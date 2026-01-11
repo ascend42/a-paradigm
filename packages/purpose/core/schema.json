@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PurposeFile",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "apiSpec": { "type": "string" },
+    "context": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rules": { "type": "object" },
+    "features": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/PurposeItem" }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/PurposeItem" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Relationship" }
+    },
+    "flows": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Flow" }
+    },
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Reference" }
+    }
+  },
+  "definitions": {
+    "PurposeItem": {
+      "type": "object",
+      "required": ["description"],
+      "properties": {
+        "description": { "type": "string" },
+        "rules": { "type": "object" },
+        "aspects": { "type": "object" },
+        "endpoints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tests": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "Relationship": {
+      "type": "object",
+      "required": ["from", "to", "type"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "Flow": {
+      "type": "object",
+      "required": ["name", "steps"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FlowStep" }
+        }
+      }
+    },
+    "FlowStep": {
+      "type": "object",
+      "required": ["component", "action"],
+      "properties": {
+        "component": { "type": "string" },
+        "action": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "Reference": {
+      "type": "object",
+      "required": ["target", "type", "path"],
+      "properties": {
+        "target": { "type": "string" },
+        "type": { "type": "string" },
+        "path": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,90 @@
+# Payments Module
+# Handles all payment processing and checkout logic
+
+intent: |
+  Process payments securely through Stripe, supporting multiple payment
+  methods while ensuring PCI compliance and excellent UX.
+
+context:
+  parent: ../.purpose
+  scope: Payment Processing
+  sensitive: true
+  compliance:
+    - PCI-DSS
+    - GDPR (for EU customers)
+
+rules:
+  - Never store raw card numbers - use Stripe tokens
+  - All payment API calls must be server-side
+  - Log all transactions for audit trail
+  - Support refunds within 30-day window
+  - Display clear error messages for failed payments
+
+features:
+  - id: "@payment-processing"
+    name: Payment Processing
+    description: Core Stripe integration for payments
+    references:
+      - "#PaymentForm"
+      - "#StripeProvider"
+      - "!payment-failed"
+      - "!payment-success"
+    
+  - id: "@order-confirmation"
+    name: Order Confirmation
+    description: Post-purchase confirmation and receipt
+    references:
+      - "@payment-processing"
+      - "#ConfirmationPage"
+      - "!order-confirmed"
+
+components:
+  - id: "#PaymentForm"
+    name: PaymentForm
+    path: src/components/checkout/PaymentForm.tsx
+    description: Stripe Elements-powered payment form
+    references:
+      - "#StripeProvider"
+      
+  - id: "#StripeProvider"
+    name: StripeProvider
+    path: src/providers/StripeProvider.tsx
+    description: Stripe.js initialization wrapper
+    
+  - id: "#ConfirmationPage"
+    name: ConfirmationPage
+    path: src/pages/ConfirmationPage.tsx
+    description: Order success page with receipt
+
+flows:
+  - id: "$checkout-to-confirmation"
+    name: Checkout Flow
+    description: Complete purchase journey
+    steps:
+      - Cart review
+      - Shipping address
+      - Payment method
+      - Order review
+      - Processing
+      - Confirmation
+    references:
+      - "@checkout-flow"
+      - "@payment-processing"
+      - "@order-confirmation"
+
+signals:
+  - id: "!payment-failed"
+    name: Payment Failed
+    description: Payment could not be processed
+    severity: error
+    action: Display error, suggest retry
+    
+  - id: "!payment-success"
+    name: Payment Successful
+    description: Payment processed successfully
+    severity: success
+    
+  - id: "!order-confirmed"
+    name: Order Confirmed
+    description: Order finalized and confirmation sent
+    severity: success
