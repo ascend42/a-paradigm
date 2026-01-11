@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DreamFile",
+  "type": "object",
+  "required": ["version", "metadata", "sources", "nodes", "connections", "layout"],
+  "properties": {
+    "version": { "type": "string" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "created", "modified"],
+      "properties": {
+        "name": { "type": "string" },
+        "created": { "type": "string", "format": "date-time" },
+        "modified": { "type": "string", "format": "date-time" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SourceConfig" }
+        },
+        "gate": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SourceConfig" }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/DreamNode" }
+    },
+    "connections": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Connection" }
+    },
+    "layout": { "$ref": "#/definitions/Layout" },
+    "snapshots": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Snapshot" }
+    }
+  },
+  "definitions": {
+    "Position": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "Viewport": {
+      "type": "object",
+      "required": ["x", "y", "zoom"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "zoom": { "type": "number", "minimum": 0.1, "maximum": 5 }
+      }
+    },
+    "SourceConfig": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "include": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "DreamNode": {
+      "type": "object",
+      "required": ["id", "symbol", "type", "position", "created"],
+      "properties": {
+        "id": { "type": "string" },
+        "symbol": { "type": "string", "pattern": "^[@#$%~^!?][\\w-]+$" },
+        "type": {
+          "type": "string",
+          "enum": ["feature", "component", "flow", "state", "aspect", "gate", "signal", "idea"]
+        },
+        "content": { "type": "string" },
+        "position": { "$ref": "#/definitions/Position" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "created": { "type": "string", "format": "date-time" },
+        "modified": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Connection": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "label": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "Group": {
+      "type": "object",
+      "required": ["id", "name", "nodes"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "color": { "type": "string" }
+      }
+    },
+    "Layout": {
+      "type": "object",
+      "required": ["viewport"],
+      "properties": {
+        "viewport": { "$ref": "#/definitions/Viewport" },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Group" }
+        }
+      }
+    },
+    "Snapshot": {
+      "type": "object",
+      "required": ["id", "name", "timestamp", "state"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "state": {
+          "type": "object",
+          "required": ["nodes", "connections", "layout"],
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/DreamNode" }
+            },
+            "connections": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/Connection" }
+            },
+            "layout": { "$ref": "#/definitions/Layout" }
+          }
+        }
+      }
+    }
+  }
+}

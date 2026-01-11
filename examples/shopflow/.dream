@@ -1,0 +1,57 @@
+# ShopFlow - E-commerce Platform
+# This .dream file connects all project knowledge
+
+name: ShopFlow
+version: 0.1.0
+description: Modern e-commerce platform with seamless checkout experience
+
+# Key areas of the project
+areas:
+  - name: Authentication
+    path: ./auth
+    symbols:
+      - "@user-login"
+      - "@user-register"
+      - "^auth-required"
+      - "#AuthProvider"
+      
+  - name: Shopping
+    path: ./features
+    symbols:
+      - "@product-browse"
+      - "@cart-management"
+      - "@wishlist"
+      - "#ProductCard"
+      - "#CartDrawer"
+      
+  - name: Checkout
+    path: ./payments
+    symbols:
+      - "@checkout-flow"
+      - "@payment-processing"
+      - "^premium-checkout"
+      - "!payment-failed"
+      - "$checkout-to-confirmation"
+
+# Free-form ideas and explorations
+ideas:
+  - symbol: "?subscription-model"
+    note: "Consider adding recurring subscription purchases"
+    priority: medium
+    
+  - symbol: "?ai-recommendations"
+    note: "ML-powered product recommendations based on browsing history"
+    priority: high
+    
+  - symbol: "?social-shopping"
+    note: "Share wishlists and get friend recommendations"
+    priority: low
+
+# Visual layout hints for the Dreamscape
+layout:
+  center: "@checkout-flow"
+  clusters:
+    - symbols: ["@user-login", "@user-register", "^auth-required"]
+      label: "Auth Cluster"
+    - symbols: ["@product-browse", "@cart-management", "#ProductCard"]
+      label: "Shopping Core"

@@ -1,0 +1,32 @@
+{
+  "name": "horizon",
+  "version": "0.1.0",
+  "description": "Unified developer tools ecosystem - Purpose, Gate, and Dream",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/gate/*",
+    "packages/purpose/*",
+    "packages/dream/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspace=@horizon/visualizer",
+    "dev:visualizer": "npm run dev --workspace=@horizon/visualizer",
+    "lint": "eslint packages --ext .ts,.tsx",
+    "clean": "rm -rf packages/*/dist packages/*/*/dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "developer-tools",
+    "visualization",
+    "architecture",
+    "ai-context",
+    "authorization"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

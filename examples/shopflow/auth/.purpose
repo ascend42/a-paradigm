@@ -1,0 +1,87 @@
+# Authentication Module
+# Handles all user authentication and session management
+
+intent: |
+  Provide secure, frictionless authentication that supports multiple
+  sign-in methods while maintaining strong security standards.
+
+context:
+  parent: ../.purpose
+  scope: Authentication & Authorization
+  sensitive: true
+
+rules:
+  - Passwords must be hashed with bcrypt (cost factor 12)
+  - JWT tokens expire after 24 hours
+  - Refresh tokens stored in httpOnly cookies
+  - Rate limit login attempts (5 per minute per IP)
+  - Support OAuth providers (Google, GitHub, Apple)
+
+features:
+  - id: "@user-login"
+    name: User Login
+    description: Email/password and OAuth authentication
+    references:
+      - "#AuthProvider"
+      - "#LoginForm"
+      - "!login-failed"
+    
+  - id: "@user-register"
+    name: User Registration
+    description: New account creation with email verification
+    references:
+      - "#AuthProvider"
+      - "#RegisterForm"
+      - "!email-exists"
+    
+  - id: "@password-reset"
+    name: Password Reset
+    description: Secure password recovery flow
+    references:
+      - "@user-login"
+      - "!reset-email-sent"
+
+components:
+  - id: "#AuthProvider"
+    name: AuthProvider
+    path: src/providers/AuthProvider.tsx
+    description: React context provider for auth state
+    references:
+      - "%auth-state"
+      
+  - id: "#LoginForm"
+    name: LoginForm
+    path: src/components/auth/LoginForm.tsx
+    description: Email/password login form with validation
+    
+  - id: "#RegisterForm"
+    name: RegisterForm
+    path: src/components/auth/RegisterForm.tsx
+    description: New user registration form
+
+states:
+  - id: "%auth-state"
+    name: Authentication State
+    description: Global auth state (user, loading, error)
+    shape: |
+      {
+        user: User | null;
+        isLoading: boolean;
+        error: string | null;
+      }
+
+signals:
+  - id: "!login-failed"
+    name: Login Failed
+    description: Emitted when login credentials are invalid
+    severity: warning
+    
+  - id: "!email-exists"
+    name: Email Already Exists
+    description: Registration blocked - email in use
+    severity: info
+    
+  - id: "!reset-email-sent"
+    name: Reset Email Sent
+    description: Password reset email dispatched
+    severity: success
