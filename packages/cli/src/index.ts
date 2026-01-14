@@ -35,6 +35,17 @@ program
   .option('--name <name>', 'Project name for .dream file')
   .action(initCommand);
 
+// horizon setup
+program
+  .command('setup [path]')
+  .description('Interactive setup wizard for Horizon')
+  .option('-y, --yes', 'Accept all defaults (non-interactive)')
+  .option('-f, --force', 'Overwrite existing .horizon config')
+  .action(async (path, options) => {
+    const { setupCommand } = await import('./commands/setup.js');
+    await setupCommand(path, options);
+  });
+
 // horizon visualize
 program
   .command('visualize')
@@ -108,17 +119,96 @@ dreamCmd
     await dreamSnapshotCommand(name, options.description);
   });
 
-// horizon cursorrules
+// horizon sync
+program
+  .command('sync [ide]')
+  .description('Generate IDE instruction files from .horizon/ config')
+  .option('--all', 'Sync all supported IDEs')
+  .option('-f, --force', 'Overwrite existing files')
+  .action(async (ide, options) => {
+    const { syncCommand } = await import('./commands/sync.js');
+    await syncCommand(ide, options);
+  });
+
+// horizon cursorrules (deprecated, alias for sync cursor)
 program
   .command('cursorrules [path]')
-  .description('Generate .cursorrules from .horizon config')
+  .description('[DEPRECATED] Use `horizon sync cursor` instead')
   .option('-a, --append', 'Append to existing .cursorrules')
   .option('-f, --force', 'Overwrite existing .cursorrules')
   .option('-p, --preview', 'Preview output without writing')
   .option('--init', 'Create default .horizon config if missing')
+  .option('--with-scan', 'Include scan protocol section')
   .action(async (path, options) => {
+    console.log('\x1b[33m⚠️  `horizon cursorrules` is deprecated. Use `horizon sync cursor` instead.\x1b[0m\n');
     const { cursorrrulesCommand } = await import('./commands/cursorrules.js');
     await cursorrrulesCommand(path, options);
+  });
+
+// horizon index
+program
+  .command('index [path]')
+  .description('Generate scan index for visual discovery')
+  .option('-o, --output <path>', 'Output path for scan-index.json')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { indexCommand } = await import('./commands/scan/index.js');
+    await indexCommand(path, options);
+  });
+
+// horizon scan <subcommand>
+const scanCmd = program
+  .command('scan')
+  .description('Scan-related commands');
+
+scanCmd
+  .command('index [path]')
+  .description('Generate scan index (alias for `horizon index`)')
+  .option('-o, --output <path>', 'Output path for scan-index.json')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { indexCommand } = await import('./commands/scan/index.js');
+    await indexCommand(path, options);
+  });
+
+// horizon upgrade
+program
+  .command('upgrade [path]')
+  .description('Upgrade project with new Horizon features')
+  .option('--features <features...>', 'Features to upgrade (scan, logger)')
+  .option('--all', 'Apply all available upgrades')
+  .option('--dry-run', 'Show what would be upgraded without making changes')
+  .option('-f, --force', 'Force re-upgrade even if already configured')
+  .action(async (path, options) => {
+    const { upgradeCommand } = await import('./commands/upgrade.js');
+    await upgradeCommand(path, options);
+  });
+
+// horizon doctor
+program
+  .command('doctor')
+  .description('Health check - validate Horizon setup')
+  .action(async () => {
+    const { doctorCommand } = await import('./commands/doctor.js');
+    await doctorCommand();
+  });
+
+// horizon watch
+program
+  .command('watch')
+  .description('Watch for changes and auto-sync IDE files')
+  .action(async () => {
+    const { watchCommand } = await import('./commands/watch.js');
+    await watchCommand();
+  });
+
+// horizon summary
+program
+  .command('summary')
+  .description('Generate .horizon/project.md with project stats')
+  .action(async () => {
+    const { summaryCommand } = await import('./commands/summary.js');
+    await summaryCommand();
   });
 
 // Parse and run

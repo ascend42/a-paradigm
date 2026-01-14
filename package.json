@@ -7,7 +7,8 @@
     "packages/*",
     "packages/gate/*",
     "packages/purpose/*",
-    "packages/dream/*"
+    "packages/dream/*",
+    "packages/scan/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

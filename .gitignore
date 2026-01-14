@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Horizon generated files (regenerate with horizon index/summary)
+.horizon/scan-index.json
+.horizon/project.md
+.horizon.backup
+.horizon-scan-index.json
+
+# BUT keep everything in examples/ (hydrated reference)
+!examples/**
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE local
+.idea/
+*.swp
+*.swo

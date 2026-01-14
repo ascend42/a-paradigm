@@ -20,6 +20,7 @@ interface CursorrrulesOptions {
   force?: boolean;
   preview?: boolean;
   init?: boolean;
+  withScan?: boolean;
 }
 
 export async function cursorrrulesCommand(targetPath: string | undefined, options: CursorrrulesOptions) {
@@ -56,9 +57,15 @@ export async function cursorrrulesCommand(targetPath: string | undefined, option
     process.exit(1);
   }
 
+  // Auto-detect scan if scan-index exists (check both locations)
+  const scanIndexExists = 
+    fs.existsSync(path.join(rootDir, '.horizon', 'scan-index.json')) ||
+    fs.existsSync(path.join(rootDir, '.horizon-scan-index.json'));
+  const includeScan = options.withScan || scanIndexExists;
+
   // Preview mode
   if (options.preview) {
-    const content = generateCursorrules(config, projectName);
+    const content = generateCursorrules(config, projectName, { withScan: includeScan });
     console.log(chalk.blue('\n--- Preview of .cursorrules content ---\n'));
     console.log(content);
     console.log(chalk.blue('\n--- End preview ---\n'));
@@ -78,11 +85,15 @@ export async function cursorrrulesCommand(targetPath: string | undefined, option
 
   // Generate
   spinner.start('Generating .cursorrules...');
-  const result = writeCursorrules(rootDir, config, mode, projectName);
+  const result = writeCursorrules(rootDir, config, mode, projectName, { withScan: includeScan });
 
   if (result.success) {
     spinner.succeed(chalk.green(result.message));
-    console.log(chalk.gray(`\n  Path: ${result.path}\n`));
+    console.log(chalk.gray(`\n  Path: ${result.path}`));
+    if (includeScan) {
+      console.log(chalk.gray('  Includes: Scan protocol'));
+    }
+    console.log();
   } else {
     spinner.fail(chalk.red('Failed to generate .cursorrules'));
     process.exit(1);

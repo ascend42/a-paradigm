@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+import {
+  detectIDE,
+  loadHorizonFiles,
+  syncToIDE
+} from "./chunk-4U5Z2TAL.js";
+import "./chunk-5GIGQCQC.js";
 
 // src/index.ts
 import { Command } from "commander";
@@ -7,19 +13,145 @@ import chalk4 from "chalk";
 // src/commands/init.ts
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import chalk from "chalk";
 import ora from "ora";
 import { getDefaultPurposeContent } from "@horizon/purpose-core";
 import { getDefaultGateConfig } from "@horizon/gate-core";
 import { getDefaultDreamContent } from "@horizon/dream-core";
+function getTemplatesDir() {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const possiblePaths = [
+    path.join(__dirname, "..", "..", "templates", "horizon"),
+    path.join(__dirname, "..", "templates", "horizon"),
+    path.join(__dirname, "..", "..", "src", "templates", "horizon")
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return path.join(__dirname, "..", "templates", "horizon");
+}
+function copyDir(src, dest, projectName) {
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath, projectName);
+    } else {
+      let content = fs.readFileSync(srcPath, "utf8");
+      content = content.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
+      fs.writeFileSync(destPath, content, "utf8");
+    }
+  }
+}
 async function initCommand(options) {
   const cwd = process.cwd();
   const projectName = options.name || path.basename(cwd);
   console.log(chalk.blue("\n\u{1F305} Initializing Horizon...\n"));
   const spinner = ora();
+  const templatesDir = getTemplatesDir();
+  const horizonDir = path.join(cwd, ".horizon");
+  const legacyHorizonFile = path.join(cwd, ".horizon");
+  if (fs.existsSync(horizonDir)) {
+    const stat = fs.statSync(horizonDir);
+    if (stat.isFile()) {
+      if (!options.force) {
+        console.log(chalk.yellow("  \u26A0 Legacy .horizon file found."));
+        console.log(chalk.gray("    Run `horizon upgrade --all` to migrate to new format."));
+        console.log(chalk.gray("    Or use --force to overwrite.\n"));
+        return;
+      }
+      fs.unlinkSync(legacyHorizonFile);
+    } else if (stat.isDirectory() && !options.force) {
+      console.log(chalk.yellow("  \u26A0 .horizon/ directory already exists (use --force to overwrite)"));
+      return;
+    }
+  }
+  spinner.start("Creating .horizon/ directory...");
+  try {
+    if (!fs.existsSync(horizonDir)) {
+      fs.mkdirSync(horizonDir, { recursive: true });
+    }
+    if (fs.existsSync(templatesDir)) {
+      copyDir(templatesDir, horizonDir, projectName);
+      spinner.succeed(chalk.green(".horizon/ directory created with specs, docs, and prompts"));
+    } else {
+      spinner.warn(chalk.yellow("Templates not found, creating minimal structure"));
+      fs.mkdirSync(path.join(horizonDir, "specs"), { recursive: true });
+      fs.mkdirSync(path.join(horizonDir, "docs"), { recursive: true });
+      fs.mkdirSync(path.join(horizonDir, "prompts"), { recursive: true });
+      const minimalConfig = `# Horizon Configuration
+version: "1.0"
+project: "${projectName}"
+
+agent-guidelines:
+  overview: |
+    This project uses Horizon for structured AI-assisted development.
+  how-to-use:
+    - Check .horizon/specs/ for philosophy and patterns
+    - Use symbol prefixes: @feature #component ^gate !signal %state $flow
+    - Use the Horizon logger instead of raw console.log/print
+
+symbol-system:
+  "@":
+    name: Feature
+    description: User-facing capabilities
+    owner: purpose
+    examples: ["@login", "@checkout"]
+  "#":
+    name: Component
+    description: Reusable code units
+    owner: purpose
+    examples: ["#Button", "#api-client"]
+  "^":
+    name: Gate
+    description: Access control points
+    owner: gate
+    examples: ["^authenticated", "^admin-only"]
+  "!":
+    name: Signal
+    description: Events and side effects
+    owner: gate
+    examples: ["!login-success", "!payment-failed"]
+  "%":
+    name: State
+    description: Application state
+    owner: purpose
+    examples: ["%user.authenticated", "%cart.items"]
+  "$":
+    name: Flow
+    description: Multi-step processes
+    owner: shared
+    examples: ["$checkout-flow", "$onboarding"]
+
+logging:
+  enforce: true
+  default-level: debug
+
+scan:
+  enabled: true
+
+conventions:
+  - Use kebab-case for symbol IDs
+  - ALWAYS use Horizon logger, NEVER raw console.log/print
+`;
+      fs.writeFileSync(path.join(horizonDir, "config.yaml"), minimalConfig, "utf8");
+      spinner.succeed(chalk.green(".horizon/ directory created (minimal)"));
+    }
+  } catch (error) {
+    spinner.fail(chalk.red(`Failed to create .horizon/: ${error.message}`));
+    return;
+  }
   const dreamPath = path.join(cwd, ".dream");
   if (fs.existsSync(dreamPath) && !options.force) {
-    console.log(chalk.yellow("  \u26A0 .dream file already exists (use --force to overwrite)"));
+    console.log(chalk.yellow("  \u26A0 .dream file already exists"));
   } else {
     spinner.start("Creating .dream file...");
     fs.writeFileSync(dreamPath, getDefaultDreamContent(projectName));
@@ -43,11 +175,43 @@ async function initCommand(options) {
   } else {
     console.log(chalk.gray("  \u25CB No gate.yaml found (optional)"));
   }
+  spinner.start("Detecting IDE...");
+  const detection = detectIDE(cwd);
+  if (detection.detected) {
+    spinner.succeed(`Detected ${chalk.cyan(detection.detected)}`);
+    const files = loadHorizonFiles(cwd);
+    if (files) {
+      spinner.start(`Generating IDE instructions...`);
+      const result = syncToIDE(cwd, detection.detected, files, true);
+      if (result.success) {
+        spinner.succeed(chalk.green(`${result.outputPath} generated`));
+      } else {
+        spinner.warn(chalk.yellow(`Could not generate IDE file: ${result.message}`));
+      }
+    }
+  } else {
+    spinner.info("No IDE detected, skipping sync (run `horizon sync` later)");
+  }
   console.log(chalk.blue("\n\u2728 Horizon initialized!\n"));
+  console.log(chalk.gray("Created:"));
+  console.log(chalk.white("  \u2022 .horizon/           - Configuration & specifications"));
+  console.log(chalk.white("    \u251C\u2500\u2500 config.yaml     - Main configuration"));
+  console.log(chalk.white("    \u251C\u2500\u2500 specs/          - Logger, scan, symbols specs"));
+  console.log(chalk.white("    \u251C\u2500\u2500 docs/           - Commands, patterns, troubleshooting"));
+  console.log(chalk.white("    \u2514\u2500\u2500 prompts/        - Pre-written task prompts"));
+  console.log(chalk.white("  \u2022 .dream              - Project overview & ideas"));
+  console.log(chalk.white("  \u2022 .purpose            - Feature & component context"));
+  if (detection.detected) {
+    const outputFile = detection.detected === "cursor" ? ".cursorrules" : detection.detected === "copilot" ? ".github/copilot-instructions.md" : ".windsurfrules";
+    console.log(chalk.white(`  \u2022 ${outputFile}  - IDE instructions`));
+  }
+  console.log("");
   console.log(chalk.gray("Next steps:"));
-  console.log(chalk.white("  1. Edit .purpose to define your project context"));
-  console.log(chalk.white("  2. Run " + chalk.cyan("horizon visualize") + " to open the Dreamscape"));
-  console.log(chalk.white("  3. Create features, components, and ideas\n"));
+  console.log(chalk.white("  1. Review " + chalk.cyan(".horizon/config.yaml") + " and customize"));
+  console.log(chalk.white("  2. Check " + chalk.cyan(".horizon/specs/") + " for logging & scan specs"));
+  console.log(chalk.white("  3. Edit " + chalk.cyan(".purpose") + " to define your project context"));
+  console.log(chalk.white("  4. Run " + chalk.cyan("horizon sync") + " after config changes"));
+  console.log(chalk.white("  5. Run " + chalk.cyan("horizon doctor") + " to verify setup\n"));
 }
 
 // src/commands/visualize.ts
@@ -160,6 +324,10 @@ ${chalk4.blue("\u2569 \u2569")}${chalk4.cyan("\u2514\u2500\u2518\u2534\u2514\u25
 `;
 program.name("horizon").description("Unified developer tools ecosystem").version(VERSION).addHelpText("before", banner);
 program.command("init").description("Initialize Horizon in the current project").option("-f, --force", "Overwrite existing files").option("--name <name>", "Project name for .dream file").action(initCommand);
+program.command("setup [path]").description("Interactive setup wizard for Horizon").option("-y, --yes", "Accept all defaults (non-interactive)").option("-f, --force", "Overwrite existing .horizon config").action(async (path3, options) => {
+  const { setupCommand } = await import("./setup-4UYSOV6V.js");
+  await setupCommand(path3, options);
+});
 program.command("visualize").alias("vis").alias("v").description("Launch the Dreamscape visualizer").option("-p, --port <port>", "Port to run the visualizer on", "3000").option("--no-open", "Do not auto-open browser").action(visualizeCommand);
 program.command("status").alias("st").description("Show project status and symbol counts").action(statusCommand);
 var purposeCmd = program.command("purpose").description("Purpose-related commands");
@@ -184,5 +352,39 @@ dreamCmd.command("aggregate [path]").description("Aggregate all sources into sym
 dreamCmd.command("snapshot <name>").description("Create a timeline snapshot").option("-d, --description <desc>", "Snapshot description").action(async (name, options) => {
   const { dreamSnapshotCommand } = await import("./snapshot-C5OH6WZJ.js");
   await dreamSnapshotCommand(name, options.description);
+});
+program.command("sync [ide]").description("Generate IDE instruction files from .horizon/ config").option("--all", "Sync all supported IDEs").option("-f, --force", "Overwrite existing files").action(async (ide, options) => {
+  const { syncCommand } = await import("./sync-IPLN5UY4.js");
+  await syncCommand(ide, options);
+});
+program.command("cursorrules [path]").description("[DEPRECATED] Use `horizon sync cursor` instead").option("-a, --append", "Append to existing .cursorrules").option("-f, --force", "Overwrite existing .cursorrules").option("-p, --preview", "Preview output without writing").option("--init", "Create default .horizon config if missing").option("--with-scan", "Include scan protocol section").action(async (path3, options) => {
+  console.log("\x1B[33m\u26A0\uFE0F  `horizon cursorrules` is deprecated. Use `horizon sync cursor` instead.\x1B[0m\n");
+  const { cursorrrulesCommand } = await import("./cursorrules-VK4SO7NF.js");
+  await cursorrrulesCommand(path3, options);
+});
+program.command("index [path]").description("Generate scan index for visual discovery").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path3, options) => {
+  const { indexCommand } = await import("./scan-TDCOQDGX.js");
+  await indexCommand(path3, options);
+});
+var scanCmd = program.command("scan").description("Scan-related commands");
+scanCmd.command("index [path]").description("Generate scan index (alias for `horizon index`)").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path3, options) => {
+  const { indexCommand } = await import("./scan-TDCOQDGX.js");
+  await indexCommand(path3, options);
+});
+program.command("upgrade [path]").description("Upgrade project with new Horizon features").option("--features <features...>", "Features to upgrade (scan, logger)").option("--all", "Apply all available upgrades").option("--dry-run", "Show what would be upgraded without making changes").option("-f, --force", "Force re-upgrade even if already configured").action(async (path3, options) => {
+  const { upgradeCommand } = await import("./upgrade-ZI6FOW4E.js");
+  await upgradeCommand(path3, options);
+});
+program.command("doctor").description("Health check - validate Horizon setup").action(async () => {
+  const { doctorCommand } = await import("./doctor-L4GZELY2.js");
+  await doctorCommand();
+});
+program.command("watch").description("Watch for changes and auto-sync IDE files").action(async () => {
+  const { watchCommand } = await import("./watch-EDLA657X.js");
+  await watchCommand();
+});
+program.command("summary").description("Generate .horizon/project.md with project stats").action(async () => {
+  const { summaryCommand } = await import("./summary-3K6HACHI.js");
+  await summaryCommand();
 });
 program.parse();
