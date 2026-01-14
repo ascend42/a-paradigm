@@ -1,98 +1,133 @@
-# Project Context (via Horizon)
+# shopflow - Horizon Context
 
-Project: ShopFlow
+Generated for Cursor by Horizon.
 
-ShopFlow is a modern e-commerce platform using Horizon for structured 
-AI context management. All project knowledge is organized through 
-.purpose files, gate.yaml authorization, and the .dream overview.
+## Overview
 
-This project uses Horizon for structured AI context:
-- `.purpose` files define features, components, and context
-- `gate.yaml` files define authorization topology
-- `.dream` files aggregate everything into the Dreamscape
+This project uses Horizon for structured AI-assisted development.
+All context, symbols, and specifications live in the .horizon/ directory.
+
 
 ## How to Use Horizon
 
-- Check .purpose files in directories before making changes
-- Run `horizon status` to see all symbols in the project
-- Run `horizon visualize` to explore the Dreamscape canvas
-- Reference symbols using @ # $ % ~ ^ ! ? prefixes
-- Look for `gate.yaml` when dealing with authorization
+- Check .horizon/specs/ for philosophy and patterns before making changes
+- Reference symbols using prefixes: @feature #component ^gate !signal %state $flow
+- Use the Horizon logger instead of raw console.log/print statements
+- Run `horizon scan` with screenshots to map UI to code
+- Check .horizon/docs/ for command reference and troubleshooting
 
 ## Symbol System
 
 Use these prefixes to reference project elements:
 
-| Symbol | Name | Owner | Examples |
-|--------|------|-------|----------|
-| `@` | Feature | purpose | @checkout-flow, @user-login |
-| `#` | Component | purpose | #ProductCard, #CartDrawer |
-| `$` | Flow | shared | $checkout-to-confirmation, $auth-flow |
-| `%` | State | purpose | %user.authenticated, %cart.items |
-| `~` | Aspect | purpose | @login~validation, #Button~disabled |
-| `^` | Gate | gate | ^auth-required, ^premium-checkout |
-| `!` | Signal | gate | !payment-failed, !login-failed |
-| `?` | Idea | dream | ?subscription-model, ?ai-recommendations |
+| Symbol | Name | Description |
+|--------|------|-------------|
+| `@` | Feature | User-facing capabilities and functionality |
+| `#` | Component | Reusable code units, UI components, or modules |
+| `$` | Flow | Multi-step processes or user journeys |
+| `%` | State | Global or user state conditions |
+| `~` | Aspect | Cross-cutting concerns or nested properties |
+| `^` | Gate | Access control points and authorization rules |
+| `!` | Signal | Events, errors, and side effects |
+| `?` | Idea | Free-form exploration and future possibilities |
 
-### Symbol Details
+See `.horizon/specs/symbols.md` for complete reference.
 
-- **`@` Feature** (purpose): User-facing capabilities (checkout, login, cart, etc.)
-- **`#` Component** (purpose): Reusable UI components and code modules
-- **`$` Flow** (shared): Multi-step user journeys and processes
-- **`%` State** (purpose): Global application and user state
-- **`~` Aspect** (purpose): Cross-cutting concerns and nested properties
-- **`^` Gate** (gate): Access control and authorization points
-- **`!` Signal** (gate): Events, errors, and side effects
-- **`?` Idea** (dream): Free-form exploration and future features
+## Horizon Logging
 
-## Defined States
+**IMPORTANT:** Use the Horizon logger instead of raw console.log/print.
 
-- `%user.authenticated` - User is logged in
-- `%user.role` - enum (guest, customer, admin, owner)
-- `%user.subscription` - enum (free, premium, enterprise)
-- `%user.emailVerified` - Email has been verified
-- `%cart.items` - Items currently in cart
-- `%cart.total` - Cart total in cents
-- `%checkout.step` - enum (cart, shipping, payment, review, processing, complete)
+```
+// Use this pattern:
+log.feature('@login').info('Starting login', { email });
+log.component('#database').debug('Query executed', { duration });
+log.gate('^authenticated').warn('Access denied', { userId });
+log.signal('!login-success').info('User authenticated');
+```
+
+### Symbol Mapping by Directory
+
+| Directory | Symbol | Logger Method |
+|-----------|--------|---------------|
+| `features/**` | `@` | `log.feature()` |
+| `routes/**` | `@` | `log.feature()` |
+| `api/**` | `@` | `log.feature()` |
+| `components/**` | `#` | `log.component()` |
+| `lib/**` | `#` | `log.component()` |
+| `utils/**` | `#` | `log.component()` |
+| `middleware/**` | `^` | `log.gate()` |
+| `auth/**` | `^` | `log.gate()` |
+| `guards/**` | `^` | `log.gate()` |
+| `stores/**` | `%` | `log.state()` |
+| `state/**` | `%` | `log.state()` |
+| `reducers/**` | `%` | `log.state()` |
+| `events/**` | `!` | `log.signal()` |
+| `handlers/**` | `!` | `log.signal()` |
+| `listeners/**` | `!` | `log.signal()` |
+| `flows/**` | `$` | `log.flow()` |
+| `sagas/**` | `$` | `log.flow()` |
+| `workflows/**` | `$` | `log.flow()` |
+
+See `.horizon/specs/logger.md` for full specification.
+
+## Horizon Scan
+
+When the user says "**horizon scan**" with an image:
+
+1. Analyze the image for UI elements
+2. Cross-reference with `.horizon/scan-index.json`
+3. Return structured mapping of visual elements to code
+
+| Mode | Use Case |
+|------|----------|
+| `horizon scan` | Map any image to code |
+| `horizon scan ui` | Screenshot of running app |
+| `horizon scan design` | Mockup - gap analysis |
+| `horizon scan error` | Error screenshot |
+
+See `.horizon/specs/scan.md` for full protocol.
 
 ## When to Update Horizon Files
 
 - When adding a feature, create/update the nearest .purpose file
-- When adding authorization logic, update gate.yaml
-- When exploring new ideas, add them to .dream with ? prefix
-- Always update references when renaming or moving symbols
-- Run `horizon cursorrules` after updating .horizon
+- When adding authorization, update gate.yaml
+- When exploring ideas, use ?symbol prefix
+- Always update references when renaming symbols
 
 ## Conventions
 
-- Use kebab-case for all symbol IDs (checkout-flow, not checkoutFlow)
+- Use kebab-case for all symbol IDs (feature-name, not featureName)
 - Document flows when logic spans 3+ components
-- Reference related items using symbol prefixes
-- Add descriptions to all features, components, and gates
-- Use signals for side effects (! prefix), not direct state mutations
+- Reference related items using symbol prefixes (@ # $ % ~ ^ ! ?)
+- Add descriptions to all features and gates
+- Update .purpose files when changing feature behavior
 - Keep gates minimal - one responsibility per gate
-- Group related ideas in .dream under areas
-- Update purpose files when changing feature behavior
+- Use signals for side effects, not direct state mutations
+- ALWAYS use Horizon logger, NEVER raw console.log/print
 
 ## Horizon Commands
 
 | Command | Description |
 |---------|-------------|
 | `horizon init` | Initialize Horizon in a project |
-| `horizon status` | Show project symbol status |
-| `horizon visualize` | Open the Dreamscape visualizer |
-| `horizon purpose validate` | Validate .purpose files |
-| `horizon gate validate` | Validate gate.yaml files |
-| `horizon dream aggregate` | Aggregate all symbols |
-| `horizon cursorrules` | Regenerate this .cursorrules file |
+| `horizon sync` | Regenerate IDE instruction files |
+| `horizon index` | Generate scan index |
+| `horizon doctor` | Health check |
+| `horizon status` | Show project status |
+| `horizon watch` | Auto-sync on changes |
 
-## Purpose File Locations
-
-`.purpose` files should exist in:
-- `auth/` (depth: 1)
-- `payments/` (depth: 1)
-- `features/` (depth: 1)
-- `components/` (depth: 1)
+See `.horizon/docs/commands.md` for full reference.
 
 ---
-*Generated by Horizon. Update `.horizon` config and run `horizon cursorrules` to regenerate.*
+
+## Reference Files
+
+- `.horizon/specs/symbols.md` - Symbol system reference
+- `.horizon/specs/logger.md` - Logging specification
+- `.horizon/specs/scan.md` - Scan protocol
+- `.horizon/docs/commands.md` - CLI reference
+- `.horizon/docs/patterns.md` - Coding patterns
+- `.horizon/docs/troubleshooting.md` - Common issues
+- `.horizon/prompts/` - Pre-written task prompts
+
+*Generated by Horizon. Run `horizon sync` to regenerate.*

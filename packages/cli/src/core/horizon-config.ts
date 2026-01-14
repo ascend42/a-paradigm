@@ -3,13 +3,44 @@
  * Defines the structure of .horizon configuration files
  */
 
+import * as yaml from 'js-yaml';
+
 export interface HorizonConfig {
   version: string;
+  project?: string;
   'agent-guidelines': AgentGuidelines;
   'symbol-system': SymbolSystem;
-  states: StateDefinitions;
+  states?: StateDefinitions;
   'purpose-required': PurposeRequirement[];
   conventions: string[];
+  scan?: ScanSettings;
+  logging?: LoggingConfig;
+}
+
+export interface LoggingConfig {
+  /** Include logging rules in generated IDE instructions */
+  enforce: boolean;
+  /** Default log level */
+  'default-level'?: 'debug' | 'info' | 'warn' | 'error';
+  /** Map directory patterns to symbol types */
+  'symbol-mapping'?: Record<string, string>;
+}
+
+export interface ScanSettings {
+  /** Enable scan protocol in cursorrules */
+  enabled: boolean;
+  /** Auto-include scan protocol when scan-index.json exists */
+  autoInclude: boolean;
+  /** Custom visual tag mappings for components */
+  visualTagMappings?: Record<string, string[]>;
+  /** Screen definitions for better UI mapping */
+  screens?: Record<string, {
+    route?: string;
+    components?: string[];
+    features?: string[];
+  }>;
+  /** Custom instructions to include in scan protocol */
+  customInstructions?: string[];
 }
 
 export interface AgentGuidelines {
@@ -135,7 +166,8 @@ export function getDefaultHorizonConfig(projectName: string): HorizonConfig {
         'Check .purpose files in directories for context before making changes',
         'Run `horizon status` to see the project symbol index',
         'Run `horizon visualize` to explore the Dreamscape',
-        'Reference symbols using prefixes: @feature #component ^gate'
+        'Reference symbols using prefixes: @feature #component ^gate',
+        'Attach an image and say "horizon scan" to map UI to code'
       ],
       'update-rules': [
         'When adding a feature, create/update the nearest .purpose file',
@@ -158,7 +190,11 @@ export function getDefaultHorizonConfig(projectName: string): HorizonConfig {
       { pattern: 'src/features/*', depth: 1 },
       { pattern: 'src/components/*', depth: 1 }
     ],
-    conventions: DEFAULT_CONVENTIONS
+    conventions: DEFAULT_CONVENTIONS,
+    scan: {
+      enabled: true,
+      autoInclude: true
+    }
   };
 }
 
@@ -166,7 +202,6 @@ export function getDefaultHorizonConfig(projectName: string): HorizonConfig {
  * Serialize config to YAML
  */
 export function serializeHorizonConfig(config: HorizonConfig): string {
-  const yaml = require('js-yaml');
   return yaml.dump(config, { lineWidth: -1, quotingType: '"' });
 }
 
@@ -174,6 +209,5 @@ export function serializeHorizonConfig(config: HorizonConfig): string {
  * Parse YAML config
  */
 export function parseHorizonConfig(content: string): HorizonConfig {
-  const yaml = require('js-yaml');
   return yaml.load(content) as HorizonConfig;
 }

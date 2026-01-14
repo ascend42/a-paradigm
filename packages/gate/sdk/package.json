@@ -24,8 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@horizon/gate-core": "*",
-    "expr-eval": "^2.0.2"
+    "@horizon/gate-core": "*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -4,7 +4,8 @@ export { b as GateCheck, G as GateClient, a as GateGuard, c as createGate, g as 
 /**
  * Safe expression evaluator for Gate key expressions
  *
- * Uses a restricted subset of JavaScript for security.
+ * Custom implementation that avoids eval() and only supports
+ * the specific operations needed for gate expressions.
  */
 /**
  * Evaluate a key expression against an entity context

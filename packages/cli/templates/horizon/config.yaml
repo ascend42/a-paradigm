@@ -1,0 +1,136 @@
+# Horizon Configuration
+# Source of truth for AI-assisted development in this project
+
+version: "1.0"
+project: "{{PROJECT_NAME}}"
+
+# Guidelines for AI agents working in this codebase
+agent-guidelines:
+  overview: |
+    This project uses Horizon for structured AI-assisted development.
+    All context, symbols, and specifications live in the .horizon/ directory.
+  
+  how-to-use:
+    - "Check .horizon/specs/ for philosophy and patterns before making changes"
+    - "Reference symbols using prefixes: @feature #component ^gate !signal %state $flow"
+    - "Use the Horizon logger instead of raw console.log/print statements"
+    - "Run `horizon scan` with screenshots to map UI to code"
+    - "Check .horizon/docs/ for command reference and troubleshooting"
+  
+  update-rules:
+    - "When adding a feature, create/update the nearest .purpose file"
+    - "When adding authorization, update gate.yaml"
+    - "When exploring ideas, use ?symbol prefix"
+    - "Always update references when renaming symbols"
+
+# Symbol system - the shared language between code and AI
+symbol-system:
+  "@":
+    name: Feature
+    description: User-facing capabilities and functionality
+    owner: purpose
+    examples: ["@checkout", "@user-login", "@search"]
+  "#":
+    name: Component
+    description: Reusable code units, UI components, or modules
+    owner: purpose
+    examples: ["#Button", "#api-client", "#AuthProvider"]
+  "$":
+    name: Flow
+    description: Multi-step processes or user journeys
+    owner: shared
+    examples: ["$checkout-flow", "$onboarding", "$auth-flow"]
+  "%":
+    name: State
+    description: Global or user state conditions
+    owner: purpose
+    examples: ["%user.authenticated", "%cart.items", "%app.loading"]
+  "~":
+    name: Aspect
+    description: Cross-cutting concerns or nested properties
+    owner: purpose
+    examples: ["@login~validation", "#Button~disabled"]
+  "^":
+    name: Gate
+    description: Access control points and authorization rules
+    owner: gate
+    examples: ["^auth-required", "^admin-only", "^rate-limited"]
+  "!":
+    name: Signal
+    description: Events, errors, and side effects
+    owner: gate
+    examples: ["!login-success", "!payment-failed", "!rate-limited"]
+  "?":
+    name: Idea
+    description: Free-form exploration and future possibilities
+    owner: dream
+    examples: ["?subscription-model", "?ai-recommendations"]
+
+# Logging configuration
+logging:
+  # Include logging rules in generated IDE instructions
+  enforce: true
+  
+  # Default log level (debug, info, warn, error)
+  default-level: debug
+  
+  # Map directory patterns to symbol types for logging
+  symbol-mapping:
+    "features/**": "@"
+    "routes/**": "@"
+    "api/**": "@"
+    "components/**": "#"
+    "lib/**": "#"
+    "utils/**": "#"
+    "middleware/**": "^"
+    "auth/**": "^"
+    "guards/**": "^"
+    "stores/**": "%"
+    "state/**": "%"
+    "reducers/**": "%"
+    "events/**": "!"
+    "handlers/**": "!"
+    "listeners/**": "!"
+    "flows/**": "$"
+    "sagas/**": "$"
+    "workflows/**": "$"
+
+# Scan configuration for visual discovery
+scan:
+  enabled: true
+  auto-include: true
+
+# Project states
+states:
+  user:
+    authenticated:
+      type: boolean
+      default: false
+      description: User is logged in
+    role:
+      type: enum
+      values: [guest, user, admin]
+      description: User access level
+  app:
+    loading:
+      type: boolean
+      default: false
+      description: App is loading
+
+# Where .purpose files should exist
+purpose-required:
+  - pattern: "src/features/*"
+    depth: 1
+  - pattern: "src/components/*"
+    depth: 1
+
+# Coding conventions
+conventions:
+  - "Use kebab-case for all symbol IDs (feature-name, not featureName)"
+  - "Document flows when logic spans 3+ components"
+  - "Reference related items using symbol prefixes (@ # $ % ~ ^ ! ?)"
+  - "Add descriptions to all features and gates"
+  - "Update .purpose files when changing feature behavior"
+  - "Keep gates minimal - one responsibility per gate"
+  - "Use signals for side effects, not direct state mutations"
+  - "ALWAYS use Horizon logger, NEVER raw console.log/print"

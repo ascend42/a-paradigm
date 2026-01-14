@@ -1,0 +1,209 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://horizon.dev/schemas/scan-index.json",
+  "title": "Horizon Scan Index",
+  "description": "Index file for horizon scan - maps visual elements to code",
+  "type": "object",
+  "required": ["$meta", "components", "features", "flows", "state", "gates", "signals", "screens", "symbolMap"],
+  "properties": {
+    "$meta": {
+      "type": "object",
+      "description": "Index metadata",
+      "required": ["version", "project", "generatedAt", "horizonVersion", "sources"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Schema version"
+        },
+        "project": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the index was generated"
+        },
+        "horizonVersion": {
+          "type": "string",
+          "description": "Horizon version that generated this"
+        },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "purposeFiles": { "type": "integer" },
+            "gateFiles": { "type": "integer" },
+            "dreamFiles": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "description": "UI components indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanElement"
+      }
+    },
+    "features": {
+      "type": "object",
+      "description": "Features indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanElement"
+      }
+    },
+    "flows": {
+      "type": "object",
+      "description": "Flows indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanFlow"
+      }
+    },
+    "state": {
+      "type": "object",
+      "description": "State stores indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanState"
+      }
+    },
+    "gates": {
+      "type": "object",
+      "description": "Gates indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanElement"
+      }
+    },
+    "signals": {
+      "type": "object",
+      "description": "Signals indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanElement"
+      }
+    },
+    "screens": {
+      "type": "object",
+      "description": "Screens/pages indexed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/ScanScreen"
+      }
+    },
+    "symbolMap": {
+      "type": "object",
+      "description": "Symbol to category+id lookup",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string" },
+          "id": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ScanElement": {
+      "type": "object",
+      "required": ["id", "name", "symbol", "category", "path"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "symbol": { "type": "string" },
+        "category": { 
+          "type": "string",
+          "enum": ["components", "features", "flows", "state", "gates", "signals", "screens", "layouts"]
+        },
+        "path": { "type": "string" },
+        "description": { "type": "string" },
+        "visualTags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "screens": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parent": { "type": "string" },
+        "children": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "related": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "meta": { "type": "object" }
+      }
+    },
+    "ScanFlow": {
+      "type": "object",
+      "required": ["id", "name", "symbol", "path", "steps"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "symbol": { "type": "string" },
+        "path": { "type": "string" },
+        "description": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "order"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "target": { "type": "string" },
+              "description": { "type": "string" },
+              "order": { "type": "integer" }
+            }
+          }
+        },
+        "feature": { "type": "string" },
+        "entryGates": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ScanState": {
+      "type": "object",
+      "required": ["id", "name", "symbol", "path"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "symbol": { "type": "string" },
+        "path": { "type": "string" },
+        "description": { "type": "string" },
+        "slices": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "consumers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ScanScreen": {
+      "type": "object",
+      "required": ["id", "name", "path"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "route": { "type": "string" },
+        "path": { "type": "string" },
+        "description": { "type": "string" },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "features": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "gates": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
