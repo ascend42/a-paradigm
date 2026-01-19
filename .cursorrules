@@ -1,0 +1,467 @@
+# Horizon Framework - Developer Context
+
+Generated for Cursor by Horizon.
+
+## Overview
+
+**Horizon** is a unified developer tools ecosystem for structured planning, testing, and ideation. It brings together three powerful tools into a single, visual experience:
+
+| Tool | Metaphor | Domain | Question It Answers |
+|------|----------|--------|---------------------|
+| **Purpose** | Interior Designer | Structure & Context | "What is this? Why does it exist?" |
+| **Gate** | Architect | Access & Authorization | "Who can access? Under what conditions?" |
+| **Dream** | Thinker | Ideation & Aggregation | "What's the complete mental model?" |
+
+The **Dreamscape** is an infinite canvas where all project knowledge flows together, visualizing features, components, gates, signals, and ideas as interconnected, taggable, and explorable symbols.
+
+---
+
+## Project Structure
+
+This is a **monorepo** using npm workspaces with the following packages:
+
+### Core Packages
+
+- **`@horizon/purpose-core`** - `.purpose` file parsing, validation, and aggregation
+  - Location: `packages/purpose/core/`
+  - Handles Purpose file format, symbol extraction, and context aggregation
+
+- **`@horizon/gate-core`** - `gate.yaml` parsing and validation
+  - Location: `packages/gate/core/`
+  - Validates gate configuration files
+
+- **`@horizon/gate-sdk`** - Runtime SDK for checking gates in applications
+  - Location: `packages/gate/sdk/`
+  - Provides runtime gate checking functionality
+
+- **`@horizon/dream-core`** - Aggregates Purpose + Gate, builds symbol index
+  - Location: `packages/dream/core/`
+  - Combines all sources into unified symbol system
+
+- **`@horizon/scan-core`** - Visual discovery layer for AI agents
+  - Location: `packages/scan/core/`
+  - Generates scan indexes for UI-to-code mapping
+
+### Tooling Packages
+
+- **`@horizon/cli`** - Unified command-line interface
+  - Location: `packages/cli/`
+  - Commands: `init`, `sync`, `index`, `doctor`, `status`, `visualize`, `watch`, `upgrade`, `summary`
+  - Generates IDE instruction files (`.cursorrules`, `.github/copilot-instructions.md`, `.windsurfrules`)
+  - Templates in `packages/cli/templates/horizon/`
+
+- **`@horizon/visualizer`** - The Dreamscape infinite canvas UI
+  - Location: `packages/visualizer/`
+  - React + TypeScript + Vite application
+  - Visualizes symbol relationships and project structure
+
+---
+
+## Symbol System
+
+Horizon uses a **symbol system** to create a shared language between code, developers, and AI agents:
+
+| Symbol | Name | Owner | Description | Examples |
+|--------|------|-------|-------------|----------|
+| `@` | Feature | Purpose | User-facing capabilities and functionality | `@checkout`, `@user-login` |
+| `#` | Component | Purpose | Reusable code units, UI components, modules | `#Button`, `#api-client` |
+| `$` | Flow | Shared | Multi-step processes or user journeys | `$purchase-flow`, `$auth-flow` |
+| `%` | State | Purpose | Global or user state conditions | `%user.authenticated` |
+| `~` | Aspect | Purpose | Cross-cutting concerns, nested properties | `@login~validation` |
+| `^` | Gate | Gate | Access control points, authorization rules | `^checkout`, `^admin-panel` |
+| `!` | Signal | Gate | Events, errors, and side effects | `!checkout-started` |
+| `?` | Idea | Dream | Free-form exploration, future possibilities | `?maybe-add-export` |
+
+### Symbol Naming Conventions
+
+1. **Use kebab-case**: `@user-login` not `@userLogin`
+2. **Be specific**: `@checkout-payment` not `@pay`
+3. **Use dots for hierarchy**: `%user.authenticated`, `%cart.items`
+4. **Use tilde for aspects**: `@login~validation`
+5. **Match file structure**: Features in `features/` use `@`, components in `components/` use `#`
+
+---
+
+## File Formats
+
+### Purpose Files (`.purpose`)
+
+Purpose files define features, components, and context. They use YAML format:
+
+```yaml
+features:
+  checkout:
+    description: Complete purchase flow
+    gates: [^authenticated, ^has-items]
+    signals: [!checkout-complete, !payment-failed]
+    flow: $checkout-flow
+    components: [#CheckoutForm, #PaymentProcessor]
+```
+
+### Gate Files (`gate.yaml`)
+
+Gate files define authorization topology:
+
+```yaml
+gates:
+  authenticated:
+    description: User must be logged in
+    keys: [user.id]
+  
+  admin-only:
+    description: Admin access required
+    requires: [^authenticated]
+    keys: [user.role == 'admin']
+```
+
+### Dream Files (`.dream`)
+
+Dream files aggregate everything into the Dreamscape canvas state. They contain:
+- Project overview
+- Symbol relationships
+- Ideas and exploration (`?` symbols)
+- Canvas layout and connections
+
+---
+
+## Horizon Logger Specification
+
+**CRITICAL:** When working on Horizon codebase, use the Horizon logger pattern (even if not fully implemented yet).
+
+### Core Principle
+
+**NEVER use raw logging. ALWAYS use the Horizon logger pattern.**
+
+```typescript
+// BAD - Raw logging
+console.log('User logged in', userId);
+
+// GOOD - Horizon logger pattern
+log.feature('@login').info('User logged in', { userId });
+log.component('#database').debug('Query executed', { duration });
+```
+
+### Logger API
+
+```typescript
+log.feature('@symbol')    → SymbolLogger   // For @features
+log.component('#symbol')  → SymbolLogger   // For #components
+log.gate('^symbol')       → SymbolLogger   // For ^gates
+log.signal('!symbol')     → SymbolLogger   // For !signals
+log.state('%symbol')      → SymbolLogger   // For %state
+log.flow('$symbol')       → SymbolLogger   // For $flows
+```
+
+### SymbolLogger Methods
+
+```typescript
+.debug(message, data?)    // Verbose debugging info
+.info(message, data?)     // General information
+.warn(message, data?)     // Warning conditions
+.error(message, data?)    // Error conditions
+.start(message, data?)    → DurationTracker  // Start timed operation
+```
+
+### Duration Tracking
+
+```typescript
+const tracker = log.feature('@login').start('Starting login');
+// ... operation ...
+tracker.success('Login completed', { userId });
+// or
+tracker.error('Login failed', { error });
+```
+
+---
+
+## Development Guidelines
+
+### Working with the Monorepo
+
+1. **Build order**: Core packages must be built before CLI/Visualizer
+   ```bash
+   npm run build  # Builds all packages
+   ```
+
+2. **Package dependencies**: 
+   - CLI depends on: `purpose-core`, `gate-core`, `dream-core`, `scan-core`
+   - Visualizer depends on: `dream-core`
+   - Dream-core aggregates: `purpose-core`, `gate-core`
+
+3. **TypeScript**: All packages use TypeScript with shared `tsconfig.base.json`
+
+4. **Testing**: Run tests from root or individual packages
+
+### CLI Development
+
+- **Commands**: Located in `packages/cli/src/commands/`
+- **Core utilities**: `packages/cli/src/core/`
+- **IDE adapters**: `packages/cli/src/core/ide-adapters/` (Cursor, Copilot, Windsurf)
+- **Templates**: `packages/cli/templates/horizon/` - Used by `horizon init`
+
+### Visualizer Development
+
+- **Tech stack**: React + TypeScript + Vite
+- **State management**: Custom store in `packages/visualizer/src/store/`
+- **Components**: `packages/visualizer/src/components/`
+- **Dev server**: `npm run dev:visualizer` (from root)
+
+### Adding New Features
+
+1. **New CLI command**: 
+   - Add command file in `packages/cli/src/commands/`
+   - Register in `packages/cli/src/index.ts`
+   - Add to command reference docs
+
+2. **New symbol type**:
+   - Update `packages/cli/templates/horizon/specs/symbols.md`
+   - Update config schema in `packages/cli/src/core/horizon-config.ts`
+   - Update cursorrules generator if needed
+
+3. **New IDE adapter**:
+   - Create adapter in `packages/cli/src/core/ide-adapters/`
+   - Implement `IDEAdapter` interface
+   - Register in sync command
+
+---
+
+## Key Concepts
+
+### IDE-Agnostic Architecture
+
+Horizon uses `.horizon/` directory as source of truth:
+- `config.yaml` - Main configuration with symbol system and logging settings
+- `specs/` - Philosophy and specifications (logger, scan, symbols)
+- `docs/` - Reference documentation (commands, patterns, troubleshooting)
+- `prompts/` - Pre-written task prompts for common operations
+- `project.md` - Auto-generated project summary
+
+IDE instruction files (`.cursorrules`, etc.) are **generated** from `.horizon/` config via `horizon sync`.
+
+### Scan Protocol
+
+Horizon scan enables visual discovery - mapping UI screenshots to code:
+- `horizon scan` - Map any image to code
+- `horizon scan ui` - Screenshot of running app
+- `horizon scan design` - Mockup - gap analysis
+- `horizon scan error` - Error screenshot
+
+Uses `.horizon/scan-index.json` generated by `horizon index`.
+
+### Symbol Cross-Referencing
+
+Symbols reference each other creating a traceable web:
+- Features reference gates, signals, flows, components
+- Gates reference other gates (requires)
+- Components are used by features
+- Flows connect multiple features/components
+
+This creates relationships that AI agents can follow.
+
+---
+
+## Common Patterns
+
+### Purpose File Structure
+
+```yaml
+# Root .purpose
+project:
+  name: "My App"
+  description: "..."
+
+features:
+  login:
+    description: "User authentication"
+    gates: [^public-access]
+    signals: [!login-success, !login-failed]
+    components: [#LoginForm, #AuthProvider]
+
+components:
+  LoginForm:
+    description: "Login UI component"
+    used-by: [@login]
+```
+
+### Gate File Structure
+
+```yaml
+gates:
+  authenticated:
+    description: "User must be logged in"
+    keys: [user.id]
+  
+  admin-only:
+    description: "Admin access required"
+    requires: [^authenticated]
+    keys: [user.role == 'admin']
+```
+
+### CLI Command Pattern
+
+```typescript
+export async function myCommand(targetPath: string | undefined, options: MyOptions) {
+  const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
+  const spinner = ora();
+  
+  // Implementation
+  spinner.succeed('Done!');
+}
+```
+
+---
+
+## When Working on Horizon
+
+### Before Making Changes
+
+1. Check existing specs in `packages/cli/templates/horizon/specs/`
+2. Review similar commands/features for patterns
+3. Ensure consistency with symbol system
+4. Consider impact on IDE adapters
+
+### After Making Changes
+
+1. Run `npm run build` to ensure everything compiles
+2. Test CLI commands locally
+3. Update documentation if needed
+4. Consider if templates need updating
+
+### Code Style
+
+- Use TypeScript strict mode
+- Follow existing patterns in each package
+- Use Horizon logger pattern (even if stubbed)
+- Document public APIs
+- Keep functions focused and testable
+
+---
+
+## Horizon Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `horizon init` | Initialize Horizon in a project |
+| `horizon sync [ide]` | Generate IDE instruction files (auto-detects IDE) |
+| `horizon sync --all` | Sync all supported IDEs at once |
+| `horizon index` | Generate scan index for visual discovery |
+| `horizon doctor` | Health check and setup validation |
+| `horizon status` | Show project symbol status |
+| `horizon visualize` | Open the Dreamscape visualizer |
+| `horizon watch` | Auto-sync on `.horizon/` file changes |
+| `horizon upgrade` | Add new features/specs to existing setup |
+| `horizon summary` | Generate `.horizon/project.md` |
+| `horizon purpose validate` | Validate .purpose files |
+| `horizon gate validate` | Validate gate.yaml files |
+| `horizon dream aggregate` | Aggregate all symbols |
+
+---
+
+## Example Project
+
+See `examples/shopflow/` for a complete example demonstrating:
+- Purpose files at multiple levels
+- Gate configuration
+- Dream file with ideas
+- Generated `.cursorrules`
+- Full `.horizon/` directory structure
+
+---
+
+## Changelog and Version Management
+
+**CRITICAL:** When asked to "update changelog", "update version", "bump version", or similar requests, follow this process:
+
+### Semantic Versioning Rules
+
+The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (MAJOR.MINOR.PATCH):
+
+- **MAJOR** (X.0.0): Breaking changes, incompatible API changes
+- **MINOR** (0.X.0): New features, backwards-compatible additions
+- **PATCH** (0.0.X): Bug fixes, backwards-compatible fixes
+
+### Changelog Update Process
+
+1. **Analyze Changes**: Review git diff or recent changes to determine version bump type:
+   - Breaking API changes → MAJOR
+   - New features, commands, or capabilities → MINOR
+   - Bug fixes, documentation updates, refactoring → PATCH
+
+2. **Read Current Version**: Check `package.json` for current version (currently `0.1.0`)
+
+3. **Calculate New Version**: Increment appropriate segment based on changes
+
+4. **Update CHANGELOG.md**:
+   - Move items from `[Unreleased]` to new version section
+   - Format: `## [X.Y.Z] - YYYY-MM-DD`
+   - Use sections: `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security`
+   - Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format
+   - Add new `[Unreleased]` section at top
+
+5. **Update package.json**: Update `version` field to new version
+
+6. **Generate Git Commit Message**: Create a conventional commit message:
+   ```
+   Format: `chore(release): vX.Y.Z`
+   
+   Or more descriptive:
+   `chore(release): bump version to X.Y.Z`
+   
+   Or with details:
+   `chore(release): vX.Y.Z
+   
+   - Added: [list of additions]
+   - Changed: [list of changes]
+   - Fixed: [list of fixes]`
+   ```
+
+### Example Workflow
+
+When user says "update changelog" or "bump version":
+
+1. Check git status/diff to see what changed
+2. Determine version bump (major/minor/patch)
+3. Update CHANGELOG.md with proper date and sections
+4. Update package.json version
+5. Provide git commit message suggestion
+
+**Example Output:**
+
+```
+Updated version from 0.1.0 to 0.2.0 (minor bump for new features)
+
+CHANGELOG.md updated with new version section
+package.json version updated
+
+Suggested git commit message:
+chore(release): v0.2.0
+
+- Added: New CLI command for scanning
+- Changed: Improved error handling in gate validation
+- Fixed: Issue with symbol parsing in nested directories
+```
+
+### Version Bump Guidelines
+
+- **PATCH** (0.0.X): Bug fixes, typos, documentation, internal refactoring
+- **MINOR** (0.X.0): New commands, new features, new packages, new capabilities, backwards-compatible changes
+- **MAJOR** (X.0.0): Breaking API changes, removed features, incompatible changes
+
+Always update both `CHANGELOG.md` and `package.json` together.
+
+---
+
+## Reference Files
+
+- `README.md` - Project overview and quick start
+- `CHANGELOG.md` - Version history and features
+- `packages/cli/templates/horizon/specs/symbols.md` - Symbol system reference
+- `packages/cli/templates/horizon/specs/logger.md` - Logging specification
+- `packages/cli/templates/horizon/specs/scan.md` - Scan protocol
+- `packages/cli/templates/horizon/docs/commands.md` - CLI reference
+- `packages/cli/templates/horizon/docs/patterns.md` - Coding patterns
+- `packages/cli/templates/horizon/docs/troubleshooting.md` - Common issues
+
+---
+
+*This file documents the Horizon framework itself. When working on Horizon codebase, reference these patterns and concepts. For projects using Horizon, see the generated `.cursorrules` in those projects.*
