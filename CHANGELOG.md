@@ -7,16 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-01-19
+
 ### Added
-- Initial monorepo structure with npm workspaces
-- `@horizon/purpose-core` - Purpose file parsing and aggregation (migrated from a-purpose)
-- `@horizon/gate-core` - Gate configuration parsing and validation (migrated from a-gate)
-- `@horizon/gate-sdk` - Runtime SDK for gate checking (migrated from a-gate)
-- `@horizon/dream-core` - Dream aggregation and symbol index
-- `@horizon/visualizer` - Dreamscape infinite canvas UI
-- `@horizon/cli` - Unified command-line interface
-- Symbol system with cross-referencing (@, #, $, %, ~, ^, !, ?)
-- `.dream` file format for canvas state persistence
+- Comprehensive `.cursorrules` file with Horizon framework documentation
+- Changelog and version management instructions in `.cursorrules`
+- Semantic versioning workflow for automated changelog updates
+
+### Changed
+- Updated `.gitignore` with comprehensive Node.js, TypeScript, and monorepo patterns
+- Improved gitignore coverage for build artifacts, cache directories, and IDE files
 
 ## [0.2.0] - 2026-01-14
 

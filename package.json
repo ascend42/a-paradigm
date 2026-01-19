@@ -1,6 +1,6 @@
 {
   "name": "horizon",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Unified developer tools ecosystem - Purpose, Gate, and Dream",
   "private": true,
   "workspaces": [
