@@ -1,79 +1,40 @@
 # ShopFlow - Project Purpose
 # Root context for the entire e-commerce platform
 
-intent: |
+version: "1.0.0"
+
+description: |
   ShopFlow is a modern e-commerce platform designed for small-to-medium 
   businesses who want a beautiful, fast, and conversion-optimized 
   shopping experience. We prioritize mobile-first design, accessibility,
   and seamless checkout flows.
 
 context:
-  domain: E-commerce / Retail
-  users:
-    - Shoppers browsing products
-    - Store owners managing inventory
-    - Admin users with full access
-  tech_stack:
-    - React 18 with TypeScript
-    - Node.js backend
-    - PostgreSQL database
-    - Stripe for payments
-    - Redis for caching
+  - "Domain: E-commerce / Retail"
+  - "Users: Shoppers browsing products, Store owners managing inventory, Admin users with full access"
+  - "Tech Stack: React 18 with TypeScript, Node.js backend, PostgreSQL database, Stripe for payments, Redis for caching"
 
 rules:
-  - All prices must be displayed in the user's local currency
-  - Cart state persists across sessions via localStorage + server sync
-  - Payment processing must happen server-side only
-  - Product images require alt text for accessibility
-  - Mobile viewport must be primary design target
+  currency: "All prices must be displayed in the user's local currency"
+  cart_persistence: "Cart state persists across sessions via localStorage + server sync"
+  payment_security: "Payment processing must happen server-side only"
+  accessibility: "Product images require alt text for accessibility"
+  mobile_first: "Mobile viewport must be primary design target"
 
 features:
-  - id: "@product-browse"
-    name: Product Browsing
-    description: Browse, filter, and search products
-    references:
-      - "#ProductCard"
-      - "#SearchBar"
-      - "#FilterPanel"
-    
-  - id: "@cart-management"
-    name: Cart Management
-    description: Add, remove, and update cart items
-    references:
-      - "#CartDrawer"
-      - "#CartItem"
-      - "@product-browse"
-    
-  - id: "@checkout-flow"
-    name: Checkout Flow
-    description: Multi-step checkout with payment integration
-    references:
-      - "@cart-management"
-      - "@payment-processing"
-      - "^auth-required"
-      - "$checkout-to-confirmation"
-    
-  - id: "@wishlist"
-    name: Wishlist
-    description: Save products for later
-    references:
-      - "@product-browse"
-      - "^auth-required"
+  "@product-browse":
+    description: "Browse, filter, and search products"
+  "@cart-management":
+    description: "Add, remove, and update cart items"
+  "@checkout-flow":
+    description: "Multi-step checkout with payment integration"
+  "@wishlist":
+    description: "Save products for later"
 
 components:
-  - id: "#ProductCard"
-    name: ProductCard
-    path: src/components/ProductCard.tsx
-    description: Displays product thumbnail, price, and quick-add button
-    
-  - id: "#CartDrawer"
-    name: CartDrawer  
-    path: src/components/CartDrawer.tsx
-    description: Slide-out drawer showing current cart contents
-    references:
-      - "#CartItem"
-      
-  - id: "#SearchBar"
-    name: SearchBar
-    path: src/components/SearchBar.tsx
-    description: Global search with autocomplete suggestions
+  "#ProductCard":
+    description: "Displays product thumbnail, price, and quick-add button"
+  "#CartDrawer":
+    description: "Slide-out drawer showing current cart contents"
+  "#SearchBar":
+    description: "Global search with autocomplete suggestions"

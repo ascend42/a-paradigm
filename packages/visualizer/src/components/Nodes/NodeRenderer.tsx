@@ -2,7 +2,7 @@
  * Node renderer - renders nodes based on their type
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import type { SymbolEntry, SymbolType } from '../../types';
 import { useNodesStore } from '../../store/nodesStore';
 import { useCanvasStore } from '../../store/canvasStore';
@@ -93,7 +93,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
   }, []);
 
   // Attach global listeners when dragging
-  useState(() => {
+  useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
@@ -102,7 +102,7 @@ export function NodeRenderer({ node }: NodeRendererProps) {
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  });
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Build CSS classes including compound idea type
   const nodeClasses = [

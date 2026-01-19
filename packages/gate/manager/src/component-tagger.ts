@@ -12,7 +12,7 @@ import type { ComponentAccessInfo } from './types.js';
 export interface ComponentTaggerOptions {
   /** Root directory to scan */
   rootDir: string;
-  /** File patterns to scan (e.g., ['**/*.tsx', '**/*.jsx']) */
+  /** File patterns to scan (e.g., TypeScript React and JavaScript React files) */
   patterns?: string[];
   /** Gate configuration path */
   gateConfigPath?: string;
@@ -27,7 +27,7 @@ export interface ComponentTaggerOptions {
 export async function scanComponents(
   options: ComponentTaggerOptions
 ): Promise<ComponentAccessInfo[]> {
-  const { rootDir, patterns = ['**/*.tsx', '**/*.jsx'], gateConfigPath } = options;
+  const { rootDir, patterns = ['**/*.tsx', '**/*.jsx'] } = options;
 
   const components: ComponentAccessInfo[] = [];
   const scannedFiles = new Set<string>();

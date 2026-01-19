@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Dreamscape Visualizer Enhancements**
+  - Click-and-drag panning on canvas background (left-click drag)
+  - Help panel with hotkeys and navigation tips (toggle with `?` key)
+  - Theme system with three modes: Morning 🌅, Daytime ☀️, and Nighttime 🌙
+  - Softer, dreamlike color palette with cloud-like aesthetics
+  - All on/off toggle button with eye icons (👁️ open, half-open, closed)
+  - Auto-reorganization of visible nodes when type visibility toggles (fills screen without gaps)
+  - Editable node properties panel (symbol, type, description)
+  - Enhanced visual distinction for toolbar stat icons (filled vs outline for on/off states)
+  - Keyboard shortcuts for editing (Enter to save, Escape to cancel)
+  - Smooth transitions and visual feedback throughout
+
+- **Tutorial System Improvements**
+  - Auto-generation of tutorial curriculum files (`curriculum.yaml` and step Markdown files)
+  - Enhanced `horizon tutorial checkpoint` command to display next step preview
+  - Updated tutorial content explaining concatenated symbols (`?@`, `?#`, etc.)
+
+- **Schema Updates**
+  - Updated `.dream` file format to latest JSON schema
+  - Updated `.purpose` file format to latest schema (context array, rules object, features/components objects)
+
+### Changed
+- **Visualizer**
+  - Fixed `horizon visualize` command to actually start Vite dev server (was previously a stub)
+  - Improved z-index layering: properties panel (400) > command input (300) > canvas (100)
+  - Enhanced node styling with backdrop blur and softer shadows
+  - Improved toolbar stat icon visibility with background containers
+  - Theme transitions are now smooth and animated
+
+- **Build System**
+  - Fixed build order to ensure core packages build before dependent packages
+  - Fixed TypeScript module resolution for workspace dependencies
+  - Removed invalid `--noExternal` flag from tsup builds
+  - Corrected npm workspace dependency syntax (`workspace:*` → `*`)
+
+### Fixed
+- ESBuild parsing error in component-tagger.ts (JSDoc comment issue)
+- TypeScript type export mismatch in gate-manager
+- Unused variable warnings in test-generator and flow-tester
+- Schema validation errors in example project files
+- Command input overlap with properties panel (fixed via z-index)
+
 ## [0.2.1] - 2026-01-19
 
 ### Added

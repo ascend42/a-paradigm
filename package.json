@@ -11,7 +11,10 @@
     "packages/scan/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build:core && npm run build:packages && npm run build:cli",
+    "build:core": "npm run build --workspace=@horizon/purpose-core && npm run build --workspace=@horizon/gate-core && npm run build --workspace=@horizon/scan-core",
+    "build:packages": "npm run build --workspace=@horizon/gate-sdk && npm run build --workspace=@horizon/gate-manager && npm run build --workspace=@horizon/dream-core && npm run build --workspace=@horizon/visualizer",
+    "build:cli": "npm run build --workspace=@horizon/cli",
     "dev": "npm run dev --workspace=@horizon/visualizer",
     "dev:visualizer": "npm run dev --workspace=@horizon/visualizer",
     "lint": "eslint packages --ext .ts,.tsx",

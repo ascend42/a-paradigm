@@ -179,6 +179,29 @@ Use for **exploration and future possibilities** — not yet implemented.
 
 **Where:** Dream files, planning documents, ideation.
 
+#### Compound Ideas (`?@`, `?#`, `?!`, etc.)
+
+Ideas can specify what type of symbol they're exploring by using a compound prefix:
+
+```
+?@subscription-model      - Idea for a feature
+?#dark-mode-toggle        - Idea for a component
+?$express-checkout        - Idea for a flow
+?%user-preferences        - Idea for state
+?~performance-optimization - Idea for an aspect
+?^premium-access          - Idea for a gate
+?!payment-webhook         - Idea for a signal
+```
+
+**Why use compound ideas?**
+- **Categorization**: Makes it clear what type of symbol the idea relates to
+- **Discoverability**: In the Dreamscape visualizer, compound ideas connect to their target symbol type
+- **Planning**: Helps organize ideas by what they would become if implemented
+
+**Simple vs Compound:**
+- `?subscription-model` - General idea, no specific type
+- `?@subscription-model` - Idea specifically for a feature
+
 ---
 
 ## Symbol Naming Conventions

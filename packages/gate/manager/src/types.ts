@@ -2,7 +2,7 @@
  * Type definitions for Gate Manager
  */
 
-import type { Gate, GateCheckResult, ParsedGateConfig } from '@horizon/gate-core';
+import type { GateCheckResult } from '@horizon/gate-core';
 
 /**
  * Options for Gateway decorator

@@ -4,6 +4,28 @@
 
 import { create } from 'zustand';
 import type { SymbolEntry, SymbolType, Position } from '../types';
+import { parseSymbol } from '../types';
+
+// Helper to build symbol from type and name
+function buildSymbol(type: SymbolType, name: string, ideaType?: SymbolType): string {
+  const prefixMap: Record<SymbolType, string> = {
+    feature: '@',
+    component: '#',
+    flow: '$',
+    state: '%',
+    aspect: '~',
+    gate: '^',
+    signal: '!',
+    idea: '?',
+  };
+
+  if (type === 'idea' && ideaType) {
+    // Compound idea: ?@name
+    return `?${prefixMap[ideaType]}${name}`;
+  }
+
+  return `${prefixMap[type]}${name}`;
+}
 
 interface NodesState {
   nodes: SymbolEntry[];
@@ -20,6 +42,7 @@ interface NodesState {
   selectNode: (id: string | null) => void;
   hoverNode: (id: string | null) => void;
   updateNodePosition: (id: string, position: Position) => void;
+  updateNode: (id: string, updates: Partial<SymbolEntry>) => void;
   addNode: (node: SymbolEntry) => void;
   removeNode: (id: string) => void;
   addTag: (id: string, tag: string) => void;
@@ -30,6 +53,9 @@ interface NodesState {
   toggleType: (type: SymbolType) => void;
   setFilterTags: (tags: string[]) => void;
   setSearchQuery: (query: string) => void;
+  
+  // Layout
+  reorganizeVisibleNodes: () => void;
   
   // Computed
   getFilteredNodes: () => SymbolEntry[];
@@ -236,6 +262,52 @@ export const useNodesStore = create<NodesState>((set, get) => ({
       ),
     })),
 
+  updateNode: (id, updates) =>
+    set((state) => {
+      const node = state.nodes.find((n) => n.id === id);
+      if (!node) return state;
+
+      let finalUpdates = { ...updates };
+
+      // Handle type change - update symbol prefix if needed
+      if (updates.type && updates.type !== node.type) {
+        const parsed = parseSymbol(node.symbol);
+        if (parsed) {
+          // Extract name without prefix
+          const name = parsed.name;
+          const newSymbol = buildSymbol(updates.type, name, updates.ideaType ?? node.ideaType);
+          finalUpdates.symbol = newSymbol;
+          
+          // Clear ideaType if changing from idea to non-idea
+          if (node.type === 'idea' && updates.type !== 'idea') {
+            finalUpdates.ideaType = undefined;
+          }
+        }
+      }
+
+      // Handle symbol change - validate and update type if prefix changed
+      if (updates.symbol && updates.symbol !== node.symbol) {
+        const parsed = parseSymbol(updates.symbol);
+        if (parsed) {
+          finalUpdates.type = parsed.type;
+          if (parsed.ideaType) {
+            finalUpdates.ideaType = parsed.ideaType;
+          } else if (parsed.type !== 'idea') {
+            finalUpdates.ideaType = undefined;
+          }
+        }
+      }
+
+      // Set modified timestamp
+      finalUpdates.modified = new Date().toISOString();
+
+      return {
+        nodes: state.nodes.map((n) =>
+          n.id === id ? { ...n, ...finalUpdates } : n
+        ),
+      };
+    }),
+
   addNode: (node) =>
     set((state) => ({
       nodes: [...state.nodes, node],
@@ -265,18 +337,69 @@ export const useNodesStore = create<NodesState>((set, get) => ({
       ),
     })),
 
-  setVisibleTypes: (types) => set({ visibleTypes: types }),
+  setVisibleTypes: (types) => {
+    set({ visibleTypes: types });
+    // Reorganize after a short delay to allow state to update
+    setTimeout(() => {
+      get().reorganizeVisibleNodes();
+    }, 50);
+  },
 
-  toggleType: (type) =>
+  toggleType: (type) => {
     set((state) => ({
       visibleTypes: state.visibleTypes.includes(type)
         ? state.visibleTypes.filter((t) => t !== type)
         : [...state.visibleTypes, type],
-    })),
+    }));
+    // Reorganize after a short delay to allow state to update
+    setTimeout(() => {
+      get().reorganizeVisibleNodes();
+    }, 50);
+  },
 
   setFilterTags: (tags) => set({ filterTags: tags }),
 
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  reorganizeVisibleNodes: () => {
+    const state = get();
+    const visibleNodes = state.getFilteredNodes();
+    
+    if (visibleNodes.length === 0) return;
+
+    // Grid layout parameters
+    const NODE_WIDTH = 200; // Approximate node width
+    const NODE_HEIGHT = 120; // Approximate node height
+    const PADDING = 40; // Space between nodes
+    const START_X = 100;
+    const START_Y = 100;
+    
+    // Calculate grid dimensions
+    const cols = Math.ceil(Math.sqrt(visibleNodes.length * 1.5)); // Slightly wider grid
+    const rows = Math.ceil(visibleNodes.length / cols);
+    
+    // Update positions for visible nodes
+    const updatedNodes = state.nodes.map((node) => {
+      const visibleIndex = visibleNodes.findIndex((n) => n.id === node.id);
+      if (visibleIndex === -1) {
+        // Keep hidden nodes in their current position
+        return node;
+      }
+      
+      // Calculate grid position
+      const col = visibleIndex % cols;
+      const row = Math.floor(visibleIndex / cols);
+      
+      const newPosition = {
+        x: START_X + col * (NODE_WIDTH + PADDING),
+        y: START_Y + row * (NODE_HEIGHT + PADDING),
+      };
+      
+      return { ...node, position: newPosition };
+    });
+    
+    set({ nodes: updatedNodes });
+  },
 
   getFilteredNodes: () => {
     const state = get();

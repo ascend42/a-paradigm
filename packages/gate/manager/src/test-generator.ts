@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ParsedGateConfig, Gate, Flow } from '@horizon/gate-core';
+import type { Gate, Flow } from '@horizon/gate-core';
 import { parseGateConfig } from '@horizon/gate-core';
 
 /**
@@ -80,7 +80,6 @@ export async function generateTests(
  * Generate test file content for a single gate
  */
 function generateGateTest(gate: Gate, framework: 'jest' | 'vitest' | 'mocha'): string {
-  const describeFn = framework === 'mocha' ? 'describe' : 'describe';
   const testFn = framework === 'mocha' ? 'it' : framework === 'vitest' ? 'it' : 'test';
 
   const gateId = gate.id;
@@ -151,16 +150,14 @@ ${lockTests.join('\n\n')}
  */
 function generateFlowTest(
   flow: Flow,
-  gates: Gate[],
+  _gates: Gate[],
   framework: 'jest' | 'vitest' | 'mocha'
 ): string {
-  const describeFn = 'describe';
   const testFn = framework === 'mocha' ? 'it' : framework === 'vitest' ? 'it' : 'test';
 
   const flowName = flow.description || flow.id;
 
   const gateTests = flow.gates.map((gateId, idx) => {
-    const gate = gates.find((g) => g.id === gateId);
     return `    ${testFn}('should pass gate ${idx + 1}: ${gateId}', async () => {
       const entity = {
         // TODO: Add entity properties

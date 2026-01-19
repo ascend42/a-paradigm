@@ -34,9 +34,19 @@ export async function dreamAggregateCommand(targetPath: string) {
         for (const error of errors) {
           console.log(chalk.yellow(`  ⚠ ${error}`));
         }
+        // If there are validation errors, the .dream file format may be outdated
+        // Fall back to directory aggregation
+        console.log(chalk.gray('  Falling back to directory aggregation...\n'));
       }
-      if (data) {
-        result = await aggregateFromDream(data, absolutePath);
+      if (data && !errors.some(e => e.includes('Required'))) {
+        // Only use .dream file if it's valid (no required field errors)
+        try {
+          result = await aggregateFromDream(data, absolutePath);
+        } catch (error) {
+          // If aggregation fails, fall back to directory aggregation
+          console.log(chalk.yellow(`  ⚠ Error using .dream file: ${(error as Error).message}`));
+          console.log(chalk.gray('  Falling back to directory aggregation...\n'));
+        }
       }
     }
     

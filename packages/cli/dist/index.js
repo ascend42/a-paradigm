@@ -215,33 +215,107 @@ conventions:
 }
 
 // src/commands/visualize.ts
+import * as path2 from "path";
+import * as fs2 from "fs";
+import { fileURLToPath as fileURLToPath2 } from "url";
+import { spawn } from "child_process";
 import chalk2 from "chalk";
 import ora2 from "ora";
 import open from "open";
 async function visualizeCommand(options) {
   const port = parseInt(options.port, 10);
   console.log(chalk2.blue("\n\u{1F30C} Starting Dreamscape...\n"));
-  const spinner = ora2("Aggregating symbols...").start();
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  spinner.succeed("Aggregated symbols");
-  spinner.start("Starting visualizer server...");
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  spinner.succeed("Visualizer ready");
+  const __filename = fileURLToPath2(import.meta.url);
+  const __dirname = path2.dirname(__filename);
+  const rootDir = path2.resolve(__dirname, "../../..");
+  const visualizerDir = path2.join(rootDir, "packages/visualizer");
+  if (!fs2.existsSync(visualizerDir)) {
+    console.error(chalk2.red(`\u274C Visualizer not found at ${visualizerDir}`));
+    console.error(chalk2.gray("   Make sure you're running from the Horizon repository root\n"));
+    process.exit(1);
+  }
+  const spinner = ora2("Starting visualizer server...").start();
+  const viteProcess = spawn("npx", ["vite", "--port", port.toString(), "--host"], {
+    cwd: visualizerDir,
+    shell: true,
+    stdio: "pipe",
+    env: {
+      ...process.env
+    }
+  });
+  let serverReady = false;
+  let errorOutput = "";
+  viteProcess.stdout.on("data", (data) => {
+    const output = data.toString();
+    errorOutput += output;
+    if (output.includes("Local:") || output.includes("ready in")) {
+      if (!serverReady) {
+        serverReady = true;
+        spinner.succeed("Visualizer server started");
+      }
+    }
+    if (output.includes("error") || output.includes("Error")) {
+      console.log(chalk2.red(output));
+    }
+  });
+  viteProcess.stderr.on("data", (data) => {
+    const output = data.toString();
+    errorOutput += output;
+    if (output.includes("Local:") || output.includes("ready in")) {
+      if (!serverReady) {
+        serverReady = true;
+        spinner.succeed("Visualizer server started");
+      }
+    } else if (output.includes("error") || output.includes("Error")) {
+      console.log(chalk2.red(output));
+    }
+  });
+  viteProcess.on("error", (error) => {
+    spinner.fail("Failed to start visualizer");
+    console.error(chalk2.red(`Error: ${error.message}
+`));
+    console.log(chalk2.yellow("Make sure dependencies are installed:"));
+    console.log(chalk2.cyan("  npm install\n"));
+    process.exit(1);
+  });
+  await new Promise((resolve2) => setTimeout(resolve2, 2e3));
+  if (!serverReady) {
+    await new Promise((resolve2) => setTimeout(resolve2, 2e3));
+  }
   const url = `http://localhost:${port}`;
   console.log(chalk2.blue(`
 \u2728 Dreamscape running at ${chalk2.cyan(url)}
 `));
   console.log(chalk2.gray("Press Ctrl+C to stop\n"));
   if (options.open !== false) {
-    await open(url);
+    setTimeout(async () => {
+      await open(url);
+    }, 1e3);
   }
-  console.log(chalk2.yellow("Note: In development, run the visualizer with:"));
-  console.log(chalk2.cyan("  npm run dev:visualizer\n"));
+  process.on("SIGINT", () => {
+    console.log(chalk2.gray("\n\nStopping visualizer..."));
+    viteProcess.kill();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    viteProcess.kill();
+    process.exit(0);
+  });
+  viteProcess.on("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(chalk2.red(`
+Visualizer server exited with code ${code}`));
+      if (errorOutput) {
+        console.error(chalk2.gray(errorOutput));
+      }
+      process.exit(code);
+    }
+  });
 }
 
 // src/commands/status.ts
-import * as fs2 from "fs";
-import * as path2 from "path";
+import * as fs3 from "fs";
+import * as path3 from "path";
 import chalk3 from "chalk";
 import ora3 from "ora";
 import {
@@ -256,9 +330,9 @@ async function statusCommand() {
   console.log(chalk3.blue("\n\u{1F4CA} Horizon Status\n"));
   console.log(chalk3.gray("\u2500".repeat(40)));
   const spinner = ora3("Scanning project...").start();
-  const hasDream = fs2.existsSync(path2.join(cwd, ".dream"));
-  const hasPurpose = fs2.existsSync(path2.join(cwd, ".purpose"));
-  const hasGate = fs2.existsSync(path2.join(cwd, "gate.yaml"));
+  const hasDream = fs3.existsSync(path3.join(cwd, ".dream"));
+  const hasPurpose = fs3.existsSync(path3.join(cwd, ".purpose"));
+  const hasGate = fs3.existsSync(path3.join(cwd, "gate.yaml"));
   spinner.stop();
   console.log(chalk3.white("\nConfiguration Files"));
   console.log(chalk3.gray("\u2500".repeat(40)));
@@ -324,30 +398,34 @@ ${chalk4.blue("\u2569 \u2569")}${chalk4.cyan("\u2514\u2500\u2518\u2534\u2514\u25
 `;
 program.name("horizon").description("Unified developer tools ecosystem").version(VERSION).addHelpText("before", banner);
 program.command("init").description("Initialize Horizon in the current project").option("-f, --force", "Overwrite existing files").option("--name <name>", "Project name for .dream file").action(initCommand);
-program.command("setup [path]").description("Interactive setup wizard for Horizon").option("-y, --yes", "Accept all defaults (non-interactive)").option("-f, --force", "Overwrite existing .horizon config").action(async (path3, options) => {
+program.command("setup [path]").description("Interactive setup wizard for Horizon").option("-y, --yes", "Accept all defaults (non-interactive)").option("-f, --force", "Overwrite existing .horizon config").action(async (path4, options) => {
   const { setupCommand } = await import("./setup-4UYSOV6V.js");
-  await setupCommand(path3, options);
+  await setupCommand(path4, options);
 });
 program.command("visualize").alias("vis").alias("v").description("Launch the Dreamscape visualizer").option("-p, --port <port>", "Port to run the visualizer on", "3000").option("--no-open", "Do not auto-open browser").action(visualizeCommand);
 program.command("status").alias("st").description("Show project status and symbol counts").action(statusCommand);
 var purposeCmd = program.command("purpose").description("Purpose-related commands");
-purposeCmd.command("remember [path]").description("Aggregate and display purpose context").action(async (path3 = ".") => {
+purposeCmd.command("remember [path]").description("Aggregate and display purpose context").action(async (path4 = ".") => {
   const { purposeRememberCommand } = await import("./remember-G744KHPC.js");
-  await purposeRememberCommand(path3);
+  await purposeRememberCommand(path4);
 });
-purposeCmd.command("validate [path]").description("Validate purpose files").action(async (path3 = ".") => {
+purposeCmd.command("validate [path]").description("Validate purpose files").action(async (path4 = ".") => {
   const { purposeValidateCommand } = await import("./validate-TAKI5OK7.js");
-  await purposeValidateCommand(path3);
+  await purposeValidateCommand(path4);
 });
 var gateCmd = program.command("gate").description("Gate-related commands");
-gateCmd.command("validate [path]").description("Validate gate.yaml configuration").action(async (path3 = "./gate.yaml") => {
+gateCmd.command("validate [path]").description("Validate gate.yaml configuration").action(async (path4 = "./gate.yaml") => {
   const { gateValidateCommand } = await import("./validate-UO6B2N6R.js");
-  await gateValidateCommand(path3);
+  await gateValidateCommand(path4);
+});
+gateCmd.command("test [path]").description("Test gates and generate test files").option("--generate", "Generate test files from gate.yaml").option("--gate <gateId>", "Test specific gate").option("--component", "Validate component access").option("--framework <framework>", "Test framework (jest, vitest, mocha)", "jest").option("--output <dir>", "Output directory for generated tests", "tests/gates").action(async (path4, options) => {
+  const { gateTestCommand } = await import("./test-VKMEBMU6.js");
+  await gateTestCommand(path4, options);
 });
 var dreamCmd = program.command("dream").description("Dream-related commands");
-dreamCmd.command("aggregate [path]").description("Aggregate all sources into symbol index").action(async (path3 = ".") => {
-  const { dreamAggregateCommand } = await import("./aggregate-JFYXHXEC.js");
-  await dreamAggregateCommand(path3);
+dreamCmd.command("aggregate [path]").description("Aggregate all sources into symbol index").action(async (path4 = ".") => {
+  const { dreamAggregateCommand } = await import("./aggregate-OGMGEECX.js");
+  await dreamAggregateCommand(path4);
 });
 dreamCmd.command("snapshot <name>").description("Create a timeline snapshot").option("-d, --description <desc>", "Snapshot description").action(async (name, options) => {
   const { dreamSnapshotCommand } = await import("./snapshot-C5OH6WZJ.js");
@@ -357,23 +435,23 @@ program.command("sync [ide]").description("Generate IDE instruction files from .
   const { syncCommand } = await import("./sync-IPLN5UY4.js");
   await syncCommand(ide, options);
 });
-program.command("cursorrules [path]").description("[DEPRECATED] Use `horizon sync cursor` instead").option("-a, --append", "Append to existing .cursorrules").option("-f, --force", "Overwrite existing .cursorrules").option("-p, --preview", "Preview output without writing").option("--init", "Create default .horizon config if missing").option("--with-scan", "Include scan protocol section").action(async (path3, options) => {
+program.command("cursorrules [path]").description("[DEPRECATED] Use `horizon sync cursor` instead").option("-a, --append", "Append to existing .cursorrules").option("-f, --force", "Overwrite existing .cursorrules").option("-p, --preview", "Preview output without writing").option("--init", "Create default .horizon config if missing").option("--with-scan", "Include scan protocol section").action(async (path4, options) => {
   console.log("\x1B[33m\u26A0\uFE0F  `horizon cursorrules` is deprecated. Use `horizon sync cursor` instead.\x1B[0m\n");
   const { cursorrrulesCommand } = await import("./cursorrules-VK4SO7NF.js");
-  await cursorrrulesCommand(path3, options);
+  await cursorrrulesCommand(path4, options);
 });
-program.command("index [path]").description("Generate scan index for visual discovery").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path3, options) => {
+program.command("index [path]").description("Generate scan index for visual discovery").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path4, options) => {
   const { indexCommand } = await import("./scan-TDCOQDGX.js");
-  await indexCommand(path3, options);
+  await indexCommand(path4, options);
 });
 var scanCmd = program.command("scan").description("Scan-related commands");
-scanCmd.command("index [path]").description("Generate scan index (alias for `horizon index`)").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path3, options) => {
+scanCmd.command("index [path]").description("Generate scan index (alias for `horizon index`)").option("-o, --output <path>", "Output path for scan-index.json").option("-q, --quiet", "Suppress output").action(async (path4, options) => {
   const { indexCommand } = await import("./scan-TDCOQDGX.js");
-  await indexCommand(path3, options);
+  await indexCommand(path4, options);
 });
-program.command("upgrade [path]").description("Upgrade project with new Horizon features").option("--features <features...>", "Features to upgrade (scan, logger)").option("--all", "Apply all available upgrades").option("--dry-run", "Show what would be upgraded without making changes").option("-f, --force", "Force re-upgrade even if already configured").action(async (path3, options) => {
+program.command("upgrade [path]").description("Upgrade project with new Horizon features").option("--features <features...>", "Features to upgrade (scan, logger)").option("--all", "Apply all available upgrades").option("--dry-run", "Show what would be upgraded without making changes").option("-f, --force", "Force re-upgrade even if already configured").action(async (path4, options) => {
   const { upgradeCommand } = await import("./upgrade-ZI6FOW4E.js");
-  await upgradeCommand(path3, options);
+  await upgradeCommand(path4, options);
 });
 program.command("doctor").description("Health check - validate Horizon setup").action(async () => {
   const { doctorCommand } = await import("./doctor-L4GZELY2.js");
@@ -386,5 +464,34 @@ program.command("watch").description("Watch for changes and auto-sync IDE files"
 program.command("summary").description("Generate .horizon/project.md with project stats").action(async () => {
   const { summaryCommand } = await import("./summary-3K6HACHI.js");
   await summaryCommand();
+});
+var tutorialCmd = program.command("tutorial").description("Interactive tutorial system");
+tutorialCmd.command("start [path]").description("Start the tutorial").action(async (path4) => {
+  const { tutorialStartCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialStartCommand(path4);
+});
+tutorialCmd.command("step [n] [path]").description("Show tutorial step").action(async (n, path4) => {
+  const { tutorialStepCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialStepCommand(path4, n);
+});
+tutorialCmd.command("checkpoint [path]").description("Validate current checkpoint").action(async (path4) => {
+  const { tutorialCheckpointCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialCheckpointCommand(path4);
+});
+tutorialCmd.command("next [path]").description("Move to next step").action(async (path4) => {
+  const { tutorialNextCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialNextCommand(path4);
+});
+tutorialCmd.command("status [path]").description("Show tutorial progress").action(async (path4) => {
+  const { tutorialStatusCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialStatusCommand(path4);
+});
+tutorialCmd.command("reset [path]").description("Reset tutorial to beginning").action(async (path4) => {
+  const { tutorialResetCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialResetCommand(path4);
+});
+tutorialCmd.command("bugs [path]").description("List intentional bugs").action(async (path4) => {
+  const { tutorialBugsCommand } = await import("./tutorial-WPCMWWGN.js");
+  await tutorialBugsCommand(path4);
 });
 program.parse();

@@ -16,7 +16,7 @@ import type { FlowTestConfig } from './types.js';
  */
 export async function testFlow(
   flow: Flow,
-  gates: Gate[],
+  _gates: Gate[],
   entity: Record<string, unknown>
 ): Promise<Array<{ gateId: string; passed: boolean; error?: string }>> {
   const results: Array<{ gateId: string; passed: boolean; error?: string }> = [];
