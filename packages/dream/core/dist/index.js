@@ -229,6 +229,180 @@ import {
   extractComponents
 } from "@horizon/purpose-core";
 import { parseGateConfig, findGateFiles } from "@horizon/gate-core";
+
+// src/symbol-index.ts
+function createSymbolIndex() {
+  return {
+    entries: /* @__PURE__ */ new Map(),
+    byType: /* @__PURE__ */ new Map(),
+    bySource: /* @__PURE__ */ new Map(),
+    timestamp: 0
+  };
+}
+function buildSymbolIndex(result) {
+  const index = createSymbolIndex();
+  index.timestamp = result.timestamp;
+  for (const symbol of result.symbols) {
+    index.entries.set(symbol.id, symbol);
+    if (!index.byType.has(symbol.type)) {
+      index.byType.set(symbol.type, []);
+    }
+    index.byType.get(symbol.type).push(symbol);
+    if (!index.bySource.has(symbol.source)) {
+      index.bySource.set(symbol.source, []);
+    }
+    index.bySource.get(symbol.source).push(symbol);
+  }
+  return index;
+}
+function getSymbol(index, symbol) {
+  for (const entry of index.entries.values()) {
+    if (entry.symbol === symbol) {
+      return entry;
+    }
+  }
+  return void 0;
+}
+function getSymbolById(index, id) {
+  return index.entries.get(id);
+}
+function getSymbolsByType(index, type) {
+  return index.byType.get(type) || [];
+}
+function getSymbolsBySource(index, source) {
+  return index.bySource.get(source) || [];
+}
+function searchSymbols(index, query) {
+  const lowerQuery = query.toLowerCase();
+  const results = [];
+  for (const entry of index.entries.values()) {
+    if (entry.symbol.toLowerCase().includes(lowerQuery)) {
+      results.push(entry);
+      continue;
+    }
+    if (entry.description?.toLowerCase().includes(lowerQuery)) {
+      results.push(entry);
+      continue;
+    }
+    if (entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery))) {
+      results.push(entry);
+    }
+  }
+  return results;
+}
+function getReferencesTo(index, symbol) {
+  const entry = getSymbol(index, symbol);
+  if (!entry) return [];
+  return entry.referencedBy.map((ref) => getSymbol(index, ref)).filter((e) => e !== void 0);
+}
+function getReferencesFrom(index, symbol) {
+  const entry = getSymbol(index, symbol);
+  if (!entry) return [];
+  return entry.references.map((ref) => getSymbol(index, ref)).filter((e) => e !== void 0);
+}
+function getSymbolsByTag(index, tag) {
+  const results = [];
+  for (const entry of index.entries.values()) {
+    if (entry.tags?.includes(tag)) {
+      results.push(entry);
+    }
+  }
+  return results;
+}
+function getAllTags(index) {
+  const tags = /* @__PURE__ */ new Set();
+  for (const entry of index.entries.values()) {
+    for (const tag of entry.tags || []) {
+      tags.add(tag);
+    }
+  }
+  return Array.from(tags).sort();
+}
+function getSymbolCounts(index) {
+  const counts = {
+    feature: 0,
+    component: 0,
+    flow: 0,
+    state: 0,
+    aspect: 0,
+    gate: 0,
+    signal: 0,
+    idea: 0
+  };
+  for (const [type, symbols] of index.byType) {
+    counts[type] = symbols.length;
+  }
+  return counts;
+}
+function getAllSymbols(index) {
+  return Array.from(index.entries.values());
+}
+function parseSymbol(symbol) {
+  if (symbol.length < 2) return null;
+  if (symbol.startsWith("?") && symbol.length >= 3) {
+    const secondChar = symbol[1];
+    const prefixToType2 = {
+      "@": "feature",
+      "#": "component",
+      "$": "flow",
+      "%": "state",
+      "~": "aspect",
+      "^": "gate",
+      "!": "signal"
+    };
+    if (secondChar in prefixToType2) {
+      return {
+        type: "idea",
+        name: symbol.slice(2),
+        // Remove "?@"
+        ideaType: prefixToType2[secondChar]
+      };
+    }
+    return { type: "idea", name: symbol.slice(1) };
+  }
+  const prefix = symbol[0];
+  const name = symbol.slice(1);
+  const prefixToType = {
+    "@": "feature",
+    "#": "component",
+    "$": "flow",
+    "%": "state",
+    "~": "aspect",
+    "^": "gate",
+    "!": "signal",
+    "?": "idea"
+  };
+  const type = prefixToType[prefix];
+  if (!type) return null;
+  return { type, name };
+}
+function createSymbolString(type, name) {
+  const prefixes = {
+    feature: "@",
+    component: "#",
+    flow: "$",
+    state: "%",
+    aspect: "~",
+    gate: "^",
+    signal: "!",
+    idea: "?"
+  };
+  return `${prefixes[type]}${name}`;
+}
+function isValidSymbol(symbol) {
+  return parseSymbol(symbol) !== null;
+}
+function getAutocompleteSuggestions(index, partial, limit = 10) {
+  const lowerPartial = partial.toLowerCase();
+  const parsed = parseSymbol(partial);
+  if (parsed) {
+    const typeSymbols = getSymbolsByType(index, parsed.type);
+    return typeSymbols.filter((s) => s.symbol.toLowerCase().includes(lowerPartial)).slice(0, limit);
+  }
+  return searchSymbols(index, partial).slice(0, limit);
+}
+
+// src/aggregator.ts
 async function aggregateFromDream(dreamFile, rootDir) {
   const symbols = [];
   const errors = [];
@@ -345,10 +519,13 @@ async function aggregateFromDream(dreamFile, rootDir) {
         continue;
       }
     }
+    const parsed = parseSymbol(node.symbol);
+    const ideaType = parsed?.ideaType;
     symbols.push(createSymbolEntry({
       id: node.id,
       symbol: node.symbol,
       type: node.type,
+      ideaType,
       source: "dream",
       filePath: ".dream",
       data: node,
@@ -403,7 +580,7 @@ function resolveReferences(symbols) {
   const symbolMap = new Map(symbols.map((s) => [s.symbol, s]));
   for (const symbol of symbols) {
     const dataStr = JSON.stringify(symbol.data);
-    const refPattern = /[@#$%~^!?][\w-]+/g;
+    const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[\w-]+/g;
     const matches = dataStr.match(refPattern) || [];
     for (const match of matches) {
       if (match !== symbol.symbol && symbolMap.has(match)) {
@@ -437,157 +614,6 @@ async function aggregateFromDirectory(rootDir) {
     }
   };
   return aggregateFromDream(dreamFile, rootDir);
-}
-
-// src/symbol-index.ts
-function createSymbolIndex() {
-  return {
-    entries: /* @__PURE__ */ new Map(),
-    byType: /* @__PURE__ */ new Map(),
-    bySource: /* @__PURE__ */ new Map(),
-    timestamp: 0
-  };
-}
-function buildSymbolIndex(result) {
-  const index = createSymbolIndex();
-  index.timestamp = result.timestamp;
-  for (const symbol of result.symbols) {
-    index.entries.set(symbol.id, symbol);
-    if (!index.byType.has(symbol.type)) {
-      index.byType.set(symbol.type, []);
-    }
-    index.byType.get(symbol.type).push(symbol);
-    if (!index.bySource.has(symbol.source)) {
-      index.bySource.set(symbol.source, []);
-    }
-    index.bySource.get(symbol.source).push(symbol);
-  }
-  return index;
-}
-function getSymbol(index, symbol) {
-  for (const entry of index.entries.values()) {
-    if (entry.symbol === symbol) {
-      return entry;
-    }
-  }
-  return void 0;
-}
-function getSymbolById(index, id) {
-  return index.entries.get(id);
-}
-function getSymbolsByType(index, type) {
-  return index.byType.get(type) || [];
-}
-function getSymbolsBySource(index, source) {
-  return index.bySource.get(source) || [];
-}
-function searchSymbols(index, query) {
-  const lowerQuery = query.toLowerCase();
-  const results = [];
-  for (const entry of index.entries.values()) {
-    if (entry.symbol.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-      continue;
-    }
-    if (entry.description?.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-      continue;
-    }
-    if (entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery))) {
-      results.push(entry);
-    }
-  }
-  return results;
-}
-function getReferencesTo(index, symbol) {
-  const entry = getSymbol(index, symbol);
-  if (!entry) return [];
-  return entry.referencedBy.map((ref) => getSymbol(index, ref)).filter((e) => e !== void 0);
-}
-function getReferencesFrom(index, symbol) {
-  const entry = getSymbol(index, symbol);
-  if (!entry) return [];
-  return entry.references.map((ref) => getSymbol(index, ref)).filter((e) => e !== void 0);
-}
-function getSymbolsByTag(index, tag) {
-  const results = [];
-  for (const entry of index.entries.values()) {
-    if (entry.tags?.includes(tag)) {
-      results.push(entry);
-    }
-  }
-  return results;
-}
-function getAllTags(index) {
-  const tags = /* @__PURE__ */ new Set();
-  for (const entry of index.entries.values()) {
-    for (const tag of entry.tags || []) {
-      tags.add(tag);
-    }
-  }
-  return Array.from(tags).sort();
-}
-function getSymbolCounts(index) {
-  const counts = {
-    feature: 0,
-    component: 0,
-    flow: 0,
-    state: 0,
-    aspect: 0,
-    gate: 0,
-    signal: 0,
-    idea: 0
-  };
-  for (const [type, symbols] of index.byType) {
-    counts[type] = symbols.length;
-  }
-  return counts;
-}
-function getAllSymbols(index) {
-  return Array.from(index.entries.values());
-}
-function parseSymbol(symbol) {
-  if (symbol.length < 2) return null;
-  const prefix = symbol[0];
-  const name = symbol.slice(1);
-  const prefixToType = {
-    "@": "feature",
-    "#": "component",
-    "$": "flow",
-    "%": "state",
-    "~": "aspect",
-    "^": "gate",
-    "!": "signal",
-    "?": "idea"
-  };
-  const type = prefixToType[prefix];
-  if (!type) return null;
-  return { type, name };
-}
-function createSymbolString(type, name) {
-  const prefixes = {
-    feature: "@",
-    component: "#",
-    flow: "$",
-    state: "%",
-    aspect: "~",
-    gate: "^",
-    signal: "!",
-    idea: "?"
-  };
-  return `${prefixes[type]}${name}`;
-}
-function isValidSymbol(symbol) {
-  return parseSymbol(symbol) !== null;
-}
-function getAutocompleteSuggestions(index, partial, limit = 10) {
-  const lowerPartial = partial.toLowerCase();
-  const parsed = parseSymbol(partial);
-  if (parsed) {
-    const typeSymbols = getSymbolsByType(index, parsed.type);
-    return typeSymbols.filter((s) => s.symbol.toLowerCase().includes(lowerPartial)).slice(0, limit);
-  }
-  return searchSymbols(index, partial).slice(0, limit);
 }
 export {
   PREFIX_TO_TYPE,

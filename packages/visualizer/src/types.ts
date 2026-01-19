@@ -24,6 +24,8 @@ export interface SymbolEntry {
   id: string;
   symbol: string;
   type: SymbolType;
+  /** For compound ideas (?@, ?#, etc.), the type this idea represents */
+  ideaType?: SymbolType;
   source: SourceType;
   filePath: string;
   data: unknown;
@@ -44,9 +46,36 @@ export interface SymbolIndex {
 }
 
 // Symbol utilities
-export function parseSymbol(symbol: string): { type: SymbolType; name: string } | null {
+export function parseSymbol(symbol: string): { type: SymbolType; name: string; ideaType?: SymbolType } | null {
   if (symbol.length < 2) return null;
 
+  // CRITICAL: Check compound idea prefixes FIRST (?@, ?#, ?!, etc.)
+  // This must come before single prefix check to avoid mis-parsing
+  if (symbol.startsWith('?') && symbol.length >= 3) {
+    const secondChar = symbol[1];
+    const prefixToType: Record<string, SymbolType> = {
+      '@': 'feature',
+      '#': 'component',
+      '$': 'flow',
+      '%': 'state',
+      '~': 'aspect',
+      '^': 'gate',
+      '!': 'signal',
+    };
+    
+    if (secondChar in prefixToType) {
+      // Compound idea: ?@subscription -> idea for a feature
+      return {
+        type: 'idea',
+        name: symbol.slice(2), // Remove "?@"
+        ideaType: prefixToType[secondChar],
+      };
+    }
+    // Simple idea: ?subscription
+    return { type: 'idea', name: symbol.slice(1) };
+  }
+
+  // Standard single-prefix parsing
   const prefix = symbol[0];
   const name = symbol.slice(1);
 
