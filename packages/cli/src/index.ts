@@ -97,6 +97,19 @@ gateCmd
     await gateValidateCommand(path);
   });
 
+gateCmd
+  .command('test [path]')
+  .description('Test gates and generate test files')
+  .option('--generate', 'Generate test files from gate.yaml')
+  .option('--gate <gateId>', 'Test specific gate')
+  .option('--component', 'Validate component access')
+  .option('--framework <framework>', 'Test framework (jest, vitest, mocha)', 'jest')
+  .option('--output <dir>', 'Output directory for generated tests', 'tests/gates')
+  .action(async (path, options) => {
+    const { gateTestCommand } = await import('./commands/gate/test.js');
+    await gateTestCommand(path, options);
+  });
+
 // horizon dream <command>
 const dreamCmd = program
   .command('dream')
@@ -209,6 +222,67 @@ program
   .action(async () => {
     const { summaryCommand } = await import('./commands/summary.js');
     await summaryCommand();
+  });
+
+// horizon tutorial <command>
+const tutorialCmd = program
+  .command('tutorial')
+  .description('Interactive tutorial system');
+
+tutorialCmd
+  .command('start [path]')
+  .description('Start the tutorial')
+  .action(async (path) => {
+    const { tutorialStartCommand } = await import('./commands/tutorial/index.js');
+    await tutorialStartCommand(path);
+  });
+
+tutorialCmd
+  .command('step [n] [path]')
+  .description('Show tutorial step')
+  .action(async (n, path) => {
+    const { tutorialStepCommand } = await import('./commands/tutorial/index.js');
+    await tutorialStepCommand(path, n);
+  });
+
+tutorialCmd
+  .command('checkpoint [path]')
+  .description('Validate current checkpoint')
+  .action(async (path) => {
+    const { tutorialCheckpointCommand } = await import('./commands/tutorial/index.js');
+    await tutorialCheckpointCommand(path);
+  });
+
+tutorialCmd
+  .command('next [path]')
+  .description('Move to next step')
+  .action(async (path) => {
+    const { tutorialNextCommand } = await import('./commands/tutorial/index.js');
+    await tutorialNextCommand(path);
+  });
+
+tutorialCmd
+  .command('status [path]')
+  .description('Show tutorial progress')
+  .action(async (path) => {
+    const { tutorialStatusCommand } = await import('./commands/tutorial/index.js');
+    await tutorialStatusCommand(path);
+  });
+
+tutorialCmd
+  .command('reset [path]')
+  .description('Reset tutorial to beginning')
+  .action(async (path) => {
+    const { tutorialResetCommand } = await import('./commands/tutorial/index.js');
+    await tutorialResetCommand(path);
+  });
+
+tutorialCmd
+  .command('bugs [path]')
+  .description('List intentional bugs')
+  .action(async (path) => {
+    const { tutorialBugsCommand } = await import('./commands/tutorial/index.js');
+    await tutorialBugsCommand(path);
   });
 
 // Parse and run

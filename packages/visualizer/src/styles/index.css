@@ -234,6 +234,38 @@ body {
 }
 .node--idea .node-symbol { color: var(--color-idea); }
 
+/* Compound idea styling - inherit colors from ideaType */
+.node--idea-feature { border-color: var(--color-feature); }
+.node--idea-feature .node-symbol { color: var(--color-feature); }
+
+.node--idea-component { border-color: var(--color-component); }
+.node--idea-component .node-symbol { color: var(--color-component); }
+
+.node--idea-flow { border-color: var(--color-flow); }
+.node--idea-flow .node-symbol { color: var(--color-flow); }
+
+.node--idea-state { border-color: var(--color-state); }
+.node--idea-state .node-symbol { color: var(--color-state); }
+
+.node--idea-aspect { border-color: var(--color-aspect); }
+.node--idea-aspect .node-symbol { color: var(--color-aspect); }
+
+.node--idea-gate { border-color: var(--color-gate); }
+.node--idea-gate .node-symbol { color: var(--color-gate); }
+
+.node--idea-signal { border-color: var(--color-signal); }
+.node--idea-signal .node-symbol { color: var(--color-signal); }
+
+.node-idea-type {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: auto;
+}
+
 /* ============================================
    Connection Lines
    ============================================ */

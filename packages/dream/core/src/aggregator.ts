@@ -9,6 +9,7 @@ import {
   extractComponents,
 } from '@horizon/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@horizon/gate-core';
+import { parseSymbol } from './symbol-index.js';
 import type {
   DreamFile,
   SymbolEntry,
@@ -163,10 +164,15 @@ export async function aggregateFromDream(
       }
     }
 
+    // Parse symbol to check for compound idea type
+    const parsed = parseSymbol(node.symbol);
+    const ideaType = parsed?.ideaType;
+
     symbols.push(createSymbolEntry({
       id: node.id,
       symbol: node.symbol,
       type: node.type,
+      ideaType,
       source: 'dream',
       filePath: '.dream',
       data: node,
@@ -248,7 +254,9 @@ function resolveReferences(symbols: SymbolEntry[]): void {
   for (const symbol of symbols) {
     // Find references in the data
     const dataStr = JSON.stringify(symbol.data);
-    const refPattern = /[@#$%~^!?][\w-]+/g;
+    // Match compound ideas (?@, ?#, etc.) OR single prefixes
+    // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
+    const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[\w-]+/g;
     const matches = dataStr.match(refPattern) || [];
 
     for (const match of matches) {

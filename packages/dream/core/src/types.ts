@@ -70,6 +70,8 @@ export interface SymbolEntry {
   symbol: string;
   /** Symbol type */
   type: SymbolType;
+  /** For compound ideas (?@, ?#, etc.), the type this idea represents */
+  ideaType?: SymbolType;
   /** Where this symbol comes from */
   source: SourceType;
   /** File path where it's defined */
