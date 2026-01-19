@@ -7,7 +7,6 @@ node_modules/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-.pnpm-store/
 
 # Build output
 dist/
@@ -60,7 +59,6 @@ coverage/
 .stylelintcache
 .turbo/
 .vite/
-.node_modules/
 
 # Optional npm cache directory
 .npm
