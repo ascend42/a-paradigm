@@ -1,57 +1,58 @@
-# ShopFlow - E-commerce Platform
-# This .dream file connects all project knowledge
+version: "1.0.0"
 
-name: ShopFlow
-version: 0.1.0
-description: Modern e-commerce platform with seamless checkout experience
+metadata:
+  name: "ShopFlow"
+  created: "2024-01-01T00:00:00.000Z"
+  modified: "2024-01-19T00:00:00.000Z"
 
-# Key areas of the project
-areas:
-  - name: Authentication
-    path: ./auth
-    symbols:
-      - "@user-login"
-      - "@user-register"
-      - "^auth-required"
-      - "#AuthProvider"
-      
-  - name: Shopping
-    path: ./features
-    symbols:
-      - "@product-browse"
-      - "@cart-management"
-      - "@wishlist"
-      - "#ProductCard"
-      - "#CartDrawer"
-      
-  - name: Checkout
-    path: ./payments
-    symbols:
-      - "@checkout-flow"
-      - "@payment-processing"
-      - "^premium-checkout"
-      - "!payment-failed"
-      - "$checkout-to-confirmation"
+sources:
+  purpose:
+    - path: "./"
+  gate:
+    - path: "./gate.yaml"
 
-# Free-form ideas and explorations
-ideas:
-  - symbol: "?subscription-model"
-    note: "Consider adding recurring subscription purchases"
-    priority: medium
+nodes:
+  - id: "idea-subscription-model"
+    symbol: "?subscription-model"
+    type: "idea"
+    position:
+      x: 100
+      y: 100
+    created: "2024-01-01T00:00:00.000Z"
+    content: "Consider adding recurring subscription purchases"
+    tags: ["planning", "medium-priority"]
     
-  - symbol: "?ai-recommendations"
-    note: "ML-powered product recommendations based on browsing history"
-    priority: high
+  - id: "idea-ai-recommendations"
+    symbol: "?ai-recommendations"
+    type: "idea"
+    position:
+      x: 200
+      y: 100
+    created: "2024-01-01T00:00:00.000Z"
+    content: "ML-powered product recommendations based on browsing history"
+    tags: ["planning", "high-priority"]
     
-  - symbol: "?social-shopping"
-    note: "Share wishlists and get friend recommendations"
-    priority: low
+  - id: "idea-social-shopping"
+    symbol: "?social-shopping"
+    type: "idea"
+    position:
+      x: 300
+      y: 100
+    created: "2024-01-01T00:00:00.000Z"
+    content: "Share wishlists and get friend recommendations"
+    tags: ["planning", "low-priority"]
 
-# Visual layout hints for the Dreamscape
+connections: []
+
 layout:
-  center: "@checkout-flow"
-  clusters:
-    - symbols: ["@user-login", "@user-register", "^auth-required"]
-      label: "Auth Cluster"
-    - symbols: ["@product-browse", "@cart-management", "#ProductCard"]
-      label: "Shopping Core"
+  viewport:
+    x: 0
+    y: 0
+    zoom: 1
+  groups:
+    - id: "auth-cluster"
+      name: "Auth Cluster"
+      nodes: ["@user-login", "@user-register", "^auth-required"]
+    - id: "shopping-core"
+      name: "Shopping Core"
+      nodes: ["@product-browse", "@cart-management", "#ProductCard"]

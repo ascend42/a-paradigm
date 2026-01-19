@@ -2,6 +2,10 @@
  * horizon visualize - Launch the Dreamscape visualizer
  */
 
+import * as path from 'path';
+import * as fs from 'fs';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import open from 'open';
@@ -16,19 +20,82 @@ export async function visualizeCommand(options: VisualizeOptions) {
 
   console.log(chalk.blue('\n🌌 Starting Dreamscape...\n'));
 
-  const spinner = ora('Aggregating symbols...').start();
+  // Find the visualizer package directory
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const rootDir = path.resolve(__dirname, '../../..');
+  const visualizerDir = path.join(rootDir, 'packages/visualizer');
 
-  // TODO: Actual aggregation
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  spinner.succeed('Aggregated symbols');
+  // Check if visualizer exists
+  if (!fs.existsSync(visualizerDir)) {
+    console.error(chalk.red(`❌ Visualizer not found at ${visualizerDir}`));
+    console.error(chalk.gray('   Make sure you\'re running from the Horizon repository root\n'));
+    process.exit(1);
+  }
 
-  spinner.start('Starting visualizer server...');
-  
-  // TODO: Actually start the Vite dev server or serve built visualizer
-  // For now, we'll just show a message
-  
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  spinner.succeed('Visualizer ready');
+  const spinner = ora('Starting visualizer server...').start();
+
+  // Start Vite dev server with port flag
+  const viteProcess = spawn('npx', ['vite', '--port', port.toString(), '--host'], {
+    cwd: visualizerDir,
+    shell: true,
+    stdio: 'pipe',
+    env: {
+      ...process.env,
+    },
+  });
+
+  let serverReady = false;
+  let errorOutput = '';
+
+  viteProcess.stdout.on('data', (data) => {
+    const output = data.toString();
+    errorOutput += output;
+    
+    // Check if server is ready (Vite outputs "Local: http://localhost:PORT")
+    if (output.includes('Local:') || output.includes('ready in')) {
+      if (!serverReady) {
+        serverReady = true;
+        spinner.succeed('Visualizer server started');
+      }
+    }
+    
+    // Show Vite output in dev mode (but don't spam)
+    if (output.includes('error') || output.includes('Error')) {
+      console.log(chalk.red(output));
+    }
+  });
+
+  viteProcess.stderr.on('data', (data) => {
+    const output = data.toString();
+    errorOutput += output;
+    
+    // Vite often outputs to stderr even for normal messages
+    if (output.includes('Local:') || output.includes('ready in')) {
+      if (!serverReady) {
+        serverReady = true;
+        spinner.succeed('Visualizer server started');
+      }
+    } else if (output.includes('error') || output.includes('Error')) {
+      console.log(chalk.red(output));
+    }
+  });
+
+  viteProcess.on('error', (error) => {
+    spinner.fail('Failed to start visualizer');
+    console.error(chalk.red(`Error: ${error.message}\n`));
+    console.log(chalk.yellow('Make sure dependencies are installed:'));
+    console.log(chalk.cyan('  npm install\n'));
+    process.exit(1);
+  });
+
+  // Wait a bit for server to start, then check if it's ready
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  if (!serverReady) {
+    // Give it more time
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
 
   const url = `http://localhost:${port}`;
   
@@ -37,11 +104,32 @@ export async function visualizeCommand(options: VisualizeOptions) {
 
   // Open browser
   if (options.open !== false) {
-    await open(url);
+    // Wait a bit more to ensure server is fully ready
+    setTimeout(async () => {
+      await open(url);
+    }, 1000);
   }
 
-  // Keep the process alive (in a real implementation, this would be the server)
-  // For now, we'll just inform the user to run the dev server manually
-  console.log(chalk.yellow('Note: In development, run the visualizer with:'));
-  console.log(chalk.cyan('  npm run dev:visualizer\n'));
+  // Handle process termination
+  process.on('SIGINT', () => {
+    console.log(chalk.gray('\n\nStopping visualizer...'));
+    viteProcess.kill();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    viteProcess.kill();
+    process.exit(0);
+  });
+
+  // Keep process alive
+  viteProcess.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(chalk.red(`\nVisualizer server exited with code ${code}`));
+      if (errorOutput) {
+        console.error(chalk.gray(errorOutput));
+      }
+      process.exit(code);
+    }
+  });
 }

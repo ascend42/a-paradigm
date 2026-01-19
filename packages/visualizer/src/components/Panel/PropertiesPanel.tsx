@@ -2,8 +2,10 @@
  * Properties panel - shows details of selected node
  */
 
+import { useState, useEffect, useCallback } from 'react';
 import { useNodesStore } from '../../store/nodesStore';
 import type { SymbolType } from '../../types';
+import { parseSymbol } from '../../types';
 
 const TYPE_LABELS: Record<SymbolType, string> = {
   feature: 'Feature',
@@ -23,15 +25,95 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export function PropertiesPanel() {
-  const { getSelectedNode, selectNode, addTag, removeTag } = useNodesStore();
+  const { getSelectedNode, selectNode, addTag, removeTag, updateNode } = useNodesStore();
   const node = getSelectedNode();
 
+  // Local state for editing
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    symbol?: string;
+    type?: SymbolType;
+    description?: string;
+  }>({});
+
+  // Reset edit state when node changes
+  useEffect(() => {
+    setEditingField(null);
+    setEditValues({});
+  }, [node?.id]);
+
   if (!node) return null;
+
+  // Handle field edit start
+  const startEdit = useCallback((field: string, currentValue: any) => {
+    setEditingField(field);
+    setEditValues({ [field]: currentValue });
+  }, []);
+
+  // Handle field save
+  const saveField = useCallback((field: string) => {
+    if (!node) return;
+
+    const value = editValues[field as keyof typeof editValues];
+    if (value === undefined) {
+      setEditingField(null);
+      return;
+    }
+
+    // Validate symbol format
+    if (field === 'symbol' && typeof value === 'string') {
+      const parsed = parseSymbol(value);
+      if (!parsed) {
+        alert('Invalid symbol format. Must start with @, #, $, %, ~, ^, !, or ?');
+        return;
+      }
+    }
+
+    // Update node
+    updateNode(node.id, { [field]: value });
+    setEditingField(null);
+    setEditValues({});
+  }, [node, editValues, updateNode]);
+
+  // Handle cancel edit
+  const cancelEdit = useCallback(() => {
+    setEditingField(null);
+    setEditValues({});
+  }, []);
+
+  // Handle keyboard shortcuts
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, field: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      saveField(field);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
+  }, [saveField, cancelEdit]);
 
   return (
     <aside className="properties-panel">
       <header className="properties-header">
-        <h2 className="properties-title">{node.symbol}</h2>
+        {editingField === 'symbol' ? (
+          <input
+            type="text"
+            className="properties-title-input"
+            value={editValues.symbol ?? node.symbol}
+            onChange={(e) => setEditValues({ symbol: e.target.value })}
+            onBlur={() => saveField('symbol')}
+            onKeyDown={(e) => handleKeyDown(e, 'symbol')}
+            autoFocus
+          />
+        ) : (
+          <h2 
+            className="properties-title properties-title-editable"
+            onClick={() => startEdit('symbol', node.symbol)}
+            title="Click to edit"
+          >
+            {node.symbol}
+          </h2>
+        )}
         <button
           className="properties-close"
           onClick={() => selectNode(null)}
@@ -48,7 +130,34 @@ export function PropertiesPanel() {
           
           <div className="properties-field">
             <div className="properties-field-label">Type</div>
-            <div className="properties-field-value">{TYPE_LABELS[node.type]}</div>
+            {editingField === 'type' ? (
+              <select
+                className="properties-field-input"
+                value={editValues.type ?? node.type}
+                onChange={(e) => {
+                  const newType = e.target.value as SymbolType;
+                  setEditValues({ type: newType });
+                  updateNode(node.id, { type: newType });
+                  setEditingField(null);
+                }}
+                onBlur={() => setEditingField(null)}
+                autoFocus
+              >
+                {(Object.keys(TYPE_LABELS) as SymbolType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div 
+                className="properties-field-value properties-field-value-editable"
+                onClick={() => startEdit('type', node.type)}
+                title="Click to edit"
+              >
+                {TYPE_LABELS[node.type]}
+              </div>
+            )}
           </div>
 
           <div className="properties-field">
@@ -56,12 +165,29 @@ export function PropertiesPanel() {
             <div className="properties-field-value">{SOURCE_LABELS[node.source]}</div>
           </div>
 
-          {node.description && (
-            <div className="properties-field">
-              <div className="properties-field-label">Description</div>
-              <div className="properties-field-value">{node.description}</div>
-            </div>
-          )}
+          <div className="properties-field">
+            <div className="properties-field-label">Description</div>
+            {editingField === 'description' ? (
+              <textarea
+                className="properties-field-textarea"
+                value={editValues.description ?? node.description ?? ''}
+                onChange={(e) => setEditValues({ description: e.target.value })}
+                onBlur={() => saveField('description')}
+                onKeyDown={(e) => handleKeyDown(e, 'description')}
+                placeholder="Enter description..."
+                rows={3}
+                autoFocus
+              />
+            ) : (
+              <div 
+                className="properties-field-value properties-field-value-editable"
+                onClick={() => startEdit('description', node.description ?? '')}
+                title="Click to edit"
+              >
+                {node.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No description (click to add)</span>}
+              </div>
+            )}
+          </div>
 
           <div className="properties-field">
             <div className="properties-field-label">File</div>

@@ -59,12 +59,402 @@ function saveState(rootDir: string, state: TutorialState): void {
 }
 
 /**
+ * Generate default curriculum for shopflow example
+ */
+function generateDefaultCurriculum(rootDir: string): void {
+  const tutorialDir = path.join(rootDir, '.horizon/tutorial');
+  if (!fs.existsSync(tutorialDir)) {
+    fs.mkdirSync(tutorialDir, { recursive: true });
+  }
+
+  const curriculum = {
+    title: 'Horizon Tutorial - ShopFlow Example',
+    description: 'Learn Horizon by exploring the ShopFlow e-commerce example',
+    steps: [
+      {
+        id: 'step-1-explore-structure',
+        title: 'Explore Project Structure',
+        description: 'Understand how Horizon organizes project knowledge',
+        file: 'step-1-explore-structure.md',
+        checkpoints: [
+          {
+            type: 'file-exists',
+            path: '.purpose'
+          },
+          {
+            type: 'file-exists',
+            path: 'gate.yaml'
+          },
+          {
+            type: 'file-exists',
+            path: '.horizon/config.yaml'
+          }
+        ]
+      },
+      {
+        id: 'step-2-understand-purpose',
+        title: 'Understanding Purpose Files',
+        description: 'Learn how Purpose files define features and components',
+        file: 'step-2-understand-purpose.md',
+        checkpoints: [
+          {
+            type: 'file-exists',
+            path: '.purpose'
+          }
+        ]
+      },
+      {
+        id: 'step-3-understand-gates',
+        title: 'Understanding Gates',
+        description: 'Learn how Gates define authorization and access control',
+        file: 'step-3-understand-gates.md',
+        checkpoints: [
+          {
+            type: 'file-exists',
+            path: 'gate.yaml'
+          }
+        ]
+      },
+      {
+        id: 'step-4-explore-symbols',
+        title: 'Exploring Symbols',
+        description: 'Understand Horizon\'s symbol system and how they connect',
+        file: 'step-4-explore-symbols.md',
+        checkpoints: [
+          {
+            type: 'command-success',
+            command: 'horizon status'
+          }
+        ]
+      },
+      {
+        id: 'step-5-visualize',
+        title: 'Visualize in Dreamscape',
+        description: 'See your project knowledge visualized in the Dreamscape',
+        file: 'step-5-visualize.md',
+        checkpoints: [
+          {
+            type: 'command-success',
+            command: 'horizon dream aggregate'
+          }
+        ]
+      }
+    ],
+    bugs: []
+  };
+
+  // Write curriculum.yaml
+  const curriculumPath = path.join(tutorialDir, 'curriculum.yaml');
+  fs.writeFileSync(curriculumPath, yaml.dump(curriculum), 'utf8');
+
+  // Generate step files
+  const stepFiles = [
+    {
+      file: 'step-1-explore-structure.md',
+      content: `# Step 1: Explore Project Structure
+
+Welcome to the Horizon tutorial! In this step, you'll explore how Horizon organizes project knowledge.
+
+## What You'll Learn
+
+- How Horizon uses files to structure project knowledge
+- The purpose of different Horizon files
+- How to navigate a Horizon project
+
+## Tasks
+
+1. **Examine the root .purpose file**
+   - Open \`.purpose\` in the root directory
+   - Notice how it defines features (\`@\`) and components (\`#\`)
+   - See how features reference components and gates
+
+2. **Check the gate.yaml file**
+   - Open \`gate.yaml\`
+   - Notice how gates (\`^\`) define authorization rules
+   - See how gates have locks, keys, and prizes
+
+3. **Explore .horizon directory**
+   - Look at \`.horizon/config.yaml\` - this is the Horizon configuration
+   - Check \`.horizon/specs/\` - these define the symbol system
+   - Browse \`.horizon/docs/\` - reference documentation
+
+4. **Notice the nested structure**
+   - Check \`auth/.purpose\`, \`payments/.purpose\`, etc.
+   - See how Purpose files can be organized by domain
+
+## Checkpoint
+
+When you're ready, run:
+\`\`\`bash
+horizon tutorial checkpoint
+\`\`\`
+
+This will verify you've explored the key files.
+`
+    },
+    {
+      file: 'step-2-understand-purpose.md',
+      content: `# Step 2: Understanding Purpose Files
+
+Purpose files are the foundation of Horizon. They define what your project does and how it's structured.
+
+## What You'll Learn
+
+- How Purpose files define features (\`@\`) and components (\`#\`)
+- How to read and understand Purpose file syntax
+- How features reference other symbols
+
+## Tasks
+
+1. **Read the root .purpose file**
+   - Open \`.purpose\` and read through it
+   - Identify all features (lines starting with \`- id: "@\`)
+   - Identify all components (lines starting with \`- id: "#\`)
+
+2. **Understand feature definitions**
+   - Look at \`@product-browse\` - what components does it use?
+   - Look at \`@checkout-flow\` - what gates does it require?
+   - Notice how features reference other features
+
+3. **Explore nested Purpose files**
+   - Open \`auth/.purpose\` - what features are defined here?
+   - Open \`payments/.purpose\` - how does it relate to checkout?
+   - See how domain-specific Purpose files organize knowledge
+
+4. **Trace a feature**
+   - Pick a feature like \`@checkout-flow\`
+   - Follow its references to see what it depends on
+   - Understand the relationships between features, components, and gates
+
+## Key Concepts
+
+- **Features (\`@\`)** - User-facing capabilities
+- **Components (\`#\`)** - Reusable code units
+- **References** - How features connect to components and gates
+
+## Checkpoint
+
+Run:
+\`\`\`bash
+horizon tutorial checkpoint
+\`\`\`
+`
+    },
+    {
+      file: 'step-3-understand-gates.md',
+      content: `# Step 3: Understanding Gates
+
+Gates define authorization and access control in Horizon. They're like security checkpoints.
+
+## What You'll Learn
+
+- How gates (\`^\`) define access control
+- The structure of locks, keys, and prizes
+- How gates protect features
+
+## Tasks
+
+1. **Examine gate.yaml**
+   - Open \`gate.yaml\` and read through it
+   - Notice the structure: gates → locks → keys
+   - See how prizes are awarded when gates pass
+
+2. **Understand a simple gate**
+   - Look at \`^auth-required\`
+   - What lock does it have?
+   - What key expression checks authentication?
+   - What prize is awarded?
+
+3. **Explore a complex gate**
+   - Look at \`^admin-panel\`
+   - How many locks does it have?
+   - What conditions must be met?
+   - What prizes are available?
+
+4. **See gates in action**
+   - Go back to \`.purpose\` files
+   - Find features that reference gates (like \`^auth-required\`)
+   - Understand how gates protect features
+
+## Key Concepts
+
+- **Gates (\`^\`)** - Access control points
+- **Locks** - Conditions that must be met
+- **Keys** - Expressions that unlock locks
+- **Prizes** - Rewards when gates pass
+
+## Checkpoint
+
+Run:
+\`\`\`bash
+horizon tutorial checkpoint
+\`\`\`
+`
+    },
+    {
+      file: 'step-4-explore-symbols.md',
+      content: `# Step 4: Exploring Symbols
+
+Horizon uses a symbol system to create a shared language between code, developers, and AI.
+
+## What You'll Learn
+
+- All the symbol types in Horizon
+- Concatenated symbols (compound ideas like \`?@\`, \`?#\`, \`?!\`)
+- How symbols reference each other
+- How to use horizon commands to explore symbols
+
+## Tasks
+
+1. **Run horizon status**
+   \`\`\`bash
+   horizon status
+   \`\`\`
+   - See how many features, components, gates, etc. are defined
+   - Notice the symbol counts
+
+2. **Understand symbol types**
+   - \`@\` - Features (user-facing capabilities)
+   - \`#\` - Components (reusable code units)
+   - \`$\` - Flows (multi-step processes)
+   - \`%\` - State (global/user state)
+   - \`~\` - Aspects (cross-cutting concerns)
+   - \`^\` - Gates (access control)
+   - \`!\` - Signals (events/errors)
+   - \`?\` - Ideas (exploration)
+
+3. **Understand concatenated symbols (compound ideas)**
+   Ideas can specify what type of symbol they're exploring by using a compound prefix:
+   - \`?@subscription-model\` - Idea for a feature
+   - \`?#dark-mode-toggle\` - Idea for a component
+   - \`?$express-checkout\` - Idea for a flow
+   - \`?%user-preferences\` - Idea for state
+   - \`?~performance-optimization\` - Idea for an aspect
+   - \`?^premium-access\` - Idea for a gate
+   - \`?!payment-webhook\` - Idea for a signal
+   
+   **Why use compound ideas?**
+   - **Categorization**: Makes it clear what type of symbol the idea relates to
+   - **Discoverability**: In the Dreamscape visualizer, compound ideas connect to their target symbol type
+   - **Planning**: Helps organize ideas by what they would become if implemented
+   
+   **Simple vs Compound:**
+   - \`?subscription-model\` - General idea, no specific type
+   - \`?@subscription-model\` - Idea specifically for a feature
+
+4. **Trace symbol relationships**
+   - Pick a feature like \`@checkout-flow\`
+   - See what gates it requires
+   - See what components it uses
+   - See what flows it's part of
+   - Look for compound ideas in \`.dream\` files
+
+5. **Explore with horizon commands**
+   \`\`\`bash
+   horizon purpose validate
+   horizon gate validate
+   \`\`\`
+   - Validate your Purpose files
+   - Validate your gate configuration
+
+## Key Concepts
+
+- Symbols create a traceable web of relationships
+- Compound ideas (\`?@\`, \`?#\`, etc.) categorize ideas by their target symbol type
+- In the Dreamscape visualizer, compound ideas visually connect to their symbol type
+- AI agents can follow these relationships
+- Symbols make project knowledge discoverable
+
+## Checkpoint
+
+Run:
+\`\`\`bash
+horizon tutorial checkpoint
+\`\`\`
+`
+    },
+    {
+      file: 'step-5-visualize.md',
+      content: `# Step 5: Visualize in Dreamscape
+
+The Dreamscape is Horizon's infinite canvas where all project knowledge flows together.
+
+## What You'll Learn
+
+- How to aggregate all symbols into the Dreamscape
+- How to visualize your project knowledge
+- How to explore relationships visually
+
+## Tasks
+
+1. **Aggregate symbols**
+   \`\`\`bash
+   horizon dream aggregate
+   \`\`\`
+   - This combines all Purpose and Gate files
+   - Creates a unified symbol index
+   - Prepares data for visualization
+
+2. **Open the Dreamscape**
+   \`\`\`bash
+   horizon visualize
+   \`\`\`
+   - This opens the visualizer in your browser
+   - You'll see all your symbols as nodes
+   - Connections show relationships
+
+3. **Explore visually**
+   - Click on features to see their connections
+   - See how gates protect features
+   - Understand the flow of information
+   - Notice how everything connects
+
+4. **Understand the big picture**
+   - See how ShopFlow is structured
+   - Understand feature dependencies
+   - Visualize authorization topology
+
+## Key Concepts
+
+- The Dreamscape shows everything at once
+- Visual exploration helps understand relationships
+- Symbols become nodes, references become connections
+
+## Checkpoint
+
+Run:
+\`\`\`bash
+horizon tutorial checkpoint
+\`\`\`
+
+## Next Steps
+
+Congratulations! You've completed the tutorial. You now understand:
+- How Horizon structures project knowledge
+- How Purpose files define features and components
+- How Gates define authorization
+- How symbols create relationships
+- How to visualize everything in the Dreamscape
+
+Continue exploring ShopFlow, or start using Horizon in your own projects!
+`
+    }
+  ];
+
+  for (const stepFile of stepFiles) {
+    const stepPath = path.join(tutorialDir, stepFile.file);
+    fs.writeFileSync(stepPath, stepFile.content, 'utf8');
+  }
+}
+
+/**
  * Load curriculum
  */
 function loadCurriculum(rootDir: string): any {
   const curriculumPath = path.join(rootDir, CURRICULUM_FILE);
   if (!fs.existsSync(curriculumPath)) {
-    throw new Error(`Curriculum not found at ${curriculumPath}`);
+    // Generate default curriculum if it doesn't exist
+    generateDefaultCurriculum(rootDir);
   }
   return yaml.load(fs.readFileSync(curriculumPath, 'utf8'));
 }
@@ -128,6 +518,14 @@ export async function tutorialStartCommand(targetPath: string | undefined): Prom
   const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
   
   try {
+    // Check if curriculum exists, generate if not
+    const curriculumPath = path.join(rootDir, CURRICULUM_FILE);
+    if (!fs.existsSync(curriculumPath)) {
+      console.log(chalk.blue('\n📚 Generating tutorial curriculum...\n'));
+      generateDefaultCurriculum(rootDir);
+      console.log(chalk.green('✅ Tutorial curriculum generated!\n'));
+    }
+
     const curriculum = loadCurriculum(rootDir);
     const state = loadState(rootDir);
 
@@ -221,6 +619,22 @@ export async function tutorialCheckpointCommand(targetPath: string | undefined):
     
     if (passed) {
       console.log(chalk.green('✅ All checkpoints passed!\n'));
+      
+      // Show next step information
+      const currentIndex = curriculum.steps.findIndex((s: any) => s.id === state.currentStep);
+      if (currentIndex < curriculum.steps.length - 1) {
+        const nextStep = curriculum.steps[currentIndex + 1];
+        const nextStepFile = path.join(rootDir, '.horizon/tutorial', nextStep.file);
+        
+        if (fs.existsSync(nextStepFile)) {
+          console.log(chalk.cyan(`\n📖 Next Step: ${nextStep.title}\n`));
+          console.log(chalk.gray(nextStep.description));
+          console.log(chalk.gray(`\nRun 'horizon tutorial step ${currentIndex + 2}' to view full instructions.\n`));
+        }
+      } else {
+        console.log(chalk.green('\n🎉 Congratulations! You\'ve completed all steps!\n'));
+        console.log(chalk.gray('Run \'horizon tutorial next\' to mark this step as complete.\n'));
+      }
     } else {
       console.log(chalk.red('❌ Some checkpoints failed. Review the errors above.\n'));
       process.exit(1);

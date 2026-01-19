@@ -1,98 +1,36 @@
 # Shared Components Library
 # Reusable UI components across ShopFlow
 
-intent: |
+version: "1.0.0"
+
+description: |
   Maintain a consistent, accessible, and beautiful component library
   that accelerates feature development.
 
 context:
-  parent: ../.purpose
-  scope: UI Components
-  design_system: true
+  - "Parent: ../.purpose"
+  - "Scope: UI Components"
+  - "Design System: true"
 
 rules:
-  - All components must pass WCAG 2.1 AA
-  - Use CSS variables for theming
-  - Components must work without JavaScript (progressive enhancement)
-  - Storybook stories required for each component
-  - Props must be fully typed with TypeScript
+  accessibility: "All components must pass WCAG 2.1 AA"
+  theming: "Use CSS variables for theming"
+  progressive_enhancement: "Components must work without JavaScript (progressive enhancement)"
+  storybook: "Storybook stories required for each component"
+  typescript: "Props must be fully typed with TypeScript"
 
 components:
-  - id: "#Button"
-    name: Button
-    path: src/components/ui/Button.tsx
-    description: Primary action button with variants
-    variants:
-      - primary
-      - secondary
-      - ghost
-      - danger
-    props:
-      - name: variant
-        type: "'primary' | 'secondary' | 'ghost' | 'danger'"
-        default: "primary"
-      - name: size
-        type: "'sm' | 'md' | 'lg'"
-        default: "md"
-      - name: loading
-        type: boolean
-        default: false
-        
-  - id: "#Input"
-    name: Input
-    path: src/components/ui/Input.tsx
-    description: Text input with validation states
-    references:
-      - "#FormField"
-      
-  - id: "#FormField"
-    name: FormField
-    path: src/components/ui/FormField.tsx
-    description: Form field wrapper with label and error display
-    
-  - id: "#Modal"
-    name: Modal
-    path: src/components/ui/Modal.tsx
-    description: Accessible modal dialog
-    references:
-      - "~a11y-focus-trap"
-      
-  - id: "#Toast"
-    name: Toast
-    path: src/components/ui/Toast.tsx
-    description: Notification toast messages
-    references:
-      - "%toast-state"
-
-  - id: "#Skeleton"
-    name: Skeleton
-    path: src/components/ui/Skeleton.tsx
-    description: Loading placeholder skeleton
-
-  - id: "#Badge"
-    name: Badge
-    path: src/components/ui/Badge.tsx
-    description: Status and count badges
-
-states:
-  - id: "%toast-state"
-    name: Toast State
-    description: Global toast notification queue
-    shape: |
-      {
-        toasts: Array<{
-          id: string;
-          type: 'success' | 'error' | 'warning' | 'info';
-          message: string;
-          duration?: number;
-        }>;
-      }
-
-aspects:
-  - id: "~a11y-focus-trap"
-    name: Focus Trap
-    description: Keyboard focus management for modals
-    considerations:
-      - Trap focus within modal when open
-      - Return focus to trigger on close
-      - Support Escape key to close
+  "#Button":
+    description: "Primary action button with variants"
+  "#Input":
+    description: "Text input with validation states"
+  "#FormField":
+    description: "Form field wrapper with label and error display"
+  "#Modal":
+    description: "Accessible modal dialog"
+  "#Toast":
+    description: "Notification toast messages"
+  "#Skeleton":
+    description: "Loading placeholder skeleton"
+  "#Badge":
+    description: "Status and count badges"

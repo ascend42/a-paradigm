@@ -1,76 +1,34 @@
 # Shopping Features Module
 # Core shopping experience features
 
-intent: |
+version: "1.0.0"
+
+description: |
   Deliver an intuitive, fast, and delightful shopping experience
   that converts browsers into buyers.
 
 context:
-  parent: ../.purpose
-  scope: Shopping Experience
+  - "Parent: ../.purpose"
+  - "Scope: Shopping Experience"
 
 rules:
-  - Product images lazy-load below the fold
-  - Search results return within 200ms
-  - Cart updates are optimistic with rollback on error
-  - Infinite scroll for product grids (batch of 20)
+  lazy_loading: "Product images lazy-load below the fold"
+  search_performance: "Search results return within 200ms"
+  optimistic_updates: "Cart updates are optimistic with rollback on error"
+  infinite_scroll: "Infinite scroll for product grids (batch of 20)"
 
 features:
-  - id: "@product-search"
-    name: Product Search
-    description: Full-text search with filters and facets
-    references:
-      - "#SearchBar"
-      - "#FilterPanel"
-      - "#ProductGrid"
-      - "~search-performance"
-    
-  - id: "@quick-view"
-    name: Quick View Modal
-    description: Preview product details without leaving the grid
-    references:
-      - "#ProductCard"
-      - "#QuickViewModal"
+  "@product-search":
+    description: "Full-text search with filters and facets"
+  "@quick-view":
+    description: "Preview product details without leaving the grid"
 
 components:
-  - id: "#ProductGrid"
-    name: ProductGrid
-    path: src/components/ProductGrid.tsx
-    description: Responsive grid of product cards with infinite scroll
-    references:
-      - "#ProductCard"
-      
-  - id: "#FilterPanel"
-    name: FilterPanel
-    path: src/components/FilterPanel.tsx
-    description: Category, price, and attribute filters
-    
-  - id: "#QuickViewModal"
-    name: QuickViewModal
-    path: src/components/QuickViewModal.tsx
-    description: Modal overlay for quick product preview
-    references:
-      - "#ProductCard"
-      - "@cart-management"
-      
-  - id: "#CartItem"
-    name: CartItem
-    path: src/components/CartItem.tsx
-    description: Single cart line item with quantity controls
-
-aspects:
-  - id: "~search-performance"
-    name: Search Performance
-    description: Elasticsearch-powered search with caching
-    considerations:
-      - Index updates on product changes
-      - Query result caching (5 minute TTL)
-      - Typo tolerance and synonyms
-      
-  - id: "~mobile-ux"
-    name: Mobile UX
-    description: Touch-optimized interactions
-    considerations:
-      - Swipe to remove cart items
-      - Pull to refresh product lists
-      - Bottom sheet for filters on mobile
+  "#ProductGrid":
+    description: "Responsive grid of product cards with infinite scroll"
+  "#FilterPanel":
+    description: "Category, price, and attribute filters"
+  "#QuickViewModal":
+    description: "Modal overlay for quick product preview"
+  "#CartItem":
+    description: "Single cart line item with quantity controls"

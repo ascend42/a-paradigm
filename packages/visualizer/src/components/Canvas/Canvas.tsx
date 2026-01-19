@@ -29,11 +29,22 @@ export function Canvas() {
   // Handle mouse down for panning
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Only pan with middle mouse or when holding space
-      if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      const target = e.target as HTMLElement;
+      const isNode = target.closest('.node');
+      
+      // Allow panning with middle mouse, space+click, or left-click on canvas background (not on nodes)
+      const isMiddleMouse = e.button === 1;
+      const isSpaceClick = e.button === 0 && e.altKey;
+      const isCanvasBackground = e.button === 0 && !isNode && (target === containerRef.current || target.classList.contains('canvas-content') || target.classList.contains('canvas-grid') || target.classList.contains('connections-layer') || target.tagName === 'svg' || target.tagName === 'path');
+      
+      if (isMiddleMouse || isSpaceClick || isCanvasBackground) {
         e.preventDefault();
         startDrag(e.clientX, e.clientY);
-      } else if (e.button === 0 && e.target === containerRef.current) {
+        // Deselect nodes when panning
+        if (isCanvasBackground) {
+          selectNode(null);
+        }
+      } else if (e.button === 0 && !isNode && target === containerRef.current) {
         // Clicked on canvas background - deselect
         selectNode(null);
       }
@@ -41,9 +52,9 @@ export function Canvas() {
     [startDrag, selectNode]
   );
 
-  // Handle mouse move for panning
+  // Handle mouse move for panning (global event)
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+    (e: MouseEvent) => {
       if (isDragging && dragStart) {
         const dx = e.clientX - dragStart.x;
         const dy = e.clientY - dragStart.y;
@@ -72,6 +83,18 @@ export function Canvas() {
     };
   }, [handleWheel]);
 
+  // Attach global mouse move/up events when dragging
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   // Calculate transform
   const transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
 
@@ -80,9 +103,6 @@ export function Canvas() {
       ref={containerRef}
       className={`canvas-container ${isDragging ? 'dragging' : ''}`}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
     >
       <CanvasGrid viewport={viewport} />
       <div className="canvas-content" style={{ transform }}>

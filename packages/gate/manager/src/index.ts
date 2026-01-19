@@ -14,7 +14,8 @@ export type { TestGeneratorOptions } from './test-generator.js';
 
 // Component tagger
 export { scanComponents, generateComponentReport } from './component-tagger.js';
-export type { ComponentAccessInfo, ComponentTaggerOptions } from './component-tagger.js';
+export type { ComponentTaggerOptions } from './component-tagger.js';
+export type { ComponentAccessInfo } from './types.js';
 
 // Flow tester
 export { testFlow, validateFlowConfig, runFlowTests } from './flow-tester.js';

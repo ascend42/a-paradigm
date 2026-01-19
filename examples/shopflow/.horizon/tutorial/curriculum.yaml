@@ -1,0 +1,43 @@
+title: Horizon Tutorial - ShopFlow Example
+description: Learn Horizon by exploring the ShopFlow e-commerce example
+steps:
+  - id: step-1-explore-structure
+    title: Explore Project Structure
+    description: Understand how Horizon organizes project knowledge
+    file: step-1-explore-structure.md
+    checkpoints:
+      - type: file-exists
+        path: .purpose
+      - type: file-exists
+        path: gate.yaml
+      - type: file-exists
+        path: .horizon/config.yaml
+  - id: step-2-understand-purpose
+    title: Understanding Purpose Files
+    description: Learn how Purpose files define features and components
+    file: step-2-understand-purpose.md
+    checkpoints:
+      - type: file-exists
+        path: .purpose
+  - id: step-3-understand-gates
+    title: Understanding Gates
+    description: Learn how Gates define authorization and access control
+    file: step-3-understand-gates.md
+    checkpoints:
+      - type: file-exists
+        path: gate.yaml
+  - id: step-4-explore-symbols
+    title: Exploring Symbols
+    description: Understand Horizon's symbol system and how they connect
+    file: step-4-explore-symbols.md
+    checkpoints:
+      - type: command-success
+        command: horizon status
+  - id: step-5-visualize
+    title: Visualize in Dreamscape
+    description: See your project knowledge visualized in the Dreamscape
+    file: step-5-visualize.md
+    checkpoints:
+      - type: command-success
+        command: horizon dream aggregate
+bugs: []

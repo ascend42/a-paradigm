@@ -11,8 +11,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    open: true,
+    port: parseInt(process.env.PORT || '3000', 10),
+    open: false, // CLI will handle opening
   },
   build: {
     outDir: 'dist',
