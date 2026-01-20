@@ -16,6 +16,7 @@ import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/in
 interface InitOptions {
   force?: boolean;
   name?: string;
+  ide?: string;
 }
 
 // Get templates directory
@@ -216,26 +217,46 @@ conventions:
     console.log(chalk.gray('  ○ No portal.yaml found (optional)'));
   }
 
-  // Auto-detect IDE and sync
-  spinner.start('Detecting IDE...');
-  const detection = detectIDE(cwd);
+  // Determine target IDE (explicit flag > auto-detect > default to Cursor)
+  let targetIDE: string;
   
-  if (detection.detected) {
-    spinner.succeed(`Detected ${chalk.cyan(detection.detected)}`);
-    
-    // Load the newly created paradigm files and sync
-    const files = loadParadigmFiles(cwd);
-    if (files) {
-      spinner.start(`Generating IDE instructions...`);
-      const result = syncToIDE(cwd, detection.detected, files, true);
-      if (result.success) {
-        spinner.succeed(chalk.green(`${result.outputPath} generated`));
-      } else {
-        spinner.warn(chalk.yellow(`Could not generate IDE file: ${result.message}`));
-      }
+  if (options.ide) {
+    // User explicitly specified IDE
+    const validIDEs = ['cursor', 'copilot', 'windsurf'];
+    const ide = options.ide.toLowerCase();
+    if (!validIDEs.includes(ide)) {
+      console.log(chalk.yellow(`  ⚠ Unknown IDE "${options.ide}". Valid options: ${validIDEs.join(', ')}`));
+      console.log(chalk.gray('    Defaulting to Cursor.'));
+      targetIDE = 'cursor';
+    } else {
+      targetIDE = ide;
+      console.log(chalk.green(`  ✓ Using IDE: ${chalk.cyan(targetIDE)}`));
     }
   } else {
-    spinner.info('No IDE detected, skipping sync (run `paradigm sync` later)');
+    // Auto-detect IDE
+    spinner.start('Detecting IDE...');
+    const detection = detectIDE(cwd);
+    
+    // Default to Cursor if no IDE detected (most common use case)
+    targetIDE = detection.detected || 'cursor';
+    
+    if (detection.detected) {
+      spinner.succeed(`Detected ${chalk.cyan(detection.detected)}`);
+    } else {
+      spinner.succeed(`No IDE detected, defaulting to ${chalk.cyan('Cursor')}`);
+    }
+  }
+  
+  // Load the newly created paradigm files and sync
+  const files = loadParadigmFiles(cwd);
+  if (files) {
+    spinner.start(`Generating IDE instructions...`);
+    const result = syncToIDE(cwd, targetIDE, files, true);
+    if (result.success) {
+      spinner.succeed(chalk.green(`${result.outputPath} generated`));
+    } else {
+      spinner.warn(chalk.yellow(`Could not generate IDE file: ${result.message}`));
+    }
   }
 
   // Summary
@@ -248,12 +269,10 @@ conventions:
   console.log(chalk.white('    └── prompts/        - Pre-written task prompts'));
   console.log(chalk.white('  • .premise              - Project overview & ideas'));
   console.log(chalk.white('  • .purpose            - Feature & component context'));
-  if (detection.detected) {
-    const outputFile = detection.detected === 'cursor' ? '.cursorrules' 
-      : detection.detected === 'copilot' ? '.github/copilot-instructions.md'
-      : '.windsurfrules';
-    console.log(chalk.white(`  • ${outputFile}  - IDE instructions`));
-  }
+  const outputFile = targetIDE === 'cursor' ? '.cursorrules' 
+    : targetIDE === 'copilot' ? '.github/copilot-instructions.md'
+    : '.windsurfrules';
+  console.log(chalk.white(`  • ${outputFile}       - IDE instructions`));
   console.log('');
   console.log(chalk.gray('Next steps:'));
   console.log(chalk.white('  1. Review ' + chalk.cyan('.paradigm/config.yaml') + ' and customize'));

@@ -8,7 +8,7 @@ import { initCommand } from './commands/init.js';
 import { visualizeCommand } from './commands/visualize.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.3.1';
 
 const program = new Command();
 
@@ -31,6 +31,7 @@ program
   .description('Initialize Paradigm in the current project')
   .option('-f, --force', 'Overwrite existing files')
   .option('--name <name>', 'Project name for .premise file')
+  .option('--ide <ide>', 'Target IDE (cursor, copilot, windsurf)')
   .action(initCommand);
 
 // paradigm setup

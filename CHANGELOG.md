@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-20
+
+### Added
+- `--ide <ide>` flag for `paradigm init` to explicitly choose target IDE (cursor, copilot, windsurf)
+
+### Fixed
+- `paradigm init` now always generates `.cursorrules` by default when no IDE is detected
+- Previously skipped IDE instruction file generation if no `.cursor`, `.vscode`, or `.windsurf` directory existed
+
 ## [0.3.0] - 2026-01-20
 
 ### Added
