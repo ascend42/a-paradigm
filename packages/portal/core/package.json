@@ -1,7 +1,7 @@
 {
-  "name": "@a-company/purpose-core",
+  "name": "@a-company/portal-core",
   "version": "0.1.0",
-  "description": "Purpose file parsing, validation, and aggregation",
+  "description": "Portal configuration parsing and validation",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,8 +12,7 @@
     }
   },
   "files": [
-    "dist",
-    "schema.json"
+    "dist"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
@@ -23,7 +22,6 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
-    "zod": "^3.22.4",
     "glob": "^10.3.10"
   },
   "devDependencies": {
@@ -31,14 +29,6 @@
     "@types/node": "^20.10.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
-  },
-  "peerDependencies": {
-    "typescript": ">=5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
   },
   "publishConfig": {
     "access": "public"
@@ -48,7 +38,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ascend42/a-horizon.git",
-    "directory": "packages/purpose/core"
+    "directory": "packages/portal/core"
   },
   "bugs": {
     "url": "https://github.com/ascend42/a-horizon/issues"
@@ -56,9 +46,9 @@
   "homepage": "https://github.com/ascend42/a-horizon#readme",
   "keywords": [
     "paradigm",
-    "purpose",
-    "documentation",
-    "ai-context",
+    "portal",
+    "authorization",
+    "access-control",
     "yaml"
   ],
   "engines": {
