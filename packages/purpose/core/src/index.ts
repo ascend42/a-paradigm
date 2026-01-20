@@ -1,5 +1,5 @@
 /**
- * @horizon/purpose-core
+ * @a-company/purpose-core
  *
  * Purpose file parsing, validation, and aggregation
  */

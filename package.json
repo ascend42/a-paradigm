@@ -1,36 +1,55 @@
 {
-  "name": "horizon",
-  "version": "0.2.1",
-  "description": "Unified developer tools ecosystem - Purpose, Gate, and Dream",
+  "name": "paradigm",
+  "version": "0.3.0",
+  "description": "Unified developer tools ecosystem - Purpose, Portal, and Premise",
   "private": true,
   "workspaces": [
     "packages/*",
-    "packages/gate/*",
+    "packages/portal/*",
     "packages/purpose/*",
-    "packages/dream/*",
-    "packages/scan/*"
+    "packages/premise/*",
+    "packages/probe/*"
   ],
   "scripts": {
+    "setup": "npm install && npm run build",
     "build": "npm run build:core && npm run build:packages && npm run build:cli",
-    "build:core": "npm run build --workspace=@horizon/purpose-core && npm run build --workspace=@horizon/gate-core && npm run build --workspace=@horizon/scan-core",
-    "build:packages": "npm run build --workspace=@horizon/gate-sdk && npm run build --workspace=@horizon/gate-manager && npm run build --workspace=@horizon/dream-core && npm run build --workspace=@horizon/visualizer",
-    "build:cli": "npm run build --workspace=@horizon/cli",
-    "dev": "npm run dev --workspace=@horizon/visualizer",
-    "dev:visualizer": "npm run dev --workspace=@horizon/visualizer",
+    "build:core": "npm run build --workspace=@a-company/purpose-core && npm run build --workspace=@a-company/portal-core && npm run build --workspace=@a-company/probe-core",
+    "build:packages": "npm run build --workspace=@a-company/portal-sdk && npm run build --workspace=@a-company/portal-manager && npm run build --workspace=@a-company/premise-core && npm run build --workspace=@a-company/prism",
+    "build:cli": "npm run build --workspace=@a-company/paradigm",
+    "dev": "npm run dev --workspace=@a-company/prism",
+    "dev:prism": "npm run dev --workspace=@a-company/prism",
     "lint": "eslint packages --ext .ts,.tsx",
-    "clean": "rm -rf packages/*/dist packages/*/*/dist",
-    "typecheck": "tsc --noEmit"
+    "clean": "rm -rf packages/*/dist packages/*/*/dist packages/paradigm/visualizer-dist",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
   },
   "keywords": [
     "developer-tools",
     "visualization",
     "architecture",
     "ai-context",
-    "authorization"
+    "authorization",
+    "documentation"
   ],
-  "author": "",
+  "author": "ascend42",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "prettier": "^3.2.0"
   }
 }
