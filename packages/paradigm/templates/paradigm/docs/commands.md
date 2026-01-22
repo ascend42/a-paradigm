@@ -358,3 +358,68 @@ paradigm premise snapshot "pre-refactor" -d "Before auth rewrite"
 3. **Use `paradigm watch` during development**
 4. **Keep probe index fresh** with regular `paradigm index` runs
 5. **Check `.paradigm/specs/`** before asking "how do I..."
+6. **Read `.index.yaml` first** when navigating documentation
+7. **Use Phoenix Protocol** when approaching context limits
+
+---
+
+## Phoenix Protocol
+
+The Phoenix Protocol enables AI context continuity across conversation boundaries.
+
+### When It Triggers
+
+- AI estimates ~80% context capacity used
+- User mentions context is getting long
+- Before suggesting "continue in new chat"
+
+### What Happens
+
+1. AI writes `.context/phoenix.yaml` with:
+   - Completed tasks
+   - In-progress work
+   - Pending tasks
+   - Critical memories
+   - Files touched
+   - Warnings/gotchas
+
+2. AI notifies user
+
+3. User starts new chat
+
+4. New AI reads ashes and continues
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `.context/phoenix.yaml` | Active handoff file |
+| `.context/phoenix.yaml.risen` | Consumed file (audit trail) |
+| `.context/README.md` | Protocol documentation |
+
+See `.paradigm/specs/phoenix.md` for full specification.
+
+---
+
+## Documentation Index System
+
+Hierarchical documentation indexing for efficient AI navigation.
+
+### Structure
+
+```
+docs/
+├── .index.yaml      # Directory index
+├── DESIGN.md        # Indexed document
+└── guides/
+    └── .index.yaml  # Subdirectory index
+```
+
+### AI Navigation
+
+1. Read `.index.yaml` first
+2. Use section line ranges for targeted reading
+3. Check dependencies before changing files
+4. Update index when editing documents
+
+See `.paradigm/specs/context.md` for full specification.
