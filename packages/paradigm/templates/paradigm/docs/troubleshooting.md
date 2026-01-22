@@ -331,6 +331,104 @@ This will:
 
 ---
 
+## Context Bloat / Token Costs
+
+### Symptoms
+- AI chats feel slow or sluggish
+- Context limit reached quickly
+- Same information repeated every chat
+- `.cursorrules` file is hundreds of lines
+
+### Problem
+
+The `.cursorrules` file is loaded on **every single chat**. A 600-line file costs ~4,000+ tokens before you even type — that's 2% of a 200K context window wasted on repeated instructions.
+
+### Solutions
+
+1. **Keep `.cursorrules` slim (~80 lines, ~700 tokens):**
+
+   Include only essentials:
+   - Symbol quick reference table
+   - Logger method mapping
+   - Key file locations
+   - Critical conventions
+   - Phoenix Protocol summary (3 lines)
+   - Pointers to full specs
+
+2. **Move details to `.paradigm/specs/`:**
+
+   ```markdown
+   # In .cursorrules (slim)
+   ## Detailed Specs
+   | Spec | What It Covers |
+   |------|----------------|
+   | `.paradigm/specs/symbols.md` | Full symbol reference |
+   | `.paradigm/specs/logger.md` | Logging patterns |
+   | `.paradigm/specs/phoenix.md` | Context handoff protocol |
+   ```
+
+3. **Use on-demand loading:**
+
+   Instead of embedding everything, prompt AI to read specs when needed:
+   > "Read `.paradigm/specs/logger.md` before implementing this"
+
+4. **Measure your costs:**
+   ```bash
+   # Check current size
+   wc -c .cursorrules
+   
+   # Estimate tokens (chars / 4)
+   echo "Tokens: $(( $(wc -c < .cursorrules) / 4 ))"
+   ```
+
+### Target Metrics
+
+| Metric | Bloated | Slim | Target |
+|--------|---------|------|--------|
+| Lines | 500+ | ~80 | <100 |
+| Characters | 15,000+ | ~3,000 | <4,000 |
+| Est. Tokens | 4,000+ | ~750 | <1,000 |
+
+### Slim `.cursorrules` Template
+
+```markdown
+# project-name - Paradigm Context
+
+## Symbol System
+| Symbol | Name | Use For |
+|--------|------|---------|
+| `@` | Feature | User-facing capabilities |
+| `#` | Component | Reusable modules |
+| `^` | Portal | Access control |
+| `!` | Signal | Events/side effects |
+| `$` | Flow | Multi-step processes |
+| `%` | State | App state |
+
+## Paradigm Logger
+**NEVER use console.log. ALWAYS use Paradigm logger.**
+
+| Directory | Method |
+|-----------|--------|
+| `features/` | `log.feature()` |
+| `components/` | `log.component()` |
+| `middleware/` | `log.portal()` |
+
+## Key Files
+| File | Purpose |
+|------|---------|
+| `.premise` | Entity graph |
+| `.purpose` | Features/flows |
+| `.index.yaml` | Doc index — READ FIRST |
+
+## Phoenix Protocol
+At ~80% context: write `.context/phoenix.yaml`, notify user.
+
+## Full Specs
+Read on-demand: `.paradigm/specs/`
+```
+
+---
+
 ## Getting Help
 
 If none of these solutions work:

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Context Cost Optimization** - Guidance for keeping `.cursorrules` slim
+  - New troubleshooting section: "Context Bloat / Token Costs"
+  - Updated `specs/context.md` with "Keeping .cursorrules Slim" section
+  - Target: <100 lines, <1,000 tokens for `.cursorrules`
+  - Slim template included in troubleshooting docs
+
 - **Phoenix Protocol** - AI context continuity system
   - New spec: `.paradigm/specs/phoenix.md`
   - Enables AI agents to preserve work state when approaching context limits

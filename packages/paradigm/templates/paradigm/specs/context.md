@@ -367,6 +367,76 @@ subdirs:
 
 ---
 
+## Keeping .cursorrules Slim
+
+The `.cursorrules` file loads on **every chat**. Keep it minimal to preserve context for actual work.
+
+### The Problem
+
+| File Size | Est. Tokens | % of 200K Context |
+|-----------|-------------|-------------------|
+| 600 lines / 18KB | ~4,500 | 2.25% |
+| 80 lines / 3KB | ~750 | 0.38% |
+
+A bloated `.cursorrules` wastes thousands of tokens before you even type.
+
+### The Solution
+
+**Embed essentials, reference details.**
+
+#### Keep in `.cursorrules` (~80 lines)
+
+- Symbol quick reference table
+- Logger method mapping table
+- Key file locations
+- Critical conventions (5-10 rules)
+- Phoenix Protocol summary (3 lines)
+- Table of pointers to full specs
+
+#### Move to `.paradigm/specs/` (read on-demand)
+
+- Full symbol documentation with examples
+- Logger implementation patterns
+- Changelog/commit format details
+- Documentation navigation protocol
+- Complete Phoenix Protocol schema
+- Source of truth hierarchy
+
+### Measuring Context Cost
+
+```bash
+# Character count
+wc -c .cursorrules
+
+# Estimate tokens (chars ÷ 4)
+echo "Tokens: $(( $(wc -c < .cursorrules) / 4 ))"
+```
+
+### Target: <1,000 tokens
+
+| Metric | Bloated | Target |
+|--------|---------|--------|
+| Lines | 500+ | <100 |
+| Characters | 15,000+ | <4,000 |
+| Tokens | 4,000+ | <1,000 |
+
+### Example Slim Structure
+
+```markdown
+# project - Paradigm Context
+
+## Symbols (table)
+## Logger Mapping (table)
+## Key Files (table)
+## Conventions (5 bullets)
+## Phoenix (3 lines)
+## Specs (reference table)
+```
+
+See `.paradigm/docs/troubleshooting.md` for the full template.
+
+---
+
 ## Example: Reading a Large Document
 
 Instead of:
