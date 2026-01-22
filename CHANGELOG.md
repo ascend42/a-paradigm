@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Phoenix Protocol** - AI context continuity system
+  - New spec: `.paradigm/specs/phoenix.md`
+  - Enables AI agents to preserve work state when approaching context limits
+  - Writes `.context/phoenix.yaml` with progress, memories, and next steps
+  - New session reads ashes and continues seamlessly
+  - Configurable threshold and model settings in `config.yaml`
+
+- **Context & Documentation Index System** - Hierarchical doc navigation
+  - New spec: `.paradigm/specs/context.md`
+  - `.index.yaml` files for directory-level indexing
+  - Document frontmatter schema with metadata
+  - Section-level line ranges for targeted reading
+  - Dependency tracking between documentation and code
+  - Canonical markers to establish source of truth
+
+- **AI Agent Configuration** in `config.yaml`
+  - `ai-agent.model` - Current AI model identifier
+  - `ai-agent.context-window` - Token limit
+  - `ai-agent.phoenix-threshold` - When to trigger phoenix (default 80%)
+  - `ai-agent.phoenix-path` - Where phoenix files are written
+
+- **Context Settings** in `config.yaml`
+  - `context.enabled` - Enable documentation indexing
+  - `context.index-file` - Index file name (default `.index.yaml`)
+  - `context.docs-path` - Root documentation directory
+
+### Changed
+- Updated `agent-guidelines.how-to-use` with documentation index and phoenix protocol tips
+
 ## [0.3.1] - 2026-01-20
 
 ### Added
