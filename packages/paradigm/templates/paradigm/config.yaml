@@ -4,6 +4,11 @@
 version: "1.0"
 project: "{{PROJECT_NAME}}"
 
+# Discipline (optional) - helps AI understand your domain
+# Options: web, backend, ml, mobile, game, embedded, devops, custom
+# See specs/disciplines.md for symbol interpretations per discipline
+discipline: auto  # auto-detect from project structure
+
 # Guidelines for AI agents working in this codebase
 agent-guidelines:
   overview: |
@@ -47,11 +52,6 @@ symbol-system:
     description: Global or user state conditions
     owner: purpose
     examples: ["%user.authenticated", "%cart.items", "%app.loading"]
-  "~":
-    name: Aspect
-    description: Cross-cutting concerns or nested properties
-    owner: purpose
-    examples: ["@login~validation", "#Button~disabled"]
   "^":
     name: Portal
     description: Access control points and authorization rules
@@ -67,6 +67,16 @@ symbol-system:
     description: Free-form exploration and future possibilities
     owner: premise
     examples: ["?subscription-model", "?ai-recommendations"]
+  "~":
+    name: Deprecated
+    description: Features or components marked for removal
+    owner: shared
+    examples: ["~legacy-api", "~v1-auth", "~old-dashboard"]
+  "&":
+    name: Integration
+    description: External services and third-party connections
+    owner: shared
+    examples: ["&stripe", "&supabase", "&resend", "&google-calendar"]
 
 # Logging configuration
 logging:
@@ -77,25 +87,53 @@ logging:
   default-level: debug
   
   # Map directory patterns to symbol types for logging
+  # These are generic patterns - customize for your project structure
   symbol-mapping:
+    # Features/Capabilities (@)
     "features/**": "@"
     "routes/**": "@"
     "api/**": "@"
+    "endpoints/**": "@"
+    "commands/**": "@"
+    "models/**": "@"        # ML models as features
+    
+    # Components/Building Blocks (#)
     "components/**": "#"
     "lib/**": "#"
     "utils/**": "#"
+    "services/**": "#"
+    "core/**": "#"
+    "drivers/**": "#"       # Embedded
+    "systems/**": "#"       # Game dev
+    
+    # Access Control (^)
     "middleware/**": "^"
     "auth/**": "^"
     "guards/**": "^"
+    "policies/**": "^"
+    
+    # State (%)
     "stores/**": "%"
     "state/**": "%"
     "reducers/**": "%"
+    "config/**": "%"
+    
+    # Events/Signals (!)
     "events/**": "!"
     "handlers/**": "!"
     "listeners/**": "!"
+    "hooks/**": "!"
+    
+    # Flows/Processes ($)
     "flows/**": "$"
     "sagas/**": "$"
     "workflows/**": "$"
+    "pipelines/**": "$"     # ML/Data pipelines
+    
+    # Integrations (&)
+    "integrations/**": "&"
+    "external/**": "&"
+    "vendors/**": "&"
 
 # Probe configuration for visual discovery
 probe:
@@ -120,11 +158,21 @@ states:
       description: App is loading
 
 # Where .purpose files should exist
+# Customize these patterns for your project structure
 purpose-required:
-  - pattern: "src/features/*"
+  - pattern: "src/*"
     depth: 1
-  - pattern: "src/components/*"
+  - pattern: "lib/*"
     depth: 1
+  - pattern: "packages/*"
+    depth: 1
+
+# Custom symbols (extend the core set)
+# custom-symbols:
+#   "§": 
+#     name: "Domain"
+#     description: "Domain-specific concepts"
+#     examples: ["§patient", "§transaction"]
 
 # Coding conventions
 conventions:

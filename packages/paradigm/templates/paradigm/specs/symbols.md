@@ -1,6 +1,10 @@
 # Paradigm Symbol System
 
+> Paradigm v1.0 - Language & Discipline Agnostic
+
 The symbol system creates a **shared language** between code, developers, and AI agents. Each symbol prefix identifies a specific type of element in the codebase.
+
+**Paradigm is universal.** The symbols mean the same thing whether you're building a web app, training an ML model, writing firmware, or deploying infrastructure. See `specs/disciplines.md` for discipline-specific interpretations.
 
 ## Symbol Reference
 
@@ -10,10 +14,11 @@ The symbol system creates a **shared language** between code, developers, and AI
 | `#` | Component | Purpose | Reusable code units, UI components, modules |
 | `$` | Flow | Shared | Multi-step processes or user journeys |
 | `%` | State | Purpose | Global or user state conditions |
-| `~` | Aspect | Purpose | Cross-cutting concerns, nested properties |
 | `^` | Portal | Portal | Access control points, authorization rules |
 | `!` | Signal | Portal | Events, errors, and side effects |
 | `?` | Idea | Premise | Free-form exploration, future possibilities |
+| `~` | Deprecated | Shared | Features/components marked for removal |
+| `&` | Integration | Shared | External services and third-party connections |
 
 ---
 
@@ -33,13 +38,13 @@ Use for **user-facing operations** — things a user can do or experience.
 
 **Where:** Entry points, API routes, user actions, feature directories.
 
-**In code:**
+**In code (pseudocode):**
 ```
 // At feature entry
-log.feature('@login').info('Starting @login', { email });
+log.feature('@login').info('Starting @login', { email })
 
-// At feature exit
-log.signal('!login-success').info('User authenticated', { userId });
+// At feature exit  
+log.signal('!login-success').info('User authenticated', { user_id })
 ```
 
 ---
@@ -58,10 +63,10 @@ Use for **infrastructure and reusable modules** — building blocks of features.
 
 **Where:** Component directories, utility libraries, shared modules.
 
-**In code:**
+**In code (pseudocode):**
 ```
-log.component('#database').debug('Query executed', { table, duration });
-log.component('#api-client').warn('Request failed, retrying', { attempt });
+log.component('#database').debug('Query executed', { table, duration })
+log.component('#cache').warn('Cache miss, fetching from source', { key })
 ```
 
 ---
@@ -78,9 +83,9 @@ $password-reset    - Request → Email → Verify → Reset
 
 **Where:** Flow definitions, saga files, orchestration logic.
 
-**In code:**
+**In code (pseudocode):**
 ```
-log.flow('$checkout-flow').info('Step completed', { step: 'shipping', next: 'payment' });
+log.flow('$checkout-flow').info('Step completed', { step: 'shipping', next: 'payment' })
 ```
 
 ---
@@ -99,9 +104,9 @@ Use for **application state** — reactive data that drives UI and behavior.
 
 **Where:** State stores, reducers, context providers.
 
-**In code:**
+**In code (pseudocode):**
 ```
-log.state('%user.authenticated').info('State changed', { from: false, to: true });
+log.state('%user.authenticated').info('State changed', { from: false, to: true })
 ```
 
 ---
@@ -135,11 +140,11 @@ Use for **authorization and access control** — checkpoints that allow or deny 
 
 **Where:** Middleware, guards, authorization logic.
 
-**In code:**
+**In code (pseudocode):**
 ```
-log.portal('^authenticated').debug('Checking portal');
-log.portal('^authenticated').warn('Access denied', { userId, resource });
-log.portal('^authenticated').debug('Portal passed', { userId });
+log.portal('^authenticated').debug('Checking portal')
+log.portal('^authenticated').warn('Access denied', { user_id, resource })
+log.portal('^authenticated').debug('Portal passed', { user_id })
 ```
 
 ---
@@ -158,10 +163,10 @@ Use for **events and side effects** — things that happen as a result of action
 
 **Where:** Event emitters, side effect handlers, notification systems.
 
-**In code:**
+**In code (pseudocode):**
 ```
-log.signal('!login-success').info('User authenticated', { userId });
-log.signal('!payment-failed').error('Payment declined', { reason });
+log.signal('!login-success').info('User authenticated', { user_id })
+log.signal('!payment-failed').error('Payment declined', { reason })
 ```
 
 ---
@@ -178,6 +183,49 @@ Use for **exploration and future possibilities** — not yet implemented.
 ```
 
 **Where:** Premise files, planning documents, ideation.
+
+---
+
+### `~` Deprecated
+
+Use for **features or components marked for removal** — still exists but should not be used.
+
+```
+~legacy-api          - Old API being phased out
+~v1-auth             - Previous auth system
+~old-dashboard       - Dashboard being replaced
+```
+
+**Where:** Code comments, changelog, migration notes.
+
+**In code:**
+```
+// ~legacy-api: Use @new-api instead. Removal planned for v2.0.
+```
+
+---
+
+### `&` Integrations
+
+Use for **external services and third-party connections** — dependencies outside your codebase.
+
+```
+&stripe              - Payment processing
+&supabase            - Database and auth
+&resend              - Email delivery
+&google-calendar     - Calendar integration
+&aws-s3              - File storage
+```
+
+**Where:** Integration modules, API wrappers, configuration.
+
+**In code (pseudocode):**
+```
+log.integration('&stripe').info('Payment processed', { amount })
+log.integration('&postgres').error('Query failed', { error })
+```
+
+---
 
 #### Compound Ideas (`?@`, `?#`, `?!`, etc.)
 
@@ -216,17 +264,29 @@ Ideas can specify what type of symbol they're exploring by using a compound pref
 
 ## Cross-Referencing
 
-Symbols can reference each other in documentation and code:
+Symbols can reference each other in documentation:
 
 ```yaml
-# In .purpose file
+# In .purpose file (any project type)
 features:
-  checkout:
-    description: Complete purchase flow
-    portals: [^authenticated, ^has-items]
-    signals: [!checkout-complete, !payment-failed]
-    flow: $checkout-flow
-    components: [#CheckoutForm, #PaymentProcessor]
+  process-order:
+    description: Complete order processing
+    portals: [^authenticated, ^valid-order]
+    signals: [!order-complete, !order-failed]
+    flow: $order-processing
+    components: [#validator, #processor]
+    integrations: [&stripe, &inventory-api]
 ```
 
 This creates a traceable web of relationships that AI agents can follow.
+
+## Discipline-Specific Examples
+
+See `specs/disciplines.md` for how symbols map to:
+- Web Development
+- Backend Services
+- Machine Learning
+- Mobile Development
+- Game Development
+- Embedded/IoT
+- Infrastructure/DevOps
