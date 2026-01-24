@@ -17,6 +17,7 @@ import type {
 import { cursorAdapter } from './cursor.js';
 import { copilotAdapter } from './copilot.js';
 import { windsurfAdapter } from './windsurf.js';
+import { claudeAdapter } from './claude.js';
 import { parseParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
 
 // Export types
@@ -34,6 +35,7 @@ export type {
 export { cursorAdapter } from './cursor.js';
 export { copilotAdapter } from './copilot.js';
 export { windsurfAdapter } from './windsurf.js';
+export { claudeAdapter } from './claude.js';
 
 /**
  * Registry of all available IDE adapters
@@ -42,6 +44,7 @@ export const adapters: IDEAdapterRegistry = new Map([
   ['cursor', cursorAdapter],
   ['copilot', copilotAdapter],
   ['windsurf', windsurfAdapter],
+  ['claude', claudeAdapter],
 ]);
 
 /**

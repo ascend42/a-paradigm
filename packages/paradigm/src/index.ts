@@ -8,7 +8,7 @@ import { initCommand } from './commands/init.js';
 import { visualizeCommand } from './commands/visualize.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 
 const program = new Command();
 

@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-01-24
+
+### Added
+- **Claude IDE Adapter** - Generate `CLAUDE.md` for Claude-native contexts
+  - Claude Code, Claude API, and Claude Desktop support
+  - Optimized format for Claude's context preferences
+  - New command: `paradigm sync claude`
+
+- **New Symbols for v1.0**
+  - `~` (Deprecated) - Mark features/components for removal
+  - `&` (Integration) - External services and third-party connections
+  - Logger method: `log.integration('&stripe')`
+
+- **Discipline Mappings** - Universal framework support
+  - New spec: `specs/disciplines.md`
+  - Symbol interpretations for: Web, Backend, ML, Mobile, Game, Embedded, DevOps
+  - Custom discipline support in `config.yaml`
+  - Generic directory patterns that work across project types
+
+- **Error Patterns Template** - Standardized error handling
+  - `docs/error-patterns.md` template (language-agnostic pseudocode)
+  - API error response format
+  - Error flow diagram
+
+- **ADR Templates** - Architecture Decision Records
+  - `docs/decisions/` directory structure
+  - `000-template.md` for new ADRs
+  - README with ADR index
+
+- **Custom Symbol Support**
+  - Projects can define additional symbols in `config.yaml`
+  - Example: `§` for domain-specific concepts
+
+### Changed
+- Version bump to 0.4.0
+- All code examples converted to language-agnostic pseudocode
+- Directory patterns expanded to support all disciplines (ML, embedded, etc.)
+- Symbol mappings now include `integrations/**`, `pipelines/**`, `drivers/**`
+- README updated with new features and discipline support
+
+---
+
+## [0.3.2] - 2026-01-24
+
 ### Added
 - **Context Cost Optimization** - Guidance for keeping `.cursorrules` slim
   - New troubleshooting section: "Context Bloat / Token Costs"

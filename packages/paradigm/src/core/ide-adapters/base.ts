@@ -122,6 +122,7 @@ function getLogMethodForSymbol(symbol: string): string {
     '!': 'signal',
     '%': 'state',
     '$': 'flow',
+    '&': 'integration',
   };
   return mapping[symbol] || 'raw';
 }
