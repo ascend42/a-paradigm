@@ -101,6 +101,8 @@ function login(email, password):
 
 ### Portal Checks
 
+For simple portal logging:
+
 ```
 function requireAuth(request):
     log.portal('^authenticated').debug('Checking ^authenticated')
@@ -113,6 +115,9 @@ function requireAuth(request):
     log.portal('^authenticated').debug('Portal passed', { userId: user.id })
     return next()
 ```
+
+> **Note:** For authorization flows that need AI validation, use the **Portal Validator** instead.
+> See [Portal Validation Specification](./portal-validation.md) for structured decision logging.
 
 ### Component Operations
 
@@ -223,6 +228,28 @@ When implementing the Paradigm logger in a new language:
 - [ ] JSON format for production
 - [ ] Correlation ID support
 - [ ] Timestamp in output
+
+---
+
+## Portal Validation
+
+For authorization decisions that need to be validated by AI agents, use the **Portal Validator** alongside the standard logger. The Portal Validator emits structured decision logs:
+
+```
+┌─────────────────────────────────────────────────────────
+│ 🚪 PORTAL CHECK: ^subscription-required
+│ ├─ Requires: active subscription, trial not exceeded
+│ ├─ Context: { userId: "abc123", plan: "growth" }
+│ ├─ Decision: ✅ ALLOW
+│ └─ Reason: Subscription valid - growth plan active
+└─────────────────────────────────────────────────────────
+```
+
+Use cases:
+- **`log.portal()`** - General portal-related logging and debugging
+- **`portal.check()`** - Authorization decisions that need validation
+
+See [Portal Validation Specification](./portal-validation.md) for full details.
 
 ---
 

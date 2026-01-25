@@ -25,3 +25,15 @@ export { evaluateExpression, createExpressionContext } from './evaluator.js';
 
 // Decorators (also available via @a-company/portal-sdk/decorators)
 export { GateGuard, GateCheck, setGateClient, getGateClient } from './decorators/index.js';
+
+// Portal Validator (also available via @a-company/portal-sdk/validator)
+export {
+  portal,
+  getGateResults,
+  clearGateResults,
+  findGateResult,
+  findGateResults,
+  assertGateAllowed,
+  assertGateDenied,
+} from './validator.js';
+export type { GateResult, GateDecision } from './validator.js';
