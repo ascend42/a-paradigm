@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **CLI Improvements**
+  - Added `claude` as a valid IDE option for `paradigm init --ide claude`
+  - Enhanced `--ide` option descriptions in help text to show output file paths
+  - Improved error messages for invalid IDE options with full list of available options
+
+### Fixed
+- **Build System**
+  - Fixed TypeScript module resolution for workspace dependencies during DTS generation
+  - Added `tsup.config.ts` for `@a-company/portal-sdk` to properly handle workspace dependencies
+  - Resolved build failures caused by missing workspace symlinks (requires `npm install`)
+
+### Changed
+- **Build System**
+  - Updated `portal-sdk` build script to use `tsup.config.ts` instead of CLI flags
+  - Improved build reliability by ensuring workspace packages are properly linked
+- **CLI**
+  - Enhanced `paradigm init` command to better explain IDE option variables and their output files
+  - Improved user experience when selecting IDE target with clearer descriptions
+
 ---
 
 ## [0.4.0] - 2026-01-24

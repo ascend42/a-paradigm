@@ -222,15 +222,27 @@ conventions:
   
   if (options.ide) {
     // User explicitly specified IDE
-    const validIDEs = ['cursor', 'copilot', 'windsurf'];
+    const validIDEs = ['cursor', 'copilot', 'windsurf', 'claude'];
+    const ideDescriptions: Record<string, string> = {
+      cursor: 'Cursor IDE (.cursorrules)',
+      copilot: 'GitHub Copilot (.github/copilot-instructions.md)',
+      windsurf: 'Windsurf IDE (.windsurfrules)',
+      claude: 'Claude Code/API/Desktop (CLAUDE.md)',
+    };
     const ide = options.ide.toLowerCase();
     if (!validIDEs.includes(ide)) {
-      console.log(chalk.yellow(`  ⚠ Unknown IDE "${options.ide}". Valid options: ${validIDEs.join(', ')}`));
+      console.log(chalk.yellow(`\n  ⚠ Unknown IDE "${options.ide}"\n`));
+      console.log(chalk.gray('  Available IDE options:'));
+      for (const [key, desc] of Object.entries(ideDescriptions)) {
+        console.log(chalk.cyan(`    --ide ${key.padEnd(10)} ${chalk.gray(desc)}`));
+      }
+      console.log();
       console.log(chalk.gray('    Defaulting to Cursor.'));
+      console.log();
       targetIDE = 'cursor';
     } else {
       targetIDE = ide;
-      console.log(chalk.green(`  ✓ Using IDE: ${chalk.cyan(targetIDE)}`));
+      console.log(chalk.green(`  ✓ Using IDE: ${chalk.cyan(ideDescriptions[ide])}`));
     }
   } else {
     // Auto-detect IDE
@@ -269,10 +281,14 @@ conventions:
   console.log(chalk.white('    └── prompts/        - Pre-written task prompts'));
   console.log(chalk.white('  • .premise              - Project overview & ideas'));
   console.log(chalk.white('  • .purpose            - Feature & component context'));
-  const outputFile = targetIDE === 'cursor' ? '.cursorrules' 
-    : targetIDE === 'copilot' ? '.github/copilot-instructions.md'
-    : '.windsurfrules';
-  console.log(chalk.white(`  • ${outputFile}       - IDE instructions`));
+  const outputFileMap: Record<string, string> = {
+    cursor: '.cursorrules',
+    copilot: '.github/copilot-instructions.md',
+    windsurf: '.windsurfrules',
+    claude: 'CLAUDE.md',
+  };
+  const outputFile = outputFileMap[targetIDE] || '.cursorrules';
+  console.log(chalk.white(`  • ${outputFile.padEnd(25)} - IDE instructions`));
   console.log('');
   console.log(chalk.gray('Next steps:'));
   console.log(chalk.white('  1. Review ' + chalk.cyan('.paradigm/config.yaml') + ' and customize'));
