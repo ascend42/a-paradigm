@@ -1,7 +1,7 @@
 {
   "name": "@a-company/portal-e2e",
   "version": "1.0.0",
-  "description": "Portal-driven E2E test runner for validating authorization flows",
+  "description": "Portal validation utilities for AI-agent driven E2E testing",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,10 +14,6 @@
       "types": "./dist/parser.d.ts",
       "import": "./dist/parser.js"
     },
-    "./runner": {
-      "types": "./dist/runner.d.ts",
-      "import": "./dist/runner.js"
-    },
     "./reporter": {
       "types": "./dist/reporter.d.ts",
       "import": "./dist/reporter.js"
@@ -29,32 +25,21 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "vitest",
-    "lint": "eslint src/"
+    "dev": "tsc --watch"
   },
   "dependencies": {
-    "@a-company/portal-core": "workspace:*",
     "yaml": "^2.3.4"
   },
-  "peerDependencies": {
-    "@playwright/test": ">=1.40.0"
-  },
-  "peerDependenciesMeta": {
-    "@playwright/test": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "vitest": "^1.1.0"
+    "typescript": "^5.3.3"
   },
   "keywords": [
     "portal",
     "e2e",
-    "testing",
+    "validation",
     "authorization",
-    "paradigm"
+    "paradigm",
+    "ai-agent"
   ],
   "license": "MIT"
 }

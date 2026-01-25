@@ -1,6 +1,18 @@
 # @a-company/portal-e2e
 
-Portal-driven E2E testing for validating authorization flows. This package provides tools to automatically test portal/gate checks by parsing structured console output.
+Portal validation utilities for AI-agent driven E2E testing. This package provides parsing and reporting tools for validating authorization flows via console output.
+
+## Philosophy
+
+**The AI agent IS the test runner.**
+
+Instead of traditional test frameworks, portal validation works by:
+1. AI agent navigates to routes using Cursor browser tools
+2. Portal checks emit structured console output
+3. AI agent reads and parses console logs
+4. Validation compares expected vs actual decisions
+
+No Playwright, Cypress, or other frameworks needed.
 
 ## Installation
 
@@ -10,100 +22,55 @@ npm install @a-company/portal-e2e
 pnpm add @a-company/portal-e2e
 ```
 
-For Playwright support:
+## Usage
 
-```bash
-npm install @playwright/test
-```
-
-## Quick Start
-
-### 1. Define Test Scenarios
-
-Create a YAML file with your test scenarios:
-
-```yaml
-# tests/scenarios/auth-flows.yaml
-
-name: Authentication Flows
-description: Verify authentication portal checks
-
-users:
-  unauthenticated:
-    authenticated: false
-  
-  starter:
-    authenticated: true
-    email: test-starter@example.com
-    password: TestPassword123!
-    tier: starter
-
-scenarios:
-  - id: unauthenticated-protected-route
-    description: Unauthenticated user accessing protected route
-    user: unauthenticated
-    steps:
-      - navigate: /leads
-        expect:
-          portal: ^authenticated
-          decision: DENY
-          redirectTo: /login
-
-  - id: starter-basic-access
-    description: Starter user accessing basic features
-    user: starter
-    steps:
-      - navigate: /leads
-        expect:
-          portal: ^subscription-required
-          decision: ALLOW
-```
-
-### 2. Run Tests
+### Parsing Portal Logs
 
 ```typescript
-import { PortalTestRunner, createPlaywrightRunner, printSummary } from '@a-company/portal-e2e';
-import scenarios from './scenarios/auth-flows.yaml';
+import { parsePortalLogs, findPortalCheck } from '@a-company/portal-e2e';
 
-async function main() {
-  const runner = await createPlaywrightRunner({
-    baseUrl: 'http://localhost:5173',
-    scenarioGlob: 'tests/scenarios/*.yaml',
-    users: scenarios.users,
-    headless: true,
-  });
+// Parse all portal checks from console output
+const consoleLogs = [
+  '🚪 PORTAL CHECK: ^authenticated',
+  '├─ Decision: ✅ ALLOW',
+  '└─ Reason: Session valid',
+];
 
-  const report = await runner.runAll(scenarios.scenarios);
-  
-  printSummary(report);
-  
-  if (report.summary.failed > 0) {
-    process.exit(1);
-  }
-}
+const results = parsePortalLogs(consoleLogs);
+// [{ gate: '^authenticated', decision: 'ALLOW', reason: 'Session valid' }]
 
-main();
+// Find specific portal check
+const authCheck = findPortalCheck(consoleLogs, '^authenticated');
+// { gate: '^authenticated', decision: 'ALLOW', reason: 'Session valid' }
 ```
 
-### 3. Generate Reports
+### Generating Reports
 
 ```typescript
-import { generateMarkdownReport, generateJUnitReport } from '@a-company/portal-e2e';
+import { generateMarkdownReport, generateCoverageReport } from '@a-company/portal-e2e';
 
-// Markdown report
+// Generate markdown report from validation results
+const report = {
+  timestamp: new Date().toISOString(),
+  environment: 'http://localhost:5173',
+  results: [...],
+  summary: { total: 10, passed: 9, failed: 1, skipped: 0 },
+};
+
 const markdown = generateMarkdownReport(report);
-fs.writeFileSync('test-results.md', markdown);
+console.log(markdown);
 
-// JUnit XML (for CI)
-const junit = generateJUnitReport(report);
-fs.writeFileSync('test-results.xml', junit);
+// Generate coverage report
+const coverage = generateCoverageReport(scenarios, [
+  '^authenticated',
+  '^subscription-required',
+  '^admin',
+]);
 ```
 
-## Console Log Parsing
+## Console Output Formats
 
-The package parses two formats of portal check output:
-
-### Visual Format
+### Visual Format (Human + AI Readable)
 
 ```
 ┌─────────────────────────────────────────────────────────
@@ -117,119 +84,90 @@ The package parses two formats of portal check output:
 
 ### JSON Format (Test Mode)
 
+When `PORTAL_TEST_MODE=true`:
+
 ```
 [GATE_RESULT] {"gate":"^authenticated","decision":"allow","reason":"Session valid"}
 ```
 
-Enable JSON format with `PORTAL_TEST_MODE=true`.
+## AI Agent Validation Protocol
+
+### Using Cursor Browser Tools
+
+```markdown
+1. Navigate to route:
+   browser_navigate("/leads")
+
+2. Read console:
+   browser_console_messages()
+
+3. Parse portal checks:
+   Look for "🚪 PORTAL CHECK:" or "[GATE_RESULT]"
+
+4. Validate:
+   Compare decision to expected (ALLOW/DENY)
+
+5. Report:
+   | Portal | Expected | Actual | Status |
+   |--------|----------|--------|--------|
+   | ^auth  | ALLOW    | ALLOW  | ✅     |
+```
+
+### Example AI Validation Session
+
+```
+Agent: Validating ^authenticated portal...
+
+1. [browser_navigate("/logout")] - Ensure logged out
+2. [browser_navigate("/dashboard")] - Access protected route
+3. [browser_console_messages()] - Read console
+
+Found portal check:
+- Gate: ^authenticated
+- Decision: ❌ DENY
+- Reason: No session
+
+Expected: DENY
+Result: ✅ PASS
+```
+
+## Scenario File Format
+
+```yaml
+# scenarios/auth-flows.yaml
+name: Authentication Tests
+scenarios:
+  - id: unauth-protected-route
+    description: Unauthenticated user denied protected route
+    user: unauthenticated
+    steps:
+      - navigate: /dashboard
+        expect:
+          portal: ^authenticated
+          decision: DENY
+          redirectTo: /login
+```
 
 ## API Reference
 
-### Parser
+### Parser Functions
 
-```typescript
-import { parsePortalLogs, findPortalCheck, hasPortalDecision } from '@a-company/portal-e2e/parser';
+| Function | Description |
+|----------|-------------|
+| `parsePortalLogs(logs)` | Parse all portal checks from log lines |
+| `parsePortalLog(log)` | Parse single log line |
+| `findPortalCheck(logs, gate)` | Find specific portal check |
+| `hasPortalDecision(logs, gate, decision)` | Check if portal has decision |
+| `extractGateNames(logs)` | Get all unique gate names |
 
-// Parse all portal checks from console logs
-const results = parsePortalLogs(consoleLogs);
+### Reporter Functions
 
-// Find specific portal check
-const authCheck = findPortalCheck(logs, '^authenticated');
-
-// Check if portal has specific decision
-const isAllowed = hasPortalDecision(logs, '^authenticated', 'ALLOW');
-```
-
-### Runner
-
-```typescript
-import { PortalTestRunner, BrowserInterface } from '@a-company/portal-e2e/runner';
-
-// With Playwright
-const runner = await createPlaywrightRunner(config);
-
-// Custom browser interface
-const customRunner = new PortalTestRunner(config, myBrowserInterface);
-
-// Run single scenario
-const result = await runner.runScenario(scenario);
-
-// Run all scenarios
-const report = await runner.runAll(scenarios);
-```
-
-### Reporter
-
-```typescript
-import { 
-  generateMarkdownReport, 
-  generateJsonReport, 
-  generateJUnitReport,
-  generateCoverageReport,
-  printSummary 
-} from '@a-company/portal-e2e/reporter';
-
-// Generate various report formats
-const markdown = generateMarkdownReport(report);
-const json = generateJsonReport(report);
-const junit = generateJUnitReport(report);
-
-// Generate coverage report
-const coverage = generateCoverageReport(scenarios, portalNames);
-
-// Print summary to console
-printSummary(report);
-```
-
-## Integration with Playwright Test
-
-```typescript
-// tests/portal.spec.ts
-import { test, expect } from '@playwright/test';
-import { parsePortalLogs } from '@a-company/portal-e2e';
-
-test.describe('Portal Validation', () => {
-  test('authenticated user can access dashboard', async ({ page }) => {
-    const logs: string[] = [];
-    page.on('console', msg => logs.push(msg.text()));
-    
-    // Login
-    await page.goto('/login');
-    await page.fill('[name="email"]', 'user@example.com');
-    await page.fill('[name="password"]', 'password');
-    await page.click('button[type="submit"]');
-    
-    // Navigate to protected route
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
-    
-    // Parse and validate
-    const portalResults = parsePortalLogs(logs);
-    const authCheck = portalResults.find(r => r.gate === '^authenticated');
-    
-    expect(authCheck).toBeDefined();
-    expect(authCheck?.decision).toBe('ALLOW');
-  });
-});
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-```yaml
-- name: Run Portal E2E Tests
-  run: npm run test:portals
-  env:
-    TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-    TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-
-- name: Upload Results
-  uses: actions/upload-artifact@v4
-  with:
-    name: portal-test-results
-    path: tests/results/
-```
+| Function | Description |
+|----------|-------------|
+| `generateMarkdownReport(report)` | Generate markdown report |
+| `generateJsonReport(report)` | Generate JSON report |
+| `generateCoverageReport(scenarios, portals)` | Generate coverage analysis |
+| `formatValidationResult(result)` | Format single result as table row |
 
 ## Related
 

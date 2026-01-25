@@ -1,7 +1,8 @@
 /**
- * Portal E2E Test Reporter
+ * Portal E2E Validation Reporter
  *
- * Generates reports from test results in various formats.
+ * Generates reports from validation results.
+ * Designed for AI agents to format and present findings.
  */
 
 import type {
@@ -14,13 +15,21 @@ import type {
 } from './types.js';
 
 /**
+ * Format a single validation result as a markdown row
+ */
+export function formatValidationResult(result: ValidationResult): string {
+  const status = result.passed ? '✅' : '❌';
+  return `| ${result.portal} | ${result.expected} | ${result.actual} | ${status} |`;
+}
+
+/**
  * Generate a markdown report from test results
  */
 export function generateMarkdownReport(report: TestReport): string {
   const lines: string[] = [];
 
   // Header
-  lines.push('# Portal E2E Test Results');
+  lines.push('# Portal Validation Results');
   lines.push('');
   lines.push(`**Date**: ${report.timestamp}`);
   lines.push(`**Environment**: ${report.environment}`);
@@ -116,7 +125,7 @@ export function generateMarkdownReport(report: TestReport): string {
     if (untested.length > 0) {
       lines.push('### Recommendations');
       lines.push('');
-      lines.push('Add test scenarios for:');
+      lines.push('Add validation scenarios for:');
       for (const portal of untested) {
         lines.push(`- ${portal.name}`);
       }
@@ -132,54 +141,6 @@ export function generateMarkdownReport(report: TestReport): string {
  */
 export function generateJsonReport(report: TestReport): string {
   return JSON.stringify(report, null, 2);
-}
-
-/**
- * Generate a JUnit XML report (for CI integration)
- */
-export function generateJUnitReport(report: TestReport): string {
-  const lines: string[] = [];
-
-  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push(
-    `<testsuites name="Portal E2E Tests" tests="${report.summary.total}" failures="${report.summary.failed}" skipped="${report.summary.skipped}" time="0">`
-  );
-
-  for (const result of report.results) {
-    const failures = result.steps.flatMap((s) => s.validations.filter((v) => !v.passed));
-    const duration = (result.duration || 0) / 1000;
-
-    lines.push(
-      `  <testsuite name="${escapeXml(result.scenario.id)}" tests="${result.steps.length}" failures="${failures.length}" time="${duration.toFixed(3)}">`
-    );
-
-    for (const step of result.steps) {
-      const stepName = step.step.navigate || step.step.click || 'action';
-      const stepFailed = step.validations.some((v) => !v.passed);
-
-      lines.push(`    <testcase name="${escapeXml(stepName)}" classname="${escapeXml(result.scenario.id)}">`);
-
-      if (stepFailed) {
-        for (const validation of step.validations.filter((v) => !v.passed)) {
-          lines.push(
-            `      <failure message="${escapeXml(validation.error || 'Validation failed')}" type="AssertionError">`
-          );
-          lines.push(`Portal: ${escapeXml(validation.portal)}`);
-          lines.push(`Expected: ${escapeXml(validation.expected)}`);
-          lines.push(`Actual: ${escapeXml(validation.actual)}`);
-          lines.push('      </failure>');
-        }
-      }
-
-      lines.push('    </testcase>');
-    }
-
-    lines.push('  </testsuite>');
-  }
-
-  lines.push('</testsuites>');
-
-  return lines.join('\n');
 }
 
 /**
@@ -240,68 +201,7 @@ export function generateCoverageReport(
       total: portals.length,
       tested,
       untested: portals.length - tested,
-      coverage: (tested / portals.length) * 100,
+      coverage: portalNames.length > 0 ? (tested / portalNames.length) * 100 : 0,
     },
   };
-}
-
-/**
- * Print a summary to console
- */
-export function printSummary(report: TestReport): void {
-  console.log('\n' + '='.repeat(60));
-  console.log('Portal E2E Test Results');
-  console.log('='.repeat(60));
-  console.log(`Environment: ${report.environment}`);
-  console.log(`Total: ${report.summary.total}`);
-  console.log(`Passed: ${report.summary.passed}`);
-  console.log(`Failed: ${report.summary.failed}`);
-  if (report.summary.skipped > 0) {
-    console.log(`Skipped: ${report.summary.skipped}`);
-  }
-  console.log('='.repeat(60) + '\n');
-
-  // Print failures
-  const failures = report.results.filter((r) => !r.passed);
-  if (failures.length > 0) {
-    console.log('FAILURES:\n');
-    for (const failure of failures) {
-      console.log(`  ❌ ${failure.scenario.id}`);
-      console.log(`     ${failure.scenario.description}`);
-
-      for (const step of failure.steps) {
-        const failedValidations = step.validations.filter((v) => !v.passed);
-        for (const v of failedValidations) {
-          console.log(`     - ${v.portal}: Expected ${v.expected}, got ${v.actual}`);
-        }
-      }
-      console.log('');
-    }
-  }
-
-  // Print coverage if available
-  if (report.coverage) {
-    console.log(`Coverage: ${report.coverage.summary.coverage.toFixed(1)}%`);
-    console.log(`  ${report.coverage.summary.tested}/${report.coverage.summary.total} portals tested`);
-
-    const untested = report.coverage.portals.filter((p) => p.coverageType === 'none');
-    if (untested.length > 0) {
-      console.log('\nUntested portals:');
-      for (const p of untested) {
-        console.log(`  - ${p.name}`);
-      }
-    }
-  }
-}
-
-/**
- * Escape XML special characters
- */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }

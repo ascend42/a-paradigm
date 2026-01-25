@@ -299,46 +299,31 @@ After running tests, analyze coverage:
 
 ---
 
-## Automation Tips
+## Browser Tools Reference
 
-### Using Playwright
+The AI agent uses Cursor's browser tools for validation:
 
-```typescript
-test('starter user basic access', async ({ page }) => {
-  // Setup
-  await page.goto('/login');
-  await page.fill('[data-testid="email"]', 'test-starter@example.com');
-  await page.fill('[data-testid="password"]', 'TestPassword123!');
-  await page.click('[data-testid="login-button"]');
-  await page.waitForURL('/leads');
-  
-  // Capture logs
-  const logs: string[] = [];
-  page.on('console', msg => logs.push(msg.text()));
-  
-  // Navigate
-  await page.goto('/leads');
-  await page.waitForLoadState('networkidle');
-  
-  // Parse and assert
-  const portalLogs = logs.filter(l => l.includes('PORTAL CHECK'));
-  expect(portalLogs.some(l => 
-    l.includes('^subscription-required') && l.includes('ALLOW')
-  )).toBe(true);
-});
-```
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `browser_navigate` | Navigate to URL | `browser_navigate("/leads")` |
+| `browser_type` | Enter text in field | `browser_type(ref="email", text="user@example.com")` |
+| `browser_click` | Click element | `browser_click(ref="submit")` |
+| `browser_wait_for` | Wait for load | `browser_wait_for(time=2)` |
+| `browser_console_messages` | Read console | Returns all console output |
+| `browser_snapshot` | Get page state | Returns accessibility tree |
 
-### Using Cursor Browser
+### Typical Validation Flow
 
 ```
 1. browser_navigate("/login")
-2. browser_type(selector="[data-testid=email]", text="test-starter@example.com")
-3. browser_type(selector="[data-testid=password]", text="TestPassword123!")
-4. browser_click(selector="[data-testid=login-button]")
-5. browser_wait_for(time=2)
-6. browser_navigate("/leads")
-7. browser_console_messages()
-8. [Parse output for portal checks]
+2. browser_snapshot() - get form element refs
+3. browser_type(ref="email", text="test-starter@example.com")
+4. browser_type(ref="password", text="TestPassword123!")
+5. browser_click(ref="submit")
+6. browser_wait_for(time=2)
+7. browser_navigate("/leads")
+8. browser_console_messages() - read portal checks
+9. [Parse output and validate against expectations]
 ```
 
 ---

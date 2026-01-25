@@ -1,5 +1,7 @@
 /**
- * Portal E2E Testing Types
+ * Portal E2E Validation Types
+ *
+ * Types for AI-agent driven portal validation.
  */
 
 /**
@@ -183,7 +185,7 @@ export interface CoverageReport {
 }
 
 /**
- * Complete test report
+ * Complete validation report
  */
 export interface TestReport {
   /** Report generation timestamp */
@@ -201,26 +203,4 @@ export interface TestReport {
     failed: number;
     skipped: number;
   };
-}
-
-/**
- * Runner configuration
- */
-export interface RunnerConfig {
-  /** Base URL of application */
-  baseUrl: string;
-  /** Path to scenario files (glob pattern) */
-  scenarioGlob: string;
-  /** Path to portal.yaml */
-  portalYamlPath?: string;
-  /** User credentials by name */
-  users?: Record<string, UserConfig>;
-  /** Enable JSON output for portal checks */
-  testMode?: boolean;
-  /** Headless browser mode */
-  headless?: boolean;
-  /** Screenshot on failure */
-  screenshotOnFailure?: boolean;
-  /** Output directory for reports */
-  outputDir?: string;
 }
