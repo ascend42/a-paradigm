@@ -352,8 +352,105 @@ See working implementations:
 
 ---
 
+## Platform Considerations
+
+> **Note**: This specification is primarily designed for **web applications**. Mobile platforms require adaptations.
+
+### Web (Primary Target)
+
+The visual block format with styled console output works in:
+- Chrome, Firefox, Safari, Edge DevTools
+- Cursor browser tools (`browser_console_messages()`)
+- Playwright/Puppeteer console capture
+
+### Mobile Adaptations
+
+Mobile platforms **cannot display styled console output**. Use JSON-only format:
+
+```typescript
+// Mobile portal validator configuration
+const portal = createPortalValidator({
+  outputFormat: 'json-only',  // No visual blocks
+  logTarget: 'native',         // Use native logging
+});
+
+// Output goes to native logs:
+// Android: Logcat with tag "PORTAL"
+// iOS: os_log with subsystem "com.app.portal"
+```
+
+#### React Native
+
+```typescript
+// Use console.log which bridges to native
+portal.check('^authenticated')
+  .context({ userId })
+  .allow('Session valid');
+// Outputs to Metro bundler console AND native logs
+```
+
+#### Flutter
+
+```dart
+// Use debugPrint or developer.log
+import 'dart:developer' as developer;
+
+void logPortalCheck(String gate, String decision, String reason) {
+  developer.log(
+    '{"gate":"$gate","decision":"$decision","reason":"$reason"}',
+    name: 'PORTAL',
+  );
+}
+```
+
+#### iOS Native
+
+```swift
+import os.log
+
+let portalLog = OSLog(subsystem: "com.app.portal", category: "gate")
+
+func logPortalCheck(gate: String, decision: String, reason: String) {
+    os_log(
+        "[GATE_RESULT] {\"gate\":\"%{public}@\",\"decision\":\"%{public}@\",\"reason\":\"%{public}@\"}",
+        log: portalLog,
+        type: .info,
+        gate, decision, reason
+    )
+}
+```
+
+#### Android Native
+
+```kotlin
+import android.util.Log
+
+fun logPortalCheck(gate: String, decision: String, reason: String) {
+    Log.i("PORTAL", """[GATE_RESULT] {"gate":"$gate","decision":"$decision","reason":"$reason"}""")
+}
+```
+
+### AI Agent Limitations
+
+| Capability | Web | Mobile |
+|------------|-----|--------|
+| Read console in real-time | ✅ | ❌ |
+| Parse portal checks | ✅ | ⚠️ (from log files) |
+| Automated testing | ✅ Playwright | ⚠️ Detox/Appium |
+| Visual block format | ✅ | ❌ |
+| JSON format | ✅ | ✅ |
+
+For mobile, AI agents can:
+- Generate test scenarios
+- Review test code
+- Analyze log files (post-execution)
+- Validate JSON output format
+
+---
+
 ## Changelog
 
 | Version | Changes |
 |---------|---------|
 | 1.0 | Initial specification |
+| 1.1 | Added platform considerations for mobile |

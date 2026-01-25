@@ -280,6 +280,59 @@ features:
 
 This creates a traceable web of relationships that AI agents can follow.
 
+---
+
+## FTUX (First Time User Experience) Symbols
+
+The FTUX system uses symbols to identify guided experience components:
+
+### Flow Symbol for Journeys
+
+```
+$ftux                     - FTUX system flow
+$ftux-window-shopper      - Window shopper journey
+$ftux-new-signup          - New user onboarding
+$ftux-upgrade-prompt      - Upgrade encouragement flow
+```
+
+### Signal Symbols for Events
+
+```
+!ftux-event-shown         - FTUX event displayed to user
+!ftux-event-complete      - User completed FTUX event
+!ftux-event-dismissed     - User dismissed FTUX event
+!ftux-journey-complete    - User completed entire journey
+!ftux-journey-abandoned   - User left mid-journey
+```
+
+### State Symbols for Tracking
+
+```
+%ftux.active-event        - Currently displayed FTUX event
+%ftux.journey-progress    - Progress through active journey
+%ftux.completed-events    - Set of completed event IDs
+%sandbox.pending-changes  - Count of local changes in sandbox mode
+```
+
+### Component Targeting
+
+FTUX targets components via `data-ftux-id` attributes:
+
+```html
+<Button data-ftux-id="add-lead-button">Add Lead</Button>
+```
+
+Reference components in events and logs:
+
+```
+log.flow('$ftux').info('Targeting component', { 
+  componentId: 'add-lead-button',
+  effect: 'tooltip',
+});
+```
+
+See `specs/ftux-component-system.md` for full specification.
+
 ## Discipline-Specific Examples
 
 See `specs/disciplines.md` for how symbols map to:
