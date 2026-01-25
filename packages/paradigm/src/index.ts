@@ -31,7 +31,7 @@ program
   .description('Initialize Paradigm in the current project')
   .option('-f, --force', 'Overwrite existing files')
   .option('--name <name>', 'Project name for .premise file')
-  .option('--ide <ide>', 'Target IDE (cursor, copilot, windsurf)')
+  .option('--ide <ide>', 'Target IDE: cursor (.cursorrules), copilot (.github/copilot-instructions.md), windsurf (.windsurfrules), claude (CLAUDE.md)')
   .action(initCommand);
 
 // paradigm setup
