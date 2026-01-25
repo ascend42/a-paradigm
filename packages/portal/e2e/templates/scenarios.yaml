@@ -1,0 +1,228 @@
+# Example Portal E2E Test Scenarios
+# Copy this template and customize for your project
+
+name: Example Portal Tests
+description: Example test scenarios for portal validation
+
+# Define test users
+# These should match your test account setup
+users:
+  unauthenticated:
+    authenticated: false
+  
+  starter:
+    authenticated: true
+    email: test-starter@example.com
+    password: TestPassword123!
+    tier: starter
+  
+  growth:
+    authenticated: true
+    email: test-growth@example.com
+    password: TestPassword123!
+    tier: growth
+  
+  agency:
+    authenticated: true
+    email: test-agency@example.com
+    password: TestPassword123!
+    tier: agency
+  
+  admin:
+    authenticated: true
+    email: test-admin@example.com
+    password: TestPassword123!
+    role: admin
+  
+  super_admin:
+    authenticated: true
+    email: test-super@example.com
+    password: TestPassword123!
+    role: super_admin
+
+# Test scenarios
+scenarios:
+  # ===================
+  # Authentication Tests
+  # ===================
+  
+  - id: auth-unauthenticated-protected
+    description: Unauthenticated user redirected from protected route
+    tags: [auth, critical]
+    user: unauthenticated
+    steps:
+      - navigate: /dashboard
+        expect:
+          portal: ^authenticated
+          decision: DENY
+          redirectTo: /login
+
+  - id: auth-unauthenticated-public
+    description: Unauthenticated user can access public routes
+    tags: [auth]
+    user: unauthenticated
+    steps:
+      - navigate: /
+        expect:
+          portal: ^public-only
+          decision: ALLOW
+      - navigate: /login
+        expect:
+          portal: ^public-only
+          decision: ALLOW
+
+  - id: auth-authenticated-redirected-from-login
+    description: Authenticated user redirected from login page
+    tags: [auth]
+    user: starter
+    steps:
+      - navigate: /login
+        expect:
+          portal: ^public-only
+          decision: DENY
+          redirectTo: /dashboard
+
+  # ===================
+  # Subscription Tests
+  # ===================
+
+  - id: sub-starter-basic-access
+    description: Starter user can access basic features
+    tags: [subscription, starter]
+    user: starter
+    steps:
+      - navigate: /leads
+        expect:
+          portal: ^subscription-required
+          decision: ALLOW
+      - navigate: /integrations
+        expect:
+          portal: ^subscription-required
+          decision: ALLOW
+
+  - id: sub-starter-denied-agency
+    description: Starter user denied agency features
+    tags: [subscription, starter]
+    user: starter
+    steps:
+      - navigate: /admin/team
+        expect:
+          portal: ^agency-required
+          decision: DENY
+          redirectTo: /select-plan
+
+  - id: sub-growth-advanced-access
+    description: Growth user can access advanced features
+    tags: [subscription, growth]
+    user: growth
+    steps:
+      - navigate: /analytics
+        expect:
+          portal: ^subscription-required
+          decision: ALLOW
+
+  - id: sub-agency-full-access
+    description: Agency user has full access
+    tags: [subscription, agency]
+    user: agency
+    steps:
+      - navigate: /admin/team
+        expect:
+          portal: ^agency-required
+          decision: ALLOW
+      - navigate: /client-accounts
+        expect:
+          portal: ^agency-required
+          decision: ALLOW
+
+  # ===================
+  # Admin Role Tests
+  # ===================
+
+  - id: admin-regular-denied
+    description: Regular user denied admin access
+    tags: [admin]
+    user: starter
+    steps:
+      - navigate: /admin/settings
+        expect:
+          portal: ^admin
+          decision: DENY
+
+  - id: admin-admin-allowed
+    description: Admin user can access admin routes
+    tags: [admin]
+    user: admin
+    steps:
+      - navigate: /admin/settings
+        expect:
+          portal: ^admin
+          decision: ALLOW
+
+  - id: admin-super-admin-full
+    description: Super admin has full access
+    tags: [admin, critical]
+    user: super_admin
+    steps:
+      - navigate: /admin/server-settings
+        expect:
+          portal: ^super-admin
+          decision: ALLOW
+      - navigate: /admin/impersonate
+        expect:
+          portal: ^super-admin
+          decision: ALLOW
+
+  # ===================
+  # Multi-Gate Flows
+  # ===================
+
+  - id: flow-multi-gate-success
+    description: User passes multiple gates in sequence
+    tags: [flow]
+    user: admin
+    steps:
+      - navigate: /admin/billing
+        expect:
+          - portal: ^authenticated
+            decision: ALLOW
+          - portal: ^admin
+            decision: ALLOW
+
+  - id: flow-subscription-bypass-admin
+    description: Admin bypasses subscription check
+    tags: [flow, admin]
+    user: super_admin
+    steps:
+      - navigate: /leads
+        expect:
+          portal: ^subscription-required
+          decision: ALLOW
+          reason: admin bypass
+
+  # ===================
+  # Edge Cases
+  # ===================
+
+  - id: edge-trial-expired
+    description: User with expired trial denied access
+    tags: [edge, subscription]
+    skip: true  # Enable when trial testing is set up
+    user: starter
+    steps:
+      - navigate: /leads
+        expect:
+          portal: ^subscription-required
+          decision: DENY
+          reason: trial expired
+
+  - id: edge-rate-limited
+    description: Rate limited user handled correctly
+    tags: [edge]
+    skip: true  # Enable when rate limiting is implemented
+    user: starter
+    steps:
+      - navigate: /api/leads
+        expect:
+          portal: ^rate-limited
+          decision: DENY
