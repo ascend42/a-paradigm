@@ -33,6 +33,8 @@ This approach provides:
 
 ## Architecture
 
+**The AI agent IS the test runner.**
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    E2E TEST ARCHITECTURE                        │
@@ -45,12 +47,12 @@ This approach provides:
 │           │                           │                         │
 │           ▼                           ▼                         │
 │  ┌────────────────────────────────────────────────────────┐     │
-│  │              Test Runner (Playwright/Cursor)           │     │
+│  │         AI Agent (Cursor Browser Tools)                │     │
 │  │                                                        │     │
-│  │  1. Parse scenario configuration                       │     │
-│  │  2. Set user state (auth, tier, role)                  │     │
+│  │  1. Read scenario configuration                        │     │
+│  │  2. Set user state (browser_navigate, browser_type)    │     │
 │  │  3. Navigate to target route                           │     │
-│  │  4. Capture console output                             │     │
+│  │  4. Read console (browser_console_messages)            │     │
 │  │  5. Parse portal check results                         │     │
 │  │  6. Compare to expected decision                       │     │
 │  └────────────────────────────────────────────────────────┘     │
@@ -68,6 +70,8 @@ This approach provides:
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+No Playwright, Cypress, or other test frameworks required.
 
 ---
 
@@ -360,167 +364,9 @@ function parsePortalLogs(logs: string[]): PortalCheckResult[] {
 
 ---
 
-## Test Runner
+## Test Execution
 
-### Playwright Implementation
-
-```typescript
-import { test, expect, Page } from '@playwright/test';
-import { parsePortalLogs, PortalCheckResult } from './parser';
-import scenarios from './scenarios/auth-flows.yaml';
-
-class PortalTestRunner {
-  private page: Page;
-  private consoleLogs: string[] = [];
-  
-  constructor(page: Page) {
-    this.page = page;
-    
-    // Capture console output
-    page.on('console', (msg) => {
-      this.consoleLogs.push(msg.text());
-    });
-  }
-  
-  async setupUser(user: UserConfig): Promise<void> {
-    if (!user.authenticated) {
-      // Ensure logged out
-      await this.page.goto('/logout');
-      return;
-    }
-    
-    // Login with test credentials
-    await this.page.goto('/login');
-    await this.page.fill('[data-testid="email"]', user.email!);
-    await this.page.fill('[data-testid="password"]', user.password || 'TestPassword123!');
-    await this.page.click('[data-testid="login-button"]');
-    
-    // Wait for auth to complete
-    await this.page.waitForURL(/\/(leads|dashboard)/);
-  }
-  
-  async runStep(step: TestStep): Promise<TestStepResult> {
-    this.consoleLogs = []; // Clear previous logs
-    
-    if (step.navigate) {
-      await this.page.goto(step.navigate);
-      await this.page.waitForLoadState('networkidle');
-    }
-    
-    if (step.click) {
-      await this.page.click(step.click);
-    }
-    
-    if (step.wait) {
-      await this.page.waitForTimeout(step.wait);
-    }
-    
-    // Parse portal checks from console
-    const portalResults = parsePortalLogs(this.consoleLogs);
-    
-    // Validate expectations
-    const expectations = Array.isArray(step.expect) ? step.expect : [step.expect];
-    const results: ValidationResult[] = [];
-    
-    for (const expected of expectations) {
-      const actual = portalResults.find(r => r.gate === expected.portal);
-      
-      if (!actual) {
-        results.push({
-          portal: expected.portal,
-          expected: expected.decision,
-          actual: 'NOT_FOUND',
-          passed: false,
-          error: `Portal check for ${expected.portal} not found in logs`,
-        });
-        continue;
-      }
-      
-      const passed = actual.decision === expected.decision;
-      results.push({
-        portal: expected.portal,
-        expected: expected.decision,
-        actual: actual.decision,
-        reason: actual.reason,
-        passed,
-        error: passed ? undefined : `Expected ${expected.decision}, got ${actual.decision}`,
-      });
-      
-      // Check redirect if specified
-      if (expected.redirectTo && actual.decision === 'DENY') {
-        const currentUrl = this.page.url();
-        if (!currentUrl.includes(expected.redirectTo)) {
-          results.push({
-            portal: expected.portal,
-            expected: `redirect to ${expected.redirectTo}`,
-            actual: currentUrl,
-            passed: false,
-            error: `Expected redirect to ${expected.redirectTo}, got ${currentUrl}`,
-          });
-        }
-      }
-    }
-    
-    return {
-      step,
-      portalResults,
-      validations: results,
-      passed: results.every(r => r.passed),
-    };
-  }
-  
-  async runScenario(scenario: TestScenario): Promise<ScenarioResult> {
-    const stepResults: TestStepResult[] = [];
-    
-    // Setup user
-    const user = typeof scenario.user === 'string' 
-      ? scenarios.users[scenario.user]
-      : scenario.user;
-    await this.setupUser(user);
-    
-    // Run each step
-    for (const step of scenario.steps) {
-      const result = await this.runStep(step);
-      stepResults.push(result);
-      
-      // Stop on first failure (optional)
-      if (!result.passed) break;
-    }
-    
-    return {
-      scenario,
-      steps: stepResults,
-      passed: stepResults.every(s => s.passed),
-    };
-  }
-}
-
-// Playwright test generation
-for (const scenario of scenarios.scenarios) {
-  test(scenario.description, async ({ page }) => {
-    const runner = new PortalTestRunner(page);
-    const result = await runner.runScenario(scenario);
-    
-    expect(result.passed).toBe(true);
-    
-    // Log details on failure
-    if (!result.passed) {
-      for (const step of result.steps) {
-        for (const validation of step.validations) {
-          if (!validation.passed) {
-            console.log(`FAILED: ${validation.portal}`);
-            console.log(`  Expected: ${validation.expected}`);
-            console.log(`  Actual: ${validation.actual}`);
-            console.log(`  Error: ${validation.error}`);
-          }
-        }
-      }
-    }
-  });
-}
-```
-
-### AI Agent Execution (Cursor Browser)
+### AI Agent Execution (Cursor Browser) - Primary Method
 
 For AI agents using Cursor's browser tools:
 
@@ -671,81 +517,103 @@ function generateCoverageReport(
 
 ---
 
-## CI/CD Integration
+## Validation Protocol
 
-### GitHub Actions
+### Complete AI Agent Session
 
-```yaml
-# .github/workflows/portal-e2e.yml
-name: Portal E2E Tests
+Here's a complete example of an AI agent validating portal scenarios:
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+```markdown
+User: Validate the authentication portal scenarios from tests/portal-e2e/scenarios/auth-flows.yaml
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Install Playwright
-        run: npx playwright install --with-deps
-      
-      - name: Start application
-        run: npm run dev &
-        env:
-          VITE_ENABLE_PORTAL_VALIDATION: true
-          PORTAL_TEST_MODE: true
-      
-      - name: Wait for app
-        run: npx wait-on http://localhost:5173
-      
-      - name: Run Portal E2E Tests
-        run: npm run test:portals
-        env:
-          TEST_USER_STARTER_EMAIL: ${{ secrets.TEST_USER_STARTER_EMAIL }}
-          TEST_USER_STARTER_PASSWORD: ${{ secrets.TEST_USER_STARTER_PASSWORD }}
-          TEST_USER_GROWTH_EMAIL: ${{ secrets.TEST_USER_GROWTH_EMAIL }}
-          TEST_USER_GROWTH_PASSWORD: ${{ secrets.TEST_USER_GROWTH_PASSWORD }}
-          TEST_USER_ADMIN_EMAIL: ${{ secrets.TEST_USER_ADMIN_EMAIL }}
-          TEST_USER_ADMIN_PASSWORD: ${{ secrets.TEST_USER_ADMIN_PASSWORD }}
-      
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: portal-test-results
-          path: tests/results/
-      
-      - name: Generate coverage badge
-        if: github.ref == 'refs/heads/main'
-        run: npm run test:portals:coverage-badge
+Agent: I'll validate the authentication portal checks.
+
+## Session: Portal E2E Validation
+
+### Scenario 1: unauthenticated-protected-route
+**Description**: Unauthenticated user accessing protected route
+
+1. **Ensuring logged out state**
+   [browser_navigate("/logout")]
+   ✓ Logged out
+
+2. **Navigating to /leads**
+   [browser_navigate("/leads")]
+
+3. **Reading console logs**
+   [browser_console_messages()]
+   
+   Found portal check:
+   ```
+   🚪 PORTAL CHECK: ^authenticated
+   ├─ Decision: ❌ DENY
+   └─ Reason: No active session - redirecting to login
+   ```
+
+4. **Validating redirect**
+   Current URL: /login
+   Expected redirect: /login ✓
+
+**Result**: ✅ PASS - Expected DENY, got DENY
+
+---
+
+### Scenario 2: starter-basic-access
+**Description**: Starter user accessing basic features
+
+1. **Logging in as starter user**
+   [browser_navigate("/login")]
+   [browser_type email: "test-starter@example.com"]
+   [browser_type password: "********"]
+   [browser_click "Sign In"]
+   ✓ Logged in
+
+2. **Navigating to /leads**
+   [browser_navigate("/leads")]
+
+3. **Reading console logs**
+   [browser_console_messages()]
+   
+   Found portal check:
+   ```
+   🚪 PORTAL CHECK: ^subscription-required
+   ├─ Decision: ✅ ALLOW
+   └─ Reason: Subscription valid - starter plan active
+   ```
+
+**Result**: ✅ PASS - Expected ALLOW, got ALLOW
+
+---
+
+## Summary
+
+| Scenario | Portal | Expected | Actual | Status |
+|----------|--------|----------|--------|--------|
+| unauthenticated-protected-route | ^authenticated | DENY | DENY | ✅ |
+| starter-basic-access | ^subscription-required | ALLOW | ALLOW | ✅ |
+| starter-agency-denied | ^agency-required | DENY | DENY | ✅ |
+
+**Total**: 3/3 passed (100%)
 ```
 
-### Package.json Scripts
+### Triggering Validation
 
-```json
-{
-  "scripts": {
-    "test:portals": "playwright test --config=tests/portal-e2e/playwright.config.ts",
-    "test:portals:generate": "ts-node tests/portal-e2e/generate-scenarios.ts",
-    "test:portals:coverage": "ts-node tests/portal-e2e/coverage.ts",
-    "test:portals:coverage-badge": "ts-node tests/portal-e2e/badge.ts"
-  }
-}
+Simply ask the AI agent:
+
+```
+Validate portal checks using tests/portal-e2e/scenarios/auth-flows.yaml
+```
+
+Or for specific portals:
+
+```
+Test the ^subscription-required portal with starter and growth users
+```
+
+Or for comprehensive validation:
+
+```
+Run complete portal E2E validation and generate coverage report
 ```
 
 ---

@@ -1,8 +1,8 @@
 /**
- * Portal E2E Testing Package
+ * Portal E2E Validation Package
  *
- * Provides tools for automated testing of portal/authorization flows
- * by parsing console output from portal checks.
+ * Provides utilities for AI-agent driven validation of portal/authorization flows.
+ * Works with Cursor browser tools or any console log capture mechanism.
  *
  * @packageDocumentation
  */
@@ -21,10 +21,9 @@ export type {
   PortalCoverage,
   CoverageReport,
   TestReport,
-  RunnerConfig,
 } from './types.js';
 
-// Parser
+// Parser - for parsing portal check output from console logs
 export {
   parsePortalLogs,
   parsePortalLog,
@@ -33,18 +32,10 @@ export {
   extractGateNames,
 } from './parser.js';
 
-// Runner
-export {
-  PortalTestRunner,
-  createPlaywrightRunner,
-  type BrowserInterface,
-} from './runner.js';
-
-// Reporter
+// Reporter - for generating validation reports
 export {
   generateMarkdownReport,
   generateJsonReport,
-  generateJUnitReport,
   generateCoverageReport,
-  printSummary,
+  formatValidationResult,
 } from './reporter.js';
