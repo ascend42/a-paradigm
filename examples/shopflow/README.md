@@ -1,39 +1,42 @@
 # ShopFlow Example Project
 
-A realistic e-commerce platform example demonstrating all Horizon features.
+A realistic e-commerce platform example demonstrating all Paradigm features.
 
 ## Structure
 
 ```
 shopflow/
-├── .horizon            # AI guidelines & symbol system (for .cursorrules)
+├── .paradigm           # AI guidelines & symbol system (for .cursorrules)
 ├── .cursorrules        # Generated Cursor AI integration
-├── .dream              # Project overview & idea board
+├── .premise            # Project overview & idea board
 ├── .purpose            # Root project context
-├── gate.yaml           # Authorization topology
+├── portal.yaml         # Authorization topology
 ├── auth/
 │   └── .purpose        # Authentication module context
 ├── payments/
 │   └── .purpose        # Payment processing context
 ├── features/
 │   └── .purpose        # Shopping features context
-└── components/
-    └── .purpose        # UI component library context
+├── components/
+│   └── .purpose        # UI component library context
+└── guards/
+    └── AuthGuard.example.ts  # Portal Validator usage example
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `.horizon` | AI guidelines, symbol definitions, states, conventions |
-| `.cursorrules` | Cursor AI integration (generated from `.horizon`) |
-| `.dream` | High-level project overview with ideas and areas |
+| `.paradigm` | AI guidelines, symbol definitions, states, conventions |
+| `.cursorrules` | Cursor AI integration (generated from `.paradigm`) |
+| `.premise` | High-level project overview with ideas and areas |
 | `.purpose` | Feature/component definitions with references |
-| `gate.yaml` | Authorization gates, locks, and keys |
+| `portal.yaml` | Authorization gates, locks, and keys |
+| `guards/*.ts` | Portal Validator examples for route guards |
 
 ## Symbol Reference
 
-This project demonstrates all Horizon symbol types:
+This project demonstrates all Paradigm symbol types:
 
 | Symbol | Type | Examples in ShopFlow |
 |--------|------|---------------------|
@@ -42,25 +45,72 @@ This project demonstrates all Horizon symbol types:
 | `$` | Flow | `$checkout-to-confirmation` |
 | `%` | State | `%auth-state`, `%toast-state` |
 | `~` | Aspect | `~search-performance`, `~mobile-ux` |
-| `^` | Gate | `^auth-required`, `^premium-checkout`, `^admin-panel` |
+| `^` | Portal | `^auth-required`, `^premium-checkout`, `^admin-panel` |
 | `!` | Signal | `!payment-failed`, `!login-failed` |
 | `?` | Idea | `?subscription-model`, `?ai-recommendations` |
 
-## Testing with Horizon CLI
+## Testing with Paradigm CLI
 
 ```bash
 # From the a-horizon root
 cd examples/shopflow
 
 # Validate all purpose files
-npx horizon purpose validate
+npx paradigm purpose validate
 
-# Validate gate configuration
-npx horizon gate validate
+# Validate portal configuration
+npx paradigm portal validate
 
-# Aggregate and view in Dreamscape
-npx horizon visualize
+# Aggregate and view in Prism
+npx paradigm visualize
 ```
+
+## Portal Validation for AI Agents
+
+The `guards/` directory contains examples of using the **Portal Validator** - a system that enables AI agents to validate authorization flows by reading structured console output.
+
+### How It Works
+
+When a portal check runs, it emits a boxed console output:
+
+```
+┌─────────────────────────────────────────────────────────
+│ 🚪 PORTAL CHECK: ^premium-checkout
+│ ├─ Requires: active subscription, plan is pro or enterprise
+│ ├─ Context: { userId: "123", plan: "free", status: "active" }
+│ ├─ Decision: ❌ DENY
+│ └─ Reason: Free plan does not include premium checkout
+└─────────────────────────────────────────────────────────
+```
+
+### Usage in Route Guards
+
+```typescript
+import { portal } from '@a-company/portal-sdk';
+
+function checkAuth(user: User | null, path: string) {
+  const gate = portal.check('^authenticated')
+    .requires('valid user session')
+    .context({ path, hasUser: !!user });
+
+  if (!user) {
+    gate.deny('No active session');
+    return { allowed: false, redirect: '/login' };
+  }
+
+  gate.allow('User authenticated');
+  return { allowed: true };
+}
+```
+
+### AI Validation
+
+AI agents can validate portals by:
+1. Navigating to protected routes
+2. Reading console output for `🚪 PORTAL CHECK:` blocks
+3. Verifying decisions match expected behavior
+
+See [Portal Validation Spec](../../packages/paradigm/templates/paradigm/specs/portal-validation.md) for full details.
 
 ## Cross-References
 
@@ -74,10 +124,10 @@ The files demonstrate rich interconnections:
 
 ## Ideas Board
 
-The `.dream` file includes exploration ideas:
+The `.premise` file includes exploration ideas:
 
 - `?subscription-model` - Recurring purchases
 - `?ai-recommendations` - ML-powered suggestions  
 - `?social-shopping` - Social wishlist sharing
 
-These appear as dashed nodes in the Dreamscape.
+These appear as dashed nodes in Prism.
