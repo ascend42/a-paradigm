@@ -1,0 +1,59 @@
+{
+  "name": "@a-company/portal-sdk",
+  "version": "0.1.0",
+  "description": "Runtime SDK for checking portals in applications",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./decorators": {
+      "types": "./dist/decorators/index.d.ts",
+      "import": "./dist/decorators/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@a-company/portal-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/portal/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "keywords": [
+    "paradigm",
+    "portal",
+    "sdk",
+    "authorization",
+    "runtime"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

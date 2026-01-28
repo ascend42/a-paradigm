@@ -1,0 +1,55 @@
+{
+  "name": "@a-company/portal-manager",
+  "version": "0.1.0",
+  "description": "Portal testing and validation system",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@a-company/portal-core": "*",
+    "@a-company/portal-sdk": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/portal/manager"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "keywords": [
+    "paradigm",
+    "portal",
+    "testing",
+    "validation"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

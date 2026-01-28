@@ -1,5 +1,5 @@
 {
-  "name": "@horizon/purpose-core",
+  "name": "@a-company/purpose-core",
   "version": "0.1.0",
   "description": "Purpose file parsing, validation, and aggregation",
   "type": "module",
@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts --format esm --dts --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
@@ -38,5 +39,29 @@
     "typescript": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/purpose/core"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "keywords": [
+    "paradigm",
+    "purpose",
+    "documentation",
+    "ai-context",
+    "yaml"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
