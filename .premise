@@ -1,0 +1,17 @@
+version: 1.0.0
+metadata:
+  name: a-horizon
+  created: '2026-01-25T04:25:23.372Z'
+  modified: '2026-01-25T04:25:23.373Z'
+sources:
+  purpose:
+    - path: ./
+  gate:
+    - path: ./portal.yaml
+nodes: []
+connections: []
+layout:
+  viewport:
+    x: 0
+    'y': 0
+    zoom: 1

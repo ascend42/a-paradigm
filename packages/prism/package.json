@@ -1,0 +1,50 @@
+{
+  "name": "@a-company/prism",
+  "version": "0.1.0",
+  "description": "Prism - Infinite canvas visualization for Paradigm",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^7.3.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/prism"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "keywords": [
+    "paradigm",
+    "prism",
+    "visualizer",
+    "infinite-canvas",
+    "react"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

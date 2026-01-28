@@ -1,0 +1,51 @@
+{
+  "name": "@a-company/probe-core",
+  "version": "0.1.0",
+  "description": "Visual discovery layer for AI agents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schema.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/probe/core"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-horizon/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "keywords": [
+    "paradigm",
+    "probe",
+    "ai-context",
+    "visual-discovery",
+    "ui-mapping"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
