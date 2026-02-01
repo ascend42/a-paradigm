@@ -16,6 +16,8 @@ paradigm mcp setup --client claude-desktop
 paradigm mcp setup --client all
 ```
 
+**For Cursor users:** After setup, you must enable the server in Cursor Settings → Tools → Installed MCP Servers (toggle ON).
+
 ---
 
 ## Table of Contents
@@ -167,6 +169,16 @@ Create `.cursor/mcp.json` in your project:
   }
 }
 ```
+
+**Important: Enable the server in Cursor**
+
+After creating the config, you must manually enable the MCP server:
+
+1. Open Cursor Settings (Cmd+, on macOS, Ctrl+, on Windows)
+2. Navigate to **Tools** section (or search for "MCP")
+3. Find **"Installed MCP Servers"**
+4. Locate your server (e.g., `your-project`)
+5. **Toggle the switch to ON** (new servers are disabled by default)
 
 ### Claude Desktop
 
@@ -361,12 +373,21 @@ For development, point to your local build:
 
 ## Troubleshooting
 
+### Cursor: MCP server not working after setup
+
+New MCP servers are **disabled by default** in Cursor. You must manually enable them:
+
+1. Open Cursor Settings (Cmd+, or Ctrl+,)
+2. Go to **Tools** → **Installed MCP Servers**
+3. Find your server and **toggle the switch to ON**
+
 ### "MCP server not found" or tools not appearing
 
 1. **Run `paradigm mcp status`** — Check if config exists
 2. **Verify JSON syntax** — Use a JSON validator to check for syntax errors
 3. **Check the project path** — Ensure `cwd` points to a valid Paradigm project
 4. **Restart the AI client completely** — Quit and relaunch, don't just close the window
+5. **For Cursor:** Ensure the server is enabled in Settings → Tools
 
 ### "npx command not found"
 
