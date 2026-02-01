@@ -223,6 +223,19 @@ program
     await upgradeCommand(path, options);
   });
 
+// paradigm lint
+program
+  .command('lint [path]')
+  .description('Validate .purpose files for schema errors')
+  .option('-f, --fix', 'Auto-fix issues where possible')
+  .option('-s, --strict', 'Fail on warnings (not just errors)')
+  .option('-q, --quiet', 'Suppress output except errors')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { lintCommand } = await import('./commands/lint.js');
+    await lintCommand(path, options);
+  });
+
 // paradigm doctor
 program
   .command('doctor')
