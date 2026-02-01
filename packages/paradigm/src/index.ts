@@ -272,6 +272,67 @@ scanCmd
     console.log('\nRun `paradigm scan auto --help` for options.\n');
   });
 
+// paradigm team <subcommand>
+const teamCmd = program
+  .command('team')
+  .description('Multi-agent orchestration commands');
+
+teamCmd
+  .command('init [path]')
+  .description('Initialize team configuration with default agents')
+  .option('-f, --force', 'Overwrite existing configuration')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamInitCommand } = await import('./commands/team/index.js');
+    await teamInitCommand(path, options);
+  });
+
+teamCmd
+  .command('status [path]')
+  .description('Show current team status')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamStatusCommand } = await import('./commands/team/index.js');
+    await teamStatusCommand(path, options);
+  });
+
+teamCmd
+  .command('handoff [path]')
+  .description('Hand off current task to another agent')
+  .requiredOption('-t, --to <agent>', 'Target agent name')
+  .option('-s, --summary <text>', 'Summary of what was done')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamHandoffCommand } = await import('./commands/team/index.js');
+    await teamHandoffCommand(path, options);
+  });
+
+teamCmd
+  .command('accept [handoff-id] [path]')
+  .description('Accept a pending handoff')
+  .option('-n, --note <text>', 'Acceptance note')
+  .option('--json', 'Output as JSON')
+  .action(async (handoffId, path, options) => {
+    const { teamAcceptCommand } = await import('./commands/team/index.js');
+    await teamAcceptCommand(handoffId, path, options);
+  });
+
+teamCmd
+  .command('check [path]')
+  .description('Check for conflicts and team health issues')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamCheckCommand } = await import('./commands/team/index.js');
+    await teamCheckCommand(path, options);
+  });
+
+// Default team action (show status)
+teamCmd
+  .action(async () => {
+    const { teamStatusCommand } = await import('./commands/team/index.js');
+    await teamStatusCommand(undefined, {});
+  });
+
 // paradigm doctor
 program
   .command('doctor')
