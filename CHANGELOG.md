@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Smart Init** - Enhanced `paradigm init` with intelligent onboarding
+  - Auto-detects existing IDE instruction files (.cursorrules, copilot-instructions.md, etc.)
+  - Detects project type (Next.js, Express, Python, etc.)
+  - Shows detection results with line counts
+  - New `--migrate` flag outputs AI-ready migration prompt
+  - New `--quick` flag for non-interactive setup
+  - New `--dry-run` flag to preview what would be created
+  - Improved post-init summary with clear next steps
+
+- **Migration Prompts** - AI-assisted migration from existing IDE files
+  - Generates detailed prompts for converting to modern scoped format
+  - Covers Cursor (.mdc) and Copilot (.instructions.md) formats
+  - Includes file structure examples and frontmatter syntax
+
+### Changed
+- **README.md** - Complete rewrite reflecting evolved project
+  - Better value proposition and problem statement
+  - Comprehensive command reference organized by category
+  - Agent efficiency features prominently featured
+  - IDE support and migration documentation
+  - Cleaner structure with practical examples
+
 ---
 
 ## [0.6.0] - 2026-01-27

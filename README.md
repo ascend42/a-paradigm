@@ -1,96 +1,198 @@
 # Paradigm
 
-[![CI](https://github.com/ascend42/a-horizon/actions/workflows/ci.yml/badge.svg)](https://github.com/ascend42/a-horizon/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@a-company/paradigm.svg)](https://www.npmjs.com/package/@a-company/paradigm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 
-> Unified developer tools ecosystem for structured planning, testing, and ideation.
+> **Structure for AI-Native Development**
 
-Paradigm brings together three powerful developer tools into a single, visual experience:
+Paradigm is a developer tools ecosystem that brings **structure**, **authorization**, and **shared context** to modern software projects — designed for both human developers and AI agents.
 
-| Tool | Metaphor | Domain | Question It Answers |
-|------|----------|--------|---------------------|
-| **Purpose** | Interior Designer | Structure & Context | "What is this? Why does it exist?" |
-| **Portal** | Architect | Access & Authorization | "Who can access? Under what conditions?" |
-| **Premise** | Thinker | Ideation & Aggregation | "What's the complete mental model?" |
+## The Problem
 
-## Prism - The Visual Canvas
+Modern development has a context problem:
 
-Prism is an infinite canvas where all project knowledge flows together:
+- **Context evaporates** — What does this feature do? What auth does it need? AI doesn't know. New team members don't know. Sometimes YOU don't know.
+- **Authorization is a black box** — Who can access what? It's buried in middleware, scattered across files, impossible to visualize.
+- **AI agents work blind** — Your AI assistant reads thousands of tokens but misses the forest for the trees.
 
-- **Features** (`@`) from Purpose files
-- **Components** (`#`) from Purpose files
-- **Portals** (`^`) from Portal files
-- **Signals** (`!`) from Portal files
-- **Free-form ideas** (`?`) created directly in Premise
+## The Solution
 
-All interconnected, taggable, and explorable.
+Three pillars, one ecosystem:
+
+| Pillar | Metaphor | What It Does |
+|--------|----------|--------------|
+| **Purpose** | Interior Designer | Define what things are and why they exist |
+| **Portal** | Architect | Define who can access what, under what conditions |
+| **Premise** | Thinker | Aggregate everything into a queryable knowledge graph |
+
+Plus **Prism** — an infinite canvas to visualize it all.
 
 ## Quick Start
 
 ```bash
-# Install the CLI
+# Install
 npm install -g @a-company/paradigm
 
-# Initialize in your project
+# Initialize (detects existing IDE files, offers migration)
 paradigm init
 
-# Open Prism visualizer
+# Generate AI context
+paradigm beacon
+
+# Open visualizer
 paradigm visualize
 ```
+
+## What Gets Created
+
+```
+your-project/
+├── .paradigm/              # Configuration & specs
+│   ├── config.yaml         # Main configuration
+│   ├── specs/              # Logger, scan, symbols
+│   ├── docs/               # Commands, patterns
+│   └── prompts/            # Task templates (pathways)
+├── .purpose                # Feature & component context
+├── .premise                # Project overview & ideas
+└── .cursor/rules/          # Generated IDE instructions
+    ├── paradigm-core.mdc
+    ├── paradigm-symbols.mdc
+    └── ...
+```
+
+## Symbol System
+
+Paradigm uses symbols to create a shared language between code, developers, and AI:
+
+| Symbol | Name | Example | Meaning |
+|--------|------|---------|---------|
+| `@` | Feature | `@checkout` | User-facing capability |
+| `#` | Component | `#Button` | Reusable code unit |
+| `^` | Portal | `^authenticated` | Authorization gate |
+| `!` | Signal | `!login-failed` | Event or side effect |
+| `$` | Flow | `$purchase-flow` | Multi-step process |
+| `%` | State | `%user.authenticated` | Data condition |
+
+These symbols work everywhere — in code comments, documentation, AI prompts, and visual tools.
+
+## Key Commands
+
+### Setup & Sync
+
+```bash
+paradigm init              # Initialize Paradigm (smart detection)
+paradigm init --migrate    # Output migration prompt for existing rules
+paradigm init --dry-run    # Show what would be created
+paradigm sync              # Regenerate IDE instructions
+paradigm sync --all        # Sync all IDEs (Cursor, Copilot, etc.)
+paradigm doctor            # Health check and validation
+```
+
+### AI Context (Agent Efficiency)
+
+```bash
+paradigm beacon            # Quick-start orientation for AI
+paradigm beacon --json     # Machine-readable output
+paradigm constellation     # Generate symbol relationship graph
+paradigm ripple @checkout  # Impact analysis before changes
+paradigm ripple @checkout --json
+```
+
+### Session Continuity
+
+```bash
+paradigm thread            # Show current session context
+paradigm thread save "Added login validation"
+paradigm thread todo "Write unit tests"
+paradigm thread note "User prefers Zod"
+paradigm echo AUTH_001     # Look up error-to-symbol mapping
+```
+
+### Visualization
+
+```bash
+paradigm visualize         # Open Prism canvas
+paradigm portal watch      # Real-time authorization viewer
+paradigm portal report     # Export session report
+```
+
+## Agent Efficiency
+
+Paradigm is designed to make AI agents faster and more context-aware:
+
+| Feature | What It Does | Command |
+|---------|--------------|---------|
+| **Beacon** | Quick-start orientation file | `paradigm beacon` |
+| **Constellation** | Machine-readable symbol graph | `paradigm constellation` |
+| **Ripple** | Change impact analysis | `paradigm ripple @symbol` |
+| **Thread** | Session continuity | `paradigm thread` |
+| **Echo** | Error-to-symbol mapping | `paradigm echo ERROR_CODE` |
+| **Agent Hints** | CLI query patterns in IDE rules | Auto-generated |
+
+**Token efficiency**: Instead of loading large context files (~2000 tokens), AI can query on-demand (~100 tokens per query).
+
+```bash
+# AI runs this before modifying @checkout
+paradigm ripple @checkout --json
+
+# AI debugs an error
+paradigm echo AUTH_REQUIRED --json
+
+# AI queries constellation directly
+jq '.stars["@checkout"]' .paradigm/constellation.json
+```
+
+## IDE Support
+
+Paradigm generates instructions for multiple IDEs from a single source:
+
+| IDE | Format | Command |
+|-----|--------|---------|
+| **Cursor** | `.cursor/rules/*.mdc` | `paradigm sync cursor` |
+| **GitHub Copilot** | `.github/instructions/*.md` | `paradigm sync copilot` |
+| **Windsurf** | `.windsurfrules` | `paradigm sync windsurf` |
+| **Claude** | `CLAUDE.md` | `paradigm sync claude` |
+
+All generated from `.paradigm/config.yaml` — one source of truth.
+
+### Migrating Existing Rules
+
+Have existing `.cursorrules` or other IDE files? Paradigm can help migrate them:
+
+```bash
+# Output a migration prompt for AI to help convert
+paradigm init --migrate
+```
+
+This generates a detailed prompt that guides AI through splitting your existing rules into the modern scoped format.
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| [`@a-company/paradigm`](./packages/paradigm) | Unified `paradigm` command |
-| [`@a-company/purpose-core`](./packages/purpose/core) | `.purpose` file parsing, validation, aggregation |
-| [`@a-company/portal-core`](./packages/portal/core) | `portal.yaml` parsing, validation |
-| [`@a-company/portal-sdk`](./packages/portal/sdk) | Runtime SDK for checking portals in applications |
-| [`@a-company/portal-manager`](./packages/portal/manager) | Portal testing and validation |
-| [`@a-company/premise-core`](./packages/premise/core) | Aggregates Purpose + Portal, builds symbol index |
-| [`@a-company/probe-core`](./packages/probe/core) | Visual discovery layer for AI agents |
-| [`@a-company/prism`](./packages/prism) | The Prism infinite canvas UI |
-
-## Symbol System
-
-| Symbol | Name | Owner | Example |
-|--------|------|-------|---------|
-| `@` | Feature | Purpose | `@checkout`, `@user-login` |
-| `#` | Component | Purpose | `#Button`, `#api-client` |
-| `$` | Flow | Shared | `$purchase-flow`, `$auth-flow` |
-| `%` | State | Purpose | `%user.authenticated` |
-| `~` | Aspect | Purpose | `@login~validation` |
-| `^` | Portal | Portal | `^checkout`, `^admin-panel` |
-| `!` | Signal | Portal | `!checkout-started` |
-| `?` | Idea | Premise | `?maybe-add-export` |
+| [`@a-company/paradigm`](./packages/paradigm) | Unified CLI |
+| [`@a-company/purpose-core`](./packages/purpose/core) | `.purpose` file parsing |
+| [`@a-company/portal-core`](./packages/portal/core) | `portal.yaml` parsing |
+| [`@a-company/portal-sdk`](./packages/portal/sdk) | Runtime authorization SDK |
+| [`@a-company/portal-viewer`](./packages/portal/viewer) | Real-time portal visualization |
+| [`@a-company/premise-core`](./packages/premise/core) | Symbol aggregation |
+| [`@a-company/probe-core`](./packages/probe/core) | Visual discovery layer |
+| [`@a-company/prism`](./packages/prism) | Infinite canvas visualizer |
 
 ## Example Project
 
-The `examples/shopflow` directory contains a complete example demonstrating all Paradigm features:
+See [`examples/shopflow`](./examples/shopflow) for a complete example:
 
 ```
 examples/shopflow/
-├── .premise            # Project overview & idea board
-├── .purpose            # Root project context
+├── .paradigm/          # Full configuration
+├── .purpose            # Project context
+├── .premise            # Ideas & overview
 ├── portal.yaml         # Authorization topology
-├── auth/.purpose       # Authentication module
-├── payments/.purpose   # Payment processing
-├── features/.purpose   # Shopping features
-└── components/.purpose # UI component library
-```
-
-Test it:
-
-```bash
-# Open Prism with the example
-cd examples/shopflow
-npx paradigm visualize
-
-# Or run from root
-npm run dev:prism
-# Then load examples/shopflow in Prism
+├── auth/.purpose       # Auth module context
+├── payments/.purpose   # Payment context
+└── features/.purpose   # Feature definitions
 ```
 
 ## Development
@@ -102,29 +204,31 @@ npm install
 # Build all packages
 npm run build
 
-# Start Prism in dev mode
+# Start Prism visualizer
 npm run dev:prism
 
-# Format code
-npm run format
-
-# Create a changeset for publishing
-npm run changeset
+# Link CLI globally for testing
+cd packages/paradigm && npm link
 ```
 
 ## Migrating from Horizon
 
-If you have an existing Horizon project, you can migrate to Paradigm:
+If you have an existing Horizon project:
 
 ```bash
 paradigm upgrade --from-horizon
 ```
 
-This will:
-- Rename `.horizon/` to `.paradigm/`
-- Rename `gate.yaml` to `portal.yaml`
-- Rename `.dream` files to `.premise`
-- Update IDE instruction files
+This renames `.horizon/` to `.paradigm/`, `gate.yaml` to `portal.yaml`, etc.
+
+## Philosophy
+
+Paradigm believes that:
+
+1. **Context should be structured** — Not buried in comments or tribal knowledge
+2. **Authorization deserves visualization** — Topology over scattered middleware
+3. **AI needs better context** — On-demand queries beat static files
+4. **One source of truth** — Generate IDE-specific files from shared config
 
 ## Contributing
 
@@ -133,3 +237,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 ## License
 
 [MIT](./LICENSE)
+
+---
+
+Built for developers who want their AI to actually understand their project.
