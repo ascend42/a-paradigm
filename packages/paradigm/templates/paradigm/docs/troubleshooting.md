@@ -60,13 +60,37 @@ Common issues and their solutions.
 
 4. **Verify .purpose file format:**
    ```yaml
-   # .purpose file should have:
+   # Record format (recommended)
    features:
      my-feature:
        description: What it does
+       gates: [^authenticated]      # Optional
+       flows: [$checkout-flow]      # Optional
+       signals: [!success, !failed] # Optional
+   
+   # Array format (also valid)
+   features:
+     - id: my-feature
+       description: What it does
+       gates: [^authenticated]
+   
    components:
      MyComponent:
        description: What it is
+   
+   # Optional: explicit symbols
+   gates:
+     my-gate:
+       description: Authorization check
+   
+   signals:
+     my-signal:
+       description: Event fired
+       category: auth
+   
+   states:
+     user.preference:
+       description: User preference state
    ```
 
 ---

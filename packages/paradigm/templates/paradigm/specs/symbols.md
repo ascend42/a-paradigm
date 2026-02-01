@@ -271,14 +271,40 @@ Symbols can reference each other in documentation:
 features:
   process-order:
     description: Complete order processing
-    portals: [^authenticated, ^valid-order]
+    gates: [^authenticated, ^valid-order]  # Portals required
+    flows: [$order-processing]             # Flows triggered
     signals: [!order-complete, !order-failed]
-    flow: $order-processing
+    states: [%user.cart, %order.status]    # State dependencies
     components: [#validator, #processor]
     integrations: [&stripe, &inventory-api]
+
+# These references are automatically indexed by `paradigm status`
+# and appear in the constellation graph
 ```
 
 This creates a traceable web of relationships that AI agents can follow.
+
+### Symbol Reference Arrays
+
+Features and components can declare symbol references using these arrays:
+
+| Array | Symbol Type | Example |
+|-------|-------------|---------|
+| `gates:` | `^` Portal | `[^authenticated, ^premium]` |
+| `flows:` | `$` Flow | `[$checkout-flow, $onboarding]` |
+| `signals:` | `!` Signal | `[!success, !failed]` |
+| `states:` | `%` State | `[%user.cart, %order.total]` |
+| `components:` | `#` Component | `[#Button, #Modal]` |
+
+**Symbol Extraction:**
+
+The indexer also extracts symbols from description text:
+```yaml
+features:
+  checkout:
+    description: "Processes orders for %user.authenticated users via $checkout-flow"
+    # %user.authenticated and $checkout-flow are auto-extracted
+```
 
 ---
 
