@@ -530,18 +530,15 @@ export async function initCommand(options: InitOptions) {
   if (!options.quick) {
     displayDetectionResults(detection, projectName);
     
-    // If existing files found, show options
+    // If existing files found, show available commands
     if (detection.hasExisting && !options.force) {
-      console.log(chalk.white('  Options:\n'));
-      console.log(chalk.green('  [1]') + chalk.white(' Fresh start ') + chalk.gray('(recommended)'));
-      console.log(chalk.gray('      Create .paradigm/ and generate new IDE rules'));
-      console.log(chalk.gray('      Your existing files will be preserved\n'));
-      console.log(chalk.yellow('  [2]') + chalk.white(' Migrate existing'));
-      console.log(chalk.gray('      Output a prompt for AI to migrate your rules\n'));
-      console.log(chalk.gray('  [3]') + chalk.white(' Minimal setup'));
-      console.log(chalk.gray('      Just create .paradigm/config.yaml\n'));
-      console.log(chalk.gray('  Proceeding with fresh start...\n'));
-      console.log(chalk.gray('  (Use --migrate for option 2, or --force to overwrite)\n'));
+      console.log(chalk.white('  What would you like to do?\n'));
+      console.log(chalk.cyan('  paradigm init --migrate'));
+      console.log(chalk.gray('      Get an AI-ready prompt to convert your existing rules\n'));
+      console.log(chalk.cyan('  paradigm init --force'));
+      console.log(chalk.gray('      Create .paradigm/ alongside existing files\n'));
+      console.log(chalk.cyan('  paradigm init --dry-run'));
+      console.log(chalk.gray('      Preview what would be created\n'));
     }
   }
 
