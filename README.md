@@ -1,6 +1,5 @@
 # Paradigm
 
-[![npm version](https://img.shields.io/npm/v/@a-company/paradigm.svg)](https://www.npmjs.com/package/@a-company/paradigm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 
@@ -26,22 +25,33 @@ Three pillars, one ecosystem:
 | **Portal** | Architect | Define who can access what, under what conditions |
 | **Premise** | Thinker | Aggregate everything into a queryable knowledge graph |
 
-Plus **Prism** — an infinite canvas to visualize it all.
-
 ## Quick Start
 
-```bash
-# Install
-npm install -g @a-company/paradigm
+### Install from GitHub
 
+```bash
+# Using npm
+npm install -g github:ascend42/a-horizon
+
+# Using bun (faster)
+bun add -g github:ascend42/a-horizon
+
+# Or run directly without installing
+npx github:ascend42/a-horizon init
+bunx github:ascend42/a-horizon init
+```
+
+### Initialize Your Project
+
+```bash
 # Initialize (detects existing IDE files, offers migration)
 paradigm init
 
-# Generate AI context
+# Generate AI context beacon
 paradigm beacon
 
-# Open visualizer
-paradigm visualize
+# Check project status
+paradigm status
 ```
 
 ## What Gets Created
@@ -121,17 +131,11 @@ paradigm team status       # Show current agent, pending handoffs
 paradigm team handoff --to builder    # Hand off to another agent
 paradigm team accept       # Accept a pending handoff
 paradigm team check        # Health check for conflicts
+paradigm team history      # Full activity timeline
+paradigm team reset        # Clear state for fresh start
 ```
 
 Default agents: `architect` → `builder` → `reviewer` → `tester` (plus `security`)
-
-### Visualization
-
-```bash
-paradigm visualize         # Open Prism canvas
-paradigm portal watch      # Real-time authorization viewer
-paradigm portal report     # Export session report
-```
 
 ## Agent Efficiency
 
@@ -163,9 +167,9 @@ paradigm echo AUTH_REQUIRED --json
 jq '.stars["@checkout"]' .paradigm/constellation.json
 ```
 
-## MCP Server (Claude Desktop Integration)
+## MCP Server (AI Integration)
 
-For dynamic, mid-conversation context, Paradigm provides an MCP server:
+For dynamic, mid-conversation context, Paradigm provides an MCP server that works with Claude Desktop, Cursor, and other MCP-compatible AI tools:
 
 | Resource/Tool | Purpose |
 |---------------|---------|
@@ -176,13 +180,27 @@ For dynamic, mid-conversation context, Paradigm provides an MCP server:
 | `paradigm_related` | Get connected symbols |
 | `paradigm_status` | Project overview |
 
-**Claude Desktop config** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+### Quick Setup
+
+```bash
+# Auto-configure MCP for your AI client
+paradigm mcp setup
+
+# Or specify client
+paradigm mcp setup --client cursor
+paradigm mcp setup --client claude
+paradigm mcp setup --client all
+```
+
+### Manual Claude Desktop Config
+
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "paradigm": {
       "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "args": ["github:ascend42/a-horizon", "mcp", "serve"],
       "cwd": "/path/to/your/project"
     }
   }
@@ -193,8 +211,6 @@ For dynamic, mid-conversation context, Paradigm provides an MCP server:
 > **You:** "What would break if I removed ^authenticated?"
 > 
 > **Claude:** *[calls paradigm_ripple]* "Removing ^authenticated would affect 12 features..."
-
-See [MCP Setup Guide](./docs/guides/mcp-setup.md) for detailed instructions.
 
 ## IDE Support
 
@@ -224,15 +240,13 @@ This generates a detailed prompt that guides AI through splitting your existing 
 
 | Package | Description |
 |---------|-------------|
-| [`@a-company/paradigm`](./packages/paradigm) | Unified CLI |
-| [`@a-company/paradigm-mcp`](./packages/paradigm-mcp) | MCP server for Claude Desktop |
-| [`@a-company/purpose-core`](./packages/purpose/core) | `.purpose` file parsing |
-| [`@a-company/portal-core`](./packages/portal/core) | `portal.yaml` parsing |
-| [`@a-company/portal-sdk`](./packages/portal/sdk) | Runtime authorization SDK |
-| [`@a-company/portal-viewer`](./packages/portal/viewer) | Real-time portal visualization |
-| [`@a-company/premise-core`](./packages/premise/core) | Symbol aggregation |
-| [`@a-company/probe-core`](./packages/probe/core) | Visual discovery layer |
-| [`@a-company/prism`](./packages/prism) | Infinite canvas visualizer |
+| `@a-company/paradigm` | Unified CLI |
+| `@a-company/paradigm-mcp` | MCP server for AI integrations |
+| `@a-company/purpose-core` | `.purpose` file parsing |
+| `@a-company/portal-core` | `portal.yaml` parsing |
+| `@a-company/portal-sdk` | Runtime authorization SDK |
+| `@a-company/premise-core` | Symbol aggregation |
+| `@a-company/probe-core` | Visual discovery layer |
 
 ## Example Project
 
@@ -252,14 +266,15 @@ examples/shopflow/
 ## Development
 
 ```bash
+# Clone
+git clone https://github.com/ascend42/a-horizon.git
+cd a-horizon
+
 # Install dependencies
 npm install
 
 # Build all packages
 npm run build
-
-# Start Prism visualizer
-npm run dev:prism
 
 # Link CLI globally for testing
 cd packages/paradigm && npm link
