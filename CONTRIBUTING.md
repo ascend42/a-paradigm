@@ -14,8 +14,8 @@ Thank you for your interest in contributing to Paradigm! This guide will help yo
 1. **Fork and clone the repository**
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/a-horizon.git
-   cd a-horizon
+   git clone https://github.com/YOUR_USERNAME/a-paradigm.git
+   cd a-paradigm
    ```
 
 2. **Install dependencies**
@@ -59,7 +59,7 @@ npm run typecheck
 ## Project Structure
 
 ```
-a-horizon/
+a-paradigm/
 ├── packages/
 │   ├── paradigm/         # Main CLI (@a-company/paradigm)
 │   ├── purpose/core/     # Purpose file parser (@a-company/purpose-core)

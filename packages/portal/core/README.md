@@ -54,7 +54,7 @@ gates:
 
 ## Documentation
 
-See the [main repository](https://github.com/ascend42/a-horizon) for full documentation.
+See the [main repository](https://github.com/ascend42/a-paradigm) for full documentation.
 
 ## License
 

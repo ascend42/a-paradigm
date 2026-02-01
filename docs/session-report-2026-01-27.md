@@ -91,7 +91,7 @@ Run `paradigm status` to verify symbol counts are correct.
 If you need the latest Paradigm:
 
 ```bash
-cd /path/to/a-horizon
+cd /path/to/a-paradigm
 git pull origin main
 npm run build
 ```

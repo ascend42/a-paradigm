@@ -2,7 +2,7 @@
 # Source of truth for AI-assisted development in this project
 
 version: "1.0"
-project: "a-horizon"
+project: "a-paradigm"
 
 # Discipline (optional) - helps AI understand your domain
 # Options: web, backend, ml, mobile, game, embedded, devops, custom

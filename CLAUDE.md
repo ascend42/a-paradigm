@@ -1,4 +1,4 @@
-# a-horizon - Claude Context
+# a-paradigm - Claude Context
 
 > **Paradigm v1.0** | For Claude Code, Claude API, and Claude-native interfaces
 

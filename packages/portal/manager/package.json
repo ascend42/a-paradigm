@@ -36,13 +36,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
     "directory": "packages/portal/manager"
   },
   "bugs": {
-    "url": "https://github.com/ascend42/a-horizon/issues"
+    "url": "https://github.com/ascend42/a-paradigm/issues"
   },
-  "homepage": "https://github.com/ascend42/a-horizon#readme",
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
   "keywords": [
     "paradigm",
     "portal",

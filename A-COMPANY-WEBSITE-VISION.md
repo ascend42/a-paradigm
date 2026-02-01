@@ -130,7 +130,7 @@ Visual comparison:
 **Quick Install**
 ```bash
 # Install
-npm install -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
 
 # Initialize
 paradigm init
