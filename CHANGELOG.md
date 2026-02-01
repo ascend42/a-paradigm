@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(No changes yet)
+
+---
+
+## [0.7.0] - 2026-02-01
+
 ### Added
 - **Multi-Agent Orchestration** (`paradigm team`) - Coordinate AI agents as a dev team
   - `paradigm team init` - Initialize with 5 default agent roles (architect, builder, reviewer, tester, security)
@@ -14,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `paradigm team handoff --to <agent>` - Hand off task with context to another agent
   - `paradigm team accept [id]` - Accept a pending handoff and become active agent
   - `paradigm team check` - Health check for conflicts, stale handoffs, blocked agents
+  - `paradigm team history` - Full activity timeline with handoffs
+  - `paradigm team reset` - Clear state for fresh start (with `--force` for pending work)
   - Agent manifest: `.paradigm/agents.yaml` with roles, focus areas, permissions
   - Team state: `.paradigm/team-state.yaml` tracks current agent and activity
   - Handoff protocol: `.paradigm/handoffs/*.yaml` preserves context between agents
@@ -23,7 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reports YAML syntax errors with line numbers
   - Validates against .purpose schema
   - Provides fix suggestions for common issues
-  - `--fix` flag for auto-fixing formatting
+  - `--fix` flag for auto-fixing:
+    - Auto-converts markdown .purpose files to YAML template
+    - Auto-quotes special YAML characters in arrays (#, @, $, ^, !, %)
+    - Cleans formatting via re-serialization
   - `--strict` flag to fail on warnings
   - `--json` for CI integration
   - Exit code 1 on errors for pipelines
@@ -39,8 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-Scan** (`paradigm scan auto`) - Zero-config .purpose generation from code
   - Detects React/Vue/Angular components → #components
   - Detects route definitions (Express, Next.js, React Router) → $flows
-  - Detects auth middleware patterns → ^gates
-  - Detects error/event patterns → !signals
+  - Detects auth middleware patterns → ^gates (including RLS, ProtectedRoute)
+  - Detects error/event patterns → !signals (toast, dispatch, analytics, emit)
   - Honors JSDoc @feature/@component tags for high confidence
   - `--dry-run` to preview without writing
   - `--force` to overwrite existing files
