@@ -4,6 +4,7 @@
 
 import { useMemo } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
+import type { PortalNode } from '../../../types';
 
 export function TestChecklist() {
   const { portals, flows, selectedFlowId, selectFlow, selectPortal, resetStats } =
@@ -111,7 +112,7 @@ export function TestChecklist() {
 }
 
 interface ChecklistItemProps {
-  portal: (typeof useViewerStore extends () => infer R ? R : never)['portals'][0];
+  portal: PortalNode;
   index: number;
   onSelect: () => void;
 }

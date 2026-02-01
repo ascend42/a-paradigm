@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto';
 import type { PortalSession, PortalNode } from '../types.js';
-import type { SessionReport, GateReport, EntityReport, ReportFormat } from './types.js';
+import type { SessionReport, GateReport, EntityReport } from './types.js';
 
 export interface ReporterOptions {
   includeEvents?: boolean;

@@ -5,9 +5,10 @@
  */
 
 import * as http from 'http';
+import type { IncomingMessage } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import sirv from 'sirv';
 import { parseGateConfig } from '@a-company/portal-core';
 import { ViewerState } from './state.js';
@@ -109,7 +110,7 @@ export class ViewerServer {
   private startWebSocketServer(): void {
     this.wss = new WebSocketServer({ port: this.options.port });
 
-    this.wss.on('connection', (ws, req) => {
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       // Determine if this is an SDK client or UI client based on path
       const isUI = req.url === '/ui' || req.url?.startsWith('/ui');
 
@@ -120,7 +121,7 @@ export class ViewerServer {
       }
     });
 
-    this.wss.on('error', (error) => {
+    this.wss.on('error', (error: Error) => {
       console.error('WebSocket server error:', error);
     });
   }
@@ -132,12 +133,12 @@ export class ViewerServer {
     this.sdkClients.add(ws);
     console.log(`🔌 SDK client connected (${this.sdkClients.size} total)`);
 
-    ws.on('message', (data) => {
+    ws.on('message', (data: RawData) => {
       try {
         const event = JSON.parse(data.toString()) as WatcherEvent;
         this.handleWatcherEvent(event);
-      } catch (error) {
-        console.error('Failed to parse SDK message:', error);
+      } catch (err) {
+        console.error('Failed to parse SDK message:', err);
       }
     });
 
@@ -146,8 +147,8 @@ export class ViewerServer {
       console.log(`🔌 SDK client disconnected (${this.sdkClients.size} remaining)`);
     });
 
-    ws.on('error', (error) => {
-      console.error('SDK client error:', error);
+    ws.on('error', (err: Error) => {
+      console.error('SDK client error:', err);
       this.sdkClients.delete(ws);
     });
   }
@@ -169,12 +170,12 @@ export class ViewerServer {
       },
     } as InitMessage);
 
-    ws.on('message', (data) => {
+    ws.on('message', (data: RawData) => {
       try {
         const message = JSON.parse(data.toString()) as ClientMessage;
         this.handleClientMessage(ws, message);
-      } catch (error) {
-        console.error('Failed to parse UI message:', error);
+      } catch (err) {
+        console.error('Failed to parse UI message:', err);
       }
     });
 
@@ -183,8 +184,8 @@ export class ViewerServer {
       console.log(`🖥️  UI client disconnected (${this.uiClients.size} remaining)`);
     });
 
-    ws.on('error', (error) => {
-      console.error('UI client error:', error);
+    ws.on('error', (err: Error) => {
+      console.error('UI client error:', err);
       this.uiClients.delete(ws);
     });
   }
@@ -208,7 +209,7 @@ export class ViewerServer {
   /**
    * Handle client message from UI
    */
-  private handleClientMessage(ws: WebSocket, message: ClientMessage): void {
+  private handleClientMessage(_ws: WebSocket, message: ClientMessage): void {
     switch (message.type) {
       case 'session-start': {
         const session = this.state.startSession(message.data as string | undefined);

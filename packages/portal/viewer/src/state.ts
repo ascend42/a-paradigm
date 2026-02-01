@@ -8,7 +8,6 @@ import type {
   FlowNode,
   PortalSession,
   ViewerEvent,
-  EntityJourney,
   WatcherEvent,
   Gate,
   Flow,
