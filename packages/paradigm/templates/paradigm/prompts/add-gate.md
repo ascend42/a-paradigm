@@ -68,17 +68,18 @@ The AI should:
 
 1. **Add to portal.yaml:**
    ```yaml
-   portals:
-     - id: premium-only
+   # Either 'gates:' or 'portals:' key works
+   gates:
+     premium-only:
        description: Requires active premium subscription
-       requires:
-         - authenticated
-       conditions:
-         - user.subscription.status === 'active'
-         - user.subscription.tier === 'premium'
+       locks:
+         - id: subscription-check
+           keys:
+             - user.subscription.status === 'active'
+             - user.subscription.tier === 'premium'
        prizes:
          - id: premium-required
-           signal: Emitted when non-premium user attempts access
+           oneTime: false
    ```
 
 2. **Implement portal middleware:**

@@ -85,12 +85,21 @@ Allow users to reset their password via email verification.
    # src/features/[feature-name]/.purpose
    description: What this feature does
    
+   # Record format (recommended)
    features:
      [feature-name]:
        description: Detailed description
-       gates: []      # Add ^portals if auth needed
-       signals: []    # Events this feature emits
-       components: [] # UI components used
+       gates: [^authenticated]      # Portals required
+       flows: [$checkout-flow]      # Flows this triggers
+       signals: [!success, !failed] # Events emitted
+       states: [%user.cart]         # State dependencies
+       components: [#MyComponent]   # UI components used
+   
+   # Array format (also supported)
+   features:
+     - id: [feature-name]
+       description: Detailed description
+       gates: [^authenticated]
    ```
 
 3. **Define portals (if authorization needed):**
