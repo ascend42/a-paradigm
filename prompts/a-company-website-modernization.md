@@ -260,17 +260,30 @@ Use dark mode by default with purple/cyan accent colors (matching Paradigm CLI):
 
 ### 9. Installation Content
 
-**Critical:** Update all installation instructions to use GitHub-direct:
+**Critical:** Push users toward CLI installation as the recommended path.
 
+**Recommended (Full CLI Install):**
 ```bash
-# Global install
+# Using npm
 npm install -g github:ascend42/a-horizon
-bun add -g github:ascend42/a-horizon
 
-# Run without installing
-npx github:ascend42/a-horizon <command>
-bunx github:ascend42/a-horizon <command>
+# Using bun (faster)
+bun add -g github:ascend42/a-horizon
 ```
+
+Benefits to highlight:
+- `paradigm` CLI with all commands
+- `paradigm-mcp` server for AI integrations
+- Faster execution (no download on each run)
+- Required for MCP setup
+
+**Alternative (Quick Try):**
+```bash
+npx github:ascend42/a-horizon init
+bunx github:ascend42/a-horizon init
+```
+
+Note: Downloads on each run. For regular use, install globally.
 
 **NOT** npm registry (currently not published there).
 
@@ -301,7 +314,15 @@ paradigm mcp setup --client cursor
 ```markdown
 # MCP Setup for Claude Desktop
 
-## Configuration File
+> **Prerequisite:** Install the Paradigm CLI globally first. The `paradigm-mcp` command is included with the CLI installation.
+
+## Quick Setup (Recommended)
+
+\`\`\`bash
+paradigm mcp setup --client claude
+\`\`\`
+
+## Manual Configuration
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -309,8 +330,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "paradigm": {
-      "command": "npx",
-      "args": ["github:ascend42/a-horizon", "mcp", "serve"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/your/project"
     }
   }
