@@ -13,147 +13,147 @@ context:
 
 features:
   cli-commands:
-    description: "@cli-commands: Core CLI commands for managing Paradigm projects"
-    components: [#commander-setup, #ora-spinners, #chalk-output]
-    flows: [$init-flow, $sync-flow]
-    signals: [!command-success, !command-error]
+    description: "Core CLI commands for managing Paradigm projects"
+    components: ["#commander-setup", "#ora-spinners", "#chalk-output"]
+    flows: ["$init-flow", "$sync-flow"]
+    signals: ["!command-success", "!command-error"]
 
   symbol-system:
-    description: "@symbol-system: The shared language between code, developers, and AI"
-    components: [#symbol-parser, #symbol-index]
+    description: "The shared language between code, developers, and AI"
+    components: ["#symbol-parser", "#symbol-index"]
     states: ["%symbols.loaded", "%symbols.indexed"]
 
   ide-sync:
-    description: "@ide-sync: Generate IDE instruction files from .paradigm/ config"
-    components: [#cursor-adapter, #copilot-adapter, #windsurf-adapter, #claude-adapter]
-    flows: [$sync-flow]
+    description: "Generate IDE instruction files from .paradigm/ config"
+    components: ["#cursor-adapter", "#copilot-adapter", "#windsurf-adapter", "#claude-adapter"]
+    flows: ["$sync-flow"]
 
   visual-discovery:
-    description: "@visual-discovery: Map screenshots to code via probe/scan"
-    components: [#probe-protocol, #scan-generator]
-    flows: [$probe-flow]
+    description: "Map screenshots to code via probe/scan"
+    components: ["#probe-protocol", "#scan-generator"]
+    flows: ["$probe-flow"]
 
   agent-efficiency:
-    description: "@agent-efficiency: Tools for token-efficient AI development"
-    components: [#beacon, #constellation, #ripple, #thread, #echo]
-    signals: [!context-loaded, !ripple-analyzed]
+    description: "Tools for token-efficient AI development"
+    components: ["#beacon", "#constellation", "#ripple", "#thread", "#echo"]
+    signals: ["!context-loaded", "!ripple-analyzed"]
 
   mcp-server:
-    description: "@mcp-server: Model Context Protocol server for AI assistants"
-    components: [#mcp-resources, #mcp-tools, #index-loader]
-    signals: [!server-started, !resource-fetched, !tool-called]
+    description: "Model Context Protocol server for AI assistants"
+    components: ["#mcp-resources", "#mcp-tools", "#index-loader"]
+    signals: ["!server-started", "!resource-fetched", "!tool-called"]
 
   prism-visualizer:
-    description: "@prism-visualizer: Infinite canvas for exploring symbol relationships"
-    components: [#canvas, #node-renderer, #connection-lines, #properties-panel]
+    description: "Infinite canvas for exploring symbol relationships"
+    components: ["#canvas", "#node-renderer", "#connection-lines", "#properties-panel"]
     states: ["%canvas.viewport", "%canvas.selectedNode"]
 
   portal-authorization:
-    description: "@portal-authorization: Runtime authorization with visual testing"
-    components: [#portal-core, #portal-sdk, #portal-viewer, #portal-manager]
-    gates: [^authenticated, ^subscription-required, ^admin-only]
-    flows: [$authorization-flow]
+    description: "Runtime authorization with visual testing"
+    components: ["#portal-core", "#portal-sdk", "#portal-viewer", "#portal-manager"]
+    gates: ["^authenticated", "^subscription-required", "^admin-only"]
+    flows: ["$authorization-flow"]
 
 components:
   commander-setup:
-    description: "#commander-setup: CLI framework setup with Commander.js"
-    used-by: [@cli-commands]
+    description: "CLI framework setup with Commander.js"
+    used-by: ["@cli-commands"]
 
   symbol-parser:
-    description: "#symbol-parser: Parses symbols from .purpose and portal.yaml files"
-    used-by: [@symbol-system]
+    description: "Parses symbols from .purpose and portal.yaml files"
+    used-by: ["@symbol-system"]
 
   symbol-index:
-    description: "#symbol-index: In-memory index of all project symbols"
-    used-by: [@symbol-system, @agent-efficiency]
+    description: "In-memory index of all project symbols"
+    used-by: ["@symbol-system", "@agent-efficiency"]
 
   cursor-adapter:
-    description: "#cursor-adapter: Generates .cursor/rules/*.mdc files"
-    used-by: [@ide-sync]
+    description: "Generates .cursor/rules/*.mdc files"
+    used-by: ["@ide-sync"]
 
   copilot-adapter:
-    description: "#copilot-adapter: Generates .github/copilot-instructions.md files"
-    used-by: [@ide-sync]
+    description: "Generates .github/copilot-instructions.md files"
+    used-by: ["@ide-sync"]
 
   windsurf-adapter:
-    description: "#windsurf-adapter: Generates .windsurfrules file"
-    used-by: [@ide-sync]
+    description: "Generates .windsurfrules file"
+    used-by: ["@ide-sync"]
 
   claude-adapter:
-    description: "#claude-adapter: Generates CLAUDE.md file"
-    used-by: [@ide-sync]
+    description: "Generates CLAUDE.md file"
+    used-by: ["@ide-sync"]
 
   beacon:
-    description: "#beacon: Quick-start orientation for AI agents"
-    used-by: [@agent-efficiency]
+    description: "Quick-start orientation for AI agents"
+    used-by: ["@agent-efficiency"]
 
   constellation:
-    description: "#constellation: Machine-readable symbol graph in JSON/YAML"
-    used-by: [@agent-efficiency]
+    description: "Machine-readable symbol graph in JSON/YAML"
+    used-by: ["@agent-efficiency"]
 
   ripple:
-    description: "#ripple: Change impact analysis tool"
-    used-by: [@agent-efficiency]
+    description: "Change impact analysis tool"
+    used-by: ["@agent-efficiency"]
 
   thread:
-    description: "#thread: Session continuity between AI agents"
-    used-by: [@agent-efficiency]
+    description: "Session continuity between AI agents"
+    used-by: ["@agent-efficiency"]
 
   echo:
-    description: "#echo: Error-to-symbol mapping"
-    used-by: [@agent-efficiency]
+    description: "Error-to-symbol mapping"
+    used-by: ["@agent-efficiency"]
 
   mcp-resources:
-    description: "#mcp-resources: Read-only data exposed via MCP protocol"
-    used-by: [@mcp-server]
+    description: "Read-only data exposed via MCP protocol"
+    used-by: ["@mcp-server"]
 
   mcp-tools:
-    description: "#mcp-tools: Actions AI can invoke via MCP protocol"
-    used-by: [@mcp-server]
+    description: "Actions AI can invoke via MCP protocol"
+    used-by: ["@mcp-server"]
 
   index-loader:
-    description: "#index-loader: Loads project symbol index for MCP server"
-    used-by: [@mcp-server]
+    description: "Loads project symbol index for MCP server"
+    used-by: ["@mcp-server"]
 
   canvas:
-    description: "#canvas: React component for infinite canvas rendering"
-    used-by: [@prism-visualizer]
+    description: "React component for infinite canvas rendering"
+    used-by: ["@prism-visualizer"]
 
   node-renderer:
-    description: "#node-renderer: Renders symbol nodes on the canvas"
-    used-by: [@prism-visualizer]
+    description: "Renders symbol nodes on the canvas"
+    used-by: ["@prism-visualizer"]
 
   connection-lines:
-    description: "#connection-lines: SVG lines connecting related symbols"
-    used-by: [@prism-visualizer]
+    description: "SVG lines connecting related symbols"
+    used-by: ["@prism-visualizer"]
 
   properties-panel:
-    description: "#properties-panel: Side panel showing selected symbol details"
-    used-by: [@prism-visualizer]
+    description: "Side panel showing selected symbol details"
+    used-by: ["@prism-visualizer"]
 
   portal-core:
-    description: "#portal-core: Core parsing and validation for portal.yaml"
-    used-by: [@portal-authorization]
+    description: "Core parsing and validation for portal.yaml"
+    used-by: ["@portal-authorization"]
 
   portal-sdk:
-    description: "#portal-sdk: Runtime SDK for checking gates in applications"
-    used-by: [@portal-authorization]
+    description: "Runtime SDK for checking gates in applications"
+    used-by: ["@portal-authorization"]
 
   portal-viewer:
-    description: "#portal-viewer: Real-time visualization of authorization flows"
-    used-by: [@portal-authorization]
+    description: "Real-time visualization of authorization flows"
+    used-by: ["@portal-authorization"]
 
   portal-manager:
-    description: "#portal-manager: Test generation and flow management"
-    used-by: [@portal-authorization]
+    description: "Test generation and flow management"
+    used-by: ["@portal-authorization"]
 
   probe-protocol:
-    description: "#probe-protocol: Protocol for visual-to-code mapping"
-    used-by: [@visual-discovery]
+    description: "Protocol for visual-to-code mapping"
+    used-by: ["@visual-discovery"]
 
   scan-generator:
-    description: "#scan-generator: Generates scan-index.json for component mapping"
-    used-by: [@visual-discovery]
+    description: "Generates scan-index.json for component mapping"
+    used-by: ["@visual-discovery"]
 
 flows:
   init-flow:
