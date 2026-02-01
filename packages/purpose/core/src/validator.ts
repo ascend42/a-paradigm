@@ -61,6 +61,11 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
     ]);
 
     for (const rel of data.relationships) {
+      // Skip if relationship is a string (shorthand format) or malformed
+      if (typeof rel === 'string' || !rel || !rel.from || !rel.to) {
+        continue;
+      }
+      
       // Check 'from' reference (strip symbol prefix if present)
       const fromId = rel.from.replace(/^[@#$%~^!?]/, '');
       if (!allIds.has(fromId) && !rel.from.includes('.')) {
@@ -91,6 +96,8 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
     if (Array.isArray(data.flows)) {
       // Array format: [{ name, steps }]
       for (const flow of data.flows) {
+        if (!flow || typeof flow !== 'object') continue;
+        
         if (!flow.name) {
           issues.push({
             type: 'error',
@@ -99,8 +106,11 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
           });
         }
 
-        if (flow.steps) {
+        if (flow.steps && Array.isArray(flow.steps)) {
           for (const step of flow.steps) {
+            // Skip string steps (simple descriptions) or malformed steps
+            if (typeof step === 'string' || !step || !step.component) continue;
+            
             const componentId = step.component.replace(/^#/, '');
             if (!componentIds.has(componentId)) {
               issues.push({
@@ -115,8 +125,13 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
     } else {
       // Record format: { flow-name: { description, gates, steps } }
       for (const [flowId, flowDef] of Object.entries(data.flows)) {
-        if (flowDef.steps) {
+        if (!flowDef || typeof flowDef !== 'object') continue;
+        
+        if (flowDef.steps && Array.isArray(flowDef.steps)) {
           for (const step of flowDef.steps) {
+            // Skip string steps (simple descriptions) or malformed steps
+            if (typeof step === 'string' || !step || !step.component) continue;
+            
             const componentId = step.component.replace(/^#/, '');
             if (!componentIds.has(componentId)) {
               issues.push({

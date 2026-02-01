@@ -2,58 +2,44 @@ version: 1.0.0
 description: |
   @a-company/premise-core - Core aggregation library that combines Purpose + Portal.
   Builds the unified symbol index used by CLI commands and MCP server.
-
 features:
   symbol-aggregation:
-    description: "@symbol-aggregation: Aggregate symbols from all sources"
-    components: [#aggregator, #source-loader]
-    signals: [!aggregation-complete]
-
+    description: '@symbol-aggregation: Aggregate symbols from all sources'
+    signals:
+      - '!aggregation-complete'
+    components:
+      - '#aggregator'
+      - '#source-loader'
   symbol-indexing:
-    description: "@symbol-indexing: Build searchable symbol index"
-    components: [#symbol-index, #search-engine]
-    states: ["%index.loaded", "%index.count"]
-
+    description: '@symbol-indexing: Build searchable symbol index'
+    states:
+      - '%index.loaded'
+      - '%index.count'
+    components:
+      - '#symbol-index'
+      - '#search-engine'
   reference-tracking:
-    description: "@reference-tracking: Track symbol relationships"
-    components: [#reference-tracker, #graph-builder]
-
+    description: '@reference-tracking: Track symbol relationships'
+    components:
+      - '#reference-tracker'
+      - '#graph-builder'
 components:
   aggregator:
-    description: "#aggregator: Main aggregation logic"
-    used-by: [@symbol-aggregation]
-
+    description: '#aggregator: Main aggregation logic'
   source-loader:
-    description: "#source-loader: Loads symbols from .purpose and portal.yaml"
-    used-by: [@symbol-aggregation]
-
+    description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:
-    description: "#symbol-index: In-memory symbol index"
-    used-by: [@symbol-indexing]
-
+    description: '#symbol-index: In-memory symbol index'
   search-engine:
-    description: "#search-engine: Symbol search functionality"
-    used-by: [@symbol-indexing]
-
+    description: '#search-engine: Symbol search functionality'
   reference-tracker:
-    description: "#reference-tracker: Tracks references between symbols"
-    used-by: [@reference-tracking]
-
+    description: '#reference-tracker: Tracks references between symbols'
   graph-builder:
-    description: "#graph-builder: Builds relationship graph"
-    used-by: [@reference-tracking]
-
+    description: '#graph-builder: Builds relationship graph'
 states:
-  index:
-    loaded:
-      type: boolean
-      description: "%index.loaded: Symbol index has been loaded"
-    count:
-      type: number
-      description: "%index.count: Total number of indexed symbols"
-
+  index: {}
 signals:
   aggregation-complete:
-    description: "!aggregation-complete: Symbol aggregation finished"
+    description: '!aggregation-complete: Symbol aggregation finished'
     category: premise
     severity: info

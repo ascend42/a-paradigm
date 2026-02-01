@@ -3,249 +3,274 @@ description: |
   Paradigm Framework - Unified developer tools ecosystem for structured AI-assisted development.
   Brings together Purpose (context), Portal (authorization), and Premise (aggregation) into
   a single, visual experience with the Prism canvas.
-
 context:
   - This is the Paradigm framework itself - use it to develop Paradigm ("dogfooding")
   - Monorepo using npm workspaces with shared TypeScript configuration
   - All packages publish to @a-company scope
   - The CLI (`paradigm`) is the main user interface
   - Prism is the visual canvas for exploring symbol relationships
-
 features:
   cli-commands:
-    description: "Core CLI commands for managing Paradigm projects"
-    components: ["#commander-setup", "#ora-spinners", "#chalk-output"]
-    flows: ["$init-flow", "$sync-flow"]
-    signals: ["!command-success", "!command-error"]
-
+    description: Core CLI commands for managing Paradigm projects
+    components:
+      - '#commander-setup'
+      - '#ora-spinners'
+      - '#chalk-output'
+    flows:
+      - $init-flow
+      - $sync-flow
+    signals:
+      - '!command-success'
+      - '!command-error'
   symbol-system:
-    description: "The shared language between code, developers, and AI"
-    components: ["#symbol-parser", "#symbol-index"]
-    states: ["%symbols.loaded", "%symbols.indexed"]
-
+    description: The shared language between code, developers, and AI
+    components:
+      - '#symbol-parser'
+      - '#symbol-index'
+    states:
+      - '%symbols.loaded'
+      - '%symbols.indexed'
   ide-sync:
-    description: "Generate IDE instruction files from .paradigm/ config"
-    components: ["#cursor-adapter", "#copilot-adapter", "#windsurf-adapter", "#claude-adapter"]
-    flows: ["$sync-flow"]
-
+    description: Generate IDE instruction files from .paradigm/ config
+    components:
+      - '#cursor-adapter'
+      - '#copilot-adapter'
+      - '#windsurf-adapter'
+      - '#claude-adapter'
+    flows:
+      - $sync-flow
   visual-discovery:
-    description: "Map screenshots to code via probe/scan"
-    components: ["#probe-protocol", "#scan-generator"]
-    flows: ["$probe-flow"]
-
+    description: Map screenshots to code via probe/scan
+    components:
+      - '#probe-protocol'
+      - '#scan-generator'
+    flows:
+      - $probe-flow
   agent-efficiency:
-    description: "Tools for token-efficient AI development"
-    components: ["#beacon", "#constellation", "#ripple", "#thread", "#echo"]
-    signals: ["!context-loaded", "!ripple-analyzed"]
-
+    description: Tools for token-efficient AI development
+    components:
+      - '#beacon'
+      - '#constellation'
+      - '#ripple'
+      - '#thread'
+      - '#echo'
+    signals:
+      - '!context-loaded'
+      - '!ripple-analyzed'
   mcp-server:
-    description: "Model Context Protocol server for AI assistants"
-    components: ["#mcp-resources", "#mcp-tools", "#index-loader"]
-    signals: ["!server-started", "!resource-fetched", "!tool-called"]
-
+    description: Model Context Protocol server for AI assistants
+    components:
+      - '#mcp-resources'
+      - '#mcp-tools'
+      - '#index-loader'
+    signals:
+      - '!server-started'
+      - '!resource-fetched'
+      - '!tool-called'
   prism-visualizer:
-    description: "Infinite canvas for exploring symbol relationships"
-    components: ["#canvas", "#node-renderer", "#connection-lines", "#properties-panel"]
-    states: ["%canvas.viewport", "%canvas.selectedNode"]
-
+    description: Infinite canvas for exploring symbol relationships
+    components:
+      - '#canvas'
+      - '#node-renderer'
+      - '#connection-lines'
+      - '#properties-panel'
+    states:
+      - '%canvas.viewport'
+      - '%canvas.selectedNode'
   portal-authorization:
-    description: "Runtime authorization with visual testing"
-    components: ["#portal-core", "#portal-sdk", "#portal-viewer", "#portal-manager"]
-    gates: ["^authenticated", "^subscription-required", "^admin-only"]
-    flows: ["$authorization-flow"]
-
+    description: Runtime authorization with visual testing
+    components:
+      - '#portal-core'
+      - '#portal-sdk'
+      - '#portal-viewer'
+      - '#portal-manager'
+    gates:
+      - ^authenticated
+      - ^subscription-required
+      - ^admin-only
+    flows:
+      - $authorization-flow
 components:
   commander-setup:
-    description: "CLI framework setup with Commander.js"
-    used-by: ["@cli-commands"]
-
+    description: CLI framework setup with Commander.js
+    used-by:
+      - '@cli-commands'
   symbol-parser:
-    description: "Parses symbols from .purpose and portal.yaml files"
-    used-by: ["@symbol-system"]
-
+    description: Parses symbols from .purpose and portal.yaml files
+    used-by:
+      - '@symbol-system'
   symbol-index:
-    description: "In-memory index of all project symbols"
-    used-by: ["@symbol-system", "@agent-efficiency"]
-
+    description: In-memory index of all project symbols
+    used-by:
+      - '@symbol-system'
+      - '@agent-efficiency'
   cursor-adapter:
-    description: "Generates .cursor/rules/*.mdc files"
-    used-by: ["@ide-sync"]
-
+    description: Generates .cursor/rules/*.mdc files
+    used-by:
+      - '@ide-sync'
   copilot-adapter:
-    description: "Generates .github/copilot-instructions.md files"
-    used-by: ["@ide-sync"]
-
+    description: Generates .github/copilot-instructions.md files
+    used-by:
+      - '@ide-sync'
   windsurf-adapter:
-    description: "Generates .windsurfrules file"
-    used-by: ["@ide-sync"]
-
+    description: Generates .windsurfrules file
+    used-by:
+      - '@ide-sync'
   claude-adapter:
-    description: "Generates CLAUDE.md file"
-    used-by: ["@ide-sync"]
-
+    description: Generates CLAUDE.md file
+    used-by:
+      - '@ide-sync'
   beacon:
-    description: "Quick-start orientation for AI agents"
-    used-by: ["@agent-efficiency"]
-
+    description: Quick-start orientation for AI agents
+    used-by:
+      - '@agent-efficiency'
   constellation:
-    description: "Machine-readable symbol graph in JSON/YAML"
-    used-by: ["@agent-efficiency"]
-
+    description: Machine-readable symbol graph in JSON/YAML
+    used-by:
+      - '@agent-efficiency'
   ripple:
-    description: "Change impact analysis tool"
-    used-by: ["@agent-efficiency"]
-
+    description: Change impact analysis tool
+    used-by:
+      - '@agent-efficiency'
   thread:
-    description: "Session continuity between AI agents"
-    used-by: ["@agent-efficiency"]
-
+    description: Session continuity between AI agents
+    used-by:
+      - '@agent-efficiency'
   echo:
-    description: "Error-to-symbol mapping"
-    used-by: ["@agent-efficiency"]
-
+    description: Error-to-symbol mapping
+    used-by:
+      - '@agent-efficiency'
   mcp-resources:
-    description: "Read-only data exposed via MCP protocol"
-    used-by: ["@mcp-server"]
-
+    description: Read-only data exposed via MCP protocol
+    used-by:
+      - '@mcp-server'
   mcp-tools:
-    description: "Actions AI can invoke via MCP protocol"
-    used-by: ["@mcp-server"]
-
+    description: Actions AI can invoke via MCP protocol
+    used-by:
+      - '@mcp-server'
   index-loader:
-    description: "Loads project symbol index for MCP server"
-    used-by: ["@mcp-server"]
-
+    description: Loads project symbol index for MCP server
+    used-by:
+      - '@mcp-server'
   canvas:
-    description: "React component for infinite canvas rendering"
-    used-by: ["@prism-visualizer"]
-
+    description: React component for infinite canvas rendering
+    used-by:
+      - '@prism-visualizer'
   node-renderer:
-    description: "Renders symbol nodes on the canvas"
-    used-by: ["@prism-visualizer"]
-
+    description: Renders symbol nodes on the canvas
+    used-by:
+      - '@prism-visualizer'
   connection-lines:
-    description: "SVG lines connecting related symbols"
-    used-by: ["@prism-visualizer"]
-
+    description: SVG lines connecting related symbols
+    used-by:
+      - '@prism-visualizer'
   properties-panel:
-    description: "Side panel showing selected symbol details"
-    used-by: ["@prism-visualizer"]
-
+    description: Side panel showing selected symbol details
+    used-by:
+      - '@prism-visualizer'
   portal-core:
-    description: "Core parsing and validation for portal.yaml"
-    used-by: ["@portal-authorization"]
-
+    description: Core parsing and validation for portal.yaml
+    used-by:
+      - '@portal-authorization'
   portal-sdk:
-    description: "Runtime SDK for checking gates in applications"
-    used-by: ["@portal-authorization"]
-
+    description: Runtime SDK for checking gates in applications
+    used-by:
+      - '@portal-authorization'
   portal-viewer:
-    description: "Real-time visualization of authorization flows"
-    used-by: ["@portal-authorization"]
-
+    description: Real-time visualization of authorization flows
+    used-by:
+      - '@portal-authorization'
   portal-manager:
-    description: "Test generation and flow management"
-    used-by: ["@portal-authorization"]
-
+    description: Test generation and flow management
+    used-by:
+      - '@portal-authorization'
   probe-protocol:
-    description: "Protocol for visual-to-code mapping"
-    used-by: ["@visual-discovery"]
-
+    description: Protocol for visual-to-code mapping
+    used-by:
+      - '@visual-discovery'
   scan-generator:
-    description: "Generates scan-index.json for component mapping"
-    used-by: ["@visual-discovery"]
-
+    description: Generates scan-index.json for component mapping
+    used-by:
+      - '@visual-discovery'
 flows:
   init-flow:
-    description: "$init-flow: Initialize Paradigm in a new project"
+    description: '$init-flow: Initialize Paradigm in a new project'
     steps:
       - Detect existing IDE files
       - Create .paradigm/ directory
       - Generate config.yaml
       - Copy templates
       - Run initial sync
-
   sync-flow:
-    description: "$sync-flow: Sync .paradigm/ to IDE instruction files"
+    description: '$sync-flow: Sync .paradigm/ to IDE instruction files'
     steps:
       - Load .paradigm/config.yaml
       - Detect target IDE
       - Generate adapter-specific files
       - Write to appropriate locations
-
   probe-flow:
-    description: "$probe-flow: Visual discovery workflow"
+    description: '$probe-flow: Visual discovery workflow'
     steps:
       - Receive screenshot
       - Match against scan-index.json
       - Return component mappings
       - Suggest code locations
-
   authorization-flow:
-    description: "$authorization-flow: Runtime gate checking"
+    description: '$authorization-flow: Runtime gate checking'
     steps:
       - Request reaches gate
       - Evaluate keys against context
       - Grant or deny access
       - Emit signal
-
 signals:
   command-success:
-    description: "!command-success: CLI command completed successfully"
+    description: '!command-success: CLI command completed successfully'
     category: cli
     severity: info
-
   command-error:
-    description: "!command-error: CLI command failed with error"
+    description: '!command-error: CLI command failed with error'
     category: cli
     severity: error
-
   context-loaded:
-    description: "!context-loaded: Project context loaded into agent tools"
+    description: '!context-loaded: Project context loaded into agent tools'
     category: agent
     severity: info
-
   ripple-analyzed:
-    description: "!ripple-analyzed: Impact analysis completed"
+    description: '!ripple-analyzed: Impact analysis completed'
     category: agent
     severity: info
-
   server-started:
-    description: "!server-started: MCP server started and listening"
+    description: '!server-started: MCP server started and listening'
     category: mcp
     severity: info
-
   resource-fetched:
-    description: "!resource-fetched: MCP resource was read by client"
+    description: '!resource-fetched: MCP resource was read by client'
     category: mcp
     severity: info
-
   tool-called:
-    description: "!tool-called: MCP tool was invoked by client"
+    description: '!tool-called: MCP tool was invoked by client'
     category: mcp
     severity: info
-
 states:
   symbols:
     loaded:
       type: boolean
-      description: "%symbols.loaded: Symbol index has been loaded"
+      description: '%symbols.loaded: Symbol index has been loaded'
     indexed:
       type: boolean
-      description: "%symbols.indexed: Symbols have been indexed for search"
+      description: '%symbols.indexed: Symbols have been indexed for search'
   canvas:
     viewport:
       type: object
-      description: "%canvas.viewport: Current canvas pan/zoom state"
+      description: '%canvas.viewport: Current canvas pan/zoom state'
     selectedNode:
       type: string
-      description: "%canvas.selectedNode: Currently selected node ID"
-
+      description: '%canvas.selectedNode: Currently selected node ID'
 relationships:
-  - "@cli-commands USES #commander-setup, #ora-spinners, #chalk-output"
-  - "@symbol-system USES #symbol-parser, #symbol-index"
-  - "@ide-sync USES #cursor-adapter, #copilot-adapter, #windsurf-adapter"
-  - "@agent-efficiency USES #beacon, #constellation, #ripple, #thread, #echo"
-  - "@mcp-server USES #mcp-resources, #mcp-tools, #index-loader"
-  - "@prism-visualizer USES #canvas, #node-renderer, #connection-lines"
-  - "@portal-authorization USES #portal-core, #portal-sdk, #portal-viewer"
+  - '@cli-commands USES #commander-setup, #ora-spinners, #chalk-output'
+  - '@symbol-system USES #symbol-parser, #symbol-index'
+  - '@ide-sync USES #cursor-adapter, #copilot-adapter, #windsurf-adapter'
+  - '@agent-efficiency USES #beacon, #constellation, #ripple, #thread, #echo'
+  - '@mcp-server USES #mcp-resources, #mcp-tools, #index-loader'
+  - '@prism-visualizer USES #canvas, #node-renderer, #connection-lines'
+  - '@portal-authorization USES #portal-core, #portal-sdk, #portal-viewer'
