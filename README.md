@@ -33,10 +33,10 @@ Installing globally gives you the full Paradigm experience with both the `paradi
 
 ```bash
 # Using npm
-npm install -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
 
 # Using bun (faster)
-bun add -g github:ascend42/a-horizon
+bun add -g github:ascend42/a-paradigm
 ```
 
 **What you get:**
@@ -50,8 +50,8 @@ bun add -g github:ascend42/a-horizon
 Want to try it first? Run directly without installing:
 
 ```bash
-npx github:ascend42/a-horizon init
-bunx github:ascend42/a-horizon init
+npx github:ascend42/a-paradigm init
+bunx github:ascend42/a-paradigm init
 ```
 
 > **Note:** This downloads on each run. For regular use, install the CLI globally.
@@ -304,8 +304,8 @@ examples/shopflow/
 
 ```bash
 # Clone
-git clone https://github.com/ascend42/a-horizon.git
-cd a-horizon
+git clone https://github.com/ascend42/a-paradigm.git
+cd a-paradigm
 
 # Install dependencies
 npm install

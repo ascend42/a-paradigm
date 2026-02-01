@@ -20,7 +20,7 @@
  *
  * gate.allow('User authenticated');
  *
- * @see https://github.com/ascend42/a-horizon/blob/main/packages/paradigm/templates/paradigm/specs/portal-validation.md
+ * @see https://github.com/ascend42/a-paradigm/blob/main/packages/paradigm/templates/paradigm/specs/portal-validation.md
  */
 
 // Environment detection

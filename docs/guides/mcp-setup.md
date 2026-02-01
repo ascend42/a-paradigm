@@ -118,7 +118,7 @@ paradigm mcp list
 #   ○ leadsync        → /Users/me/projects/leadsync-dash
 #
 # Cursor (this project):
-#   ● a-horizon       → (current)
+#   ● a-paradigm       → (current)
 ```
 
 ### Removing Servers

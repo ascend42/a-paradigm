@@ -1,6 +1,6 @@
 version: 1.0.0
 team:
-  name: a-horizon-team
+  name: a-paradigm-team
   default_agent: architect
   require_handoff: false
 agents:

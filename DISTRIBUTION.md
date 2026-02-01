@@ -6,12 +6,12 @@
 
 ```bash
 # Install globally
-npm install -g github:ascend42/a-horizon
-bun add -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
+bun add -g github:ascend42/a-paradigm
 
 # Run without installing
-npx github:ascend42/a-horizon <command>
-bunx github:ascend42/a-horizon <command>
+npx github:ascend42/a-paradigm <command>
+bunx github:ascend42/a-paradigm <command>
 ```
 
 **Pros:**
@@ -131,7 +131,7 @@ paradigm-website/
 1. Make changes
 2. `git add -A && git commit`
 3. `git push origin main`
-4. Users get latest with `npm i -g github:ascend42/a-horizon`
+4. Users get latest with `npm i -g github:ascend42/a-paradigm`
 
 ### With Tags (Versioning)
 
@@ -141,7 +141,7 @@ git tag v0.7.0
 git push origin v0.7.0
 
 # Users can pin version
-npm install -g github:ascend42/a-horizon#v0.7.0
+npm install -g github:ascend42/a-paradigm#v0.7.0
 ```
 
 ### GitHub Releases
@@ -197,13 +197,13 @@ After pushing, verify these work:
 
 ```bash
 # Fresh install test
-npm install -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
 paradigm --version
 paradigm --help
 
 # Direct execution test
-npx github:ascend42/a-horizon init --dry-run
+npx github:ascend42/a-paradigm init --dry-run
 
 # Bun test
-bun add -g github:ascend42/a-horizon
+bun add -g github:ascend42/a-paradigm
 ```

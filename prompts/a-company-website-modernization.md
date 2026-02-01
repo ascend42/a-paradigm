@@ -10,7 +10,7 @@ I need to modernize the a-company.org website. It's currently out of date and ne
 
 ### Reference Documents
 
-Before making changes, read these files from the a-horizon repository:
+Before making changes, read these files from the a-paradigm repository:
 - `A-COMPANY-WEBSITE-VISION.md` — Full website vision, structure, and content strategy
 - `README.md` — Paradigm overview and features
 - `CHANGELOG.md` — Latest features (v0.7.0)
@@ -142,10 +142,10 @@ understand your codebase. We fix that.
 **Install Block:**
 ```bash
 # Install from GitHub
-npm install -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
 
 # Or run directly
-npx github:ascend42/a-horizon init
+npx github:ascend42/a-paradigm init
 ```
 
 ### 5. Paradigm Landing Page (`/paradigm`)
@@ -173,7 +173,7 @@ export default defineConfig({
         src: './src/assets/paradigm-logo.svg',
       },
       social: {
-        github: 'https://github.com/ascend42/a-horizon',
+        github: 'https://github.com/ascend42/a-paradigm',
       },
       sidebar: [
         {
@@ -265,10 +265,10 @@ Use dark mode by default with purple/cyan accent colors (matching Paradigm CLI):
 **Recommended (Full CLI Install):**
 ```bash
 # Using npm
-npm install -g github:ascend42/a-horizon
+npm install -g github:ascend42/a-paradigm
 
 # Using bun (faster)
-bun add -g github:ascend42/a-horizon
+bun add -g github:ascend42/a-paradigm
 ```
 
 Benefits to highlight:
@@ -279,8 +279,8 @@ Benefits to highlight:
 
 **Alternative (Quick Try):**
 ```bash
-npx github:ascend42/a-horizon init
-bunx github:ascend42/a-horizon init
+npx github:ascend42/a-paradigm init
+bunx github:ascend42/a-paradigm init
 ```
 
 Note: Downloads on each run. For regular use, install globally.

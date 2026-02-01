@@ -6,7 +6,7 @@ The `@a-company/paradigm-mcp` package fails to run after `npm link`:
 
 ```
 $ paradigm-mcp --help
-file:///Users/ascend/Documents/GitHub/a-horizon/packages/paradigm-mcp/dist/index.js:2
+file:///Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/dist/index.js:2
 #!/usr/bin/env node
 ^
 SyntaxError: Invalid or unexpected token
@@ -26,10 +26,10 @@ The shebang (`#!/usr/bin/env node`) is appearing on **line 2** instead of **line
 
 ```bash
 # Check what's on the first few lines of the built file
-head -5 ~/Documents/GitHub/a-horizon/packages/paradigm-mcp/dist/index.js
+head -5 ~/Documents/GitHub/a-paradigm/packages/paradigm-mcp/dist/index.js
 
 # Check the source file
-head -5 ~/Documents/GitHub/a-horizon/packages/paradigm-mcp/src/index.ts
+head -5 ~/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/index.ts
 ```
 
 ## Likely Fixes
@@ -82,7 +82,7 @@ After fixing, verify:
 
 ```bash
 # Rebuild
-cd ~/Documents/GitHub/a-horizon/packages/paradigm-mcp
+cd ~/Documents/GitHub/a-paradigm/packages/paradigm-mcp
 npm run build
 
 # Check output - line 1 should be shebang ONLY
@@ -106,7 +106,7 @@ The linked binary location:
 
 The source dist file:
 ```
-/Users/ascend/Documents/GitHub/a-horizon/packages/paradigm-mcp/dist/index.js
+/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/dist/index.js
 ```
 
 ---

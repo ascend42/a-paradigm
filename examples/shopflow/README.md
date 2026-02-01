@@ -52,7 +52,7 @@ This project demonstrates all Paradigm symbol types:
 ## Testing with Paradigm CLI
 
 ```bash
-# From the a-horizon root
+# From the a-paradigm root
 cd examples/shopflow
 
 # Validate all purpose files
