@@ -99,6 +99,39 @@ The command will:
 3. Add it to `.gitignore` (for project-level configs)
 4. Show next steps
 
+### Managing Multiple Projects
+
+For user-level clients like Claude Desktop, each project you set up is **merged** into the shared config. To manage your servers:
+
+```bash
+# List all configured servers across all clients
+paradigm mcp list
+
+# Output:
+# 🔌 Configured MCP Servers
+#
+# Claude Desktop (user-level):
+#   ○ project-one     → /Users/me/projects/project-one
+#   ● project-two     → (current)
+#   ○ leadsync        → /Users/me/projects/leadsync-dash
+#
+# Cursor (this project):
+#   ● a-horizon       → (current)
+```
+
+### Removing Servers
+
+```bash
+# Remove current project from all clients
+paradigm mcp remove
+
+# Remove a specific server by name
+paradigm mcp remove project-one --client claude-desktop
+
+# Remove from all clients
+paradigm mcp remove old-project --client all
+```
+
 ---
 
 ## Supported Clients

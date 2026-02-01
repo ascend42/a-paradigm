@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `paradigm mcp status` to check configuration
   - Auto-adds project-level configs to `.gitignore`
 
+- **MCP List Command** (`paradigm mcp list`) - View all configured servers
+  - Shows servers across all AI clients (not just current project)
+  - Highlights current project in the output
+  - Useful for managing multi-project Claude Desktop setups
+
+- **MCP Remove Command** (`paradigm mcp remove`) - Clean up server configs
+  - Remove by server name: `paradigm mcp remove project-name`
+  - Remove current project: `paradigm mcp remove`
+  - Target specific client: `--client claude-desktop`
+  - Also matches by project path for Continue's unnamed servers
+
 - **Enhanced Signals Schema** - Extended `SignalDefinition` for richer metadata
   - Added `severity` field: `'info' | 'warn' | 'error'`
   - Added `emitters` field: Array of files that emit this signal
