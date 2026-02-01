@@ -519,3 +519,195 @@ export async function teamCheckCommand(targetPath: string | undefined, options: 
   console.log(`  Blocked agents: ${state.blocked.length}`);
   console.log();
 }
+
+interface HistoryOptions {
+  limit?: number;
+  json?: boolean;
+}
+
+/**
+ * paradigm team history - Show full activity log
+ */
+export async function teamHistoryCommand(targetPath: string | undefined, options: HistoryOptions) {
+  const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
+  
+  const manifest = loadAgentsManifest(rootDir);
+  if (!manifest) {
+    if (options.json) {
+      console.log(JSON.stringify({ error: 'Team not configured' }));
+    } else {
+      console.log(chalk.yellow('\nTeam not configured. Run `paradigm team init` first.\n'));
+    }
+    return;
+  }
+  
+  const state = loadTeamState(rootDir);
+  const handoffs = listHandoffs(rootDir);
+  const limit = options.limit || 50;
+  
+  // Combine activities and handoffs into timeline
+  const timeline: Array<{
+    timestamp: string;
+    type: 'activity' | 'handoff';
+    agent: string;
+    description: string;
+    details?: Record<string, unknown>;
+  }> = [];
+  
+  // Add activities
+  for (const activity of state.recent) {
+    timeline.push({
+      timestamp: activity.timestamp,
+      type: 'activity',
+      agent: activity.agent,
+      description: activity.task,
+      details: {
+        result: activity.result,
+        handed_to: activity.handed_to,
+        artifacts: activity.artifacts,
+      },
+    });
+  }
+  
+  // Add handoffs
+  for (const handoff of handoffs) {
+    timeline.push({
+      timestamp: handoff.timestamp,
+      type: 'handoff',
+      agent: handoff.from,
+      description: `Handoff to ${handoff.to}: ${handoff.context.summary}`,
+      details: {
+        to: handoff.to,
+        status: handoff.status,
+        symbols: handoff.completed.symbols,
+      },
+    });
+  }
+  
+  // Sort by timestamp (newest first)
+  timeline.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  
+  // Limit results
+  const limited = timeline.slice(0, limit);
+  
+  if (options.json) {
+    console.log(JSON.stringify({
+      total: timeline.length,
+      showing: limited.length,
+      timeline: limited,
+    }, null, 2));
+    return;
+  }
+  
+  console.log(chalk.blue('\n📜 Team History\n'));
+  console.log(chalk.gray('─'.repeat(60)));
+  
+  if (limited.length === 0) {
+    console.log(chalk.gray('No activity recorded yet.\n'));
+    return;
+  }
+  
+  for (const entry of limited) {
+    const time = new Date(entry.timestamp).toLocaleString();
+    const icon = entry.type === 'handoff' ? '✋' : 
+                 (entry.details?.result === 'success' ? '✓' : 
+                  entry.details?.result === 'failed' ? '✗' : '○');
+    const color = entry.type === 'handoff' ? chalk.cyan :
+                  (entry.details?.result === 'success' ? chalk.green :
+                   entry.details?.result === 'failed' ? chalk.red : chalk.gray);
+    
+    console.log(`${color(icon)} ${chalk.gray(time)}`);
+    console.log(`  ${chalk.yellow(entry.agent)}: ${entry.description}`);
+    
+    if (entry.details?.handed_to) {
+      console.log(chalk.gray(`  → handed to ${entry.details.handed_to}`));
+    }
+    if (entry.details?.symbols && (entry.details.symbols as string[]).length > 0) {
+      console.log(chalk.gray(`  symbols: ${(entry.details.symbols as string[]).join(', ')}`));
+    }
+    console.log();
+  }
+  
+  if (timeline.length > limit) {
+    console.log(chalk.gray(`Showing ${limit} of ${timeline.length} entries. Use --limit to see more.\n`));
+  }
+}
+
+interface ResetOptions {
+  force?: boolean;
+  json?: boolean;
+}
+
+/**
+ * paradigm team reset - Reset team state for fresh start
+ */
+export async function teamResetCommand(targetPath: string | undefined, options: ResetOptions) {
+  const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
+  
+  const manifest = loadAgentsManifest(rootDir);
+  if (!manifest) {
+    if (options.json) {
+      console.log(JSON.stringify({ error: 'Team not configured' }));
+    } else {
+      console.log(chalk.yellow('\nTeam not configured. Run `paradigm team init` first.\n'));
+    }
+    return;
+  }
+  
+  const state = loadTeamState(rootDir);
+  const pending = getPendingHandoffs(rootDir);
+  
+  // Check for pending work
+  if (!options.force && (state.current || pending.length > 0)) {
+    if (options.json) {
+      console.log(JSON.stringify({
+        error: 'Has pending work',
+        current: state.current,
+        pending_handoffs: pending.length,
+      }));
+    } else {
+      console.log(chalk.yellow('\n⚠ Cannot reset - there is pending work:\n'));
+      if (state.current) {
+        console.log(`  Current: ${state.current.agent} working on "${state.current.task}"`);
+      }
+      if (pending.length > 0) {
+        console.log(`  Pending handoffs: ${pending.length}`);
+      }
+      console.log(chalk.gray('\nUse --force to reset anyway.\n'));
+    }
+    return;
+  }
+  
+  // Reset state
+  const newState: TeamState = {
+    current: null,
+    queue: [],
+    recent: [],
+    blocked: [],
+  };
+  
+  saveTeamState(rootDir, newState);
+  
+  // Optionally clear handoffs
+  const handoffsDir = path.join(getParadigmDir(rootDir), 'handoffs');
+  if (options.force && fs.existsSync(handoffsDir)) {
+    const files = fs.readdirSync(handoffsDir);
+    for (const file of files) {
+      fs.unlinkSync(path.join(handoffsDir, file));
+    }
+  }
+  
+  if (options.json) {
+    console.log(JSON.stringify({ success: true, cleared_handoffs: options.force }));
+    return;
+  }
+  
+  console.log(chalk.green('\n✓ Team state reset\n'));
+  console.log(chalk.gray('  Current agent: cleared'));
+  console.log(chalk.gray('  Activity log: cleared'));
+  console.log(chalk.gray('  Queue: cleared'));
+  if (options.force) {
+    console.log(chalk.gray('  Handoff files: deleted'));
+  }
+  console.log(chalk.gray('\nReady for fresh start. Run `paradigm team status` to verify.\n'));
+}

@@ -326,6 +326,26 @@ teamCmd
     await teamCheckCommand(path, options);
   });
 
+teamCmd
+  .command('history [path]')
+  .description('Show full activity log')
+  .option('-l, --limit <number>', 'Number of entries to show', '50')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamHistoryCommand } = await import('./commands/team/index.js');
+    await teamHistoryCommand(path, { ...options, limit: parseInt(options.limit) });
+  });
+
+teamCmd
+  .command('reset [path]')
+  .description('Reset team state for fresh start')
+  .option('-f, --force', 'Force reset even with pending work')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamResetCommand } = await import('./commands/team/index.js');
+    await teamResetCommand(path, options);
+  });
+
 // Default team action (show status)
 teamCmd
   .action(async () => {
