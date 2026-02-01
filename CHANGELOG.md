@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] - 2026-01-27
+
 ### Added
+- **Portal Viewer** - Real-time visualization dashboard for portal activations
+  - New package: `@a-company/portal-viewer`
+  - Constellation view: Interactive star map where portals "light up" on activation
+  - Testing checklist: Auto-ticking gates for QA verification
+  - Event timeline: Scrolling log with entity filtering
+  - Session recording: Capture test runs for reporting
+  - Flow visualization: Track progress through multi-gate flows
+  - New CLI commands: `paradigm portal watch`, `paradigm portal report`
+
+- **Webhook Integration** - Push session reports to external services
+  - Slack Block Kit formatted messages
+  - Discord embed formatted messages
+  - Email HTML reports
+  - Generic HTTP POST for custom endpoints
+  - Configuration via `.paradigm/portal-webhooks.yaml`
+  - Environment variable expansion for secrets
+
+- **Session Reporting** - Structured test session exports
+  - JSON export with full event details
+  - Markdown reports for documentation
+  - Pass/fail statistics and flow completion tracking
+  - Entity journey tracking
+
 - **CLI Improvements**
   - Added `claude` as a valid IDE option for `paradigm init --ide claude`
   - Enhanced `--ide` option descriptions in help text to show output file paths
@@ -20,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolved build failures caused by missing workspace symlinks (requires `npm install`)
 
 ### Changed
+- **Marathon Ports** - All Paradigm tools now use memorable port numbers
+  - Portal Viewer UI: 42195 (marathon distance: 42.195km)
+  - Portal Viewer WebSocket: 42196
+  - Prism Visualizer: 42197
 - **Build System**
   - Updated `portal-sdk` build script to use `tsup.config.ts` instead of CLI flags
   - Improved build reliability by ensuring workspace packages are properly linked

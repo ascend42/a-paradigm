@@ -83,9 +83,9 @@ export interface Flow {
  * Dev mode settings for runtime watcher
  */
 export interface DevSettings {
-  /** Port for the visualizer server. Default: 3100 */
+  /** Port for the visualizer server. Default: 42195 (marathon: 42.195km) */
   visualizerPort?: number;
-  /** Port for the watcher WebSocket server. Default: 3101 */
+  /** Port for the watcher WebSocket server. Default: 42196 */
   watcherPort?: number;
   /** Auto-connect SDK to watcher in dev mode. Default: true */
   autoConnect?: boolean;

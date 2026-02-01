@@ -8,7 +8,7 @@ import { initCommand } from './commands/init.js';
 import { visualizeCommand } from './commands/visualize.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const program = new Command();
 
@@ -51,7 +51,7 @@ program
   .alias('vis')
   .alias('v')
   .description('Launch the Prism visualizer')
-  .option('-p, --port <port>', 'Port to run the visualizer on', '3000')
+  .option('-p, --port <port>', 'Port to run the visualizer on', '42197')
   .option('--no-open', 'Do not auto-open browser')
   .action(visualizeCommand);
 
@@ -107,6 +107,29 @@ portalCmd
   .action(async (path, options) => {
     const { gateTestCommand } = await import('./commands/portal/test.js');
     await gateTestCommand(path, options);
+  });
+
+portalCmd
+  .command('watch [path]')
+  .alias('w')
+  .description('Launch the Portal Viewer - real-time visualization dashboard')
+  .option('-p, --port <port>', 'WebSocket port for SDK connections', '42196')
+  .option('-u, --ui-port <port>', 'HTTP port for UI', '42195')
+  .option('-c, --config <path>', 'Path to portal.yaml config')
+  .option('--no-open', 'Do not auto-open browser')
+  .action(async (path, options) => {
+    const { portalWatchCommand } = await import('./commands/portal/watch.js');
+    await portalWatchCommand(path, options);
+  });
+
+portalCmd
+  .command('report <session>')
+  .description('Generate a report from a session file')
+  .option('-f, --format <format>', 'Output format: json, markdown, slack, discord', 'markdown')
+  .option('-o, --output <path>', 'Output file path')
+  .action(async (session, options) => {
+    const { portalReportCommand } = await import('./commands/portal/watch.js');
+    await portalReportCommand(session, options);
   });
 
 // paradigm premise <command>

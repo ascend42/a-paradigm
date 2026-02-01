@@ -11,14 +11,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: parseInt(process.env.PORT || '42197', 10), // Paradigm ports: 42195-42199
+    port: parseInt(process.env.PORT || '42195', 10), // Marathon distance: 42.195km
     open: false, // CLI will handle opening
   },
   build: {
-    outDir: 'dist',
+    outDir: 'dist/ui',
     sourcemap: true,
   },
   define: {
-    __PARADIGM_VERSION__: JSON.stringify(process.env.npm_package_version || '0.1.0'),
+    __PORTAL_VIEWER_VERSION__: JSON.stringify(process.env.npm_package_version || '0.1.0'),
   },
 });

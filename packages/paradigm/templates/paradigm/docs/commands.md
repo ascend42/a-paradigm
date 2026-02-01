@@ -265,7 +265,7 @@ paradigm status
 
 **Options:**
 ```
--p, --port <port>   Port to run on (default: 3000)
+-p, --port <port>   Port to run on (default: 42197)
 --no-open           Don't auto-open browser
 ```
 
@@ -317,6 +317,77 @@ paradigm portal validate
 paradigm portal validate ./portal.yaml
 ```
 
+### paradigm portal watch
+
+Launch the Portal Viewer - a real-time visualization dashboard for portal activations.
+
+**Options:**
+```
+[path]              Target directory (defaults to current)
+-p, --port <port>   WebSocket port for SDK connections (default: 42196)
+-u, --ui-port <port> HTTP port for UI (default: 42195)
+-c, --config <path> Path to portal.yaml config
+--no-open           Don't auto-open browser
+```
+
+**Examples:**
+```bash
+# Launch viewer with defaults
+paradigm portal watch
+
+# Custom ports
+paradigm portal watch --port 7001 --ui-port 7000
+
+# Specify config location
+paradigm portal watch -c ./config/portal.yaml
+```
+
+**Features:**
+- **Constellation View**: Interactive star map where portals "light up" on activation
+- **Checklist Mode**: Auto-ticking gates for QA testing
+- **Event Timeline**: Scrolling log with entity filtering
+- **Session Recording**: Capture and export test runs
+- **Flow Visualization**: Track progress through gate sequences
+
+**Ports (Marathon-inspired):**
+| Port | Purpose |
+|------|---------|
+| 42195 | Portal Viewer UI (marathon: 42.195km) |
+| 42196 | Portal Viewer WebSocket |
+
+### paradigm portal report
+
+Generate a report from a recorded session file.
+
+**Options:**
+```
+<session>           Path to session JSON file (required)
+-f, --format <fmt>  Output format: json, markdown, slack, discord (default: markdown)
+-o, --output <path> Output file path (prints to stdout if omitted)
+```
+
+**Examples:**
+```bash
+# Generate markdown report
+paradigm portal report ./session.json
+
+# Export as JSON
+paradigm portal report ./session.json --format json -o report.json
+
+# Format for Slack
+paradigm portal report ./session.json --format slack
+```
+
+### paradigm portal test
+
+Test portals and generate test files.
+
+```bash
+paradigm portal test
+paradigm portal test --generate
+paradigm portal test --portal ^checkout
+```
+
 ---
 
 ## paradigm premise
@@ -348,6 +419,8 @@ paradigm premise snapshot "pre-refactor" -d "Before auth rewrite"
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logger output level | `debug` (dev), `info` (prod) |
 | `PARADIGM_SYMBOLS` | Symbol filter (comma-separated) | all |
+| `PORTAL_VALIDATION` | Enable portal validation logging | `true` (dev) |
+| `PORTAL_TEST_MODE` | Emit JSON lines for parsing | `false` |
 
 ---
 
