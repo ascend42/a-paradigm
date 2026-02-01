@@ -8,6 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multi-Agent Orchestration** (`paradigm team`) - Coordinate AI agents as a dev team
+  - `paradigm team init` - Initialize with 5 default agent roles (architect, builder, reviewer, tester, security)
+  - `paradigm team status` - Show current agent, pending handoffs, activity log
+  - `paradigm team handoff --to <agent>` - Hand off task with context to another agent
+  - `paradigm team accept [id]` - Accept a pending handoff and become active agent
+  - `paradigm team check` - Health check for conflicts, stale handoffs, blocked agents
+  - Agent manifest: `.paradigm/agents.yaml` with roles, focus areas, permissions
+  - Team state: `.paradigm/team-state.yaml` tracks current agent and activity
+  - Handoff protocol: `.paradigm/handoffs/*.yaml` preserves context between agents
+  - Each agent has defined read/write permissions and handoff targets
+
+- **Lint Command** (`paradigm lint`) - Validate .purpose files for schema errors
+  - Reports YAML syntax errors with line numbers
+  - Validates against .purpose schema
+  - Provides fix suggestions for common issues
+  - `--fix` flag for auto-fixing formatting
+  - `--strict` flag to fail on warnings
+  - `--json` for CI integration
+  - Exit code 1 on errors for pipelines
+
+- **Cost Analysis** (`paradigm cost`) - Token cost analysis for AI context
+  - Estimates token counts for all context files
+  - Compares static vs dynamic (MCP) context loading
+  - Shows potential savings percentage and cost estimate
+  - `--detailed` flag for file-by-file breakdown
+  - `--json` for programmatic access
+  - Provides optimization recommendations
+
+- **Auto-Scan** (`paradigm scan auto`) - Zero-config .purpose generation from code
+  - Detects React/Vue/Angular components → #components
+  - Detects route definitions (Express, Next.js, React Router) → $flows
+  - Detects auth middleware patterns → ^gates
+  - Detects error/event patterns → !signals
+  - Honors JSDoc @feature/@component tags for high confidence
+  - `--dry-run` to preview without writing
+  - `--force` to overwrite existing files
+  - Groups symbols by directory for organized .purpose files
+
 - **MCP Server** (`@a-company/paradigm-mcp`) - Model Context Protocol server for AI assistants
   - Exposes Paradigm symbols, gates, flows to Claude and other MCP-compatible AI
   - **Resources**: `paradigm://symbols`, `paradigm://symbol/{symbol}`, `paradigm://gates`, `paradigm://flows`
