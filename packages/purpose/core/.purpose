@@ -1,0 +1,65 @@
+version: 1.0.0
+description: |
+  @a-company/purpose-core - Core library for parsing and validating .purpose files.
+  Handles YAML parsing, Zod schema validation, and symbol extraction from purpose files.
+
+features:
+  purpose-parsing:
+    description: "@purpose-parsing: Parse .purpose files into structured data"
+    components: [#yaml-parser, #zod-schemas]
+    signals: [!parse-success, !parse-error]
+
+  purpose-validation:
+    description: "@purpose-validation: Validate .purpose file content"
+    components: [#validator, #schema-rules]
+    signals: [!validation-passed, !validation-failed]
+
+  purpose-aggregation:
+    description: "@purpose-aggregation: Aggregate multiple .purpose files"
+    components: [#aggregator, #symbol-extractor]
+
+components:
+  yaml-parser:
+    description: "#yaml-parser: Parses YAML content from .purpose files"
+    used-by: [@purpose-parsing]
+
+  zod-schemas:
+    description: "#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc."
+    used-by: [@purpose-parsing]
+
+  validator:
+    description: "#validator: Validates parsed purpose data"
+    used-by: [@purpose-validation]
+
+  schema-rules:
+    description: "#schema-rules: Rules for validating symbol references"
+    used-by: [@purpose-validation]
+
+  aggregator:
+    description: "#aggregator: Combines multiple .purpose files"
+    used-by: [@purpose-aggregation]
+
+  symbol-extractor:
+    description: "#symbol-extractor: Extracts symbols from purpose data"
+    used-by: [@purpose-aggregation]
+
+signals:
+  parse-success:
+    description: "!parse-success: .purpose file parsed successfully"
+    category: purpose
+    severity: info
+
+  parse-error:
+    description: "!parse-error: Failed to parse .purpose file"
+    category: purpose
+    severity: error
+
+  validation-passed:
+    description: "!validation-passed: Validation checks passed"
+    category: purpose
+    severity: info
+
+  validation-failed:
+    description: "!validation-failed: Validation found issues"
+    category: purpose
+    severity: warn

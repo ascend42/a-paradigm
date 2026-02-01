@@ -1,0 +1,53 @@
+version: 1.0.0
+description: |
+  @a-company/portal-core - Core library for parsing and validating portal.yaml files.
+  Handles gate definitions, locks, keys, prizes, and authorization topology.
+
+features:
+  portal-parsing:
+    description: "@portal-parsing: Parse portal.yaml into structured data"
+    components: [#yaml-parser, #gate-schemas]
+    signals: [!parse-success, !parse-error]
+
+  portal-validation:
+    description: "@portal-validation: Validate portal.yaml configuration"
+    components: [#validator, #topology-checker]
+    signals: [!validation-passed, !validation-failed]
+
+components:
+  yaml-parser:
+    description: "#yaml-parser: Parses YAML content from portal.yaml"
+    used-by: [@portal-parsing]
+
+  gate-schemas:
+    description: "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key"
+    used-by: [@portal-parsing]
+
+  validator:
+    description: "#validator: Validates gate configuration"
+    used-by: [@portal-validation]
+
+  topology-checker:
+    description: "#topology-checker: Checks for circular dependencies in gates"
+    used-by: [@portal-validation]
+
+signals:
+  parse-success:
+    description: "!parse-success: portal.yaml parsed successfully"
+    category: portal
+    severity: info
+
+  parse-error:
+    description: "!parse-error: Failed to parse portal.yaml"
+    category: portal
+    severity: error
+
+  validation-passed:
+    description: "!validation-passed: Portal validation passed"
+    category: portal
+    severity: info
+
+  validation-failed:
+    description: "!validation-failed: Portal validation found issues"
+    category: portal
+    severity: warn

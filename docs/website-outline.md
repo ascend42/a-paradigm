@@ -62,15 +62,18 @@ Home
 │   ├── Purpose (Structure)
 │   ├── Portal (Authorization)
 │   ├── Premise (Aggregation)
-│   └── Prism (Visualization)
+│   ├── Prism (Visualization)
+│   └── MCP Server (AI Integration)
 ├── Features
 │   ├── Symbol System
 │   ├── Agent Efficiency
+│   ├── MCP Integration
 │   ├── IDE Integration
 │   └── CLI Tools
 ├── Docs
 │   ├── Getting Started
 │   ├── Guides
+│   │   └── MCP Setup (Claude Desktop)
 │   ├── CLI Reference
 │   └── API Reference
 ├── Use Cases
@@ -87,6 +90,7 @@ Purpose           Documentation     About            GitHub
 Portal            Tutorials         Blog             Discord
 Premise           Examples          Changelog        Twitter
 Prism             FAQ               License          Newsletter
+MCP Server        MCP Setup Guide
 ```
 
 ---
@@ -160,6 +164,16 @@ $purchase     Flow           Multi-step process
 | **Ripple** | Change impact analysis before modifications |
 | **Thread** | Session continuity between AI interactions |
 | **Echo** | Error-to-symbol mapping for debugging |
+| **MCP Server** | Dynamic context for Claude Desktop — query symbols mid-conversation |
+
+**Two Approaches Visual:**
+
+| Static Context | Dynamic Context (MCP) |
+|----------------|----------------------|
+| Load everything upfront | Query only what's needed |
+| ~2000 tokens per session | ~100 tokens per query |
+| Stale if files change | Always current |
+| IDE-specific | Works with Claude Desktop |
 
 **Quote/Testimonial Placeholder:** "Paradigm cut my AI's token usage by 80% while making it 3x more accurate." — Developer testimonial
 
@@ -183,8 +197,16 @@ Logos/icons for:
 - GitHub Copilot
 - Windsurf
 - VS Code (via Copilot)
+- Claude Desktop (via MCP)
 
-**Key Point:** "One source of truth in `.paradigm/`, generates instructions for any IDE."
+**Key Point:** "One source of truth in `.paradigm/`, generates instructions for any IDE — plus dynamic MCP access for Claude Desktop."
+
+**Two Integration Modes:**
+
+| Mode | How It Works | Best For |
+|------|--------------|----------|
+| **Static (IDE Rules)** | `paradigm sync` generates instruction files | Cursor, Copilot, Windsurf |
+| **Dynamic (MCP)** | MCP server exposes symbols on-demand | Claude Desktop, MCP clients |
 
 ### Getting Started Section
 
@@ -341,6 +363,75 @@ jq '.stars["@checkout"]' .paradigm/constellation.json
 
 **CTA:** "Launch Prism" → `paradigm visualize`
 
+### 4.5 MCP Server Page
+
+**Hero:** "Dynamic Context for AI Assistants"
+
+**Core Concept:**
+- MCP (Model Context Protocol) is Anthropic's standard for AI tool integration
+- Paradigm's MCP server exposes symbols dynamically, not statically
+- Claude Desktop (or any MCP client) can query your project mid-conversation
+
+**The Problem with Static Context:**
+```
+Traditional: AI loads .cursorrules → 2000 tokens → works on task
+            (Even if only 5% is relevant)
+
+With MCP:   AI needs info about @checkout → 
+            Calls paradigm_ripple("@checkout") →
+            Gets 100 tokens of targeted context
+```
+
+**Key Features:**
+
+1. **Resources (Read-Only Data)**
+
+| Resource | What It Returns |
+|----------|-----------------|
+| `paradigm://symbols` | All symbols with counts |
+| `paradigm://symbol/@checkout` | Single symbol details |
+| `paradigm://symbols/type/gate` | All gates |
+| `paradigm://gates` | Detailed gate definitions |
+| `paradigm://flows` | All flow definitions |
+
+2. **Tools (Actions AI Can Invoke)**
+
+| Tool | What It Does |
+|------|--------------|
+| `paradigm_search` | Find symbols by query |
+| `paradigm_ripple` | Impact analysis ("what breaks if I change X?") |
+| `paradigm_related` | Get connected symbols |
+| `paradigm_status` | Project overview |
+| `paradigm_gates_for_route` | Suggest gates for a route |
+
+**Setup (Claude Desktop):**
+```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "paradigm": {
+      "command": "npx",
+      "args": ["@a-company/paradigm-mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Example Conversation:**
+
+> **You:** "What would break if I removed the ^authenticated gate?"
+>
+> **Claude:** *[calls paradigm_ripple]* "Removing ^authenticated would affect 12 features including @checkout, @profile, and @settings. Here's the full impact..."
+
+**Benefits:**
+- Token efficient — only fetch what's needed
+- Always current — reads live project state
+- Technology agnostic — works with any language/framework
+- Standard protocol — any MCP client can use it
+
+**CTA:** "Set Up MCP" → MCP Setup Guide
+
 ---
 
 ## 5. Documentation
@@ -360,7 +451,9 @@ Guides
 ├── Building a Symbol Index with Premise
 ├── Visualizing with Prism
 ├── Integrating with Your IDE
-└── Optimizing for AI Agents
+├── Optimizing for AI Agents
+├── Setting Up MCP with Claude Desktop
+└── TaskFlow Tutorial (Build-Along Project)
 
 CLI Reference
 ├── paradigm init
@@ -378,6 +471,11 @@ CLI Reference
 ├── paradigm portal watch
 └── paradigm portal report
 
+MCP Reference
+├── Resources (paradigm://...)
+├── Tools (paradigm_search, paradigm_ripple, etc.)
+└── Configuration
+
 Specifications
 ├── Symbol System
 ├── Purpose File Format
@@ -391,7 +489,8 @@ API Reference
 ├── @a-company/portal-core
 ├── @a-company/portal-sdk
 ├── @a-company/premise-core
-└── @a-company/probe-core
+├── @a-company/probe-core
+└── @a-company/paradigm-mcp
 ```
 
 ### Key Documentation Pages
@@ -482,8 +581,28 @@ API Reference
 - Agent hints teach query patterns
 - JSON output for precise data
 - Ripple analysis before changes
+- MCP server for dynamic context
 
-#### 4. "For Authorization-Heavy Apps"
+#### 4. "For Claude Desktop Users"
+
+**Headline:** "Your Project, On-Demand"
+
+**Pain Points:**
+- Claude doesn't know your codebase
+- Copy-pasting context is tedious
+- Context gets stale as you work
+
+**Solution:**
+- MCP server exposes symbols dynamically
+- Claude queries only what it needs
+- Always up-to-date with your latest changes
+- Ask "what would break if..." and get real answers
+
+**Demo Conversation:**
+> "Claude, what features depend on ^authenticated?"
+> *Claude calls paradigm_ripple, returns targeted answer*
+
+#### 5. "For Authorization-Heavy Apps"
 
 **Headline:** "See Your Auth Topology"
 
@@ -587,12 +706,14 @@ API Reference
 - [ ] Getting Started guide
 - [ ] CLI Reference (core commands)
 - [ ] GitHub README polish
+- [ ] MCP Setup Guide
 
 ### Phase 2 (Post-Launch)
 
-- [ ] Individual product pages
+- [ ] Individual product pages (including MCP Server)
 - [ ] Use case pages
-- [ ] Video tutorials
+- [ ] Video tutorials (7-video series)
+- [ ] TaskFlow tutorial project
 - [ ] Example project gallery
 
 ### Phase 3 (Growth)
@@ -601,6 +722,7 @@ API Reference
 - [ ] Community showcase
 - [ ] Enterprise features page
 - [ ] Integration guides
+- [ ] YouTube channel content
 
 ---
 
@@ -615,6 +737,11 @@ API Reference
 - "Feature documentation"
 - "Cursor rules generator"
 - "Developer knowledge graph"
+- "MCP server"
+- "Model Context Protocol"
+- "Claude Desktop integration"
+- "Dynamic AI context"
+- "Anthropic MCP tools"
 
 ### Meta Descriptions
 
@@ -629,6 +756,12 @@ API Reference
 
 **Premise:**
 "Aggregate your project into a queryable knowledge graph. Power AI context with structured symbol data."
+
+**MCP Server:**
+"Dynamic context for Claude Desktop and MCP clients. Query your project's symbols, gates, and flows mid-conversation — only fetch what you need."
+
+**Prism:**
+"The infinite canvas for your project. Visualize symbols as constellations, watch authorization in real-time, explore relationships."
 
 ---
 
@@ -667,5 +800,6 @@ API Reference
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 1.1*
 *Last Updated: 2026-01-27*
+*Added: MCP Server documentation, Claude Desktop integration, TaskFlow tutorial reference*

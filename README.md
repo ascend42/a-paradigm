@@ -143,6 +143,39 @@ paradigm echo AUTH_REQUIRED --json
 jq '.stars["@checkout"]' .paradigm/constellation.json
 ```
 
+## MCP Server (Claude Desktop Integration)
+
+For dynamic, mid-conversation context, Paradigm provides an MCP server:
+
+| Resource/Tool | Purpose |
+|---------------|---------|
+| `paradigm://symbols` | Query all project symbols |
+| `paradigm://symbol/@checkout` | Get single symbol details |
+| `paradigm_search` | Find symbols by query |
+| `paradigm_ripple` | Impact analysis on-demand |
+| `paradigm_related` | Get connected symbols |
+| `paradigm_status` | Project overview |
+
+**Claude Desktop config** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "paradigm": {
+      "command": "npx",
+      "args": ["@a-company/paradigm-mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Example conversation:**
+> **You:** "What would break if I removed ^authenticated?"
+> 
+> **Claude:** *[calls paradigm_ripple]* "Removing ^authenticated would affect 12 features..."
+
+See [MCP Setup Guide](./docs/guides/mcp-setup.md) for detailed instructions.
+
 ## IDE Support
 
 Paradigm generates instructions for multiple IDEs from a single source:
@@ -172,6 +205,7 @@ This generates a detailed prompt that guides AI through splitting your existing 
 | Package | Description |
 |---------|-------------|
 | [`@a-company/paradigm`](./packages/paradigm) | Unified CLI |
+| [`@a-company/paradigm-mcp`](./packages/paradigm-mcp) | MCP server for Claude Desktop |
 | [`@a-company/purpose-core`](./packages/purpose/core) | `.purpose` file parsing |
 | [`@a-company/portal-core`](./packages/portal/core) | `portal.yaml` parsing |
 | [`@a-company/portal-sdk`](./packages/portal/sdk) | Runtime authorization SDK |

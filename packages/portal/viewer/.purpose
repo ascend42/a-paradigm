@@ -1,0 +1,88 @@
+version: 1.0.0
+description: |
+  @a-company/portal-viewer - Real-time visualization of authorization flows.
+  WebSocket-based viewer showing gate decisions, sessions, and timelines.
+
+features:
+  realtime-visualization:
+    description: "@realtime-visualization: Live view of authorization decisions"
+    components: [#websocket-server, #event-stream]
+    signals: [!decision-received, !session-started]
+
+  session-management:
+    description: "@session-management: Track entity journeys through gates"
+    components: [#session-tracker, #journey-recorder]
+    states: ["%session.active", "%session.entity"]
+
+  event-timeline:
+    description: "@event-timeline: Chronological view of gate events"
+    components: [#timeline-component, #event-renderer]
+
+  test-checklist:
+    description: "@test-checklist: Visual checklist for testing gates"
+    components: [#checklist-component, #test-runner]
+
+  command-palette:
+    description: "@command-palette: Contextual CLI command suggestions"
+    components: [#palette-component, #command-generator]
+
+components:
+  websocket-server:
+    description: "#websocket-server: WebSocket server for real-time events"
+    used-by: [@realtime-visualization]
+
+  event-stream:
+    description: "#event-stream: Streams gate events to clients"
+    used-by: [@realtime-visualization]
+
+  session-tracker:
+    description: "#session-tracker: Tracks active sessions"
+    used-by: [@session-management]
+
+  journey-recorder:
+    description: "#journey-recorder: Records entity paths through gates"
+    used-by: [@session-management]
+
+  timeline-component:
+    description: "#timeline-component: React component for event timeline"
+    used-by: [@event-timeline]
+
+  event-renderer:
+    description: "#event-renderer: Renders individual timeline events"
+    used-by: [@event-timeline]
+
+  checklist-component:
+    description: "#checklist-component: React component for test checklist"
+    used-by: [@test-checklist]
+
+  test-runner:
+    description: "#test-runner: Executes gate tests"
+    used-by: [@test-checklist]
+
+  palette-component:
+    description: "#palette-component: React component for command palette"
+    used-by: [@command-palette]
+
+  command-generator:
+    description: "#command-generator: Generates contextual CLI commands"
+    used-by: [@command-palette]
+
+states:
+  session:
+    active:
+      type: boolean
+      description: "%session.active: Whether a session is currently active"
+    entity:
+      type: string
+      description: "%session.entity: Current entity being tracked"
+
+signals:
+  decision-received:
+    description: "!decision-received: Gate decision event received"
+    category: viewer
+    severity: info
+
+  session-started:
+    description: "!session-started: New session tracking started"
+    category: viewer
+    severity: info
