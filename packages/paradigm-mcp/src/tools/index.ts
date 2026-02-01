@@ -3,6 +3,10 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
   getSymbol,
@@ -21,7 +25,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 export function registerTools(server: Server, getContext: () => ProjectContext) {
   // List available tools
   server.setRequestHandler(
-    { method: 'tools/list' } as any,
+    ListToolsRequestSchema,
     async () => {
       return {
         tools: [
@@ -110,8 +114,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
 
   // Handle tool calls
   server.setRequestHandler(
-    { method: 'tools/call' } as any,
-    async (request: any) => {
+    CallToolRequestSchema,
+    async (request) => {
       const { name, arguments: args } = request.params;
       const ctx = getContext();
 

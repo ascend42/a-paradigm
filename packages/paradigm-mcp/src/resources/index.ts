@@ -4,6 +4,10 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import {
   getSymbol,
   getSymbolsByType,
   getSymbolCounts,
@@ -19,7 +23,7 @@ import { getGatesData, getFlowsData } from './gates.js';
 export function registerResources(server: Server, getContext: () => ProjectContext) {
   // List available resources
   server.setRequestHandler(
-    { method: 'resources/list' } as any,
+    ListResourcesRequestSchema,
     async () => {
       return {
         resources: [
@@ -84,9 +88,9 @@ export function registerResources(server: Server, getContext: () => ProjectConte
 
   // Read resources
   server.setRequestHandler(
-    { method: 'resources/read' } as any,
-    async (request: any) => {
-      const uri = request.params?.uri as string;
+    ReadResourceRequestSchema,
+    async (request) => {
+      const uri = request.params.uri;
       
       if (!uri?.startsWith('paradigm://')) {
         throw new Error(`Unknown URI scheme: ${uri}`);
