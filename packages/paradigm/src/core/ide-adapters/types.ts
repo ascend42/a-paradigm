@@ -55,6 +55,16 @@ export interface SyncResult {
 }
 
 /**
+ * Generated file for multi-file adapters
+ */
+export interface GeneratedFile {
+  /** File path relative to output directory */
+  path: string;
+  /** File content */
+  content: string;
+}
+
+/**
  * Base interface for IDE adapters
  */
 export interface IDEAdapter {
@@ -64,14 +74,20 @@ export interface IDEAdapter {
   /** Display name for UI */
   readonly displayName: string;
   
-  /** Output file path relative to project root */
+  /** Output file/directory path relative to project root */
   readonly outputPath: string;
+  
+  /** Whether this adapter generates multiple files */
+  readonly multiFile?: boolean;
   
   /** Detect if this IDE is in use */
   detect(rootDir: string): boolean;
   
-  /** Generate instruction file content */
+  /** Generate instruction file content (single file adapters) */
   generate(files: ParadigmFiles): string;
+  
+  /** Generate multiple files (multi-file adapters like Cursor modern format) */
+  generateFiles?(files: ParadigmFiles): GeneratedFile[];
 }
 
 /**

@@ -9,6 +9,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-01-27
+
+### Added
+- **Agent Efficiency Suite** - Tools to make AI agents faster and more context-aware
+
+- **Beacon** (`.paradigm/beacon.md`) - Quick-start orientation for AI agents
+  - Compact symbol map showing features, portals, and relationships
+  - Key file landmarks for fast navigation
+  - Links to available pathways (prompts)
+  - New command: `paradigm beacon [--refresh] [--json]`
+
+- **Constellation** (`.paradigm/constellation.json`) - Machine-readable symbol graph
+  - Complete symbol relationship data in JSON/YAML format
+  - Stars (symbols) with categorized references: portals, signals, components, etc.
+  - Orbits (flows) with step sequences
+  - Queryable by AI agents for impact analysis
+  - New command: `paradigm constellation [--format json|yaml]`
+
+- **Ripple** - Change impact analysis
+  - Shows upstream dependencies (what a symbol requires)
+  - Shows downstream effects (what would be affected by changes)
+  - Flow membership tracking (which flows include this symbol)
+  - Test command suggestions
+  - New command: `paradigm ripple <symbol> [--json]`
+
+- **Thread** (`.paradigm/thread.md`) - Session continuity between AI agents
+  - Trail: Record what was done in a session
+  - Loose ends: Track unfinished tasks
+  - Breadcrumbs: Notes for the next agent
+  - New commands: `paradigm thread [show|save|todo|note|clear] [--json]`
+
+- **Echo** (`.paradigm/echoes.yaml`) - Error-to-symbol mapping
+  - Map error codes to their source symbols
+  - Include resolution hints and ripple effects
+  - Template included in `paradigm init`
+  - New commands: `paradigm echo [lookup|init|list] [--json]`
+
+- **Enhanced Pathways** - Improved prompt templates
+  - Added prerequisites section with file references
+  - Added implementation steps with CLI commands
+  - Added "After" sections for follow-up actions
+  - Templates now reference beacon, constellation, thread, and echo
+
+- **Agent CLI Integration** - Token-efficient querying for AI agents
+  - Added `--json` flag to `beacon`, `thread`, and `echo` commands
+  - All agent-facing commands now support machine-readable output
+  - New `paradigm-agent-hints.mdc` generated for Cursor with query patterns
+  - New `paradigm-agent-hints.instructions.md` for Copilot
+  - New `queries.md` documentation with jq recipes for constellation queries
+  - Portal Viewer: New Command Palette UI for copying CLI commands
+  - AI agents can now query on-demand (~100 tokens) vs reading files (~2000 tokens)
+
+- **Website Outline** - Comprehensive website design document
+  - Brand positioning and taglines
+  - Site architecture and navigation
+  - Homepage sections and content
+  - Product pages for Purpose, Portal, Premise, Prism
+  - Documentation structure
+  - Visual design notes
+
+---
+
 ## [0.5.0] - 2026-01-27
 
 ### Added
@@ -34,6 +96,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Markdown reports for documentation
   - Pass/fail statistics and flow completion tracking
   - Entity journey tracking
+
+- **Modern Cursor Rules Format** - `.cursor/rules/*.mdc` support
+  - `paradigm sync cursor` now generates multiple focused `.mdc` files
+  - YAML frontmatter with `globs` and `alwaysApply` for scoped rules
+  - Rules only load when relevant files are open (better token efficiency)
+  - Generated files: `paradigm-core.mdc`, `paradigm-symbols.mdc`, `paradigm-logging.mdc`, etc.
+  - Automatic backup of legacy `.cursorrules` to `.cursorrules.bak`
+
+- **Modern Copilot Instructions Format** - `.github/instructions/*.instructions.md` support
+  - `paradigm sync copilot` now generates multiple focused `.instructions.md` files
+  - YAML frontmatter with `applyTo` for glob-based scoping
+  - Core instructions remain in `.github/copilot-instructions.md` (always applies)
+  - Path-specific instructions in `.github/instructions/` directory
+  - Generated files: `paradigm-symbols.instructions.md`, `paradigm-logging.instructions.md`, etc.
 
 - **CLI Improvements**
   - Added `claude` as a valid IDE option for `paradigm init --ide claude`

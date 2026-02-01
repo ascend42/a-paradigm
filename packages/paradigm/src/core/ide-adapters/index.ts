@@ -29,6 +29,7 @@ export type {
   SpecFiles,
   DocFiles,
   SyncResult,
+  GeneratedFile,
 } from './types.js';
 
 // Export adapters
@@ -184,7 +185,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
 }
 
 /**
- * Sync Paradigm to IDE instruction file
+ * Sync Paradigm to IDE instruction file(s)
  */
 export function syncToIDE(
   rootDir: string,
@@ -205,22 +206,28 @@ export function syncToIDE(
   
   const outputPath = path.join(rootDir, adapter.outputPath);
   
-  // Check if output exists and not forcing
-  if (!force && fs.existsSync(outputPath)) {
-    // Could check if content is different, for now just note it exists
-  }
-  
-  // Ensure parent directory exists (for copilot)
-  const parentDir = path.dirname(outputPath);
-  if (!fs.existsSync(parentDir)) {
-    fs.mkdirSync(parentDir, { recursive: true });
-  }
-  
-  // Generate content
-  const content = adapter.generate(files);
-  
-  // Write file
   try {
+    // Handle multi-file adapters (like modern Cursor format)
+    if (adapter.multiFile && adapter.generateFiles) {
+      return syncMultiFileAdapter(rootDir, adapter, files, force);
+    }
+    
+    // Single file adapter
+    // Check if output exists and not forcing
+    if (!force && fs.existsSync(outputPath)) {
+      // Could check if content is different, for now just note it exists
+    }
+    
+    // Ensure parent directory exists (for copilot)
+    const parentDir = path.dirname(outputPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    
+    // Generate content
+    const content = adapter.generate(files);
+    
+    // Write file
     fs.writeFileSync(outputPath, content, 'utf8');
     return {
       success: true,
@@ -236,6 +243,80 @@ export function syncToIDE(
       message: `Failed to write ${adapter.outputPath}: ${(error as Error).message}`,
     };
   }
+}
+
+/**
+ * Sync multi-file adapter (generates directory of files)
+ */
+function syncMultiFileAdapter(
+  rootDir: string,
+  adapter: IDEAdapter,
+  files: ParadigmFiles,
+  force: boolean
+): SyncResult {
+  const outputDir = path.join(rootDir, adapter.outputPath);
+  
+  // Ensure output directory exists
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  // Generate files
+  const generatedFiles = adapter.generateFiles!(files);
+  
+  // Write each file
+  const writtenFiles: string[] = [];
+  for (const file of generatedFiles) {
+    // Handle relative paths (e.g., ../copilot-instructions.md for Copilot)
+    let filePath: string;
+    if (file.path.startsWith('../')) {
+      filePath = path.join(outputDir, file.path);
+    } else {
+      filePath = path.join(outputDir, file.path);
+    }
+    
+    // Ensure parent directory exists
+    const parentDir = path.dirname(filePath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    
+    // Check if file exists and not forcing
+    if (!force && fs.existsSync(filePath)) {
+      // Could check if content is different
+    }
+    
+    fs.writeFileSync(filePath, file.content, 'utf8');
+    writtenFiles.push(file.path);
+  }
+  
+  // Clean up legacy files when migrating to modern format
+  if (adapter.name === 'cursor') {
+    const legacyCursorrules = path.join(rootDir, '.cursorrules');
+    if (fs.existsSync(legacyCursorrules)) {
+      // Rename to .cursorrules.bak for safety
+      const backupPath = path.join(rootDir, '.cursorrules.bak');
+      if (!fs.existsSync(backupPath)) {
+        fs.renameSync(legacyCursorrules, backupPath);
+      }
+    }
+  }
+  
+  // Count files in the main directory (excluding parent references)
+  const mainDirFiles = writtenFiles.filter(f => !f.startsWith('../'));
+  const extraFiles = writtenFiles.filter(f => f.startsWith('../'));
+  
+  let message = `Generated ${mainDirFiles.length} files in ${adapter.outputPath}/`;
+  if (extraFiles.length > 0) {
+    message += ` + ${extraFiles.length} additional file(s)`;
+  }
+  
+  return {
+    success: true,
+    ide: adapter.name,
+    outputPath: outputDir,
+    message,
+  };
 }
 
 /**

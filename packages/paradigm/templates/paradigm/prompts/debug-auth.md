@@ -1,6 +1,24 @@
-# Debug Authentication Prompt
+# Pathway: Debug Authentication
 
 Use this prompt when you're having issues with authentication or authorization.
+
+---
+
+## Prerequisites
+
+Before debugging, gather context:
+
+1. **Check the echo for error codes:**
+   - File: `.paradigm/echoes.yaml`
+   - Run: `paradigm echo AUTH_REQUIRED` (or relevant error code)
+
+2. **Review portal definitions:**
+   - File: `portal.yaml`
+   - Look for the `^portal-name` that's failing
+
+3. **Check ripple effects:**
+   - Run: `paradigm ripple ^authenticated` (or relevant portal)
+   - Understand what depends on this portal
 
 ---
 
@@ -80,22 +98,77 @@ The ^authenticated portal fails after ~5 minutes, redirecting to login.
 
 ---
 
-## Debugging Tips
+## Debugging Steps
 
-1. **Filter logs to auth-related symbols:**
+### 1. Check Portal Configuration
+
+Review the portal definition:
+- File: `portal.yaml`
+- Look for: `^authenticated` gate definition
+
+```yaml
+# Expected in portal.yaml
+gates:
+  authenticated:
+    description: User must be logged in
+    locks:
+      - id: session-valid
+        keys:
+          - expression: "user.session.valid"
+```
+
+### 2. Filter Logs to Auth Symbols
+
+```bash
+PARADIGM_SYMBOLS=@login,^authenticated,!session-expired LOG_LEVEL=debug
+```
+
+### 3. Trace the Auth Flow
+
+Run ripple analysis:
+```bash
+paradigm ripple ^authenticated
+```
+
+This shows:
+- What features depend on this portal
+- What signals are related
+- Where the portal is defined
+
+### 4. Check the Constellation
+
+```bash
+paradigm constellation
+```
+
+Then look in `.paradigm/constellation.json` for:
+- `^authenticated` relationships
+- What `requiredBy` this portal
+
+---
+
+## Common Issues
+
+| Issue | Likely Cause | Check |
+|-------|--------------|-------|
+| Session expires early | Token expiry mismatch | JWT exp claim vs config |
+| Portal always fails | Missing context | Check keys expression |
+| Intermittent failures | Clock skew | Server time sync |
+| After deployment | Code change | Git diff on auth files |
+
+---
+
+## After Debugging
+
+1. **Update echoes if new error pattern found:**
+   - Edit: `.paradigm/echoes.yaml`
+   
+2. **Document the fix:**
    ```bash
-   PARADIGM_SYMBOLS=@,^,! LOG_LEVEL=debug
+   paradigm thread save "Fixed ^authenticated session expiry issue"
    ```
 
-2. **Check portal definitions in `portal.yaml`**
-
-3. **Trace the flow:**
-   - @login → token creation
-   - ^authenticated → token validation
-   - !session-expired → why triggered?
-
-4. **Common issues:**
-   - Token expiry mismatch
-   - Clock skew between servers
-   - Cookie domain/path issues
-   - Missing refresh token logic
+3. **Add breadcrumb for future:**
+   ```bash
+   paradigm thread note "JWT expiry must match cookie maxAge"
+   ```

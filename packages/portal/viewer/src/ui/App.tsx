@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ConstellationCanvas } from './components/Constellation/ConstellationCanvas';
 import { EventTimeline } from './components/Timeline/EventTimeline';
 import { TestChecklist } from './components/Checklist/TestChecklist';
 import { SessionControls } from './components/Session/SessionControls';
+import { CommandPalette } from './components/CommandPalette/CommandPalette';
 import { Toolbar } from './components/Toolbar/Toolbar';
 import { useViewerStore } from './store/viewerStore';
 
@@ -10,6 +11,7 @@ declare const __PORTAL_VIEWER_VERSION__: string;
 
 function App() {
   const { isConnected, error, viewMode, connect, portals } = useViewerStore();
+  const [showCommands, setShowCommands] = useState(false);
 
   // Connect to WebSocket on mount
   useEffect(() => {
@@ -55,7 +57,17 @@ function App() {
         </div>
         <aside className="sidebar">
           <SessionControls />
-          {viewMode !== 'timeline' && (
+          <div className="sidebar-toggle">
+            <button 
+              className={`toggle-btn ${showCommands ? 'active' : ''}`}
+              onClick={() => setShowCommands(!showCommands)}
+            >
+              📋 CLI Commands
+            </button>
+          </div>
+          {showCommands ? (
+            <CommandPalette />
+          ) : viewMode !== 'timeline' && (
             <div className="mini-timeline">
               <h3>Recent Events</h3>
               <EventTimeline compact />
