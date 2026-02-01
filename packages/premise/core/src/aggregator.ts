@@ -7,6 +7,9 @@ import {
   getAllPurposeFiles,
   extractFeatures,
   extractComponents,
+  extractGates,
+  extractStates,
+  extractFlows,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import { parseSymbol } from './symbol-index.js';
@@ -67,21 +70,46 @@ export async function aggregateFromDream(
           }));
         }
 
-        // Extract flows from purpose files
-        for (const { filePath, data } of parsed) {
-          if (data.flows) {
-            for (const flow of data.flows) {
-              symbols.push(createSymbolEntry({
-                id: `purpose-flow-${flow.name}`,
-                symbol: `$${flow.name}`,
-                type: 'flow',
-                source: 'purpose',
-                filePath,
-                data: flow,
-                description: flow.description,
-              }));
-            }
-          }
+        // Extract gates from purpose files
+        const gates = extractGates(parsed);
+        for (const [id, { item, filePath }] of gates) {
+          symbols.push(createSymbolEntry({
+            id: `purpose-gate-${id}`,
+            symbol: `^${id}`,
+            type: 'gate',
+            source: 'purpose',
+            filePath,
+            data: item,
+            description: item.description,
+          }));
+        }
+
+        // Extract states from purpose files
+        const states = extractStates(parsed);
+        for (const [id, { item, filePath }] of states) {
+          symbols.push(createSymbolEntry({
+            id: `purpose-state-${id}`,
+            symbol: `%${id}`,
+            type: 'state',
+            source: 'purpose',
+            filePath,
+            data: item,
+            description: item.description,
+          }));
+        }
+
+        // Extract flows from purpose files (now supports both formats)
+        const flows = extractFlows(parsed);
+        for (const [id, { item, filePath }] of flows) {
+          symbols.push(createSymbolEntry({
+            id: `purpose-flow-${id}`,
+            symbol: `$${id}`,
+            type: 'flow',
+            source: 'purpose',
+            filePath,
+            data: item,
+            description: item.description,
+          }));
         }
       } catch (e: unknown) {
         errors.push({
