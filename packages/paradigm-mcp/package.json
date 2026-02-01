@@ -1,0 +1,33 @@
+{
+  "name": "@a-company/paradigm-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "paradigm-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "keywords": [
+    "paradigm",
+    "mcp",
+    "ai",
+    "claude",
+    "context"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@a-company/premise-core": "*",
+    "@a-company/purpose-core": "*",
+    "@a-company/portal-core": "*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

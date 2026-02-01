@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **MCP Server** (`@a-company/paradigm-mcp`) - Model Context Protocol server for AI assistants
+  - Exposes Paradigm symbols, gates, flows to Claude and other MCP-compatible AI
+  - **Resources**: `paradigm://symbols`, `paradigm://symbol/{symbol}`, `paradigm://gates`, `paradigm://flows`
+  - **Tools**: `paradigm_search`, `paradigm_ripple`, `paradigm_related`, `paradigm_status`, `paradigm_gates_for_route`
+  - Technology agnostic: Works with any language/framework
+  - Enables dynamic mid-conversation context fetching
+  - Usage: `npx @a-company/paradigm-mcp` or add to Claude Desktop config
+
+- **Enhanced Signals Schema** - Extended `SignalDefinition` for richer metadata
+  - Added `severity` field: `'info' | 'warn' | 'error'`
+  - Added `emitters` field: Array of files that emit this signal
+  - Added `related` field: Array of related symbols (@, ^, $, etc.)
+  - Enables categorized signal tracking and documentation
+
+- **Symbol Indexer Improvements** - Comprehensive symbol extraction from `.purpose` files
+  - Parse `flows:`, `gates:`, `states:`, `signals:` from feature/component definitions
+  - Support both array format `[{id, description}]` and record format `{id: {description}}`
+  - Extract symbol references from descriptions via regex (`$flow`, `^gate`, etc.)
+  - Parse `portals:` key in `portal.yaml` as alias for `gates:`
+
 - **Smart Init** - Enhanced `paradigm init` with intelligent onboarding
   - Auto-detects existing IDE instruction files (.cursorrules, copilot-instructions.md, etc.)
   - Detects project type (Next.js, Express, Python, etc.)
@@ -29,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Agent efficiency features prominently featured
   - IDE support and migration documentation
   - Cleaner structure with practical examples
+
+### Fixed
+- **Symbol Indexer** - Fixed parsing of flows, gates, states from `.purpose` files
+- **Portal Parser** - Now accepts both `gates:` and `portals:` keys in `portal.yaml`
 
 ---
 
