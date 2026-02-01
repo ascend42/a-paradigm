@@ -450,3 +450,249 @@ export async function mcpStatusCommand(options: { json?: boolean }) {
     console.log(JSON.stringify(results, null, 2));
   }
 }
+
+// Types for server info
+interface ServerInfo {
+  name: string;
+  cwd: string;
+  command: string;
+  args: string[];
+}
+
+interface ClientServers {
+  client: AIClient;
+  servers: ServerInfo[];
+}
+
+// Helper to get servers from a client config
+function getServersFromConfig(client: AIClient): ServerInfo[] {
+  if (!fs.existsSync(client.configPath)) {
+    return [];
+  }
+  
+  try {
+    const content = fs.readFileSync(client.configPath, 'utf8');
+    const config = JSON.parse(content);
+    
+    if (client.id === 'continue') {
+      const mcpServers = config?.experimental?.modelContextProtocolServers || [];
+      return mcpServers.map((server: any, i: number) => ({
+        name: `server-${i + 1}`,
+        cwd: server?.transport?.cwd || 'unknown',
+        command: server?.transport?.command || 'unknown',
+        args: server?.transport?.args || [],
+      }));
+    } else {
+      const mcpServers = config?.mcpServers || {};
+      return Object.entries(mcpServers).map(([name, server]: [string, any]) => ({
+        name,
+        cwd: server?.cwd || 'unknown',
+        command: server?.command || 'unknown',
+        args: server?.args || [],
+      }));
+    }
+  } catch {
+    return [];
+  }
+}
+
+// List all configured MCP servers across all clients
+export async function mcpListCommand(options: { json?: boolean }) {
+  console.log(chalk.blue('\n🔌 Configured MCP Servers\n'));
+  
+  const clients = detectAllClients();
+  const currentProjectPath = process.cwd();
+  const currentProjectName = getProjectName();
+  const allClientServers: ClientServers[] = [];
+  
+  let totalServers = 0;
+  
+  for (const client of clients) {
+    const servers = getServersFromConfig(client);
+    allClientServers.push({ client, servers });
+    
+    if (servers.length === 0) {
+      continue;
+    }
+    
+    totalServers += servers.length;
+    
+    // Header for this client
+    const scope = client.configType === 'project' ? 'this project' : 'user-level';
+    console.log(chalk.cyan(`${client.name} (${scope}):`));
+    
+    // List servers
+    for (const server of servers) {
+      const isCurrentProject = server.cwd === currentProjectPath;
+      const icon = isCurrentProject ? chalk.green('●') : chalk.gray('○');
+      const nameDisplay = isCurrentProject 
+        ? chalk.green(server.name) 
+        : chalk.white(server.name);
+      const cwdDisplay = isCurrentProject
+        ? chalk.green('(current)')
+        : chalk.gray(server.cwd);
+      
+      // Pad the name for alignment
+      const paddedName = server.name.padEnd(20);
+      console.log(`  ${icon} ${nameDisplay.padEnd(20)} → ${cwdDisplay}`);
+    }
+    console.log();
+  }
+  
+  if (totalServers === 0) {
+    console.log(chalk.yellow('No MCP servers configured.\n'));
+    console.log(chalk.gray('Run `paradigm mcp setup` to configure MCP for your AI clients.\n'));
+  } else {
+    console.log(chalk.gray(`Total: ${totalServers} server(s) across ${allClientServers.filter(cs => cs.servers.length > 0).length} client(s)\n`));
+  }
+  
+  // JSON output
+  if (options.json) {
+    const output = allClientServers.map(cs => ({
+      client: cs.client.id,
+      name: cs.client.name,
+      configType: cs.client.configType,
+      configPath: cs.client.configPath,
+      servers: cs.servers,
+    }));
+    console.log(JSON.stringify(output, null, 2));
+  }
+}
+
+// Remove options
+interface RemoveOptions {
+  client?: string;
+  force?: boolean;
+  json?: boolean;
+}
+
+// Remove a server from MCP configuration
+export async function mcpRemoveCommand(serverName: string | undefined, options: RemoveOptions) {
+  const spinner = ora();
+  const projectPath = process.cwd();
+  const projectName = getProjectName();
+  const defaultServerName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  
+  // If no server name provided, use current project name
+  const targetServerName = serverName || defaultServerName;
+  
+  console.log(chalk.blue('\n🔌 Paradigm MCP Remove\n'));
+  
+  const clients = detectAllClients();
+  let clientsToCheck: AIClient[] = [];
+  
+  // Determine which clients to check
+  if (options.client) {
+    if (options.client === 'all') {
+      clientsToCheck = clients;
+    } else {
+      const client = clients.find(c => c.id === options.client);
+      if (!client) {
+        console.log(chalk.red(`Unknown client: ${options.client}`));
+        console.log(chalk.gray(`Available: ${clients.map(c => c.id).join(', ')}\n`));
+        return;
+      }
+      clientsToCheck = [client];
+    }
+  } else {
+    // Check all clients
+    clientsToCheck = clients;
+  }
+  
+  let removed = 0;
+  let notFound = 0;
+  const results: Array<{ client: string; removed: boolean; serverName: string }> = [];
+  
+  for (const client of clientsToCheck) {
+    if (!fs.existsSync(client.configPath)) {
+      continue;
+    }
+    
+    spinner.start(`Checking ${client.name}...`);
+    
+    try {
+      const content = fs.readFileSync(client.configPath, 'utf8');
+      const config = JSON.parse(content);
+      let modified = false;
+      
+      if (client.id === 'continue') {
+        // Continue format - remove by cwd match
+        const servers = config?.experimental?.modelContextProtocolServers || [];
+        const originalLength = servers.length;
+        const filtered = servers.filter((server: any) => {
+          const serverCwd = server?.transport?.cwd || '';
+          // Match by cwd (project path) since Continue doesn't have named servers
+          return serverCwd !== projectPath;
+        });
+        
+        if (filtered.length < originalLength) {
+          config.experimental.modelContextProtocolServers = filtered;
+          modified = true;
+          removed++;
+          results.push({ client: client.id, removed: true, serverName: 'server (by path)' });
+        } else {
+          notFound++;
+          results.push({ client: client.id, removed: false, serverName: targetServerName });
+        }
+      } else {
+        // Standard MCP format - remove by name
+        const servers = config?.mcpServers || {};
+        
+        if (servers[targetServerName]) {
+          delete servers[targetServerName];
+          config.mcpServers = servers;
+          modified = true;
+          removed++;
+          results.push({ client: client.id, removed: true, serverName: targetServerName });
+        } else {
+          // Also try matching by cwd
+          let foundByPath = false;
+          for (const [name, server] of Object.entries(servers)) {
+            if ((server as any)?.cwd === projectPath) {
+              delete servers[name];
+              config.mcpServers = servers;
+              modified = true;
+              removed++;
+              foundByPath = true;
+              results.push({ client: client.id, removed: true, serverName: name });
+              break;
+            }
+          }
+          
+          if (!foundByPath) {
+            notFound++;
+            results.push({ client: client.id, removed: false, serverName: targetServerName });
+          }
+        }
+      }
+      
+      if (modified) {
+        fs.writeFileSync(client.configPath, JSON.stringify(config, null, 2) + '\n');
+        spinner.succeed(`Removed from ${client.name}`);
+      } else {
+        spinner.info(`${client.name}: Server "${targetServerName}" not found`);
+      }
+    } catch (err) {
+      spinner.fail(`Error reading ${client.name} config`);
+    }
+  }
+  
+  // Summary
+  console.log();
+  if (removed > 0) {
+    console.log(chalk.green(`✓ Removed from ${removed} client(s)\n`));
+    console.log(chalk.gray('Remember to restart your AI client(s) for changes to take effect.\n'));
+  } else {
+    console.log(chalk.yellow(`Server "${targetServerName}" not found in any client config.\n`));
+    console.log(chalk.gray('Use `paradigm mcp list` to see all configured servers.\n'));
+  }
+  
+  // JSON output
+  if (options.json) {
+    console.log(JSON.stringify({
+      targetServer: targetServerName,
+      projectPath,
+      results,
+    }, null, 2));
+  }
+}

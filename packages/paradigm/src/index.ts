@@ -481,6 +481,28 @@ mcpCmd
     await mcpStatusCommand(options);
   });
 
+mcpCmd
+  .command('list')
+  .alias('ls')
+  .description('List all configured MCP servers across all clients')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpListCommand } = await import('./commands/mcp/setup.js');
+    await mcpListCommand(options);
+  });
+
+mcpCmd
+  .command('remove [server]')
+  .alias('rm')
+  .description('Remove MCP server from client configs')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, continue, cline, all')
+  .option('-f, --force', 'Skip confirmation')
+  .option('--json', 'Output as JSON')
+  .action(async (server, options) => {
+    const { mcpRemoveCommand } = await import('./commands/mcp/setup.js');
+    await mcpRemoveCommand(server, options);
+  });
+
 // Default mcp action (show status)
 mcpCmd
   .action(async () => {
