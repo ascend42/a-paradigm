@@ -7,7 +7,21 @@ var PurposeItemSchema = z.object({
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
-  aspects: z.record(z.unknown()).optional()
+  aspects: z.record(z.unknown()).optional(),
+  // Symbol reference arrays
+  flows: z.array(z.string()).optional(),
+  gates: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional(),
+  states: z.array(z.string()).optional(),
+  components: z.array(z.string()).optional()
+});
+var PurposeItemArraySchema = PurposeItemSchema.extend({
+  id: z.string()
+});
+var SignalDefinitionSchema = z.object({
+  description: z.string().optional(),
+  category: z.string().optional(),
+  data: z.record(z.unknown()).optional()
 });
 var RelationshipSchema = z.object({
   from: z.string(),
@@ -54,10 +68,18 @@ var PurposeFileSchema = z.object({
   apiSpec: z.string().optional(),
   context: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
-  features: z.record(PurposeItemSchema).optional(),
-  components: z.record(PurposeItemSchema).optional(),
+  // Support both array format [{ id, description }] and record format { id: { description } }
+  features: z.union([
+    z.array(PurposeItemArraySchema),
+    z.record(PurposeItemSchema)
+  ]).optional(),
+  components: z.union([
+    z.array(PurposeItemArraySchema),
+    z.record(PurposeItemSchema)
+  ]).optional(),
   gates: z.record(GateDefinitionSchema).optional(),
   states: z.record(StateDefinitionSchema).optional(),
+  signals: z.record(SignalDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
   // Support both array format and record format for flows
   flows: z.union([
@@ -190,6 +212,14 @@ function getDefaultPurposeContent() {
 import * as fs2 from "fs";
 import * as path from "path";
 import { glob } from "glob";
+function normalizeItemsToEntries(items) {
+  if (!items) return [];
+  if (Array.isArray(items)) {
+    return items.map((item) => [item.id, item]);
+  } else {
+    return Object.entries(items);
+  }
+}
 function aggregatePurposes(parsedFiles) {
   const basePurpose = {
     description: "",
@@ -221,8 +251,14 @@ function aggregatePurposes(parsedFiles) {
         basePurpose.rules[key] = value;
       }
     }
-    basePurpose.features = { ...basePurpose.features, ...data.features || {} };
-    basePurpose.components = { ...basePurpose.components, ...data.components || {} };
+    const featureEntries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of featureEntries) {
+      basePurpose.features[id] = item;
+    }
+    const componentEntries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of componentEntries) {
+      basePurpose.components[id] = item;
+    }
   });
   const lastFile = parsedFiles[parsedFiles.length - 1];
   basePurpose.description = lastFile.data.description || basePurpose.description;
@@ -281,10 +317,9 @@ async function getAllPurposeFiles(rootDir) {
 function extractFeatures(parsedFiles) {
   const features = /* @__PURE__ */ new Map();
   for (const { filePath, data } of parsedFiles) {
-    if (data.features) {
-      for (const [id, item] of Object.entries(data.features)) {
-        features.set(id, { item, filePath });
-      }
+    const entries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of entries) {
+      features.set(id, { item, filePath });
     }
   }
   return features;
@@ -292,10 +327,9 @@ function extractFeatures(parsedFiles) {
 function extractComponents(parsedFiles) {
   const components = /* @__PURE__ */ new Map();
   for (const { filePath, data } of parsedFiles) {
-    if (data.components) {
-      for (const [id, item] of Object.entries(data.components)) {
-        components.set(id, { item, filePath });
-      }
+    const entries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of entries) {
+      components.set(id, { item, filePath });
     }
   }
   return components;
@@ -356,25 +390,150 @@ function extractFlows(parsedFiles) {
   }
   return flows;
 }
+function extractSignals(parsedFiles) {
+  const signals = /* @__PURE__ */ new Map();
+  for (const { filePath, data } of parsedFiles) {
+    if (data.signals) {
+      for (const [id, item] of Object.entries(data.signals)) {
+        signals.set(id, { item, filePath });
+      }
+    }
+  }
+  return signals;
+}
+function extractSymbolReferences(parsedFiles) {
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const { filePath, data } of parsedFiles) {
+    const featureEntries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of featureEntries) {
+      extractRefsFromItem(`@${id}`, item, filePath, refs, seen);
+    }
+    const componentEntries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of componentEntries) {
+      extractRefsFromItem(`#${id}`, item, filePath, refs, seen);
+    }
+  }
+  return refs;
+}
+function extractRefsFromItem(sourceSymbol, item, filePath, refs, seen) {
+  if (item.flows) {
+    for (const flow of item.flows) {
+      const symbol = flow.startsWith("$") ? flow : `$${flow}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "flow", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.gates) {
+    for (const gate of item.gates) {
+      const symbol = gate.startsWith("^") ? gate : `^${gate}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "gate", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.signals) {
+    for (const signal of item.signals) {
+      const symbol = signal.startsWith("!") ? signal : `!${signal}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "signal", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.states) {
+    for (const state of item.states) {
+      const symbol = state.startsWith("%") ? state : `%${state}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "state", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.components) {
+    for (const comp of item.components) {
+      const symbol = comp.startsWith("#") ? comp : `#${comp}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "component", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.description) {
+    const descRefs = extractSymbolsFromText(item.description);
+    for (const { symbol, type } of descRefs) {
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type, sourceSymbol, filePath });
+      }
+    }
+  }
+}
+function extractSymbolsFromText(text) {
+  const results = [];
+  const pattern = /([$^!%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const prefix = match[1];
+    const id = match[2];
+    const symbol = `${prefix}${id}`;
+    let type;
+    switch (prefix) {
+      case "$":
+        type = "flow";
+        break;
+      case "^":
+        type = "gate";
+        break;
+      case "!":
+        type = "signal";
+        break;
+      case "%":
+        type = "state";
+        break;
+      default:
+        continue;
+    }
+    results.push({ symbol, type });
+  }
+  return results;
+}
 
 // src/validator.ts
+function normalizeToEntries(items) {
+  if (!items) return [];
+  if (Array.isArray(items)) {
+    return items.map((item) => [item.id, item]);
+  } else {
+    return Object.entries(items);
+  }
+}
+function getItemIds(items) {
+  if (!items) return [];
+  if (Array.isArray(items)) {
+    return items.map((item) => item.id);
+  } else {
+    return Object.keys(items);
+  }
+}
 function validatePurposeFile(data, filePath) {
   const issues = [];
   const prefix = filePath ? `${filePath}: ` : "";
-  if (data.features) {
-    for (const [id, feature] of Object.entries(data.features)) {
-      validatePurposeItem(id, feature, "feature", prefix, issues);
-    }
+  const featureEntries = normalizeToEntries(data.features);
+  for (const [id, feature] of featureEntries) {
+    validatePurposeItem(id, feature, "feature", prefix, issues);
   }
-  if (data.components) {
-    for (const [id, component] of Object.entries(data.components)) {
-      validatePurposeItem(id, component, "component", prefix, issues);
-    }
+  const componentEntries = normalizeToEntries(data.components);
+  for (const [id, component] of componentEntries) {
+    validatePurposeItem(id, component, "component", prefix, issues);
   }
   if (data.relationships) {
     const allIds = /* @__PURE__ */ new Set([
-      ...Object.keys(data.features || {}),
-      ...Object.keys(data.components || {})
+      ...getItemIds(data.features),
+      ...getItemIds(data.components)
     ]);
     for (const rel of data.relationships) {
       const fromId = rel.from.replace(/^[@#$%~^!?]/, "");
@@ -396,7 +555,7 @@ function validatePurposeFile(data, filePath) {
     }
   }
   if (data.flows) {
-    const componentIds = new Set(Object.keys(data.components || {}));
+    const componentIds = new Set(getItemIds(data.components));
     if (Array.isArray(data.flows)) {
       for (const flow of data.flows) {
         if (!flow.name) {
@@ -505,7 +664,9 @@ export {
   extractFeatures,
   extractFlows,
   extractGates,
+  extractSignals,
   extractStates,
+  extractSymbolReferences,
   findPurposeFiles,
   formatValidationResult,
   getAllPurposeFiles,

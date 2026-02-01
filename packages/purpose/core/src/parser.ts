@@ -11,12 +11,31 @@ import type { PurposeFile, ParseResult, ParseError } from './types.js';
 // Zod Schema for Validation
 // ============================================
 
+// Base schema for purpose items (features/components)
 const PurposeItemSchema = z.object({
   description: z.string(),
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
   aspects: z.record(z.unknown()).optional(),
+  // Symbol reference arrays
+  flows: z.array(z.string()).optional(),
+  gates: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional(),
+  states: z.array(z.string()).optional(),
+  components: z.array(z.string()).optional(),
+});
+
+// Array format: [{ id, description, ... }]
+const PurposeItemArraySchema = PurposeItemSchema.extend({
+  id: z.string(),
+});
+
+// Signals defined in .purpose files
+const SignalDefinitionSchema = z.object({
+  description: z.string().optional(),
+  category: z.string().optional(),
+  data: z.record(z.unknown()).optional(),
 });
 
 const RelationshipSchema = z.object({
@@ -75,10 +94,18 @@ const PurposeFileSchema = z.object({
   apiSpec: z.string().optional(),
   context: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
-  features: z.record(PurposeItemSchema).optional(),
-  components: z.record(PurposeItemSchema).optional(),
+  // Support both array format [{ id, description }] and record format { id: { description } }
+  features: z.union([
+    z.array(PurposeItemArraySchema),
+    z.record(PurposeItemSchema),
+  ]).optional(),
+  components: z.union([
+    z.array(PurposeItemArraySchema),
+    z.record(PurposeItemSchema),
+  ]).optional(),
   gates: z.record(GateDefinitionSchema).optional(),
   states: z.record(StateDefinitionSchema).optional(),
+  signals: z.record(SignalDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
   // Support both array format and record format for flows
   flows: z.union([

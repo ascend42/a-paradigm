@@ -10,6 +10,8 @@ import {
   extractGates,
   extractStates,
   extractFlows,
+  extractSignals,
+  extractSymbolReferences,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import { parseSymbol } from './symbol-index.js';
@@ -110,6 +112,41 @@ export async function aggregateFromDream(
             data: item,
             description: item.description,
           }));
+        }
+
+        // Extract signals from purpose files
+        const signals = extractSignals(parsed);
+        for (const [id, { item, filePath }] of signals) {
+          symbols.push(createSymbolEntry({
+            id: `purpose-signal-${id}`,
+            symbol: `!${id}`,
+            type: 'signal',
+            source: 'purpose',
+            filePath,
+            data: item,
+            description: item.description,
+          }));
+        }
+
+        // Extract symbol references from feature/component data
+        // (flows: [$checkout], gates: [^auth], etc.)
+        const symbolRefs = extractSymbolReferences(parsed);
+        const existingSymbols = new Set(symbols.map(s => s.symbol));
+        
+        for (const ref of symbolRefs) {
+          // Only add if not already in the index
+          if (!existingSymbols.has(ref.symbol)) {
+            existingSymbols.add(ref.symbol);
+            symbols.push(createSymbolEntry({
+              id: `purpose-ref-${ref.type}-${ref.symbol.slice(1)}`,
+              symbol: ref.symbol,
+              type: ref.type,
+              source: 'purpose',
+              filePath: ref.filePath,
+              data: { referencedFrom: ref.sourceSymbol },
+              description: `Referenced from ${ref.sourceSymbol}`,
+            }));
+          }
         }
       } catch (e: unknown) {
         errors.push({
