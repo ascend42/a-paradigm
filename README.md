@@ -25,9 +25,11 @@ Three pillars, one ecosystem:
 | **Portal** | Architect | Define who can access what, under what conditions |
 | **Premise** | Thinker | Aggregate everything into a queryable knowledge graph |
 
-## Quick Start
+## Installation
 
-### Install from GitHub
+### Recommended: Install the CLI
+
+Installing globally gives you the full Paradigm experience with both the `paradigm` CLI and `paradigm-mcp` server:
 
 ```bash
 # Using npm
@@ -35,23 +37,41 @@ npm install -g github:ascend42/a-horizon
 
 # Using bun (faster)
 bun add -g github:ascend42/a-horizon
+```
 
-# Or run directly without installing
+**What you get:**
+- `paradigm` — Full CLI with all commands
+- `paradigm-mcp` — MCP server for AI integrations (Cursor, Claude, etc.)
+- Faster execution (no download on each run)
+- Tab completion support
+
+### Alternative: Quick Try (No Install)
+
+Want to try it first? Run directly without installing:
+
+```bash
 npx github:ascend42/a-horizon init
 bunx github:ascend42/a-horizon init
 ```
 
-### Initialize Your Project
+> **Note:** This downloads on each run. For regular use, install the CLI globally.
+
+---
+
+## Quick Start
 
 ```bash
-# Initialize (detects existing IDE files, offers migration)
+# 1. Initialize (detects existing IDE files, offers migration)
 paradigm init
 
-# Generate AI context beacon
+# 2. Generate AI context beacon
 paradigm beacon
 
-# Check project status
+# 3. Check project status
 paradigm status
+
+# 4. (Optional) Set up MCP for your AI tools
+paradigm mcp setup
 ```
 
 ## What Gets Created
@@ -169,7 +189,9 @@ jq '.stars["@checkout"]' .paradigm/constellation.json
 
 ## MCP Server (AI Integration)
 
-For dynamic, mid-conversation context, Paradigm provides an MCP server that works with Claude Desktop, Cursor, and other MCP-compatible AI tools:
+For dynamic, mid-conversation context, Paradigm provides an MCP server that works with Claude Desktop, Cursor, and other MCP-compatible AI tools.
+
+> **Requires CLI Installation** — The MCP server (`paradigm-mcp`) is included when you install the CLI globally. See [Installation](#installation).
 
 | Resource/Tool | Purpose |
 |---------------|---------|
@@ -180,7 +202,9 @@ For dynamic, mid-conversation context, Paradigm provides an MCP server that work
 | `paradigm_related` | Get connected symbols |
 | `paradigm_status` | Project overview |
 
-### Quick Setup
+### Quick Setup (Recommended)
+
+With the CLI installed, run:
 
 ```bash
 # Auto-configure MCP for your AI client
@@ -192,15 +216,28 @@ paradigm mcp setup --client claude
 paradigm mcp setup --client all
 ```
 
-### Manual Claude Desktop Config
+### Manual Configuration
 
-`~/Library/Application Support/Claude/claude_desktop_config.json`:
+**Cursor** (`.cursor/mcp.json` in your project):
 ```json
 {
   "mcpServers": {
     "paradigm": {
-      "command": "npx",
-      "args": ["github:ascend42/a-horizon", "mcp", "serve"],
+      "command": "paradigm-mcp",
+      "args": ["."],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "paradigm": {
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/your/project"
     }
   }
