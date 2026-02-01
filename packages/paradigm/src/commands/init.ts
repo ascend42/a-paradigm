@@ -1,6 +1,11 @@
 /**
  * paradigm init - Initialize Paradigm in a project
- * Creates .paradigm/ directory with config, specs, docs, and prompts
+ * 
+ * Features:
+ * - Smart detection of existing IDE instruction files
+ * - Migration prompt generation for AI-assisted migration
+ * - Interactive setup flow
+ * - Multiple init modes (fresh, migrate, minimal)
  */
 
 import * as fs from 'fs';
@@ -13,19 +18,342 @@ import { getDefaultGateConfig } from '@a-company/portal-core';
 import { getDefaultDreamContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 
-interface InitOptions {
+// ============================================
+// Types
+// ============================================
+
+export interface InitOptions {
   force?: boolean;
   name?: string;
   ide?: string;
+  migrate?: boolean;
+  quick?: boolean;
+  dryRun?: boolean;
 }
 
-// Get templates directory
+interface DetectedFile {
+  path: string;
+  lines: number;
+  type: 'legacy' | 'modern';
+}
+
+interface DetectedIDE {
+  name: string;
+  displayName: string;
+  legacy?: DetectedFile;
+  modern?: DetectedFile[];
+}
+
+interface DetectionResult {
+  ides: DetectedIDE[];
+  hasExisting: boolean;
+  totalLines: number;
+  projectType?: string;
+}
+
+// ============================================
+// Detection Functions
+// ============================================
+
+/**
+ * Count lines in a file
+ */
+function countLines(filePath: string): number {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content.split('\n').length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Detect project type from package.json or other indicators
+ */
+function detectProjectType(rootDir: string): string | undefined {
+  const packageJsonPath = path.join(rootDir, 'package.json');
+  
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      
+      if (deps['next']) return 'Next.js';
+      if (deps['nuxt']) return 'Nuxt';
+      if (deps['@angular/core']) return 'Angular';
+      if (deps['vue']) return 'Vue';
+      if (deps['svelte']) return 'Svelte';
+      if (deps['express']) return 'Express';
+      if (deps['fastify']) return 'Fastify';
+      if (deps['react'] && !deps['next']) return 'React';
+      if (deps['typescript']) return 'TypeScript';
+      return 'Node.js';
+    } catch {
+      return undefined;
+    }
+  }
+  
+  // Python detection
+  if (fs.existsSync(path.join(rootDir, 'requirements.txt')) ||
+      fs.existsSync(path.join(rootDir, 'pyproject.toml'))) {
+    if (fs.existsSync(path.join(rootDir, 'manage.py'))) return 'Django';
+    if (fs.existsSync(path.join(rootDir, 'app.py'))) return 'Flask';
+    return 'Python';
+  }
+  
+  // Go detection
+  if (fs.existsSync(path.join(rootDir, 'go.mod'))) return 'Go';
+  
+  // Rust detection
+  if (fs.existsSync(path.join(rootDir, 'Cargo.toml'))) return 'Rust';
+  
+  return undefined;
+}
+
+/**
+ * Detect existing IDE instruction files
+ */
+function detectExistingIDEFiles(rootDir: string): DetectionResult {
+  const ides: DetectedIDE[] = [];
+  let totalLines = 0;
+
+  // Cursor detection
+  const cursorIDE: DetectedIDE = { name: 'cursor', displayName: 'Cursor' };
+  const cursorLegacy = path.join(rootDir, '.cursorrules');
+  const cursorModernDir = path.join(rootDir, '.cursor', 'rules');
+  
+  if (fs.existsSync(cursorLegacy)) {
+    const lines = countLines(cursorLegacy);
+    cursorIDE.legacy = { path: '.cursorrules', lines, type: 'legacy' };
+    totalLines += lines;
+  }
+  
+  if (fs.existsSync(cursorModernDir)) {
+    const files = fs.readdirSync(cursorModernDir).filter(f => f.endsWith('.mdc'));
+    if (files.length > 0) {
+      cursorIDE.modern = files.map(f => {
+        const fullPath = path.join(cursorModernDir, f);
+        const lines = countLines(fullPath);
+        totalLines += lines;
+        return { path: `.cursor/rules/${f}`, lines, type: 'modern' as const };
+      });
+    }
+  }
+  
+  if (cursorIDE.legacy || cursorIDE.modern) {
+    ides.push(cursorIDE);
+  }
+
+  // Copilot detection
+  const copilotIDE: DetectedIDE = { name: 'copilot', displayName: 'GitHub Copilot' };
+  const copilotLegacy = path.join(rootDir, '.github', 'copilot-instructions.md');
+  const copilotModernDir = path.join(rootDir, '.github', 'instructions');
+  
+  if (fs.existsSync(copilotLegacy)) {
+    const lines = countLines(copilotLegacy);
+    copilotIDE.legacy = { path: '.github/copilot-instructions.md', lines, type: 'legacy' };
+    totalLines += lines;
+  }
+  
+  if (fs.existsSync(copilotModernDir)) {
+    const files = fs.readdirSync(copilotModernDir).filter(f => f.endsWith('.md'));
+    if (files.length > 0) {
+      copilotIDE.modern = files.map(f => {
+        const fullPath = path.join(copilotModernDir, f);
+        const lines = countLines(fullPath);
+        totalLines += lines;
+        return { path: `.github/instructions/${f}`, lines, type: 'modern' as const };
+      });
+    }
+  }
+  
+  if (copilotIDE.legacy || copilotIDE.modern) {
+    ides.push(copilotIDE);
+  }
+
+  // Windsurf detection
+  const windsurfPath = path.join(rootDir, '.windsurfrules');
+  if (fs.existsSync(windsurfPath)) {
+    const lines = countLines(windsurfPath);
+    ides.push({
+      name: 'windsurf',
+      displayName: 'Windsurf',
+      legacy: { path: '.windsurfrules', lines, type: 'legacy' },
+    });
+    totalLines += lines;
+  }
+
+  // Claude detection
+  const claudePath = path.join(rootDir, 'CLAUDE.md');
+  if (fs.existsSync(claudePath)) {
+    const lines = countLines(claudePath);
+    ides.push({
+      name: 'claude',
+      displayName: 'Claude',
+      legacy: { path: 'CLAUDE.md', lines, type: 'legacy' },
+    });
+    totalLines += lines;
+  }
+
+  // AGENTS.md detection
+  const agentsPath = path.join(rootDir, 'AGENTS.md');
+  if (fs.existsSync(agentsPath)) {
+    const lines = countLines(agentsPath);
+    ides.push({
+      name: 'agents',
+      displayName: 'AGENTS.md',
+      legacy: { path: 'AGENTS.md', lines, type: 'legacy' },
+    });
+    totalLines += lines;
+  }
+
+  return {
+    ides,
+    hasExisting: ides.length > 0,
+    totalLines,
+    projectType: detectProjectType(rootDir),
+  };
+}
+
+// ============================================
+// Migration Prompt Generator
+// ============================================
+
+/**
+ * Generate a migration prompt for AI agents
+ */
+function generateMigrationPrompt(detection: DetectionResult, projectName: string): string {
+  const lines: string[] = [];
+  
+  lines.push('# Migrate IDE Instructions to Paradigm Format');
+  lines.push('');
+  lines.push('## Overview');
+  lines.push('');
+  lines.push(`Migrate existing IDE instruction files for **${projectName}** to Paradigm\'s managed, scoped format.`);
+  lines.push('');
+  
+  // Source files
+  lines.push('## Source Files Found');
+  lines.push('');
+  
+  for (const ide of detection.ides) {
+    if (ide.legacy) {
+      lines.push(`- \`${ide.legacy.path}\` (${ide.legacy.lines} lines) - ${ide.displayName} ${ide.legacy.type} format`);
+    }
+    if (ide.modern) {
+      for (const file of ide.modern) {
+        lines.push(`- \`${file.path}\` (${file.lines} lines) - ${ide.displayName} modern format`);
+      }
+    }
+  }
+  lines.push('');
+  
+  // Target structure for Cursor
+  if (detection.ides.some(i => i.name === 'cursor')) {
+    lines.push('## Cursor Migration → `.cursor/rules/*.mdc`');
+    lines.push('');
+    lines.push('Split the existing `.cursorrules` into scoped `.mdc` files with YAML frontmatter:');
+    lines.push('');
+    lines.push('### File Structure');
+    lines.push('');
+    lines.push('```');
+    lines.push('.cursor/rules/');
+    lines.push('├── project-core.mdc      # Always applies - project overview, architecture');
+    lines.push('├── code-style.mdc        # globs: **/*.{ts,tsx,js,jsx} - naming, formatting');
+    lines.push('├── components.mdc        # globs: **/components/**/* - component patterns');
+    lines.push('├── api-patterns.mdc      # globs: **/api/**/* - API conventions');
+    lines.push('├── testing.mdc           # globs: **/*.test.* - testing guidelines');
+    lines.push('└── custom.mdc            # Any project-specific rules');
+    lines.push('```');
+    lines.push('');
+    lines.push('### Frontmatter Format');
+    lines.push('');
+    lines.push('```yaml');
+    lines.push('---');
+    lines.push('description: Brief description of what these rules cover');
+    lines.push('globs: "**/*.ts"           # File pattern (OR use alwaysApply)');
+    lines.push('alwaysApply: true          # Apply to all files (OR use globs)');
+    lines.push('---');
+    lines.push('```');
+    lines.push('');
+  }
+  
+  // Target structure for Copilot
+  if (detection.ides.some(i => i.name === 'copilot')) {
+    lines.push('## Copilot Migration → `.github/instructions/*.instructions.md`');
+    lines.push('');
+    lines.push('Split into scoped instruction files with `applyTo` frontmatter:');
+    lines.push('');
+    lines.push('### File Structure');
+    lines.push('');
+    lines.push('```');
+    lines.push('.github/');
+    lines.push('├── copilot-instructions.md              # Always applies - core rules');
+    lines.push('└── instructions/');
+    lines.push('    ├── typescript.instructions.md       # applyTo: **/*.ts');
+    lines.push('    ├── react.instructions.md            # applyTo: **/*.tsx');
+    lines.push('    ├── api.instructions.md              # applyTo: **/api/**');
+    lines.push('    └── testing.instructions.md          # applyTo: **/*.test.*');
+    lines.push('```');
+    lines.push('');
+    lines.push('### Frontmatter Format');
+    lines.push('');
+    lines.push('```yaml');
+    lines.push('---');
+    lines.push('applyTo: "**/*.ts"');
+    lines.push('---');
+    lines.push('```');
+    lines.push('');
+  }
+  
+  // Instructions
+  lines.push('## Migration Steps');
+  lines.push('');
+  lines.push('1. **Read each source file** and identify logical sections:');
+  lines.push('   - Project overview / architecture');
+  lines.push('   - Code style / naming conventions');
+  lines.push('   - Language-specific patterns');
+  lines.push('   - Framework-specific rules');
+  lines.push('   - Testing guidelines');
+  lines.push('   - API patterns');
+  lines.push('');
+  lines.push('2. **Create scoped target files** with appropriate frontmatter');
+  lines.push('');
+  lines.push('3. **Backup originals** by renaming to `.bak`:');
+  lines.push('   - `.cursorrules` → `.cursorrules.bak`');
+  lines.push('   - `.github/copilot-instructions.md` → `.github/copilot-instructions.md.bak`');
+  lines.push('');
+  lines.push('4. **Verify** the migration by checking that rules apply correctly');
+  lines.push('');
+  
+  // Tips
+  lines.push('## Tips');
+  lines.push('');
+  lines.push('- **Prefer specific globs** over `alwaysApply` when possible');
+  lines.push('- **Keep files focused** - one concern per file');
+  lines.push('- **Use descriptive names** that indicate the scope');
+  lines.push('- **Paradigm will generate its own rules** - keep custom rules separate');
+  lines.push('- After migration, run `paradigm sync` to add Paradigm-managed rules');
+  lines.push('');
+  
+  // Footer
+  lines.push('---');
+  lines.push('');
+  lines.push('*Generated by `paradigm init --migrate`*');
+  
+  return lines.join('\n');
+}
+
+// ============================================
+// Template Functions
+// ============================================
+
+/**
+ * Get templates directory
+ */
 function getTemplatesDir(): string {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  // In dist, we're at dist/commands/init.js, templates are at templates/paradigm/
-  // But templates should be copied to dist during build or referenced from src
-  // For now, try multiple possible locations
   const possiblePaths = [
     path.join(__dirname, '..', '..', 'templates', 'paradigm'),
     path.join(__dirname, '..', 'templates', 'paradigm'),
@@ -38,12 +366,11 @@ function getTemplatesDir(): string {
     }
   }
   
-  // Fallback: return the expected location
   return path.join(__dirname, '..', 'templates', 'paradigm');
 }
 
 /**
- * Copy directory recursively
+ * Copy directory recursively with template variable replacement
  */
 function copyDir(src: string, dest: string, projectName: string): void {
   if (!fs.existsSync(dest)) {
@@ -60,40 +387,180 @@ function copyDir(src: string, dest: string, projectName: string): void {
       copyDir(srcPath, destPath, projectName);
     } else {
       let content = fs.readFileSync(srcPath, 'utf8');
-      // Replace template variables
       content = content.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
       fs.writeFileSync(destPath, content, 'utf8');
     }
   }
 }
 
+// ============================================
+// Display Functions
+// ============================================
+
+/**
+ * Display detection results
+ */
+function displayDetectionResults(detection: DetectionResult, projectName: string): void {
+  console.log(chalk.blue('\n┌─────────────────────────────────────────────────┐'));
+  console.log(chalk.blue('│') + chalk.white.bold('  Welcome to Paradigm                            ') + chalk.blue('│'));
+  console.log(chalk.blue('│') + chalk.gray('  Let\'s set up your project                      ') + chalk.blue('│'));
+  console.log(chalk.blue('└─────────────────────────────────────────────────┘\n'));
+  
+  // Project info
+  console.log(chalk.white('  📁 Project: ') + chalk.cyan(projectName) + 
+    (detection.projectType ? chalk.gray(` (${detection.projectType} detected)`) : ''));
+  console.log('');
+  
+  // Detection results
+  if (detection.hasExisting) {
+    console.log(chalk.white('  📄 Found existing IDE instructions:\n'));
+    
+    for (const ide of detection.ides) {
+      if (ide.legacy) {
+        console.log(chalk.green('     ✓ ') + chalk.white(ide.legacy.path) + 
+          chalk.gray(` (${ide.legacy.lines} lines)`));
+      }
+      if (ide.modern) {
+        for (const file of ide.modern) {
+          console.log(chalk.green('     ✓ ') + chalk.white(file.path) + 
+            chalk.gray(` (${file.lines} lines)`));
+        }
+      }
+    }
+    console.log('');
+    console.log(chalk.gray(`     Total: ${detection.totalLines} lines of existing instructions`));
+  } else {
+    console.log(chalk.gray('  📄 No existing IDE instructions found'));
+  }
+  
+  console.log('');
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+  console.log('');
+}
+
+/**
+ * Display post-init summary
+ */
+function displaySummary(targetIDE: string, detection: DetectionResult): void {
+  const outputFileMap: Record<string, string> = {
+    cursor: '.cursor/rules/',
+    copilot: '.github/instructions/',
+    windsurf: '.windsurfrules',
+    claude: 'CLAUDE.md',
+  };
+  const outputFile = outputFileMap[targetIDE] || '.cursor/rules/';
+  
+  console.log(chalk.blue('\n✨ Paradigm initialized!\n'));
+  
+  console.log(chalk.white('  Created:'));
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+  console.log(chalk.white('  📁 .paradigm/'));
+  console.log(chalk.gray('     ├── config.yaml      Configuration'));
+  console.log(chalk.gray('     ├── specs/           Logger, scan, symbols'));
+  console.log(chalk.gray('     ├── docs/            Commands, patterns'));
+  console.log(chalk.gray('     └── prompts/         Task templates'));
+  console.log(chalk.white('  📄 .premise             Project overview'));
+  console.log(chalk.white('  📄 .purpose             Feature context'));
+  console.log(chalk.white(`  📄 ${outputFile.padEnd(20)} IDE instructions`));
+  
+  if (detection.hasExisting) {
+    console.log('');
+    console.log(chalk.yellow('  ⚠  Your existing IDE files were preserved.'));
+    console.log(chalk.gray('     Run `paradigm init --migrate` to get a migration prompt.'));
+  }
+  
+  console.log('');
+  console.log(chalk.white('  Next steps:'));
+  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+  console.log(chalk.white('  1. ') + chalk.gray('Review ') + chalk.cyan('.paradigm/config.yaml'));
+  console.log(chalk.white('  2. ') + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
+  console.log(chalk.white('  3. ') + chalk.gray('Run ') + chalk.cyan('paradigm beacon') + chalk.gray(' to generate AI context'));
+  console.log(chalk.white('  4. ') + chalk.gray('Run ') + chalk.cyan('paradigm doctor') + chalk.gray(' to verify setup'));
+  console.log(chalk.white('  5. ') + chalk.gray('Run ') + chalk.cyan('paradigm visualize') + chalk.gray(' to see your project'));
+  console.log('');
+}
+
+// ============================================
+// Main Init Command
+// ============================================
+
 export async function initCommand(options: InitOptions) {
   const cwd = process.cwd();
   const projectName = options.name || path.basename(cwd);
-
-  console.log(chalk.blue('\n🌅 Initializing Paradigm...\n'));
-
   const spinner = ora();
+
+  // Detect existing IDE files
+  const detection = detectExistingIDEFiles(cwd);
+
+  // --migrate flag: just output migration prompt
+  if (options.migrate) {
+    if (!detection.hasExisting) {
+      console.log(chalk.yellow('\n  No existing IDE instruction files found.\n'));
+      console.log(chalk.gray('  Run `paradigm init` to create a fresh setup.\n'));
+      return;
+    }
+    
+    console.log(chalk.blue('\n  Migration Prompt\n'));
+    console.log(chalk.gray('  Copy the following prompt to an AI agent:\n'));
+    console.log(chalk.gray('  ═══════════════════════════════════════════════════\n'));
+    console.log(generateMigrationPrompt(detection, projectName));
+    console.log(chalk.gray('\n  ═══════════════════════════════════════════════════\n'));
+    return;
+  }
+
+  // --dry-run flag: show what would be created
+  if (options.dryRun) {
+    displayDetectionResults(detection, projectName);
+    console.log(chalk.white('  Would create (dry run):'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────'));
+    console.log(chalk.cyan('  📁 .paradigm/'));
+    console.log(chalk.cyan('     ├── config.yaml'));
+    console.log(chalk.cyan('     ├── specs/'));
+    console.log(chalk.cyan('     ├── docs/'));
+    console.log(chalk.cyan('     └── prompts/'));
+    console.log(chalk.cyan('  📄 .premise'));
+    console.log(chalk.cyan('  📄 .purpose'));
+    console.log(chalk.cyan('  📁 .cursor/rules/*.mdc'));
+    console.log('');
+    console.log(chalk.gray('  Run without --dry-run to create these files.\n'));
+    return;
+  }
+
+  // Display detection results (skip for --quick)
+  if (!options.quick) {
+    displayDetectionResults(detection, projectName);
+    
+    // If existing files found, show options
+    if (detection.hasExisting && !options.force) {
+      console.log(chalk.white('  Options:\n'));
+      console.log(chalk.green('  [1]') + chalk.white(' Fresh start ') + chalk.gray('(recommended)'));
+      console.log(chalk.gray('      Create .paradigm/ and generate new IDE rules'));
+      console.log(chalk.gray('      Your existing files will be preserved\n'));
+      console.log(chalk.yellow('  [2]') + chalk.white(' Migrate existing'));
+      console.log(chalk.gray('      Output a prompt for AI to migrate your rules\n'));
+      console.log(chalk.gray('  [3]') + chalk.white(' Minimal setup'));
+      console.log(chalk.gray('      Just create .paradigm/config.yaml\n'));
+      console.log(chalk.gray('  Proceeding with fresh start...\n'));
+      console.log(chalk.gray('  (Use --migrate for option 2, or --force to overwrite)\n'));
+    }
+  }
+
   const templatesDir = getTemplatesDir();
   const paradigmDir = path.join(cwd, '.paradigm');
-  const legacyParadigmFile = path.join(cwd, '.paradigm');
 
   // Check for existing .paradigm
   if (fs.existsSync(paradigmDir)) {
     const stat = fs.statSync(paradigmDir);
     
     if (stat.isFile()) {
-      // Legacy .paradigm file exists
       if (!options.force) {
         console.log(chalk.yellow('  ⚠ Legacy .paradigm file found.'));
-        console.log(chalk.gray('    Run `paradigm upgrade --all` to migrate to new format.'));
-        console.log(chalk.gray('    Or use --force to overwrite.\n'));
+        console.log(chalk.gray('    Run `paradigm upgrade --all` to migrate.\n'));
         return;
       }
-      // Remove legacy file
-      fs.unlinkSync(legacyParadigmFile);
+      fs.unlinkSync(paradigmDir);
     } else if (stat.isDirectory() && !options.force) {
-      console.log(chalk.yellow('  ⚠ .paradigm/ directory already exists (use --force to overwrite)'));
+      console.log(chalk.yellow('  ⚠ .paradigm/ already exists (use --force to overwrite)\n'));
       return;
     }
   }
@@ -102,27 +569,82 @@ export async function initCommand(options: InitOptions) {
   spinner.start('Creating .paradigm/ directory...');
   
   try {
-    // Create main directory
     if (!fs.existsSync(paradigmDir)) {
       fs.mkdirSync(paradigmDir, { recursive: true });
     }
     
-    // Check if templates exist
     if (fs.existsSync(templatesDir)) {
-      // Copy from templates
       copyDir(templatesDir, paradigmDir, projectName);
-      spinner.succeed(chalk.green('.paradigm/ directory created with specs, docs, and prompts'));
+      spinner.succeed(chalk.green('.paradigm/ created'));
     } else {
-      // Create minimal structure manually
       spinner.warn(chalk.yellow('Templates not found, creating minimal structure'));
-      
-      // Create subdirectories
-      fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
-      fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
-      fs.mkdirSync(path.join(paradigmDir, 'prompts'), { recursive: true });
-      
-      // Create minimal config
-      const minimalConfig = `# Paradigm Configuration
+      createMinimalStructure(paradigmDir, projectName);
+    }
+  } catch (error) {
+    spinner.fail(chalk.red(`Failed: ${(error as Error).message}`));
+    return;
+  }
+
+  // Create .premise file
+  const dreamPath = path.join(cwd, '.premise');
+  if (!fs.existsSync(dreamPath) || options.force) {
+    spinner.start('Creating .premise...');
+    fs.writeFileSync(dreamPath, getDefaultDreamContent(projectName));
+    spinner.succeed(chalk.green('.premise created'));
+  }
+
+  // Create root .purpose file
+  const purposePath = path.join(cwd, '.purpose');
+  if (!fs.existsSync(purposePath) || options.force) {
+    spinner.start('Creating .purpose...');
+    fs.writeFileSync(purposePath, getDefaultPurposeContent());
+    spinner.succeed(chalk.green('.purpose created'));
+  }
+
+  // Check for portal.yaml
+  const gatePath = path.join(cwd, 'portal.yaml');
+  if (!fs.existsSync(gatePath)) {
+    console.log(chalk.gray('  ○ No portal.yaml (optional - run `paradigm portal init` to create)'));
+  }
+
+  // Determine target IDE
+  let targetIDE: string;
+  
+  if (options.ide) {
+    const validIDEs = ['cursor', 'copilot', 'windsurf', 'claude'];
+    targetIDE = validIDEs.includes(options.ide.toLowerCase()) ? options.ide.toLowerCase() : 'cursor';
+  } else {
+    spinner.start('Detecting IDE...');
+    const ideDetection = detectIDE(cwd);
+    targetIDE = ideDetection.detected || 'cursor';
+    spinner.succeed(`Using ${chalk.cyan(targetIDE)}`);
+  }
+  
+  // Sync IDE files
+  const files = loadParadigmFiles(cwd);
+  if (files) {
+    spinner.start('Generating IDE instructions...');
+    const result = syncToIDE(cwd, targetIDE, files, true);
+    if (result.success) {
+      spinner.succeed(chalk.green(result.message || 'IDE instructions generated'));
+    } else {
+      spinner.warn(chalk.yellow(result.message));
+    }
+  }
+
+  // Display summary
+  displaySummary(targetIDE, detection);
+}
+
+/**
+ * Create minimal structure when templates aren't available
+ */
+function createMinimalStructure(paradigmDir: string, projectName: string): void {
+  fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
+  fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(paradigmDir, 'prompts'), { recursive: true });
+  
+  const minimalConfig = `# Paradigm Configuration
 version: "1.0"
 project: "${projectName}"
 
@@ -132,38 +654,33 @@ agent-guidelines:
   how-to-use:
     - Check .paradigm/specs/ for philosophy and patterns
     - Use symbol prefixes: @feature #component ^gate !signal %state $flow
-    - Use the Paradigm logger instead of raw console.log/print
+    - Run \`paradigm beacon\` for quick context
+    - Run \`paradigm ripple @symbol\` before making changes
 
 symbol-system:
   "@":
     name: Feature
     description: User-facing capabilities
-    owner: purpose
     examples: ["@login", "@checkout"]
   "#":
     name: Component
     description: Reusable code units
-    owner: purpose
     examples: ["#Button", "#api-client"]
   "^":
-    name: Gate
-    description: Access control points
-    owner: gate
+    name: Portal
+    description: Authorization gates
     examples: ["^authenticated", "^admin-only"]
   "!":
     name: Signal
     description: Events and side effects
-    owner: gate
     examples: ["!login-success", "!payment-failed"]
   "%":
     name: State
     description: Application state
-    owner: purpose
     examples: ["%user.authenticated", "%cart.items"]
   "$":
     name: Flow
     description: Multi-step processes
-    owner: shared
     examples: ["$checkout-flow", "$onboarding"]
 
 logging:
@@ -177,123 +694,6 @@ conventions:
   - Use kebab-case for symbol IDs
   - ALWAYS use Paradigm logger, NEVER raw console.log/print
 `;
-      fs.writeFileSync(path.join(paradigmDir, 'config.yaml'), minimalConfig, 'utf8');
-      spinner.succeed(chalk.green('.paradigm/ directory created (minimal)'));
-    }
-  } catch (error) {
-    spinner.fail(chalk.red(`Failed to create .paradigm/: ${(error as Error).message}`));
-    return;
-  }
-
-  // Create .premise file
-  const dreamPath = path.join(cwd, '.premise');
-  if (fs.existsSync(dreamPath) && !options.force) {
-    console.log(chalk.yellow('  ⚠ .premise file already exists'));
-  } else {
-    spinner.start('Creating .premise file...');
-    fs.writeFileSync(dreamPath, getDefaultDreamContent(projectName));
-    spinner.succeed(chalk.green('.premise file created'));
-  }
-
-  // Create root .purpose file if it doesn't exist
-  const purposePath = path.join(cwd, '.purpose');
-  if (fs.existsSync(purposePath) && !options.force) {
-    console.log(chalk.yellow('  ⚠ .purpose file already exists'));
-  } else {
-    spinner.start('Creating .purpose file...');
-    fs.writeFileSync(purposePath, getDefaultPurposeContent());
-    spinner.succeed(chalk.green('.purpose file created'));
-  }
-
-  // Check for portal.yaml
-  const gatePath = path.join(cwd, 'portal.yaml');
-  if (fs.existsSync(gatePath)) {
-    console.log(chalk.green('  ✓ Detected existing portal.yaml'));
-  } else if (options.force) {
-    spinner.start('Creating portal.yaml...');
-    fs.writeFileSync(gatePath, getDefaultGateConfig());
-    spinner.succeed(chalk.green('portal.yaml created'));
-  } else {
-    console.log(chalk.gray('  ○ No portal.yaml found (optional)'));
-  }
-
-  // Determine target IDE (explicit flag > auto-detect > default to Cursor)
-  let targetIDE: string;
   
-  if (options.ide) {
-    // User explicitly specified IDE
-    const validIDEs = ['cursor', 'copilot', 'windsurf', 'claude'];
-    const ideDescriptions: Record<string, string> = {
-      cursor: 'Cursor IDE (.cursorrules)',
-      copilot: 'GitHub Copilot (.github/copilot-instructions.md)',
-      windsurf: 'Windsurf IDE (.windsurfrules)',
-      claude: 'Claude Code/API/Desktop (CLAUDE.md)',
-    };
-    const ide = options.ide.toLowerCase();
-    if (!validIDEs.includes(ide)) {
-      console.log(chalk.yellow(`\n  ⚠ Unknown IDE "${options.ide}"\n`));
-      console.log(chalk.gray('  Available IDE options:'));
-      for (const [key, desc] of Object.entries(ideDescriptions)) {
-        console.log(chalk.cyan(`    --ide ${key.padEnd(10)} ${chalk.gray(desc)}`));
-      }
-      console.log();
-      console.log(chalk.gray('    Defaulting to Cursor.'));
-      console.log();
-      targetIDE = 'cursor';
-    } else {
-      targetIDE = ide;
-      console.log(chalk.green(`  ✓ Using IDE: ${chalk.cyan(ideDescriptions[ide])}`));
-    }
-  } else {
-    // Auto-detect IDE
-    spinner.start('Detecting IDE...');
-    const detection = detectIDE(cwd);
-    
-    // Default to Cursor if no IDE detected (most common use case)
-    targetIDE = detection.detected || 'cursor';
-    
-    if (detection.detected) {
-      spinner.succeed(`Detected ${chalk.cyan(detection.detected)}`);
-    } else {
-      spinner.succeed(`No IDE detected, defaulting to ${chalk.cyan('Cursor')}`);
-    }
-  }
-  
-  // Load the newly created paradigm files and sync
-  const files = loadParadigmFiles(cwd);
-  if (files) {
-    spinner.start(`Generating IDE instructions...`);
-    const result = syncToIDE(cwd, targetIDE, files, true);
-    if (result.success) {
-      spinner.succeed(chalk.green(`${result.outputPath} generated`));
-    } else {
-      spinner.warn(chalk.yellow(`Could not generate IDE file: ${result.message}`));
-    }
-  }
-
-  // Summary
-  console.log(chalk.blue('\n✨ Paradigm initialized!\n'));
-  console.log(chalk.gray('Created:'));
-  console.log(chalk.white('  • .paradigm/           - Configuration & specifications'));
-  console.log(chalk.white('    ├── config.yaml     - Main configuration'));
-  console.log(chalk.white('    ├── specs/          - Logger, scan, symbols specs'));
-  console.log(chalk.white('    ├── docs/           - Commands, patterns, troubleshooting'));
-  console.log(chalk.white('    └── prompts/        - Pre-written task prompts'));
-  console.log(chalk.white('  • .premise              - Project overview & ideas'));
-  console.log(chalk.white('  • .purpose            - Feature & component context'));
-  const outputFileMap: Record<string, string> = {
-    cursor: '.cursorrules',
-    copilot: '.github/copilot-instructions.md',
-    windsurf: '.windsurfrules',
-    claude: 'CLAUDE.md',
-  };
-  const outputFile = outputFileMap[targetIDE] || '.cursorrules';
-  console.log(chalk.white(`  • ${outputFile.padEnd(25)} - IDE instructions`));
-  console.log('');
-  console.log(chalk.gray('Next steps:'));
-  console.log(chalk.white('  1. Review ' + chalk.cyan('.paradigm/config.yaml') + ' and customize'));
-  console.log(chalk.white('  2. Check ' + chalk.cyan('.paradigm/specs/') + ' for logging & scan specs'));
-  console.log(chalk.white('  3. Edit ' + chalk.cyan('.purpose') + ' to define your project context'));
-  console.log(chalk.white('  4. Run ' + chalk.cyan('paradigm sync') + ' after config changes'));
-  console.log(chalk.white('  5. Run ' + chalk.cyan('paradigm doctor') + ' to verify setup\n'));
+  fs.writeFileSync(path.join(paradigmDir, 'config.yaml'), minimalConfig, 'utf8');
 }

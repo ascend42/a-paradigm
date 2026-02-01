@@ -30,8 +30,11 @@ program
   .command('init')
   .description('Initialize Paradigm in the current project')
   .option('-f, --force', 'Overwrite existing files')
-  .option('--name <name>', 'Project name for .premise file')
-  .option('--ide <ide>', 'Target IDE: cursor (.cursorrules), copilot (.github/copilot-instructions.md), windsurf (.windsurfrules), claude (CLAUDE.md)')
+  .option('--name <name>', 'Project name')
+  .option('--ide <ide>', 'Target IDE: cursor, copilot, windsurf, claude')
+  .option('--migrate', 'Output migration prompt for existing IDE files')
+  .option('--quick', 'Non-interactive mode with smart defaults')
+  .option('--dry-run', 'Show what would be created without creating')
   .action(initCommand);
 
 // paradigm setup
