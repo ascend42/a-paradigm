@@ -35,6 +35,9 @@ const PurposeItemArraySchema = PurposeItemSchema.extend({
 const SignalDefinitionSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
+  severity: z.enum(['info', 'warn', 'error']).optional(),
+  emitters: z.array(z.string()).optional(),
+  related: z.array(z.string()).optional(),
   data: z.record(z.unknown()).optional(),
 });
 

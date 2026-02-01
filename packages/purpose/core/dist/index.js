@@ -21,6 +21,9 @@ var PurposeItemArraySchema = PurposeItemSchema.extend({
 var SignalDefinitionSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
+  severity: z.enum(["info", "warn", "error"]).optional(),
+  emitters: z.array(z.string()).optional(),
+  related: z.array(z.string()).optional(),
   data: z.record(z.unknown()).optional()
 });
 var RelationshipSchema = z.object({
