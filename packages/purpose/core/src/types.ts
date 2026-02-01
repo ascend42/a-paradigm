@@ -65,6 +65,15 @@ export interface StateDefinition {
 }
 
 /**
+ * A signal defined in a purpose file
+ */
+export interface SignalDefinition {
+  description?: string;
+  category?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
  * A reference to an external resource
  */
 export interface Reference {
@@ -87,6 +96,24 @@ export interface PurposeItem {
   rules?: Record<string, unknown>;
   /** Cross-cutting concerns and metadata */
   aspects?: Record<string, unknown>;
+  /** Flow references ($flow-name) */
+  flows?: string[];
+  /** Gate references (^gate-name) */
+  gates?: string[];
+  /** Signal references (!signal-name) */
+  signals?: string[];
+  /** State references (%state.name) */
+  states?: string[];
+  /** Component references (#component-name) */
+  components?: string[];
+}
+
+/**
+ * An item defined in array format (alternative to record format)
+ */
+export interface PurposeItemArray extends PurposeItem {
+  /** Unique identifier for this item */
+  id: string;
 }
 
 /**
@@ -103,14 +130,16 @@ export interface PurposeFile {
   context?: string[];
   /** Rules that apply to this scope */
   rules?: Record<string, unknown>;
-  /** Features defined in this scope */
-  features?: Record<string, PurposeItem>;
-  /** Components defined in this scope */
-  components?: Record<string, PurposeItem>;
+  /** Features defined in this scope (record or array format) */
+  features?: Record<string, PurposeItem> | PurposeItemArray[];
+  /** Components defined in this scope (record or array format) */
+  components?: Record<string, PurposeItem> | PurposeItemArray[];
   /** Gates (authorization points) defined in this scope */
   gates?: Record<string, GateDefinition>;
   /** States defined in this scope */
   states?: Record<string, StateDefinition>;
+  /** Signals defined in this scope */
+  signals?: Record<string, SignalDefinition>;
   /** Relationships between symbols */
   relationships?: Relationship[];
   /** Flows defined in this scope (array format with steps) */

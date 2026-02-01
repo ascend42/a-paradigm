@@ -54,6 +54,14 @@ interface StateDefinition {
     type?: string;
 }
 /**
+ * A signal defined in a purpose file
+ */
+interface SignalDefinition {
+    description?: string;
+    category?: string;
+    data?: Record<string, unknown>;
+}
+/**
  * A reference to an external resource
  */
 interface Reference {
@@ -75,6 +83,23 @@ interface PurposeItem {
     rules?: Record<string, unknown>;
     /** Cross-cutting concerns and metadata */
     aspects?: Record<string, unknown>;
+    /** Flow references ($flow-name) */
+    flows?: string[];
+    /** Gate references (^gate-name) */
+    gates?: string[];
+    /** Signal references (!signal-name) */
+    signals?: string[];
+    /** State references (%state.name) */
+    states?: string[];
+    /** Component references (#component-name) */
+    components?: string[];
+}
+/**
+ * An item defined in array format (alternative to record format)
+ */
+interface PurposeItemArray extends PurposeItem {
+    /** Unique identifier for this item */
+    id: string;
 }
 /**
  * The structure of a .purpose file
@@ -90,14 +115,16 @@ interface PurposeFile {
     context?: string[];
     /** Rules that apply to this scope */
     rules?: Record<string, unknown>;
-    /** Features defined in this scope */
-    features?: Record<string, PurposeItem>;
-    /** Components defined in this scope */
-    components?: Record<string, PurposeItem>;
+    /** Features defined in this scope (record or array format) */
+    features?: Record<string, PurposeItem> | PurposeItemArray[];
+    /** Components defined in this scope (record or array format) */
+    components?: Record<string, PurposeItem> | PurposeItemArray[];
     /** Gates (authorization points) defined in this scope */
     gates?: Record<string, GateDefinition>;
     /** States defined in this scope */
     states?: Record<string, StateDefinition>;
+    /** Signals defined in this scope */
+    signals?: Record<string, SignalDefinition>;
     /** Relationships between symbols */
     relationships?: Relationship[];
     /** Flows defined in this scope (array format with steps) */
@@ -280,6 +307,27 @@ declare function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, {
     item: ExtractedFlow;
     filePath: string;
 }>;
+/**
+ * Extract all signals from parsed purpose files
+ */
+declare function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, {
+    item: SignalDefinition;
+    filePath: string;
+}>;
+/**
+ * Extracted symbol reference from feature/component data
+ */
+interface ExtractedSymbolRef {
+    symbol: string;
+    type: 'flow' | 'gate' | 'signal' | 'state' | 'component';
+    sourceSymbol: string;
+    filePath: string;
+}
+/**
+ * Extract symbol references ($, ^, !, %) from feature/component data
+ * This captures references like flows: [$checkout-flow], gates: [^authenticated]
+ */
+declare function extractSymbolReferences(parsedFiles: ParsedPurposeFile[]): ExtractedSymbolRef[];
 
 /**
  * Validator for Purpose files
@@ -294,4 +342,4 @@ declare function validatePurposeFile(data: PurposeFile, filePath?: string): Vali
  */
 declare function formatValidationResult(result: ValidationResult): string;
 
-export { type AggregatedPurpose, type ExtractedFlow, type FlowDefinition, type FlowStep, type FlowWithSteps, type GateDefinition, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type Reference, type Relationship, type StateDefinition, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractComponents, extractFeatures, extractFlows, extractGates, extractStates, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validatePurposeFile };
+export { type AggregatedPurpose, type ExtractedFlow, type ExtractedSymbolRef, type FlowDefinition, type FlowStep, type FlowWithSteps, type GateDefinition, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type PurposeItemArray, type Reference, type Relationship, type SignalDefinition, type StateDefinition, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractComponents, extractFeatures, extractFlows, extractGates, extractSignals, extractStates, extractSymbolReferences, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validatePurposeFile };

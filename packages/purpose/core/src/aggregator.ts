@@ -9,11 +9,30 @@ import type {
   AggregatedPurpose, 
   PurposeFile, 
   PurposeItem, 
+  PurposeItemArray,
   GateDefinition, 
   StateDefinition, 
+  SignalDefinition,
   FlowDefinition,
   FlowWithSteps,
 } from './types.js';
+
+/**
+ * Helper to normalize features/components to entries regardless of format
+ */
+function normalizeItemsToEntries(
+  items: Record<string, PurposeItem> | PurposeItemArray[] | undefined
+): Array<[string, PurposeItem]> {
+  if (!items) return [];
+  
+  if (Array.isArray(items)) {
+    // Array format: [{ id, description, ... }]
+    return items.map((item) => [item.id, item]);
+  } else {
+    // Record format: { id: { description, ... } }
+    return Object.entries(items);
+  }
+}
 import { parsePurposeFile } from './parser.js';
 
 /**
@@ -65,9 +84,16 @@ export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedP
       }
     }
 
-    // Merge features and components
-    basePurpose.features = { ...basePurpose.features, ...(data.features || {}) };
-    basePurpose.components = { ...basePurpose.components, ...(data.components || {}) };
+    // Merge features and components (normalize to record format)
+    const featureEntries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of featureEntries) {
+      basePurpose.features[id] = item;
+    }
+    
+    const componentEntries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of componentEntries) {
+      basePurpose.components[id] = item;
+    }
   });
 
   // The last file in the list is the most specific one
@@ -161,10 +187,10 @@ export function extractFeatures(parsedFiles: ParsedPurposeFile[]): Map<string, {
   const features = new Map<string, { item: PurposeItem; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
-    if (data.features) {
-      for (const [id, item] of Object.entries(data.features)) {
-        features.set(id, { item, filePath });
-      }
+    // Handle both array and record formats
+    const entries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of entries) {
+      features.set(id, { item, filePath });
     }
   }
 
@@ -178,10 +204,10 @@ export function extractComponents(parsedFiles: ParsedPurposeFile[]): Map<string,
   const components = new Map<string, { item: PurposeItem; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
-    if (data.components) {
-      for (const [id, item] of Object.entries(data.components)) {
-        components.set(id, { item, filePath });
-      }
+    // Handle both array and record formats
+    const entries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of entries) {
+      components.set(id, { item, filePath });
     }
   }
 
@@ -275,4 +301,159 @@ export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { it
   }
 
   return flows;
+}
+
+/**
+ * Extract all signals from parsed purpose files
+ */
+export function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, { item: SignalDefinition; filePath: string }> {
+  const signals = new Map<string, { item: SignalDefinition; filePath: string }>();
+
+  for (const { filePath, data } of parsedFiles) {
+    if (data.signals) {
+      for (const [id, item] of Object.entries(data.signals)) {
+        signals.set(id, { item, filePath });
+      }
+    }
+  }
+
+  return signals;
+}
+
+/**
+ * Extracted symbol reference from feature/component data
+ */
+export interface ExtractedSymbolRef {
+  symbol: string;
+  type: 'flow' | 'gate' | 'signal' | 'state' | 'component';
+  sourceSymbol: string;
+  filePath: string;
+}
+
+/**
+ * Extract symbol references ($, ^, !, %) from feature/component data
+ * This captures references like flows: [$checkout-flow], gates: [^authenticated]
+ */
+export function extractSymbolReferences(parsedFiles: ParsedPurposeFile[]): ExtractedSymbolRef[] {
+  const refs: ExtractedSymbolRef[] = [];
+  const seen = new Set<string>();
+
+  for (const { filePath, data } of parsedFiles) {
+    // Process features
+    const featureEntries = normalizeItemsToEntries(data.features);
+    for (const [id, item] of featureEntries) {
+      extractRefsFromItem(`@${id}`, item, filePath, refs, seen);
+    }
+
+    // Process components
+    const componentEntries = normalizeItemsToEntries(data.components);
+    for (const [id, item] of componentEntries) {
+      extractRefsFromItem(`#${id}`, item, filePath, refs, seen);
+    }
+  }
+
+  return refs;
+}
+
+/**
+ * Extract symbol references from a single item
+ */
+function extractRefsFromItem(
+  sourceSymbol: string,
+  item: PurposeItem,
+  filePath: string,
+  refs: ExtractedSymbolRef[],
+  seen: Set<string>
+): void {
+  // Extract from explicit arrays
+  if (item.flows) {
+    for (const flow of item.flows) {
+      const symbol = flow.startsWith('$') ? flow : `$${flow}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'flow', sourceSymbol, filePath });
+      }
+    }
+  }
+
+  if (item.gates) {
+    for (const gate of item.gates) {
+      const symbol = gate.startsWith('^') ? gate : `^${gate}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'gate', sourceSymbol, filePath });
+      }
+    }
+  }
+
+  if (item.signals) {
+    for (const signal of item.signals) {
+      const symbol = signal.startsWith('!') ? signal : `!${signal}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'signal', sourceSymbol, filePath });
+      }
+    }
+  }
+
+  if (item.states) {
+    for (const state of item.states) {
+      const symbol = state.startsWith('%') ? state : `%${state}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'state', sourceSymbol, filePath });
+      }
+    }
+  }
+
+  if (item.components) {
+    for (const comp of item.components) {
+      const symbol = comp.startsWith('#') ? comp : `#${comp}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'component', sourceSymbol, filePath });
+      }
+    }
+  }
+
+  // Also extract from description using regex
+  if (item.description) {
+    const descRefs = extractSymbolsFromText(item.description);
+    for (const { symbol, type } of descRefs) {
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type, sourceSymbol, filePath });
+      }
+    }
+  }
+}
+
+/**
+ * Extract symbol references from text using regex
+ */
+function extractSymbolsFromText(text: string): Array<{ symbol: string; type: ExtractedSymbolRef['type'] }> {
+  const results: Array<{ symbol: string; type: ExtractedSymbolRef['type'] }> = [];
+  
+  // Match $flow, ^gate, !signal, %state patterns
+  const pattern = /([$^!%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
+  let match;
+  
+  while ((match = pattern.exec(text)) !== null) {
+    const prefix = match[1];
+    const id = match[2];
+    const symbol = `${prefix}${id}`;
+    
+    let type: ExtractedSymbolRef['type'];
+    switch (prefix) {
+      case '$': type = 'flow'; break;
+      case '^': type = 'gate'; break;
+      case '!': type = 'signal'; break;
+      case '%': type = 'state'; break;
+      default: continue;
+    }
+    
+    results.push({ symbol, type });
+  }
+  
+  return results;
 }

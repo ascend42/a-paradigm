@@ -44,10 +44,12 @@ export async function parseGateConfig(configPath: string): Promise<ParsedGateCon
     throw new Error('Gate config missing required "version" field');
   }
 
-  // Parse main gates
+  // Parse main gates (support both 'gates' and 'portals' keys)
   const gates: Gate[] = [];
-  if (config.gates) {
-    for (const [id, gateDef] of Object.entries(config.gates)) {
+  const configAny = config as unknown as { portals?: typeof config.gates };
+  const gatesSource = config.gates || configAny.portals;
+  if (gatesSource) {
+    for (const [id, gateDef] of Object.entries(gatesSource)) {
       gates.push(normalizeGate(id, gateDef));
     }
   }

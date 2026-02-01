@@ -2,7 +2,37 @@
  * Validator for Purpose files
  */
 
-import type { PurposeFile, ValidationResult, ValidationIssue } from './types.js';
+import type { PurposeFile, PurposeItem, PurposeItemArray, ValidationResult, ValidationIssue } from './types.js';
+
+/**
+ * Helper to normalize features/components to entries regardless of format
+ */
+function normalizeToEntries(
+  items: Record<string, PurposeItem> | PurposeItemArray[] | undefined
+): Array<[string, PurposeItem]> {
+  if (!items) return [];
+  
+  if (Array.isArray(items)) {
+    // Array format: [{ id, description, ... }]
+    return items.map((item) => [item.id, item]);
+  } else {
+    // Record format: { id: { description, ... } }
+    return Object.entries(items);
+  }
+}
+
+/**
+ * Get all IDs from features/components (handles both formats)
+ */
+function getItemIds(items: Record<string, PurposeItem> | PurposeItemArray[] | undefined): string[] {
+  if (!items) return [];
+  
+  if (Array.isArray(items)) {
+    return items.map((item) => item.id);
+  } else {
+    return Object.keys(items);
+  }
+}
 
 /**
  * Validate a parsed purpose file
@@ -11,25 +41,23 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
   const issues: ValidationIssue[] = [];
   const prefix = filePath ? `${filePath}: ` : '';
 
-  // Validate features
-  if (data.features) {
-    for (const [id, feature] of Object.entries(data.features)) {
-      validatePurposeItem(id, feature, 'feature', prefix, issues);
-    }
+  // Validate features (handles both array and record formats)
+  const featureEntries = normalizeToEntries(data.features);
+  for (const [id, feature] of featureEntries) {
+    validatePurposeItem(id, feature, 'feature', prefix, issues);
   }
 
-  // Validate components
-  if (data.components) {
-    for (const [id, component] of Object.entries(data.components)) {
-      validatePurposeItem(id, component, 'component', prefix, issues);
-    }
+  // Validate components (handles both array and record formats)
+  const componentEntries = normalizeToEntries(data.components);
+  for (const [id, component] of componentEntries) {
+    validatePurposeItem(id, component, 'component', prefix, issues);
   }
 
   // Validate relationships reference existing features/components
   if (data.relationships) {
     const allIds = new Set([
-      ...Object.keys(data.features || {}),
-      ...Object.keys(data.components || {}),
+      ...getItemIds(data.features),
+      ...getItemIds(data.components),
     ]);
 
     for (const rel of data.relationships) {
@@ -57,7 +85,7 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
 
   // Validate flows reference existing components
   if (data.flows) {
-    const componentIds = new Set(Object.keys(data.components || {}));
+    const componentIds = new Set(getItemIds(data.components));
 
     // Handle both array format and record format
     if (Array.isArray(data.flows)) {

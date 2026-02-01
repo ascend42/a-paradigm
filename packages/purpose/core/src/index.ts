@@ -8,6 +8,7 @@
 export type {
   PurposeFile,
   PurposeItem,
+  PurposeItemArray,
   AggregatedPurpose,
   Relationship,
   FlowWithSteps,
@@ -15,6 +16,7 @@ export type {
   FlowStep,
   GateDefinition,
   StateDefinition,
+  SignalDefinition,
   Reference,
   ParseResult,
   ParseError,
@@ -35,7 +37,7 @@ export {
 } from './parser.js';
 
 // Aggregator
-export type { ParsedPurposeFile, ExtractedFlow } from './aggregator.js';
+export type { ParsedPurposeFile, ExtractedFlow, ExtractedSymbolRef } from './aggregator.js';
 export {
   aggregatePurposes,
   findPurposeFiles,
@@ -47,6 +49,8 @@ export {
   extractGates,
   extractStates,
   extractFlows,
+  extractSignals,
+  extractSymbolReferences,
 } from './aggregator.js';
 
 // Validator
