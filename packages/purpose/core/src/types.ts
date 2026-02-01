@@ -26,12 +26,42 @@ export interface FlowStep {
 }
 
 /**
- * A flow representing a sequence of steps
+ * A flow representing a sequence of steps (array format)
  */
-export interface Flow {
+export interface FlowWithSteps {
   name: string;
   description?: string;
   steps: FlowStep[];
+}
+
+/**
+ * A flow defined as a record (flexible format)
+ */
+export interface FlowDefinition {
+  description?: string;
+  gates?: string[];
+  signals?: string[];
+  components?: string[];
+  steps?: FlowStep[];
+}
+
+/**
+ * A gate defined in a purpose file
+ */
+export interface GateDefinition {
+  description?: string;
+  requires?: string[];
+  keys?: string[];
+  signals?: string[];
+}
+
+/**
+ * A state defined in a purpose file
+ */
+export interface StateDefinition {
+  description?: string;
+  default?: unknown;
+  type?: string;
 }
 
 /**
@@ -77,10 +107,14 @@ export interface PurposeFile {
   features?: Record<string, PurposeItem>;
   /** Components defined in this scope */
   components?: Record<string, PurposeItem>;
+  /** Gates (authorization points) defined in this scope */
+  gates?: Record<string, GateDefinition>;
+  /** States defined in this scope */
+  states?: Record<string, StateDefinition>;
   /** Relationships between symbols */
   relationships?: Relationship[];
-  /** Flows defined in this scope */
-  flows?: Flow[];
+  /** Flows defined in this scope (array format with steps) */
+  flows?: FlowWithSteps[] | Record<string, FlowDefinition>;
   /** External references */
   references?: Reference[];
 }

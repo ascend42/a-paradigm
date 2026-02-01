@@ -59,24 +59,44 @@ export function validatePurposeFile(data: PurposeFile, filePath?: string): Valid
   if (data.flows) {
     const componentIds = new Set(Object.keys(data.components || {}));
 
-    for (const flow of data.flows) {
-      if (!flow.name) {
-        issues.push({
-          type: 'error',
-          message: `${prefix}Flow missing required "name" field`,
-          path: 'flows',
-        });
-      }
+    // Handle both array format and record format
+    if (Array.isArray(data.flows)) {
+      // Array format: [{ name, steps }]
+      for (const flow of data.flows) {
+        if (!flow.name) {
+          issues.push({
+            type: 'error',
+            message: `${prefix}Flow missing required "name" field`,
+            path: 'flows',
+          });
+        }
 
-      if (flow.steps) {
-        for (const step of flow.steps) {
-          const componentId = step.component.replace(/^#/, '');
-          if (!componentIds.has(componentId)) {
-            issues.push({
-              type: 'warning',
-              message: `${prefix}Flow "${flow.name}" references unknown component: "${step.component}"`,
-              path: `flows.${flow.name}`,
-            });
+        if (flow.steps) {
+          for (const step of flow.steps) {
+            const componentId = step.component.replace(/^#/, '');
+            if (!componentIds.has(componentId)) {
+              issues.push({
+                type: 'warning',
+                message: `${prefix}Flow "${flow.name}" references unknown component: "${step.component}"`,
+                path: `flows.${flow.name}`,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      // Record format: { flow-name: { description, gates, steps } }
+      for (const [flowId, flowDef] of Object.entries(data.flows)) {
+        if (flowDef.steps) {
+          for (const step of flowDef.steps) {
+            const componentId = step.component.replace(/^#/, '');
+            if (!componentIds.has(componentId)) {
+              issues.push({
+                type: 'warning',
+                message: `${prefix}Flow "${flowId}" references unknown component: "${step.component}"`,
+                path: `flows.${flowId}`,
+              });
+            }
           }
         }
       }

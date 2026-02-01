@@ -20,10 +20,28 @@ var FlowStepSchema = z.object({
   action: z.string(),
   description: z.string().optional()
 });
-var FlowSchema = z.object({
+var FlowWithStepsSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   steps: z.array(FlowStepSchema)
+});
+var FlowDefinitionSchema = z.object({
+  description: z.string().optional(),
+  gates: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional(),
+  components: z.array(z.string()).optional(),
+  steps: z.array(FlowStepSchema).optional()
+});
+var GateDefinitionSchema = z.object({
+  description: z.string().optional(),
+  requires: z.array(z.string()).optional(),
+  keys: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional()
+});
+var StateDefinitionSchema = z.object({
+  description: z.string().optional(),
+  default: z.unknown().optional(),
+  type: z.string().optional()
 });
 var ReferenceSchema = z.object({
   target: z.string(),
@@ -38,8 +56,14 @@ var PurposeFileSchema = z.object({
   rules: z.record(z.unknown()).optional(),
   features: z.record(PurposeItemSchema).optional(),
   components: z.record(PurposeItemSchema).optional(),
+  gates: z.record(GateDefinitionSchema).optional(),
+  states: z.record(StateDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
-  flows: z.array(FlowSchema).optional(),
+  // Support both array format and record format for flows
+  flows: z.union([
+    z.array(FlowWithStepsSchema),
+    z.record(FlowDefinitionSchema)
+  ]).optional(),
   references: z.array(ReferenceSchema).optional()
 });
 function parsePurposeFile(filePath) {
@@ -276,6 +300,62 @@ function extractComponents(parsedFiles) {
   }
   return components;
 }
+function extractGates(parsedFiles) {
+  const gates = /* @__PURE__ */ new Map();
+  for (const { filePath, data } of parsedFiles) {
+    if (data.gates) {
+      for (const [id, item] of Object.entries(data.gates)) {
+        gates.set(id, { item, filePath });
+      }
+    }
+  }
+  return gates;
+}
+function extractStates(parsedFiles) {
+  const states = /* @__PURE__ */ new Map();
+  for (const { filePath, data } of parsedFiles) {
+    if (data.states) {
+      for (const [id, item] of Object.entries(data.states)) {
+        states.set(id, { item, filePath });
+      }
+    }
+  }
+  return states;
+}
+function extractFlows(parsedFiles) {
+  const flows = /* @__PURE__ */ new Map();
+  for (const { filePath, data } of parsedFiles) {
+    if (data.flows) {
+      if (Array.isArray(data.flows)) {
+        for (const flow of data.flows) {
+          flows.set(flow.name, {
+            item: {
+              id: flow.name,
+              description: flow.description,
+              steps: flow.steps
+            },
+            filePath
+          });
+        }
+      } else {
+        for (const [id, flowDef] of Object.entries(data.flows)) {
+          flows.set(id, {
+            item: {
+              id,
+              description: flowDef.description,
+              gates: flowDef.gates,
+              signals: flowDef.signals,
+              components: flowDef.components,
+              steps: flowDef.steps
+            },
+            filePath
+          });
+        }
+      }
+    }
+  }
+  return flows;
+}
 
 // src/validator.ts
 function validatePurposeFile(data, filePath) {
@@ -317,23 +397,40 @@ function validatePurposeFile(data, filePath) {
   }
   if (data.flows) {
     const componentIds = new Set(Object.keys(data.components || {}));
-    for (const flow of data.flows) {
-      if (!flow.name) {
-        issues.push({
-          type: "error",
-          message: `${prefix}Flow missing required "name" field`,
-          path: "flows"
-        });
+    if (Array.isArray(data.flows)) {
+      for (const flow of data.flows) {
+        if (!flow.name) {
+          issues.push({
+            type: "error",
+            message: `${prefix}Flow missing required "name" field`,
+            path: "flows"
+          });
+        }
+        if (flow.steps) {
+          for (const step of flow.steps) {
+            const componentId = step.component.replace(/^#/, "");
+            if (!componentIds.has(componentId)) {
+              issues.push({
+                type: "warning",
+                message: `${prefix}Flow "${flow.name}" references unknown component: "${step.component}"`,
+                path: `flows.${flow.name}`
+              });
+            }
+          }
+        }
       }
-      if (flow.steps) {
-        for (const step of flow.steps) {
-          const componentId = step.component.replace(/^#/, "");
-          if (!componentIds.has(componentId)) {
-            issues.push({
-              type: "warning",
-              message: `${prefix}Flow "${flow.name}" references unknown component: "${step.component}"`,
-              path: `flows.${flow.name}`
-            });
+    } else {
+      for (const [flowId, flowDef] of Object.entries(data.flows)) {
+        if (flowDef.steps) {
+          for (const step of flowDef.steps) {
+            const componentId = step.component.replace(/^#/, "");
+            if (!componentIds.has(componentId)) {
+              issues.push({
+                type: "warning",
+                message: `${prefix}Flow "${flowId}" references unknown component: "${step.component}"`,
+                path: `flows.${flowId}`
+              });
+            }
           }
         }
       }
@@ -406,6 +503,9 @@ export {
   collectPurposeChain,
   extractComponents,
   extractFeatures,
+  extractFlows,
+  extractGates,
+  extractStates,
   findPurposeFiles,
   formatValidationResult,
   getAllPurposeFiles,

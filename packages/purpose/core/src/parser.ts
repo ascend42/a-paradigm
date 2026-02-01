@@ -32,10 +32,35 @@ const FlowStepSchema = z.object({
   description: z.string().optional(),
 });
 
-const FlowSchema = z.object({
+// Array format: [{ name, steps }]
+const FlowWithStepsSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   steps: z.array(FlowStepSchema),
+});
+
+// Record format: { flow-name: { description, gates, signals } }
+const FlowDefinitionSchema = z.object({
+  description: z.string().optional(),
+  gates: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional(),
+  components: z.array(z.string()).optional(),
+  steps: z.array(FlowStepSchema).optional(),
+});
+
+// Gates defined in .purpose files
+const GateDefinitionSchema = z.object({
+  description: z.string().optional(),
+  requires: z.array(z.string()).optional(),
+  keys: z.array(z.string()).optional(),
+  signals: z.array(z.string()).optional(),
+});
+
+// States defined in .purpose files
+const StateDefinitionSchema = z.object({
+  description: z.string().optional(),
+  default: z.unknown().optional(),
+  type: z.string().optional(),
 });
 
 const ReferenceSchema = z.object({
@@ -52,8 +77,14 @@ const PurposeFileSchema = z.object({
   rules: z.record(z.unknown()).optional(),
   features: z.record(PurposeItemSchema).optional(),
   components: z.record(PurposeItemSchema).optional(),
+  gates: z.record(GateDefinitionSchema).optional(),
+  states: z.record(StateDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
-  flows: z.array(FlowSchema).optional(),
+  // Support both array format and record format for flows
+  flows: z.union([
+    z.array(FlowWithStepsSchema),
+    z.record(FlowDefinitionSchema),
+  ]).optional(),
   references: z.array(ReferenceSchema).optional(),
 });
 

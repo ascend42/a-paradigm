@@ -5,7 +5,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import type { AggregatedPurpose, PurposeFile, PurposeItem } from './types.js';
+import type { 
+  AggregatedPurpose, 
+  PurposeFile, 
+  PurposeItem, 
+  GateDefinition, 
+  StateDefinition, 
+  FlowDefinition,
+  FlowWithSteps,
+} from './types.js';
 import { parsePurposeFile } from './parser.js';
 
 /**
@@ -178,4 +186,93 @@ export function extractComponents(parsedFiles: ParsedPurposeFile[]): Map<string,
   }
 
   return components;
+}
+
+/**
+ * Extract all gates from parsed purpose files
+ */
+export function extractGates(parsedFiles: ParsedPurposeFile[]): Map<string, { item: GateDefinition; filePath: string }> {
+  const gates = new Map<string, { item: GateDefinition; filePath: string }>();
+
+  for (const { filePath, data } of parsedFiles) {
+    if (data.gates) {
+      for (const [id, item] of Object.entries(data.gates)) {
+        gates.set(id, { item, filePath });
+      }
+    }
+  }
+
+  return gates;
+}
+
+/**
+ * Extract all states from parsed purpose files
+ */
+export function extractStates(parsedFiles: ParsedPurposeFile[]): Map<string, { item: StateDefinition; filePath: string }> {
+  const states = new Map<string, { item: StateDefinition; filePath: string }>();
+
+  for (const { filePath, data } of parsedFiles) {
+    if (data.states) {
+      for (const [id, item] of Object.entries(data.states)) {
+        states.set(id, { item, filePath });
+      }
+    }
+  }
+
+  return states;
+}
+
+/**
+ * Normalized flow for extraction
+ */
+export interface ExtractedFlow {
+  id: string;
+  description?: string;
+  gates?: string[];
+  signals?: string[];
+  components?: string[];
+  steps?: Array<{ component: string; action: string; description?: string }>;
+}
+
+/**
+ * Extract all flows from parsed purpose files
+ * Handles both array format [{name, steps}] and record format {flow-name: {description, gates}}
+ */
+export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { item: ExtractedFlow; filePath: string }> {
+  const flows = new Map<string, { item: ExtractedFlow; filePath: string }>();
+
+  for (const { filePath, data } of parsedFiles) {
+    if (data.flows) {
+      if (Array.isArray(data.flows)) {
+        // Array format: [{ name, steps, description }]
+        for (const flow of data.flows as FlowWithSteps[]) {
+          flows.set(flow.name, {
+            item: {
+              id: flow.name,
+              description: flow.description,
+              steps: flow.steps,
+            },
+            filePath,
+          });
+        }
+      } else {
+        // Record format: { flow-name: { description, gates, signals } }
+        for (const [id, flowDef] of Object.entries(data.flows as Record<string, FlowDefinition>)) {
+          flows.set(id, {
+            item: {
+              id,
+              description: flowDef.description,
+              gates: flowDef.gates,
+              signals: flowDef.signals,
+              components: flowDef.components,
+              steps: flowDef.steps,
+            },
+            filePath,
+          });
+        }
+      }
+    }
+  }
+
+  return flows;
 }

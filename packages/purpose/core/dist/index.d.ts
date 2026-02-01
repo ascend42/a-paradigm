@@ -19,12 +19,39 @@ interface FlowStep {
     description?: string;
 }
 /**
- * A flow representing a sequence of steps
+ * A flow representing a sequence of steps (array format)
  */
-interface Flow {
+interface FlowWithSteps {
     name: string;
     description?: string;
     steps: FlowStep[];
+}
+/**
+ * A flow defined as a record (flexible format)
+ */
+interface FlowDefinition {
+    description?: string;
+    gates?: string[];
+    signals?: string[];
+    components?: string[];
+    steps?: FlowStep[];
+}
+/**
+ * A gate defined in a purpose file
+ */
+interface GateDefinition {
+    description?: string;
+    requires?: string[];
+    keys?: string[];
+    signals?: string[];
+}
+/**
+ * A state defined in a purpose file
+ */
+interface StateDefinition {
+    description?: string;
+    default?: unknown;
+    type?: string;
 }
 /**
  * A reference to an external resource
@@ -67,10 +94,14 @@ interface PurposeFile {
     features?: Record<string, PurposeItem>;
     /** Components defined in this scope */
     components?: Record<string, PurposeItem>;
+    /** Gates (authorization points) defined in this scope */
+    gates?: Record<string, GateDefinition>;
+    /** States defined in this scope */
+    states?: Record<string, StateDefinition>;
     /** Relationships between symbols */
     relationships?: Relationship[];
-    /** Flows defined in this scope */
-    flows?: Flow[];
+    /** Flows defined in this scope (array format with steps) */
+    flows?: FlowWithSteps[] | Record<string, FlowDefinition>;
     /** External references */
     references?: Reference[];
 }
@@ -212,6 +243,43 @@ declare function extractComponents(parsedFiles: ParsedPurposeFile[]): Map<string
     item: PurposeItem;
     filePath: string;
 }>;
+/**
+ * Extract all gates from parsed purpose files
+ */
+declare function extractGates(parsedFiles: ParsedPurposeFile[]): Map<string, {
+    item: GateDefinition;
+    filePath: string;
+}>;
+/**
+ * Extract all states from parsed purpose files
+ */
+declare function extractStates(parsedFiles: ParsedPurposeFile[]): Map<string, {
+    item: StateDefinition;
+    filePath: string;
+}>;
+/**
+ * Normalized flow for extraction
+ */
+interface ExtractedFlow {
+    id: string;
+    description?: string;
+    gates?: string[];
+    signals?: string[];
+    components?: string[];
+    steps?: Array<{
+        component: string;
+        action: string;
+        description?: string;
+    }>;
+}
+/**
+ * Extract all flows from parsed purpose files
+ * Handles both array format [{name, steps}] and record format {flow-name: {description, gates}}
+ */
+declare function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, {
+    item: ExtractedFlow;
+    filePath: string;
+}>;
 
 /**
  * Validator for Purpose files
@@ -226,4 +294,4 @@ declare function validatePurposeFile(data: PurposeFile, filePath?: string): Vali
  */
 declare function formatValidationResult(result: ValidationResult): string;
 
-export { type AggregatedPurpose, type Flow, type FlowStep, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type Reference, type Relationship, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractComponents, extractFeatures, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validatePurposeFile };
+export { type AggregatedPurpose, type ExtractedFlow, type FlowDefinition, type FlowStep, type FlowWithSteps, type GateDefinition, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type Reference, type Relationship, type StateDefinition, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractComponents, extractFeatures, extractFlows, extractGates, extractStates, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validatePurposeFile };
