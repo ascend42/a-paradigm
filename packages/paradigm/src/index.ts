@@ -236,6 +236,17 @@ program
     await lintCommand(path, options);
   });
 
+// paradigm cost
+program
+  .command('cost [path]')
+  .description('Analyze token costs for AI context')
+  .option('-d, --detailed', 'Show detailed breakdown by file')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { costCommand } = await import('./commands/cost.js');
+    await costCommand(path, options);
+  });
+
 // paradigm doctor
 program
   .command('doctor')
