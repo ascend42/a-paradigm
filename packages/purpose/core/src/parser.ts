@@ -41,18 +41,22 @@ const SignalDefinitionSchema = z.object({
   data: z.record(z.unknown()).optional(),
 });
 
-const RelationshipSchema = z.object({
+// Relationship can be an object or a string (shorthand like "@feature USES #component")
+const RelationshipObjectSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: z.string(),
   description: z.string().optional(),
 });
+const RelationshipSchema = z.union([RelationshipObjectSchema, z.string()]);
 
-const FlowStepSchema = z.object({
+// Flow step can be an object or a string (simple description)
+const FlowStepObjectSchema = z.object({
   component: z.string(),
   action: z.string(),
   description: z.string().optional(),
 });
+const FlowStepSchema = z.union([FlowStepObjectSchema, z.string()]);
 
 // Array format: [{ name, steps }]
 const FlowWithStepsSchema = z.object({

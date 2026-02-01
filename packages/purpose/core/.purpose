@@ -2,64 +2,55 @@ version: 1.0.0
 description: |
   @a-company/purpose-core - Core library for parsing and validating .purpose files.
   Handles YAML parsing, Zod schema validation, and symbol extraction from purpose files.
-
 features:
   purpose-parsing:
-    description: "@purpose-parsing: Parse .purpose files into structured data"
-    components: [#yaml-parser, #zod-schemas]
-    signals: [!parse-success, !parse-error]
-
+    description: '@purpose-parsing: Parse .purpose files into structured data'
+    signals:
+      - '!parse-success'
+      - '!parse-error'
+    components:
+      - '#yaml-parser'
+      - '#zod-schemas'
   purpose-validation:
-    description: "@purpose-validation: Validate .purpose file content"
-    components: [#validator, #schema-rules]
-    signals: [!validation-passed, !validation-failed]
-
+    description: '@purpose-validation: Validate .purpose file content'
+    signals:
+      - '!validation-passed'
+      - '!validation-failed'
+    components:
+      - '#validator'
+      - '#schema-rules'
   purpose-aggregation:
-    description: "@purpose-aggregation: Aggregate multiple .purpose files"
-    components: [#aggregator, #symbol-extractor]
-
+    description: '@purpose-aggregation: Aggregate multiple .purpose files'
+    components:
+      - '#aggregator'
+      - '#symbol-extractor'
 components:
   yaml-parser:
-    description: "#yaml-parser: Parses YAML content from .purpose files"
-    used-by: [@purpose-parsing]
-
+    description: '#yaml-parser: Parses YAML content from .purpose files'
   zod-schemas:
-    description: "#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc."
-    used-by: [@purpose-parsing]
-
+    description: '#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc.'
   validator:
-    description: "#validator: Validates parsed purpose data"
-    used-by: [@purpose-validation]
-
+    description: '#validator: Validates parsed purpose data'
   schema-rules:
-    description: "#schema-rules: Rules for validating symbol references"
-    used-by: [@purpose-validation]
-
+    description: '#schema-rules: Rules for validating symbol references'
   aggregator:
-    description: "#aggregator: Combines multiple .purpose files"
-    used-by: [@purpose-aggregation]
-
+    description: '#aggregator: Combines multiple .purpose files'
   symbol-extractor:
-    description: "#symbol-extractor: Extracts symbols from purpose data"
-    used-by: [@purpose-aggregation]
-
+    description: '#symbol-extractor: Extracts symbols from purpose data'
 signals:
   parse-success:
-    description: "!parse-success: .purpose file parsed successfully"
+    description: '!parse-success: .purpose file parsed successfully'
     category: purpose
     severity: info
-
   parse-error:
-    description: "!parse-error: Failed to parse .purpose file"
+    description: '!parse-error: Failed to parse .purpose file'
     category: purpose
     severity: error
-
   validation-passed:
-    description: "!validation-passed: Validation checks passed"
+    description: '!validation-passed: Validation checks passed'
     category: purpose
     severity: info
-
   validation-failed:
-    description: "!validation-failed: Validation found issues"
+    description: '!validation-failed: Validation found issues'
     category: purpose
     severity: warn

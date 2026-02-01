@@ -26,17 +26,19 @@ var SignalDefinitionSchema = z.object({
   related: z.array(z.string()).optional(),
   data: z.record(z.unknown()).optional()
 });
-var RelationshipSchema = z.object({
+var RelationshipObjectSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: z.string(),
   description: z.string().optional()
 });
-var FlowStepSchema = z.object({
+var RelationshipSchema = z.union([RelationshipObjectSchema, z.string()]);
+var FlowStepObjectSchema = z.object({
   component: z.string(),
   action: z.string(),
   description: z.string().optional()
 });
+var FlowStepSchema = z.union([FlowStepObjectSchema, z.string()]);
 var FlowWithStepsSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -539,6 +541,9 @@ function validatePurposeFile(data, filePath) {
       ...getItemIds(data.components)
     ]);
     for (const rel of data.relationships) {
+      if (typeof rel === "string" || !rel || !rel.from || !rel.to) {
+        continue;
+      }
       const fromId = rel.from.replace(/^[@#$%~^!?]/, "");
       if (!allIds.has(fromId) && !rel.from.includes(".")) {
         issues.push({
@@ -561,6 +566,7 @@ function validatePurposeFile(data, filePath) {
     const componentIds = new Set(getItemIds(data.components));
     if (Array.isArray(data.flows)) {
       for (const flow of data.flows) {
+        if (!flow || typeof flow !== "object") continue;
         if (!flow.name) {
           issues.push({
             type: "error",
@@ -568,8 +574,9 @@ function validatePurposeFile(data, filePath) {
             path: "flows"
           });
         }
-        if (flow.steps) {
+        if (flow.steps && Array.isArray(flow.steps)) {
           for (const step of flow.steps) {
+            if (typeof step === "string" || !step || !step.component) continue;
             const componentId = step.component.replace(/^#/, "");
             if (!componentIds.has(componentId)) {
               issues.push({
@@ -583,8 +590,10 @@ function validatePurposeFile(data, filePath) {
       }
     } else {
       for (const [flowId, flowDef] of Object.entries(data.flows)) {
-        if (flowDef.steps) {
+        if (!flowDef || typeof flowDef !== "object") continue;
+        if (flowDef.steps && Array.isArray(flowDef.steps)) {
           for (const step of flowDef.steps) {
+            if (typeof step === "string" || !step || !step.component) continue;
             const componentId = step.component.replace(/^#/, "");
             if (!componentIds.has(componentId)) {
               issues.push({

@@ -2,145 +2,329 @@ version: 1.0.0
 description: |
   @a-company/paradigm - The unified CLI for the Paradigm framework.
   Entry point for all Paradigm commands including init, sync, status, beacon, 
-  constellation, ripple, thread, echo, probe, and more.
+  constellation, ripple, thread, echo, probe, lint, cost, team, and more.
 
 features:
   init-command:
-    description: "@init-command: Initialize Paradigm in a project"
-    components: [#init-handler, #template-copier, #detection-engine]
-    flows: [$init-flow]
-    signals: [!init-success, !init-skipped]
+    description: "Initialize Paradigm in a project with smart detection"
+    components: ["#init-handler", "#template-copier", "#detection-engine"]
+    flows: ["$init-flow"]
+    signals: ["!init-success", "!init-skipped"]
 
   sync-command:
-    description: "@sync-command: Sync .paradigm/ to IDE instruction files"
-    components: [#sync-handler, #ide-adapters]
-    flows: [$sync-flow]
+    description: "Sync .paradigm/ to IDE instruction files"
+    components: ["#sync-handler", "#ide-adapters"]
+    flows: ["$sync-flow"]
 
   status-command:
-    description: "@status-command: Show project symbol status"
-    components: [#status-handler, #symbol-counter]
+    description: "Show project symbol status and counts"
+    components: ["#status-handler", "#symbol-counter"]
+
+  lint-command:
+    description: "Validate .purpose files for schema errors with --fix auto-repair"
+    components: ["#lint-handler", "#yaml-fixer", "#schema-validator"]
+    signals: ["!lint-error", "!lint-fixed"]
+
+  cost-command:
+    description: "Analyze token costs - static vs MCP dynamic loading"
+    components: ["#cost-handler", "#token-estimator"]
+
+  scan-auto-command:
+    description: "Auto-generate .purpose files from code analysis"
+    components: ["#auto-scan-handler", "#component-detector", "#route-detector", "#auth-detector", "#signal-detector"]
+
+  team-init-command:
+    description: "Initialize multi-agent team configuration"
+    components: ["#team-loader", "#manifest-generator"]
+
+  team-status-command:
+    description: "Show current agent, pending handoffs, activity log"
+    components: ["#team-loader", "#state-reporter"]
+
+  team-handoff-command:
+    description: "Hand off task with context to another agent"
+    components: ["#team-loader", "#handoff-creator"]
+    signals: ["!handoff-created"]
+
+  team-accept-command:
+    description: "Accept a pending handoff and become active agent"
+    components: ["#team-loader", "#handoff-acceptor"]
+    signals: ["!handoff-accepted"]
+
+  team-history-command:
+    description: "Show full activity timeline with handoffs"
+    components: ["#team-loader", "#history-reporter"]
+
+  team-reset-command:
+    description: "Reset team state for fresh start"
+    components: ["#team-loader", "#state-resetter"]
+
+  mcp-setup-command:
+    description: "Auto-configure MCP server for AI clients"
+    components: ["#mcp-setup-handler", "#client-detector", "#config-generator"]
+    signals: ["!mcp-configured"]
+
+  mcp-status-command:
+    description: "Show MCP configuration status across clients"
+    components: ["#mcp-setup-handler", "#status-checker"]
+
+  mcp-list-command:
+    description: "List all configured MCP servers across clients"
+    components: ["#mcp-setup-handler", "#server-lister"]
+
+  mcp-remove-command:
+    description: "Remove MCP server from client configs"
+    components: ["#mcp-setup-handler", "#config-remover"]
 
   beacon-command:
-    description: "@beacon-command: Generate/show beacon.md for AI orientation"
-    components: [#beacon-handler, #markdown-generator]
+    description: "Generate/show beacon.md for AI orientation"
+    components: ["#beacon-handler", "#markdown-generator"]
 
   constellation-command:
-    description: "@constellation-command: Generate symbol graph JSON/YAML"
-    components: [#constellation-handler, #graph-builder]
+    description: "Generate symbol graph JSON/YAML"
+    components: ["#constellation-handler", "#graph-builder"]
 
   ripple-command:
-    description: "@ripple-command: Analyze change impact"
-    components: [#ripple-handler, #impact-analyzer]
+    description: "Analyze change impact upstream/downstream"
+    components: ["#ripple-handler", "#impact-analyzer"]
 
   thread-command:
-    description: "@thread-command: Session continuity management"
-    components: [#thread-handler, #session-storage]
+    description: "Session continuity management"
+    components: ["#thread-handler", "#session-storage"]
 
   echo-command:
-    description: "@echo-command: Error-to-symbol mapping"
-    components: [#echo-handler, #error-mapper]
+    description: "Error-to-symbol mapping"
+    components: ["#echo-handler", "#error-mapper"]
 
   probe-command:
-    description: "@probe-command: Visual discovery via screenshots"
-    components: [#probe-handler, #image-processor]
+    description: "Visual discovery via screenshots"
+    components: ["#probe-handler", "#image-processor"]
 
   doctor-command:
-    description: "@doctor-command: Health check and diagnostics"
-    components: [#doctor-handler, #health-checker]
+    description: "Health check and diagnostics"
+    components: ["#doctor-handler", "#health-checker"]
 
   visualize-command:
-    description: "@visualize-command: Open the Prism visualizer"
-    components: [#visualize-handler, #server-launcher]
+    description: "Open the Prism visualizer"
+    components: ["#visualize-handler", "#server-launcher"]
 
 components:
   init-handler:
-    description: "#init-handler: Handles paradigm init command logic"
-    used-by: [@init-command]
+    description: "Handles paradigm init command logic"
+    used-by: ["@init-command"]
 
   template-copier:
-    description: "#template-copier: Copies templates to project"
-    used-by: [@init-command]
+    description: "Copies templates to project"
+    used-by: ["@init-command"]
 
   detection-engine:
-    description: "#detection-engine: Detects existing IDE files and project type"
-    used-by: [@init-command]
+    description: "Detects existing IDE files and project type"
+    used-by: ["@init-command"]
 
   sync-handler:
-    description: "#sync-handler: Handles paradigm sync command logic"
-    used-by: [@sync-command]
+    description: "Handles paradigm sync command logic"
+    used-by: ["@sync-command"]
 
   ide-adapters:
-    description: "#ide-adapters: Adapter implementations for each IDE"
-    used-by: [@sync-command]
+    description: "Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)"
+    used-by: ["@sync-command"]
+
+  lint-handler:
+    description: "Handles paradigm lint command"
+    used-by: ["@lint-command"]
+
+  yaml-fixer:
+    description: "Auto-fixes YAML issues (quotes symbols, converts markdown)"
+    used-by: ["@lint-command"]
+
+  schema-validator:
+    description: "Validates .purpose files against schema"
+    used-by: ["@lint-command"]
+
+  cost-handler:
+    description: "Handles paradigm cost command"
+    used-by: ["@cost-command"]
+
+  token-estimator:
+    description: "Estimates token counts for context files"
+    used-by: ["@cost-command"]
+
+  auto-scan-handler:
+    description: "Handles paradigm scan auto command"
+    used-by: ["@scan-auto-command"]
+
+  component-detector:
+    description: "Detects React/Vue/Angular components"
+    used-by: ["@scan-auto-command"]
+
+  route-detector:
+    description: "Detects routes (Express, Next.js, React Router)"
+    used-by: ["@scan-auto-command"]
+
+  auth-detector:
+    description: "Detects auth middleware and gates"
+    used-by: ["@scan-auto-command"]
+
+  signal-detector:
+    description: "Detects events, errors, toast notifications"
+    used-by: ["@scan-auto-command"]
+
+  team-loader:
+    description: "Loads agents.yaml and team-state.yaml"
+    used-by: ["@team-init-command", "@team-status-command", "@team-handoff-command", "@team-accept-command", "@team-history-command", "@team-reset-command"]
+
+  manifest-generator:
+    description: "Generates default agents.yaml"
+    used-by: ["@team-init-command"]
+
+  state-reporter:
+    description: "Reports current team state"
+    used-by: ["@team-status-command"]
+
+  handoff-creator:
+    description: "Creates handoff files"
+    used-by: ["@team-handoff-command"]
+
+  handoff-acceptor:
+    description: "Accepts and processes handoffs"
+    used-by: ["@team-accept-command"]
+
+  history-reporter:
+    description: "Reports activity timeline"
+    used-by: ["@team-history-command"]
+
+  state-resetter:
+    description: "Resets team state"
+    used-by: ["@team-reset-command"]
+
+  mcp-setup-handler:
+    description: "Handles MCP setup commands"
+    used-by: ["@mcp-setup-command", "@mcp-status-command", "@mcp-list-command", "@mcp-remove-command"]
+
+  client-detector:
+    description: "Detects installed AI clients (Cursor, Claude Desktop, Continue, Cline)"
+    used-by: ["@mcp-setup-command"]
+
+  config-generator:
+    description: "Generates MCP config for each client"
+    used-by: ["@mcp-setup-command"]
+
+  status-checker:
+    description: "Checks MCP configuration status"
+    used-by: ["@mcp-status-command"]
+
+  server-lister:
+    description: "Lists configured MCP servers"
+    used-by: ["@mcp-list-command"]
+
+  config-remover:
+    description: "Removes MCP server from configs"
+    used-by: ["@mcp-remove-command"]
 
   status-handler:
-    description: "#status-handler: Handles paradigm status command"
-    used-by: [@status-command]
+    description: "Handles paradigm status command"
+    used-by: ["@status-command"]
 
   symbol-counter:
-    description: "#symbol-counter: Counts symbols by type"
-    used-by: [@status-command]
+    description: "Counts symbols by type"
+    used-by: ["@status-command"]
 
   beacon-handler:
-    description: "#beacon-handler: Generates beacon.md content"
-    used-by: [@beacon-command]
+    description: "Generates beacon.md content"
+    used-by: ["@beacon-command"]
 
   markdown-generator:
-    description: "#markdown-generator: Generates markdown output"
-    used-by: [@beacon-command]
+    description: "Generates markdown output"
+    used-by: ["@beacon-command"]
 
   constellation-handler:
-    description: "#constellation-handler: Builds constellation graph"
-    used-by: [@constellation-command]
+    description: "Builds constellation graph"
+    used-by: ["@constellation-command"]
 
   graph-builder:
-    description: "#graph-builder: Builds symbol relationship graph"
-    used-by: [@constellation-command]
+    description: "Builds symbol relationship graph"
+    used-by: ["@constellation-command"]
 
   ripple-handler:
-    description: "#ripple-handler: Performs ripple analysis"
-    used-by: [@ripple-command]
+    description: "Performs ripple analysis"
+    used-by: ["@ripple-command"]
 
   impact-analyzer:
-    description: "#impact-analyzer: Analyzes upstream/downstream impact"
-    used-by: [@ripple-command]
+    description: "Analyzes upstream/downstream impact"
+    used-by: ["@ripple-command"]
 
   thread-handler:
-    description: "#thread-handler: Manages thread.md operations"
-    used-by: [@thread-command]
+    description: "Manages thread.md operations"
+    used-by: ["@thread-command"]
 
   session-storage:
-    description: "#session-storage: Stores session state in thread.md"
-    used-by: [@thread-command]
+    description: "Stores session state in thread.md"
+    used-by: ["@thread-command"]
 
   echo-handler:
-    description: "#echo-handler: Handles echo lookups"
-    used-by: [@echo-command]
+    description: "Handles echo lookups"
+    used-by: ["@echo-command"]
 
   error-mapper:
-    description: "#error-mapper: Maps error codes to symbols"
-    used-by: [@echo-command]
+    description: "Maps error codes to symbols"
+    used-by: ["@echo-command"]
 
   probe-handler:
-    description: "#probe-handler: Handles probe command"
-    used-by: [@probe-command]
+    description: "Handles probe command"
+    used-by: ["@probe-command"]
 
   image-processor:
-    description: "#image-processor: Processes screenshot input"
-    used-by: [@probe-command]
+    description: "Processes screenshot input"
+    used-by: ["@probe-command"]
 
   doctor-handler:
-    description: "#doctor-handler: Runs health checks"
-    used-by: [@doctor-command]
+    description: "Runs health checks"
+    used-by: ["@doctor-command"]
 
   health-checker:
-    description: "#health-checker: Validates project setup"
-    used-by: [@doctor-command]
+    description: "Validates project setup"
+    used-by: ["@doctor-command"]
 
   visualize-handler:
-    description: "#visualize-handler: Launches Prism visualizer"
-    used-by: [@visualize-command]
+    description: "Launches Prism visualizer"
+    used-by: ["@visualize-command"]
 
   server-launcher:
-    description: "#server-launcher: Starts local HTTP server for visualizer"
-    used-by: [@visualize-command]
+    description: "Starts local HTTP server for visualizer"
+    used-by: ["@visualize-command"]
+
+signals:
+  init-success:
+    description: "Paradigm initialized successfully"
+    category: cli
+    severity: info
+
+  init-skipped:
+    description: "Paradigm init skipped (already exists)"
+    category: cli
+    severity: info
+
+  lint-error:
+    description: "Lint found validation errors"
+    category: cli
+    severity: error
+
+  lint-fixed:
+    description: "Lint auto-fixed issues"
+    category: cli
+    severity: info
+
+  handoff-created:
+    description: "Team handoff created"
+    category: team
+    severity: info
+
+  handoff-accepted:
+    description: "Team handoff accepted"
+    category: team
+    severity: info
+
+  mcp-configured:
+    description: "MCP server configured for client"
+    category: mcp
+    severity: info
