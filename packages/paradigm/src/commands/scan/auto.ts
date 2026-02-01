@@ -299,25 +299,39 @@ function detectRoutes(rootDir: string): DetectedSymbol[] {
  */
 function detectAuth(rootDir: string): DetectedSymbol[] {
   const symbols: DetectedSymbol[] = [];
-  const files = findFiles(rootDir, SCAN_PATTERNS.auth);
+  
+  // Scan both dedicated auth files AND all source files for auth patterns
+  const authFiles = findFiles(rootDir, SCAN_PATTERNS.auth);
+  const allFiles = findFiles(rootDir, ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']);
+  const files = [...new Set([...authFiles, ...allFiles.slice(0, 100)])]; // Dedupe and limit
+  
+  // Auth middleware patterns - expanded list
+  const authPatterns = [
+    { pattern: /isAuthenticated|requireAuth|authMiddleware|withAuth|useAuth/i, id: 'authenticated', desc: 'User must be authenticated' },
+    { pattern: /isAdmin|requireAdmin|adminOnly|adminRequired/i, id: 'admin-only', desc: 'Admin access required' },
+    { pattern: /hasRole|requireRole|checkRole|roleGuard/i, id: 'role-required', desc: 'Specific role required' },
+    { pattern: /hasPermission|requirePermission|checkPermission|canAccess/i, id: 'permission-required', desc: 'Specific permission required' },
+    { pattern: /isSubscribed|requireSubscription|premiumOnly|subscriptionRequired|isPremium/i, id: 'subscription-required', desc: 'Subscription required' },
+    { pattern: /isOwner|requireOwner|ownerOnly/i, id: 'owner-only', desc: 'Resource owner access required' },
+    { pattern: /isVerified|requireVerification|verifiedOnly/i, id: 'verified-required', desc: 'Email verification required' },
+    { pattern: /rateLimit|rateLimiter|throttle/i, id: 'rate-limited', desc: 'Rate limiting applied' },
+    { pattern: /csrf|csrfProtection|xsrf/i, id: 'csrf-protected', desc: 'CSRF protection required' },
+  ];
+  
+  // RLS (Row Level Security) patterns for Supabase/Postgres
+  const rlsPatterns = [
+    { pattern: /\.rls\s*\(|enableRLS|row.*level.*security/i, id: 'rls-enabled', desc: 'Row-level security enabled' },
+    { pattern: /auth\.uid\(\)|current_user|session_user/i, id: 'user-scoped', desc: 'Data scoped to current user' },
+  ];
   
   for (const filePath of files) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
       const relativePath = path.relative(rootDir, filePath);
       
-      // Auth middleware patterns
-      const authPatterns = [
-        { pattern: /isAuthenticated|requireAuth|authMiddleware/i, id: 'authenticated', desc: 'User must be authenticated' },
-        { pattern: /isAdmin|requireAdmin|adminOnly/i, id: 'admin-only', desc: 'Admin access required' },
-        { pattern: /hasRole|requireRole/i, id: 'role-required', desc: 'Specific role required' },
-        { pattern: /hasPermission|requirePermission/i, id: 'permission-required', desc: 'Specific permission required' },
-        { pattern: /isSubscribed|requireSubscription|premiumOnly/i, id: 'subscription-required', desc: 'Subscription required' },
-      ];
-      
-      for (const { pattern, id, desc } of authPatterns) {
+      // Check standard auth patterns
+      for (const { pattern, id, desc } of [...authPatterns, ...rlsPatterns]) {
         if (pattern.test(content)) {
-          // Check if we already have this symbol
           if (!symbols.find(s => s.id === id)) {
             symbols.push({
               id,
@@ -329,6 +343,19 @@ function detectAuth(rootDir: string): DetectedSymbol[] {
           }
         }
       }
+      
+      // Look for ProtectedRoute components
+      if (/ProtectedRoute|PrivateRoute|AuthRoute|GuardedRoute/i.test(content)) {
+        if (!symbols.find(s => s.id === 'route-protected')) {
+          symbols.push({
+            id: 'route-protected',
+            type: 'gate',
+            description: 'Route requires authentication',
+            source: relativePath,
+            confidence: 'high',
+          });
+        }
+      }
     } catch {
       // Skip files we can't read
     }
@@ -338,7 +365,7 @@ function detectAuth(rootDir: string): DetectedSymbol[] {
 }
 
 /**
- * Detect error patterns (signals)
+ * Detect error/event patterns (signals)
  */
 function detectSignals(rootDir: string): DetectedSymbol[] {
   const symbols: DetectedSymbol[] = [];
@@ -346,37 +373,70 @@ function detectSignals(rootDir: string): DetectedSymbol[] {
   // Look for common error/event patterns in all JS/TS files
   const allFiles = findFiles(rootDir, ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']);
   
+  // Signal patterns to detect
   const signalPatterns = [
-    { pattern: /emit\s*\(\s*['"]([^'"]+)['"]/, type: 'emit' },
-    { pattern: /throw\s+new\s+(\w+Error)/, type: 'error' },
-    { pattern: /log\.(error|warn)\s*\(\s*['"]([^'"]+)['"]/, type: 'log' },
+    // Event emitters
+    { pattern: /emit\s*\(\s*['"]([^'"]+)['"]/, type: 'event', category: 'emit' },
+    { pattern: /dispatch\s*\(\s*\{?\s*type:\s*['"]([^'"]+)['"]/, type: 'event', category: 'redux' },
+    { pattern: /dispatchEvent\s*\(\s*new\s+\w+\s*\(\s*['"]([^'"]+)['"]/, type: 'event', category: 'dom' },
+    
+    // Error types
+    { pattern: /throw\s+new\s+(\w+Error)/, type: 'error', category: 'exception' },
+    { pattern: /new\s+(ApiError|HttpError|ValidationError|AuthError)\s*\(/, type: 'error', category: 'api' },
+    
+    // Logging
+    { pattern: /log\.(error|warn)\s*\(\s*['"]([^'"]+)['"]/, type: 'log', category: 'logging' },
+    { pattern: /console\.(error|warn)\s*\(\s*['"]([^'"]+)['"]/, type: 'log', category: 'console' },
+    
+    // Toast/Notifications
+    { pattern: /toast\.(success|error|warning|info)\s*\(\s*['"]([^'"]+)['"]/, type: 'notification', category: 'toast' },
+    { pattern: /notify\s*\(\s*\{[^}]*message:\s*['"]([^'"]+)['"]/, type: 'notification', category: 'notify' },
+    { pattern: /showNotification\s*\(\s*['"]([^'"]+)['"]/, type: 'notification', category: 'notification' },
+    
+    // Analytics
+    { pattern: /track\s*\(\s*['"]([^'"]+)['"]/, type: 'analytics', category: 'tracking' },
+    { pattern: /analytics\.(track|page|identify)\s*\(\s*['"]([^'"]+)['"]/, type: 'analytics', category: 'analytics' },
+    { pattern: /gtag\s*\(\s*['"]event['"]\s*,\s*['"]([^'"]+)['"]/, type: 'analytics', category: 'ga' },
+    
+    // Paradigm signals (if already using)
+    { pattern: /log\.signal\s*\(\s*['"]!?([^'"]+)['"]/, type: 'signal', category: 'paradigm' },
   ];
   
   const seen = new Set<string>();
   
-  for (const filePath of allFiles.slice(0, 50)) {  // Limit to first 50 files for performance
+  for (const filePath of allFiles.slice(0, 100)) {  // Increased limit
     try {
       const content = fs.readFileSync(filePath, 'utf8');
       const relativePath = path.relative(rootDir, filePath);
       
-      for (const { pattern, type } of signalPatterns) {
+      for (const { pattern, type, category } of signalPatterns) {
         const matches = content.matchAll(new RegExp(pattern, 'gi'));
         for (const match of matches) {
           const name = match[1] || match[2];
           if (!name || seen.has(name)) continue;
+          
+          // Skip common false positives
+          if (name.length < 3 || name.length > 50) continue;
+          if (/^[a-z]$|^%s|^\$\{/.test(name)) continue; // Template strings, format specifiers
+          
           seen.add(name);
           
           const id = name
             .replace(/([a-z])([A-Z])/g, '$1-$2')
             .replace(/Error$/, '')
+            .replace(/[^a-zA-Z0-9-]/g, '-')
             .toLowerCase();
+          
+          // Determine confidence based on pattern type
+          const confidence = category === 'paradigm' ? 'high' : 
+                            (type === 'error' || type === 'event') ? 'medium' : 'low';
           
           symbols.push({
             id,
             type: 'signal',
-            description: `${type === 'error' ? 'Error: ' : ''}${name}`,
+            description: `${type === 'error' ? 'Error: ' : type === 'analytics' ? 'Event: ' : ''}${name}`,
             source: relativePath,
-            confidence: 'low',
+            confidence,
           });
         }
       }

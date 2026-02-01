@@ -93,28 +93,128 @@ function getSuggestion(error: ParseError | ValidationIssue): string | undefined 
 }
 
 /**
+ * Check if content looks like markdown (not YAML)
+ */
+function isMarkdownFormat(content: string): boolean {
+  const lines = content.trim().split('\n');
+  // Check for markdown indicators
+  const hasMarkdownHeader = lines.some(l => /^#+\s/.test(l));
+  const hasNoYamlStructure = !content.includes(':') || lines[0].startsWith('#') || lines[0].startsWith('@');
+  return hasMarkdownHeader || (hasNoYamlStructure && !content.trim().startsWith('---'));
+}
+
+/**
+ * Convert markdown .purpose to YAML template
+ */
+function convertMarkdownToYaml(content: string, filePath: string): string {
+  const lines = content.trim().split('\n');
+  const dirName = path.basename(path.dirname(filePath));
+  
+  // Extract any useful info from markdown
+  let description = '';
+  for (const line of lines) {
+    // Look for first non-header content
+    if (!line.startsWith('#') && !line.startsWith('@') && line.trim()) {
+      description = line.trim();
+      break;
+    }
+    // Or use header as description
+    if (line.startsWith('#')) {
+      description = line.replace(/^#+\s*/, '').trim();
+    }
+  }
+  
+  return `# Auto-converted from markdown format
+description: "${description || `Purpose file for ${dirName}`}"
+
+# TODO: Add features and components
+# features:
+#   feature-name:
+#     description: "What this feature does"
+
+# components:
+#   component-name:
+#     description: "What this component does"
+`;
+}
+
+/**
+ * Auto-quote special YAML characters in arrays
+ * Fixes: [#component, @feature] → ["#component", "@feature"]
+ */
+function autoQuoteSpecialChars(content: string): string {
+  // Pattern to match unquoted symbols in arrays: [#foo, @bar, $baz]
+  // This regex finds array items starting with special chars that aren't quoted
+  return content.replace(
+    /\[\s*([^\]]+)\s*\]/g,
+    (match, arrayContent) => {
+      const items = arrayContent.split(',').map((item: string) => {
+        const trimmed = item.trim();
+        // If starts with special char and not already quoted
+        if (/^[#@$^!%]/.test(trimmed) && !trimmed.startsWith('"') && !trimmed.startsWith("'")) {
+          return `"${trimmed}"`;
+        }
+        return trimmed;
+      });
+      return `[${items.join(', ')}]`;
+    }
+  );
+}
+
+/**
  * Attempt to auto-fix common issues
  * Returns the fixed content if fixable, or null if not
  */
-function attemptFix(filePath: string, _errors: LintIssue[]): string | null {
-  // For now, auto-fix is limited to safe operations
-  // Future: Add more sophisticated fixes
-  
+function attemptFix(filePath: string, errors: LintIssue[]): string | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
+    let content = fs.readFileSync(filePath, 'utf8');
+    let modified = false;
     
-    // Check if we can parse it at all
-    const result = parsePurposeFileDetailed(filePath);
-    if (!result.isYamlValid || !result.data) {
-      return null; // Can't fix YAML syntax errors automatically
+    // Fix 1: Convert markdown to YAML template
+    if (isMarkdownFormat(content)) {
+      content = convertMarkdownToYaml(content, filePath);
+      modified = true;
     }
     
-    // Re-serialize to fix formatting issues
-    const fixed = serializePurposeFile(result.data);
+    // Fix 2: Auto-quote special characters in arrays
+    const hasUnquotedSymbols = errors.some(e => 
+      e.message.includes('tag suffix') || 
+      e.message.includes('flow indicator') ||
+      e.message.includes('missed comma')
+    );
     
-    // Only return if actually different
-    if (fixed.trim() !== content.trim()) {
-      return fixed;
+    if (hasUnquotedSymbols || content.match(/\[[^\]]*[#@$^!%][^\]"']*\]/)) {
+      const quoted = autoQuoteSpecialChars(content);
+      if (quoted !== content) {
+        content = quoted;
+        modified = true;
+      }
+    }
+    
+    // Fix 3: If content is now valid YAML, re-serialize for consistent formatting
+    if (modified) {
+      // Try to parse the fixed content
+      const tempPath = filePath + '.tmp';
+      fs.writeFileSync(tempPath, content);
+      const result = parsePurposeFileDetailed(tempPath);
+      fs.unlinkSync(tempPath);
+      
+      if (result.isYamlValid && result.data) {
+        // Re-serialize for clean formatting
+        return serializePurposeFile(result.data);
+      }
+      
+      // Return partially fixed content even if not fully valid
+      return content;
+    }
+    
+    // Fix 4: Try re-serialization for valid but messy YAML
+    const result = parsePurposeFileDetailed(filePath);
+    if (result.isYamlValid && result.data) {
+      const fixed = serializePurposeFile(result.data);
+      if (fixed.trim() !== content.trim()) {
+        return fixed;
+      }
     }
     
     return null;
