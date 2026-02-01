@@ -78,7 +78,7 @@ These symbols work everywhere — in code comments, documentation, AI prompts, a
 
 ## Key Commands
 
-### Setup & Sync
+### Setup & Validation
 
 ```bash
 paradigm init              # Initialize Paradigm (smart detection)
@@ -87,6 +87,10 @@ paradigm init --dry-run    # Show what would be created
 paradigm sync              # Regenerate IDE instructions
 paradigm sync --all        # Sync all IDEs (Cursor, Copilot, etc.)
 paradigm doctor            # Health check and validation
+paradigm lint              # Validate .purpose files for schema errors
+paradigm lint --fix        # Auto-fix where possible
+paradigm cost              # Analyze token costs (static vs MCP)
+paradigm scan auto         # Auto-generate .purpose from code analysis
 ```
 
 ### AI Context (Agent Efficiency)
@@ -109,6 +113,18 @@ paradigm thread note "User prefers Zod"
 paradigm echo AUTH_001     # Look up error-to-symbol mapping
 ```
 
+### Multi-Agent Orchestration
+
+```bash
+paradigm team init         # Initialize team with 5 agent roles
+paradigm team status       # Show current agent, pending handoffs
+paradigm team handoff --to builder    # Hand off to another agent
+paradigm team accept       # Accept a pending handoff
+paradigm team check        # Health check for conflicts
+```
+
+Default agents: `architect` → `builder` → `reviewer` → `tester` (plus `security`)
+
 ### Visualization
 
 ```bash
@@ -128,9 +144,13 @@ Paradigm is designed to make AI agents faster and more context-aware:
 | **Ripple** | Change impact analysis | `paradigm ripple @symbol` |
 | **Thread** | Session continuity | `paradigm thread` |
 | **Echo** | Error-to-symbol mapping | `paradigm echo ERROR_CODE` |
+| **Cost** | Token usage analysis | `paradigm cost` |
+| **Team** | Multi-agent orchestration | `paradigm team` |
 | **Agent Hints** | CLI query patterns in IDE rules | Auto-generated |
 
 **Token efficiency**: Instead of loading large context files (~2000 tokens), AI can query on-demand (~100 tokens per query).
+
+**Cost analysis** shows the savings: `paradigm cost` compares static context vs MCP, typically showing 80-90% token reduction.
 
 ```bash
 # AI runs this before modifying @checkout
