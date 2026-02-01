@@ -1,0 +1,25 @@
+# Echoes - Error to Symbol Mapping
+# When errors occur, they echo back to their source symbol.
+# Run `paradigm echo ERROR_CODE` to look up context.
+
+version: "1.0"
+
+errors:
+  # Example error mapping
+  # AUTH_REQUIRED:
+  #   symbol: "^authenticated"
+  #   location: "src/middleware/auth.ts"
+  #   ripple:
+  #     - "@checkout"
+  #     - "@profile"
+  #     - "@settings"
+  #   resolution: "Ensure user token is passed in request headers"
+
+  # CART_EMPTY:
+  #   symbol: "^has-items"
+  #   location: "src/features/cart/guards.ts"
+  #   ripple:
+  #     - "@checkout"
+  #   resolution: "Add items to cart before checkout"
+
+  # Add your error mappings below

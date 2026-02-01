@@ -1,6 +1,24 @@
-# Trace Flow Prompt
+# Pathway: Trace a Flow
 
 Use this prompt when you need to understand or debug a multi-step process.
+
+---
+
+## Prerequisites
+
+Before tracing, gather context:
+
+1. **Check the constellation** for flow definitions:
+   - File: `.paradigm/constellation.json`
+   - Look in `orbits` section for `$flow-name` sequences
+
+2. **Read the beacon** for overview:
+   - File: `.paradigm/beacon.md`
+   - See which flows exist in the project
+
+3. **Check ripple effects:**
+   - Run: `paradigm ripple $[flow-name]`
+   - Understand what symbols are part of this flow
 
 ---
 
@@ -52,10 +70,44 @@ Need to understand where the flow might be getting stuck.
 
 ---
 
+## Finding Flow Definitions
+
+### 1. Check the Constellation
+
+```bash
+paradigm constellation
+```
+
+Look in `.paradigm/constellation.json`:
+
+```json
+{
+  "orbits": {
+    "$checkout-flow": {
+      "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+    }
+  }
+}
+```
+
+### 2. Find in .purpose Files
+
+Flows are often defined in feature .purpose files:
+- Look in `src/features/` directories
+- Search for `flows:` sections
+
+### 3. Check portal.yaml
+
+Flows may reference gate sequences:
+- File: `portal.yaml`
+- Look for `flows:` section
+
+---
+
 ## What the AI Will Do
 
 1. **Map the flow:**
-   - Find $flow definition in .purpose files
+   - Find $flow definition in .purpose files or portal.yaml
    - Identify all steps and transitions
    - List components involved at each step
 
@@ -63,18 +115,18 @@ Need to understand where the flow might be getting stuck.
    ```
    $checkout-flow
    
-   Step 1: cart
+   Step 1: @cart
    - Component: #CartPage
    - Entry: User clicks "Checkout"
    - Exit signal: !checkout-started
-   - Next: shipping
+   - Next: @shipping
    
-   Step 2: shipping
+   Step 2: @shipping
    - Component: #ShippingForm
    - Portal: ^authenticated
    - Validates: address, shipping method
    - Exit signal: !shipping-confirmed
-   - Next: payment
+   - Next: @payment
    
    ...
    ```
@@ -93,25 +145,58 @@ Need to understand where the flow might be getting stuck.
 
 ## Flow Debugging Tips
 
-1. **Enable full logging:**
+### 1. Enable Full Logging
+
+```bash
+LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,@
+```
+
+### 2. Check for Step Signals
+
+Each step should emit a signal on entry/exit:
+- Missing signal = step didn't complete
+- Look for: `!step-started`, `!step-completed`
+
+### 3. Verify State Transitions
+
+```
+%order.status should change at each step:
+  @cart      → "cart"
+  @shipping  → "shipping"
+  @payment   → "payment"
+  @confirm   → "confirmed"
+
+Stuck status = process interrupted
+```
+
+### 4. Look for Error Signals
+
+Common failure signals:
+- `!payment-failed`
+- `!inventory-unavailable`
+- `!validation-error`
+
+### 5. Check External Services
+
+If flow involves external services:
+- Payment processor responses
+- Email service confirmations
+- Inventory system updates
+
+---
+
+## After Tracing
+
+1. **Update the thread:**
    ```bash
-   LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,@
+   paradigm thread save "Traced $checkout-flow - found issue at payment step"
    ```
 
-2. **Check for step signals:**
-   - Each step should emit a signal on entry/exit
-   - Missing signal = step didn't complete
+2. **Add echoes for errors found:**
+   - Edit: `.paradigm/echoes.yaml`
+   - Map error codes to symbols
 
-3. **Verify state transitions:**
-   - %order.status should change at each step
-   - Stuck status = process interrupted
-
-4. **Look for error signals:**
-   - !payment-failed
-   - !inventory-unavailable
-   - !validation-error
-
-5. **Check external services:**
-   - Payment processor responses
-   - Email service confirmations
-   - Inventory system updates
+3. **Document findings:**
+   ```bash
+   paradigm thread note "Payment webhook not triggering order completion"
+   ```

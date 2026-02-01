@@ -73,11 +73,53 @@ paradigm sync --all
 ```
 
 **Output files:**
-| IDE | Output File |
-|-----|-------------|
-| Cursor | `.cursorrules` |
-| GitHub Copilot | `.github/copilot-instructions.md` |
+| IDE | Output |
+|-----|--------|
+| Cursor | `.cursor/rules/*.mdc` (multiple files) |
+| GitHub Copilot | `.github/instructions/*.instructions.md` + `.github/copilot-instructions.md` |
 | Windsurf | `.windsurfrules` |
+
+### Modern Cursor Format
+
+Cursor now uses the `.cursor/rules/*.mdc` format with YAML frontmatter:
+
+```
+.cursor/rules/
+  paradigm-core.mdc          # alwaysApply: true
+  paradigm-symbols.mdc       # alwaysApply: true
+  paradigm-logging.mdc       # globs: **/*.{ts,tsx}
+  paradigm-purpose.mdc       # globs: **/.purpose
+  paradigm-portal.mdc        # globs: **/portal.yaml
+  paradigm-conventions.mdc   # globs: **/*.{ts,tsx}
+  paradigm-commands.mdc      # manual selection
+```
+
+Each `.mdc` file has frontmatter controlling when it loads:
+- `alwaysApply: true` - Loads for every conversation
+- `globs: pattern` - Only loads when matching files are open
+- No options - Manual selection in Cursor's rule picker
+
+### Modern Copilot Format
+
+Copilot now uses `.github/instructions/*.instructions.md` with `applyTo` frontmatter:
+
+```
+.github/
+  copilot-instructions.md              # Always applies (core instructions)
+  instructions/
+    paradigm-symbols.instructions.md   # applyTo: "**/*.ts,**/*.tsx"
+    paradigm-logging.instructions.md   # applyTo: "**/*.ts,**/*.tsx"
+    paradigm-purpose.instructions.md   # applyTo: "**/.purpose"
+    paradigm-portal.instructions.md    # applyTo: "**/portal.yaml"
+    paradigm-conventions.instructions.md # applyTo: "**/*.ts,**/*.tsx"
+    paradigm-commands.instructions.md  # No frontmatter (reference only)
+```
+
+Each `.instructions.md` file has frontmatter controlling when it loads:
+- `applyTo: "glob,patterns"` - Only applies when matching files are referenced
+- No frontmatter - Available for manual reference
+
+Both modern formats are more efficient because instructions only load when relevant files are open.
 
 ---
 
@@ -409,6 +451,189 @@ Create a timeline snapshot.
 ```bash
 paradigm premise snapshot "v1.0 release"
 paradigm premise snapshot "pre-refactor" -d "Before auth rewrite"
+```
+
+---
+
+## Agent Efficiency Commands
+
+Commands designed to make AI agents faster and more context-aware.
+
+### paradigm beacon
+
+**What it does:** Generate a quick-start orientation file for AI agents.
+
+**When to use:**
+- First thing an AI agent should read
+- After major project changes
+- When onboarding new AI sessions
+
+**Options:**
+```
+[path]           Target directory (defaults to current)
+-r, --refresh    Regenerate even if beacon exists
+-o, --output     Custom output path
+-q, --quiet      Suppress output
+```
+
+**Examples:**
+```bash
+# Generate beacon
+paradigm beacon
+
+# Refresh existing beacon
+paradigm beacon --refresh
+```
+
+**Output:** `.paradigm/beacon.md` containing:
+- Symbol map (features, portals, relationships)
+- Key file landmarks
+- Available pathways (prompts)
+- Symbol quick reference
+
+---
+
+### paradigm constellation
+
+**What it does:** Generate a machine-readable symbol relationship graph.
+
+**When to use:**
+- Before making changes that might have ripple effects
+- When AI needs to query symbol relationships programmatically
+- For impact analysis and dependency tracking
+
+**Options:**
+```
+[path]                  Target directory (defaults to current)
+-f, --format <format>   Output format: json or yaml (default: json)
+-o, --output <path>     Custom output path
+-q, --quiet             Suppress output
+```
+
+**Examples:**
+```bash
+# Generate constellation
+paradigm constellation
+
+# Generate as YAML
+paradigm constellation --format yaml
+```
+
+**Output:** `.paradigm/constellation.json` containing:
+- `stars`: All symbols with their relationships
+- `orbits`: Flow sequences
+- `stats`: Symbol counts by type
+
+---
+
+### paradigm ripple
+
+**What it does:** Show change impact analysis for a symbol.
+
+**When to use:**
+- Before modifying a symbol
+- Understanding what depends on something
+- Planning refactoring
+
+**Options:**
+```
+<symbol>         Symbol to analyze (e.g., @checkout, ^authenticated)
+[path]           Target directory (defaults to current)
+-d, --depth      Analysis depth (default: 1)
+--json           Output as JSON
+-q, --quiet      Suppress output
+```
+
+**Examples:**
+```bash
+# Analyze a feature
+paradigm ripple @checkout
+
+# Analyze a portal
+paradigm ripple ^authenticated
+
+# Get JSON output
+paradigm ripple @checkout --json
+```
+
+**Output:**
+- Upstream: What the symbol requires
+- Downstream: What would be affected by changes
+- Flow membership: Which flows include this symbol
+- Test suggestions: How to test after changes
+
+---
+
+### paradigm thread
+
+**What it does:** Manage session continuity between AI agent sessions.
+
+**When to use:**
+- Recording what was done in a session
+- Leaving notes for the next agent
+- Tracking unfinished tasks
+
+**Subcommands:**
+
+```bash
+# Show current thread
+paradigm thread
+paradigm thread show
+
+# Save activity to trail
+paradigm thread save "Added email validation to @signup"
+
+# Add unfinished task
+paradigm thread todo "Write unit tests for email validation"
+
+# Add note for next agent
+paradigm thread note "User prefers Zod over manual validation"
+
+# Clear the thread
+paradigm thread clear
+```
+
+**Output:** `.paradigm/thread.md` containing:
+- Trail: What was done
+- Loose ends: Unfinished tasks
+- Breadcrumbs: Notes for next agent
+
+---
+
+### paradigm echo
+
+**What it does:** Look up error codes to find related symbols.
+
+**When to use:**
+- Debugging errors
+- Understanding what symbol an error relates to
+- Finding resolution hints
+
+**Subcommands:**
+
+```bash
+# Look up an error code
+paradigm echo AUTH_REQUIRED
+paradigm echo lookup AUTH_REQUIRED
+
+# Initialize echoes.yaml template
+paradigm echo init
+
+# List all error mappings
+paradigm echo list
+```
+
+**Configuration:** `.paradigm/echoes.yaml`
+
+```yaml
+errors:
+  AUTH_REQUIRED:
+    symbol: "^authenticated"
+    location: "src/middleware/auth.ts"
+    ripple:
+      - "@checkout"
+      - "@profile"
+    resolution: "Ensure user token is passed in request headers"
 ```
 
 ---

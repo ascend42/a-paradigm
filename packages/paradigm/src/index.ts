@@ -8,7 +8,7 @@ import { initCommand } from './commands/init.js';
 import { visualizeCommand } from './commands/visualize.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 
 const program = new Command();
 
@@ -245,6 +245,150 @@ program
   .action(async () => {
     const { summaryCommand } = await import('./commands/summary.js');
     await summaryCommand();
+  });
+
+// paradigm constellation
+program
+  .command('constellation [path]')
+  .alias('const')
+  .description('Generate .paradigm/constellation.json - symbol relationship graph for AI agents')
+  .option('-f, --format <format>', 'Output format: json or yaml', 'json')
+  .option('-o, --output <path>', 'Custom output path')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { constellationCommand } = await import('./commands/constellation.js');
+    await constellationCommand(path, options);
+  });
+
+// paradigm beacon
+program
+  .command('beacon [path]')
+  .description('Generate .paradigm/beacon.md - quick-start orientation for AI agents')
+  .option('-r, --refresh', 'Regenerate even if beacon exists')
+  .option('-o, --output <path>', 'Custom output path')
+  .option('--json', 'Output as JSON (for AI agent queries)')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { beaconCommand } = await import('./commands/beacon.js');
+    await beaconCommand(path, options);
+  });
+
+// paradigm ripple
+program
+  .command('ripple <symbol> [path]')
+  .description('Show change impact analysis for a symbol')
+  .option('-d, --depth <depth>', 'Analysis depth (default: 1)', '1')
+  .option('--json', 'Output as JSON')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (symbol, path, options) => {
+    const { rippleCommand } = await import('./commands/ripple.js');
+    await rippleCommand(symbol, path, options);
+  });
+
+// paradigm thread <command>
+const threadCmd = program
+  .command('thread')
+  .description('Session continuity - pass context between AI agent sessions');
+
+threadCmd
+  .command('show [path]')
+  .alias('s')
+  .description('Show current thread')
+  .option('--json', 'Output as JSON (for AI agent queries)')
+  .action(async (path, options) => {
+    const { threadShowCommand } = await import('./commands/thread.js');
+    await threadShowCommand(path, options);
+  });
+
+threadCmd
+  .command('save <message> [path]')
+  .description('Save activity to the thread trail')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (message, path, options) => {
+    const { threadSaveCommand } = await import('./commands/thread.js');
+    await threadSaveCommand(message, path, options);
+  });
+
+threadCmd
+  .command('todo <task> [path]')
+  .description('Add a loose end (unfinished task)')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (task, path, options) => {
+    const { threadTodoCommand } = await import('./commands/thread.js');
+    await threadTodoCommand(task, path, options);
+  });
+
+threadCmd
+  .command('note <note> [path]')
+  .description('Add a breadcrumb (note for next agent)')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (note, path, options) => {
+    const { threadNoteCommand } = await import('./commands/thread.js');
+    await threadNoteCommand(note, path, options);
+  });
+
+threadCmd
+  .command('clear [path]')
+  .description('Clear the thread')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { threadClearCommand } = await import('./commands/thread.js');
+    await threadClearCommand(path, options);
+  });
+
+// Default thread action (show)
+threadCmd
+  .option('--json', 'Output as JSON (for AI agent queries)')
+  .action(async (options) => {
+    const { threadShowCommand } = await import('./commands/thread.js');
+    await threadShowCommand(undefined, options);
+  });
+
+// paradigm echo <command>
+const echoCmd = program
+  .command('echo')
+  .description('Error-to-symbol mapping - find related symbols for error codes');
+
+echoCmd
+  .command('lookup <errorCode> [path]')
+  .alias('l')
+  .description('Look up an error code')
+  .option('--json', 'Output as JSON (for AI agent queries)')
+  .action(async (errorCode, path, options) => {
+    const { echoCommand } = await import('./commands/echo.js');
+    await echoCommand(errorCode, path, options);
+  });
+
+echoCmd
+  .command('init [path]')
+  .description('Create .paradigm/echoes.yaml template')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (path, options) => {
+    const { echoInitCommand } = await import('./commands/echo.js');
+    await echoInitCommand(path, options);
+  });
+
+echoCmd
+  .command('list [path]')
+  .alias('ls')
+  .description('List all error mappings')
+  .action(async (path) => {
+    const { echoListCommand } = await import('./commands/echo.js');
+    await echoListCommand(path);
+  });
+
+// Default echo action (with error code argument)
+echoCmd
+  .argument('[errorCode]', 'Error code to look up')
+  .option('--json', 'Output as JSON (for AI agent queries)')
+  .action(async (errorCode, options) => {
+    if (errorCode) {
+      const { echoCommand } = await import('./commands/echo.js');
+      await echoCommand(errorCode, undefined, options);
+    } else {
+      const { echoListCommand } = await import('./commands/echo.js');
+      await echoListCommand();
+    }
   });
 
 // paradigm tutorial <command>

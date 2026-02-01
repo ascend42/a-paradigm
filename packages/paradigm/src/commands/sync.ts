@@ -81,12 +81,22 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
   }
 
   // Sync
-  spinner.start(`Generating ${adapter.outputPath}...`);
+  const isMultiFile = adapter.multiFile;
+  spinner.start(`Generating ${isMultiFile ? adapter.outputPath + '/' : adapter.outputPath}...`);
   const result = syncToIDE(rootDir, targetIDE, files, options.force);
 
   if (result.success) {
     spinner.succeed(chalk.green(result.message));
-    console.log(chalk.gray(`\n  Path: ${result.outputPath}\n`));
+    console.log(chalk.gray(`\n  Path: ${result.outputPath}`));
+    
+    // Show individual files for multi-file adapters
+    if (isMultiFile && adapter.generateFiles) {
+      const generatedFiles = adapter.generateFiles(files);
+      for (const file of generatedFiles) {
+        console.log(chalk.gray(`    └─ ${file.path}`));
+      }
+    }
+    console.log('');
   } else {
     spinner.fail(chalk.red(result.message));
     process.exit(1);
