@@ -1,19 +1,32 @@
-# Setting Up Paradigm MCP with Claude Desktop
+# Setting Up Paradigm MCP
 
-This guide walks you through setting up Paradigm's MCP (Model Context Protocol) server to give Claude Desktop dynamic access to your project's symbols, gates, and flows.
+This guide walks you through setting up Paradigm's MCP (Model Context Protocol) server to give AI assistants dynamic access to your project's symbols, gates, and flows.
+
+---
+
+## Quick Start
+
+```bash
+# Auto-detect and configure MCP for your AI client
+paradigm mcp setup
+
+# Or specify a client
+paradigm mcp setup --client cursor
+paradigm mcp setup --client claude-desktop
+paradigm mcp setup --client all
+```
 
 ---
 
 ## Table of Contents
 
 1. [What is MCP?](#what-is-mcp)
-2. [Prerequisites](#prerequisites)
-3. [Installing Claude Desktop](#installing-claude-desktop)
-4. [Configuring the MCP Server](#configuring-the-mcp-server)
-5. [Verifying the Setup](#verifying-the-setup)
-6. [Using Paradigm MCP](#using-paradigm-mcp)
-7. [Advanced Configuration](#advanced-configuration)
-8. [Troubleshooting](#troubleshooting)
+2. [Quick Setup (Recommended)](#quick-setup-recommended)
+3. [Manual Setup](#manual-setup)
+4. [Supported Clients](#supported-clients)
+5. [Using Paradigm MCP](#using-paradigm-mcp)
+6. [Advanced Configuration](#advanced-configuration)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -51,7 +64,7 @@ Before setting up MCP, ensure you have:
 
 1. **A Paradigm project** — Run `paradigm init` if you haven't already
 2. **Node.js 18+** — Required for the MCP server
-3. **npm** — To run `npx @a-company/paradigm-mcp`
+3. **A supported AI client** — Cursor, Claude Desktop, Continue, or Cline
 
 Verify your project is set up:
 
@@ -59,51 +72,61 @@ Verify your project is set up:
 paradigm status
 ```
 
-You should see your features, components, and other symbols listed.
+---
+
+## Quick Setup (Recommended)
+
+The easiest way to set up MCP is using the `paradigm mcp` command:
+
+```bash
+# Auto-detect installed clients and show options
+paradigm mcp setup
+
+# Configure a specific client
+paradigm mcp setup --client cursor
+paradigm mcp setup --client claude-desktop
+
+# Configure all detected clients
+paradigm mcp setup --client all
+
+# Check current MCP configuration
+paradigm mcp status
+```
+
+The command will:
+1. Detect which AI clients are installed
+2. Generate the appropriate config file
+3. Add it to `.gitignore` (for project-level configs)
+4. Show next steps
 
 ---
 
-## Installing Claude Desktop
+## Supported Clients
 
-### macOS
+| Client | Config Type | Config Location |
+|--------|-------------|-----------------|
+| **Cursor** | Project-level | `.cursor/mcp.json` |
+| **Claude Desktop** | User-level | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Continue (VS Code)** | User-level | `~/.continue/config.json` |
+| **Cline (VS Code)** | Project-level | `.cline/mcp.json` |
 
-1. Download Claude Desktop from [claude.ai/download](https://claude.ai/download)
-2. Open the `.dmg` file and drag Claude to Applications
-3. Launch Claude from Applications
-
-### Windows
-
-1. Download the Windows installer from [claude.ai/download](https://claude.ai/download)
-2. Run the installer
-3. Launch Claude from the Start menu
-
-### Linux
-
-Claude Desktop is not officially available for Linux yet. You can use the web version at [claude.ai](https://claude.ai) (MCP is not supported in the web version).
+**Project-level** configs are specific to a project and can be shared with your team.
+**User-level** configs apply to all projects and are stored in your home directory.
 
 ---
 
-## Configuring the MCP Server
+## Manual Setup
 
-### Step 1: Locate the Config File
+If you prefer manual configuration, here are the config formats for each client:
 
-The Claude Desktop configuration file is located at:
+### Cursor
 
-| OS | Path |
-|----|------|
-| **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-
-If the file doesn't exist, create it.
-
-### Step 2: Add the Paradigm MCP Server
-
-Open or create `claude_desktop_config.json` and add:
+Create `.cursor/mcp.json` in your project:
 
 ```json
 {
   "mcpServers": {
-    "paradigm": {
+    "your-project": {
       "command": "npx",
       "args": ["@a-company/paradigm-mcp"],
       "cwd": "/path/to/your/project"
@@ -112,28 +135,59 @@ Open or create `claude_desktop_config.json` and add:
 }
 ```
 
-**Important:** Replace `/path/to/your/project` with the actual path to your Paradigm project.
+### Claude Desktop
 
-### Step 3: Restart Claude Desktop
-
-Completely quit Claude Desktop (not just close the window) and relaunch it.
-
-### Multiple Projects
-
-To configure multiple projects, add multiple entries:
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
-    "myapp": {
+    "your-project": {
       "command": "npx",
       "args": ["@a-company/paradigm-mcp"],
-      "cwd": "/Users/me/projects/myapp"
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+### Continue (VS Code)
+
+Edit `~/.continue/config.json`:
+
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["@a-company/paradigm-mcp"],
+          "cwd": "/path/to/your/project"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Multiple Projects
+
+For user-level configs (Claude Desktop, Continue), add multiple servers:
+
+```json
+{
+  "mcpServers": {
+    "project-one": {
+      "command": "npx",
+      "args": ["@a-company/paradigm-mcp"],
+      "cwd": "/Users/me/projects/project-one"
     },
-    "api": {
+    "project-two": {
       "command": "npx",
       "args": ["@a-company/paradigm-mcp"],
-      "cwd": "/Users/me/projects/api-backend"
+      "cwd": "/Users/me/projects/project-two"
     }
   }
 }
@@ -143,22 +197,21 @@ To configure multiple projects, add multiple entries:
 
 ## Verifying the Setup
 
-After restarting Claude Desktop, verify the MCP server is connected:
+After configuration, restart your AI client and verify:
 
-1. Open a new conversation in Claude Desktop
-2. Look for the MCP tools icon (hammer/wrench) in the interface
-3. Ask Claude: "What Paradigm tools do you have access to?"
+```bash
+# Check configuration status
+paradigm mcp status
+```
 
-Claude should respond with something like:
+Then in your AI client, ask: "What Paradigm tools do you have access to?"
 
-> I have access to the following Paradigm tools:
-> - `paradigm_search` — Find symbols by query
-> - `paradigm_ripple` — Analyze impact of changes
-> - `paradigm_related` — Get connected symbols
-> - `paradigm_status` — Project overview
-> - `paradigm_gates_for_route` — Suggest gates for routes
-
-If you don't see these, check [Troubleshooting](#troubleshooting).
+The AI should respond with:
+- `paradigm_search` — Find symbols by query
+- `paradigm_ripple` — Analyze impact of changes
+- `paradigm_related` — Get connected symbols
+- `paradigm_status` — Project overview
+- `paradigm_gates_for_route` — Suggest gates for routes
 
 ---
 
@@ -277,10 +330,10 @@ For development, point to your local build:
 
 ### "MCP server not found" or tools not appearing
 
-1. **Check the config file path** — Ensure it's in the correct location for your OS
+1. **Run `paradigm mcp status`** — Check if config exists
 2. **Verify JSON syntax** — Use a JSON validator to check for syntax errors
 3. **Check the project path** — Ensure `cwd` points to a valid Paradigm project
-4. **Restart Claude Desktop completely** — Quit and relaunch, don't just close the window
+4. **Restart the AI client completely** — Quit and relaunch, don't just close the window
 
 ### "npx command not found"
 
@@ -305,11 +358,23 @@ npx @a-company/paradigm-mcp
 
 Look for error messages about missing files or parsing issues.
 
-### Claude says it can't access tools
+### AI says it can't access tools
 
-1. **Check MCP icon** — Ensure the tools icon appears in Claude Desktop
+1. **Check MCP tools icon** — Ensure it appears in your AI client's interface
 2. **Try a fresh conversation** — Start a new chat
-3. **Verify permissions** — Ensure Claude Desktop has file system access
+3. **Verify permissions** — Ensure the AI client has file system access
+
+### Configuration conflicts
+
+If you have multiple projects configured:
+
+```bash
+# Check status across all clients
+paradigm mcp status
+
+# Reconfigure with force flag
+paradigm mcp setup --client cursor --force
+```
 
 ---
 

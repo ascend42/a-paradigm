@@ -455,5 +455,38 @@ tutorialCmd
     await tutorialBugsCommand(path);
   });
 
+// paradigm mcp <command>
+const mcpCmd = program
+  .command('mcp')
+  .description('MCP server configuration for AI clients');
+
+mcpCmd
+  .command('setup')
+  .description('Configure MCP server for detected AI clients')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, continue, cline, all')
+  .option('-f, --force', 'Overwrite existing config')
+  .option('--json', 'Output as JSON')
+  .option('--no-gitignore', 'Do not add config to .gitignore')
+  .action(async (options) => {
+    const { mcpSetupCommand } = await import('./commands/mcp/setup.js');
+    await mcpSetupCommand(options);
+  });
+
+mcpCmd
+  .command('status')
+  .description('Show MCP configuration status across clients')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpStatusCommand } = await import('./commands/mcp/setup.js');
+    await mcpStatusCommand(options);
+  });
+
+// Default mcp action (show status)
+mcpCmd
+  .action(async () => {
+    const { mcpStatusCommand } = await import('./commands/mcp/setup.js');
+    await mcpStatusCommand({});
+  });
+
 // Parse and run
 program.parse();
