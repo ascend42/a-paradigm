@@ -247,6 +247,31 @@ program
     await costCommand(path, options);
   });
 
+// paradigm scan <subcommand>
+const scanCmd = program
+  .command('scan')
+  .description('Visual discovery and auto-generation commands');
+
+scanCmd
+  .command('auto [path]')
+  .description('Auto-generate .purpose files from code analysis')
+  .option('-n, --dry-run', 'Show what would be generated without writing')
+  .option('-f, --force', 'Overwrite existing .purpose files')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { autoScanCommand } = await import('./commands/scan/auto.js');
+    await autoScanCommand(path, options);
+  });
+
+// Default scan action (show help)
+scanCmd
+  .action(() => {
+    console.log('\nUsage: paradigm scan <command>\n');
+    console.log('Commands:');
+    console.log('  auto [path]  Auto-generate .purpose files from code analysis');
+    console.log('\nRun `paradigm scan auto --help` for options.\n');
+  });
+
 // paradigm doctor
 program
   .command('doctor')
