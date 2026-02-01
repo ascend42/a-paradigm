@@ -20,8 +20,8 @@ import type {
  * Default dev settings
  */
 const DEFAULT_DEV_SETTINGS = {
-  visualizerPort: 3100,
-  watcherPort: 3101,
+  visualizerPort: 42195,  // Marathon: 42.195km
+  watcherPort: 42196,     // Marathon + 1
   autoConnect: true,
 };
 
@@ -258,8 +258,8 @@ export function getDefaultGateConfig(): string {
     },
     settings: {
       dev: {
-        visualizerPort: 3100,
-        watcherPort: 3101,
+        visualizerPort: 42195,  // Marathon: 42.195km
+        watcherPort: 42196,     // Marathon + 1
         autoConnect: true,
       },
     },
