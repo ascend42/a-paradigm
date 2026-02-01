@@ -42,6 +42,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Covers Cursor (.mdc) and Copilot (.instructions.md) formats
   - Includes file structure examples and frontmatter syntax
 
+- **MCP Setup Guide** (`docs/guides/mcp-setup.md`) - Comprehensive guide for Claude Desktop integration
+  - Step-by-step installation and configuration
+  - Available resources and tools reference
+  - Example conversations showing MCP in action
+  - Troubleshooting section
+
+- **Content Guide** (`docs/content-guide.md`) - Structure for YouTube and blog content
+  - 7-video YouTube series with detailed scripts
+  - 5-part blog post series outlines
+  - Production notes and visual guidelines
+  - Call-to-action templates
+
+- **TaskFlow Tutorial** (`docs/tutorial-project.md`) - Build-along tutorial project
+  - 6-episode guide building a task management app
+  - Demonstrates all Paradigm features
+  - AI interaction scripts for each episode
+  - Starter repository structure
+  - Teaching moments with intentional mistakes
+
+- **Project `.purpose` Files** - Paradigm now documents itself
+  - Root `.purpose` with 8 features, 20+ components
+  - Package-level `.purpose` files for CLI, MCP, Portal, Prism, etc.
+  - Full symbol coverage of the framework
+
 ### Changed
 - **README.md** - Complete rewrite reflecting evolved project
   - Better value proposition and problem statement
@@ -49,6 +73,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Agent efficiency features prominently featured
   - IDE support and migration documentation
   - Cleaner structure with practical examples
+  - Added MCP Server section with Claude Desktop config example
+
+- **Website Outline** (`docs/website-outline.md`) - Updated with MCP documentation
+  - Added MCP Server product page (Section 4.5)
+  - Added Claude Desktop to IDE integration
+  - Added MCP-specific use case
+  - Updated navigation and SEO keywords
+  - Added TaskFlow tutorial reference
 
 ### Fixed
 - **Symbol Indexer** - Fixed parsing of flows, gates, states from `.purpose` files

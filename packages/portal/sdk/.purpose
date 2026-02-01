@@ -1,0 +1,60 @@
+version: 1.0.0
+description: |
+  @a-company/portal-sdk - Runtime SDK for checking gates in applications.
+  Provides decorators, evaluators, and client APIs for authorization checks.
+
+features:
+  gate-checking:
+    description: "@gate-checking: Runtime evaluation of gate conditions"
+    components: [#evaluator, #context-resolver]
+    gates: [^gate-check]
+    signals: [!gate-passed, !gate-denied]
+
+  decorator-api:
+    description: "@decorator-api: TypeScript decorators for gate protection"
+    components: [#gate-decorator, #require-decorator]
+
+  client-api:
+    description: "@client-api: Programmatic API for gate checks"
+    components: [#portal-client, #gate-client]
+
+components:
+  evaluator:
+    description: "#evaluator: Evaluates gate keys against context"
+    used-by: [@gate-checking]
+
+  context-resolver:
+    description: "#context-resolver: Resolves user context for evaluation"
+    used-by: [@gate-checking]
+
+  gate-decorator:
+    description: "#gate-decorator: @Gate() decorator for methods"
+    used-by: [@decorator-api]
+
+  require-decorator:
+    description: "#require-decorator: @Require() decorator for properties"
+    used-by: [@decorator-api]
+
+  portal-client:
+    description: "#portal-client: High-level client for portal operations"
+    used-by: [@client-api]
+
+  gate-client:
+    description: "#gate-client: Low-level gate checking client"
+    used-by: [@client-api]
+
+gates:
+  gate-check:
+    description: "^gate-check: Internal gate for SDK validation"
+    keys: [context.valid]
+
+signals:
+  gate-passed:
+    description: "!gate-passed: Gate check passed, access granted"
+    category: portal
+    severity: info
+
+  gate-denied:
+    description: "!gate-denied: Gate check failed, access denied"
+    category: portal
+    severity: warn

@@ -1,0 +1,37 @@
+version: 1.0.0
+description: |
+  @a-company/probe-core - Visual discovery layer for AI agents.
+  Generates scan indexes for UI-to-code mapping via screenshots.
+
+features:
+  scan-index-generation:
+    description: "@scan-index-generation: Generate scan-index.json for component mapping"
+    components: [#generator, #component-scanner]
+    signals: [!index-generated]
+
+  probe-protocol:
+    description: "@probe-protocol: Protocol for image-to-code queries"
+    components: [#protocol-handler, #matcher]
+
+components:
+  generator:
+    description: "#generator: Generates scan-index.json"
+    used-by: [@scan-index-generation]
+
+  component-scanner:
+    description: "#component-scanner: Scans for UI components"
+    used-by: [@scan-index-generation]
+
+  protocol-handler:
+    description: "#protocol-handler: Handles probe protocol requests"
+    used-by: [@probe-protocol]
+
+  matcher:
+    description: "#matcher: Matches images to components"
+    used-by: [@probe-protocol]
+
+signals:
+  index-generated:
+    description: "!index-generated: Scan index was generated"
+    category: probe
+    severity: info

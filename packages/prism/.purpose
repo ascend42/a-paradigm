@@ -1,0 +1,96 @@
+version: 1.0.0
+description: |
+  @a-company/prism - The Dreamscape infinite canvas visualizer.
+  React + Vite application for exploring symbol relationships visually.
+
+features:
+  infinite-canvas:
+    description: "@infinite-canvas: Pannable, zoomable canvas for symbols"
+    components: [#canvas-component, #canvas-grid, #viewport-controller]
+    states: ["%canvas.viewport", "%canvas.zoom"]
+
+  symbol-nodes:
+    description: "@symbol-nodes: Visual representation of symbols"
+    components: [#node-renderer, #node-styles]
+    states: ["%node.selected", "%node.hovered"]
+
+  connection-lines:
+    description: "@connection-lines: Lines showing symbol relationships"
+    components: [#connection-component, #line-renderer]
+
+  properties-panel:
+    description: "@properties-panel: Side panel showing symbol details"
+    components: [#panel-component, #detail-renderer]
+
+  command-input:
+    description: "@command-input: Search and command input with autocomplete"
+    components: [#input-component, #autocomplete]
+
+  help-panel:
+    description: "@help-panel: Keyboard shortcuts and help documentation"
+    components: [#help-component]
+
+components:
+  canvas-component:
+    description: "#canvas-component: Main canvas React component"
+    used-by: [@infinite-canvas]
+
+  canvas-grid:
+    description: "#canvas-grid: Background grid for the canvas"
+    used-by: [@infinite-canvas]
+
+  viewport-controller:
+    description: "#viewport-controller: Manages pan/zoom state"
+    used-by: [@infinite-canvas]
+
+  node-renderer:
+    description: "#node-renderer: Renders symbol nodes"
+    used-by: [@symbol-nodes]
+
+  node-styles:
+    description: "#node-styles: Styling for different node types"
+    used-by: [@symbol-nodes]
+
+  connection-component:
+    description: "#connection-component: SVG connection lines"
+    used-by: [@connection-lines]
+
+  line-renderer:
+    description: "#line-renderer: Renders line paths"
+    used-by: [@connection-lines]
+
+  panel-component:
+    description: "#panel-component: Properties panel component"
+    used-by: [@properties-panel]
+
+  detail-renderer:
+    description: "#detail-renderer: Renders symbol details"
+    used-by: [@properties-panel]
+
+  input-component:
+    description: "#input-component: Command input field"
+    used-by: [@command-input]
+
+  autocomplete:
+    description: "#autocomplete: Autocomplete suggestions"
+    used-by: [@command-input]
+
+  help-component:
+    description: "#help-component: Help panel component"
+    used-by: [@help-panel]
+
+states:
+  canvas:
+    viewport:
+      type: object
+      description: "%canvas.viewport: Current viewport position"
+    zoom:
+      type: number
+      description: "%canvas.zoom: Current zoom level"
+  node:
+    selected:
+      type: string
+      description: "%node.selected: Currently selected node ID"
+    hovered:
+      type: string
+      description: "%node.hovered: Currently hovered node ID"

@@ -1,0 +1,83 @@
+version: 1.0.0
+description: |
+  @a-company/paradigm-mcp - MCP (Model Context Protocol) server for Paradigm.
+  Exposes symbols, gates, flows, and analysis tools to AI assistants like Claude.
+  Technology agnostic - works with any language or framework.
+
+features:
+  mcp-resources:
+    description: "@mcp-resources: Read-only data exposed via MCP protocol"
+    components: [#symbols-resource, #gates-resource, #flows-resource]
+    signals: [!resource-read]
+
+  mcp-tools:
+    description: "@mcp-tools: Actions AI can invoke via MCP protocol"
+    components: [#search-tool, #ripple-tool, #related-tool, #status-tool, #gates-for-route-tool]
+    signals: [!tool-invoked]
+
+  index-loading:
+    description: "@index-loading: Load project symbol index on startup"
+    components: [#index-loader, #context-manager]
+    signals: [!context-loaded, !context-error]
+
+components:
+  symbols-resource:
+    description: "#symbols-resource: paradigm://symbols and paradigm://symbol/{symbol}"
+    used-by: [@mcp-resources]
+
+  gates-resource:
+    description: "#gates-resource: paradigm://gates with lock/key details"
+    used-by: [@mcp-resources]
+
+  flows-resource:
+    description: "#flows-resource: paradigm://flows with step sequences"
+    used-by: [@mcp-resources]
+
+  search-tool:
+    description: "#search-tool: paradigm_search - find symbols by query"
+    used-by: [@mcp-tools]
+
+  ripple-tool:
+    description: "#ripple-tool: paradigm_ripple - impact analysis"
+    used-by: [@mcp-tools]
+
+  related-tool:
+    description: "#related-tool: paradigm_related - connected symbols"
+    used-by: [@mcp-tools]
+
+  status-tool:
+    description: "#status-tool: paradigm_status - project overview"
+    used-by: [@mcp-tools]
+
+  gates-for-route-tool:
+    description: "#gates-for-route-tool: paradigm_gates_for_route - suggest gates"
+    used-by: [@mcp-tools]
+
+  index-loader:
+    description: "#index-loader: Loads symbol index using premise-core"
+    used-by: [@index-loading]
+
+  context-manager:
+    description: "#context-manager: Manages project context state"
+    used-by: [@index-loading]
+
+signals:
+  resource-read:
+    description: "!resource-read: MCP resource was fetched"
+    category: mcp
+    severity: info
+
+  tool-invoked:
+    description: "!tool-invoked: MCP tool was called"
+    category: mcp
+    severity: info
+
+  context-loaded:
+    description: "!context-loaded: Project context successfully loaded"
+    category: mcp
+    severity: info
+
+  context-error:
+    description: "!context-error: Failed to load project context"
+    category: mcp
+    severity: error
