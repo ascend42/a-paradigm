@@ -58,7 +58,15 @@ interface StateDefinition {
  */
 interface SignalDefinition {
     description?: string;
+    /** Category for grouping: auth | billing | lead | conversion | sdk | integration | system */
     category?: string;
+    /** Severity level: info | warn | error (default: info) */
+    severity?: 'info' | 'warn' | 'error';
+    /** Files that emit this signal */
+    emitters?: string[];
+    /** Related symbols (@features, ^gates, $flows, etc.) */
+    related?: string[];
+    /** Expected payload shape */
     data?: Record<string, unknown>;
 }
 /**
