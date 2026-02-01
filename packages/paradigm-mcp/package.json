@@ -29,5 +29,18 @@
   "devDependencies": {
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-horizon.git",
+    "directory": "packages/paradigm-mcp"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
