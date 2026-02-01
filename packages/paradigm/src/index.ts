@@ -5,7 +5,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
-import { visualizeCommand } from './commands/visualize.js';
 import { statusCommand } from './commands/status.js';
 
 const VERSION = '0.6.0';
@@ -47,16 +46,6 @@ program
     const { setupCommand } = await import('./commands/setup.js');
     await setupCommand(path, options);
   });
-
-// paradigm visualize
-program
-  .command('visualize')
-  .alias('vis')
-  .alias('v')
-  .description('Launch the Prism visualizer')
-  .option('-p, --port <port>', 'Port to run the visualizer on', '42197')
-  .option('--no-open', 'Do not auto-open browser')
-  .action(visualizeCommand);
 
 // paradigm status
 program

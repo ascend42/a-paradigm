@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No changes yet)
+### Deprecated
+- **`paradigm visualize` command** - Removed in favor of AI-first workflows
+  - The Prism visualizer is no longer bundled with the CLI
+  - Use `paradigm constellation --format json` for graph data export
+  - Use `paradigm beacon` for AI-readable project orientation
+  - The `packages/prism/` source remains in the repo for potential future use
+
+### Fixed
+- Schema now accepts string format for relationships (e.g., `"@feature USES #component"`)
+- Schema now accepts string format for flow steps (simple descriptions)
+- Validator handles both string and object formats gracefully
 
 ---
 

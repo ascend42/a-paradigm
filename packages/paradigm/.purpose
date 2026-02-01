@@ -104,10 +104,6 @@ features:
     description: "Health check and diagnostics"
     components: ["#doctor-handler", "#health-checker"]
 
-  visualize-command:
-    description: "Open the Prism visualizer"
-    components: ["#visualize-handler", "#server-launcher"]
-
 components:
   init-handler:
     description: "Handles paradigm init command logic"
@@ -284,14 +280,6 @@ components:
   health-checker:
     description: "Validates project setup"
     used-by: ["@doctor-command"]
-
-  visualize-handler:
-    description: "Launches Prism visualizer"
-    used-by: ["@visualize-command"]
-
-  server-launcher:
-    description: "Starts local HTTP server for visualizer"
-    used-by: ["@visualize-command"]
 
 signals:
   init-success:

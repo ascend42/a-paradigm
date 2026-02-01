@@ -10,12 +10,10 @@
   },
   "files": [
     "dist",
-    "visualizer-dist",
     "templates"
   ],
   "scripts": {
     "build": "tsup",
-    "postbuild": "node scripts/bundle-visualizer.js",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
@@ -31,8 +29,7 @@
     "commander": "^11.1.0",
     "js-yaml": "^4.1.0",
     "open": "^10.0.3",
-    "ora": "^8.0.1",
-    "sirv": "^3.0.2"
+    "ora": "^8.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -58,8 +55,8 @@
     "cli",
     "developer-tools",
     "ai-context",
-    "documentation",
-    "visualization"
+    "mcp",
+    "documentation"
   ],
   "engines": {
     "node": ">=18.0.0"
