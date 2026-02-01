@@ -111,3 +111,5 @@ $RECYCLE.BIN/
 # Uncomment if you want to ignore TypeScript config files
 # tsconfig.json
 # tsconfig.*.json
+# MCP config (contains local paths)
+.cursor/mcp.json

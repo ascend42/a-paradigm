@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables dynamic mid-conversation context fetching
   - Usage: `npx @a-company/paradigm-mcp` or add to Claude Desktop config
 
+- **MCP Setup Command** (`paradigm mcp setup`) - Auto-configure MCP for AI clients
+  - Detects installed clients: Cursor, Claude Desktop, Continue, Cline
+  - Generates appropriate config files for each client
+  - `paradigm mcp setup --client cursor` for specific client
+  - `paradigm mcp setup --client all` for all detected clients
+  - `paradigm mcp status` to check configuration
+  - Auto-adds project-level configs to `.gitignore`
+
 - **Enhanced Signals Schema** - Extended `SignalDefinition` for richer metadata
   - Added `severity` field: `'info' | 'warn' | 'error'`
   - Added `emitters` field: Array of files that emit this signal
