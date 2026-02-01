@@ -2,7 +2,7 @@
  * Session and Report Types
  */
 
-import type { PortalSession, ViewerEvent } from '../types.js';
+import type { ViewerEvent } from '../types.js';
 
 export interface SessionReport {
   // Metadata
@@ -52,7 +52,7 @@ export interface GateReport {
   passCount: number;
   failCount: number;
   passRate: number;
-  lastDecision?: 'allow' | 'deny';
+  lastDecision?: 'pending' | 'allow' | 'deny';
   lastReason?: string;
 }
 
