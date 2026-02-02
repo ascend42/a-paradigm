@@ -28,6 +28,11 @@ import { ParadigmQuickFixProvider, createSymbolCommand } from './providers/quick
 
 let indexService: IndexService | null = null;
 let statusBarItem: vscode.StatusBarItem | null = null;
+let outputChannel: vscode.OutputChannel | null = null;
+
+function log(message: string): void {
+  outputChannel?.appendLine(`[${new Date().toISOString()}] ${message}`);
+}
 
 // Document selectors for various file types
 const PURPOSE_SELECTOR: vscode.DocumentSelector = { language: 'purpose' };
@@ -52,51 +57,69 @@ const ALL_SELECTORS: vscode.DocumentSelector = [
 ];
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  console.log('Paradigm extension activating...');
+  // Create output channel first
+  outputChannel = vscode.window.createOutputChannel('Paradigm');
+  context.subscriptions.push(outputChannel);
+  outputChannel.show(true);
+
+  log('Paradigm extension activating...');
 
   // Get workspace root
   const workspaceFolders = vscode.workspace.workspaceFolders;
+  log(`Workspace folders: ${workspaceFolders?.length ?? 0}`);
+
   if (!workspaceFolders || workspaceFolders.length === 0) {
-    console.log('No workspace folder found, Paradigm extension not activated');
+    log('No workspace folder found, Paradigm extension not activated');
     return;
   }
 
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  log(`Workspace root: ${workspaceRoot}`);
 
-  // Initialize index service
-  indexService = new IndexService(workspaceRoot);
-
-  // Create status bar item
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  );
-  statusBarItem.text = '$(sync~spin) Paradigm';
-  statusBarItem.tooltip = 'Paradigm: Building symbol index...';
-  statusBarItem.show();
-  context.subscriptions.push(statusBarItem);
-
-  // Initialize index
   try {
+    // Initialize index service
+    log('Creating IndexService...');
+    indexService = new IndexService(workspaceRoot, log);
+
+    // Create status bar item
+    statusBarItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      100
+    );
+    statusBarItem.text = '$(sync~spin) Paradigm';
+    statusBarItem.tooltip = 'Paradigm: Building symbol index...';
+    statusBarItem.show();
+    context.subscriptions.push(statusBarItem);
+
+    // Initialize index
+    log('Initializing index...');
     await indexService.initialize();
+    log(`Index ready with ${indexService.getAllSymbols().length} symbols`);
     updateStatusBar('ready');
+
+    // Register index update handler
+    context.subscriptions.push(
+      indexService.onDidUpdateIndex(() => {
+        updateStatusBar('ready');
+      })
+    );
+
+    // Register providers
+    log('Registering providers...');
+    registerProviders(context, indexService);
+
+    // Register commands
+    log('Registering commands...');
+    registerCommands(context, indexService);
+
+    log('Paradigm extension activated successfully');
   } catch (error) {
-    console.error('Failed to initialize Paradigm index:', error);
+    log(`FATAL ERROR during activation: ${error}`);
+    if (error instanceof Error) {
+      log(`Stack: ${error.stack}`);
+    }
     updateStatusBar('error');
   }
-
-  // Register index update handler
-  context.subscriptions.push(
-    indexService.onDidUpdateIndex(() => {
-      updateStatusBar('ready');
-    })
-  );
-
-  // Register providers
-  registerProviders(context, indexService);
-
-  // Register commands
-  registerCommands(context, indexService);
 
   console.log('Paradigm extension activated');
 }
