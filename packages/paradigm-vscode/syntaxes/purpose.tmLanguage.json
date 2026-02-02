@@ -1,0 +1,121 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Purpose",
+  "scopeName": "source.purpose",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#constants" },
+    { "include": "#keywords" },
+    { "include": "#symbols" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.purpose",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.purpose",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.purpose",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.purpose",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.purpose",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.purpose",
+          "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.purpose",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.purpose",
+          "match": "\\b(null|~)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.purpose",
+          "match": "^\\s*(description|features|components|gates|states|signals|flows|relationships|references|context|rules|apiSpec|version):"
+        },
+        {
+          "name": "support.type.property-name.purpose",
+          "match": "^\\s*[a-zA-Z][a-zA-Z0-9_-]*:"
+        }
+      ]
+    },
+    "symbols": {
+      "patterns": [
+        {
+          "name": "entity.name.function.paradigm.feature",
+          "match": "@[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "entity.name.class.paradigm.component",
+          "match": "#[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "keyword.control.paradigm.gate",
+          "match": "\\^[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "variable.other.paradigm.signal",
+          "match": "![a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "constant.language.paradigm.flow",
+          "match": "\\$[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "variable.language.paradigm.state",
+          "match": "%[a-zA-Z][a-zA-Z0-9._-]*"
+        },
+        {
+          "name": "comment.paradigm.idea",
+          "match": "\\?[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "invalid.deprecated.paradigm",
+          "match": "~[a-zA-Z][a-zA-Z0-9_-]*"
+        },
+        {
+          "name": "string.other.paradigm.integration",
+          "match": "&[a-zA-Z][a-zA-Z0-9_-]*"
+        }
+      ]
+    }
+  }
+}

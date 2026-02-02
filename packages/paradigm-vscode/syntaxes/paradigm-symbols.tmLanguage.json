@@ -1,0 +1,52 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Paradigm Symbols",
+  "scopeName": "source.paradigm.symbols",
+  "patterns": [
+    {
+      "name": "entity.name.function.paradigm.feature",
+      "match": "@[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Feature symbol: @checkout, @login"
+    },
+    {
+      "name": "entity.name.class.paradigm.component",
+      "match": "#[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Component symbol: #Button, #Modal"
+    },
+    {
+      "name": "keyword.control.paradigm.gate",
+      "match": "\\^[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Gate symbol: ^authenticated, ^admin"
+    },
+    {
+      "name": "variable.other.paradigm.signal",
+      "match": "![a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Signal symbol: !login-success, !error"
+    },
+    {
+      "name": "constant.language.paradigm.flow",
+      "match": "\\$[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Flow symbol: $checkout-flow, $onboarding"
+    },
+    {
+      "name": "variable.language.paradigm.state",
+      "match": "%[a-zA-Z][a-zA-Z0-9._-]*",
+      "comment": "State symbol: %user.authenticated, %cart.items"
+    },
+    {
+      "name": "comment.paradigm.idea",
+      "match": "\\?[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Idea symbol: ?subscription-model"
+    },
+    {
+      "name": "invalid.deprecated.paradigm",
+      "match": "~[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Deprecated symbol: ~legacy-api"
+    },
+    {
+      "name": "string.other.paradigm.integration",
+      "match": "&[a-zA-Z][a-zA-Z0-9_-]*",
+      "comment": "Integration symbol: &stripe, &analytics"
+    }
+  ]
+}
