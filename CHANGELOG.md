@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-02-02
+
+### Fixed
+
+- **Symbol `~` Definition** - Standardized on "Deprecated" (was inconsistently "Aspects" in some files)
+  - Updated symbols.md, beacon.ts, constellation.ts, tutorial, and all templates
+  - Symbol now consistently means "marked for removal" across all documentation
+
+- **Logger Method Naming** - Standardized on `log.gate()` for portal/gate logging
+  - Changed from `log.portal()` to `log.gate()` to match `^` gate symbol
+  - Updated logger.md, symbols.md, patterns.md, and all template files
+
+- **Broken Reference** - Removed reference to non-existent `specs/ftux-component-system.md`
+
+### Changed
+
+- **CLAUDE.md Optimization** - Reduced from 135 to 81 lines
+  - Removed duplicated logger spec (now references spec file)
+  - Added AI Agent Systems table (Navigator, Wisdom, History)
+  - Streamlined symbol table and conventions
+
+- **File Organization** - Cleaned up root directory
+  - Moved 9 `paradigm-*.md` prompt files to `.plans/` (gitignored)
+  - Deleted empty `paradigm-wisdom-history.md`
+  - Deleted internal `A-COMPANY-WEBSITE-VISION.md`
+  - Renamed `horizon-config.ts` → `legacy-config.ts`
+
+- **Templates Updated** - `paradigm init` now generates correct files
+  - Added navigator.md, wisdom.md, history.md to template specs
+  - All templates use `log.gate()` consistently
+  - All templates define `~` as "Deprecated"
+
+- **Example Cleanup** - Migrated `examples/shopflow/.horizon/` → `.paradigm/`
+  - Updated all internal references from .horizon to .paradigm
+
+### Added
+
+- **Minimal Setup Guide** - Added "Getting Started with Minimal Paradigm" section to README
+- **.gitignore Entries** - Added `.plans/`, `.claude/settings.local.json`, `.cursor/plans/`, `*.prompt.md`, `.mcp.json`
+
+---
+
 ## [1.2.0] - 2026-02-02
 
 ### Added
