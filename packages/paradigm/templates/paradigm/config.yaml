@@ -22,7 +22,7 @@ agent-guidelines:
     - "Run `paradigm probe` with screenshots to map UI to code"
     - "Check .paradigm/docs/ for command reference and troubleshooting"
     - "Read .index.yaml files first when navigating documentation"
-    - "Use Phoenix Protocol when approaching context limits"
+    - "Use `paradigm team handoff` when approaching context limits"
   
   update-rules:
     - "When adding a feature, create/update the nearest .purpose file"
@@ -185,16 +185,13 @@ conventions:
   - "Use signals for side effects, not direct state mutations"
   - "ALWAYS use Paradigm logger, NEVER raw console.log/print"
 
-# AI agent context management (Phoenix Protocol)
+# AI agent context management
 ai-agent:
   # Model being used
   model: claude-opus-4.5
   # Context window size in tokens
   context-window: 200000
-  # Threshold to trigger phoenix protocol (percentage)
-  phoenix-threshold: 0.8
-  # Where phoenix files are written
-  phoenix-path: .context/phoenix.yaml
+  # Use `paradigm team handoff` for context continuity
 
 # Documentation index settings
 context:

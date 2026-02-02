@@ -376,7 +376,7 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
    - Logger method mapping
    - Key file locations
    - Critical conventions
-   - Phoenix Protocol summary (3 lines)
+   - Team handoff summary (3 lines)
    - Pointers to full specs
 
 2. **Move details to `.paradigm/specs/`:**
@@ -388,7 +388,7 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
    |------|----------------|
    | `.paradigm/specs/symbols.md` | Full symbol reference |
    | `.paradigm/specs/logger.md` | Logging patterns |
-   | `.paradigm/specs/phoenix.md` | Context handoff protocol |
+   | `paradigm team --help` | Context handoff commands |
    ```
 
 3. **Use on-demand loading:**
@@ -444,8 +444,8 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
 | `.purpose` | Features/flows |
 | `.index.yaml` | Doc index — READ FIRST |
 
-## Phoenix Protocol
-At ~80% context: write `.context/phoenix.yaml`, notify user.
+## Context Handoff
+At ~80% context: `paradigm team handoff --to <agent>`, start new session.
 
 ## Full Specs
 Read on-demand: `.paradigm/specs/`

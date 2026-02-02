@@ -359,45 +359,88 @@ paradigm premise snapshot "pre-refactor" -d "Before auth rewrite"
 4. **Keep probe index fresh** with regular `paradigm index` runs
 5. **Check `.paradigm/specs/`** before asking "how do I..."
 6. **Read `.index.yaml` first** when navigating documentation
-7. **Use Phoenix Protocol** when approaching context limits
+7. **Use `paradigm team handoff`** when approaching context limits
 
 ---
 
-## Phoenix Protocol
+## paradigm team
 
-The Phoenix Protocol enables AI context continuity across conversation boundaries.
+**Multi-agent orchestration and context handoffs.**
 
-### When It Triggers
+### paradigm team init
 
-- AI estimates ~80% context capacity used
-- User mentions context is getting long
-- Before suggesting "continue in new chat"
+Initialize team configuration with default agents.
 
-### What Happens
+```bash
+paradigm team init
+paradigm team init --force
+```
 
-1. AI writes `.context/phoenix.yaml` with:
-   - Completed tasks
-   - In-progress work
-   - Pending tasks
-   - Critical memories
-   - Files touched
-   - Warnings/gotchas
+### paradigm team status
 
-2. AI notifies user
+Show current team status.
 
-3. User starts new chat
+```bash
+paradigm team
+paradigm team status
+paradigm team status --json
+```
 
-4. New AI reads ashes and continues
+### paradigm team handoff
 
-### Files
+Hand off work to another agent (or for context continuity).
 
-| File | Purpose |
-|------|---------|
-| `.context/phoenix.yaml` | Active handoff file |
-| `.context/phoenix.yaml.risen` | Consumed file (audit trail) |
-| `.context/README.md` | Protocol documentation |
+```bash
+# Hand off to specific agent
+paradigm team handoff --to builder --summary "Auth spec complete"
 
-See `.paradigm/specs/phoenix.md` for full specification.
+# Context continuity (hand off to same role in new session)
+paradigm team handoff --to architect --summary "Continuing auth work"
+```
+
+### paradigm team accept
+
+Accept a pending handoff.
+
+```bash
+paradigm team accept h001
+paradigm team accept h001 --note "Starting implementation"
+```
+
+### paradigm team check
+
+Check for conflicts and team health.
+
+```bash
+paradigm team check
+```
+
+### paradigm team history
+
+Show team activity history.
+
+```bash
+paradigm team history
+paradigm team history --limit 20
+```
+
+### paradigm team reset
+
+Reset team state for fresh start.
+
+```bash
+paradigm team reset
+paradigm team reset --force
+```
+
+### Context Continuity
+
+When approaching context limits, use `paradigm team handoff` to preserve state:
+
+1. Run `paradigm team handoff --to <agent> --summary "Context checkpoint"`
+2. Start new chat
+3. New session runs `paradigm team status` to see pending handoff
+4. Accept with `paradigm team accept <id>`
 
 ---
 

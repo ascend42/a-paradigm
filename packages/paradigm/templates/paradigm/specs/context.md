@@ -341,8 +341,8 @@ subdirs:
   - path: docs/
     summary: Design and architecture documentation
     index: docs/.index.yaml
-  - path: .context/
-    summary: Phoenix protocol files
+  - path: .paradigm/team/
+    summary: Multi-agent handoff files
 ```
 
 ---
@@ -390,7 +390,7 @@ A bloated `.cursorrules` wastes thousands of tokens before you even type.
 - Logger method mapping table
 - Key file locations
 - Critical conventions (5-10 rules)
-- Phoenix Protocol summary (3 lines)
+- Team handoff summary (3 lines)
 - Table of pointers to full specs
 
 #### Move to `.paradigm/specs/` (read on-demand)
@@ -399,7 +399,7 @@ A bloated `.cursorrules` wastes thousands of tokens before you even type.
 - Logger implementation patterns
 - Changelog/commit format details
 - Documentation navigation protocol
-- Complete Phoenix Protocol schema
+- Complete Team handoff documentation
 - Source of truth hierarchy
 
 ### Measuring Context Cost
@@ -429,7 +429,7 @@ echo "Tokens: $(( $(wc -c < .cursorrules) / 4 ))"
 ## Logger Mapping (table)
 ## Key Files (table)
 ## Conventions (5 bullets)
-## Phoenix (3 lines)
+## Team Handoff (3 lines)
 ## Specs (reference table)
 ```
 
