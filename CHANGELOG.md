@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Minimal Setup Guide** - Added "Getting Started with Minimal Paradigm" section to README
 - **.gitignore Entries** - Added `.plans/`, `.claude/settings.local.json`, `.cursor/plans/`, `*.prompt.md`, `.mcp.json`
 
+### Removed
+
+- **Phoenix Protocol** - Removed in favor of `paradigm team handoff`
+  - Deleted `.paradigm/specs/phoenix.md` and template
+  - Deleted `.paradigm/prompts/phoenix-handoff.md` and template
+  - Removed `phoenix-threshold` and `phoenix-path` from config.yaml
+  - Updated docs to reference `paradigm team handoff` for context continuity
+  - The Team system's handoff command provides the same functionality with better structure
+
 ---
 
 ## [1.2.0] - 2026-02-02

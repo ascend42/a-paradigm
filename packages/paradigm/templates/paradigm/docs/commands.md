@@ -73,53 +73,11 @@ paradigm sync --all
 ```
 
 **Output files:**
-| IDE | Output |
-|-----|--------|
-| Cursor | `.cursor/rules/*.mdc` (multiple files) |
-| GitHub Copilot | `.github/instructions/*.instructions.md` + `.github/copilot-instructions.md` |
+| IDE | Output File |
+|-----|-------------|
+| Cursor | `.cursorrules` |
+| GitHub Copilot | `.github/copilot-instructions.md` |
 | Windsurf | `.windsurfrules` |
-
-### Modern Cursor Format
-
-Cursor now uses the `.cursor/rules/*.mdc` format with YAML frontmatter:
-
-```
-.cursor/rules/
-  paradigm-core.mdc          # alwaysApply: true
-  paradigm-symbols.mdc       # alwaysApply: true
-  paradigm-logging.mdc       # globs: **/*.{ts,tsx}
-  paradigm-purpose.mdc       # globs: **/.purpose
-  paradigm-portal.mdc        # globs: **/portal.yaml
-  paradigm-conventions.mdc   # globs: **/*.{ts,tsx}
-  paradigm-commands.mdc      # manual selection
-```
-
-Each `.mdc` file has frontmatter controlling when it loads:
-- `alwaysApply: true` - Loads for every conversation
-- `globs: pattern` - Only loads when matching files are open
-- No options - Manual selection in Cursor's rule picker
-
-### Modern Copilot Format
-
-Copilot now uses `.github/instructions/*.instructions.md` with `applyTo` frontmatter:
-
-```
-.github/
-  copilot-instructions.md              # Always applies (core instructions)
-  instructions/
-    paradigm-symbols.instructions.md   # applyTo: "**/*.ts,**/*.tsx"
-    paradigm-logging.instructions.md   # applyTo: "**/*.ts,**/*.tsx"
-    paradigm-purpose.instructions.md   # applyTo: "**/.purpose"
-    paradigm-portal.instructions.md    # applyTo: "**/portal.yaml"
-    paradigm-conventions.instructions.md # applyTo: "**/*.ts,**/*.tsx"
-    paradigm-commands.instructions.md  # No frontmatter (reference only)
-```
-
-Each `.instructions.md` file has frontmatter controlling when it loads:
-- `applyTo: "glob,patterns"` - Only applies when matching files are referenced
-- No frontmatter - Available for manual reference
-
-Both modern formats are more efficient because instructions only load when relevant files are open.
 
 ---
 
@@ -307,7 +265,7 @@ paradigm status
 
 **Options:**
 ```
--p, --port <port>   Port to run on (default: 42197)
+-p, --port <port>   Port to run on (default: 3000)
 --no-open           Don't auto-open browser
 ```
 
@@ -359,77 +317,6 @@ paradigm portal validate
 paradigm portal validate ./portal.yaml
 ```
 
-### paradigm portal watch
-
-Launch the Portal Viewer - a real-time visualization dashboard for portal activations.
-
-**Options:**
-```
-[path]              Target directory (defaults to current)
--p, --port <port>   WebSocket port for SDK connections (default: 42196)
--u, --ui-port <port> HTTP port for UI (default: 42195)
--c, --config <path> Path to portal.yaml config
---no-open           Don't auto-open browser
-```
-
-**Examples:**
-```bash
-# Launch viewer with defaults
-paradigm portal watch
-
-# Custom ports
-paradigm portal watch --port 7001 --ui-port 7000
-
-# Specify config location
-paradigm portal watch -c ./config/portal.yaml
-```
-
-**Features:**
-- **Constellation View**: Interactive star map where portals "light up" on activation
-- **Checklist Mode**: Auto-ticking gates for QA testing
-- **Event Timeline**: Scrolling log with entity filtering
-- **Session Recording**: Capture and export test runs
-- **Flow Visualization**: Track progress through gate sequences
-
-**Ports (Marathon-inspired):**
-| Port | Purpose |
-|------|---------|
-| 42195 | Portal Viewer UI (marathon: 42.195km) |
-| 42196 | Portal Viewer WebSocket |
-
-### paradigm portal report
-
-Generate a report from a recorded session file.
-
-**Options:**
-```
-<session>           Path to session JSON file (required)
--f, --format <fmt>  Output format: json, markdown, slack, discord (default: markdown)
--o, --output <path> Output file path (prints to stdout if omitted)
-```
-
-**Examples:**
-```bash
-# Generate markdown report
-paradigm portal report ./session.json
-
-# Export as JSON
-paradigm portal report ./session.json --format json -o report.json
-
-# Format for Slack
-paradigm portal report ./session.json --format slack
-```
-
-### paradigm portal test
-
-Test portals and generate test files.
-
-```bash
-paradigm portal test
-paradigm portal test --generate
-paradigm portal test --portal ^checkout
-```
-
 ---
 
 ## paradigm premise
@@ -455,197 +342,12 @@ paradigm premise snapshot "pre-refactor" -d "Before auth rewrite"
 
 ---
 
-## Agent Efficiency Commands
-
-Commands designed to make AI agents faster and more context-aware.
-
-### paradigm beacon
-
-**What it does:** Generate a quick-start orientation file for AI agents.
-
-**When to use:**
-- First thing an AI agent should read
-- After major project changes
-- When onboarding new AI sessions
-
-**Options:**
-```
-[path]           Target directory (defaults to current)
--r, --refresh    Regenerate even if beacon exists
--o, --output     Custom output path
--q, --quiet      Suppress output
-```
-
-**Examples:**
-```bash
-# Generate beacon
-paradigm beacon
-
-# Refresh existing beacon
-paradigm beacon --refresh
-```
-
-**Output:** `.paradigm/beacon.md` containing:
-- Symbol map (features, portals, relationships)
-- Key file landmarks
-- Available pathways (prompts)
-- Symbol quick reference
-
----
-
-### paradigm constellation
-
-**What it does:** Generate a machine-readable symbol relationship graph.
-
-**When to use:**
-- Before making changes that might have ripple effects
-- When AI needs to query symbol relationships programmatically
-- For impact analysis and dependency tracking
-
-**Options:**
-```
-[path]                  Target directory (defaults to current)
--f, --format <format>   Output format: json or yaml (default: json)
--o, --output <path>     Custom output path
--q, --quiet             Suppress output
-```
-
-**Examples:**
-```bash
-# Generate constellation
-paradigm constellation
-
-# Generate as YAML
-paradigm constellation --format yaml
-```
-
-**Output:** `.paradigm/constellation.json` containing:
-- `stars`: All symbols with their relationships
-- `orbits`: Flow sequences
-- `stats`: Symbol counts by type
-
----
-
-### paradigm ripple
-
-**What it does:** Show change impact analysis for a symbol.
-
-**When to use:**
-- Before modifying a symbol
-- Understanding what depends on something
-- Planning refactoring
-
-**Options:**
-```
-<symbol>         Symbol to analyze (e.g., @checkout, ^authenticated)
-[path]           Target directory (defaults to current)
--d, --depth      Analysis depth (default: 1)
---json           Output as JSON
--q, --quiet      Suppress output
-```
-
-**Examples:**
-```bash
-# Analyze a feature
-paradigm ripple @checkout
-
-# Analyze a portal
-paradigm ripple ^authenticated
-
-# Get JSON output
-paradigm ripple @checkout --json
-```
-
-**Output:**
-- Upstream: What the symbol requires
-- Downstream: What would be affected by changes
-- Flow membership: Which flows include this symbol
-- Test suggestions: How to test after changes
-
----
-
-### paradigm thread
-
-**What it does:** Manage session continuity between AI agent sessions.
-
-**When to use:**
-- Recording what was done in a session
-- Leaving notes for the next agent
-- Tracking unfinished tasks
-
-**Subcommands:**
-
-```bash
-# Show current thread
-paradigm thread
-paradigm thread show
-
-# Save activity to trail
-paradigm thread save "Added email validation to @signup"
-
-# Add unfinished task
-paradigm thread todo "Write unit tests for email validation"
-
-# Add note for next agent
-paradigm thread note "User prefers Zod over manual validation"
-
-# Clear the thread
-paradigm thread clear
-```
-
-**Output:** `.paradigm/thread.md` containing:
-- Trail: What was done
-- Loose ends: Unfinished tasks
-- Breadcrumbs: Notes for next agent
-
----
-
-### paradigm echo
-
-**What it does:** Look up error codes to find related symbols.
-
-**When to use:**
-- Debugging errors
-- Understanding what symbol an error relates to
-- Finding resolution hints
-
-**Subcommands:**
-
-```bash
-# Look up an error code
-paradigm echo AUTH_REQUIRED
-paradigm echo lookup AUTH_REQUIRED
-
-# Initialize echoes.yaml template
-paradigm echo init
-
-# List all error mappings
-paradigm echo list
-```
-
-**Configuration:** `.paradigm/echoes.yaml`
-
-```yaml
-errors:
-  AUTH_REQUIRED:
-    symbol: "^authenticated"
-    location: "src/middleware/auth.ts"
-    ripple:
-      - "@checkout"
-      - "@profile"
-    resolution: "Ensure user token is passed in request headers"
-```
-
----
-
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logger output level | `debug` (dev), `info` (prod) |
 | `PARADIGM_SYMBOLS` | Symbol filter (comma-separated) | all |
-| `PORTAL_VALIDATION` | Enable portal validation logging | `true` (dev) |
-| `PORTAL_TEST_MODE` | Emit JSON lines for parsing | `false` |
 
 ---
 
@@ -657,45 +359,88 @@ errors:
 4. **Keep probe index fresh** with regular `paradigm index` runs
 5. **Check `.paradigm/specs/`** before asking "how do I..."
 6. **Read `.index.yaml` first** when navigating documentation
-7. **Use Phoenix Protocol** when approaching context limits
+7. **Use `paradigm team handoff`** when approaching context limits
 
 ---
 
-## Phoenix Protocol
+## paradigm team
 
-The Phoenix Protocol enables AI context continuity across conversation boundaries.
+**Multi-agent orchestration and context handoffs.**
 
-### When It Triggers
+### paradigm team init
 
-- AI estimates ~80% context capacity used
-- User mentions context is getting long
-- Before suggesting "continue in new chat"
+Initialize team configuration with default agents.
 
-### What Happens
+```bash
+paradigm team init
+paradigm team init --force
+```
 
-1. AI writes `.context/phoenix.yaml` with:
-   - Completed tasks
-   - In-progress work
-   - Pending tasks
-   - Critical memories
-   - Files touched
-   - Warnings/gotchas
+### paradigm team status
 
-2. AI notifies user
+Show current team status.
 
-3. User starts new chat
+```bash
+paradigm team
+paradigm team status
+paradigm team status --json
+```
 
-4. New AI reads ashes and continues
+### paradigm team handoff
 
-### Files
+Hand off work to another agent (or for context continuity).
 
-| File | Purpose |
-|------|---------|
-| `.context/phoenix.yaml` | Active handoff file |
-| `.context/phoenix.yaml.risen` | Consumed file (audit trail) |
-| `.context/README.md` | Protocol documentation |
+```bash
+# Hand off to specific agent
+paradigm team handoff --to builder --summary "Auth spec complete"
 
-See `.paradigm/specs/phoenix.md` for full specification.
+# Context continuity (hand off to same role in new session)
+paradigm team handoff --to architect --summary "Continuing auth work"
+```
+
+### paradigm team accept
+
+Accept a pending handoff.
+
+```bash
+paradigm team accept h001
+paradigm team accept h001 --note "Starting implementation"
+```
+
+### paradigm team check
+
+Check for conflicts and team health.
+
+```bash
+paradigm team check
+```
+
+### paradigm team history
+
+Show team activity history.
+
+```bash
+paradigm team history
+paradigm team history --limit 20
+```
+
+### paradigm team reset
+
+Reset team state for fresh start.
+
+```bash
+paradigm team reset
+paradigm team reset --force
+```
+
+### Context Continuity
+
+When approaching context limits, use `paradigm team handoff` to preserve state:
+
+1. Run `paradigm team handoff --to <agent> --summary "Context checkpoint"`
+2. Start new chat
+3. New session runs `paradigm team status` to see pending handoff
+4. Accept with `paradigm team accept <id>`
 
 ---
 
@@ -721,3 +466,262 @@ docs/
 4. Update index when editing documents
 
 See `.paradigm/specs/context.md` for full specification.
+
+---
+
+## paradigm wisdom
+
+**Team wisdom — preferences, antipatterns, decisions, expertise.**
+
+### paradigm wisdom show
+
+Show wisdom overview or for a specific symbol.
+
+```bash
+# Overview
+paradigm wisdom
+
+# For a symbol
+paradigm wisdom show @checkout
+paradigm wisdom show @checkout --json
+```
+
+### paradigm wisdom init
+
+Initialize the wisdom directory with templates.
+
+```bash
+paradigm wisdom init
+paradigm wisdom init --force
+```
+
+### paradigm wisdom add-antipattern
+
+Add a new antipattern (what NOT to do).
+
+```bash
+paradigm wisdom add-antipattern \
+  --id "api-001" \
+  --symbols "@api,#api-client" \
+  --description "Do NOT use axios interceptors for auth" \
+  --reason "Causes race conditions with token refresh" \
+  --alternative "Use wrapper function with explicit token handling"
+```
+
+### paradigm wisdom decide
+
+Create a new decision record (ADR).
+
+```bash
+paradigm wisdom decide \
+  --id "001" \
+  --title "Authentication Approach" \
+  --symbols "^authenticated,@login" \
+  --context "Need to choose auth method" \
+  --decision "Use JWT with refresh tokens" \
+  --status accepted
+```
+
+### paradigm wisdom expert
+
+Find experts for a symbol or area.
+
+```bash
+# By symbol
+paradigm wisdom expert @checkout
+
+# By area
+paradigm wisdom expert --area payments
+```
+
+---
+
+## paradigm history
+
+**Implementation history — tracking changes, validation, fragility.**
+
+### paradigm history show
+
+Show history overview or for a specific symbol.
+
+```bash
+# Overview
+paradigm history
+
+# For a symbol
+paradigm history show @checkout
+paradigm history show @checkout --limit 20 --json
+```
+
+### paradigm history init
+
+Initialize the history directory.
+
+```bash
+paradigm history init
+paradigm history init --force
+```
+
+### paradigm history fragile
+
+Show fragile symbols that need extra care when modifying.
+
+```bash
+paradigm history fragile
+paradigm history fragile --json
+```
+
+### paradigm history reindex
+
+Regenerate the index from the log.
+
+```bash
+paradigm history reindex
+```
+
+### paradigm history record
+
+Record an implementation event.
+
+```bash
+paradigm history record \
+  --type implement \
+  --symbols "@checkout" \
+  --description "Added Apple Pay support" \
+  --intent feature \
+  --commit abc123
+```
+
+### paradigm history validate
+
+Record a validation result.
+
+```bash
+paradigm history validate \
+  --result pass \
+  --ref h0045 \
+  --passed 15 \
+  --failed 0
+```
+
+---
+
+## paradigm hooks
+
+**Git hooks for automatic history capture.**
+
+### paradigm hooks install
+
+Install git hooks for automatic history capture.
+
+```bash
+paradigm hooks install
+paradigm hooks install --force
+paradigm hooks install --post-commit  # Only post-commit hook
+```
+
+### paradigm hooks uninstall
+
+Remove paradigm git hooks.
+
+```bash
+paradigm hooks uninstall
+```
+
+### paradigm hooks status
+
+Check git hooks status.
+
+```bash
+paradigm hooks status
+```
+
+**What hooks do:**
+- `post-commit`: Records implementation entries from commits
+- `pre-push`: Reindexes history before pushing
+
+---
+
+## MCP Server
+
+**Paradigm MCP server for AI clients.**
+
+### paradigm mcp setup
+
+Configure MCP server for AI clients.
+
+```bash
+paradigm mcp setup
+paradigm mcp setup --client cursor
+paradigm mcp setup --client claude-desktop
+```
+
+### paradigm mcp status
+
+Show MCP configuration status.
+
+```bash
+paradigm mcp status
+```
+
+---
+
+## Enhanced Sync Options
+
+Additional options for `paradigm sync`:
+
+```bash
+# Generate with MCP config
+paradigm sync claude --mcp
+
+# Skip MCP config
+paradigm sync cursor --no-mcp
+
+# Generate nested CLAUDE.md files
+paradigm sync claude --nested
+```
+
+---
+
+## Navigator
+
+**AI exploration optimization — pre-indexed project structure.**
+
+The Navigator is auto-generated by `paradigm scan` to help AI tools explore efficiently.
+
+### What It Generates
+
+```
+.paradigm/
+  navigator.yaml      # Structure index
+```
+
+### navigator.yaml Contents
+
+- **structure**: Maps code categories to directory locations
+- **key_files**: Important files (config, entry points, types)
+- **skip_patterns**: Patterns to avoid during exploration
+- **symbols**: Direct symbol-to-path mapping
+
+### MCP Tool: paradigm_navigate
+
+Query the navigator for targeted exploration:
+
+```bash
+# Find a symbol
+paradigm_navigate({ intent: "find", target: "@checkout" })
+
+# Explore an area
+paradigm_navigate({ intent: "explore", target: "authentication" })
+
+# Get context for a task
+paradigm_navigate({ intent: "context", task: "add Apple Pay" })
+```
+
+### Exploration Protocol
+
+1. Read `.paradigm/navigator.yaml` for structure map
+2. Query by symbol → go directly to path
+3. Respect skip patterns
+
+See `.paradigm/specs/navigator.md` for full specification.
