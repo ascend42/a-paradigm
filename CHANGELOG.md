@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.2.0] - 2026-02-02
+
+### Added
+
+- **Navigator System** - AI exploration optimization via pre-indexed project structure
+  - Auto-generates `.paradigm/navigator.yaml` during `paradigm scan`
+  - Structure mapping: code categories to directory locations
+  - Key files index: config, entry points, type definitions
+  - Skip patterns: inherits from .gitignore plus defaults
+  - Symbol-to-path mapping for direct lookup
+  - New MCP tool: `paradigm_navigate` with find/explore/context intents
+  - New specification: `.paradigm/specs/navigator.md`
+
+- **Navigation Sections in IDE Files**
+  - CLAUDE.md includes "Paradigm Navigation" exploration protocol
+  - Cursor rules include `paradigm-navigator.mdc` with navigation guidance
+  - Task recipes for common operations (adding features, modifying components)
+
+- **MCP Navigate Tool**
+  - `paradigm_navigate({ intent: "find", target: "@checkout" })` - locate symbols
+  - `paradigm_navigate({ intent: "explore", target: "authentication" })` - browse areas
+  - `paradigm_navigate({ intent: "context", task: "add Apple Pay" })` - task context
+  - Returns: paths, symbols, skip patterns, suggested reading order
+
+### Changed
+
+- `paradigm scan` now generates both scan-index.json and navigator.yaml
+- MCP server version bumped to 1.2.0
+- CLI version bumped to 1.2.0
+
+---
+
+## [1.1.0] - 2026-02-02
+
+### Added
+
+- **Wisdom System** - Team context MCP for preferences, antipatterns, decisions, expertise
+  - New directory: `.paradigm/wisdom/` with preferences.yaml, antipatterns.yaml, expertise.yaml
+  - Decision records in `.paradigm/wisdom/decisions/*.yaml` (ADR format)
+  - MCP resources: `paradigm://wisdom/preferences`, `paradigm://wisdom/antipatterns`, `paradigm://wisdom/decisions`
+  - MCP tools: `paradigm_wisdom_context`, `paradigm_wisdom_record`, `paradigm_wisdom_expert`
+  - CLI commands: `paradigm wisdom show|init|add-antipattern|decide|expert`
+  - Symbol-indexed for targeted, low-token queries
+
+- **History System** - Implementation history MCP for tracking what worked/failed
+  - New directory: `.paradigm/history/` with log.jsonl (append-only), index.yaml, validation.yaml
+  - Tracks implementations, validations, rollbacks with fragility scoring
+  - Co-change pattern detection (symbols that tend to change together)
+  - MCP resources: `paradigm://history/symbol/{symbol}`, `paradigm://history/fragile`, `paradigm://history/cochanges`
+  - MCP tools: `paradigm_history_context`, `paradigm_history_record`, `paradigm_history_validate`, `paradigm_history_fragility`
+  - CLI commands: `paradigm history show|init|fragile|reindex|record|validate`
+
+- **Git Hooks for History Capture** - Automatic history recording from commits
+  - Post-commit hook extracts symbols from .purpose files in changed directories
+  - Pre-push hook reindexes history
+  - New CLI commands: `paradigm hooks install|uninstall|status`
+
+- **Enhanced Sync** - Multi-platform improvements
+  - MCP config generation for Claude (`.claude/settings.json`) and Cursor (`.cursor/mcp.json`)
+  - Nested CLAUDE.md generation for directories with .purpose files (`--nested` flag)
+  - New sync options: `--mcp`, `--no-mcp`, `--nested`
+
+- **New Specifications**
+  - `.paradigm/specs/wisdom.md` - Full wisdom system specification
+  - `.paradigm/specs/history.md` - Full history system specification
+
+### Changed
+
+- Extended `ProjectContext` type with wisdom and history data
+- MCP server version bumped to 1.1.0
+- CLI version bumped to 1.1.0
+
 ### Deprecated
 - **`paradigm visualize` command** - Removed in favor of AI-first workflows
   - The Prism visualizer is no longer bundled with the CLI

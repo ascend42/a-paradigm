@@ -348,7 +348,7 @@ Common issues and their solutions.
    ```
 
 This will:
-- Rename `.horizon/` to `.paradigm/`
+- Rename `.paradigm/` to `.paradigm/`
 - Rename `gate.yaml` to `portal.yaml`
 - Rename `.dream` files to `.premise`
 - Update IDE instruction files
@@ -435,7 +435,7 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
 |-----------|--------|
 | `features/` | `log.feature()` |
 | `components/` | `log.component()` |
-| `middleware/` | `log.portal()` |
+| `middleware/` | `log.gate()` |
 
 ## Key Files
 | File | Purpose |

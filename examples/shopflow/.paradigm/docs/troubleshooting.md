@@ -55,8 +55,8 @@ Common issues and their solutions.
    ```
 
 3. **Check scan index location:**
-   - New setup: `.horizon/scan-index.json`
-   - Legacy setup: `.horizon-scan-index.json`
+   - New setup: `.paradigm/scan-index.json`
+   - Legacy setup: `.paradigm-scan-index.json`
 
 4. **Verify .purpose file format:**
    ```yaml
@@ -117,7 +117,7 @@ Common issues and their solutions.
 
 ---
 
-## Legacy .horizon File vs Directory
+## Legacy .paradigm File vs Directory
 
 ### Symptoms
 - Error: "ENOTDIR" when running commands
@@ -134,10 +134,10 @@ Common issues and their solutions.
 2. **Manual migration:**
    ```bash
    # Backup old file
-   cp .horizon .horizon.backup
+   cp .paradigm .paradigm.backup
    
    # Remove old file
-   rm .horizon
+   rm .paradigm
    
    # Reinitialize
    horizon init
@@ -147,7 +147,7 @@ Common issues and their solutions.
 
 3. **Check current structure:**
    ```bash
-   ls -la .horizon*
+   ls -la .paradigm*
    # File = legacy
    # Directory = current
    ```
@@ -157,7 +157,7 @@ Common issues and their solutions.
 ## Config YAML Errors
 
 ### Symptoms
-- "Failed to parse .horizon/config.yaml"
+- "Failed to parse .paradigm/config.yaml"
 - YAML syntax errors
 - Commands failing to read config
 
@@ -166,7 +166,7 @@ Common issues and their solutions.
 1. **Validate YAML syntax:**
    ```bash
    # Use a YAML linter
-   yamllint .horizon/config.yaml
+   yamllint .paradigm/config.yaml
    ```
 
 2. **Common YAML issues:**
@@ -194,7 +194,7 @@ Common issues and their solutions.
 ## Missing Specs or Docs
 
 ### Symptoms
-- `.horizon/specs/` is empty
+- `.paradigm/specs/` is empty
 - Missing `logger.md`, `scan.md`, etc.
 - IDE instructions incomplete
 
@@ -212,9 +212,9 @@ Common issues and their solutions.
 
 3. **Manually check what's missing:**
    ```bash
-   ls -la .horizon/specs/
-   ls -la .horizon/docs/
-   ls -la .horizon/prompts/
+   ls -la .paradigm/specs/
+   ls -la .paradigm/docs/
+   ls -la .paradigm/prompts/
    ```
 
 ---
@@ -257,8 +257,8 @@ Common issues and their solutions.
 ### Solutions
 
 1. **Check file patterns:**
-   - Config: `.horizon/config.yaml`
-   - Specs: `.horizon/specs/*.md`
+   - Config: `.paradigm/config.yaml`
+   - Specs: `.paradigm/specs/*.md`
    - Purpose: `**/.purpose`
    - Gate: `**/gate.yaml`
 
@@ -321,7 +321,7 @@ If none of these solutions work:
 
 3. **Review full config:**
    ```bash
-   cat .horizon/config.yaml
+   cat .paradigm/config.yaml
    ```
 
 4. **Check generated IDE file:**

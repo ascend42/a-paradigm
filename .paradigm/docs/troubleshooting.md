@@ -348,7 +348,7 @@ Common issues and their solutions.
    ```
 
 This will:
-- Rename `.horizon/` to `.paradigm/`
+- Rename `.paradigm/` to `.paradigm/`
 - Rename `gate.yaml` to `portal.yaml`
 - Rename `.dream` files to `.premise`
 - Update IDE instruction files

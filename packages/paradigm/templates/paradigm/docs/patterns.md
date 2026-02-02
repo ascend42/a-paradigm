@@ -58,7 +58,7 @@ Portals (`^`) are authorization checkpoints. Log before and after the check.
 
 function requireAuth(request, next):
     // 1. Log portal check start
-    log.portal('^authenticated').debug('Checking ^authenticated', {
+    log.gate('^authenticated').debug('Checking ^authenticated', {
         path: request.path,
         method: request.method
     })
@@ -68,14 +68,14 @@ function requireAuth(request, next):
     
     if not user:
         // 3. Log denial
-        log.portal('^authenticated').warn('Access denied - no session', {
+        log.gate('^authenticated').warn('Access denied - no session', {
             path: request.path,
             ip: request.ip
         })
         return unauthorized("Authentication required")
     
     // 4. Log success
-    log.portal('^authenticated').debug('Portal passed', {
+    log.gate('^authenticated').debug('Portal passed', {
         userId: user.id,
         path: request.path
     })

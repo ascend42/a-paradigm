@@ -1,15 +1,15 @@
-title: Paradigm Tutorial - ShopFlow Example
-description: Learn Paradigm by exploring the ShopFlow e-commerce example
+title: Horizon Tutorial - ShopFlow Example
+description: Learn Horizon by exploring the ShopFlow e-commerce example
 steps:
   - id: step-1-explore-structure
     title: Explore Project Structure
-    description: Understand how Paradigm organizes project knowledge
+    description: Understand how Horizon organizes project knowledge
     file: step-1-explore-structure.md
     checkpoints:
       - type: file-exists
         path: .purpose
       - type: file-exists
-        path: portal.yaml
+        path: gate.yaml
       - type: file-exists
         path: .paradigm/config.yaml
   - id: step-2-understand-purpose
@@ -25,19 +25,19 @@ steps:
     file: step-3-understand-gates.md
     checkpoints:
       - type: file-exists
-        path: portal.yaml
+        path: gate.yaml
   - id: step-4-explore-symbols
     title: Exploring Symbols
-    description: Understand Paradigm's symbol system and how they connect
+    description: Understand Horizon's symbol system and how they connect
     file: step-4-explore-symbols.md
     checkpoints:
       - type: command-success
-        command: paradigm status
+        command: horizon status
   - id: step-5-visualize
     title: Visualize in Dreamscape
     description: See your project knowledge visualized in the Dreamscape
     file: step-5-visualize.md
     checkpoints:
       - type: command-success
-        command: paradigm dream aggregate
+        command: horizon dream aggregate
 bugs: []

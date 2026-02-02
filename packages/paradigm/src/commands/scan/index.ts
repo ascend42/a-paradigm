@@ -12,7 +12,8 @@ import {
   serializeScanIndex,
   type ScanIndex 
 } from '@a-company/probe-core';
-import { parseHorizonConfig } from '../../core/horizon-config.js';
+import { parseHorizonConfig } from '../../core/legacy-config.js';
+import { generateNavigator } from './navigator.js';
 
 interface IndexOptions {
   output?: string;
@@ -131,6 +132,9 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     console.error(chalk.gray((err as Error).message));
     process.exit(1);
   }
+
+  // Generate navigator.yaml for AI exploration
+  await generateNavigator(rootDir, aggregation, { quiet: options.quiet });
 
   // Summary
   if (!options.quiet) {

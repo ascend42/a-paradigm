@@ -91,6 +91,28 @@ your-project/
     └── ...
 ```
 
+## Getting Started with Minimal Paradigm
+
+You don't need to use everything. Start small:
+
+```bash
+# 1. Initialize with defaults
+paradigm init
+
+# 2. Add context to your main feature directory
+# Edit src/features/.purpose (or wherever your features live)
+
+# 3. Generate AI orientation
+paradigm beacon
+```
+
+**That's it.** Your AI assistant can now read `beacon.md` for quick context.
+
+Add more as needed:
+- `portal.yaml` — when you need authorization topology
+- `.paradigm/prompts/` — for reusable task templates
+- MCP server — for dynamic, mid-conversation queries
+
 ## Symbol System
 
 Paradigm uses symbols to create a shared language between code, developers, and AI:

@@ -65,29 +65,47 @@ export interface GeneratedFile {
 }
 
 /**
+ * MCP Server configuration
+ */
+export interface McpConfig {
+  mcpServers: {
+    paradigm: {
+      command: string;
+      args: string[];
+    };
+  };
+}
+
+/**
  * Base interface for IDE adapters
  */
 export interface IDEAdapter {
   /** IDE identifier */
   readonly name: string;
-  
+
   /** Display name for UI */
   readonly displayName: string;
-  
+
   /** Output file/directory path relative to project root */
   readonly outputPath: string;
-  
+
   /** Whether this adapter generates multiple files */
   readonly multiFile?: boolean;
-  
+
   /** Detect if this IDE is in use */
   detect(rootDir: string): boolean;
-  
+
   /** Generate instruction file content (single file adapters) */
   generate(files: ParadigmFiles): string;
-  
+
   /** Generate multiple files (multi-file adapters like Cursor modern format) */
   generateFiles?(files: ParadigmFiles): GeneratedFile[];
+
+  /** Generate MCP configuration for this IDE (optional) */
+  generateMcpConfig?(): McpConfig;
+
+  /** Generate nested context files for directories with .purpose files (optional) */
+  generateNestedContexts?(rootDir: string, files: ParadigmFiles): GeneratedFile[];
 }
 
 /**

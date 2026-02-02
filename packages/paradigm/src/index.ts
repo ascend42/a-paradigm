@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '0.6.0';
+const VERSION = '1.2.0';
 
 const program = new Command();
 
@@ -152,6 +152,9 @@ program
   .description('Generate IDE instruction files from .paradigm/ config')
   .option('--all', 'Sync all supported IDEs')
   .option('-f, --force', 'Overwrite existing files')
+  .option('--mcp', 'Generate MCP configuration (default: true)')
+  .option('--no-mcp', 'Skip MCP configuration generation')
+  .option('--nested', 'Generate nested CLAUDE.md files for directories with .purpose')
   .action(async (ide, options) => {
     const { syncCommand } = await import('./commands/sync.js');
     await syncCommand(ide, options);
@@ -627,6 +630,191 @@ mcpCmd
   .action(async () => {
     const { mcpStatusCommand } = await import('./commands/mcp/setup.js');
     await mcpStatusCommand({});
+  });
+
+// paradigm wisdom <command>
+const wisdomCmd = program
+  .command('wisdom')
+  .description('Team wisdom - preferences, antipatterns, decisions, expertise');
+
+wisdomCmd
+  .command('show [symbol]')
+  .description('Display wisdom for symbols or overview')
+  .option('--json', 'Output as JSON')
+  .action(async (symbol, options) => {
+    const { wisdomShowCommand } = await import('./commands/wisdom/index.js');
+    await wisdomShowCommand(symbol, options);
+  });
+
+wisdomCmd
+  .command('init')
+  .description('Initialize wisdom directory with templates')
+  .option('-f, --force', 'Overwrite existing files')
+  .action(async (options) => {
+    const { wisdomInitCommand } = await import('./commands/wisdom/index.js');
+    await wisdomInitCommand(options);
+  });
+
+wisdomCmd
+  .command('add-antipattern')
+  .description('Add a new antipattern')
+  .requiredOption('--id <id>', 'Antipattern ID (e.g., api-001)')
+  .requiredOption('--symbols <symbols>', 'Comma-separated symbols')
+  .requiredOption('--description <desc>', 'What NOT to do')
+  .requiredOption('--reason <reason>', 'Why this is bad')
+  .requiredOption('--alternative <alt>', 'What to do instead')
+  .action(async (options) => {
+    const { wisdomAddAntipatternCommand } = await import('./commands/wisdom/index.js');
+    await wisdomAddAntipatternCommand(options);
+  });
+
+wisdomCmd
+  .command('decide')
+  .description('Create a new decision record (ADR)')
+  .requiredOption('--id <id>', 'Decision ID (e.g., 001)')
+  .requiredOption('--title <title>', 'Decision title')
+  .requiredOption('--symbols <symbols>', 'Comma-separated symbols')
+  .requiredOption('--context <context>', 'Context/problem')
+  .requiredOption('--decision <decision>', 'The decision made')
+  .option('--status <status>', 'Status: proposed, accepted', 'proposed')
+  .action(async (options) => {
+    const { wisdomDecideCommand } = await import('./commands/wisdom/index.js');
+    await wisdomDecideCommand(options);
+  });
+
+wisdomCmd
+  .command('expert [query]')
+  .description('Find experts for symbols or areas')
+  .option('--json', 'Output as JSON')
+  .action(async (query, options) => {
+    const { wisdomExpertCommand } = await import('./commands/wisdom/index.js');
+    await wisdomExpertCommand(query, options);
+  });
+
+// Default wisdom action (show)
+wisdomCmd
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { wisdomShowCommand } = await import('./commands/wisdom/index.js');
+    await wisdomShowCommand(undefined, options);
+  });
+
+// paradigm history <command>
+const historyCmd = program
+  .command('history')
+  .description('Implementation history - tracking changes, validation, fragility');
+
+historyCmd
+  .command('show [symbol]')
+  .description('Display history for symbols or overview')
+  .option('--json', 'Output as JSON')
+  .option('-l, --limit <number>', 'Number of entries', '10')
+  .action(async (symbol, options) => {
+    const { historyShowCommand } = await import('./commands/history/index.js');
+    await historyShowCommand(symbol, { ...options, limit: parseInt(options.limit) });
+  });
+
+historyCmd
+  .command('init')
+  .description('Initialize history directory')
+  .option('-f, --force', 'Overwrite existing files')
+  .action(async (options) => {
+    const { historyInitCommand } = await import('./commands/history/index.js');
+    await historyInitCommand(options);
+  });
+
+historyCmd
+  .command('fragile')
+  .description('Show fragile symbols that need extra care')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { historyFragileCommand } = await import('./commands/history/index.js');
+    await historyFragileCommand(options);
+  });
+
+historyCmd
+  .command('reindex')
+  .description('Regenerate index from log')
+  .action(async () => {
+    const { historyReindexCommand } = await import('./commands/history/index.js');
+    await historyReindexCommand();
+  });
+
+historyCmd
+  .command('record')
+  .description('Record an implementation event')
+  .requiredOption('--type <type>', 'Type: implement, refactor, rollback')
+  .requiredOption('--symbols <symbols>', 'Comma-separated symbols')
+  .requiredOption('--description <desc>', 'What was done')
+  .option('--intent <intent>', 'Intent: feature, fix, refactor')
+  .option('--commit <hash>', 'Git commit hash')
+  .option('--reason <reason>', 'Reason for rollback')
+  .action(async (options) => {
+    const { historyRecordCommand } = await import('./commands/history/index.js');
+    await historyRecordCommand(options);
+  });
+
+historyCmd
+  .command('validate')
+  .description('Record a validation result')
+  .requiredOption('--result <result>', 'Result: pass, fail, partial')
+  .option('--ref <id>', 'Implementation ID being validated')
+  .option('--passed <n>', 'Tests passed')
+  .option('--failed <n>', 'Tests failed')
+  .action(async (options) => {
+    const { historyValidateCommand } = await import('./commands/history/index.js');
+    await historyValidateCommand({
+      ...options,
+      passed: options.passed ? parseInt(options.passed) : undefined,
+      failed: options.failed ? parseInt(options.failed) : undefined,
+    });
+  });
+
+// Default history action (show)
+historyCmd
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { historyShowCommand } = await import('./commands/history/index.js');
+    await historyShowCommand(undefined, options);
+  });
+
+// paradigm hooks <command>
+const hooksCmd = program
+  .command('hooks')
+  .description('Git hooks for automatic history capture');
+
+hooksCmd
+  .command('install')
+  .description('Install git hooks for history capture')
+  .option('-f, --force', 'Overwrite existing hooks')
+  .option('--post-commit', 'Only install post-commit hook')
+  .option('--pre-push', 'Only install pre-push hook')
+  .action(async (options) => {
+    const { hooksInstallCommand } = await import('./commands/hooks/index.js');
+    await hooksInstallCommand(options);
+  });
+
+hooksCmd
+  .command('uninstall')
+  .description('Remove paradigm git hooks')
+  .action(async () => {
+    const { hooksUninstallCommand } = await import('./commands/hooks/index.js');
+    await hooksUninstallCommand();
+  });
+
+hooksCmd
+  .command('status')
+  .description('Check git hooks status')
+  .action(async () => {
+    const { hooksStatusCommand } = await import('./commands/hooks/index.js');
+    await hooksStatusCommand();
+  });
+
+// Default hooks action (status)
+hooksCmd
+  .action(async () => {
+    const { hooksStatusCommand } = await import('./commands/hooks/index.js');
+    await hooksStatusCommand();
   });
 
 // Parse and run

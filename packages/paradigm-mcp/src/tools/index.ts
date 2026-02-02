@@ -18,6 +18,9 @@ import {
   getSymbolCounts,
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
+import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
+import { getHistoryToolsList, handleHistoryTool } from './history.js';
+import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
 
 /**
  * Register all MCP tools
@@ -107,6 +110,12 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
               required: ['route'],
             },
           },
+          // Wisdom tools
+          ...getWisdomToolsList(),
+          // History tools
+          ...getHistoryToolsList(),
+          // Navigate tools
+          ...getNavigateToolsList(),
         ],
       };
     }
@@ -377,8 +386,39 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           };
         }
 
-        default:
+        default: {
+          // Try navigate tool
+          if (name === 'paradigm_navigate') {
+            const result = await handleNavigateTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try wisdom tools
+          if (name.startsWith('paradigm_wisdom_')) {
+            const result = await handleWisdomTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try history tools
+          if (name.startsWith('paradigm_history_')) {
+            const result = await handleHistoryTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
           throw new Error(`Unknown tool: ${name}`);
+        }
       }
     }
   );

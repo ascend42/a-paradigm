@@ -1,5 +1,10 @@
 {
-  "currentStep": "step-1-explore-structure",
-  "completedSteps": [],
+  "currentStep": "step-5-visualize",
+  "completedSteps": [
+    "step-1-explore-structure",
+    "step-2-understand-purpose",
+    "step-3-understand-gates",
+    "step-4-explore-symbols"
+  ],
   "fixedBugs": []
 }

@@ -1,6 +1,6 @@
 # Step 3: Understanding Gates
 
-Gates define authorization and access control in Paradigm. They're like security checkpoints.
+Gates define authorization and access control in Horizon. They're like security checkpoints.
 
 ## What You'll Learn
 
@@ -10,8 +10,8 @@ Gates define authorization and access control in Paradigm. They're like security
 
 ## Tasks
 
-1. **Examine portal.yaml**
-   - Open `portal.yaml` and read through it
+1. **Examine gate.yaml**
+   - Open `gate.yaml` and read through it
    - Notice the structure: gates → locks → keys
    - See how prizes are awarded when gates pass
 
@@ -43,5 +43,5 @@ Gates define authorization and access control in Paradigm. They're like security
 
 Run:
 ```bash
-paradigm tutorial checkpoint
+horizon tutorial checkpoint
 ```

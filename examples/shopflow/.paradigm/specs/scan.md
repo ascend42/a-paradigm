@@ -9,7 +9,7 @@ The Horizon Scan protocol enables **visual discovery** — AI agents can analyze
 1. User attaches an image (screenshot, mockup, diagram)
 2. User says "horizon scan" (or a variant)
 3. AI analyzes the image and identifies visual elements
-4. AI cross-references with `.horizon/scan-index.json`
+4. AI cross-references with `.paradigm/scan-index.json`
 5. AI returns structured mapping of UI → code
 
 ---
@@ -30,7 +30,7 @@ The Horizon Scan protocol enables **visual discovery** — AI agents can analyze
 
 ## Scan Index
 
-The scan index at `.horizon/scan-index.json` contains:
+The scan index at `.paradigm/scan-index.json` contains:
 
 ```json
 {
