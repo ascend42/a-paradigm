@@ -136,6 +136,12 @@ export class CursorAdapter implements IDEAdapter {
       content: this.generateNavigatorMdc(),
     });
 
+    // 10. Context Monitoring (session management)
+    generatedFiles.push({
+      path: 'paradigm-context.mdc',
+      content: this.generateContextMdc(),
+    });
+
     return generatedFiles;
   }
 
@@ -426,6 +432,66 @@ Always available in \`navigator.yaml\`:
 - \`key_files.config\` - Configuration files
 - \`key_files.entry\` - Entry points
 - \`key_files.types\` - Type definitions
+`;
+  }
+
+  /**
+   * Context monitoring rules - session management and handoff
+   */
+  private generateContextMdc(): string {
+    return frontmatter('Paradigm context monitoring - session management and handoff protocol', {
+      alwaysApply: true
+    }) +
+      `# Context Monitoring Protocol
+
+## Periodic Checks
+
+**Every 10-15 tool calls** (or when user asks about context), call:
+
+\`\`\`
+paradigm_context_check()
+\`\`\`
+
+This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-recommended\`, or \`handoff-urgent\`.
+
+## When to Handoff
+
+| Usage | Recommendation | Action |
+|-------|----------------|--------|
+| <50% | continue | Keep working |
+| 50-70% | consider-handoff | Plan stopping point |
+| 70-85% | handoff-recommended | Prepare handoff soon |
+| >85% | handoff-urgent | Handoff after current task |
+
+## When Recommendation is NOT "continue"
+
+1. **Inform user**: "Context usage is at ~X%. Recommend handoff soon."
+2. **Offer to prepare**: Ask if user wants handoff summary
+3. **If urgent (>85%)**: Prioritize completing current task, then handoff
+
+## Handoff Process
+
+1. Call \`paradigm_handoff_prepare\` with:
+   - Summary of work completed
+   - List of next steps
+   - Target agent role
+
+2. User runs CLI command:
+   \`\`\`bash
+   paradigm team handoff --to <agent> --summary "..."
+   \`\`\`
+
+3. New session accepts:
+   \`\`\`bash
+   paradigm team accept <handoff-id>
+   \`\`\`
+
+## Session Stats
+
+Get current stats anytime:
+\`\`\`
+paradigm_session_stats()
+\`\`\`
 `;
   }
 

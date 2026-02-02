@@ -56,6 +56,21 @@ See `.paradigm/specs/logger.md` for full specification.
 | **Navigator** | Codebase exploration and context discovery | `.paradigm/specs/navigator.md` |
 | **Wisdom** | Project patterns and learned knowledge | `.paradigm/specs/wisdom.md` |
 | **History** | Session continuity and change tracking | `.paradigm/specs/history.md` |
+| **Context** | Session monitoring and handoff triggers | `.paradigm/specs/context-tracking.md` |
+
+## Context Monitoring Protocol
+
+**Periodically check context usage** by calling `paradigm_context_check` (every 10-15 tool calls or when user asks).
+
+**When recommendation is NOT "continue":**
+1. Inform user: "Context usage is at ~X%. Recommend handoff soon."
+2. Offer to prepare handoff summary
+3. If urgent (>85%), prioritize completing current task then handoff
+
+**To handoff:**
+1. Call `paradigm_handoff_prepare` with summary and next steps
+2. User runs: `paradigm team handoff --to <agent> --summary "..."`
+3. New session accepts with: `paradigm team accept <id>`
 
 ## Conventions
 
