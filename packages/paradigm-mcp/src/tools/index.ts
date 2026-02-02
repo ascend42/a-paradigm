@@ -22,6 +22,7 @@ import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
 import { getContextToolsList, handleContextTool, trackToolCall } from './context.js';
+import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 
 /**
  * Register all MCP tools
@@ -119,6 +120,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getNavigateToolsList(),
           // Context tracking tools
           ...getContextToolsList(),
+          // Sentinel tools
+          ...getSentinelToolsList(),
         ],
       };
     }
@@ -427,6 +430,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           if (name.startsWith('paradigm_context_') || name === 'paradigm_handoff_prepare' || name === 'paradigm_session_stats') {
             const result = await handleContextTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try sentinel tools
+          if (name.startsWith('paradigm_sentinel_')) {
+            const result = await handleSentinelTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length);
               return {
                 content: [{ type: 'text', text: result.text }],
               };

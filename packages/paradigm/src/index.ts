@@ -817,5 +817,214 @@ hooksCmd
     await hooksStatusCommand();
   });
 
+// paradigm triage <command>
+const triageCmd = program
+  .command('triage')
+  .description('Semantic error triage - incident management and pattern matching');
+
+triageCmd
+  .command('list')
+  .alias('ls')
+  .description('List recent incidents with matched patterns')
+  .option('-l, --limit <number>', 'Maximum incidents to show', '10')
+  .option('-s, --status <status>', 'Filter by status: open, investigating, resolved, wont-fix, all')
+  .option('--symbol <symbol>', 'Filter by symbol (e.g., @checkout, ^auth)')
+  .option('-e, --env <environment>', 'Filter by environment')
+  .option('--search <text>', 'Search in error messages')
+  .option('--from <date>', 'Filter from date (ISO format)')
+  .option('--to <date>', 'Filter to date (ISO format)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { triageListCommand } = await import('./commands/triage/index.js');
+    await triageListCommand(options);
+  });
+
+triageCmd
+  .command('show <id>')
+  .description('Show full incident details')
+  .option('--timeline', 'Include flow timeline')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { triageShowCommand } = await import('./commands/triage/index.js');
+    await triageShowCommand(id, options);
+  });
+
+triageCmd
+  .command('resolve <id>')
+  .description('Mark incident as resolved')
+  .option('-p, --pattern <patternId>', 'Pattern that led to resolution')
+  .option('-c, --commit <hash>', 'Git commit hash of fix')
+  .option('--pr <url>', 'Pull request URL')
+  .option('-n, --notes <text>', 'Resolution notes')
+  .option('--wont-fix', 'Mark as will not fix')
+  .action(async (id, options) => {
+    const { triageResolveCommand } = await import('./commands/triage/index.js');
+    await triageResolveCommand(id, options);
+  });
+
+triageCmd
+  .command('note <id> <note>')
+  .description('Add a note to an incident')
+  .action(async (id, note) => {
+    const { triageNoteCommand } = await import('./commands/triage/index.js');
+    await triageNoteCommand(id, note);
+  });
+
+triageCmd
+  .command('link <id1> <id2>')
+  .description('Link two related incidents')
+  .action(async (id1, id2) => {
+    const { triageLinkCommand } = await import('./commands/triage/index.js');
+    await triageLinkCommand(id1, id2);
+  });
+
+// paradigm triage patterns <subcommand>
+const triagePatternsCmd = triageCmd
+  .command('patterns')
+  .description('Manage failure patterns');
+
+triagePatternsCmd
+  .command('list')
+  .alias('ls')
+  .description('List all patterns')
+  .option('--source <source>', 'Filter by source: manual, suggested, imported, community')
+  .option('--min-confidence <score>', 'Minimum confidence score')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { triagePatternsListCommand } = await import('./commands/triage/index.js');
+    await triagePatternsListCommand(options);
+  });
+
+triagePatternsCmd
+  .command('show <id>')
+  .description('Show pattern details')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { triagePatternsShowCommand } = await import('./commands/triage/index.js');
+    await triagePatternsShowCommand(id, options);
+  });
+
+triagePatternsCmd
+  .command('add')
+  .description('Create a new pattern')
+  .requiredOption('--id <id>', 'Pattern ID (kebab-case)')
+  .requiredOption('--name <name>', 'Human-readable name')
+  .option('--description <text>', 'Pattern description')
+  .option('--symbols <pairs>', 'Symbol criteria (e.g., "feature:@checkout,gate:^auth")')
+  .option('--error-contains <keywords>', 'Error keywords (comma-separated)')
+  .option('--missing-signals <signals>', 'Expected missing signals (comma-separated)')
+  .option('--strategy <strategy>', 'Resolution strategy: retry, fallback, fix-data, fix-code, ignore, escalate', 'fix-code')
+  .option('--priority <priority>', 'Priority: low, medium, high, critical', 'medium')
+  .option('--code-hint <text>', 'Code hint for resolution')
+  .option('--tags <tags>', 'Tags (comma-separated)')
+  .option('--from-incident <id>', 'Generate suggestion from incident')
+  .action(async (options) => {
+    const { triagePatternsAddCommand } = await import('./commands/triage/index.js');
+    await triagePatternsAddCommand(options);
+  });
+
+triagePatternsCmd
+  .command('delete <id>')
+  .alias('rm')
+  .description('Delete a pattern')
+  .action(async (id) => {
+    const { triagePatternsDeleteCommand } = await import('./commands/triage/index.js');
+    await triagePatternsDeleteCommand(id);
+  });
+
+triagePatternsCmd
+  .command('test <id>')
+  .description('Test pattern against historical incidents')
+  .option('-l, --limit <number>', 'Max incidents to test against', '100')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { triagePatternsTestCommand } = await import('./commands/triage/index.js');
+    await triagePatternsTestCommand(id, options);
+  });
+
+triagePatternsCmd
+  .command('seed')
+  .description('Load built-in seed patterns')
+  .action(async () => {
+    const { triagePatternsSeedCommand } = await import('./commands/triage/index.js');
+    await triagePatternsSeedCommand();
+  });
+
+// Default patterns action (list)
+triagePatternsCmd
+  .action(async () => {
+    const { triagePatternsListCommand } = await import('./commands/triage/index.js');
+    await triagePatternsListCommand({});
+  });
+
+triageCmd
+  .command('export <type>')
+  .description('Export patterns or full backup (type: patterns, backup)')
+  .option('-o, --output <path>', 'Output file path')
+  .option('--include-private', 'Include private patterns')
+  .action(async (type, options) => {
+    const { triageExportCommand } = await import('./commands/triage/index.js');
+    await triageExportCommand(type, options);
+  });
+
+triageCmd
+  .command('import <file>')
+  .description('Import patterns from JSON file')
+  .option('--overwrite', 'Overwrite existing patterns')
+  .action(async (file, options) => {
+    const { triageImportCommand } = await import('./commands/triage/index.js');
+    await triageImportCommand(file, options);
+  });
+
+triageCmd
+  .command('restore <file>')
+  .description('Restore from full backup')
+  .action(async (file) => {
+    const { triageRestoreCommand } = await import('./commands/triage/index.js');
+    await triageRestoreCommand(file);
+  });
+
+triageCmd
+  .command('stats')
+  .description('Show statistics dashboard')
+  .option('-p, --period <period>', 'Time period: 1d, 7d, 30d, 90d', '7d')
+  .option('--symbol <symbol>', 'Show health for specific symbol')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { triageStatsCommand } = await import('./commands/triage/index.js');
+    await triageStatsCommand(options);
+  });
+
+triageCmd
+  .command('record')
+  .description('Manually record an incident')
+  .requiredOption('--error <message>', 'Error message')
+  .requiredOption('-e, --env <environment>', 'Environment')
+  .option('--feature <symbol>', 'Feature symbol (@...)')
+  .option('--component <symbol>', 'Component symbol (#...)')
+  .option('--flow <symbol>', 'Flow symbol ($...)')
+  .option('--gate <symbol>', 'Gate symbol (^...)')
+  .option('--signal <symbol>', 'Signal symbol (!...)')
+  .option('--state <symbol>', 'State symbol (%...)')
+  .option('--integration <symbol>', 'Integration symbol (&...)')
+  .option('--service <name>', 'Service name')
+  .option('--version <version>', 'App version')
+  .option('--stack <trace>', 'Stack trace')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { triageRecordCommand } = await import('./commands/triage/index.js');
+    await triageRecordCommand(options);
+  });
+
+// Default triage action (list)
+triageCmd
+  .option('-l, --limit <number>', 'Maximum incidents to show', '10')
+  .option('-s, --status <status>', 'Filter by status')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { triageListCommand } = await import('./commands/triage/index.js');
+    await triageListCommand(options);
+  });
+
 // Parse and run
 program.parse();

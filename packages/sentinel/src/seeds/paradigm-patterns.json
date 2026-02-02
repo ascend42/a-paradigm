@@ -1,0 +1,195 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2026-02-02T00:00:00.000Z",
+  "patterns": [
+    {
+      "id": "flow-incomplete-001",
+      "name": "Flow Did Not Complete",
+      "description": "A flow started but critical signals were never emitted",
+      "pattern": {
+        "symbols": { "flow": ["$*"] },
+        "missingSignals": ["!*-complete", "!*-success", "!*-done"]
+      },
+      "resolution": {
+        "description": "Flow started but never completed - check for early returns, unhandled branches, or silent failures",
+        "strategy": "fix-code",
+        "priority": "high",
+        "codeHint": "Ensure all code paths emit completion signals, add error boundaries that emit failure signals"
+      },
+      "confidence": { "score": 72, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["flow", "incomplete", "signals", "paradigm"]
+    },
+    {
+      "id": "gate-bypass-001",
+      "name": "Gate Bypassed",
+      "description": "A gate check was skipped or circumvented",
+      "pattern": {
+        "symbols": { "gate": ["^*"] },
+        "errorContains": ["unauthorized access", "bypassed", "skipped check", "gate not checked"]
+      },
+      "resolution": {
+        "description": "Security gate was bypassed - audit code paths to ensure all routes check gates",
+        "strategy": "fix-code",
+        "priority": "critical",
+        "codeHint": "Add gate middleware to all relevant routes, audit direct function calls that skip gate checks"
+      },
+      "confidence": { "score": 95, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["security", "gate", "bypass", "paradigm"]
+    },
+    {
+      "id": "state-race-001",
+      "name": "State Race Condition",
+      "description": "Component accessed state that was not yet loaded",
+      "pattern": {
+        "symbols": { "state": ["%*.loading", "%*.pending", "%*"] },
+        "errorContains": ["undefined", "not loaded", "pending state", "state not ready"]
+      },
+      "resolution": {
+        "description": "Component accessed data before it was loaded - add loading guards",
+        "strategy": "fix-code",
+        "priority": "medium",
+        "codeHint": "Check loading state before rendering, add loading skeletons, use suspense boundaries"
+      },
+      "confidence": { "score": 68, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["state", "race-condition", "loading", "paradigm"]
+    },
+    {
+      "id": "signal-unhandled-001",
+      "name": "Unhandled Signal",
+      "description": "A signal was emitted but no handler responded",
+      "pattern": {
+        "symbols": { "signal": ["!*"] },
+        "errorContains": ["unhandled signal", "no handler", "signal dropped", "orphan signal"]
+      },
+      "resolution": {
+        "description": "Signal was emitted but not handled - add signal handler or check signal routing",
+        "strategy": "fix-code",
+        "priority": "medium",
+        "codeHint": "Add handler for the signal, or check if signal name is correct"
+      },
+      "confidence": { "score": 70, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["signal", "unhandled", "paradigm"]
+    },
+    {
+      "id": "gate-cascade-failure-001",
+      "name": "Gate Cascade Failure",
+      "description": "Multiple gates failed in sequence, indicating deeper issue",
+      "pattern": {
+        "symbols": { "gate": ["^*"] },
+        "errorContains": ["multiple gates failed", "cascade", "chain failure"]
+      },
+      "resolution": {
+        "description": "Multiple gates failing suggests a root cause issue - check shared dependencies",
+        "strategy": "escalate",
+        "priority": "critical",
+        "codeHint": "Identify common dependency between failing gates, check service health, review recent deployments"
+      },
+      "confidence": { "score": 65, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["gate", "cascade", "critical", "paradigm"]
+    },
+    {
+      "id": "integration-config-missing-001",
+      "name": "Integration Configuration Missing",
+      "description": "Integration failed due to missing configuration",
+      "pattern": {
+        "symbols": { "integration": ["&*"] },
+        "errorContains": ["config", "missing key", "API_KEY", "SECRET", "undefined config", "env var"]
+      },
+      "resolution": {
+        "description": "Integration configuration is missing - check environment variables and config files",
+        "strategy": "fix-data",
+        "priority": "high",
+        "codeHint": "Verify .env file, check deployment secrets, ensure config is loaded before integration init"
+      },
+      "confidence": { "score": 82, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["integration", "config", "environment", "paradigm"]
+    },
+    {
+      "id": "component-unmounted-001",
+      "name": "Operation on Unmounted Component",
+      "description": "Async operation completed after component unmounted",
+      "pattern": {
+        "symbols": { "component": ["#*"] },
+        "errorContains": ["unmounted", "memory leak", "setState on unmounted", "can't perform"]
+      },
+      "resolution": {
+        "description": "Async operation running on unmounted component - add cleanup or cancellation",
+        "strategy": "fix-code",
+        "priority": "medium",
+        "codeHint": "Use AbortController, add cleanup in useEffect, check mounted state before setState"
+      },
+      "confidence": { "score": 78, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["component", "unmounted", "async", "react", "paradigm"]
+    },
+    {
+      "id": "feature-flag-missing-001",
+      "name": "Feature Flag Not Found",
+      "description": "Feature flag check failed because flag doesn't exist",
+      "pattern": {
+        "symbols": { "feature": ["@*"] },
+        "errorContains": ["feature flag", "flag not found", "undefined flag", "feature disabled"]
+      },
+      "resolution": {
+        "description": "Feature flag doesn't exist or isn't configured - add flag definition",
+        "strategy": "fix-data",
+        "priority": "medium",
+        "codeHint": "Add feature flag to configuration, provide default value for missing flags"
+      },
+      "confidence": { "score": 75, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["feature", "flag", "config", "paradigm"]
+    },
+    {
+      "id": "state-invalid-transition-001",
+      "name": "Invalid State Transition",
+      "description": "Attempted to transition to invalid state from current state",
+      "pattern": {
+        "symbols": { "state": ["%*"] },
+        "errorContains": ["invalid transition", "cannot transition", "illegal state", "state machine"]
+      },
+      "resolution": {
+        "description": "State machine received invalid transition - check state machine definition and trigger",
+        "strategy": "fix-code",
+        "priority": "high",
+        "codeHint": "Review state machine transitions, add guards for invalid transitions, log current state before transition"
+      },
+      "confidence": { "score": 76, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["state", "machine", "transition", "paradigm"]
+    },
+    {
+      "id": "purpose-not-defined-001",
+      "name": "Purpose File Not Defined",
+      "description": "Symbol referenced but has no .purpose file",
+      "pattern": {
+        "errorContains": [".purpose not found", "purpose undefined", "missing purpose", "no purpose file"]
+      },
+      "resolution": {
+        "description": "Symbol is used but not documented - add .purpose file for the symbol",
+        "strategy": "fix-data",
+        "priority": "low",
+        "codeHint": "Create .purpose file in the symbol's directory describing its intent"
+      },
+      "confidence": { "score": 60, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["purpose", "documentation", "paradigm"]
+    }
+  ]
+}
