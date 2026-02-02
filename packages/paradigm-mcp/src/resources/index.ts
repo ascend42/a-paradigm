@@ -16,6 +16,8 @@ import {
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { getGatesData, getFlowsData } from './gates.js';
+import { getWisdomResourcesList, handleWisdomResource } from './wisdom.js';
+import { getHistoryResourcesList, handleHistoryResource } from './history.js';
 
 /**
  * Register all MCP resources
@@ -81,6 +83,10 @@ export function registerResources(server: Server, getContext: () => ProjectConte
             description: 'All flows with gate sequences',
             mimeType: 'application/json',
           },
+          // Wisdom resources
+          ...getWisdomResourcesList(),
+          // History resources
+          ...getHistoryResourcesList(),
         ],
       };
     }
@@ -205,7 +211,7 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       // paradigm://flows - Detailed flows
       if (resourcePath === 'flows') {
         const flows = getFlowsData(ctx);
-        
+
         return {
           contents: [{
             uri,
@@ -217,7 +223,35 @@ export function registerResources(server: Server, getContext: () => ProjectConte
           }],
         };
       }
-      
+
+      // Try wisdom resources
+      if (resourcePath.startsWith('wisdom/')) {
+        const result = await handleWisdomResource(resourcePath, ctx);
+        if (result.handled) {
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: result.text,
+            }],
+          };
+        }
+      }
+
+      // Try history resources
+      if (resourcePath.startsWith('history/')) {
+        const result = await handleHistoryResource(resourcePath, ctx);
+        if (result.handled) {
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: result.text,
+            }],
+          };
+        }
+      }
+
       throw new Error(`Unknown resource: ${resourcePath}`);
     }
   );

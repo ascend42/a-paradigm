@@ -1,12 +1,12 @@
 # Step 1: Explore Project Structure
 
-Welcome to the Paradigm tutorial! In this step, you'll explore how Paradigm organizes project knowledge.
+Welcome to the Horizon tutorial! In this step, you'll explore how Horizon organizes project knowledge.
 
 ## What You'll Learn
 
-- How Paradigm uses files to structure project knowledge
-- The purpose of different Paradigm files
-- How to navigate a Paradigm project
+- How Horizon uses files to structure project knowledge
+- The purpose of different Horizon files
+- How to navigate a Horizon project
 
 ## Tasks
 
@@ -15,13 +15,13 @@ Welcome to the Paradigm tutorial! In this step, you'll explore how Paradigm orga
    - Notice how it defines features (`@`) and components (`#`)
    - See how features reference components and gates
 
-2. **Check the portal.yaml file**
-   - Open `portal.yaml`
+2. **Check the gate.yaml file**
+   - Open `gate.yaml`
    - Notice how gates (`^`) define authorization rules
    - See how gates have locks, keys, and prizes
 
 3. **Explore .paradigm directory**
-   - Look at `.paradigm/config.yaml` - this is the Paradigm configuration
+   - Look at `.paradigm/config.yaml` - this is the Horizon configuration
    - Check `.paradigm/specs/` - these define the symbol system
    - Browse `.paradigm/docs/` - reference documentation
 
@@ -33,7 +33,7 @@ Welcome to the Paradigm tutorial! In this step, you'll explore how Paradigm orga
 
 When you're ready, run:
 ```bash
-paradigm tutorial checkpoint
+horizon tutorial checkpoint
 ```
 
 This will verify you've explored the key files.

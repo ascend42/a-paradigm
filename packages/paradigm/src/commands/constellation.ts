@@ -240,7 +240,7 @@ export async function constellationCommand(targetPath?: string, options: Constel
         { symbol: '!', name: 'Signals', count: stats.signals, color: chalk.yellow },
         { symbol: '$', name: 'Flows', count: stats.flows, color: chalk.cyan },
         { symbol: '%', name: 'States', count: stats.states, color: chalk.magenta },
-        { symbol: '~', name: 'Aspects', count: stats.aspects, color: chalk.gray },
+        { symbol: '~', name: 'Deprecated', count: stats.aspects, color: chalk.gray },
         { symbol: '?', name: 'Ideas', count: stats.ideas, color: chalk.white },
       ];
 

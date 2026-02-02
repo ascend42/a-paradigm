@@ -113,3 +113,10 @@ $RECYCLE.BIN/
 # tsconfig.*.json
 # MCP config (contains local paths)
 .cursor/mcp.json
+.mcp.json
+
+# Local planning and IDE settings
+/.plans/
+/.claude/settings.local.json
+/.cursor/plans/
+*.prompt.md

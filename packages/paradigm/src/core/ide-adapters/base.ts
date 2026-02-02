@@ -222,6 +222,50 @@ export function generateCommandsReference(): string {
 }
 
 /**
+ * Generate navigation section for AI exploration
+ */
+export function generateNavigationSection(config: ParadigmConfig): string {
+  const lines: string[] = [];
+
+  lines.push('## Paradigm Navigation');
+  lines.push('');
+  lines.push('Before exploring this codebase:');
+  lines.push('');
+  lines.push('1. Read `.paradigm/navigator.yaml` for structure map');
+  lines.push('2. Query by symbol - lookup paths directly');
+  lines.push('3. Respect skip patterns (node_modules, dist, etc.)');
+  lines.push('');
+  lines.push('### Exploration Protocol');
+  lines.push('');
+  lines.push('**INSTEAD OF:** Broad exploration (expensive token usage)');
+  lines.push('');
+  lines.push('**DO THIS:**');
+  lines.push('1. Read `.paradigm/navigator.yaml` for structure map');
+  lines.push('2. Find relevant symbol → go to path');
+  lines.push('3. Read only needed files');
+  lines.push('');
+  lines.push('### Task Recipes');
+  lines.push('');
+  lines.push('**Adding a feature:**');
+  lines.push('1. Check `navigator.yaml` → `structure.features.paths`');
+  lines.push('2. Read existing feature as template');
+  lines.push('3. Create in same location');
+  lines.push('');
+  lines.push('**Modifying a component:**');
+  lines.push('1. Look up symbol in `navigator.yaml` → `symbols`');
+  lines.push('2. Go directly to the path');
+  lines.push('3. Check `paradigm_ripple` for impact');
+  lines.push('');
+  lines.push('**Using MCP Tools:**');
+  lines.push('- `paradigm_navigate({ intent: "find", target: "@checkout" })` - locate symbol');
+  lines.push('- `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area');
+  lines.push('- `paradigm_navigate({ intent: "context", task: "add login" })` - task context');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
  * Generate footer section
  */
 export function generateFooter(): string {

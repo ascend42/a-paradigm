@@ -27,7 +27,7 @@ log.component('#database').debug('Query executed', { duration });
 ```
 log.feature('@symbol')    → SymbolLogger   // For @features
 log.component('#symbol')  → SymbolLogger   // For #components
-log.portal('^symbol')     → SymbolLogger   // For ^portals
+log.gate('^symbol')       → SymbolLogger   // For ^portals (gates)
 log.signal('!symbol')     → SymbolLogger   // For !signals
 log.state('%symbol')      → SymbolLogger   // For %state
 log.flow('$symbol')       → SymbolLogger   // For $flows
@@ -73,7 +73,7 @@ log.raw('?symbol')        → SymbolLogger   // For any symbol
 |-------------------|--------|------------|
 | `features/`, `routes/`, `api/` | `@` | `log.feature()` |
 | `components/`, `lib/`, `utils/` | `#` | `log.component()` |
-| `middleware/`, `auth/`, `guards/` | `^` | `log.portal()` |
+| `middleware/`, `auth/`, `guards/` | `^` | `log.gate()` |
 | `stores/`, `state/`, `reducers/` | `%` | `log.state()` |
 | `events/`, `handlers/`, `listeners/` | `!` | `log.signal()` |
 | `flows/`, `sagas/`, `workflows/` | `$` | `log.flow()` |
@@ -105,14 +105,14 @@ For simple portal logging:
 
 ```
 function requireAuth(request):
-    log.portal('^authenticated').debug('Checking ^authenticated')
-    
+    log.gate('^authenticated').debug('Checking ^authenticated')
+
     user = getUser(request)
     if not user:
-        log.portal('^authenticated').warn('Access denied', { path: request.path })
+        log.gate('^authenticated').warn('Access denied', { path: request.path })
         return unauthorized()
-    
-    log.portal('^authenticated').debug('Portal passed', { userId: user.id })
+
+    log.gate('^authenticated').debug('Gate passed', { userId: user.id })
     return next()
 ```
 
@@ -246,7 +246,7 @@ For authorization decisions that need to be validated by AI agents, use the **Po
 ```
 
 Use cases:
-- **`log.portal()`** - General portal-related logging and debugging
+- **`log.gate()`** - General gate/portal-related logging and debugging
 - **`portal.check()`** - Authorization decisions that need validation
 
 See [Portal Validation Specification](./portal-validation.md) for full details.

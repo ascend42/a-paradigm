@@ -1,6 +1,6 @@
 # Step 2: Understanding Purpose Files
 
-Purpose files are the foundation of Paradigm. They define what your project does and how it's structured.
+Purpose files are the foundation of Horizon. They define what your project does and how it's structured.
 
 ## What You'll Learn
 
@@ -40,5 +40,5 @@ Purpose files are the foundation of Paradigm. They define what your project does
 
 Run:
 ```bash
-paradigm tutorial checkpoint
+horizon tutorial checkpoint
 ```

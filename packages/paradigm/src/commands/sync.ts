@@ -12,11 +12,15 @@ import {
   loadParadigmFiles,
   syncToIDE,
   syncToAllIDEs,
+  writeMcpConfig,
+  writeNestedContexts,
 } from '../core/ide-adapters/index.js';
 
 interface SyncOptions {
   all?: boolean;
   force?: boolean;
+  mcp?: boolean;
+  nested?: boolean;
 }
 
 export async function syncCommand(ide: string | undefined, options: SyncOptions) {
@@ -88,7 +92,7 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
   if (result.success) {
     spinner.succeed(chalk.green(result.message));
     console.log(chalk.gray(`\n  Path: ${result.outputPath}`));
-    
+
     // Show individual files for multi-file adapters
     if (isMultiFile && adapter.generateFiles) {
       const generatedFiles = adapter.generateFiles(files);
@@ -96,6 +100,23 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
         console.log(chalk.gray(`    └─ ${file.path}`));
       }
     }
+
+    // Generate MCP config if requested or by default for supporting IDEs
+    if (options.mcp !== false && adapter.generateMcpConfig) {
+      const mcpResult = writeMcpConfig(rootDir, targetIDE);
+      if (mcpResult.success) {
+        console.log(chalk.green(`\n  ✓ ${mcpResult.message}`));
+      }
+    }
+
+    // Generate nested contexts if requested (Claude only currently)
+    if (options.nested && adapter.generateNestedContexts) {
+      const nestedResult = writeNestedContexts(rootDir, targetIDE, files);
+      if (nestedResult.success && nestedResult.count > 0) {
+        console.log(chalk.green(`\n  ✓ ${nestedResult.message}`));
+      }
+    }
+
     console.log('');
   } else {
     spinner.fail(chalk.red(result.message));

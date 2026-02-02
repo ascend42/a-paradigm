@@ -1,6 +1,8 @@
 /**
- * Horizon Configuration Types
+ * Legacy Configuration Types (renamed from horizon-config.ts)
  * Defines the structure of .paradigm configuration files
+ *
+ * Note: "Horizon" was the original codename. Interface names kept for backwards compatibility.
  */
 
 import * as yaml from 'js-yaml';

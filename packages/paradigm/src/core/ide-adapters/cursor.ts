@@ -9,7 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { IDEAdapter, ParadigmFiles, GeneratedFile } from './types.js';
+import type { IDEAdapter, ParadigmFiles, GeneratedFile, McpConfig } from './types.js';
 import {
   generateOverview,
   generateSymbolSystem,
@@ -128,6 +128,12 @@ export class CursorAdapter implements IDEAdapter {
     generatedFiles.push({
       path: 'paradigm-agent-hints.mdc',
       content: this.generateAgentHintsMdc(),
+    });
+
+    // 9. Navigator (AI exploration optimization)
+    generatedFiles.push({
+      path: 'paradigm-navigator.mdc',
+      content: this.generateNavigatorMdc(),
     });
 
     return generatedFiles;
@@ -289,8 +295,8 @@ gate.allow('Access granted');
    * Agent Hints - when to query CLI commands
    */
   private generateAgentHintsMdc(): string {
-    return frontmatter('Paradigm CLI queries for AI agents - prefer CLI over reading large files', { 
-      alwaysApply: true 
+    return frontmatter('Paradigm CLI queries for AI agents - prefer CLI over reading large files', {
+      alwaysApply: true
     }) +
       `# Agent CLI Queries (Token-Efficient)
 
@@ -356,6 +362,85 @@ jq '.orbits | keys' .paradigm/constellation.json
 - **Precise**: Only get the data you need
 - **Token-efficient**: ~100 tokens per query vs ~2000 upfront
 `;
+  }
+
+  /**
+   * Navigator rules - AI exploration optimization
+   */
+  private generateNavigatorMdc(): string {
+    return frontmatter('Paradigm Navigator - efficient codebase exploration', {
+      alwaysApply: true
+    }) +
+      `# Paradigm Navigator
+
+## Exploration Protocol
+
+Before exploring this codebase:
+
+1. **Read \`.paradigm/navigator.yaml\`** for the structure map
+2. **Query by symbol** - lookup paths directly from the symbols map
+3. **Respect skip patterns** - avoid node_modules, dist, .git, etc.
+
+## Navigation Strategy
+
+**INSTEAD OF:** Broad exploration (expensive token usage)
+
+**DO THIS:**
+1. Read \`.paradigm/navigator.yaml\` for project structure
+2. Find relevant symbol → go directly to path
+3. Read only needed files
+
+## Using MCP Navigate Tool
+
+\`\`\`
+# Find a specific symbol
+paradigm_navigate({ intent: "find", target: "@checkout" })
+
+# Explore an area
+paradigm_navigate({ intent: "explore", target: "authentication" })
+
+# Get context for a task
+paradigm_navigate({ intent: "context", task: "add Apple Pay" })
+\`\`\`
+
+## Task Recipes
+
+### Adding a Feature
+1. Check \`navigator.yaml\` → \`structure.features.paths\`
+2. Read an existing feature as template
+3. Create in the same location
+
+### Modifying a Component
+1. Look up symbol in \`navigator.yaml\` → \`symbols\`
+2. Go directly to the path
+3. Use \`paradigm_ripple\` to check impact
+
+### Understanding Dependencies
+1. Use \`paradigm_navigate({ intent: "context", task: "..." })\`
+2. Read suggested files in order
+3. Skip patterns in the \`skip\` array
+
+## Key Files (Quick Reference)
+
+Always available in \`navigator.yaml\`:
+- \`key_files.config\` - Configuration files
+- \`key_files.entry\` - Entry points
+- \`key_files.types\` - Type definitions
+`;
+  }
+
+  /**
+   * Generate MCP configuration for Cursor
+   */
+  generateMcpConfig(): McpConfig {
+    return {
+      mcpServers: {
+        paradigm: {
+          command: 'npx',
+          args: ['@a-company/paradigm-mcp'],
+        },
+      },
+    };
   }
 }
 

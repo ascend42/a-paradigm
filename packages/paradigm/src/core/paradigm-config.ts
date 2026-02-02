@@ -54,7 +54,7 @@ export interface SymbolSystem {
   '#': SymbolDefinition; // Components
   '$': SymbolDefinition; // Flows
   '%': SymbolDefinition; // States
-  '~': SymbolDefinition; // Aspects
+  '~': SymbolDefinition; // Deprecated
   '^': SymbolDefinition; // Gates
   '!': SymbolDefinition; // Signals
   '?': SymbolDefinition; // Ideas
@@ -116,10 +116,10 @@ export const DEFAULT_SYMBOL_SYSTEM: SymbolSystem = {
     examples: ['%user.authenticated', '%cart.items']
   },
   '~': {
-    name: 'Aspect',
-    description: 'Cross-cutting concerns or nested properties',
-    owner: 'purpose',
-    examples: ['@login~validation', '#Button~disabled']
+    name: 'Deprecated',
+    description: 'Features or components marked for removal',
+    owner: 'shared',
+    examples: ['~legacy-api', '~v1-auth', '~old-dashboard']
   },
   '^': {
     name: 'Gate',

@@ -318,7 +318,7 @@ Paradigm uses a symbol system to create a shared language between code, develope
    - \`#\` - Components (reusable code units)
    - \`$\` - Flows (multi-step processes)
    - \`%\` - State (global/user state)
-   - \`~\` - Aspects (cross-cutting concerns)
+   - \`~\` - Deprecated (marked for removal)
    - \`^\` - Gates (access control)
    - \`!\` - Signals (events/errors)
    - \`?\` - Ideas (exploration)
@@ -329,7 +329,7 @@ Paradigm uses a symbol system to create a shared language between code, develope
    - \`?#dark-mode-toggle\` - Idea for a component
    - \`?$express-checkout\` - Idea for a flow
    - \`?%user-preferences\` - Idea for state
-   - \`?~performance-optimization\` - Idea for an aspect
+   - \`?~old-api-removal\` - Idea for deprecation
    - \`?^premium-access\` - Idea for a gate
    - \`?!payment-webhook\` - Idea for a signal
    

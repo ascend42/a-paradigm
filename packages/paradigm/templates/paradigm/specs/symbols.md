@@ -111,21 +111,6 @@ log.state('%user.authenticated').info('State changed', { from: false, to: true }
 
 ---
 
-### `~` Aspects
-
-Use for **cross-cutting concerns** — properties or behaviors that attach to other symbols.
-
-```
-@login~validation      - Validation rules for login
-@login~rate-limit      - Rate limiting for login
-#Button~disabled       - Disabled state of button
-#Modal~animation       - Animation behavior
-```
-
-**Where:** Aspect-oriented code, decorators, mixins.
-
----
-
 ### `^` Portals
 
 Use for **authorization and access control** — checkpoints that allow or deny access.
@@ -142,9 +127,9 @@ Use for **authorization and access control** — checkpoints that allow or deny 
 
 **In code (pseudocode):**
 ```
-log.portal('^authenticated').debug('Checking portal')
-log.portal('^authenticated').warn('Access denied', { user_id, resource })
-log.portal('^authenticated').debug('Portal passed', { user_id })
+log.gate('^authenticated').debug('Checking gate')
+log.gate('^authenticated').warn('Access denied', { user_id, resource })
+log.gate('^authenticated').debug('Gate passed', { user_id })
 ```
 
 ---
@@ -356,8 +341,6 @@ log.flow('$ftux').info('Targeting component', {
   effect: 'tooltip',
 });
 ```
-
-See `specs/ftux-component-system.md` for full specification.
 
 ## Discipline-Specific Examples
 

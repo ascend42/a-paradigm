@@ -328,10 +328,132 @@ export function syncToAllIDEs(
   force: boolean = false
 ): SyncResult[] {
   const results: SyncResult[] = [];
-  
+
   for (const [name] of adapters) {
     results.push(syncToIDE(rootDir, name, files, force));
   }
-  
+
   return results;
+}
+
+/**
+ * Write MCP configuration for an IDE
+ */
+export function writeMcpConfig(
+  rootDir: string,
+  ideName: string
+): { success: boolean; path: string; message: string } {
+  const adapter = getAdapter(ideName);
+
+  if (!adapter || !adapter.generateMcpConfig) {
+    return {
+      success: false,
+      path: '',
+      message: `IDE ${ideName} does not support MCP configuration`,
+    };
+  }
+
+  const mcpConfig = adapter.generateMcpConfig();
+  let configPath: string;
+
+  // Determine the config path based on IDE
+  switch (ideName) {
+    case 'cursor':
+      configPath = path.join(rootDir, '.cursor', 'mcp.json');
+      break;
+    case 'claude':
+      configPath = path.join(rootDir, '.claude', 'settings.json');
+      break;
+    default:
+      return {
+        success: false,
+        path: '',
+        message: `Unknown MCP config path for ${ideName}`,
+      };
+  }
+
+  try {
+    // Ensure directory exists
+    const parentDir = path.dirname(configPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
+    // Merge with existing config if present
+    let existingConfig: Record<string, unknown> = {};
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      existingConfig = JSON.parse(content);
+    }
+
+    // Merge MCP servers
+    const mergedConfig = {
+      ...existingConfig,
+      mcpServers: {
+        ...(existingConfig.mcpServers as Record<string, unknown> || {}),
+        ...mcpConfig.mcpServers,
+      },
+    };
+
+    fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
+
+    return {
+      success: true,
+      path: configPath,
+      message: `MCP configuration written to ${path.relative(rootDir, configPath)}`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      path: configPath,
+      message: `Failed to write MCP config: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Write nested context files (e.g., CLAUDE.md in directories with .purpose)
+ */
+export function writeNestedContexts(
+  rootDir: string,
+  ideName: string,
+  files: ParadigmFiles
+): { success: boolean; count: number; message: string } {
+  const adapter = getAdapter(ideName);
+
+  if (!adapter || !adapter.generateNestedContexts) {
+    return {
+      success: false,
+      count: 0,
+      message: `IDE ${ideName} does not support nested contexts`,
+    };
+  }
+
+  try {
+    const generatedFiles = adapter.generateNestedContexts(rootDir, files);
+
+    for (const file of generatedFiles) {
+      const filePath = path.join(rootDir, file.path);
+
+      // Ensure parent directory exists
+      const parentDir = path.dirname(filePath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+
+      fs.writeFileSync(filePath, file.content, 'utf8');
+    }
+
+    return {
+      success: true,
+      count: generatedFiles.length,
+      message: `Generated ${generatedFiles.length} nested context files`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      count: 0,
+      message: `Failed to write nested contexts: ${(error as Error).message}`,
+    };
+  }
 }

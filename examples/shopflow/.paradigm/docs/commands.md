@@ -14,7 +14,7 @@ Complete reference for all Horizon commands with examples and usage guidance.
 
 **Options:**
 ```
--f, --force     Overwrite existing .horizon/ directory
+-f, --force     Overwrite existing .paradigm/ directory
 --name <name>   Project name (defaults to directory name)
 ```
 
@@ -32,7 +32,7 @@ horizon init --force
 
 **What it creates:**
 ```
-.horizon/
+.paradigm/
 ├── config.yaml
 ├── specs/
 ├── docs/
@@ -43,11 +43,11 @@ horizon init --force
 
 ## horizon sync
 
-**What it does:** Generate IDE-specific instruction files from `.horizon/` config.
+**What it does:** Generate IDE-specific instruction files from `.paradigm/` config.
 
 **When to use:**
-- After modifying `.horizon/config.yaml`
-- After updating specs in `.horizon/specs/`
+- After modifying `.paradigm/config.yaml`
+- After updating specs in `.paradigm/specs/`
 - When switching IDEs or onboarding team members
 - After running `horizon upgrade`
 
@@ -114,12 +114,12 @@ horizon index -o ./custom/scan-index.json
 
 ## horizon upgrade
 
-**What it does:** Add new features/specs to an existing `.horizon/` setup.
+**What it does:** Add new features/specs to an existing `.paradigm/` setup.
 
 **When to use:**
 - When Horizon releases new features
 - To add missing specs to an older setup
-- To migrate from legacy `.horizon` file to `.horizon/` directory
+- To migrate from legacy `.paradigm` file to `.paradigm/` directory
 
 **Options:**
 ```
@@ -166,13 +166,13 @@ horizon doctor
 ```
 Checking Horizon setup...
 
-  .horizon/config.yaml          ✓ OK
-  .horizon/specs/logger.md      ✓ OK
-  .horizon/specs/scan.md        ✓ OK
-  .horizon/specs/symbols.md     ✓ OK
-  .horizon/docs/commands.md     ✓ OK
+  .paradigm/config.yaml          ✓ OK
+  .paradigm/specs/logger.md      ✓ OK
+  .paradigm/specs/scan.md        ✓ OK
+  .paradigm/specs/symbols.md     ✓ OK
+  .paradigm/docs/commands.md     ✓ OK
   .cursorrules                  ⚠ STALE (run: horizon sync)
-  .horizon/scan-index.json      ✓ OK (2 hours old)
+  .paradigm/scan-index.json      ✓ OK (2 hours old)
 
 1 issue found. Run suggested commands to fix.
 ```
@@ -185,7 +185,7 @@ Checking Horizon setup...
 
 **When to use:**
 - During active development
-- When frequently updating `.horizon/` files
+- When frequently updating `.paradigm/` files
 - For real-time sync while editing config
 
 **Examples:**
@@ -194,8 +194,8 @@ horizon watch
 ```
 
 **What it watches:**
-- `.horizon/config.yaml` → re-syncs IDE files
-- `.horizon/specs/*.md` → re-syncs IDE files
+- `.paradigm/config.yaml` → re-syncs IDE files
+- `.paradigm/specs/*.md` → re-syncs IDE files
 - `**/.purpose` files → regenerates scan index
 - `**/gate.yaml` files → regenerates scan index
 
@@ -203,7 +203,7 @@ horizon watch
 
 ## horizon summary
 
-**What it does:** Generate/update `.horizon/project.md` with project stats.
+**What it does:** Generate/update `.paradigm/project.md` with project stats.
 
 **When to use:**
 - To get an overview of your project's Horizon usage
@@ -352,4 +352,4 @@ horizon dream snapshot "pre-refactor" -d "Before auth rewrite"
 2. **Run `horizon sync` after any config change**
 3. **Use `horizon watch` during development**
 4. **Keep scan index fresh** with regular `horizon index` runs
-5. **Check `.horizon/specs/`** before asking "how do I..."
+5. **Check `.paradigm/specs/`** before asking "how do I..."

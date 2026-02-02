@@ -220,7 +220,7 @@ function generateBeacon(
   lines.push('| `!` | Signal | Event or side effect |');
   lines.push('| `$` | Flow | Multi-step process |');
   lines.push('| `%` | State | Data condition |');
-  lines.push('| `~` | Aspect | Cross-cutting concern |');
+  lines.push('| `~` | Deprecated | Marked for removal |');
   lines.push('| `?` | Idea | Future possibility |');
   lines.push('');
   
@@ -228,7 +228,7 @@ function generateBeacon(
   lines.push('## For More Context');
   lines.push('');
   lines.push('- Full symbol graph: `.paradigm/constellation.json`');
-  lines.push('- Detailed context: `.paradigm/horizons/` (if available)');
+  lines.push('- Detailed context: `.paradigm/specs/` for detailed specifications');
   lines.push('- Session history: `.paradigm/thread.md` (if available)');
   lines.push('- Error mapping: `.paradigm/echoes.yaml` (if available)');
   lines.push('');

@@ -8,14 +8,14 @@ project: "shopflow"
 agent-guidelines:
   overview: |
     This project uses Horizon for structured AI-assisted development.
-    All context, symbols, and specifications live in the .horizon/ directory.
+    All context, symbols, and specifications live in the .paradigm/ directory.
   
   how-to-use:
-    - "Check .horizon/specs/ for philosophy and patterns before making changes"
+    - "Check .paradigm/specs/ for philosophy and patterns before making changes"
     - "Reference symbols using prefixes: @feature #component ^gate !signal %state $flow"
     - "Use the Horizon logger instead of raw console.log/print statements"
     - "Run `horizon scan` with screenshots to map UI to code"
-    - "Check .horizon/docs/ for command reference and troubleshooting"
+    - "Check .paradigm/docs/ for command reference and troubleshooting"
   
   update-rules:
     - "When adding a feature, create/update the nearest .purpose file"

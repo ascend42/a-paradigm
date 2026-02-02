@@ -1,6 +1,6 @@
 # Step 5: Visualize in Dreamscape
 
-The Dreamscape is Paradigm's infinite canvas where all project knowledge flows together.
+The Dreamscape is Horizon's infinite canvas where all project knowledge flows together.
 
 ## What You'll Learn
 
@@ -12,7 +12,7 @@ The Dreamscape is Paradigm's infinite canvas where all project knowledge flows t
 
 1. **Aggregate symbols**
    ```bash
-   paradigm dream aggregate
+   horizon dream aggregate
    ```
    - This combines all Purpose and Gate files
    - Creates a unified symbol index
@@ -20,7 +20,7 @@ The Dreamscape is Paradigm's infinite canvas where all project knowledge flows t
 
 2. **Open the Dreamscape**
    ```bash
-   paradigm visualize
+   horizon visualize
    ```
    - This opens the visualizer in your browser
    - You'll see all your symbols as nodes
@@ -47,16 +47,16 @@ The Dreamscape is Paradigm's infinite canvas where all project knowledge flows t
 
 Run:
 ```bash
-paradigm tutorial checkpoint
+horizon tutorial checkpoint
 ```
 
 ## Next Steps
 
 Congratulations! You've completed the tutorial. You now understand:
-- How Paradigm structures project knowledge
+- How Horizon structures project knowledge
 - How Purpose files define features and components
 - How Gates define authorization
 - How symbols create relationships
 - How to visualize everything in the Dreamscape
 
-Continue exploring ShopFlow, or start using Paradigm in your own projects!
+Continue exploring ShopFlow, or start using Horizon in your own projects!
