@@ -27,7 +27,10 @@ export class IndexService implements vscode.Disposable {
 
   public readonly onDidUpdateIndex = this._onDidUpdateIndex.event;
 
-  constructor(private readonly workspaceRoot: string) {}
+  constructor(
+    private readonly workspaceRoot: string,
+    private readonly log: (msg: string) => void = console.log
+  ) {}
 
   /**
    * Initialize the index service
@@ -113,11 +116,24 @@ export class IndexService implements vscode.Disposable {
     this.isBuilding = true;
 
     try {
+      this.log(`Building index from: ${this.workspaceRoot}`);
       const result = await aggregateFromDirectory(this.workspaceRoot);
-      this.index = buildSymbolIndex(result.symbols);
+      this.log(`Found ${result.purposeFiles.length} .purpose files`);
+      for (const f of result.purposeFiles) {
+        this.log(`  - ${f}`);
+      }
+      if (result.errors.length > 0) {
+        this.log(`Errors during aggregation:`);
+        for (const e of result.errors) {
+          this.log(`  - ${e.source}: ${e.filePath}: ${e.message}`);
+        }
+      }
+      this.log(`Extracted ${result.symbols.length} symbols`);
+      this.index = buildSymbolIndex(result);
+      this.log(`Index built with ${this.getAllSymbols().length} symbols`);
       this._onDidUpdateIndex.fire(this.index);
     } catch (error) {
-      console.error('Failed to build symbol index:', error);
+      this.log(`Failed to build symbol index: ${error}`);
     } finally {
       this.isBuilding = false;
 

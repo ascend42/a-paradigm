@@ -63,22 +63,21 @@ export class ParadigmHoverProvider implements vscode.HoverProvider {
       md.appendMarkdown(`${entry.description}\n\n`);
     }
 
-    // File location
+    // File location - make it a clickable link
     const relativePath = vscode.workspace.asRelativePath(entry.filePath);
-    md.appendMarkdown(`**File**: \`${relativePath}\`\n\n`);
+    const fileUri = vscode.Uri.file(entry.filePath);
+    md.appendMarkdown(`**File**: [${relativePath}](${fileUri})\n\n`);
 
-    // References
+    // References - show all with links
     if (entry.references.length > 0) {
-      const refs = entry.references.slice(0, 5).join(', ');
-      const more = entry.references.length > 5 ? ` (+${entry.references.length - 5} more)` : '';
-      md.appendMarkdown(`**References**: ${refs}${more}\n\n`);
+      const refLinks = entry.references.map(ref => this.createSymbolLink(ref));
+      md.appendMarkdown(`**References**: ${refLinks.join(', ')}\n\n`);
     }
 
-    // Referenced by
+    // Referenced by - show all with links
     if (entry.referencedBy.length > 0) {
-      const refBy = entry.referencedBy.slice(0, 5).join(', ');
-      const more = entry.referencedBy.length > 5 ? ` (+${entry.referencedBy.length - 5} more)` : '';
-      md.appendMarkdown(`**Used by**: ${refBy}${more}\n\n`);
+      const refByLinks = entry.referencedBy.map(ref => this.createSymbolLink(ref));
+      md.appendMarkdown(`**Used by**: ${refByLinks.join(', ')}\n\n`);
     }
 
     // Tags
@@ -87,5 +86,21 @@ export class ParadigmHoverProvider implements vscode.HoverProvider {
     }
 
     return new vscode.Hover(md, symbolMatch.range);
+  }
+
+  /**
+   * Create a clickable markdown link for a symbol
+   * Links to the file where the symbol is defined
+   */
+  private createSymbolLink(symbol: string): string {
+    const entry = this.indexService.lookup(symbol);
+    if (entry) {
+      const fileUri = vscode.Uri.file(entry.filePath);
+      const relativePath = vscode.workspace.asRelativePath(entry.filePath);
+      // Create link with symbol name, tooltip shows file path
+      return `[${symbol}](${fileUri} "${relativePath}")`;
+    }
+    // Symbol not found in index, just show plain text
+    return symbol;
   }
 }
