@@ -24,6 +24,7 @@
     "@a-company/premise-core": "*",
     "@a-company/purpose-core": "*",
     "@a-company/portal-core": "*",
+    "@a-company/sentinel": "*",
     "js-yaml": "^4.1.0",
     "zod": "^3.23.0"
   },

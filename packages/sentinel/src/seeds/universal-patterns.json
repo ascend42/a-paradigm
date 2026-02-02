@@ -1,0 +1,292 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2026-02-02T00:00:00.000Z",
+  "patterns": [
+    {
+      "id": "timeout-external-001",
+      "name": "External Service Timeout",
+      "description": "External API or service did not respond within expected time",
+      "pattern": {
+        "symbols": { "integration": ["&*"] },
+        "errorContains": ["timeout", "ETIMEDOUT", "ECONNRESET", "ESOCKETTIMEDOUT", "deadline exceeded"]
+      },
+      "resolution": {
+        "description": "External service timeout - typically transient",
+        "strategy": "retry",
+        "priority": "medium",
+        "codeHint": "Add retry with exponential backoff (3 attempts, 1s/2s/4s delays)",
+        "codeSnippet": "const result = await retry(() => externalCall(), { retries: 3, minTimeout: 1000, factor: 2 });"
+      },
+      "confidence": { "score": 85, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["network", "timeout", "transient"]
+    },
+    {
+      "id": "auth-token-expired-001",
+      "name": "Authentication Token Expired",
+      "description": "JWT or session token has expired",
+      "pattern": {
+        "symbols": { "gate": ["^authenticated", "^auth-required", "^*-auth*"] },
+        "errorContains": ["401", "unauthorized", "token expired", "jwt expired", "session expired", "invalid token"]
+      },
+      "resolution": {
+        "description": "Authentication token expired - user needs to re-authenticate or token needs refresh",
+        "strategy": "fix-data",
+        "priority": "high",
+        "codeHint": "Implement proactive token refresh before expiry, or redirect to login",
+        "symbolsToModify": ["^authenticated"]
+      },
+      "confidence": { "score": 90, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["auth", "token", "security"]
+    },
+    {
+      "id": "payment-declined-001",
+      "name": "Payment Declined",
+      "description": "Payment processor declined the transaction",
+      "pattern": {
+        "symbols": {
+          "feature": ["@checkout", "@payment", "@billing"],
+          "gate": ["^payment-validated", "^payment-*"]
+        },
+        "missingSignals": ["!payment-authorized", "!payment-success"],
+        "errorContains": ["declined", "insufficient", "card_error", "card_declined", "do_not_honor"]
+      },
+      "resolution": {
+        "description": "Payment method was declined by the processor - not a system error",
+        "strategy": "fallback",
+        "priority": "medium",
+        "codeHint": "Show user-friendly error message, offer alternative payment methods",
+        "symbolsToModify": ["@checkout"]
+      },
+      "confidence": { "score": 80, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["payment", "user-error", "expected"]
+    },
+    {
+      "id": "rate-limit-exceeded-001",
+      "name": "Rate Limit Exceeded",
+      "description": "API rate limit was exceeded",
+      "pattern": {
+        "symbols": { "integration": ["&*"] },
+        "errorContains": ["429", "rate limit", "too many requests", "throttle", "quota exceeded"]
+      },
+      "resolution": {
+        "description": "API rate limit exceeded - need to implement rate limiting or backoff",
+        "strategy": "retry",
+        "priority": "high",
+        "codeHint": "Implement client-side rate limiting, add exponential backoff, consider request caching"
+      },
+      "confidence": { "score": 88, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["rate-limit", "api", "throttling"]
+    },
+    {
+      "id": "db-connection-failed-001",
+      "name": "Database Connection Failed",
+      "description": "Could not establish database connection",
+      "pattern": {
+        "symbols": { "component": ["#database", "#db", "#postgres", "#mysql", "#mongo", "#redis"] },
+        "errorContains": ["connection refused", "ECONNREFUSED", "connection pool", "too many connections", "connection timeout"]
+      },
+      "resolution": {
+        "description": "Database connection issue - check connection pool, credentials, and DB health",
+        "strategy": "fix-code",
+        "priority": "critical",
+        "codeHint": "Check connection pool settings, implement connection retry, verify database is running and accessible"
+      },
+      "confidence": { "score": 75, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["database", "connection", "infrastructure"]
+    },
+    {
+      "id": "null-reference-001",
+      "name": "Null/Undefined Reference",
+      "description": "Attempted to access property of null or undefined",
+      "pattern": {
+        "errorContains": ["cannot read property", "undefined is not an object", "null is not an object", "TypeError: Cannot read"],
+        "errorType": ["TypeError"]
+      },
+      "resolution": {
+        "description": "Code attempted to access a property on null/undefined - add null checks or fix data flow",
+        "strategy": "fix-code",
+        "priority": "high",
+        "codeHint": "Add optional chaining (?.), nullish coalescing (??), or explicit null checks"
+      },
+      "confidence": { "score": 70, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["null", "type-error", "data-validation"]
+    },
+    {
+      "id": "network-offline-001",
+      "name": "Network Offline",
+      "description": "Device or server has no network connectivity",
+      "pattern": {
+        "errorContains": ["network error", "ERR_NETWORK", "offline", "no internet", "DNS_PROBE", "ENOTFOUND"]
+      },
+      "resolution": {
+        "description": "Network connectivity issue - may be user's connection or server network",
+        "strategy": "retry",
+        "priority": "medium",
+        "codeHint": "Show offline indicator, queue requests for retry, implement offline-first patterns"
+      },
+      "confidence": { "score": 82, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["network", "offline", "connectivity"]
+    },
+    {
+      "id": "validation-failed-001",
+      "name": "Input Validation Failed",
+      "description": "User input failed validation",
+      "pattern": {
+        "symbols": { "gate": ["^*-validated", "^valid-*"] },
+        "errorContains": ["validation", "invalid", "required field", "must be", "expected"]
+      },
+      "resolution": {
+        "description": "Input validation failed - show user the specific validation errors",
+        "strategy": "fix-data",
+        "priority": "low",
+        "codeHint": "Display field-level validation errors, highlight invalid fields"
+      },
+      "confidence": { "score": 78, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["validation", "user-input", "expected"]
+    },
+    {
+      "id": "permission-denied-001",
+      "name": "Permission Denied",
+      "description": "User lacks permission for the requested action",
+      "pattern": {
+        "symbols": { "gate": ["^*-authorized", "^has-permission", "^can-*"] },
+        "errorContains": ["403", "forbidden", "permission denied", "not authorized", "access denied"]
+      },
+      "resolution": {
+        "description": "User doesn't have required permissions - show appropriate message or hide action",
+        "strategy": "fallback",
+        "priority": "medium",
+        "codeHint": "Check permissions before showing actions, display clear permission error"
+      },
+      "confidence": { "score": 85, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["permissions", "authorization", "access-control"]
+    },
+    {
+      "id": "resource-not-found-001",
+      "name": "Resource Not Found",
+      "description": "Requested resource does not exist",
+      "pattern": {
+        "errorContains": ["404", "not found", "does not exist", "no such", "ENOENT"]
+      },
+      "resolution": {
+        "description": "Resource doesn't exist - may be deleted, wrong ID, or stale reference",
+        "strategy": "fallback",
+        "priority": "medium",
+        "codeHint": "Show 'not found' page, redirect to list, or remove stale reference"
+      },
+      "confidence": { "score": 80, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["not-found", "resource", "stale"]
+    },
+    {
+      "id": "json-parse-error-001",
+      "name": "JSON Parse Error",
+      "description": "Failed to parse JSON response or data",
+      "pattern": {
+        "errorContains": ["JSON", "Unexpected token", "JSON.parse", "SyntaxError"],
+        "errorType": ["SyntaxError"]
+      },
+      "resolution": {
+        "description": "Invalid JSON received - check API response format or data source",
+        "strategy": "fix-code",
+        "priority": "high",
+        "codeHint": "Wrap JSON.parse in try-catch, validate response content-type, add error boundaries"
+      },
+      "confidence": { "score": 75, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["json", "parsing", "api"]
+    },
+    {
+      "id": "cors-error-001",
+      "name": "CORS Error",
+      "description": "Cross-Origin Resource Sharing policy blocked request",
+      "pattern": {
+        "errorContains": ["CORS", "cross-origin", "Access-Control-Allow-Origin", "blocked by CORS"]
+      },
+      "resolution": {
+        "description": "CORS policy blocking request - configure server CORS headers or use proxy",
+        "strategy": "fix-code",
+        "priority": "high",
+        "codeHint": "Add proper CORS headers on server, or proxy requests through same-origin endpoint"
+      },
+      "confidence": { "score": 90, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["cors", "security", "browser"]
+    },
+    {
+      "id": "memory-exceeded-001",
+      "name": "Memory Limit Exceeded",
+      "description": "Application ran out of memory",
+      "pattern": {
+        "errorContains": ["out of memory", "heap", "ENOMEM", "memory limit", "allocation failed"]
+      },
+      "resolution": {
+        "description": "Memory exhausted - check for memory leaks, optimize data structures, increase limits",
+        "strategy": "fix-code",
+        "priority": "critical",
+        "codeHint": "Profile memory usage, implement pagination, stream large datasets, check for memory leaks"
+      },
+      "confidence": { "score": 72, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["memory", "performance", "infrastructure"]
+    },
+    {
+      "id": "ssl-cert-error-001",
+      "name": "SSL Certificate Error",
+      "description": "SSL/TLS certificate validation failed",
+      "pattern": {
+        "errorContains": ["certificate", "SSL", "TLS", "CERT_", "self-signed", "expired cert"]
+      },
+      "resolution": {
+        "description": "SSL certificate issue - renew certificate or configure trust",
+        "strategy": "escalate",
+        "priority": "critical",
+        "codeHint": "Check certificate expiration, verify certificate chain, renew if needed"
+      },
+      "confidence": { "score": 88, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["ssl", "security", "certificate"]
+    },
+    {
+      "id": "file-too-large-001",
+      "name": "File Too Large",
+      "description": "Uploaded file exceeds size limit",
+      "pattern": {
+        "errorContains": ["file too large", "payload too large", "size limit", "413", "maxFileSize"]
+      },
+      "resolution": {
+        "description": "File exceeds upload limit - show user-friendly error with size limit info",
+        "strategy": "fallback",
+        "priority": "low",
+        "codeHint": "Validate file size client-side before upload, show clear size limits"
+      },
+      "confidence": { "score": 85, "timesMatched": 0, "timesResolved": 0, "timesRecurred": 0 },
+      "source": "community",
+      "private": false,
+      "tags": ["upload", "file", "validation"]
+    }
+  ]
+}
