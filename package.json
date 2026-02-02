@@ -16,6 +16,8 @@
     "build:core": "npm run build --workspace=@a-company/purpose-core && npm run build --workspace=@a-company/portal-core && npm run build --workspace=@a-company/probe-core",
     "build:packages": "npm run build --workspace=@a-company/portal-sdk && npm run build --workspace=@a-company/portal-manager && npm run build --workspace=@a-company/portal-viewer && npm run build --workspace=@a-company/premise-core && npm run build --workspace=@a-company/prism && npm run build --workspace=@a-company/paradigm-mcp",
     "build:cli": "npm run build --workspace=@a-company/paradigm",
+    "build:vscode": "npm run build --workspace=@a-company/paradigm-vscode",
+    "package:vscode": "cd packages/paradigm-vscode && npx vsce package",
     "dev": "npm run dev --workspace=@a-company/prism",
     "dev:prism": "npm run dev --workspace=@a-company/prism",
     "lint": "eslint packages --ext .ts,.tsx",

@@ -1,0 +1,123 @@
+{
+  "name": "paradigm-vscode",
+  "displayName": "Paradigm",
+  "description": "Rich IDE support for Paradigm symbol system and .purpose files",
+  "version": "1.0.0",
+  "publisher": "a-company",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "paradigm",
+    "purpose",
+    "symbols",
+    "ai-context",
+    "documentation"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/.purpose",
+    "workspaceContains:**/portal.yaml",
+    "workspaceContains:**/.paradigm/config.yaml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "purpose",
+        "aliases": ["Purpose", "purpose"],
+        "extensions": [".purpose"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "purpose",
+        "scopeName": "source.purpose",
+        "path": "./syntaxes/purpose.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.paradigm.symbols",
+        "path": "./syntaxes/paradigm-symbols.tmLanguage.json",
+        "injectTo": [
+          "source.yaml",
+          "text.html.markdown",
+          "source.ts",
+          "source.tsx",
+          "source.js",
+          "source.jsx",
+          "source.purpose"
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Paradigm",
+      "properties": {
+        "paradigm.enableCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show reference counts above symbol definitions"
+        },
+        "paradigm.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show validation errors for .purpose files"
+        },
+        "paradigm.enableAutoComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable symbol autocomplete suggestions"
+        },
+        "paradigm.symbolHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable syntax highlighting for Paradigm symbols"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "paradigm.rebuildIndex",
+        "title": "Paradigm: Rebuild Symbol Index"
+      },
+      {
+        "command": "paradigm.showSymbol",
+        "title": "Paradigm: Show Symbol Info"
+      },
+      {
+        "command": "paradigm.findReferences",
+        "title": "Paradigm: Find Symbol References"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "@a-company/premise-core": "*",
+    "@a-company/purpose-core": "*",
+    "@a-company/portal-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/paradigm-vscode"
+  },
+  "license": "MIT",
+  "author": "ascend42"
+}
