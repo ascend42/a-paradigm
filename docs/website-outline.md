@@ -35,20 +35,21 @@ Paradigm is a unified developer tools ecosystem that brings **structure**, **aut
 
 | Audience | Pain Point | Paradigm Solution |
 |----------|------------|-------------------|
-| **Solo Developers** | Context loss between sessions | Thread, Beacon, Constellation |
-| **Teams** | Inconsistent understanding of features/auth | Purpose files, Portal topology |
-| **AI-Assisted Developers** | AI lacks project context | Symbol system, Agent hints, CLI queries |
-| **Enterprise** | Authorization complexity, audit trails | Portal validation, Session reporting |
+| **Solo Developers** | Context loss between sessions | Thread, Beacon, Constellation, History |
+| **Teams** | Inconsistent understanding, lost knowledge | Purpose files, Portal topology, Wisdom system |
+| **AI-Assisted Developers** | AI lacks project context | Symbol system, Navigator, Agent hints, CLI queries |
+| **Enterprise** | Authorization complexity, audit trails | Portal validation, History tracking, Session reporting |
 | **Open Source Maintainers** | Onboarding contributors | Beacon, Pathways, structured .purpose files |
 
 ### Competitive Positioning
 
 | vs. | Paradigm Advantage |
 |-----|-------------------|
-| Plain documentation | Machine-readable, AI-queryable |
+| Plain documentation | Machine-readable, AI-queryable, symbol-indexed |
 | Comments in code | Aggregated, cross-referenced, visualizable |
 | Auth libraries | Topology-first, visual validation |
 | Context files (.cursorrules) | Generated from structured source, IDE-agnostic |
+| Tribal knowledge | Wisdom system preserves team patterns and antipatterns |
 
 ---
 
@@ -67,13 +68,18 @@ Home
 ├── Features
 │   ├── Symbol System
 │   ├── Agent Efficiency
+│   │   ├── Navigator
+│   │   ├── Wisdom
+│   │   └── History
 │   ├── MCP Integration
 │   ├── IDE Integration
+│   ├── Multi-Agent Teams
 │   └── CLI Tools
 ├── Docs
 │   ├── Getting Started
 │   ├── Guides
-│   │   └── MCP Setup (Claude Desktop)
+│   │   ├── MCP Setup (Claude Desktop)
+│   │   └── Multi-Agent Teams
 │   ├── CLI Reference
 │   └── API Reference
 ├── Use Cases
@@ -147,6 +153,9 @@ Visual grid showing symbols with examples:
 !error        Signal         Event or side effect
 $purchase     Flow           Multi-step process
 %user.auth    State          Data condition
+~legacy       Deprecated     Marked for removal
+?idea         Idea           Future possibility
+&stripe       Integration    External service
 ```
 
 **Key Point:** "These symbols work everywhere — in code comments, documentation, AI prompts, and visual tools."
@@ -161,9 +170,12 @@ $purchase     Flow           Multi-step process
 |---------|--------------|
 | **Beacon** | Quick-start orientation file AI reads first |
 | **Constellation** | Machine-readable symbol graph |
+| **Navigator** | Pre-indexed project structure for targeted exploration |
 | **Ripple** | Change impact analysis before modifications |
 | **Thread** | Session continuity between AI interactions |
 | **Echo** | Error-to-symbol mapping for debugging |
+| **Wisdom** | Team patterns, antipatterns, and decisions |
+| **History** | Implementation log with fragility tracking |
 | **MCP Server** | Dynamic context for Claude Desktop — query symbols mid-conversation |
 
 **Two Approaches Visual:**
@@ -198,6 +210,7 @@ Logos/icons for:
 - Windsurf
 - VS Code (via Copilot)
 - Claude Desktop (via MCP)
+- Claude Code (via CLAUDE.md)
 
 **Key Point:** "One source of truth in `.paradigm/`, generates instructions for any IDE — plus dynamic MCP access for Claude Desktop."
 
@@ -214,7 +227,7 @@ Logos/icons for:
 
 ```bash
 # Install
-npm install -g @a-company/paradigm
+npm install -g github:ascend42/a-paradigm
 
 # Initialize in your project
 paradigm init
@@ -259,7 +272,7 @@ Email signup for updates, tutorials, and release notes.
 1. **Feature Definitions** — Name, description, gates, signals, components
 2. **Component Registry** — Track reusable units and their usage
 3. **Relationship Mapping** — See how everything connects
-4. **Validation** — Ensure consistency with `paradigm purpose validate`
+4. **Validation** — Ensure consistency with `paradigm lint`
 
 **Example:**
 ```yaml
@@ -299,7 +312,7 @@ gates:
   authenticated:
     description: User must be logged in
     keys: [user.id]
-    
+
   admin-only:
     description: Admin access required
     requires: [^authenticated]
@@ -377,7 +390,7 @@ jq '.stars["@checkout"]' .paradigm/constellation.json
 Traditional: AI loads .cursorrules → 2000 tokens → works on task
             (Even if only 5% is relevant)
 
-With MCP:   AI needs info about @checkout → 
+With MCP:   AI needs info about @checkout →
             Calls paradigm_ripple("@checkout") →
             Gets 100 tokens of targeted context
 ```
@@ -393,6 +406,8 @@ With MCP:   AI needs info about @checkout →
 | `paradigm://symbols/type/gate` | All gates |
 | `paradigm://gates` | Detailed gate definitions |
 | `paradigm://flows` | All flow definitions |
+| `paradigm://wisdom/preferences` | Team patterns |
+| `paradigm://history/fragile` | Fragile symbols |
 
 2. **Tools (Actions AI Can Invoke)**
 
@@ -402,7 +417,9 @@ With MCP:   AI needs info about @checkout →
 | `paradigm_ripple` | Impact analysis ("what breaks if I change X?") |
 | `paradigm_related` | Get connected symbols |
 | `paradigm_status` | Project overview |
-| `paradigm_gates_for_route` | Suggest gates for a route |
+| `paradigm_navigate` | Targeted exploration via Navigator |
+| `paradigm_wisdom_context` | Get team patterns before implementing |
+| `paradigm_history_fragility` | Check stability before modifying |
 
 **Setup (Claude Desktop):**
 ```json
@@ -410,8 +427,8 @@ With MCP:   AI needs info about @checkout →
 {
   "mcpServers": {
     "paradigm": {
-      "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "command": "paradigm-mcp",
+      "args": ["."],
       "cwd": "/path/to/your/project"
     }
   }
@@ -432,6 +449,95 @@ With MCP:   AI needs info about @checkout →
 
 **CTA:** "Set Up MCP" → MCP Setup Guide
 
+### 4.6 Navigator Page
+
+**Hero:** "Targeted Exploration, Not Token Waste"
+
+**Core Concept:**
+- Navigator provides a pre-indexed project structure
+- AI tools query for targeted paths instead of broad exploration
+- Reduces exploration overhead by 90%+
+
+**Key Features:**
+1. **Structure Index** — Feature, component, gate locations pre-mapped
+2. **Symbol-to-Path Lookup** — Direct navigation from symbol to file
+3. **Skip Patterns** — Automatically avoid node_modules, dist, etc.
+4. **Task Context** — Get relevant files for any task description
+
+**Example:**
+```typescript
+// Instead of: glob **/*.ts (thousands of files)
+paradigm_navigate({ intent: "find", target: "@checkout" })
+// Returns: { paths: ["src/features/checkout/"], symbols: ["@checkout"] }
+```
+
+**Benefits:**
+- 90% reduction in exploration tokens
+- AI goes directly to relevant code
+- No more wasted reads of irrelevant files
+
+### 4.7 Wisdom Page
+
+**Hero:** "Preserve What Your Team Knows"
+
+**Core Concept:**
+- Wisdom captures team knowledge indexed by symbols
+- Antipatterns prevent repeated mistakes
+- Decisions provide architectural context
+
+**Key Features:**
+1. **Preferences** — "What TO do" patterns per symbol
+2. **Antipatterns** — "What NOT to do" with reasons
+3. **Expertise** — Who knows what areas
+4. **Decisions** — ADR-style records with rationale
+
+**Example:**
+```yaml
+# .paradigm/wisdom/antipatterns.yaml
+antipatterns:
+  - id: "api-001"
+    symbols: ["@api", "#api-client"]
+    description: "Do NOT use axios interceptors for auth token refresh"
+    reason: "Caused race conditions when multiple requests trigger refresh"
+    alternative: "Use a token refresh queue with mutex"
+```
+
+**Benefits:**
+- Institutional knowledge survives team changes
+- AI agents avoid known pitfalls
+- New developers learn from past mistakes
+
+### 4.8 History Page
+
+**Hero:** "Know What Changed and What Broke"
+
+**Core Concept:**
+- History tracks implementations, validations, and rollbacks
+- Identifies fragile areas that need extra care
+- Detects co-change patterns
+
+**Key Features:**
+1. **Implementation Log** — Append-only record of changes
+2. **Fragility Scoring** — Identifies unstable symbols
+3. **Co-Change Detection** — Symbols that often change together
+4. **Validation Tracking** — Test results over time
+
+**Example:**
+```bash
+# Check fragility before modifying
+paradigm history fragile
+# → @search: HIGH fragility (3 rollbacks in last 10 changes)
+
+# See what changed together
+paradigm history show @checkout
+# → Often changes with #payment-form (89% correlation)
+```
+
+**Benefits:**
+- Know which areas need extra testing
+- Understand change patterns
+- Full audit trail for any symbol
+
 ---
 
 ## 5. Documentation
@@ -442,6 +548,7 @@ With MCP:   AI needs info about @checkout →
 Getting Started
 ├── Installation
 ├── Quick Start
+├── Minimal Setup
 ├── Core Concepts
 └── Your First Project
 
@@ -453,6 +560,7 @@ Guides
 ├── Integrating with Your IDE
 ├── Optimizing for AI Agents
 ├── Setting Up MCP with Claude Desktop
+├── Multi-Agent Teams
 └── TaskFlow Tutorial (Build-Along Project)
 
 CLI Reference
@@ -460,16 +568,20 @@ CLI Reference
 ├── paradigm sync
 ├── paradigm status
 ├── paradigm doctor
+├── paradigm lint
 ├── paradigm visualize
 ├── paradigm constellation
 ├── paradigm beacon
 ├── paradigm ripple
 ├── paradigm thread
 ├── paradigm echo
-├── paradigm purpose validate
-├── paradigm portal validate
-├── paradigm portal watch
-└── paradigm portal report
+├── paradigm cost
+├── paradigm team
+├── paradigm history
+├── paradigm wisdom
+├── paradigm hooks
+├── paradigm mcp setup
+└── paradigm scan auto
 
 MCP Reference
 ├── Resources (paradigm://...)
@@ -482,6 +594,9 @@ Specifications
 ├── Portal File Format
 ├── Constellation Schema
 ├── Logger Pattern
+├── Navigator Protocol
+├── Wisdom Schema
+├── History Schema
 └── Probe Protocol
 
 API Reference
@@ -498,7 +613,7 @@ API Reference
 #### Getting Started (Priority)
 
 1. **Installation**
-   - npm global install
+   - npm global install from GitHub
    - Verify with `paradigm --version`
    - System requirements
 
@@ -508,7 +623,12 @@ API Reference
    - `paradigm sync`
    - `paradigm visualize`
 
-3. **Core Concepts**
+3. **Minimal Setup**
+   - Just `paradigm init` + `paradigm beacon`
+   - Add `.purpose` files as needed
+   - Start without full setup
+
+4. **Core Concepts**
    - The symbol system explained
    - Purpose vs Portal vs Premise
    - How files are generated
@@ -528,11 +648,17 @@ API Reference
    - Teach AI to query CLI
    - Session continuity with thread
 
-3. **"Visual Authorization Testing"**
-   - Configure portal.yaml
-   - Run portal watch
-   - Walk through flows
-   - Export reports
+3. **"Capture Team Wisdom"**
+   - Initialize wisdom directory
+   - Record antipatterns
+   - Document decisions
+   - Map expertise
+
+4. **"Track Implementation History"**
+   - Initialize history
+   - Record implementations
+   - Monitor fragility
+   - Integrate with git hooks
 
 ---
 
@@ -552,6 +678,7 @@ API Reference
 **Solution:**
 - Thread maintains session history
 - Beacon orients you (and AI) instantly
+- History tracks what changed
 - Ripple shows what changed
 
 #### 2. "For Teams"
@@ -562,11 +689,13 @@ API Reference
 - Onboarding takes forever
 - "Ask Sarah, she knows that code"
 - Inconsistent feature understanding
+- Knowledge lost when people leave
 
 **Solution:**
 - Purpose files document features
 - Constellation shows relationships
-- Anyone can understand any area
+- Wisdom preserves team knowledge
+- Expertise mapping shows who knows what
 
 #### 3. "For AI-Assisted Development"
 
@@ -576,11 +705,12 @@ API Reference
 - AI lacks project context
 - Burns tokens reading everything
 - Makes changes that break things
+- Doesn't know your team's patterns
 
 **Solution:**
-- Agent hints teach query patterns
-- JSON output for precise data
-- Ripple analysis before changes
+- Navigator provides targeted exploration
+- Wisdom teaches team patterns
+- History warns about fragile areas
 - MCP server for dynamic context
 
 #### 4. "For Claude Desktop Users"
@@ -658,6 +788,8 @@ API Reference
 - Signal yellow (!) — #eab308
 - Flow purple ($) — #8b5cf6
 - State cyan (%) — #06b6d4
+- Deprecated gray (~) — #6b7280
+- Integration orange (&) — #f97316
 
 ### Typography
 
@@ -672,6 +804,7 @@ API Reference
 3. **Portals/Gates** — Doorway imagery for authorization
 4. **Light Trails** — For flows and journeys
 5. **Beacons** — Lighthouse/guiding light imagery
+6. **Memory/History** — Timeline, journal imagery
 
 ### Animation Ideas
 
@@ -690,6 +823,11 @@ API Reference
    - Waves propagate to connected symbols
    - Shows impact visually
 
+4. **Navigator Animation:**
+   - Query enters
+   - Structure illuminates path
+   - Target file highlights
+
 ### Responsive Considerations
 
 - Mobile: Simplified navigation, stacked layouts
@@ -704,17 +842,19 @@ API Reference
 
 - [ ] Homepage (all sections)
 - [ ] Getting Started guide
+- [ ] Minimal Setup guide
 - [ ] CLI Reference (core commands)
 - [ ] GitHub README polish
 - [ ] MCP Setup Guide
 
 ### Phase 2 (Post-Launch)
 
-- [ ] Individual product pages (including MCP Server)
+- [ ] Individual product pages (Purpose, Portal, Premise, Prism, MCP, Navigator, Wisdom, History)
 - [ ] Use case pages
 - [ ] Video tutorials (7-video series)
 - [ ] TaskFlow tutorial project
 - [ ] Example project gallery
+- [ ] Multi-agent team documentation
 
 ### Phase 3 (Growth)
 
@@ -742,6 +882,8 @@ API Reference
 - "Claude Desktop integration"
 - "Dynamic AI context"
 - "Anthropic MCP tools"
+- "Team knowledge management"
+- "Code fragility tracking"
 
 ### Meta Descriptions
 
@@ -762,6 +904,15 @@ API Reference
 
 **Prism:**
 "The infinite canvas for your project. Visualize symbols as constellations, watch authorization in real-time, explore relationships."
+
+**Navigator:**
+"Pre-indexed project structure for targeted AI exploration. 90% reduction in exploration tokens."
+
+**Wisdom:**
+"Preserve team knowledge indexed by symbols. Antipatterns, preferences, decisions, and expertise mapping."
+
+**History:**
+"Track implementations, validations, and rollbacks. Identify fragile areas and co-change patterns."
 
 ---
 
@@ -795,11 +946,12 @@ API Reference
 | `!` | Signal | Portal | `!login-failed` | Event or side effect |
 | `$` | Flow | Shared | `$purchase-flow` | Multi-step process |
 | `%` | State | Purpose | `%user.authenticated` | Data condition |
-| `~` | Aspect | Purpose | `@login~validation` | Cross-cutting concern |
+| `~` | Deprecated | Shared | `~legacy-api` | Marked for removal |
 | `?` | Idea | Premise | `?add-export` | Future possibility |
+| `&` | Integration | Shared | `&stripe` | External service |
 
 ---
 
-*Document Version: 1.1*
-*Last Updated: 2026-01-27*
-*Added: MCP Server documentation, Claude Desktop integration, TaskFlow tutorial reference*
+*Document Version: 1.2*
+*Last Updated: 2026-02-02*
+*Added: Navigator, Wisdom, History systems; Multi-agent teams; Updated symbol definitions; Minimal setup guide*

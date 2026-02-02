@@ -11,10 +11,13 @@ I need to modernize the a-company.org website. It's currently out of date and ne
 ### Reference Documents
 
 Before making changes, read these files from the a-paradigm repository:
-- `A-COMPANY-WEBSITE-VISION.md` — Full website vision, structure, and content strategy
+- `docs/website-outline.md` — Full website vision, structure, and content strategy
 - `README.md` — Paradigm overview and features
-- `CHANGELOG.md` — Latest features (v0.7.0)
+- `CHANGELOG.md` — Latest features
 - `DISTRIBUTION.md` — Installation methods (GitHub-direct, no npm)
+- `.paradigm/specs/navigator.md` — Navigator system specification
+- `.paradigm/specs/wisdom.md` — Wisdom system specification
+- `.paradigm/specs/history.md` — History system specification
 
 ### Current State
 
@@ -445,6 +448,14 @@ From Paradigm v0.7.0:
 - `!` Signals
 - `$` Flows
 - `%` State
+- `~` Deprecated
+- `?` Ideas
+- `&` Integrations
+
+**AI Agent Systems:**
+- Navigator — Pre-indexed project structure for targeted exploration
+- Wisdom — Team preferences, antipatterns, decisions, expertise
+- History — Implementation log, validation tracking, fragility detection
 
 **IDE Support:**
 - Cursor (.cursor/rules/)
