@@ -725,3 +725,54 @@ paradigm_navigate({ intent: "context", task: "add Apple Pay" })
 3. Respect skip patterns
 
 See `.paradigm/specs/navigator.md` for full specification.
+
+---
+
+## Context Tracking (MCP)
+
+**Session-aware context monitoring for handoff recommendations.**
+
+### MCP Tool: paradigm_context_check
+
+Check if context handoff is recommended:
+
+```bash
+# Via MCP tool call
+paradigm_context_check({ contextWindowSize: 200000 })
+```
+
+**Returns:**
+- `recommendation`: continue | consider-handoff | handoff-recommended | handoff-urgent
+- `usagePercent`: Estimated context usage percentage
+- `action`: Suggested next action
+
+### MCP Tool: paradigm_handoff_prepare
+
+Prepare a handoff summary:
+
+```bash
+paradigm_handoff_prepare({
+  summary: "Completed auth refactor",
+  nextSteps: ["Add tests", "Update docs"],
+  agent: "builder"
+})
+```
+
+### MCP Tool: paradigm_session_stats
+
+Get current session statistics:
+
+```bash
+paradigm_session_stats({})
+```
+
+### Recommendation Thresholds
+
+| Usage | Recommendation |
+|-------|----------------|
+| < 50% | Continue working |
+| 50-70% | Consider handoff at good stopping point |
+| 70-85% | Handoff recommended soon |
+| > 85% | Handoff urgently needed |
+
+See `.paradigm/specs/context-tracking.md` for full specification.
