@@ -21,6 +21,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
+import { getContextToolsList, handleContextTool, trackToolCall } from './context.js';
 
 /**
  * Register all MCP tools
@@ -116,6 +117,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getHistoryToolsList(),
           // Navigate tools
           ...getNavigateToolsList(),
+          // Context tracking tools
+          ...getContextToolsList(),
         ],
       };
     }
@@ -391,6 +394,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           if (name === 'paradigm_navigate') {
             const result = await handleNavigateTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
+              trackToolCall(result.text.length);
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -401,6 +405,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           if (name.startsWith('paradigm_wisdom_')) {
             const result = await handleWisdomTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
+              trackToolCall(result.text.length);
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -410,6 +415,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           // Try history tools
           if (name.startsWith('paradigm_history_')) {
             const result = await handleHistoryTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try context tools
+          if (name.startsWith('paradigm_context_') || name === 'paradigm_handoff_prepare' || name === 'paradigm_session_stats') {
+            const result = await handleContextTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               return {
                 content: [{ type: 'text', text: result.text }],

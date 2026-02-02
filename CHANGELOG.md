@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Context Tracking (MCP)** - Session-aware context monitoring for handoff recommendations
+  - `paradigm_context_check` tool - Check if context handoff is recommended
+  - `paradigm_handoff_prepare` tool - Prepare handoff summary with next steps
+  - `paradigm_session_stats` tool - Get current session statistics
+  - `paradigm://context/session` resource - Passive session monitoring
+  - `paradigm://context/handoff-guide` resource - When/how to handoff guide
+  - New spec: `.paradigm/specs/context-tracking.md`
+  - Thresholds: <50% continue, 50-70% consider, 70-85% recommended, >85% urgent
+
 ---
 
 ## [1.2.1] - 2026-02-02

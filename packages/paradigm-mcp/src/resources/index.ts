@@ -18,6 +18,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { getGatesData, getFlowsData } from './gates.js';
 import { getWisdomResourcesList, handleWisdomResource } from './wisdom.js';
 import { getHistoryResourcesList, handleHistoryResource } from './history.js';
+import { getContextResourcesList, handleContextResource } from './context.js';
 
 /**
  * Register all MCP resources
@@ -87,6 +88,8 @@ export function registerResources(server: Server, getContext: () => ProjectConte
           ...getWisdomResourcesList(),
           // History resources
           ...getHistoryResourcesList(),
+          // Context resources
+          ...getContextResourcesList(),
         ],
       };
     }
@@ -246,6 +249,20 @@ export function registerResources(server: Server, getContext: () => ProjectConte
             contents: [{
               uri,
               mimeType: 'application/json',
+              text: result.text,
+            }],
+          };
+        }
+      }
+
+      // Try context resources
+      if (resourcePath.startsWith('context/')) {
+        const result = await handleContextResource(resourcePath, ctx);
+        if (result.handled) {
+          return {
+            contents: [{
+              uri,
+              mimeType: result.text.startsWith('#') ? 'text/markdown' : 'application/json',
               text: result.text,
             }],
           };
