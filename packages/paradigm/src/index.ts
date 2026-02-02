@@ -7,15 +7,15 @@ import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 
 const program = new Command();
 
 // ASCII art banner
 const banner = `
-${chalk.magenta('╔═╗')}${chalk.cyan('┌─┐┬─┐┌─┐┌┬┐┬┌─┐┌┬┐')}
-${chalk.magenta('╠═╝')}${chalk.cyan('├─┤├┬┘├─┤ │││││ ┬│││')}
-${chalk.magenta('╩  ')}${chalk.cyan('┴ ┴┴└─┴ ┴─┴┘┴└─┘┴ ┴')} ${chalk.gray(`v${VERSION}`)}
+${chalk.magenta('╔═╗')}${chalk.cyan('┌─┐┬─┐┌─┐┌┬┐┬ ┌─┐┌┬┐')}
+${chalk.magenta('╠═╝')}${chalk.cyan('├─┤├┬┘├─┤ │││ ├─┐│││')}
+${chalk.magenta('╩  ')}${chalk.cyan('┴ ┴┴└─┴ ┴─┴┘┴ └─┘┴ ┴')} ${chalk.gray(`v${VERSION}`)}
 `;
 
 program

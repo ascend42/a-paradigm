@@ -1,5 +1,5 @@
 /**
- * horizon dream aggregate - Aggregate all sources
+ * paradigm premise aggregate - Aggregate all sources
  */
 
 import * as fs from 'fs';

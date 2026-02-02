@@ -143,10 +143,10 @@ export async function gateTestCommand(
   }
 
   // Default: show help
-  console.log(chalk.blue('\n🧪 Gate Testing\n'));
+  console.log(chalk.blue('\n🧪 Portal Testing\n'));
   console.log('Usage:');
-  console.log('  paradigm gate test --generate          Generate test files');
-  console.log('  paradigm gate test --gate ^auth-required  Test specific gate');
-  console.log('  paradigm gate test --component           Validate component access');
+  console.log('  paradigm portal test --generate             Generate test files');
+  console.log('  paradigm portal test --portal ^auth-required  Test specific portal');
+  console.log('  paradigm portal test --component             Validate component access');
   console.log('');
 }

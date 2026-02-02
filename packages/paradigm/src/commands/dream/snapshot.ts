@@ -1,5 +1,5 @@
 /**
- * horizon dream snapshot - Create a timeline snapshot
+ * paradigm premise snapshot - Create a timeline snapshot
  */
 
 import * as fs from 'fs';
@@ -23,7 +23,7 @@ export async function dreamSnapshotCommand(name: string, description?: string) {
   try {
     if (!fs.existsSync(dreamPath)) {
       spinner.fail('.dream file not found');
-      console.log(chalk.yellow('\nRun "horizon init" first to create a .dream file\n'));
+      console.log(chalk.yellow('\nRun "paradigm init" first to create a .premise file\n'));
       process.exit(1);
     }
 

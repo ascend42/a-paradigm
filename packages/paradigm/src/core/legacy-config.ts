@@ -163,13 +163,13 @@ export function getDefaultHorizonConfig(projectName: string): HorizonConfig {
   return {
     version: '1.0',
     'agent-guidelines': {
-      overview: `${projectName} uses Horizon for structured planning and context management.`,
+      overview: `${projectName} uses Paradigm for structured planning and context management.`,
       'how-to-use': [
         'Check .purpose files in directories for context before making changes',
-        'Run `horizon status` to see the project symbol index',
-        'Run `horizon visualize` to explore the Dreamscape',
+        'Run `paradigm status` to see the project symbol index',
+        'Run `paradigm visualize` to explore the symbol graph',
         'Reference symbols using prefixes: @feature #component ^gate',
-        'Attach an image and say "horizon scan" to map UI to code'
+        'Attach an image and say "paradigm probe" to map UI to code'
       ],
       'update-rules': [
         'When adding a feature, create/update the nearest .purpose file',
