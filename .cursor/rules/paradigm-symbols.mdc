@@ -1,0 +1,21 @@
+---
+description: Paradigm symbol system - understand @features, #components, ^portals, etc.
+alwaysApply: true
+---
+## Symbol System
+
+Use these prefixes to reference project elements:
+
+| Symbol | Name | Description |
+|--------|------|-------------|
+| `@` | Feature | User-facing capabilities and functionality |
+| `#` | Component | Reusable code units, UI components, or modules |
+| `$` | Flow | Multi-step processes or user journeys |
+| `%` | State | Global or user state conditions |
+| `^` | Portal | Access control points and authorization rules |
+| `!` | Signal | Events, errors, and side effects |
+| `?` | Idea | Free-form exploration and future possibilities |
+| `~` | Deprecated | Features or components marked for removal |
+| `&` | Integration | External services and third-party connections |
+
+See `.paradigm/specs/symbols.md` for complete reference.

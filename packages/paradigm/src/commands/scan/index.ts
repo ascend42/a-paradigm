@@ -1,5 +1,5 @@
 /**
- * horizon index - Generate scan index for visual discovery
+ * paradigm index - Generate scan index for visual discovery
  */
 
 import * as fs from 'fs';
@@ -7,10 +7,10 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { aggregateFromDirectory } from '@a-company/premise-core';
-import { 
-  generateScanIndex, 
+import {
+  generateScanIndex,
   serializeScanIndex,
-  type ScanIndex 
+  type ScanIndex
 } from '@a-company/probe-core';
 import { parseHorizonConfig } from '../../core/legacy-config.js';
 import { generateNavigator } from './navigator.js';
@@ -27,19 +27,19 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   const spinner = ora();
 
   // Determine output path
-  // Handle both .horizon as file (legacy) and .horizon/ as directory
-  const horizonPath = path.join(rootDir, '.horizon');
-  const horizonIsFile = fs.existsSync(horizonPath) && fs.statSync(horizonPath).isFile();
-  
+  // Handle both .paradigm as file (legacy) and .paradigm/ as directory
+  const paradigmPath = path.join(rootDir, '.paradigm');
+  const paradigmIsFile = fs.existsSync(paradigmPath) && fs.statSync(paradigmPath).isFile();
+
   let outputPath: string;
   if (options.output) {
     outputPath = path.resolve(options.output);
-  } else if (horizonIsFile) {
-    // Legacy: .horizon is a config file, put scan-index alongside it
-    outputPath = path.join(rootDir, '.horizon-scan-index.json');
+  } else if (paradigmIsFile) {
+    // Legacy: .paradigm is a config file, put scan-index alongside it
+    outputPath = path.join(rootDir, '.paradigm-scan-index.json');
   } else {
-    // Modern: .horizon is a directory
-    outputPath = path.join(rootDir, '.horizon', 'scan-index.json');
+    // Modern: .paradigm is a directory
+    outputPath = path.join(rootDir, '.paradigm', 'scan-index.json');
     // Ensure directory exists
     if (!fs.existsSync(path.dirname(outputPath))) {
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -47,18 +47,18 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   }
 
   if (!options.quiet) {
-    console.log(chalk.blue('\n🔭 Generating Horizon Scan Index\n'));
+    console.log(chalk.blue('\n🔭 Generating Paradigm Scan Index\n'));
   }
 
-  // Load horizon config if exists (for custom settings)
+  // Load paradigm config if exists (for custom settings)
   let scanConfig: { visualTagMappings?: Record<string, string[]>; screens?: Record<string, unknown> } | undefined;
-  
-  // Try both .horizon (file) and .horizon/config.yaml (directory)
+
+  // Try both .paradigm (file) and .paradigm/config.yaml (directory)
   const configPaths = [
-    path.join(rootDir, '.horizon'),
-    path.join(rootDir, '.horizon', 'config.yaml'),
+    path.join(rootDir, '.paradigm'),
+    path.join(rootDir, '.paradigm', 'config.yaml'),
   ];
-  
+
   for (const configPath of configPaths) {
     if (fs.existsSync(configPath) && fs.statSync(configPath).isFile()) {
       try {
@@ -74,8 +74,8 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   }
 
   // Aggregate all symbols
-  spinner.start('Aggregating symbols from purpose and gate files...');
-  
+  spinner.start('Aggregating symbols from purpose and portal files...');
+
   let aggregation;
   try {
     aggregation = await aggregateFromDirectory(rootDir);
@@ -97,7 +97,7 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
       signals: aggregation.symbols.filter(s => s.type === 'signal').length,
       state: aggregation.symbols.filter(s => s.type === 'state').length,
     };
-    
+
     console.log(chalk.gray('  Breakdown:'));
     for (const [type, count] of Object.entries(breakdown)) {
       if (count > 0) {
@@ -146,23 +146,23 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     console.log(chalk.gray(`  Gates: ${Object.keys(index.gates).length}`));
     console.log(chalk.gray(`  Signals: ${Object.keys(index.signals).length}`));
     console.log();
-    console.log(chalk.blue('✨ Scan index ready for "horizon scan" queries'));
-    console.log(chalk.gray('   Attach an image and say "horizon scan" to map UI to code\n'));
+    console.log(chalk.blue('✨ Scan index ready for "paradigm probe" queries'));
+    console.log(chalk.gray('   Attach an image and say "paradigm probe" to map UI to code\n'));
   }
 
   return index;
 }
 
 /**
- * Get scan index path for a project (handles both .horizon file and directory cases)
+ * Get scan index path for a project (handles both .paradigm file and directory cases)
  */
 export function getScanIndexPath(rootDir: string): string {
-  const horizonPath = path.join(rootDir, '.horizon');
-  const horizonIsFile = fs.existsSync(horizonPath) && fs.statSync(horizonPath).isFile();
-  
-  return horizonIsFile
-    ? path.join(rootDir, '.horizon-scan-index.json')
-    : path.join(rootDir, '.horizon', 'scan-index.json');
+  const paradigmPath = path.join(rootDir, '.paradigm');
+  const paradigmIsFile = fs.existsSync(paradigmPath) && fs.statSync(paradigmPath).isFile();
+
+  return paradigmIsFile
+    ? path.join(rootDir, '.paradigm-scan-index.json')
+    : path.join(rootDir, '.paradigm', 'scan-index.json');
 }
 
 /**
@@ -171,8 +171,8 @@ export function getScanIndexPath(rootDir: string): string {
 export function scanIndexExists(rootDir: string): boolean {
   // Check both possible locations
   return (
-    fs.existsSync(path.join(rootDir, '.horizon', 'scan-index.json')) ||
-    fs.existsSync(path.join(rootDir, '.horizon-scan-index.json'))
+    fs.existsSync(path.join(rootDir, '.paradigm', 'scan-index.json')) ||
+    fs.existsSync(path.join(rootDir, '.paradigm-scan-index.json'))
   );
 }
 
@@ -182,10 +182,10 @@ export function scanIndexExists(rootDir: string): boolean {
 export function getScanIndexAge(rootDir: string): number | null {
   // Try both possible locations
   const paths = [
-    path.join(rootDir, '.horizon', 'scan-index.json'),
-    path.join(rootDir, '.horizon-scan-index.json'),
+    path.join(rootDir, '.paradigm', 'scan-index.json'),
+    path.join(rootDir, '.paradigm-scan-index.json'),
   ];
-  
+
   for (const indexPath of paths) {
     if (fs.existsSync(indexPath)) {
       try {
@@ -198,6 +198,6 @@ export function getScanIndexAge(rootDir: string): number | null {
       }
     }
   }
-  
+
   return null;
 }

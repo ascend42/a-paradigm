@@ -116,21 +116,21 @@ export function detectIDE(rootDir: string): IDEDetectionResult {
  * Load Paradigm files from .paradigm/ directory
  */
 export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
-  const horizonDir = path.join(rootDir, '.paradigm');
-  const horizonFile = path.join(rootDir, '.paradigm');
-  
+  const paradigmDir = path.join(rootDir, '.paradigm');
+  const paradigmFile = path.join(rootDir, '.paradigm');
+
   // Check if .paradigm is a directory (new format)
   let configPath: string;
   let specsDir: string;
   let docsDir: string;
-  
-  if (fs.existsSync(horizonDir) && fs.statSync(horizonDir).isDirectory()) {
-    configPath = path.join(horizonDir, 'config.yaml');
-    specsDir = path.join(horizonDir, 'specs');
-    docsDir = path.join(horizonDir, 'docs');
-  } else if (fs.existsSync(horizonFile) && fs.statSync(horizonFile).isFile()) {
+
+  if (fs.existsSync(paradigmDir) && fs.statSync(paradigmDir).isDirectory()) {
+    configPath = path.join(paradigmDir, 'config.yaml');
+    specsDir = path.join(paradigmDir, 'specs');
+    docsDir = path.join(paradigmDir, 'docs');
+  } else if (fs.existsSync(paradigmFile) && fs.statSync(paradigmFile).isFile()) {
     // Legacy format: .paradigm is a file
-    configPath = horizonFile;
+    configPath = paradigmFile;
     specsDir = ''; // No specs in legacy format
     docsDir = '';
   } else {

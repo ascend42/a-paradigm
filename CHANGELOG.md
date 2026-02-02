@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.2.1] - 2026-02-02
+
 ### Added
 
 - **Context Tracking (MCP)** - Session-aware context monitoring for handoff recommendations
@@ -17,12 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `paradigm://context/handoff-guide` resource - When/how to handoff guide
   - New spec: `.paradigm/specs/context-tracking.md`
   - Thresholds: <50% continue, 50-70% consider, 70-85% recommended, >85% urgent
-
----
-
-## [1.2.1] - 2026-02-02
+  - Context Monitoring Protocol added to CLAUDE.md and Cursor rules
 
 ### Fixed
+
+- **ASCII Art Banner** - Fixed 'GM' portion alignment in CLI banner
+- **Legacy "Horizon" References** - Updated remaining references in scan/index.ts, legacy-config.ts, ide-adapters
+- **Help Text** - Updated `paradigm portal test` help to use correct command names
 
 - **Symbol `~` Definition** - Standardized on "Deprecated" (was inconsistently "Aspects" in some files)
   - Updated symbols.md, beacon.ts, constellation.ts, tutorial, and all templates
@@ -61,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **.gitignore Entries** - Added `.plans/`, `.claude/settings.local.json`, `.cursor/plans/`, `*.prompt.md`, `.mcp.json`
 
 ### Removed
+
+- **Legacy gate/ Commands** - Removed orphaned `commands/gate/` directory (use `commands/portal/` instead)
 
 - **Phoenix Protocol** - Removed in favor of `paradigm team handoff`
   - Deleted `.paradigm/specs/phoenix.md` and template

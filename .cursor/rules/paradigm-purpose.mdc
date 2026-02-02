@@ -1,0 +1,37 @@
+---
+description: Purpose file conventions - .purpose file format and usage
+globs: **/.purpose
+alwaysApply: false
+---
+# Purpose Files
+
+Purpose files (`.purpose`) define the context for directories.
+
+## Format
+
+```yaml
+# Directory context
+description: What this directory contains and why
+
+# Features (@ symbol)
+features:
+  feature-name:
+    description: What this feature does
+    gates: [^gate1, ^gate2]       # Required portals
+    signals: [!signal1]           # Events emitted
+    components: [#Component1]     # Components used
+
+# Components (# symbol)  
+components:
+  ComponentName:
+    description: What this component does
+    used-by: [@feature1, @feature2]
+```
+
+## Symbol References
+
+- Reference features: `@feature-name`
+- Reference components: `#ComponentName`
+- Reference portals: `^portal-name`
+- Reference signals: `!signal-name`
+- Reference flows: `$flow-name`
