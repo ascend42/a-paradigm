@@ -91,6 +91,22 @@ export class ClaudeAdapter implements IDEAdapter {
     // Navigation section for AI exploration
     sections.push(generateNavigationSection(config));
 
+    // Context monitoring protocol
+    sections.push('## Context Monitoring Protocol');
+    sections.push('');
+    sections.push('**Periodically check context usage** by calling `paradigm_context_check` (every 10-15 tool calls or when user asks).');
+    sections.push('');
+    sections.push('**When recommendation is NOT "continue":**');
+    sections.push('1. Inform user: "Context usage is at ~X%. Recommend handoff soon."');
+    sections.push('2. Offer to prepare handoff summary');
+    sections.push('3. If urgent (>85%), prioritize completing current task then handoff');
+    sections.push('');
+    sections.push('**To handoff:**');
+    sections.push('1. Call `paradigm_handoff_prepare` with summary and next steps');
+    sections.push('2. User runs: `paradigm team handoff --to <agent> --summary "..."`');
+    sections.push('3. New session accepts with: `paradigm team accept <id>`');
+    sections.push('');
+
     // Directory structure hint
     if (config['purpose-required']?.length) {
       sections.push('## Directory Structure');
