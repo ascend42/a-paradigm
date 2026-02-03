@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Symptoms: "DeleteClient action", command not found, immediate disconnect
   - Solutions: Broken npm link diagnosis, direct path workaround, shebang issues
   - Common causes table for quick reference
+  - **nvm/PATH section**: Cursor doesn't inherit shell PATH, need absolute paths in mcp.json
 
 ### Fixed
 
