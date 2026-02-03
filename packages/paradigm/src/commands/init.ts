@@ -599,9 +599,10 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Check for portal.yaml
-  const gatePath = path.join(cwd, 'portal.yaml');
-  if (!fs.existsSync(gatePath)) {
-    console.log(chalk.gray('  ○ No portal.yaml (optional - run `paradigm portal init` to create)'));
+  const portalPath = path.join(cwd, 'portal.yaml');
+  if (!fs.existsSync(portalPath)) {
+    console.log(chalk.gray('  ○ No portal.yaml (optional - create manually if you need gate/auth definitions)'));
+    console.log(chalk.gray('    See: https://github.com/a-company/paradigm/blob/main/docs/guides/portals.md'));
   }
 
   // Determine target IDE

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP Troubleshooting Guide** - Comprehensive section for diagnosing MCP server connection issues
+  - Symptoms: "DeleteClient action", command not found, immediate disconnect
+  - Solutions: Broken npm link diagnosis, direct path workaround, shebang issues
+  - Common causes table for quick reference
+
+### Fixed
+
+- **Init Command** - Fixed misleading message suggesting non-existent `paradigm portal init` command
+  - Now correctly advises to create portal.yaml manually if needed
+  - Added link to portals documentation
+
+### Changed
+
+- **Documentation** - Renamed `docs/website-outline.md` → `docs/paradigm-website-outline.md`
+
 ---
 
 ## [1.2.1] - 2026-02-02
