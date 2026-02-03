@@ -453,6 +453,110 @@ Read on-demand: `.paradigm/specs/`
 
 ---
 
+## MCP Server Connection Issues
+
+### Symptoms
+- Cursor logs show "Handling DeleteClient action"
+- MCP tools not available in Cursor/Claude
+- MCP server immediately disconnects
+- "command not found: paradigm-mcp"
+
+### Solutions
+
+1. **Check if paradigm-mcp is installed:**
+   ```bash
+   which paradigm-mcp
+   # Should return a path like:
+   # /Users/you/.nvm/versions/node/vXX/bin/paradigm-mcp
+   ```
+
+2. **Broken npm link (most common):**
+   
+   The symlink exists but points to nothing. Re-link:
+   ```bash
+   cd path/to/a-paradigm/packages/paradigm-mcp
+   npm link
+   ```
+
+3. **Verify the link target exists:**
+   ```bash
+   # Check if the binary symlink target exists
+   ls -la $(which paradigm-mcp)
+   
+   # Follow the symlink and check if dist/index.js exists
+   ls -la $(npm root -g)/@a-company/paradigm-mcp/dist/index.js
+   ```
+
+4. **Alternative: Use direct path in mcp.json:**
+   
+   If linking is problematic, bypass it:
+   ```json
+   {
+     "mcpServers": {
+       "my-project": {
+         "command": "node",
+         "args": ["/full/path/to/paradigm-mcp/dist/index.js", "."],
+         "cwd": "/path/to/your/project"
+       }
+     }
+   }
+   ```
+
+5. **Check if package is built:**
+   ```bash
+   ls path/to/paradigm-mcp/dist/
+   # Should contain index.js
+   
+   # If not, build it:
+   cd path/to/paradigm-mcp
+   npm run build
+   ```
+
+6. **Shebang issues:**
+   
+   The dist/index.js should start with:
+   ```
+   #!/usr/bin/env node
+   ```
+   
+   If missing, rebuild the package.
+
+7. **nvm/node version mismatch:**
+   
+   If using nvm, ensure Cursor is using the same node version:
+   ```bash
+   # Check current node
+   node --version
+   
+   # Check where paradigm-mcp is linked
+   which paradigm-mcp
+   
+   # These should match the same nvm version
+   ```
+
+### Debugging MCP Startup
+
+Run the MCP server directly to see any errors:
+```bash
+cd /path/to/your/project
+node /path/to/paradigm-mcp/dist/index.js . 2>&1
+```
+
+If it hangs waiting for input, the server is working (MCP servers wait for stdio).
+If it throws an error, that's your problem.
+
+### Common DeleteClient Causes
+
+| Cause | Fix |
+|-------|-----|
+| Broken symlink | `npm link` in paradigm-mcp |
+| Package not built | `npm run build` |
+| Missing dependencies | `npm install` in paradigm-mcp |
+| Wrong cwd in mcp.json | Use absolute path |
+| No .paradigm/ in project | Run `paradigm init` |
+
+---
+
 ## Getting Help
 
 If none of these solutions work:
