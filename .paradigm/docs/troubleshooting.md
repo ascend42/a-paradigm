@@ -554,6 +554,59 @@ If it throws an error, that's your problem.
 | Missing dependencies | `npm install` in paradigm-mcp |
 | Wrong cwd in mcp.json | Use absolute path |
 | No .paradigm/ in project | Run `paradigm init` |
+| nvm/PATH not available | Use full paths (see below) |
+
+### nvm Users: Cursor Doesn't Inherit Shell PATH
+
+**Problem:** Cursor's MCP spawner doesn't load your shell profile, so nvm-managed `node` and globally linked commands like `paradigm-mcp` aren't found.
+
+**Symptoms:**
+- MCP works in terminal but not in Cursor
+- "command not found" even though `which paradigm-mcp` works
+- Server starts when run manually but Cursor shows "DeleteClient"
+
+**Solution:** Use absolute paths in your `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "paradigm": {
+      "command": "/Users/YOU/.nvm/versions/node/vXX.XX.X/bin/node",
+      "args": ["/path/to/paradigm-mcp/dist/index.js", "."],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Find your paths:**
+```bash
+# Get your node path
+which node
+# Example: /Users/you/.nvm/versions/node/v24.12.0/bin/node
+
+# Get paradigm-mcp location
+ls $(npm root -g)/../bin/paradigm-mcp
+# Or use the source directly:
+# /path/to/a-paradigm/packages/paradigm-mcp/dist/index.js
+```
+
+**Template for multiple projects:**
+
+Each project's `.cursor/mcp.json` should look like:
+```json
+{
+  "mcpServers": {
+    "my-project": {
+      "command": "/Users/ascend/.nvm/versions/node/v24.12.0/bin/node",
+      "args": ["/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/dist/index.js", "."],
+      "cwd": "/Users/ascend/Documents/GitHub/my-project"
+    }
+  }
+}
+```
+
+Only the `cwd` needs to change per project.
 
 ---
 
