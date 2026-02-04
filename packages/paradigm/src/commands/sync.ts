@@ -56,7 +56,24 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
     }
     
     const successCount = results.filter(r => r.success).length;
-    console.log(chalk.gray(`\n${successCount}/${results.length} IDE files generated.\n`));
+    console.log(chalk.gray(`\n${successCount}/${results.length} IDE files generated.`));
+
+    // Generate MCP configs for IDEs that support it (unless --no-mcp)
+    if (options.mcp !== false) {
+      console.log('');
+      const ideNames = getAdapterNames();
+      for (const name of ideNames) {
+        const adapter = getAdapter(name);
+        if (adapter?.generateMcpConfig) {
+          const mcpResult = writeMcpConfig(rootDir, name);
+          if (mcpResult.success) {
+            console.log(chalk.green(`  ✓ MCP config for ${name}`), chalk.gray(`→ ${path.relative(rootDir, mcpResult.path)}`));
+          }
+        }
+      }
+    }
+
+    console.log('');
     return;
   }
 
