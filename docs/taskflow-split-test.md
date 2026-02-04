@@ -125,6 +125,93 @@ Pivot 5 (Pattern question):
 | Understood cross-feature dependencies | 0-3 |
 | Solution matches existing patterns | 0-3 |
 
+### Validation Checklists
+
+#### Pivot 1: Audit Logging
+
+- [ ] Creates, updates, AND deletes are all logged (not just one)
+- [ ] Log captures: user ID, action, timestamp, before/after state
+- [ ] Hooked into task service/routes (not just one endpoint)
+
+```bash
+# Quick test: Create a task, update it, delete it
+# Check audit log has 3 entries with correct user/action/time
+```
+
+#### Pivot 2: Task Templates
+
+- [ ] Template CRUD endpoints exist
+- [ ] `POST /templates` requires admin (returns 403 for members)
+- [ ] `POST /tasks` accepts template_id parameter
+- [ ] Members can create tasks from templates
+
+```bash
+# Quick test:
+# As member: POST /templates → should 403
+# As admin: POST /templates → should 201
+# As member: POST /tasks with template_id → should 201
+```
+
+#### Pivot 3: Auth Bug Fix
+
+- [ ] `DELETE /comments/:id` checks ownership
+- [ ] Returns 403 when non-author tries to delete
+- [ ] Author can still delete their own comment
+
+```bash
+# Quick test:
+# User A creates comment
+# User B tries DELETE → should 403
+# User A tries DELETE → should 200
+```
+
+#### Pivot 4: Slack Notifications
+
+- [ ] Fires when task is assigned (not just created)
+- [ ] Hooks into existing notification/integration system
+- [ ] Slack config is externalized (not hardcoded)
+
+```bash
+# Quick test:
+# Assign task to user with Slack connected
+# Check Slack webhook was called (or mock it)
+```
+
+#### Pivot 5: Pattern Question
+
+- [ ] AI checked existing codebase for delete patterns
+- [ ] Gave a definitive answer (not "it depends")
+- [ ] Reasoning references project conventions or created one
+
+*This pivot is subjective — you're testing whether the AI understood the codebase enough to make a consistent recommendation.*
+
+### Automated Validation (Optional)
+
+For rigorous testing, write a small test file before each pivot:
+
+```typescript
+// pivot-3-validation.test.ts
+describe('Comment deletion auth', () => {
+  it('allows authors to delete', async () => {
+    const comment = await createComment({ authorId: 'user-a' });
+    const res = await request(app)
+      .delete(`/comments/${comment.id}`)
+      .set('Authorization', 'Bearer user-a-token');
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks non-authors', async () => {
+    const comment = await createComment({ authorId: 'user-a' });
+    const res = await request(app)
+      .delete(`/comments/${comment.id}`)
+      .set('Authorization', 'Bearer user-b-token');
+    expect(res.status).toBe(403);
+  });
+});
+```
+
+The pivot is "complete" when tests pass.
+
 ---
 
 ## Expected Results
