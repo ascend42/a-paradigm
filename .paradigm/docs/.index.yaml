@@ -42,12 +42,20 @@ entries:
     title: Error Handling Patterns
     description: Standard error handling and response formats
     
+  - dir: commands/
+    title: Detailed Command Guides
+    description: Comprehensive documentation for each CLI command
+    index_file: .index.yaml
+    
   - dir: decisions/
     title: Architecture Decision Records
     description: Historical decisions and their rationale
 
 # Reading order for new agents
 reading_order:
-  - commands.md       # Learn available commands
-  - patterns.md       # Understand coding patterns
-  - troubleshooting.md # Know how to debug issues
+  - commands.md              # Learn available commands (quick reference)
+  - commands/init.md         # Detailed: How to initialize projects
+  - commands/sync.md         # Detailed: Keeping IDE files updated
+  - commands/beacon.md       # Detailed: AI orientation
+  - patterns.md              # Understand coding patterns
+  - troubleshooting.md       # Know how to debug issues
