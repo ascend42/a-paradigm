@@ -452,7 +452,6 @@ function displaySummary(targetIDE: string, detection: DetectionResult): void {
   const outputFile = outputFileMap[targetIDE] || '.cursor/rules/';
   
   console.log(chalk.blue('\n✨ Paradigm initialized!\n'));
-  tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
   
   console.log(chalk.white('  Created:'));
   console.log(chalk.gray('  ─────────────────────────────────────────────────'));
@@ -637,6 +636,7 @@ export async function initCommand(options: InitOptions) {
 
   // Display summary
   displaySummary(targetIDE, detection);
+  tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
 }
 
 /**
