@@ -5,6 +5,153 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-04
+
+### Added
+
+- **`paradigm shift` Command** - One command to fully initialize any project
+  - Combines: init → scan → sync (all IDEs) → doctor
+  - Generates CLAUDE.md, .cursor/rules/, .github/copilot-instructions.md, .windsurfrules
+  - Options: `--quick` (skip scan), `--verify` (run health checks), `--ide <name>` (specific IDE)
+  - One-liner install: `curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh | bash && paradigm shift`
+
+- **Auto-Documenting Protocol** - AIs now know when to update Paradigm files
+  - New "Maintaining Paradigm Files" section in generated CLAUDE.md
+  - Decision table: change type → required action
+  - Reference to `.paradigm/docs/ai-maintenance-protocol.md`
+
+- **Graceful Degradation for MCP Tools** - Tools work even without full index
+  - `paradigm_ripple` falls back to grep when symbol not indexed
+  - Returns partial results with suggestion to run `paradigm scan`
+  - `paradigm_search` includes fuzzy matching for typos (Levenshtein distance)
+
+- **Session Continuity** - Breadcrumbs for cross-session context
+  - Session breadcrumbs persisted to `.paradigm/session-breadcrumbs.json`
+  - New `paradigm_session_recover` tool loads previous session context
+  - Tracks symbols modified and files explored
+
+- **Enhanced Gate Suggestions** - Learns from existing patterns
+  - `paradigm_gates_for_route` now reads portal.yaml for similar routes
+  - Route similarity scoring (exact, param, partial matches)
+  - Infers ownership gates from `/api/{resource}/:id` patterns
+
+- **Input Validation** - Zod schemas for all MCP tool inputs
+  - New `validation.ts` with schemas for all tools
+  - Better error messages for invalid inputs
+  - Symbol format validation (must start with @#$%^!?~&)
+
+- **Sentinel Auto-Initialization** - Zero-config incident tracking
+  - Loads seed patterns on first use
+  - Helpful empty state with recording instructions
+
+- **New Documentation**
+  - `.paradigm/docs/ai-maintenance-protocol.md` - When/how to update Paradigm files
+  - `.paradigm/docs/agentic-efficiency-study.md` - Split test results (8.5x context reduction)
+  - `.paradigm/docs/migration-prompt.md` - Guide for migrating existing codebases
+
+### Changed
+
+- **Auto-index on init** - `paradigm init` now runs scan automatically
+  - Creates index for MCP tools to work immediately
+  - Skipped with `--quick` flag for faster init
+  - Graceful failure: warns but doesn't block init
+
+- **Configurable ripple depth** - `paradigm_ripple` depth parameter
+  - Default depth: 2, max: 5
+  - Recursive analysis with cycle detection
+
+- **Wisdom cache invalidation** - Fresh data after recording
+  - Cache invalidated after `paradigm_wisdom_record`
+  - 30-second TTL for automatic refresh
+
+- **Lazy indexing in MCP** - Re-aggregates when index empty
+  - 30-second cache TTL
+  - Automatic refresh on stale data
+
+- **Doctor command** - Now returns boolean and supports quiet mode
+  - `doctorCommand({ quiet: true })` for programmatic use
+  - Returns `true` if all checks pass
+
+- **Sync command** - Supports quiet mode and target parameter
+  - `syncCommand(ide, { quiet: true })` for programmatic use
+  - Throws instead of process.exit in quiet mode
+
+- **install.sh** - Updated to recommend `paradigm shift`
+  - Simplified next steps
+  - Shows all options for shift command
+
+### Performance
+
+- **8.5x average context reduction** vs traditional documentation
+  - Cross-cutting changes: 12x less context needed
+  - Flow understanding: 11x less context needed
+  - Authorization features: 5.1x less context needed
+  - See `.paradigm/docs/agentic-efficiency-study.md` for full results
+
+---
+
+## [1.4.0] - 2026-02-04
+
+### Added
+
+- **MCP-First Architecture** - Reference content served via MCP instead of copied to projects
+  - New MCP resources: `paradigm://prompts`, `paradigm://prompts/{name}`, `paradigm://docs/{name}`, `paradigm://specs/{name}`
+  - Prompts: 10 task templates (add-feature, refactor, debug-auth, etc.) available on-demand
+  - Reference docs: commands.md, queries.md served via MCP
+  - Reference specs: disciplines.md, scan.md, context-tracking.md served via MCP
+  - Template size reduced from 260KB to ~60KB (76% reduction)
+  - Token savings: ~37K tokens per project (~$0.11 per full read at Sonnet pricing)
+
+- **Enhanced Session Cost Tracking** - Real-time token and cost monitoring
+  - New utility: `session-tracker.ts` with detailed tracking
+  - Multi-model pricing support: Claude Opus 4 ($15/M), Sonnet 4 ($3/M), Haiku 3.5 ($0.80/M)
+  - Resource reads tracked by URI and type
+  - Tool calls tracked by name with response size
+  - Cost breakdown by category (resources vs tools)
+  - `paradigm_session_stats` now returns detailed cost breakdown
+
+- **MCP Resources Documentation** - CLAUDE.md now documents MCP resources
+  - New section explaining on-demand content via MCP
+  - Table of available resources and URIs
+  - Usage instructions for reading prompts
+
+### Changed
+
+- **Template Copying** - `paradigm init` now skips MCP-served content
+  - `prompts/` directory no longer copied to projects
+  - `docs/commands.md`, `docs/queries.md` not copied
+  - `specs/disciplines.md`, `specs/scan.md`, `specs/context-tracking.md` not copied
+  - `echoes.yaml` not copied (redundant)
+  - Projects still get: config.yaml, specs/ (logger, symbols, context, etc.), docs/ (patterns, troubleshooting)
+
+- **Session Tracker Refactored** - Moved to dedicated utility module
+  - `trackToolCall(size, name)` now accepts tool name for detailed tracking
+  - `trackResourceRead(size, uri)` now accepts URI for categorization
+  - All MCP handlers updated to pass tracking context
+
+- **Display Updates** - Init command updated for MCP-first
+  - Summary no longer mentions prompts/ directory
+  - Notes that reference content is available via MCP
+  - Dry-run mode reflects lean template structure
+
+### Migration Guide
+
+**For existing projects:**
+```bash
+# Optional cleanup (saves disk space)
+rm -rf .paradigm/prompts
+rm .paradigm/docs/commands.md .paradigm/docs/queries.md
+rm .paradigm/specs/disciplines.md .paradigm/specs/scan.md .paradigm/specs/context-tracking.md
+rm .paradigm/echoes.yaml
+
+# Required for updated agent instructions
+paradigm sync
+```
+
+**MCP resources work regardless of local files** - old projects continue to work, but won't benefit from lean templates until cleanup.
+
+---
+
 ## [1.3.0] - 2026-02-04
 
 ### Added

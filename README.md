@@ -148,11 +148,10 @@ paradigm doctor
 
 ```
 your-project/
-├── .paradigm/              # Configuration & specs
+├── .paradigm/              # Configuration & specs (~60KB, lean)
 │   ├── config.yaml         # Main configuration
-│   ├── specs/              # Logger, scan, symbols
-│   ├── docs/               # Commands, patterns
-│   └── prompts/            # Task templates (pathways)
+│   ├── specs/              # Logger, symbols, context specs
+│   └── docs/               # Patterns, troubleshooting
 ├── .purpose                # Feature & component context
 ├── .premise                # Project overview & ideas
 └── .cursor/rules/          # Generated IDE instructions
@@ -160,6 +159,8 @@ your-project/
     ├── paradigm-symbols.mdc
     └── ...
 ```
+
+**Note:** Reference content (prompts, command docs, discipline mappings) is served via MCP resources instead of being copied to your project. This keeps templates lean while providing full content on-demand.
 
 ## Getting Started with Minimal Paradigm
 
@@ -289,14 +290,39 @@ For dynamic, mid-conversation context, Paradigm provides an MCP server that work
 
 > **Requires CLI Installation** — The MCP server (`paradigm-mcp`) is included when you install the CLI globally. See [Installation](#installation).
 
+### MCP-First Architecture
+
+Paradigm uses an MCP-first approach where reference content is served on-demand rather than being copied to every project:
+
+| Category | Local (`.paradigm/`) | MCP Resources |
+|----------|---------------------|---------------|
+| **Configuration** | `config.yaml`, `specs/logger.md`, `specs/symbols.md` | — |
+| **Prompts** | — | `paradigm://prompts`, `paradigm://prompts/{name}` |
+| **Reference Docs** | — | `paradigm://docs/commands`, `paradigm://docs/queries` |
+| **Reference Specs** | — | `paradigm://specs/disciplines`, `paradigm://specs/scan` |
+
+**Benefits:**
+- **Lean templates**: ~60KB instead of ~260KB per project
+- **Always current**: MCP serves latest version from package
+- **Token efficient**: Load only what you need, when you need it
+- **Session tracking**: Monitor token usage with `paradigm_session_stats`
+
+### Available Resources & Tools
+
 | Resource/Tool | Purpose |
 |---------------|---------|
 | `paradigm://symbols` | Query all project symbols |
 | `paradigm://symbol/@checkout` | Get single symbol details |
+| `paradigm://prompts` | List available prompt templates |
+| `paradigm://prompts/add-feature` | Get specific prompt content |
+| `paradigm://docs/commands` | CLI command reference |
+| `paradigm://specs/disciplines` | Symbol mappings by domain |
 | `paradigm_search` | Find symbols by query |
 | `paradigm_ripple` | Impact analysis on-demand |
 | `paradigm_related` | Get connected symbols |
 | `paradigm_status` | Project overview |
+| `paradigm_session_stats` | Session token usage and cost |
+| `paradigm_context_check` | Handoff recommendations |
 
 ### Quick Setup (Recommended)
 

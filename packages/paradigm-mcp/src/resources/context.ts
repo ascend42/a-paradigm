@@ -1,24 +1,11 @@
 /**
  * MCP Context Resources - Session usage information
+ *
+ * Uses the consolidated session tracker singleton for consistent stats.
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
-
-// Import session stats from tools (shared state)
-// Note: This creates a circular dependency risk, but the state is simple enough
-let sessionStats = {
-  toolCalls: 0,
-  resourceReads: 0,
-  estimatedTokens: 0,
-  startTime: Date.now(),
-};
-
-/**
- * Update session stats (called from tools/context.ts)
- */
-export function updateSessionStats(stats: typeof sessionStats) {
-  sessionStats = stats;
-}
+import { getSessionTracker } from '../utils/session-tracker.js';
 
 /**
  * Get context resources list
@@ -113,22 +100,26 @@ Call \`paradigm_context_check\` periodically to monitor session health:
   }
 
   if (resourcePath === 'context/session') {
-    const durationMin = Math.round((Date.now() - sessionStats.startTime) / 60000);
+    const tracker = getSessionTracker();
+    const stats = tracker.getStats();
+    const durationMin = tracker.getDurationMinutes();
 
     return {
       handled: true,
       text: JSON.stringify({
         session: {
           durationMinutes: durationMin,
-          startTime: new Date(sessionStats.startTime).toISOString(),
+          startTime: new Date(stats.startTime).toISOString(),
+          lastActivity: new Date(stats.lastActivity).toISOString(),
         },
         interactions: {
-          toolCalls: sessionStats.toolCalls,
-          resourceReads: sessionStats.resourceReads,
+          toolCalls: stats.totals.toolCallCount,
+          resourceReads: stats.totals.resourceReadCount,
+          totalInteractions: stats.totals.toolCallCount + stats.totals.resourceReadCount,
         },
         tokens: {
-          estimatedMcpContribution: sessionStats.estimatedTokens,
-          note: 'Use paradigm_context_check tool for full analysis',
+          estimatedMcpContribution: stats.totals.totalTokens,
+          note: 'Use paradigm_context_check tool for full analysis with handoff recommendations',
         },
       }, null, 2),
     };

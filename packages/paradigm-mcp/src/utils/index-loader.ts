@@ -2,6 +2,8 @@
  * Index Loader - Loads Paradigm symbol index from a project directory
  *
  * Technology agnostic: Only reads .purpose and portal.yaml files
+ *
+ * Features lazy re-aggregation when index is empty.
  */
 
 import * as fs from 'fs';
@@ -16,6 +18,9 @@ import { parseGateConfig, type ParsedGateConfig } from '@a-company/portal-core';
 import type { WisdomContext, HistoryContext } from '../types/index.js';
 import { loadWisdomContext } from './wisdom-loader.js';
 import { loadHistoryContext } from './history-loader.js';
+
+/** TTL for cached index (30 seconds) */
+const INDEX_CACHE_TTL_MS = 30 * 1000;
 
 export interface ProjectContext {
   /** Root directory of the project */
@@ -32,6 +37,8 @@ export interface ProjectContext {
   wisdom: WisdomContext | null;
   /** History context (implementation log, validation, fragility) */
   history: HistoryContext | null;
+  /** Timestamp when context was loaded (for cache invalidation) */
+  _loadedAt?: number;
 }
 
 /**
@@ -39,11 +46,11 @@ export interface ProjectContext {
  */
 export async function loadProjectContext(rootDir: string): Promise<ProjectContext> {
   const absoluteRoot = path.resolve(rootDir);
-  
+
   // Aggregate symbols from .purpose files
   const aggregation = await aggregateFromDirectory(absoluteRoot);
   const index = buildSymbolIndex(aggregation);
-  
+
   // Try to load portal.yaml
   let gateConfig: ParsedGateConfig | null = null;
   const portalPath = path.join(absoluteRoot, 'portal.yaml');
@@ -55,7 +62,7 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
       console.error('Warning: Could not parse portal.yaml:', (e as Error).message);
     }
   }
-  
+
   // Determine project name
   let projectName = path.basename(absoluteRoot);
   const premisePath = path.join(absoluteRoot, '.premise');
@@ -71,7 +78,7 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
       // Use directory name as fallback
     }
   }
-  
+
   return {
     rootDir: absoluteRoot,
     index,
@@ -80,7 +87,41 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
     projectName,
     wisdom: null, // Loaded lazily by wisdom-loader
     history: null, // Loaded lazily by history-loader
+    _loadedAt: Date.now(),
   };
+}
+
+/**
+ * Check if the cached context is stale (older than TTL)
+ */
+export function isContextStale(ctx: ProjectContext): boolean {
+  if (!ctx._loadedAt) return true;
+  return Date.now() - ctx._loadedAt > INDEX_CACHE_TTL_MS;
+}
+
+/**
+ * Check if the index is effectively empty (no symbols found)
+ */
+export function isIndexEmpty(ctx: ProjectContext): boolean {
+  return ctx.aggregation.symbols.length === 0;
+}
+
+/**
+ * Ensure the project context has a fresh index
+ * Re-aggregates if index is empty and cache has expired
+ */
+export async function ensureFreshIndex(ctx: ProjectContext): Promise<ProjectContext> {
+  // If index is not empty and cache is fresh, return as-is
+  if (!isIndexEmpty(ctx) && !isContextStale(ctx)) {
+    return ctx;
+  }
+
+  // If index is empty or cache is stale, re-aggregate
+  if (isIndexEmpty(ctx) || isContextStale(ctx)) {
+    return reloadProjectContext(ctx);
+  }
+
+  return ctx;
 }
 
 /**

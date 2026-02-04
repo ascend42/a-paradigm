@@ -7,60 +7,32 @@
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
-
-interface SessionStats {
-  startTime: number;
-  toolCalls: number;
-  resourceReads: number;
-  estimatedMcpTokens: number;
-  lastActivity: number;
-}
-
-// Session state (resets when MCP server restarts)
-let session: SessionStats = {
-  startTime: Date.now(),
-  toolCalls: 0,
-  resourceReads: 0,
-  estimatedMcpTokens: 0,
-  lastActivity: Date.now(),
-};
+import {
+  getSessionTracker,
+  resetSessionTracker,
+  MODEL_PRICING,
+  type ModelId,
+} from '../utils/session-tracker.js';
 
 /**
- * Estimate tokens from text (same algorithm as cost.ts)
+ * Track a tool call (convenience wrapper for the session tracker)
  */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3.5);
+export function trackToolCall(responseSize: number, toolName: string = 'unknown') {
+  getSessionTracker().trackToolCall(toolName, responseSize);
 }
 
 /**
- * Track a tool call
+ * Track a resource read (convenience wrapper for the session tracker)
  */
-export function trackToolCall(responseSize: number) {
-  session.toolCalls++;
-  session.estimatedMcpTokens += estimateTokens(responseSize.toString()) + responseSize / 4;
-  session.lastActivity = Date.now();
-}
-
-/**
- * Track a resource read
- */
-export function trackResourceRead(responseSize: number) {
-  session.resourceReads++;
-  session.estimatedMcpTokens += responseSize / 4; // Approximate token count
-  session.lastActivity = Date.now();
+export function trackResourceRead(responseSize: number, uri: string = 'paradigm://unknown') {
+  getSessionTracker().trackResourceRead(uri, responseSize);
 }
 
 /**
  * Reset session (called on handoff or new session)
  */
 export function resetSession() {
-  session = {
-    startTime: Date.now(),
-    toolCalls: 0,
-    resourceReads: 0,
-    estimatedMcpTokens: 0,
-    lastActivity: Date.now(),
-  };
+  resetSessionTracker();
 }
 
 /**
@@ -87,7 +59,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_handoff_prepare',
-      description: 'Prepare a handoff summary. Generates a handoff file and returns instructions.',
+      description: 'Prepare a handoff summary. Generates a structured handoff file with markdown summary and recovery instructions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -104,6 +76,21 @@ export function getContextToolsList() {
             type: 'string',
             description: 'Target agent role (e.g., "builder", "architect")',
           },
+          modifiedFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'List of files modified in this session',
+          },
+          symbolsTouched: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'List of symbols (@feature, #component, etc.) touched',
+          },
+          openQuestions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Unresolved questions or decisions needed',
+          },
         },
         required: ['summary'],
       },
@@ -111,6 +98,14 @@ export function getContextToolsList() {
     {
       name: 'paradigm_session_stats',
       description: 'Get current session statistics (MCP interactions, estimated tokens)',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    {
+      name: 'paradigm_session_recover',
+      description: 'Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -125,53 +120,21 @@ export function getContextToolsList() {
 export async function handleContextTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: ProjectContext
+  _ctx: ProjectContext
 ): Promise<{ handled: boolean; text: string }> {
+  const tracker = getSessionTracker();
 
   if (name === 'paradigm_context_check') {
     const contextWindowSize = (args.contextWindowSize as number) || 200000;
     const estimatedTotal = args.estimatedTotalTokens as number | undefined;
 
-    // Calculate session duration
-    const durationMs = Date.now() - session.startTime;
-    const durationMin = Math.round(durationMs / 60000);
+    const stats = tracker.getStats();
+    const { recommendation, message, usagePercent, signals } = tracker.getHandoffRecommendation(
+      contextWindowSize,
+      estimatedTotal
+    );
 
-    // Estimate context usage
-    // Heuristic: Each MCP call adds ~100-300 tokens of actual content
-    // Plus the AI's analysis, user prompts, etc. multiply by ~3-5x
-    const mcpContribution = session.estimatedMcpTokens;
-    const estimatedConversationOverhead = mcpContribution * 4; // Rough multiplier
-    const totalEstimate = estimatedTotal || (mcpContribution + estimatedConversationOverhead);
-
-    // Calculate percentage
-    const usagePercent = Math.round((totalEstimate / contextWindowSize) * 100);
-
-    // Determine recommendation
-    let recommendation: 'continue' | 'consider-handoff' | 'handoff-recommended' | 'handoff-urgent';
-    let message: string;
-
-    if (usagePercent >= 85) {
-      recommendation = 'handoff-urgent';
-      message = 'Context is nearly full. Initiate handoff immediately to preserve session continuity.';
-    } else if (usagePercent >= 70) {
-      recommendation = 'handoff-recommended';
-      message = 'Context usage is high. Consider initiating handoff soon to ensure smooth transition.';
-    } else if (usagePercent >= 50) {
-      recommendation = 'consider-handoff';
-      message = 'Context usage is moderate. Plan a good stopping point for potential handoff.';
-    } else {
-      recommendation = 'continue';
-      message = 'Context usage is healthy. Continue working.';
-    }
-
-    // Additional signals
-    const signals: string[] = [];
-    if (session.toolCalls > 50) {
-      signals.push('High number of tool calls (>50) suggests complex session');
-    }
-    if (durationMin > 30) {
-      signals.push('Session duration >30 min - check user fatigue');
-    }
+    const durationMin = tracker.getDurationMinutes();
 
     return {
       handled: true,
@@ -180,10 +143,10 @@ export async function handleContextTool(
         message,
         stats: {
           sessionDurationMinutes: durationMin,
-          mcpToolCalls: session.toolCalls,
-          mcpResourceReads: session.resourceReads,
-          estimatedMcpTokens: Math.round(mcpContribution),
-          estimatedTotalTokens: Math.round(totalEstimate),
+          mcpToolCalls: stats.totals.toolCallCount,
+          mcpResourceReads: stats.totals.resourceReadCount,
+          estimatedMcpTokens: stats.totals.totalTokens,
+          estimatedTotalTokens: estimatedTotal || Math.round(stats.totals.totalTokens * 5),
           contextWindowSize,
           usagePercent,
         },
@@ -199,25 +162,64 @@ export async function handleContextTool(
     const summary = args.summary as string;
     const nextSteps = (args.nextSteps as string[]) || [];
     const agent = (args.agent as string) || 'builder';
+    const modifiedFiles = (args.modifiedFiles as string[]) || [];
+    const symbolsTouched = (args.symbolsTouched as string[]) || [];
+    const openQuestions = (args.openQuestions as string[]) || [];
+
+    const stats = tracker.getStats();
+    const breakdown = tracker.getCostBreakdown();
 
     // Generate handoff ID
     const handoffId = `h${Date.now().toString(36)}`;
+    const timestamp = new Date().toISOString();
 
-    // Create handoff content
+    // Create structured handoff content
     const handoffContent = {
       id: handoffId,
-      timestamp: new Date().toISOString(),
+      timestamp,
       from: 'current-session',
       to: agent,
       summary,
+      workCompleted: summary, // Alias for clarity
+      inProgress: nextSteps.length > 0 ? nextSteps[0] : null,
       nextSteps,
+      context: {
+        modifiedFiles: modifiedFiles.length > 0 ? modifiedFiles : undefined,
+        symbolsTouched: symbolsTouched.length > 0 ? symbolsTouched : undefined,
+        openQuestions: openQuestions.length > 0 ? openQuestions : undefined,
+      },
       sessionStats: {
-        duration: Math.round((Date.now() - session.startTime) / 60000),
-        mcpCalls: session.toolCalls + session.resourceReads,
-        estimatedTokens: Math.round(session.estimatedMcpTokens),
+        duration: tracker.getDurationMinutes(),
+        mcpCalls: stats.totals.toolCallCount + stats.totals.resourceReadCount,
+        estimatedTokens: stats.totals.totalTokens,
+        estimatedCostUsd: breakdown.total.costUsd,
+        model: breakdown.model,
       },
       status: 'pending',
     };
+
+    // Generate markdown handoff summary for easy copying
+    const markdownSummary = `# Handoff: ${timestamp}
+
+## Session Summary
+${summary}
+
+## Work Completed
+- ${summary}
+
+## Next Steps
+${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified)'}
+
+## Key Context
+- Modified files: ${modifiedFiles.length > 0 ? modifiedFiles.join(', ') : '(not specified)'}
+- Symbols touched: ${symbolsTouched.length > 0 ? symbolsTouched.join(', ') : '(not specified)'}
+- Open questions: ${openQuestions.length > 0 ? openQuestions.join(', ') : '(none)'}
+
+## Recovery Command
+\`\`\`bash
+paradigm team accept ${handoffId}
+\`\`\`
+`;
 
     // Reset session stats after handoff
     resetSession();
@@ -226,38 +228,124 @@ export async function handleContextTool(
       handled: true,
       text: JSON.stringify({
         handoff: handoffContent,
+        markdownSummary,
         instructions: [
-          '1. Save the handoff summary above',
+          '1. Share the handoff summary with the user',
           '2. Run: paradigm team handoff --to ' + agent + ' --summary "' + summary.slice(0, 50) + '..."',
           '3. Start a new chat session',
           '4. In new session: paradigm team accept ' + handoffId,
         ],
         cliCommand: `paradigm team handoff --to ${agent} --summary "${summary.replace(/"/g, '\\"')}"`,
+        recoveryCommand: `paradigm team accept ${handoffId}`,
       }, null, 2),
     };
   }
 
   if (name === 'paradigm_session_stats') {
-    const durationMs = Date.now() - session.startTime;
-    const durationMin = Math.round(durationMs / 60000);
+    const stats = tracker.getStats();
+    const breakdown = tracker.getCostBreakdown();
+    const durationMin = tracker.getDurationMinutes();
 
     return {
       handled: true,
       text: JSON.stringify({
         session: {
-          startTime: new Date(session.startTime).toISOString(),
+          startTime: new Date(stats.startTime).toISOString(),
           durationMinutes: durationMin,
-          lastActivity: new Date(session.lastActivity).toISOString(),
+          lastActivity: new Date(stats.lastActivity).toISOString(),
+        },
+        model: {
+          name: breakdown.model,
+          id: breakdown.modelId,
+          pricing: {
+            inputPerMillion: `$${breakdown.pricing.input.toFixed(2)}`,
+            outputPerMillion: `$${breakdown.pricing.output.toFixed(2)}`,
+          },
         },
         interactions: {
-          toolCalls: session.toolCalls,
-          resourceReads: session.resourceReads,
-          totalInteractions: session.toolCalls + session.resourceReads,
+          toolCalls: stats.totals.toolCallCount,
+          resourceReads: stats.totals.resourceReadCount,
+          totalInteractions: stats.totals.toolCallCount + stats.totals.resourceReadCount,
         },
         tokens: {
-          estimatedMcpTokens: Math.round(session.estimatedMcpTokens),
-          note: 'This tracks MCP responses only, not full conversation context',
+          total: stats.totals.totalTokens,
+          byCategory: {
+            resources: breakdown.resources.tokens,
+            tools: breakdown.tools.tokens,
+          },
         },
+        cost: {
+          totalUsd: `$${breakdown.total.costUsd.toFixed(4)}`,
+          breakdown: {
+            resources: `$${breakdown.resources.costUsd.toFixed(4)}`,
+            tools: `$${breakdown.tools.costUsd.toFixed(4)}`,
+          },
+          note: 'Cost is for MCP output tokens only (responses sent to model)',
+        },
+        details: {
+          resourcesByType: breakdown.resources.byType,
+          toolsByName: breakdown.tools.byName,
+        },
+      }, null, 2),
+    };
+  }
+
+  if (name === 'paradigm_session_recover') {
+    // Set root dir for the tracker so it can load breadcrumbs
+    tracker.setRootDir(_ctx.rootDir);
+
+    const previousSession = tracker.loadPreviousSession();
+
+    if (!previousSession) {
+      return {
+        handled: true,
+        text: JSON.stringify({
+          found: false,
+          message: 'No previous session breadcrumbs found.',
+          tip: 'Session breadcrumbs are saved to .paradigm/session-breadcrumbs.json during active sessions.',
+        }, null, 2),
+      };
+    }
+
+    const ageMs = Date.now() - previousSession.lastActivity;
+    const ageMinutes = Math.round(ageMs / 60000);
+    const ageHours = Math.round(ageMs / 3600000);
+
+    // Summarize the last few actions
+    const recentActions = previousSession.breadcrumbs.slice(-10);
+    const actionSummary = recentActions.map(bc => ({
+      time: new Date(bc.timestamp).toISOString(),
+      action: bc.action,
+      tool: bc.tool,
+      symbol: bc.symbol,
+      summary: bc.summary,
+    }));
+
+    // Suggest what to do next based on recent activity
+    let suggestion = 'Continue where the previous session left off.';
+    if (recentActions.length > 0) {
+      const lastAction = recentActions[recentActions.length - 1];
+      if (lastAction.symbol) {
+        suggestion = `Last work involved ${lastAction.symbol}. Consider checking its current state with paradigm_ripple.`;
+      }
+    }
+
+    return {
+      handled: true,
+      text: JSON.stringify({
+        found: true,
+        previousSession: {
+          sessionId: previousSession.sessionId,
+          startTime: new Date(previousSession.startTime).toISOString(),
+          lastActivity: new Date(previousSession.lastActivity).toISOString(),
+          age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+        },
+        context: {
+          symbolsModified: previousSession.symbolsModified,
+          filesExplored: previousSession.filesExplored,
+        },
+        recentActions: actionSummary,
+        suggestion,
       }, null, 2),
     };
   }

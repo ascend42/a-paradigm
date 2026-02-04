@@ -36,6 +36,19 @@ program
   .option('--dry-run', 'Show what would be created without creating')
   .action(initCommand);
 
+// paradigm shift - one command to rule them all
+program
+  .command('shift')
+  .description('Full project setup in one command (init + scan + sync all IDEs + doctor)')
+  .option('-f, --force', 'Reinitialize even if already setup')
+  .option('-q, --quick', 'Skip slow operations (scan)')
+  .option('--verify', 'Run health checks after setup')
+  .option('--ide <ide>', 'Target specific IDE instead of all')
+  .action(async (options) => {
+    const { shiftCommand } = await import('./commands/shift.js');
+    await shiftCommand(options);
+  });
+
 // paradigm setup
 program
   .command('setup [path]')

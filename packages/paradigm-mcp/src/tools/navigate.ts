@@ -5,12 +5,15 @@
  * - find: Locate a specific symbol or path
  * - explore: Explore an area or category
  * - context: Get context for a task description
+ *
+ * ZERO-CONFIG: Auto-generates minimal navigator from .purpose files if navigator.yaml missing
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ProjectContext } from '../utils/index-loader.js';
-import type { NavigateInput, NavigateResult } from '../types/navigator.js';
+import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/navigator.js';
 import { loadNavigatorContext, navigate, getSkipPatterns } from '../utils/navigator-loader.js';
+import { getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
 
 /**
  * Navigate tool definition
@@ -69,25 +72,14 @@ export async function handleNavigateTool(
   };
 
   // Load navigator context
-  const navCtx = await loadNavigatorContext(ctx.rootDir);
+  let navCtx = await loadNavigatorContext(ctx.rootDir);
 
+  // AUTO-GENERATE: If navigator.yaml missing, generate minimal config from symbols
   if (!navCtx.config) {
-    // Navigator not generated yet
-    return {
-      handled: true,
-      text: JSON.stringify(
-        {
-          error: 'Navigator not found',
-          suggestion:
-            'Run "paradigm scan" to generate navigator.yaml for efficient exploration',
-          fallback: {
-            paths: ['.paradigm/config.yaml', 'package.json'],
-            skip: ['node_modules/', 'dist/', '.git/'],
-          },
-        },
-        null,
-        2
-      ),
+    const autoConfig = generateMinimalNavigator(ctx);
+    navCtx = {
+      config: autoConfig,
+      configPath: null, // Mark as auto-generated
     };
   }
 
@@ -156,16 +148,109 @@ export async function handleNavigateTool(
     ...(result.explanation && { explanation: result.explanation }),
   };
 
-  // Add helpful metadata
+  // Indicate if using auto-generated navigator
+  if (navCtx.config?.auto_generated) {
+    response.auto_generated = true;
+    response.tip = 'Using auto-generated navigator from .purpose files. Run `paradigm scan` for more accurate results.';
+  }
+
+  // Add helpful metadata and recovery suggestions
   if (result.paths.length === 0) {
-    response.note =
-      'No paths found. Try a different search term or use paradigm_search for symbol lookup.';
+    response.note = 'No paths found.';
+    response.recovery = [
+      'Try a different search term',
+      'Use `paradigm_search` to find symbols by name',
+      'Check `.purpose` files exist in your project',
+      'Run `paradigm scan` to build the full navigator index',
+    ];
   } else if (result.paths.length > 5) {
-    response.tip = 'Many paths returned. Start with suggested_order for efficient exploration.';
+    response.tip = response.tip || 'Many paths returned. Start with suggested_order for efficient exploration.';
   }
 
   return {
     handled: true,
     text: JSON.stringify(response, null, 2),
+  };
+}
+
+/**
+ * Generate a minimal navigator config from project symbols
+ * Used when navigator.yaml doesn't exist - enables zero-config usage
+ */
+function generateMinimalNavigator(ctx: ProjectContext): NavigatorConfig {
+  const symbols: Record<string, string> = {};
+  const structure: NavigatorConfig['structure'] = {
+    features: { paths: [], symbol: '@' },
+    components: { paths: [], symbol: '#' },
+    gates: { paths: [], symbol: '^' },
+    flows: { paths: [], symbol: '$' },
+  };
+
+  // Build symbol-to-path mapping from index
+  const allSymbols = getAllSymbols(ctx.index);
+  const seenPaths = new Set<string>();
+
+  for (const sym of allSymbols) {
+    if (sym.filePath) {
+      symbols[sym.symbol] = sym.filePath;
+      seenPaths.add(sym.filePath);
+
+      // Infer structure from symbol types
+      const dir = sym.filePath.replace(/\/[^/]+$/, ''); // Get directory
+      switch (sym.type) {
+        case 'feature':
+          if (!structure.features.paths.includes(dir)) {
+            structure.features.paths.push(dir);
+          }
+          break;
+        case 'component':
+          if (!structure.components.paths.includes(dir)) {
+            structure.components.paths.push(dir);
+          }
+          break;
+        case 'gate':
+          if (!structure.gates.paths.includes(dir)) {
+            structure.gates.paths.push(dir);
+          }
+          break;
+        case 'flow':
+          if (!structure.flows.paths.includes(dir)) {
+            structure.flows.paths.push(dir);
+          }
+          break;
+      }
+    }
+  }
+
+  // Collect config and entry files from purpose files
+  const configFiles: string[] = [];
+  const entryFiles: string[] = [];
+
+  for (const pf of ctx.aggregation.purposeFiles) {
+    configFiles.push(pf.filePath);
+  }
+
+  // Add standard config files if they might exist
+  configFiles.push('.paradigm/config.yaml');
+  if (ctx.gateConfig) {
+    configFiles.push('portal.yaml');
+  }
+
+  return {
+    version: '1.0',
+    generated: new Date().toISOString(),
+    auto_generated: true, // Mark as auto-generated
+    structure,
+    key_files: {
+      config: configFiles.slice(0, 10), // Limit to avoid noise
+      entry: entryFiles,
+      types: [],
+    },
+    skip_patterns: {
+      always: ['node_modules/', 'dist/', '.git/', 'build/', 'coverage/'],
+      unless_testing: ['__tests__/', '*.test.*', '*.spec.*'],
+      unless_docs: ['*.md', 'docs/'],
+    },
+    symbols,
   };
 }

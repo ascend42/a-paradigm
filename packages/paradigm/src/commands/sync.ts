@@ -22,26 +22,35 @@ interface SyncOptions {
   force?: boolean;
   mcp?: boolean;
   nested?: boolean;
+  quiet?: boolean;
+  target?: string; // alias for ide parameter when called programmatically
 }
 
 export async function syncCommand(ide: string | undefined, options: SyncOptions) {
   const rootDir = process.cwd();
   const spinner = ora();
+  const targetIde = options.target || ide;
+  const quiet = options.quiet;
 
-  console.log(chalk.blue('\n🔄 Paradigm Sync\n'));
+  if (!quiet) {
+    console.log(chalk.blue('\n🔄 Paradigm Sync\n'));
+  }
 
   // Load Paradigm files
-  spinner.start('Loading .paradigm/ configuration...');
+  if (!quiet) spinner.start('Loading .paradigm/ configuration...');
   const files = loadParadigmFiles(rootDir);
 
   if (!files) {
-    spinner.fail('No .paradigm/ directory found');
+    if (!quiet) {
+      spinner.fail('No .paradigm/ directory found');
+      console.log(chalk.gray('\nRun `paradigm init` to initialize Paradigm in this project.\n'));
+    }
     log.command('sync').error('Missing .paradigm/ directory');
-    console.log(chalk.gray('\nRun `paradigm init` to initialize Paradigm in this project.\n'));
-    process.exit(1);
+    if (!quiet) process.exit(1);
+    throw new Error('No .paradigm/ directory found');
   }
 
-  spinner.succeed(`Loaded configuration for ${chalk.cyan(files.projectName)}`);
+  if (!quiet) spinner.succeed(`Loaded configuration for ${chalk.cyan(files.projectName)}`);
   log.command('sync').debug('Configuration loaded', { projectName: files.projectName });
 
   // Sync to all IDEs if --all flag
@@ -90,73 +99,79 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
     return;
   }
 
-  // Determine target IDE
-  let targetIDE = ide;
-  
-  if (!targetIDE) {
-    spinner.start('Auto-detecting IDE...');
+  // Determine target IDE (use targetIde from options.target or ide parameter)
+  let finalTargetIde = targetIde;
+
+  if (!finalTargetIde) {
+    if (!quiet) spinner.start('Auto-detecting IDE...');
     const detection = detectIDE(rootDir);
-    
+
     if (detection.detected) {
-      targetIDE = detection.detected;
-      spinner.succeed(`Detected ${chalk.cyan(targetIDE)} (${detection.reason})`);
+      finalTargetIde = detection.detected;
+      if (!quiet) spinner.succeed(`Detected ${chalk.cyan(finalTargetIde)} (${detection.reason})`);
     } else {
-      spinner.warn('Could not auto-detect IDE, defaulting to Cursor');
-      targetIDE = 'cursor';
+      if (!quiet) spinner.warn('Could not auto-detect IDE, defaulting to Cursor');
+      finalTargetIde = 'cursor';
     }
   }
 
   // Validate IDE
-  const adapter = getAdapter(targetIDE);
+  const adapter = getAdapter(finalTargetIde);
   if (!adapter) {
-    console.log(chalk.red(`\n❌ Unknown IDE: ${targetIDE}`));
-    console.log(chalk.gray(`\nAvailable IDEs: ${getAdapterNames().join(', ')}\n`));
-    log.command('sync').error('Unknown IDE', { ide: targetIDE, available: getAdapterNames() });
-    process.exit(1);
+    if (!quiet) {
+      console.log(chalk.red(`\n❌ Unknown IDE: ${finalTargetIde}`));
+      console.log(chalk.gray(`\nAvailable IDEs: ${getAdapterNames().join(', ')}\n`));
+    }
+    log.command('sync').error('Unknown IDE', { ide: finalTargetIde, available: getAdapterNames() });
+    if (!quiet) process.exit(1);
+    throw new Error(`Unknown IDE: ${finalTargetIde}`);
   }
 
   // Sync
   const isMultiFile = adapter.multiFile;
-  spinner.start(`Generating ${isMultiFile ? adapter.outputPath + '/' : adapter.outputPath}...`);
-  
-  const tracker = log.operation(`sync-${targetIDE}`).start('Syncing IDE files', { ide: targetIDE });
-  const result = syncToIDE(rootDir, targetIDE, files, options.force);
+  if (!quiet) spinner.start(`Generating ${isMultiFile ? adapter.outputPath + '/' : adapter.outputPath}...`);
+
+  const tracker = log.operation(`sync-${finalTargetIde}`).start('Syncing IDE files', { ide: finalTargetIde });
+  const result = syncToIDE(rootDir, finalTargetIde, files, options.force);
 
   if (result.success) {
-    spinner.succeed(chalk.green(result.message));
-    tracker.success('IDE files generated', { ide: targetIDE, path: result.outputPath });
-    console.log(chalk.gray(`\n  Path: ${result.outputPath}`));
+    if (!quiet) {
+      spinner.succeed(chalk.green(result.message));
+      console.log(chalk.gray(`\n  Path: ${result.outputPath}`));
 
-    // Show individual files for multi-file adapters
-    if (isMultiFile && adapter.generateFiles) {
-      const generatedFiles = adapter.generateFiles(files);
-      for (const file of generatedFiles) {
-        console.log(chalk.gray(`    └─ ${file.path}`));
+      // Show individual files for multi-file adapters
+      if (isMultiFile && adapter.generateFiles) {
+        const generatedFiles = adapter.generateFiles(files);
+        for (const file of generatedFiles) {
+          console.log(chalk.gray(`    └─ ${file.path}`));
+        }
       }
     }
+    tracker.success('IDE files generated', { ide: finalTargetIde, path: result.outputPath });
 
     // Generate MCP config if requested or by default for supporting IDEs
     if (options.mcp !== false && adapter.generateMcpConfig) {
-      const mcpResult = writeMcpConfig(rootDir, targetIDE);
+      const mcpResult = writeMcpConfig(rootDir, finalTargetIde);
       if (mcpResult.success) {
-        console.log(chalk.green(`\n  ✓ ${mcpResult.message}`));
-        log.component('mcp-config').success('MCP config generated', { ide: targetIDE, path: mcpResult.path });
+        if (!quiet) console.log(chalk.green(`\n  ✓ ${mcpResult.message}`));
+        log.component('mcp-config').success('MCP config generated', { ide: finalTargetIde, path: mcpResult.path });
       }
     }
 
     // Generate nested contexts if requested (Claude only currently)
     if (options.nested && adapter.generateNestedContexts) {
-      const nestedResult = writeNestedContexts(rootDir, targetIDE, files);
+      const nestedResult = writeNestedContexts(rootDir, finalTargetIde, files);
       if (nestedResult.success && nestedResult.count > 0) {
-        console.log(chalk.green(`\n  ✓ ${nestedResult.message}`));
-        log.component('nested-contexts').success('Nested contexts generated', { ide: targetIDE, count: nestedResult.count });
+        if (!quiet) console.log(chalk.green(`\n  ✓ ${nestedResult.message}`));
+        log.component('nested-contexts').success('Nested contexts generated', { ide: finalTargetIde, count: nestedResult.count });
       }
     }
 
-    console.log('');
+    if (!quiet) console.log('');
   } else {
-    spinner.fail(chalk.red(result.message));
-    tracker.error('Sync failed', { ide: targetIDE, message: result.message });
-    process.exit(1);
+    if (!quiet) spinner.fail(chalk.red(result.message));
+    tracker.error('Sync failed', { ide: finalTargetIde, message: result.message });
+    if (!quiet) process.exit(1);
+    throw new Error(result.message || 'Sync failed');
   }
 }

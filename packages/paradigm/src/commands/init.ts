@@ -18,6 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultGateConfig } from '@a-company/portal-core';
 import { getDefaultDreamContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
+import { indexCommand, scanIndexExists } from './scan/index.js';
 
 // ============================================
 // Types
@@ -371,21 +372,65 @@ function getTemplatesDir(): string {
 }
 
 /**
- * Copy directory recursively with template variable replacement
+ * Files and directories to skip during template copying
+ * These are served via MCP resources instead of being copied to projects
  */
-function copyDir(src: string, dest: string, projectName: string): void {
+const MCP_SERVED_CONTENT = {
+  // Skip entire directories
+  directories: ['prompts'],
+  // Skip specific files (relative to .paradigm/)
+  files: [
+    'echoes.yaml',
+    'docs/commands.md',
+    'docs/queries.md',
+    'specs/disciplines.md',
+    'specs/scan.md',
+    'specs/context-tracking.md',
+  ],
+};
+
+/**
+ * Check if a path should be skipped during template copying
+ */
+function shouldSkipPath(relativePath: string): boolean {
+  // Check directories
+  for (const dir of MCP_SERVED_CONTENT.directories) {
+    if (relativePath === dir || relativePath.startsWith(dir + '/')) {
+      return true;
+    }
+  }
+
+  // Check files
+  if (MCP_SERVED_CONTENT.files.includes(relativePath)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Copy directory recursively with template variable replacement
+ * Skips MCP-served content (prompts, reference docs/specs)
+ */
+function copyDir(src: string, dest: string, projectName: string, relativePath: string = ''): void {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
   }
-  
+
   const entries = fs.readdirSync(src, { withFileTypes: true });
-  
+
   for (const entry of entries) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-    
+    const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+    // Skip MCP-served content
+    if (shouldSkipPath(entryRelativePath)) {
+      continue;
+    }
+
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath, projectName);
+      copyDir(srcPath, destPath, projectName, entryRelativePath);
     } else {
       let content = fs.readFileSync(srcPath, 'utf8');
       content = content.replace(/\{\{PROJECT_NAME\}\}/g, projectName);
@@ -457,12 +502,13 @@ function displaySummary(targetIDE: string, detection: DetectionResult): void {
   console.log(chalk.gray('  ─────────────────────────────────────────────────'));
   console.log(chalk.white('  📁 .paradigm/'));
   console.log(chalk.gray('     ├── config.yaml      Configuration'));
-  console.log(chalk.gray('     ├── specs/           Logger, scan, symbols'));
-  console.log(chalk.gray('     ├── docs/            Commands, patterns'));
-  console.log(chalk.gray('     └── prompts/         Task templates'));
+  console.log(chalk.gray('     ├── specs/           Logger, symbols, context'));
+  console.log(chalk.gray('     └── docs/            Patterns, troubleshooting'));
   console.log(chalk.white('  📄 .premise             Project overview'));
   console.log(chalk.white('  📄 .purpose             Feature context'));
   console.log(chalk.white(`  📄 ${outputFile.padEnd(20)} IDE instructions`));
+  console.log('');
+  console.log(chalk.gray('  Reference content (prompts, commands, etc.) available via MCP'));
   
   if (detection.hasExisting) {
     console.log('');
@@ -520,12 +566,12 @@ export async function initCommand(options: InitOptions) {
     console.log(chalk.cyan('  📁 .paradigm/'));
     console.log(chalk.cyan('     ├── config.yaml'));
     console.log(chalk.cyan('     ├── specs/'));
-    console.log(chalk.cyan('     ├── docs/'));
-    console.log(chalk.cyan('     └── prompts/'));
+    console.log(chalk.cyan('     └── docs/'));
     console.log(chalk.cyan('  📄 .premise'));
     console.log(chalk.cyan('  📄 .purpose'));
     console.log(chalk.cyan('  📁 .cursor/rules/*.mdc'));
     console.log('');
+    console.log(chalk.gray('  Reference content (prompts, commands, etc.) served via MCP'));
     console.log(chalk.gray('  Run without --dry-run to create these files.\n'));
     return;
   }
@@ -634,6 +680,19 @@ export async function initCommand(options: InitOptions) {
     }
   }
 
+  // Auto-index unless --quick flag is set
+  if (!options.quick) {
+    spinner.start('Creating scan index for MCP tools...');
+    try {
+      await indexCommand(cwd, { quiet: true });
+      spinner.succeed(chalk.green('Scan index created'));
+    } catch (error) {
+      // Graceful failure - warn but don't block init
+      spinner.warn(chalk.yellow('Could not create scan index: ' + (error as Error).message));
+      console.log(chalk.gray('    Run `paradigm scan` manually after adding .purpose files'));
+    }
+  }
+
   // Display summary
   displaySummary(targetIDE, detection);
   tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
@@ -645,7 +704,7 @@ export async function initCommand(options: InitOptions) {
 function createMinimalStructure(paradigmDir: string, projectName: string): void {
   fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
   fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
-  fs.mkdirSync(path.join(paradigmDir, 'prompts'), { recursive: true });
+  // Note: prompts/ not created - served via MCP resources
   
   const minimalConfig = `# Paradigm Configuration
 version: "1.0"

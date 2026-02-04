@@ -57,6 +57,8 @@ export interface NavigatorConfig {
   version: string;
   /** When this was generated */
   generated: string;
+  /** True if auto-generated from .purpose files (not from paradigm scan) */
+  auto_generated?: boolean;
 
   /**
    * Project structure map
