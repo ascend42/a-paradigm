@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documentation section with quick access to most important guides
   - Professional documentation structure for better discoverability
 
+- **Template Optimization** - Reduced `.paradigm/` token cost by 42%
+  - Removed CLI command docs from templates (reference GitHub instead)
+  - Moved optional patterns to `examples/patterns/` (not in every project)
+  - Template size: 452KB → 260KB (~39,600 tokens saved per project)
+  - Cost savings: $0.30 per AI session, $29.70 per 100 projects
+  - What stays: Core specs, docs patterns, task prompts, config
+  - What's optional: FTUX, sandbox mode, portal testing patterns
+
 ### Changed
 
 - **MCP Tool Descriptions** - More prescriptive descriptions for key tools
