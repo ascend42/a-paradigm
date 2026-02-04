@@ -2,6 +2,30 @@
 
 Complete reference for all Paradigm commands with examples and usage guidance.
 
+## 📖 Detailed Command Guides
+
+For comprehensive documentation with usage patterns, tips, and troubleshooting:
+
+**Setup & Configuration:**
+- [`paradigm init`](./commands/init.md) - Initialize Paradigm in your project
+- [`paradigm sync`](./commands/sync.md) - Regenerate IDE instruction files
+- [`paradigm mcp setup`](./commands/mcp-setup.md) - Configure MCP for AI clients
+
+**AI Context Generation:**
+- [`paradigm beacon`](./commands/beacon.md) - Generate quick-start orientation for AI
+- [`paradigm constellation`](./commands/constellation.md) - Build complete symbol relationship graph
+- [`paradigm index`](./commands/index.md) - Generate visual discovery index
+
+**Analysis & Safety:**
+- [`paradigm ripple`](./commands/ripple.md) - Analyze symbol impact before changes
+- [`paradigm doctor`](./commands/doctor.md) - Run health checks on Paradigm setup
+
+---
+
+## Quick Reference
+
+For quick syntax reference, see below. For detailed guides with examples and workflows, use the links above.
+
 ---
 
 ## paradigm init
