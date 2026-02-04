@@ -1,27 +1,27 @@
-# @horizon/visualizer
+# @a-company/prism
 
-> Dreamscape - Infinite canvas visualization for Horizon
+> Prism - Infinite canvas visualization for Paradigm
 
-The Dreamscape is an interactive infinite canvas where all project knowledge flows together, making complex relationships visible and explorable.
+Prism is an interactive infinite canvas where all project knowledge flows together, making complex relationships visible and explorable.
 
 ## Features
 
 - **Infinite Canvas** - Pan, zoom, and explore your project's symbol graph
 - **Symbol Visualization** - Features, components, gates, signals, and ideas as interactive nodes
 - **Real-time Filtering** - Filter by symbol type, tags, or search
-- **Multiple Themes** - Morning, daytime, and nighttime visual modes
+- **Multiple Themes** - Spectrum, Focus, and Deep visual modes
 - **Timeline** - Track project evolution over time
 
 ## Usage
 
-The visualizer is served by the Horizon CLI:
+The visualizer is served by the Paradigm CLI:
 
 ```bash
 # Install the CLI
-npm install -g @horizon/cli
+npm install -g @a-company/paradigm
 
-# Open the Dreamscape
-horizon visualize
+# Open Prism
+paradigm visualize
 ```
 
 ## Symbol Types
@@ -40,7 +40,7 @@ horizon visualize
 
 ```bash
 # From the monorepo root
-npm run dev:visualizer
+npm run dev:prism
 
 # Opens at http://localhost:5173
 ```

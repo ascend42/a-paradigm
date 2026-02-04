@@ -5,15 +5,63 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-02-04
 
 ### Added
+
+- **MCP Agent Protocol Resource** - New `paradigm://context/agent-protocol` resource
+  - Returns workflow instructions for agents in any MCP-compatible client
+  - Enables Claude Desktop to receive the "query before modify" protocol
+  - Listed first in resources to encourage discovery at session start
+
+- **Enhanced CLAUDE.md Generation** - `paradigm sync claude` now includes MCP Workflow Protocol
+  - Adds "query before modify" table with tool recommendations
+  - Explains token efficiency benefits (~100 tokens vs ~2000)
+  - Bridges instruction gap for Claude Code users
+
+- **Claude Code Permissions** - `paradigm sync claude` now adds permissions to `.claude/settings.json`
+  - Automatically adds `Bash(paradigm *)` permission
+  - Allows Claude Code to run all paradigm commands without prompting
+
+- **Quick Start Guide** - New comprehensive setup documentation
+  - Added `docs/guides/quick-start.md` with complete setup instructions
+  - Includes super command for one-line project setup
+  - Key commands reference table
+
+- **Installation Script** - Added `install.sh` for automated CLI installation
+  - One-command installation: `curl -fsSL https://...raw.../install.sh | bash`
+  - Downloads, builds, and installs Paradigm CLI globally
+  - Includes verification and helpful next steps
 
 - **MCP Troubleshooting Guide** - Comprehensive section for diagnosing MCP server connection issues
   - Symptoms: "DeleteClient action", command not found, immediate disconnect
   - Solutions: Broken npm link diagnosis, direct path workaround, shebang issues
   - Common causes table for quick reference
   - **nvm/PATH section**: Cursor doesn't inherit shell PATH, need absolute paths in mcp.json
+
+### Changed
+
+- **MCP Tool Descriptions** - More prescriptive descriptions for key tools
+  - `paradigm_ripple` now emphasizes "call BEFORE modifying"
+  - `paradigm_status` recommends calling at session start for orientation
+  - `paradigm_related` suggests calling before modifications to understand connections
+
+- **Logger Method Consistency** - Fixed remaining `log.portal()` → `log.gate()` references
+  - Updated `.paradigm/docs/patterns.md`, `.paradigm/docs/error-patterns.md`
+  - Updated `.paradigm/prompts/add-gate.md`, `.paradigm/specs/portal-validation.md`
+
+- **Package READMEs** - Updated all package READMEs to use `@a-company/*` package names
+  - Updated 7 package READMEs (purpose-core, probe-core, prism, premise-core, portal-sdk, portal-manager, portal-core)
+  - Fixed CLI command references from `horizon` to `paradigm`
+  - Fixed config file references from `gate.yaml` to `portal.yaml`
+
+- **Spec Naming** - Renamed `.paradigm/specs/scan.md` → `.paradigm/specs/probe.md` to match content
+
+- **Documentation** - Added `.paradigm/docs/.index.yaml` for AI agent navigation
+
+### Removed
+
+- **Session Report** - Removed temporary `docs/session-report-2026-01-27.md`
 
 ### Fixed
 

@@ -592,9 +592,9 @@ npm install -g @a-company/paradigm
 paradigm init
 ```
 
-- [Full documentation](link)
-- [GitHub repository](link)
-- [Discord community](link)
+- [Full documentation](https://github.com/ascend42/a-paradigm#readme)
+- [GitHub repository](https://github.com/ascend42/a-paradigm)
+- [Discord community](https://discord.gg/paradigm) <!-- TODO: Update with actual Discord link -->
 
 Questions? Drop a comment or find us on Discord.
 ```

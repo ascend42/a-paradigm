@@ -1,0 +1,53 @@
+# Documentation Index
+# This file helps AI agents navigate the docs directory efficiently
+
+title: Paradigm Documentation
+description: Reference documentation for Paradigm CLI and workflows
+
+entries:
+  - file: commands.md
+    title: CLI Command Reference
+    description: Complete reference for all Paradigm CLI commands
+    sections:
+      - name: Core Commands
+        lines: 1-50
+      - name: Portal Commands
+        lines: 51-150
+      - name: Agent Commands
+        lines: 151-250
+    
+  - file: patterns.md
+    title: Coding Patterns
+    description: Recommended patterns for using Paradigm symbols and logger
+    sections:
+      - name: Logger Patterns
+        lines: 1-80
+      - name: Portal Patterns
+        lines: 81-150
+      - name: Flow Patterns
+        lines: 151-200
+
+  - file: troubleshooting.md
+    title: Troubleshooting Guide
+    description: Solutions for common issues
+    sections:
+      - name: Common Issues
+        lines: 1-100
+      - name: MCP Issues
+        lines: 101-200
+      - name: Migration Issues
+        lines: 201-350
+
+  - file: error-patterns.md
+    title: Error Handling Patterns
+    description: Standard error handling and response formats
+    
+  - dir: decisions/
+    title: Architecture Decision Records
+    description: Historical decisions and their rationale
+
+# Reading order for new agents
+reading_order:
+  - commands.md       # Learn available commands
+  - patterns.md       # Understand coding patterns
+  - troubleshooting.md # Know how to debug issues

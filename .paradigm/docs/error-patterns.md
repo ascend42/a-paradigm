@@ -149,7 +149,7 @@ log.feature('@checkout').error('Payment failed', { reason, order_id })
 log.component('#database').error('Connection lost', { host })
 
 // Portal context
-log.portal('^auth').warn('Access denied', { user_id, resource })
+log.gate('^auth').warn('Access denied', { user_id, resource })
 
 // Integration context
 log.integration('&stripe').error('API error', { status, message })

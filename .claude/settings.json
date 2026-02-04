@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "paradigm": {
+      "command": "npx",
+      "args": [
+        "@a-company/paradigm-mcp"
+      ]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(paradigm *)"
+    ]
+  }
+}

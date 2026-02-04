@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm-mcp",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
   "type": "module",
   "main": "./dist/index.js",
