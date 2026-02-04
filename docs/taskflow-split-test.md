@@ -152,6 +152,178 @@ Run these requests to validate authorization is implemented correctly:
 
 ---
 
+## Copy-Paste Prompts
+
+Use these exact prompts for consistent testing across AI models.
+
+### Initial Build Prompt
+
+Copy this entire block to start the test:
+
+```
+Build a project management API called "TaskFlow" with the following spec:
+
+## Tech Stack
+- Node.js + Express + TypeScript
+- SQLite database
+- JWT authentication
+- WebSocket for real-time
+
+## Features
+1. Projects - CRUD, team membership (members vs admins)
+2. Tasks - CRUD within projects, assignees, status, due dates
+3. Comments - Threaded on tasks, @mention support
+4. Notifications - For assignments and mentions
+5. Activity Feed - Timeline of actions per project
+
+## Required Endpoints
+
+### Projects
+- GET /api/projects - list user's projects (authenticated)
+- POST /api/projects - create project (authenticated)
+- GET /api/projects/:id - get project (project member only)
+- PUT /api/projects/:id - update project (project admin only)
+- DELETE /api/projects/:id - delete project (project admin only)
+
+### Tasks
+- GET /api/projects/:id/tasks - list tasks (project member)
+- POST /api/projects/:id/tasks - create task (project member)
+- GET /api/tasks/:id - get task (project member)
+- PUT /api/tasks/:id - update task (task assignee or admin)
+- DELETE /api/tasks/:id - delete task (project admin)
+
+### Comments
+- GET /api/tasks/:id/comments - list comments (project member)
+- POST /api/tasks/:id/comments - create comment (project member)
+- PUT /api/comments/:id - update comment (comment author only)
+- DELETE /api/comments/:id - delete comment (comment author only)
+
+## Seed Data (create on startup)
+
+Users:
+- user-admin (org admin, can access everything)
+- user-alice (admin of project-1)
+- user-bob (member of project-1, assignee of task-1)
+- user-outsider (not in any project)
+
+Project:
+- project-1: "Test Project" with alice as admin, bob as member
+
+Task:
+- task-1: in project-1, assigned to bob
+
+Comment:
+- comment-1: on task-1, authored by alice
+
+## Validation
+
+After building, these requests must return the correct status:
+
+1. GET /api/projects/project-1 as outsider → 403
+2. GET /api/projects/project-1 as alice → 200
+3. PUT /api/projects/project-1 as bob → 403
+4. PUT /api/projects/project-1 as alice → 200
+5. PUT /api/tasks/task-1 as alice → 403 (not assignee)
+6. PUT /api/tasks/task-1 as bob → 200 (is assignee)
+7. DELETE /api/comments/comment-1 as bob → 403 (not author)
+8. DELETE /api/comments/comment-1 as alice → 200 (is author)
+
+Build this now. Tell me when it's ready to test.
+```
+
+---
+
+### Pivot 1 Prompt (Cross-Cutting Change)
+
+```
+Add audit logging to all task state changes. I want to know who changed what and when.
+
+Requirements:
+- Log task creates, updates, and deletes
+- Capture: user ID, action type, timestamp, task ID, before/after state
+- Store in an audit_logs table
+
+Validation:
+1. Create a task as bob → check audit log has entry with action="create"
+2. Update the task as bob → check audit log has entry with action="update"
+3. Delete the task as alice (admin) → check audit log has entry with action="delete"
+4. All entries should have correct user_id and timestamp
+```
+
+---
+
+### Pivot 2 Prompt (New Feature + Auth)
+
+```
+Add a task templates feature. Project admins can create templates, regular members can use them.
+
+Requirements:
+- New endpoints:
+  - POST /api/projects/:id/templates (admin only) - create template
+  - GET /api/projects/:id/templates (member) - list templates
+  - DELETE /api/templates/:id (admin only) - delete template
+- Modify POST /api/projects/:id/tasks to accept optional template_id
+- When template_id provided, copy title/description from template
+
+Validation:
+1. POST /api/projects/project-1/templates as bob → 403
+2. POST /api/projects/project-1/templates as alice → 201
+3. GET /api/projects/project-1/templates as bob → 200
+4. POST /api/projects/project-1/tasks with template_id as bob → 201 (task has template's title)
+```
+
+---
+
+### Pivot 3 Prompt (Auth Bug Fix)
+
+```
+Bug report: Users can delete comments they don't own. Fix this.
+
+Current behavior: Any project member can delete any comment
+Expected behavior: Only the comment author can delete their comment
+
+Validation:
+1. DELETE /api/comments/comment-1 as bob → 403 (alice is author)
+2. DELETE /api/comments/comment-1 as alice → 200
+3. Create new comment as bob, delete as bob → 200
+4. Create new comment as bob, delete as alice → 403
+```
+
+---
+
+### Pivot 4 Prompt (Multi-Feature Flow)
+
+```
+When a task is assigned to someone, send them a Slack notification.
+
+Requirements:
+- Add Slack webhook URL to project settings
+- When task is created with assignees OR assignees are added via update:
+  - Send Slack message: "You've been assigned to: {task title}"
+- Only notify newly assigned users (not existing ones on update)
+
+Validation:
+1. Create task with assignee → Slack webhook called
+2. Update task to add new assignee → Slack webhook called for new assignee only
+3. Update task without changing assignees → no Slack call
+4. Project without Slack webhook → no error, just skip
+```
+
+---
+
+### Pivot 5 Prompt (Pattern Question)
+
+```
+I need to clean up old completed tasks. Should I soft delete or hard delete them?
+
+Look at the existing codebase and tell me:
+1. What pattern is currently used for deletions?
+2. What are the implications of each approach?
+3. What do you recommend for this codebase and why?
+```
+
+---
+
 ## The Test
 
 Build this app twice — once with Paradigm, once without. Then execute the pivots below.
