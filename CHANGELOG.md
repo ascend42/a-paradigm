@@ -65,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sync --all MCP Generation** - Fixed `paradigm sync --all` not generating MCP configs
+  - Now properly creates `.claude/settings.json` when syncing all IDEs
+  - MCP configs are generated for all supporting IDEs (Cursor, Claude)
+
 - **Init Command** - Fixed misleading message suggesting non-existent `paradigm portal init` command
   - Now correctly advises to create portal.yaml manually if needed
   - Added link to portals documentation
