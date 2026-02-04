@@ -31,6 +31,43 @@ Three pillars, one ecosystem:
 | **Portal** | Architect | Define who can access what, under what conditions |
 | **Premise** | Thinker | Aggregate everything into a queryable knowledge graph |
 
+## Case Study: TaskFlow API
+
+We built the same project management API twice — once with traditional documentation (README + JSDoc), once with Paradigm. Same features, same AI agent, same prompts.
+
+### The Results
+
+| Metric | Traditional | Paradigm | Difference |
+|--------|-------------|----------|------------|
+| **Time to complete** | ~12 minutes | ~7 minutes | **42% faster** |
+| **Context per task** | ~14,000 tokens | ~1,500 tokens | **8.5x less** |
+| **Token cost** | $0.50/task | $0.06/task | **88% cheaper** |
+| **Auth gates documented** | 0% | 100% | — |
+| **Cross-feature flows** | Implicit | Explicit | — |
+
+### The Paradox
+
+The Paradigm version had **more files** — `.purpose` files in each feature directory, `portal.yaml` for authorization, `navigator.yaml` for structure mapping. More lines of text overall.
+
+Yet it was faster and cheaper. Why?
+
+**Structured context beats raw context.** Instead of reading 3 full source files (49KB) to understand a cross-cutting change, the AI read 2 small `.purpose` files (4KB) that explicitly documented:
+- What signals get emitted on state changes
+- Which features depend on each other
+- What authorization gates apply
+
+The AI never needed to read the implementation — the contracts were explicit.
+
+### Key Insight
+
+> "More documentation" isn't the same as "better context."
+> A 50-line `.purpose` file that declares signals and dependencies
+> beats a 500-line source file that buries them in implementation details.
+
+[Full study →](.paradigm/docs/agentic-efficiency-study.md)
+
+---
+
 ## Installation
 
 ### Recommended: Clone and Build
