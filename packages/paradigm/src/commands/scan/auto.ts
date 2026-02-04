@@ -11,6 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { log } from '../../utils/logger.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import * as yaml from 'js-yaml';

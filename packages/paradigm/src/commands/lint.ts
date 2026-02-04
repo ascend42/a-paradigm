@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import {
   findPurposeFiles,
   parsePurposeFileDetailed,
@@ -335,10 +336,13 @@ export async function lintCommand(targetPath: string | undefined, options: LintO
     console.log(chalk.blue('\n🔍 Paradigm Lint\n'));
   }
   
+  const tracker = log.command('lint').start('Linting purpose files', { fix: !!options.fix });
+  
   // Find all .purpose files
   spinner.start('Finding .purpose files...');
   const files = await findPurposeFiles(rootDir);
   spinner.stop();
+  log.operation('find-files').debug('Purpose files found', { count: files.length });
   
   if (files.length === 0) {
     if (options.json) {
@@ -421,7 +425,13 @@ export async function lintCommand(targetPath: string | undefined, options: LintO
     
     if (summary.totalErrors === 0 && summary.totalWarnings === 0) {
       console.log(chalk.green(`\n✓ All ${summary.totalFiles} file${summary.totalFiles > 1 ? 's' : ''} valid\n`));
+      tracker.success('All files valid', { files: summary.totalFiles });
     } else {
+      tracker.error('Files have issues', { 
+        errors: summary.totalErrors, 
+        warnings: summary.totalWarnings, 
+        fixed: summary.fixedFiles 
+      });
       console.log('');
       
       if (summary.validFiles > 0) {

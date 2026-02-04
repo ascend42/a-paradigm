@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -195,18 +196,21 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
     console.log(chalk.blue(`\n🌊 Ripple Analysis for ${chalk.cyan(symbolArg)}\n`));
   }
 
+  const tracker = log.command('ripple').start('Analyzing ripple effects', { symbol: symbolArg });
   const spinner = options.json ? null : ora('Analyzing impact...').start();
 
   try {
     // Aggregate symbols
     const result = await aggregateFromDirectory(absolutePath);
     const index = buildSymbolIndex(result);
+    log.operation('aggregate').debug('Symbols aggregated for ripple', { symbol: symbolArg });
 
     // Analyze ripple
     const ripple = analyzeRipple(symbolArg, index);
 
     if (!ripple) {
       spinner?.fail(`Symbol not found: ${symbolArg}`);
+      tracker.error('Symbol not found', { symbol: symbolArg });
       console.log(chalk.gray('\n  Available symbols of this type:'));
       const sameType = getSymbolsByType(index, parsed.type).slice(0, 5);
       for (const s of sameType) {
@@ -220,6 +224,11 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
     }
 
     spinner?.succeed('Impact analyzed');
+    tracker.success('Ripple analysis complete', { 
+      symbol: symbolArg, 
+      requires: ripple.requires.length, 
+      requiredBy: ripple.requiredBy.length 
+    });
 
     // Output as JSON if requested
     if (options.json) {
@@ -326,6 +335,7 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
 
   } catch (error) {
     spinner?.fail('Analysis failed');
+    tracker.error('Ripple analysis failed', { symbol: symbolArg, error: (error as Error).message });
     console.log(chalk.red(`Error: ${(error as Error).message}\n`));
     process.exit(1);
   }

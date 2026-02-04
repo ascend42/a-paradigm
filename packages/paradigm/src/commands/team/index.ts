@@ -7,6 +7,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import * as yaml from 'js-yaml';
+import { log } from '../../utils/logger.js';
 import {
   AgentsManifest,
   Handoff,

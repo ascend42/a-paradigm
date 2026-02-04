@@ -8,6 +8,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import { parseParadigmConfig, serializeParadigmConfig, type ParadigmConfig } from '../core/paradigm-config.js';
 import { loadParadigmFiles, syncToIDE, detectIDE } from '../core/ide-adapters/index.js';
 

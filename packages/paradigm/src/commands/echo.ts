@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 
 export interface EchoOptions {
   add?: boolean;
@@ -167,12 +168,15 @@ export async function echoCommand(errorCode: string, targetPath?: string, option
   const absolutePath = targetPath ? path.resolve(cwd, targetPath) : cwd;
   const echoesPath = path.join(absolutePath, '.paradigm', 'echoes.yaml');
 
+  log.command('echo').debug('Looking up error code', { errorCode });
+
   // Check if echoes.yaml exists
   if (!fs.existsSync(echoesPath)) {
     if (options.json) {
       console.log(JSON.stringify({ found: false, error: 'No echoes.yaml found' }, null, 2));
       return;
     }
+    log.command('echo').warn('No echoes.yaml found');
     console.log(chalk.yellow('\n📢 No echoes.yaml found.\n'));
     console.log(chalk.gray('  Run `paradigm echo --init` to create one.\n'));
     return;
@@ -180,11 +184,13 @@ export async function echoCommand(errorCode: string, targetPath?: string, option
 
   const content = fs.readFileSync(echoesPath, 'utf8');
   const data = parseEchoes(content);
+  log.component('echoes-parser').debug('Echoes file parsed', { count: Object.keys(data.errors).length });
 
   // Look up the error
   const entry = data.errors[errorCode.toUpperCase()];
 
   if (!entry) {
+    log.command('echo').warn('Error code not found', { errorCode });
     if (options.json) {
       console.log(JSON.stringify({
         found: false,
@@ -211,6 +217,8 @@ export async function echoCommand(errorCode: string, targetPath?: string, option
     console.log('');
     return;
   }
+
+  log.command('echo').success('Error code found', { errorCode, hasSymbol: !!entry.symbol, hasResolution: !!entry.resolution });
 
   // JSON output mode
   if (options.json) {

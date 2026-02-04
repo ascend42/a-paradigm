@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -20,6 +21,7 @@ export async function statusCommand() {
   console.log(chalk.blue('\n📊 Paradigm Status\n'));
   console.log(chalk.gray('─'.repeat(40)));
 
+  const tracker = log.command('status').start('Getting project status');
   const spinner = ora('Scanning project...').start();
 
   // Check for config files
@@ -82,6 +84,8 @@ export async function statusCommand() {
       const total = Object.values(counts).reduce((a, b) => a + b, 0);
       console.log(chalk.gray('─'.repeat(40)));
       console.log(`  Total:          ${chalk.cyan(total.toString())}`);
+      
+      tracker.success('Status retrieved', { symbols: total, files: purposeFiles.length + gateFiles.length });
 
       // Show errors if any
       if (result.errors.length > 0) {
@@ -90,9 +94,11 @@ export async function statusCommand() {
         for (const error of result.errors) {
           console.log(chalk.yellow(`  ⚠ ${error.source}: ${error.message}`));
         }
+        log.command('status').warn('Aggregation had errors', { count: result.errors.length });
       }
     } catch (error) {
       spinner.fail('Failed to aggregate');
+      tracker.error('Status failed', { error: (error as Error).message });
       console.log(chalk.red(`  Error: ${(error as Error).message}`));
     }
   }

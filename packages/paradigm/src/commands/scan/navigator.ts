@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { log } from '../../utils/logger.js';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import ora from 'ora';

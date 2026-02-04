@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -254,6 +255,7 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
   }
 
   const spinner = options.json ? null : ora('Scanning project...').start();
+  const tracker = log.command('beacon').start('Generating beacon', { project: projectName });
 
   try {
     // Check if beacon exists and not refreshing (skip for JSON)
@@ -350,8 +352,10 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
 
     // Write beacon
     fs.writeFileSync(beaconPath, beaconContent, 'utf8');
+    log.component('beacon-file').success('Beacon file written', { path: beaconPath });
 
     spinner.succeed('Beacon generated');
+    tracker.success('Beacon generated', { path: beaconPath, symbols: symbols.length });
 
     if (!options.quiet) {
       const counts = getSymbolCounts(index);
@@ -374,7 +378,8 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
     }
 
   } catch (error) {
-    spinner.fail('Failed to generate beacon');
+    spinner?.fail('Failed to generate beacon');
+    tracker.error('Beacon generation failed', { error: (error as Error).message });
     console.log(chalk.red(`Error: ${(error as Error).message}\n`));
     process.exit(1);
   }

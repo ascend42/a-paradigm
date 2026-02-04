@@ -5,6 +5,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
+import { log } from '../../utils/logger.js';
 import { generateTests } from '@a-company/portal-manager';
 import { scanComponents, generateComponentReport } from '@a-company/portal-manager';
 import { checkGateway, validateGateway } from '@a-company/portal-manager';

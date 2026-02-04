@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../../utils/logger.js';
 
 // Types
 interface AIClient {
@@ -183,6 +184,7 @@ function writeConfig(client: AIClient, config: object, force: boolean): { succes
   // Create directory if needed
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
+    log.component('mcp-config').debug('Created config directory', { path: configDir });
   }
   
   // Check for existing config
@@ -192,13 +194,16 @@ function writeConfig(client: AIClient, config: object, force: boolean): { succes
       const existingContent = fs.readFileSync(client.configPath, 'utf8');
       const existingConfig = JSON.parse(existingContent);
       finalConfig = mergeConfig(existingConfig, config, client);
+      log.component('mcp-config').debug('Merged with existing config', { client: client.id });
     } catch {
       // If we can't parse existing, just use new config
+      log.component('mcp-config').warn('Could not parse existing config, using new', { client: client.id });
     }
   }
   
   // Write config
   fs.writeFileSync(client.configPath, JSON.stringify(finalConfig, null, 2) + '\n');
+  log.component('mcp-config').success('Config written', { client: client.id, path: client.configPath });
   
   return {
     success: true,
@@ -345,11 +350,13 @@ export async function mcpSetupCommand(options: SetupOptions) {
   for (const client of clientsToSetup) {
     spinner.start(`Configuring ${client.name}...`);
     
+    const tracker = log.operation(`mcp-setup-${client.id}`).start('Configuring MCP', { client: client.id });
     const config = generateMCPConfig(client, projectPath, projectName);
     const result = writeConfig(client, config, options.force || false);
     
     if (result.success) {
       spinner.succeed(`${client.name} configured`);
+      tracker.success('MCP configured', { client: client.id, path: client.configPath });
       console.log(chalk.gray(`   → ${client.configPath}`));
       
       // Offer to add to .gitignore for project-level configs
@@ -357,10 +364,12 @@ export async function mcpSetupCommand(options: SetupOptions) {
         const added = addToGitignore(client.configPath);
         if (added) {
           console.log(chalk.gray('   → Added to .gitignore'));
+          log.component('gitignore').debug('Added MCP config to .gitignore', { path: client.configPath });
         }
       }
     } else {
       spinner.fail(`Failed to configure ${client.name}: ${result.message}`);
+      tracker.error('MCP configuration failed', { client: client.id, message: result.message });
     }
   }
   

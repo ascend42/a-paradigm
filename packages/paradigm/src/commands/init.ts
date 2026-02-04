@@ -13,6 +13,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultGateConfig } from '@a-company/portal-core';
 import { getDefaultDreamContent } from '@a-company/premise-core';
@@ -451,6 +452,7 @@ function displaySummary(targetIDE: string, detection: DetectionResult): void {
   const outputFile = outputFileMap[targetIDE] || '.cursor/rules/';
   
   console.log(chalk.blue('\n✨ Paradigm initialized!\n'));
+  tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
   
   console.log(chalk.white('  Created:'));
   console.log(chalk.gray('  ─────────────────────────────────────────────────'));
@@ -488,9 +490,12 @@ export async function initCommand(options: InitOptions) {
   const cwd = process.cwd();
   const projectName = options.name || path.basename(cwd);
   const spinner = ora();
+  
+  const tracker = log.command('init').start('Initializing Paradigm', { project: projectName, quick: !!options.quick });
 
   // Detect existing IDE files
   const detection = detectExistingIDEFiles(cwd);
+  log.operation('detect-ide').debug('IDE detection complete', { hasExisting: detection.hasExisting });
 
   // --migrate flag: just output migration prompt
   if (options.migrate) {

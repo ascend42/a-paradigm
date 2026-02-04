@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../../utils/logger.js';
 import open from 'open';
 
 interface WatchOptions {
