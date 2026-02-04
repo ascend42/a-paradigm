@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -195,11 +196,13 @@ export async function constellationCommand(targetPath?: string, options: Constel
   }
 
   const spinner = ora('Aggregating symbols...').start();
+  const tracker = log.command('constellation').start('Building constellation', { project: projectName });
 
   try {
     // Aggregate all symbols
     const result = await aggregateFromDirectory(absolutePath);
     const index = buildSymbolIndex(result);
+    log.operation('aggregate').debug('Symbols aggregated', { count: getAllSymbols(index).length });
 
     spinner.text = 'Building constellation...';
 
@@ -224,8 +227,10 @@ export async function constellationCommand(targetPath?: string, options: Constel
     }
 
     fs.writeFileSync(outputPath, content, 'utf8');
+    log.component('constellation-file').success('Constellation written', { path: outputPath, format });
 
     spinner.succeed('Constellation built');
+    tracker.success('Constellation built', { path: outputPath, stars: Object.keys(constellation.stars).length });
 
     if (!options.quiet) {
       // Display stats
@@ -291,6 +296,7 @@ export async function constellationCommand(targetPath?: string, options: Constel
 
   } catch (error) {
     spinner.fail('Failed to build constellation');
+    tracker.error('Constellation build failed', { error: (error as Error).message });
     console.log(chalk.red(`Error: ${(error as Error).message}\n`));
     process.exit(1);
   }

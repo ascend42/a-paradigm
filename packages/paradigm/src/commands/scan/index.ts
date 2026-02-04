@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../../utils/logger.js';
 import { aggregateFromDirectory } from '@a-company/premise-core';
 import {
   generateScanIndex,

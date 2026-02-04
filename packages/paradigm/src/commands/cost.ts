@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../utils/logger.js';
 import { findPurposeFiles } from '@a-company/purpose-core';
 import { findGateFiles } from '@a-company/portal-core';
 

@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import { log } from '../../utils/logger.js';
 import { execSync } from 'child_process';
 
 const POST_COMMIT_HOOK = `#!/bin/sh

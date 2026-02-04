@@ -6,6 +6,7 @@
 
 import chalk from 'chalk';
 import ora from 'ora';
+import { log } from '../../utils/logger.js';
 import {
   SentinelStorage,
   PatternMatcher,

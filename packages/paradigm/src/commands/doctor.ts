@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import { log } from '../utils/logger.js';
 import { parseParadigmConfig } from '../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../core/ide-adapters/index.js';
 
@@ -21,6 +22,8 @@ export async function doctorCommand() {
 
   console.log(chalk.blue('\n🩺 Paradigm Doctor\n'));
   console.log(chalk.gray('Checking Paradigm setup...\n'));
+  
+  const tracker = log.command('doctor').start('Running health checks');
 
   // Check .paradigm directory
   const paradigmDir = path.join(cwd, '.paradigm');
@@ -286,6 +289,7 @@ export async function doctorCommand() {
   const issueCount = errorCount + warnCount + missingCount;
   if (issueCount === 0) {
     console.log(chalk.green('✨ All checks passed!\n'));
+    tracker.success('All health checks passed', { total: results.length });
   } else {
     const parts: string[] = [];
     if (errorCount > 0) parts.push(chalk.red(`${errorCount} error${errorCount > 1 ? 's' : ''}`));
@@ -294,5 +298,7 @@ export async function doctorCommand() {
     
     console.log(`${parts.join(', ')} found.\n`);
     console.log(chalk.gray('Run the suggested commands to fix issues.\n'));
+    
+    tracker.error('Health checks found issues', { errors: errorCount, warnings: warnCount, missing: missingCount });
   }
 }

@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import { log } from '../utils/logger.js';
 import { loadParadigmFiles, detectIDE, syncToIDE } from '../core/ide-adapters/index.js';
 
 interface WatchState {

@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Common causes table for quick reference
   - **nvm/PATH section**: Cursor doesn't inherit shell PATH, need absolute paths in mcp.json
 
+- **Internal CLI Logger** - Paradigm CLI now uses its own logger specification
+  - All commands use structured logging with `log.command()`, `log.operation()`, `log.component()`
+  - Duration tracking for operations via `.start()` → `.success()`/`.error()`
+  - Debug logs visible with `DEBUG=1` environment variable
+  - Maintains visual polish with chalk while adding structure for debugging
+  - "Eating our own dog food" - CLI follows Paradigm logger patterns
+
 ### Changed
 
 - **MCP Tool Descriptions** - More prescriptive descriptions for key tools
