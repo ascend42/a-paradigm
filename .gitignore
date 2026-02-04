@@ -120,3 +120,11 @@ $RECYCLE.BIN/
 /.claude/settings.local.json
 /.cursor/plans/
 *.prompt.md
+
+# MCP configs (local paths)
+.claude/
+
+# IDE instruction files (except Cursor, which we use)
+.github/copilot-instructions.md
+.github/instructions/
+.windsurfrules
