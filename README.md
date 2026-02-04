@@ -90,6 +90,23 @@ paradigm --version
 
 ---
 
+## 📖 Documentation
+
+**[Complete Documentation Hub →](./docs/README.md)**
+
+Quick access:
+- **[Quick Start Guide](./docs/guides/quick-start.md)** - Step-by-step setup walkthrough
+- **[Command Reference](./docs/README.md#command-reference)** - Detailed guides for all commands
+- **[MCP Setup](./docs/guides/mcp-setup.md)** - AI client integration guide
+
+Popular command guides:
+- [`paradigm init`](./docs/commands/init.md) - Initialize your project
+- [`paradigm sync`](./docs/commands/sync.md) - Update IDE files
+- [`paradigm ripple`](./docs/commands/ripple.md) - Analyze change impact
+- [`paradigm beacon`](./docs/commands/beacon.md) - Generate AI context
+
+---
+
 ## Quick Start
 
 ### Super Command (Complete Setup)
@@ -166,6 +183,8 @@ Add more as needed:
 - `.paradigm/prompts/` — for reusable task templates
 - MCP server — for dynamic, mid-conversation queries
 
+**📖 For detailed explanations:** See the [documentation hub](./docs/README.md) for comprehensive guides on each command.
+
 ## Symbol System
 
 Paradigm uses symbols to create a shared language between code, developers, and AI:
@@ -180,6 +199,8 @@ Paradigm uses symbols to create a shared language between code, developers, and 
 | `%` | State | `%user.authenticated` | Data condition |
 
 These symbols work everywhere — in code comments, documentation, AI prompts, and visual tools.
+
+**📖 Deep dive:** See [detailed command guides](./docs/README.md#command-reference) for comprehensive usage patterns, examples, and troubleshooting.
 
 ## Key Commands
 
@@ -410,6 +431,16 @@ Paradigm believes that:
 2. **Authorization deserves visualization** — Topology over scattered middleware
 3. **AI needs better context** — On-demand queries beat static files
 4. **One source of truth** — Generate IDE-specific files from shared config
+
+## Documentation
+
+**[Complete Documentation Hub](./docs/README.md)** - Comprehensive guides for all Paradigm features
+
+Key resources:
+- [Quick Start Guide](./docs/guides/quick-start.md)
+- [Command Reference](./docs/README.md#command-reference)
+- [MCP Setup Guide](./docs/guides/mcp-setup.md)
+- [Changelog](./CHANGELOG.md)
 
 ## Contributing
 
