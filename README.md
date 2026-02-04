@@ -27,51 +27,104 @@ Three pillars, one ecosystem:
 
 ## Installation
 
-### Recommended: Install the CLI
-
-Installing globally gives you the full Paradigm experience with both the `paradigm` CLI and `paradigm-mcp` server:
+### Recommended: Clone and Build
 
 ```bash
-# Using npm
-npm install -g github:ascend42/a-paradigm
+# 1. Clone the repository
+git clone https://github.com/ascend42/a-paradigm.git
+cd a-paradigm
 
-# Using bun (faster)
-bun add -g github:ascend42/a-paradigm
+# 2. Install dependencies and build
+npm install && npm run build
+
+# 3. Install CLI globally
+npm link @a-company/paradigm
+
+# 4. Verify installation
+paradigm --version
 ```
 
-**What you get:**
-- `paradigm` — Full CLI with all commands
-- `paradigm-mcp` — MCP server for AI integrations (Cursor, Claude, etc.)
-- Faster execution (no download on each run)
-- Tab completion support
+### Quick Install (One Command)
 
-### Alternative: Quick Try (No Install)
-
-Want to try it first? Run directly without installing:
+For public repositories, you can use the install script:
 
 ```bash
-npx github:ascend42/a-paradigm init
-bunx github:ascend42/a-paradigm init
+curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh | bash
 ```
 
-> **Note:** This downloads on each run. For regular use, install the CLI globally.
+Or download and inspect first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+### Alternative: Local Install Script
+
+If you already cloned the repo:
+
+```bash
+cd a-paradigm
+./install.sh
+```
+
+**What the install script does:**
+- Installs dependencies
+- Builds all packages
+- Installs the `paradigm` CLI globally
+- Verifies installation
+
+```bash
+# 1. Clone and build
+git clone https://github.com/ascend42/a-paradigm.git
+cd a-paradigm
+npm install && npm run build
+
+# 2. Install CLI globally
+npm link @a-company/paradigm
+
+# 3. Verify
+paradigm --version
+```
 
 ---
 
 ## Quick Start
 
-```bash
-# 1. Initialize (detects existing IDE files, offers migration)
-paradigm init
+### Super Command (Complete Setup)
 
-# 2. Generate AI context beacon
+Navigate to your project and run:
+
+```bash
+paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
+```
+
+**What this does:**
+1. ✅ Initializes `.paradigm/` configuration
+2. ✅ Generates IDE files for Cursor, Claude, Copilot, Windsurf
+3. ✅ Configures MCP for all detected AI clients
+4. ✅ Generates symbol graph and AI orientation
+5. ✅ Verifies everything is set up correctly
+
+### Step-by-Step Setup
+
+```bash
+# 1. Initialize configuration
+paradigm init --quick
+
+# 2. Generate IDE instruction files
+paradigm sync --all
+
+# 3. Configure MCP for AI tools
+paradigm mcp setup --client all
+
+# 4. Generate symbol graph and orientation
+paradigm constellation
 paradigm beacon
 
-# 3. Check project status
-paradigm status
-
-# 4. (Optional) Set up MCP for your AI tools
-paradigm mcp setup
+# 5. Verify setup
+paradigm doctor
 ```
 
 ## What Gets Created

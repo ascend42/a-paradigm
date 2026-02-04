@@ -8,11 +8,11 @@ Use this prompt when you want to add a new user-facing feature to the project.
 
 Before starting, gather context:
 
-1. **Read the beacon** for project orientation:
-   - File: `.paradigm/beacon.md`
+1. **Get project orientation:**
+   - Run: `paradigm beacon` or use MCP tool `paradigm_status`
 
-2. **Check the constellation** for similar features:
-   - File: `.paradigm/constellation.json`
+2. **Check for similar features:**
+   - Run: `paradigm constellation` or use MCP tool `paradigm_search`
    - Look for patterns in existing `@feature` symbols
 
 3. **Review existing .purpose files** for format reference:

@@ -1,4 +1,4 @@
-# @horizon/gate-manager
+# @a-company/portal-manager
 
 > Gate testing and validation system
 
@@ -7,7 +7,7 @@ Test and validate your gate configurations to ensure authorization rules work as
 ## Installation
 
 ```bash
-npm install @horizon/gate-manager
+npm install @a-company/portal-manager
 ```
 
 ## Usage
@@ -17,10 +17,10 @@ import {
   generateTests, 
   runGatewayTests,
   scanComponents 
-} from '@horizon/gate-manager';
+} from '@a-company/portal-manager';
 
-// Generate test cases from gate config
-const tests = await generateTests('./gate.yaml');
+// Generate test cases from portal config
+const tests = await generateTests('./portal.yaml');
 
 // Run the tests
 const results = await runGatewayTests(tests);
@@ -35,7 +35,7 @@ for (const result of results) {
 
 ```typescript
 // Scan codebase for gate usage
-const report = await scanComponents('./src', './gate.yaml');
+const report = await scanComponents('./src', './portal.yaml');
 
 // Find unused gates
 console.log('Unused gates:', report.unusedGates);

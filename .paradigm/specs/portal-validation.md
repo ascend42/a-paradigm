@@ -328,7 +328,7 @@ Portal Validation extends the Paradigm Logger's `^portal` symbol type:
 
 ```typescript
 // Standard Paradigm logging
-log.portal('^checkout').info('User entered checkout');
+log.gate('^checkout').info('User entered checkout');
 
 // Portal Validation (structured decision output)
 portal.check('^checkout')
@@ -338,7 +338,7 @@ portal.check('^checkout')
 ```
 
 Both work together:
-- Use `log.portal()` for general portal-related logging
+- Use `log.gate()` for general gate-related logging
 - Use `portal.check()` for authorization decisions that need validation
 
 ---

@@ -59,7 +59,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           },
           {
             name: 'paradigm_ripple',
-            description: 'Analyze the impact of changing a symbol - what depends on it directly and indirectly',
+            description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -73,7 +73,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           },
           {
             name: 'paradigm_related',
-            description: 'Get all symbols related to a given symbol (references to and from)',
+            description: 'Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -87,7 +87,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           },
           {
             name: 'paradigm_status',
-            description: 'Get overview of the project\'s Paradigm symbols and health',
+            description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features.',
             inputSchema: {
               type: 'object',
               properties: {},

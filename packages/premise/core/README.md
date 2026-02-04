@@ -1,13 +1,13 @@
-# @horizon/dream-core
+# @a-company/premise-core
 
 > Symbol aggregation and project knowledge management
 
-Aggregates symbols from Purpose and Gate files into a unified knowledge graph for the Dreamscape visualizer.
+Aggregates symbols from Purpose and Portal files into a unified knowledge graph for the Prism visualizer.
 
 ## Installation
 
 ```bash
-npm install @horizon/dream-core
+npm install @a-company/premise-core
 ```
 
 ## Usage
@@ -16,14 +16,14 @@ npm install @horizon/dream-core
 import { 
   aggregateFromDirectory,
   buildSymbolIndex 
-} from '@horizon/dream-core';
+} from '@a-company/premise-core';
 
 // Aggregate all symbols from a project
 const result = await aggregateFromDirectory('./');
 
 console.log(`Found ${result.symbols.length} symbols`);
 console.log(`From ${result.purposeFiles.length} .purpose files`);
-console.log(`And ${result.gateFiles.length} gate.yaml files`);
+console.log(`And ${result.portalFiles.length} portal.yaml files`);
 
 // Build a searchable index
 const index = buildSymbolIndex(result.symbols);
@@ -41,10 +41,10 @@ const gates = index.byType.get('gate');
 | `#` | component | .purpose |
 | `$` | flow | .purpose |
 | `%` | state | .purpose |
-| `~` | aspect | .purpose |
-| `^` | gate | gate.yaml |
-| `!` | signal | gate.yaml |
-| `?` | idea | .dream |
+| `~` | deprecated | .purpose |
+| `^` | gate | portal.yaml |
+| `!` | signal | portal.yaml |
+| `?` | idea | .premise |
 
 ## Documentation
 

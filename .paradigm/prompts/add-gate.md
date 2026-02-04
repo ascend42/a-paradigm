@@ -85,10 +85,10 @@ The AI should:
 2. **Implement portal middleware:**
    ```
    function requirePremium(request, next):
-       log.portal('^premium-only').debug('Checking ^premium-only')
+       log.gate('^premium-only').debug('Checking ^premium-only')
        
        if not user.subscription or user.subscription.status !== 'active':
-           log.portal('^premium-only').warn('Access denied - not premium', {
+           log.gate('^premium-only').warn('Access denied - not premium', {
                userId: user.id,
                subscriptionStatus: user.subscription?.status
            })
@@ -98,7 +98,7 @@ The AI should:
            })
            return forbidden("Premium subscription required")
        
-       log.portal('^premium-only').debug('Portal passed')
+       log.gate('^premium-only').debug('Portal passed')
        return next()
    ```
 

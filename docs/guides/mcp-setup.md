@@ -288,6 +288,25 @@ Tools are actions Claude can invoke:
 | `paradigm_status` | (none) | Get project overview with symbol counts |
 | `paradigm_gates_for_route` | `route`, `method?` | Suggest which gates should protect a route |
 
+### Agent Workflow Protocol
+
+For best results, follow this "query before modify" protocol:
+
+| Before doing this... | Call this tool |
+|---------------------|----------------|
+| Modifying a symbol | `paradigm_ripple` with the symbol |
+| Understanding code | `paradigm_navigate` with explore intent |
+| Checking dependencies | `paradigm_related` for connections |
+| Getting oriented | `paradigm_status` for project overview |
+| Monitoring session | `paradigm_context_check` every 10-15 tool calls |
+
+**Why this matters:**
+- **Token efficient**: ~100 tokens per query vs ~2000 for reading files
+- **Fresh data**: Always current from live project index
+- **Safer changes**: Understand impact before modifying
+
+The MCP server also provides a `paradigm://context/agent-protocol` resource with detailed workflow instructions. Claude Desktop users should read this resource at session start.
+
 ### Example Conversations
 
 **Impact Analysis:**

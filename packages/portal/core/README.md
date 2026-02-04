@@ -1,38 +1,38 @@
-# @horizon/gate-core
+# @a-company/portal-core
 
-> Gate configuration parsing and validation
+> Portal configuration parsing and validation
 
-Core library for working with `gate.yaml` files - the authorization topology format for defining access control rules.
+Core library for working with `portal.yaml` files - the authorization topology format for defining access control rules.
 
 ## Installation
 
 ```bash
-npm install @horizon/gate-core
+npm install @a-company/portal-core
 ```
 
 ## Usage
 
 ```typescript
 import { 
-  parseGateConfig, 
-  validateGateConfig,
-  findGateFiles 
-} from '@horizon/gate-core';
+  parsePortalConfig, 
+  validatePortalConfig,
+  findPortalFiles 
+} from '@a-company/portal-core';
 
-// Find gate.yaml files
-const files = await findGateFiles('./');
+// Find portal.yaml files
+const files = await findPortalFiles('./');
 
-// Parse a gate configuration
-const config = await parseGateConfig('./gate.yaml');
+// Parse a portal configuration
+const config = await parsePortalConfig('./portal.yaml');
 
 // Validate the configuration
-const result = validateGateConfig(config);
+const result = validatePortalConfig(config);
 if (!result.valid) {
   console.error(result.errors);
 }
 ```
 
-## Gate File Format
+## Portal File Format
 
 ```yaml
 gates:

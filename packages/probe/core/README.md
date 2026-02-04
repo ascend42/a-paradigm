@@ -1,33 +1,33 @@
-# @horizon/scan-core
+# @a-company/probe-core
 
 > Visual discovery layer for AI agents
 
-Enables AI agents to understand UI by mapping visual elements to code through the `horizon scan` command.
+Enables AI agents to understand UI by mapping visual elements to code through the `paradigm probe` command.
 
 ## Installation
 
 ```bash
-npm install @horizon/scan-core
+npm install @a-company/probe-core
 ```
 
 ## Usage
 
 ```typescript
 import { 
-  getScanProtocol,
-  buildScanIndex 
-} from '@horizon/scan-core';
+  getProbeProtocol,
+  buildProbeIndex 
+} from '@a-company/probe-core';
 
-// Get the scan protocol for AI agents
-const protocol = getScanProtocol();
+// Get the probe protocol for AI agents
+const protocol = getProbeProtocol();
 
-// Build a scan index from project
-const index = await buildScanIndex('./src');
+// Build a probe index from project
+const index = await buildProbeIndex('./src');
 ```
 
-## Scan Protocol
+## Probe Protocol
 
-The scan protocol allows AI agents to:
+The probe protocol allows AI agents to:
 
 1. **Analyze screenshots** of running applications
 2. **Map visual elements** to source code locations
@@ -37,14 +37,14 @@ The scan protocol allows AI agents to:
 ## CLI Usage
 
 ```bash
-# Scan a running app screenshot
-horizon scan ui screenshot.png
+# Probe a running app screenshot
+paradigm probe ui screenshot.png
 
-# Scan a design mockup
-horizon scan design mockup.png
+# Probe a design mockup
+paradigm probe design mockup.png
 
-# Scan an error screenshot
-horizon scan error error.png
+# Probe an error screenshot
+paradigm probe error error.png
 ```
 
 ## Documentation

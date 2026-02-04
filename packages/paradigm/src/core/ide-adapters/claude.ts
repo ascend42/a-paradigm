@@ -107,6 +107,21 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('3. New session accepts with: `paradigm team accept <id>`');
     sections.push('');
 
+    // MCP Workflow Protocol (agent hints for query-before-modify)
+    sections.push('## MCP Workflow Protocol');
+    sections.push('');
+    sections.push('**Query before modifying** - Use MCP tools for token-efficient, fresh data:');
+    sections.push('');
+    sections.push('| Before doing this... | Call this tool |');
+    sections.push('|---------------------|----------------|');
+    sections.push('| Modifying a symbol | `paradigm_ripple` with the symbol |');
+    sections.push('| Understanding code | `paradigm_navigate` with explore intent |');
+    sections.push('| Checking dependencies | `paradigm_related` for connections |');
+    sections.push('| Getting oriented | `paradigm_status` for project overview |');
+    sections.push('');
+    sections.push('**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.');
+    sections.push('');
+
     // Directory structure hint
     if (config['purpose-required']?.length) {
       sections.push('## Directory Structure');

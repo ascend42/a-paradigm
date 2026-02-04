@@ -1,4 +1,4 @@
-# @horizon/purpose-core
+# @a-company/purpose-core
 
 > Purpose file parsing, validation, and aggregation
 
@@ -7,7 +7,7 @@ Core library for working with `.purpose` files - the structured documentation fo
 ## Installation
 
 ```bash
-npm install @horizon/purpose-core
+npm install @a-company/purpose-core
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ import {
   findPurposeFiles, 
   parsePurposeFile, 
   validatePurposeFile 
-} from '@horizon/purpose-core';
+} from '@a-company/purpose-core';
 
 // Find all .purpose files in a directory
 const files = await findPurposeFiles('./src');

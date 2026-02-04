@@ -395,6 +395,21 @@ export function writeMcpConfig(
       },
     };
 
+    // For Claude, also add permissions for paradigm commands
+    if (ideName === 'claude') {
+      const existingPermissions = (existingConfig.permissions as Record<string, string[]>) || {};
+      const existingAllow = existingPermissions.allow || [];
+      
+      // Add paradigm command permission if not already present
+      const paradigmPermission = 'Bash(paradigm *)';
+      if (!existingAllow.includes(paradigmPermission)) {
+        (mergedConfig as Record<string, unknown>).permissions = {
+          ...existingPermissions,
+          allow: [...existingAllow, paradigmPermission],
+        };
+      }
+    }
+
     fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
 
     return {

@@ -1,22 +1,22 @@
-# @horizon/gate-sdk
+# @a-company/portal-sdk
 
 > Runtime SDK for checking gates in applications
 
-Use gates at runtime to enforce authorization rules defined in your `gate.yaml`.
+Use gates at runtime to enforce authorization rules defined in your `portal.yaml`.
 
 ## Installation
 
 ```bash
-npm install @horizon/gate-sdk
+npm install @a-company/portal-sdk
 ```
 
 ## Usage
 
 ```typescript
-import { createGateClient, checkGate } from '@horizon/gate-sdk';
+import { createGateClient, checkGate } from '@a-company/portal-sdk';
 
-// Initialize the client with your gate config
-const client = await createGateClient('./gate.yaml');
+// Initialize the client with your portal config
+const client = await createGateClient('./portal.yaml');
 
 // Check if a gate allows access
 const canCheckout = await client.check('checkout', {
@@ -35,7 +35,7 @@ if (canCheckout.allowed) {
 ### With Decorators
 
 ```typescript
-import { Gate } from '@horizon/gate-sdk/decorators';
+import { Gate } from '@a-company/portal-sdk/decorators';
 
 class CheckoutService {
   @Gate('checkout')
