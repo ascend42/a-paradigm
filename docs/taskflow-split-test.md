@@ -60,6 +60,96 @@ Use these for both test versions to keep it controlled:
 3. Update activity feed
 4. Send real-time event
 
+### Required API Endpoints
+
+The AI must implement these endpoints. Use these for validation.
+
+#### Projects
+| Method | Endpoint | Auth Required | Expected |
+|--------|----------|---------------|----------|
+| GET | `/api/projects` | `^authenticated` | 200: user's projects |
+| POST | `/api/projects` | `^authenticated` | 201: new project |
+| GET | `/api/projects/:id` | `^project-member` | 200: project details |
+| PUT | `/api/projects/:id` | `^project-admin` | 200: updated project |
+| DELETE | `/api/projects/:id` | `^project-admin` | 204: deleted |
+
+#### Tasks
+| Method | Endpoint | Auth Required | Expected |
+|--------|----------|---------------|----------|
+| GET | `/api/projects/:id/tasks` | `^project-member` | 200: task list |
+| POST | `/api/projects/:id/tasks` | `^project-member` | 201: new task |
+| GET | `/api/tasks/:id` | `^project-member` | 200: task details |
+| PUT | `/api/tasks/:id` | `^task-assignee` | 200: updated task |
+| DELETE | `/api/tasks/:id` | `^project-admin` | 204: deleted |
+
+#### Comments
+| Method | Endpoint | Auth Required | Expected |
+|--------|----------|---------------|----------|
+| GET | `/api/tasks/:id/comments` | `^project-member` | 200: comment list |
+| POST | `/api/tasks/:id/comments` | `^project-member` | 201: new comment |
+| PUT | `/api/comments/:id` | `^comment-author` | 200: updated comment |
+| DELETE | `/api/comments/:id` | `^comment-author` | 204: deleted |
+
+### Test Seed Data
+
+Create this data at startup for consistent testing:
+
+```json
+{
+  "users": [
+    { "id": "user-admin", "email": "admin@test.com", "role": "org-admin" },
+    { "id": "user-alice", "email": "alice@test.com" },
+    { "id": "user-bob", "email": "bob@test.com" },
+    { "id": "user-outsider", "email": "outsider@test.com" }
+  ],
+  "projects": [
+    {
+      "id": "project-1",
+      "name": "Test Project",
+      "members": [
+        { "userId": "user-alice", "role": "admin" },
+        { "userId": "user-bob", "role": "member" }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1",
+      "projectId": "project-1",
+      "title": "Sample Task",
+      "assignees": ["user-bob"]
+    }
+  ],
+  "comments": [
+    {
+      "id": "comment-1",
+      "taskId": "task-1",
+      "authorId": "user-alice",
+      "body": "This is a test comment"
+    }
+  ]
+}
+```
+
+### Auth Test Matrix
+
+Run these requests to validate authorization is implemented correctly:
+
+| Request | As User | Expected | Tests Gate |
+|---------|---------|----------|------------|
+| `GET /api/projects/project-1` | outsider | 403 | `^project-member` |
+| `GET /api/projects/project-1` | alice | 200 | `^project-member` |
+| `PUT /api/projects/project-1` | bob | 403 | `^project-admin` |
+| `PUT /api/projects/project-1` | alice | 200 | `^project-admin` |
+| `DELETE /api/projects/project-1` | bob | 403 | `^project-admin` |
+| `PUT /api/tasks/task-1` | alice | 403 | `^task-assignee` |
+| `PUT /api/tasks/task-1` | bob | 200 | `^task-assignee` |
+| `DELETE /api/comments/comment-1` | bob | 403 | `^comment-author` |
+| `DELETE /api/comments/comment-1` | alice | 200 | `^comment-author` |
+| `DELETE /api/projects/project-1` | admin | 200 | `^org-admin` override |
+
+**Scoring:** Each correct response = 1 point. Max = 10 points.
+
 ---
 
 ## The Test
