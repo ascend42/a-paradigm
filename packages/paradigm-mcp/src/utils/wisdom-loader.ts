@@ -6,11 +6,27 @@
  * - antipatterns.yaml: What NOT to do, with reasons
  * - expertise.yaml: Who knows what symbols
  * - decisions/*.yaml: ADR-style decision records
+ *
+ * Features:
+ * - Cache invalidation after recording new wisdom
+ * - TTL-based automatic refresh (30 seconds)
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+
+/** TTL for wisdom cache (30 seconds) */
+const WISDOM_CACHE_TTL_MS = 30 * 1000;
+
+/** Wisdom cache entry */
+interface WisdomCacheEntry {
+  context: WisdomContext;
+  loadedAt: number;
+}
+
+/** In-memory cache for wisdom context by root directory */
+const wisdomCache: Map<string, WisdomCacheEntry> = new Map();
 import type {
   WisdomContext,
   WisdomPreferences,
@@ -26,9 +42,33 @@ import type {
 const WISDOM_DIR = '.paradigm/wisdom';
 
 /**
- * Load all wisdom data from a project directory
+ * Load all wisdom data from a project directory (with caching)
  */
 export async function loadWisdomContext(rootDir: string): Promise<WisdomContext> {
+  const absoluteRoot = path.resolve(rootDir);
+
+  // Check cache first
+  const cached = wisdomCache.get(absoluteRoot);
+  if (cached && Date.now() - cached.loadedAt < WISDOM_CACHE_TTL_MS) {
+    return cached.context;
+  }
+
+  // Load fresh wisdom
+  const context = await loadWisdomContextFresh(absoluteRoot);
+
+  // Cache it
+  wisdomCache.set(absoluteRoot, {
+    context,
+    loadedAt: Date.now(),
+  });
+
+  return context;
+}
+
+/**
+ * Load wisdom context without caching (internal)
+ */
+async function loadWisdomContextFresh(rootDir: string): Promise<WisdomContext> {
   const wisdomPath = path.join(rootDir, WISDOM_DIR);
 
   if (!fs.existsSync(wisdomPath)) {
@@ -53,6 +93,22 @@ export async function loadWisdomContext(rootDir: string): Promise<WisdomContext>
     decisions,
     expertise,
   };
+}
+
+/**
+ * Invalidate wisdom cache for a project
+ * Call this after recording new wisdom (antipattern, decision)
+ */
+export function invalidateWisdomCache(rootDir: string): void {
+  const absoluteRoot = path.resolve(rootDir);
+  wisdomCache.delete(absoluteRoot);
+}
+
+/**
+ * Clear all wisdom caches
+ */
+export function clearWisdomCache(): void {
+  wisdomCache.clear();
 }
 
 /**
@@ -259,6 +315,9 @@ export async function recordAntipattern(
   });
 
   fs.writeFileSync(filePath, yaml.dump(data, { lineWidth: -1 }));
+
+  // Invalidate cache so next query gets fresh data
+  invalidateWisdomCache(rootDir);
 }
 
 /**
@@ -279,6 +338,9 @@ export async function recordDecision(
   const filePath = path.join(decisionsPath, fileName);
 
   fs.writeFileSync(filePath, yaml.dump(decision, { lineWidth: -1 }));
+
+  // Invalidate cache so next query gets fresh data
+  invalidateWisdomCache(rootDir);
 }
 
 /**

@@ -60,6 +60,20 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('```');
     sections.push('');
 
+    // Agent Onboarding section (new for agentic workflows)
+    sections.push('## Agent Onboarding');
+    sections.push('');
+    sections.push('**First Session:**');
+    sections.push('1. Call `paradigm_status` for project overview');
+    sections.push('2. Read `.paradigm/config.yaml` for conventions');
+    sections.push('3. Check if `portal.yaml` exists (for auth gates)');
+    sections.push('');
+    sections.push('**Before Each Task:**');
+    sections.push('1. `paradigm_wisdom_context` for symbols you\'ll modify');
+    sections.push('2. `paradigm_ripple` to check impact');
+    sections.push('3. `paradigm_history_fragility` for stability warnings');
+    sections.push('');
+
     // Symbol system - compact format for Claude
     sections.push('## Symbol System');
     sections.push('');
@@ -75,6 +89,16 @@ export class ClaudeAdapter implements IDEAdapter {
         sections.push(`| \`${prefix}\` | ${def.name} | \`${example}\` |`);
       }
     }
+    sections.push('');
+
+    // First actions for new sessions - explicit onboarding checklist
+    sections.push('## First Actions for New Sessions');
+    sections.push('');
+    sections.push('1. **Orient:** Call `paradigm_status` to see project overview and available symbols');
+    sections.push('2. **Verify:** Check `.paradigm/config.yaml` for discipline and conventions');
+    sections.push('3. **Locate:** Use `paradigm_navigate` with "context" intent for your task');
+    sections.push('4. **Review:** Read the nearest `.purpose` file before making changes');
+    sections.push('5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints');
     sections.push('');
 
     // Context discovery - key for Claude
@@ -122,6 +146,55 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.');
     sections.push('');
 
+    // Token budget reference
+    sections.push('## Token Budget Reference');
+    sections.push('');
+    sections.push('| Operation | Typical Tokens | Use When |');
+    sections.push('|-----------|---------------|----------|');
+    sections.push('| `paradigm_status` | ~100 | Starting a session |');
+    sections.push('| `paradigm_search` | ~150 | Looking for symbols |');
+    sections.push('| `paradigm_navigate` | ~200 | Finding code locations |');
+    sections.push('| `paradigm_ripple` | ~300 | Before modifying symbols |');
+    sections.push('| `paradigm_gates_for_route` | ~150 | Adding API endpoints |');
+    sections.push('| File read (small) | ~500 | Need exact code |');
+    sections.push('| File read (large) | ~2000+ | Avoid if possible |');
+    sections.push('| Full .purpose + config | ~1500 | Initial orientation |');
+    sections.push('');
+    sections.push('**Tip**: Prefer MCP queries over file reads. Check `paradigm_session_stats` for actual usage.');
+    sections.push('');
+
+    // MCP vs File Read decision guide
+    sections.push('### When to Use MCP vs File Reads');
+    sections.push('');
+    sections.push('| Need | Use MCP | Use File Read |');
+    sections.push('|------|---------|---------------|');
+    sections.push('| Find symbol | `paradigm_navigate` | Never |');
+    sections.push('| Check impact | `paradigm_ripple` | Never |');
+    sections.push('| Read implementation | MCP first | Then specific file |');
+    sections.push('| Write code | N/A | Existing patterns |');
+    sections.push('| Check team wisdom | `paradigm_wisdom_context` | Never |');
+    sections.push('');
+    sections.push('**Rule**: MCP for discovery, files for implementation.');
+    sections.push('');
+
+    // MCP Resources section
+    sections.push('## MCP Resources (On-Demand Content)');
+    sections.push('');
+    sections.push('Reference content is served via MCP resources instead of being stored locally:');
+    sections.push('');
+    sections.push('| Resource | URI | Content |');
+    sections.push('|----------|-----|---------|');
+    sections.push('| Prompts | `paradigm://prompts` | Task templates (add-feature, refactor, etc.) |');
+    sections.push('| Commands | `paradigm://docs/commands` | CLI command reference |');
+    sections.push('| Queries | `paradigm://docs/queries` | jq query examples |');
+    sections.push('| Disciplines | `paradigm://specs/disciplines` | Symbol mappings by domain |');
+    sections.push('| Scan | `paradigm://specs/scan` | Visual discovery protocol |');
+    sections.push('');
+    sections.push('**Usage**: Read resources with `paradigm://prompts/{name}` (e.g., `paradigm://prompts/add-feature`).');
+    sections.push('');
+    sections.push('**Session Tracking**: Call `paradigm_session_stats` to see token usage and cost breakdown.');
+    sections.push('');
+
     // Directory structure hint
     if (config['purpose-required']?.length) {
       sections.push('## Directory Structure');
@@ -162,6 +235,37 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('- Create #component-name');
     sections.push('- Emit !signal-name on success');
     sections.push('```');
+    sections.push('');
+
+    // Troubleshooting section
+    sections.push('## Troubleshooting');
+    sections.push('');
+    sections.push('| Issue | Solution |');
+    sections.push('|-------|----------|');
+    sections.push('| "Symbol not found" | Run `paradigm scan` to rebuild index |');
+    sections.push('| "Navigator not found" | Run `paradigm scan` to generate navigator.yaml |');
+    sections.push('| Empty search results | Check that .purpose files define symbols |');
+    sections.push('| High context usage | Call `paradigm_handoff_prepare` |');
+    sections.push('| Gate suggestions missing | Check that portal.yaml exists and defines gates |');
+    sections.push('');
+
+    // Maintaining Paradigm files section
+    sections.push('## Maintaining Paradigm Files');
+    sections.push('');
+    sections.push('**After completing code changes, update Paradigm files if needed:**');
+    sections.push('');
+    sections.push('| Change Type | Action Required |');
+    sections.push('|-------------|-----------------|');
+    sections.push('| Add feature | Create `.purpose` in feature directory |');
+    sections.push('| Add route with auth | Update `portal.yaml` with gates |');
+    sections.push('| Add signal/event | Add to emitting feature\'s `.purpose` |');
+    sections.push('| Add multi-step flow | Document as `$flow` in `.purpose` |');
+    sections.push('| Rename/delete symbol | Update all `.purpose` references |');
+    sections.push('| Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |');
+    sections.push('');
+    sections.push('**Validation**: Run `paradigm doctor` to check for inconsistencies.');
+    sections.push('');
+    sections.push('See `.paradigm/docs/ai-maintenance-protocol.md` for detailed guidance.');
     sections.push('');
 
     // Claude-specific footer

@@ -16,13 +16,20 @@ interface CheckResult {
   fix?: string;
 }
 
-export async function doctorCommand() {
+interface DoctorOptions {
+  quiet?: boolean;
+}
+
+export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
   const cwd = process.cwd();
   const results: CheckResult[] = [];
+  const quiet = options.quiet;
 
-  console.log(chalk.blue('\n🩺 Paradigm Doctor\n'));
-  console.log(chalk.gray('Checking Paradigm setup...\n'));
-  
+  if (!quiet) {
+    console.log(chalk.blue('\n🩺 Paradigm Doctor\n'));
+    console.log(chalk.gray('Checking Paradigm setup...\n'));
+  }
+
   const tracker = log.command('doctor').start('Running health checks');
 
   // Check .paradigm directory
@@ -252,7 +259,7 @@ export async function doctorCommand() {
   for (const result of results) {
     let icon: string;
     let color: typeof chalk;
-    
+
     switch (result.status) {
       case 'ok':
         icon = '✓';
@@ -274,31 +281,42 @@ export async function doctorCommand() {
         missingCount++;
         break;
     }
-    
-    const namePadded = result.name.padEnd(30);
-    console.log(`  ${color(icon)} ${namePadded} ${color(result.message)}`);
-    
-    if (result.fix) {
-      console.log(chalk.gray(`    └─ Fix: ${result.fix}`));
+
+    if (!quiet) {
+      const namePadded = result.name.padEnd(30);
+      console.log(`  ${color(icon)} ${namePadded} ${color(result.message)}`);
+
+      if (result.fix) {
+        console.log(chalk.gray(`    └─ Fix: ${result.fix}`));
+      }
     }
   }
 
   // Summary
-  console.log('');
-  
   const issueCount = errorCount + warnCount + missingCount;
-  if (issueCount === 0) {
-    console.log(chalk.green('✨ All checks passed!\n'));
+  const healthy = issueCount === 0;
+
+  if (!quiet) {
+    console.log('');
+
+    if (healthy) {
+      console.log(chalk.green('✨ All checks passed!\n'));
+    } else {
+      const parts: string[] = [];
+      if (errorCount > 0) parts.push(chalk.red(`${errorCount} error${errorCount > 1 ? 's' : ''}`));
+      if (warnCount > 0) parts.push(chalk.yellow(`${warnCount} warning${warnCount > 1 ? 's' : ''}`));
+      if (missingCount > 0) parts.push(chalk.gray(`${missingCount} missing`));
+
+      console.log(`${parts.join(', ')} found.\n`);
+      console.log(chalk.gray('Run the suggested commands to fix issues.\n'));
+    }
+  }
+
+  if (healthy) {
     tracker.success('All health checks passed', { total: results.length });
   } else {
-    const parts: string[] = [];
-    if (errorCount > 0) parts.push(chalk.red(`${errorCount} error${errorCount > 1 ? 's' : ''}`));
-    if (warnCount > 0) parts.push(chalk.yellow(`${warnCount} warning${warnCount > 1 ? 's' : ''}`));
-    if (missingCount > 0) parts.push(chalk.gray(`${missingCount} missing`));
-    
-    console.log(`${parts.join(', ')} found.\n`);
-    console.log(chalk.gray('Run the suggested commands to fix issues.\n'));
-    
     tracker.error('Health checks found issues', { errors: errorCount, warnings: warnCount, missing: missingCount });
   }
+
+  return healthy;
 }

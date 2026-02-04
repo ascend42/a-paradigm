@@ -2,6 +2,8 @@
  * MCP Tools - Paradigm Sentinel Integration
  *
  * Provides AI agents with access to incident triage and pattern matching.
+ *
+ * ZERO-CONFIG: Auto-initializes sentinel storage and loads seed patterns on first use.
  */
 
 import {
@@ -22,11 +24,36 @@ import type {
 import type { ProjectContext } from '../utils/index-loader.js';
 
 let storage: SentinelStorage | null = null;
+let storageInitialized = false;
 
-function getStorage(): SentinelStorage {
+/**
+ * Get or initialize sentinel storage
+ * Lazy-initializes with seed patterns on first use
+ */
+function getStorage(ctx?: ProjectContext): SentinelStorage {
   if (!storage) {
     storage = new SentinelStorage();
   }
+
+  // Load seed patterns on first use (idempotent)
+  if (!storageInitialized) {
+    try {
+      const seedPatterns = loadAllSeedPatterns();
+      for (const pattern of seedPatterns) {
+        // Only add if pattern doesn't already exist
+        try {
+          storage.addPattern(pattern);
+        } catch {
+          // Pattern may already exist, ignore
+        }
+      }
+      storageInitialized = true;
+    } catch (e) {
+      // Seed patterns are optional, continue without them
+      storageInitialized = true;
+    }
+  }
+
   return storage;
 }
 
@@ -281,7 +308,7 @@ export async function handleSentinelTool(
   args: Record<string, unknown>,
   ctx: ProjectContext
 ): Promise<{ handled: boolean; text: string }> {
-  const store = getStorage();
+  const store = getStorage(ctx);
   const matcher = new PatternMatcher(store);
 
   switch (name) {
@@ -307,6 +334,26 @@ export async function handleSentinelTool(
         environment,
         search,
       });
+
+      // Return helpful message if no incidents
+      if (incidents.length === 0) {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            count: 0,
+            incidents: [],
+            tip: 'No incidents recorded yet. Incidents are created when errors occur in production or via paradigm_sentinel_record.',
+            howToRecord: {
+              description: 'Record incidents manually with paradigm_sentinel_record',
+              example: {
+                error: { message: 'Connection timeout', code: 'ETIMEDOUT' },
+                symbols: { feature: '@checkout', integration: '&stripe' },
+                environment: 'production',
+              },
+            },
+          }, null, 2),
+        };
+      }
 
       const results = incidents.map((incident) => {
         const matches = matcher.match(incident, { maxResults: 3 });
