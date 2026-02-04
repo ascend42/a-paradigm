@@ -24,6 +24,17 @@
 
 8. **Integrations** - Webhooks for external systems. Slack notifications. GitHub issue sync.
 
+### Tech Stack
+
+Use these for both test versions to keep it controlled:
+
+- **Runtime:** Node.js
+- **Framework:** Express
+- **Database:** SQLite (no setup required)
+- **Auth:** JWT tokens
+- **Real-time:** WebSocket (ws library)
+- **Language:** TypeScript
+
 ### Authorization Rules
 
 - Only authenticated users can access the API
@@ -79,6 +90,23 @@ Build this app twice — once with Paradigm, once without. Then execute the pivo
 | 4 | Multi-feature flow | "Add Slack notifications when tasks are assigned" |
 | 5 | Pattern question | "Should I soft delete or hard delete old tasks?" |
 
+### Prompts
+
+Pivot 1 (Cross-cutting): 
+"Add audit logging to all task state changes. I want to know who changed what and when."
+
+Pivot 2 (New feature + auth):
+"Add a task templates feature. Project admins should be able to create templates, and regular members can use them to quickly create tasks."
+
+Pivot 3 (Auth bug):
+"Bug: Users can delete comments they don't own. Can you fix this?"
+
+Pivot 4 (Multi-feature flow):
+"When a task is assigned to someone, send them a Slack notification."
+
+Pivot 5 (Pattern question):
+"I need to clean up old completed tasks. Should I soft delete or hard delete them?"
+
 ### Measurements
 
 | Metric | How to Measure |
@@ -115,10 +143,10 @@ Based on initial testing:
 
 ## Notes
 
-- No tech stack specified — let the AI choose
-- No file structure specified — let the AI decide
-- No code patterns specified — observe what the AI creates
-- The goal is to test how well the AI understands and navigates the codebase, not prescribe implementation
+- Tech stack is fixed to keep the comparison controlled
+- File structure is not specified — let the AI decide
+- Code patterns are not specified — observe what the AI creates
+- The goal is to test how well the AI understands and navigates the codebase
 
 ---
 
