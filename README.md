@@ -1,9 +1,15 @@
-# Paradigm
+<p align="center">
+  <img src="assets/logo.png" alt="Paradigm Logo" width="200">
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+<h1 align="center">Paradigm</h1>
 
-> **Structure for AI-Native Development**
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg" alt="Node.js"></a>
+</p>
+
+<p align="center"><strong>Structure for AI-Native Development</strong></p>
 
 Paradigm is a developer tools ecosystem that brings **structure**, **authorization**, and **shared context** to modern software projects — designed for both human developers and AI agents.
 
