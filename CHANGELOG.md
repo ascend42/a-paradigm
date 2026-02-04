@@ -47,12 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - "Eating our own dog food" - CLI follows Paradigm logger patterns
 
 - **Comprehensive Command Documentation** - Detailed guides for all core commands
-  - Created `.paradigm/docs/commands/` directory with 8 detailed command guides
+  - Created `.paradigm/docs/commands/` directory with 8 detailed command guides (internal framework)
   - Each guide includes: Overview, Usage, Integration, Workflows, Tips, Examples, Troubleshooting
   - Commands documented: `init`, `sync`, `index`, `beacon`, `constellation`, `mcp-setup`, `ripple`, `doctor`
   - Added navigation index (`.paradigm/docs/commands/.index.yaml`)
   - Updated main `commands.md` to link to detailed guides
   - Improved onboarding and reduces "what does this do?" confusion
+
+- **GitHub Documentation Hub** - Public-facing documentation structure
+  - Created `docs/README.md` as central documentation hub
+  - Copied command guides to `docs/commands/` for GitHub visibility
+  - Updated main `README.md` with prominent documentation links
+  - Documentation section with quick access to most important guides
+  - Professional documentation structure for better discoverability
 
 ### Changed
 
