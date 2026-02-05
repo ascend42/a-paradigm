@@ -184,8 +184,9 @@ Paradigm supports multi-agent orchestration via `paradigm team` commands:
 Providers are tried in order until one is available:
 1. `claude` - Anthropic API (requires ANTHROPIC_API_KEY)
 2. `claude-code` - Claude Code Task tool (Max subscription)
-3. `claude-cli` - Spawn claude CLI processes
-4. `manual` - File-based handoffs (always available)
+3. `cursor-cli` - Cursor agent CLI (auto-detected in Cursor IDE)
+4. `claude-cli` - Spawn claude CLI processes
+5. `manual` - File-based handoffs (always available)
 
 Configure via:
 - Environment: `PARADIGM_AGENT_PROVIDER=claude-code`
