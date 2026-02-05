@@ -1,0 +1,61 @@
+---
+description: Paradigm multi-agent orchestration protocol
+alwaysApply: true
+---
+# Paradigm Orchestration Protocol
+
+## CRITICAL: When to Use Orchestration
+
+**ALWAYS call `paradigm_orchestrate_inline` FIRST when:**
+- Task affects 3+ files
+- Task involves security/auth AND implementation
+- Task mentions multiple features (@symbols)
+- Building a new feature end-to-end
+- User explicitly requests multi-agent workflow
+
+## Workflow
+
+1. **Plan first:** `paradigm_orchestrate_inline({ task: "...", mode: "plan" })`
+   - Review suggested agents and estimated tokens
+   - Check if parallel execution is possible
+
+2. **Execute:** `paradigm_orchestrate_inline({ task: "...", mode: "execute" })`
+   - Get full prompts for each agent stage
+   - Note which stages can run in parallel
+
+3. **Spawn subagents:** Use Task tool for each agent prompt
+   - Parallel stages: Launch multiple Task calls in one message
+   - Sequential stages: Wait for completion before next stage
+
+4. **Record history:** `paradigm_history_record({ type: "implement", symbols: [...], description: "..." })`
+
+## Available Agents
+
+- **architect**: You design system architecture, write specifications, and plan features. (writes: specs/*.md, .purpose)
+- **builder**: You implement code based on specifications from the Architect. (writes: src/**, tests/**)
+- **reviewer**: You review code for correctness, security, and adherence to specs. (writes: reviews/*.md)
+- **tester**: You verify implementations work correctly. (writes: tests/**, health.yaml)
+- **security**: You audit for security issues, especially around ^gates. (writes: security/*.md)
+
+## Red Flags - STOP and Orchestrate
+
+If you find yourself:
+- Implementing 5+ files without planning → STOP, call orchestrate
+- Adding auth without security review → STOP, involve security agent
+- Writing code without specs → STOP, involve architect first
+- Making cross-cutting changes → STOP, plan the stages
+
+## DO NOT Skip Orchestration
+
+Complex tasks need specialist agents. One agent trying to do everything leads to:
+- Missed security gates
+- Inconsistent patterns
+- Poor test coverage
+- Context overflow
+
+## CLI Shortcut
+
+You can also suggest agents via CLI:
+```bash
+paradigm team agents suggest "Add user authentication with JWT"
+```
