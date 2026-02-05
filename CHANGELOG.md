@@ -54,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prioritized over `claude-cli` when Cursor environment is detected
   - `paradigm team providers` now shows `cursor-cli` availability
 
+- **Model Visibility in Orchestration** - See which model runs each agent
+  - Spinner and live output now shows `agent (model)` format (e.g., "builder (haiku)")
+  - Orchestration MDC includes model assignments next to agent names
+  - Helps understand cost and capability distribution across facets
+
+- **OS-Aware Terminal Syntax Guidance** - Agents use correct commands for the OS
+  - `paradigm_status` MCP tool returns OS platform and shell type
+  - IDE instruction files include OS-specific terminal syntax tables
+  - Windows users get PowerShell/CMD guidance
+  - Mac/Linux users get bash/zsh guidance
+  - Prevents agents from using `rm` on Windows or `del` on Unix
+
 ### Changed
 
 - **Team Init** - Now auto-detects environment and prompts for models in Cursor/interactive terminals

@@ -167,9 +167,10 @@ export async function teamOrchestrateCommand(
         beforeAgentSpawn: true,
         afterAgentComplete: true,
       } : undefined,
-      onAgentStart: (agent, subtask) => {
+      onAgentStart: (agent, subtask, model) => {
         if (!options.quiet && !options.json) {
-          spinner.text = `${agent}: ${subtask.slice(0, 50)}...`;
+          const agentLabel = `${agent} (${model})`;
+          spinner.text = `${agentLabel}: ${subtask.slice(0, 50)}...`;
         }
       },
     });
@@ -208,22 +209,24 @@ export async function teamOrchestrateCommand(
         process.stdout.write(chalk.gray(`[${source}] `) + message.content);
       }
     },
-    onAgentStart: (agent, subtask) => {
+    onAgentStart: (agent, subtask, model) => {
       if (options.json || options.quiet) return;
 
+      const agentLabel = `${agent} (${model})`;
       if (options.live) {
-        console.log(chalk.cyan(`\n▶ ${agent}: ${subtask}`));
+        console.log(chalk.cyan(`\n▶ ${agentLabel}: ${subtask}`));
       } else {
-        spinner.text = `${agent}: ${subtask.slice(0, 50)}...`;
+        spinner.text = `${agentLabel}: ${subtask.slice(0, 50)}...`;
       }
     },
-    onAgentComplete: (agent, agentResult) => {
+    onAgentComplete: (agent, agentResult, model) => {
       if (options.json || options.quiet) return;
 
       if (options.live) {
         const status = agentResult.success ? chalk.green('✓') : chalk.red('✗');
         const tokens = agentResult.relay ? formatTokens(agentResult.relay.metrics.tokens_used.total) : '0';
-        console.log(`${status} ${agent} completed (${tokens})`);
+        const agentLabel = `${agent} (${model})`;
+        console.log(`${status} ${agentLabel} completed (${tokens})`);
       }
     },
     onCheckpoint: async (description) => {

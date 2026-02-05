@@ -2,6 +2,7 @@
  * MCP Tools - Actions AI can invoke on Paradigm data
  */
 
+import * as os from 'os';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   ListToolsRequestSchema,
@@ -545,6 +546,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
             examples[type] = symbols.slice(0, 3).map(s => s.symbol);
           }
 
+          // Detect OS for terminal command guidance
+          const platform = os.platform();
+          const isWindows = platform === 'win32';
+          const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
+
           const text = JSON.stringify({
             project: ctx.projectName,
             counts: {
@@ -560,6 +566,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
             examples,
             hasPortalYaml: ctx.gateConfig !== null,
             purposeFiles: ctx.aggregation.purposeFiles.length,
+            environment: {
+              os: platform,
+              shell,
+              terminalNote: isWindows
+                ? 'Use PowerShell syntax: semicolons for command chaining, backslashes for paths, $env:VAR for env vars'
+                : 'Use Unix syntax: && for command chaining, forward slashes for paths, $VAR for env vars',
+            },
           }, null, 2);
 
           trackToolCall(text.length, name);

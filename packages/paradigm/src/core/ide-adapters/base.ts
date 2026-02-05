@@ -3,6 +3,7 @@
  * Shared functionality for generating IDE instruction files
  */
 
+import * as os from 'os';
 import type { ParadigmConfig } from '../paradigm-config.js';
 import type { ParadigmFiles, SpecFiles } from './types.js';
 
@@ -263,6 +264,60 @@ export function generateNavigationSection(config: ParadigmConfig): string {
   lines.push('');
 
   return lines.join('\n');
+}
+
+/**
+ * Generate terminal syntax guidance based on OS
+ */
+export function generateTerminalGuidance(): string {
+  const platform = os.platform();
+  const isWindows = platform === 'win32';
+  const lines: string[] = [];
+
+  lines.push('## Terminal Syntax');
+  lines.push('');
+
+  if (isWindows) {
+    lines.push('This project runs on **Windows**. Use appropriate syntax:');
+    lines.push('');
+    lines.push('| Operation | Windows Syntax |');
+    lines.push('|-----------|----------------|');
+    lines.push('| Chain commands | `cmd1 ; cmd2` or `cmd1 && cmd2` (PowerShell) |');
+    lines.push('| Path separator | `\\` (backslash) |');
+    lines.push('| Environment vars | `$env:VAR` (PowerShell) or `%VAR%` (CMD) |');
+    lines.push('| Null device | `$null` (PowerShell) or `NUL` (CMD) |');
+    lines.push('| List files | `dir` or `Get-ChildItem` |');
+    lines.push('| Remove files | `del` or `Remove-Item` |');
+    lines.push('');
+    lines.push('**IMPORTANT:** Do NOT use Unix-style commands like `rm`, `cat`, `grep` directly.');
+  } else {
+    const osName = platform === 'darwin' ? 'macOS' : 'Linux';
+    lines.push(`This project runs on **${osName}**. Use appropriate syntax:`);
+    lines.push('');
+    lines.push('| Operation | Unix Syntax |');
+    lines.push('|-----------|-------------|');
+    lines.push('| Chain commands | `cmd1 && cmd2` (stop on error) or `cmd1 ; cmd2` (always continue) |');
+    lines.push('| Path separator | `/` (forward slash) |');
+    lines.push('| Environment vars | `$VAR` or `${VAR}` |');
+    lines.push('| Null device | `/dev/null` |');
+    lines.push('| List files | `ls` |');
+    lines.push('| Remove files | `rm` |');
+    lines.push('');
+    lines.push('**IMPORTANT:** Do NOT use Windows-style commands like `dir`, `del`, or `%VAR%`.');
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * Get OS information for agents
+ */
+export function getOsInfo(): { platform: string; isWindows: boolean; shell: string } {
+  const platform = os.platform();
+  const isWindows = platform === 'win32';
+  const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
+  return { platform, isWindows, shell };
 }
 
 /**
