@@ -20,6 +20,13 @@ out/
 .horizon.backup
 .horizon-scan-index.json
 
+# Paradigm runtime data (regenerate with paradigm commands)
+.paradigm/model-cache.json
+.paradigm/orchestrations/
+.paradigm/tasks/
+.paradigm/team-state.yaml
+.paradigm/handoffs/
+
 # BUT keep everything in examples/ (hydrated reference)
 !examples/**
 
