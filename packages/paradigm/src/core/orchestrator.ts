@@ -65,9 +65,9 @@ export interface OrchestrationOptions {
   /** Checkpoint approval callback */
   onCheckpoint?: (description: string) => Promise<boolean>;
   /** Agent started callback */
-  onAgentStart?: (agentName: string, task: string) => void;
+  onAgentStart?: (agentName: string, task: string, model: AgentModel) => void;
   /** Agent completed callback */
-  onAgentComplete?: (agentName: string, result: SpawnResult) => void;
+  onAgentComplete?: (agentName: string, result: SpawnResult, model: AgentModel) => void;
 }
 
 export interface OrchestrationResult {
@@ -301,13 +301,13 @@ export class Orchestrator {
     };
 
     if (options.onAgentStart) {
-      options.onAgentStart('solo', task);
+      options.onAgentStart('solo', task, model);
     }
 
     const result = await this.spawner.spawn(agentName, task, spawnerOptions);
 
     if (options.onAgentComplete) {
-      options.onAgentComplete('solo', result);
+      options.onAgentComplete('solo', result, model);
     }
 
     return result;
@@ -413,14 +413,14 @@ export class Orchestrator {
         };
 
         if (options.onAgentStart) {
-          options.onAgentStart(step.agent, step.subtask);
+          options.onAgentStart(step.agent, step.subtask, model);
         }
 
         // Spawn agent
         const result = await this.spawner.spawn(step.agent, taskWithContext, spawnerOptions);
 
         if (options.onAgentComplete) {
-          options.onAgentComplete(step.agent, result);
+          options.onAgentComplete(step.agent, result, model);
         }
 
         return { step, result, model };
@@ -937,14 +937,14 @@ export class Orchestrator {
         };
 
         if (options.onAgentStart) {
-          options.onAgentStart(builder.agent, `Implement ${builder.group}`);
+          options.onAgentStart(builder.agent, `Implement ${builder.group}`, 'haiku');
         }
 
         // Spawn using 'builder' agent definition
         const result = await this.spawner.spawn('builder', taskPrompt, spawnerOptions);
 
         if (options.onAgentComplete) {
-          options.onAgentComplete(builder.agent, result);
+          options.onAgentComplete(builder.agent, result, 'haiku');
         }
 
         return { builder, result };

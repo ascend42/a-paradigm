@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as yaml from 'js-yaml';
 import type { IDEAdapter, ParadigmFiles, GeneratedFile, McpConfig } from './types.js';
 import {
@@ -531,15 +532,51 @@ paradigm_session_stats()
           .map(([name, agent]) => {
             const roleFirstLine = agent.role.split('\n')[0].trim();
             const writes = agent.focus?.writes?.join(', ') || 'any';
-            return `- **${name}**: ${roleFirstLine} (writes: ${writes})`;
+            const model = agent.defaultModel || 'sonnet';
+            return `- **${name}** (${model}): ${roleFirstLine} (writes: ${writes})`;
           })
           .join('\n')
       : '(Run `paradigm team init` to configure agents)';
+
+    // Detect OS for terminal guidance
+    const platform = os.platform();
+    const isWindows = platform === 'win32';
+    const terminalGuidance = isWindows
+      ? `## Terminal Syntax (Windows)
+
+This project runs on **Windows**. Use appropriate syntax:
+
+| Operation | Windows Syntax |
+|-----------|----------------|
+| Chain commands | \`cmd1 ; cmd2\` or \`cmd1 && cmd2\` (PowerShell) |
+| Path separator | \`\\\` (backslash) |
+| Environment vars | \`$env:VAR\` (PowerShell) or \`%VAR%\` (CMD) |
+| Null device | \`$null\` (PowerShell) or \`NUL\` (CMD) |
+| List files | \`dir\` or \`Get-ChildItem\` |
+| Remove files | \`del\` or \`Remove-Item\` |
+
+**IMPORTANT:** Do NOT use Unix-style commands like \`rm\`, \`cat\`, \`grep\` directly.`
+      : `## Terminal Syntax (${platform === 'darwin' ? 'macOS' : 'Linux'})
+
+This project runs on **${platform === 'darwin' ? 'macOS' : 'Linux'}**. Use appropriate syntax:
+
+| Operation | Unix Syntax |
+|-----------|-------------|
+| Chain commands | \`cmd1 && cmd2\` (stop on error) or \`cmd1 ; cmd2\` (always continue) |
+| Path separator | \`/\` (forward slash) |
+| Environment vars | \`$VAR\` or \`\${VAR}\` |
+| Null device | \`/dev/null\` |
+| List files | \`ls\` |
+| Remove files | \`rm\` |
+
+**IMPORTANT:** Do NOT use Windows-style commands like \`dir\`, \`del\`, or \`%VAR%\`.`;
 
     return frontmatter('Paradigm multi-agent orchestration protocol', {
       alwaysApply: true,
     }) +
       `# Paradigm Orchestration Protocol
+
+${terminalGuidance}
 
 ## CRITICAL: When to Use Orchestration
 

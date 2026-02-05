@@ -14,6 +14,7 @@ import {
   generateConventions,
   generateUpdateRules,
   generateNavigationSection,
+  generateTerminalGuidance,
 } from './base.js';
 
 export class ClaudeAdapter implements IDEAdapter {
@@ -59,6 +60,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('portal.yaml            → Security/auth definitions');
     sections.push('```');
     sections.push('');
+
+    // Terminal guidance (OS-specific)
+    sections.push(generateTerminalGuidance());
 
     // Agent Onboarding section (new for agentic workflows)
     sections.push('## Agent Onboarding');
