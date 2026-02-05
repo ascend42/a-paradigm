@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import type { IDEAdapter, ParadigmFiles, GeneratedFile, McpConfig } from './types.js';
 import {
   generateOverview,
@@ -19,6 +20,7 @@ import {
   generateUpdateRules,
   generateCommandsReference,
 } from './base.js';
+import type { AgentsManifest } from '../../commands/team/types.js';
 
 /**
  * Generate YAML frontmatter for .mdc files
@@ -75,7 +77,7 @@ export class CursorAdapter implements IDEAdapter {
   /**
    * Generate multiple .mdc files for the modern Cursor format
    */
-  generateFiles(files: ParadigmFiles): GeneratedFile[] {
+  generateFiles(files: ParadigmFiles, rootDir?: string): GeneratedFile[] {
     const { config, projectName } = files;
     const generatedFiles: GeneratedFile[] = [];
 
@@ -140,6 +142,14 @@ export class CursorAdapter implements IDEAdapter {
     generatedFiles.push({
       path: 'paradigm-context.mdc',
       content: this.generateContextMdc(),
+    });
+
+    // 11. Orchestration Protocol (multi-agent workflow)
+    // Load agents manifest if rootDir is provided
+    const agentsManifest = rootDir ? this.loadAgentsManifest(rootDir) : null;
+    generatedFiles.push({
+      path: 'paradigm-orchestration.mdc',
+      content: this.generateOrchestrationMdc(agentsManifest),
     });
 
     return generatedFiles;
@@ -491,6 +501,96 @@ This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-rec
 Get current stats anytime:
 \`\`\`
 paradigm_session_stats()
+\`\`\`
+`;
+  }
+
+  /**
+   * Load agents manifest from .paradigm/agents.yaml
+   */
+  private loadAgentsManifest(rootDir: string): AgentsManifest | null {
+    const agentsPath = path.join(rootDir, '.paradigm', 'agents.yaml');
+    if (!fs.existsSync(agentsPath)) {
+      return null;
+    }
+    try {
+      const content = fs.readFileSync(agentsPath, 'utf-8');
+      return yaml.load(content) as AgentsManifest;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Orchestration protocol rules - multi-agent workflow
+   */
+  private generateOrchestrationMdc(agentsManifest: AgentsManifest | null): string {
+    // Build agent list from manifest
+    const agentList = agentsManifest
+      ? Object.entries(agentsManifest.agents)
+          .map(([name, agent]) => {
+            const roleFirstLine = agent.role.split('\n')[0].trim();
+            const writes = agent.focus?.writes?.join(', ') || 'any';
+            return `- **${name}**: ${roleFirstLine} (writes: ${writes})`;
+          })
+          .join('\n')
+      : '(Run `paradigm team init` to configure agents)';
+
+    return frontmatter('Paradigm multi-agent orchestration protocol', {
+      alwaysApply: true,
+    }) +
+      `# Paradigm Orchestration Protocol
+
+## CRITICAL: When to Use Orchestration
+
+**ALWAYS call \`paradigm_orchestrate_inline\` FIRST when:**
+- Task affects 3+ files
+- Task involves security/auth AND implementation
+- Task mentions multiple features (@symbols)
+- Building a new feature end-to-end
+- User explicitly requests multi-agent workflow
+
+## Workflow
+
+1. **Plan first:** \`paradigm_orchestrate_inline({ task: "...", mode: "plan" })\`
+   - Review suggested agents and estimated tokens
+   - Check if parallel execution is possible
+
+2. **Execute:** \`paradigm_orchestrate_inline({ task: "...", mode: "execute" })\`
+   - Get full prompts for each agent stage
+   - Note which stages can run in parallel
+
+3. **Spawn subagents:** Use Task tool for each agent prompt
+   - Parallel stages: Launch multiple Task calls in one message
+   - Sequential stages: Wait for completion before next stage
+
+4. **Record history:** \`paradigm_history_record({ type: "implement", symbols: [...], description: "..." })\`
+
+## Available Agents
+
+${agentList}
+
+## Red Flags - STOP and Orchestrate
+
+If you find yourself:
+- Implementing 5+ files without planning → STOP, call orchestrate
+- Adding auth without security review → STOP, involve security agent
+- Writing code without specs → STOP, involve architect first
+- Making cross-cutting changes → STOP, plan the stages
+
+## DO NOT Skip Orchestration
+
+Complex tasks need specialist agents. One agent trying to do everything leads to:
+- Missed security gates
+- Inconsistent patterns
+- Poor test coverage
+- Context overflow
+
+## CLI Shortcut
+
+You can also suggest agents via CLI:
+\`\`\`bash
+paradigm team agents suggest "Add user authentication with JWT"
 \`\`\`
 `;
   }

@@ -261,8 +261,8 @@ function syncMultiFileAdapter(
     fs.mkdirSync(outputDir, { recursive: true });
   }
   
-  // Generate files
-  const generatedFiles = adapter.generateFiles!(files);
+  // Generate files (pass rootDir for adapters that need to load additional config)
+  const generatedFiles = adapter.generateFiles!(files, rootDir);
   
   // Write each file
   const writtenFiles: string[] = [];

@@ -291,7 +291,19 @@ export function getOrchestrationToolsList() {
   return [
     {
       name: 'paradigm_orchestrate_inline',
-      description: 'Plan a multi-agent task for inline execution. Returns an execution plan with stages and agent prompts. Use this to coordinate complex tasks across multiple agent roles (architect, builder, tester, etc.) within the same session.',
+      description: `IMPORTANT: For complex tasks (3+ files, security + implementation, multiple features), call this tool FIRST before implementing.
+
+Plans and coordinates multi-agent task execution within the same session.
+- mode: "plan" - See suggested agents, estimated tokens, and get orchestration plan
+- mode: "execute" - Get full prompts ready for Task tool
+
+After getting prompts, launch agents using the Task tool. Stages marked canRunParallel: true can be launched simultaneously in a single message.
+
+When to use this tool:
+- Task affects 3+ files
+- Task involves security/auth AND implementation
+- Task mentions multiple features (@symbols)
+- Building a new feature end-to-end`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -302,7 +314,7 @@ export function getOrchestrationToolsList() {
           mode: {
             type: 'string',
             enum: ['plan', 'execute'],
-            description: 'Mode: "plan" returns the execution plan, "execute" returns prompts ready for Task tool',
+            description: 'Mode: "plan" returns suggested agents and plan, "execute" returns prompts ready for Task tool',
           },
           agents: {
             type: 'array',
@@ -393,15 +405,20 @@ async function handleOrchestrateInline(
   const plan = planAgentSequence(task, manifest.agents, agentOverride);
 
   if (mode === 'plan') {
-    // Return just the plan
+    // Get agent suggestions based on triggers
+    const suggestedAgents = suggestAgentsForTask(task, manifest.agents);
+
+    // Return the plan with suggestions
     const text = JSON.stringify({
       task,
       mode: 'plan',
       plan,
+      suggestedAgents,
       instructions: [
-        'Review this plan before executing',
-        'Call again with mode="execute" to get agent prompts',
-        'Or use paradigm_agent_prompt for individual agents',
+        'Review suggested agents above based on task triggers',
+        'Call again with mode="execute" to get full prompts for Task tool',
+        'Stages marked canRunParallel: true can be launched simultaneously',
+        'After each agent completes, pass handoff context to the next stage',
       ],
     }, null, 2);
     trackToolCall(text.length, 'paradigm_orchestrate_inline');
@@ -822,6 +839,79 @@ function getSymbolType(symbol: string): string {
     '~': 'deprecated',
   };
   return types[prefix] || 'unknown';
+}
+
+// ============================================================================
+// Agent Suggestion
+// ============================================================================
+
+interface AgentSuggestion {
+  name: string;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low';
+  triggers_matched: string[];
+}
+
+/**
+ * Suggest agents for a task based on triggers in agents.yaml
+ */
+function suggestAgentsForTask(
+  task: string,
+  agents: Record<string, AgentDefinition>
+): AgentSuggestion[] {
+  const suggestions: AgentSuggestion[] = [];
+  const taskLower = task.toLowerCase();
+  const symbols = extractSymbols(task);
+
+  for (const [name, agent] of Object.entries(agents)) {
+    const matched: string[] = [];
+
+    for (const trigger of agent.triggers || []) {
+      if (trigger.type === 'keyword' && trigger.match) {
+        for (const keyword of trigger.match) {
+          if (taskLower.includes(keyword.toLowerCase())) {
+            matched.push(`keyword:${keyword}`);
+          }
+        }
+      }
+      if (trigger.type === 'symbol' && trigger.match) {
+        for (const pattern of trigger.match) {
+          const matchingSymbols = symbols.filter((s) => {
+            if (pattern.endsWith('*')) {
+              return s.startsWith(pattern.slice(0, -1));
+            }
+            return s === pattern;
+          });
+          for (const s of matchingSymbols) {
+            matched.push(`symbol:${s}`);
+          }
+        }
+      }
+    }
+
+    if (matched.length > 0) {
+      const keywordCount = matched.filter((m) => m.startsWith('keyword:')).length;
+      const symbolCount = matched.filter((m) => m.startsWith('symbol:')).length;
+      const hasMultipleTypes = keywordCount > 0 && symbolCount > 0;
+      const confidence: 'high' | 'medium' | 'low' =
+        matched.length >= 3 || hasMultipleTypes ? 'high' :
+        matched.length >= 2 ? 'medium' : 'low';
+
+      const roleFirstLine = agent.role.split('\n')[0].trim();
+      const roleSnippet = roleFirstLine.length > 50 ? roleFirstLine.slice(0, 47) + '...' : roleFirstLine;
+
+      suggestions.push({
+        name,
+        reason: roleSnippet,
+        confidence,
+        triggers_matched: matched,
+      });
+    }
+  }
+
+  // Sort by confidence score
+  const scoreMap = { high: 3, medium: 2, low: 1 };
+  return suggestions.sort((a, b) => scoreMap[b.confidence] - scoreMap[a.confidence]);
 }
 
 function loadAgentsManifest(rootDir: string): AgentManifest | null {

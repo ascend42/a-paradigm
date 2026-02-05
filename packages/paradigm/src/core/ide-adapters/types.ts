@@ -99,7 +99,7 @@ export interface IDEAdapter {
   generate(files: ParadigmFiles): string;
 
   /** Generate multiple files (multi-file adapters like Cursor modern format) */
-  generateFiles?(files: ParadigmFiles): GeneratedFile[];
+  generateFiles?(files: ParadigmFiles, rootDir?: string): GeneratedFile[];
 
   /** Generate MCP configuration for this IDE (optional) */
   generateMcpConfig?(): McpConfig;
