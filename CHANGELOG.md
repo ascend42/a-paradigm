@@ -5,6 +5,71 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-02-05
+
+### Added
+
+- **Task Type Classification** - Intelligent agent selection based on task analysis
+  - New `task-classifier.ts` detects: analysis, bugfix, feature, refactor, documentation
+  - Analysis tasks use Architect only (0.4x cost)
+  - Documentation tasks skip Builder/Tester (0.35x cost)
+  - Keywords-based classification: "should", "what", "how" → analysis
+  - Integrated into orchestrator for automatic agent right-sizing
+
+- **Security Escalation Triggers** - Auto-involve Security agent for sensitive operations
+  - Keywords: auth, permission, admin, delete, purge, password, credential, token
+  - Gate symbols (^) in task description trigger escalation
+  - Sensitive paths: `**/auth/**`, `**/middleware/**`, `**/security/**`
+  - Security agent promoted to `required: true` with `opus` model
+
+- **Cost Preview** - Estimated costs shown before agent spawn
+  - New `cost-estimator.ts` calculates per-agent token estimates
+  - Model pricing: opus ($15/$75), sonnet ($3/$15), haiku ($0.25/$1.25) per 1M tokens
+  - Comparison to "full team" baseline in plan mode
+  - `paradigm_orchestrate_inline` plan response includes `costPreview`
+
+- **Portal Compliance Check** - Validate gates are used in codebase
+  - New `paradigm portal check` command
+  - Finds: declared but unused gates, used but undeclared gates
+  - Language-agnostic grep-based detection
+  - Integrated into `paradigm doctor` health checks
+
+- **Auto-Ripple for Refactoring** - Automatic impact analysis
+  - Detects refactoring tasks: rename, refactor, migrate, restructure
+  - Runs `paradigm_ripple` before architect planning
+  - Includes ripple results in architect context
+  - Prevents breaking changes from missing dependencies
+
+- **Purpose Tracker** - Post-task .purpose file prompts
+  - Detects new directories without .purpose files
+  - Generates .purpose templates for new features
+  - Callback system for orchestrator integration
+
+- **Flow Validation** - Define and validate multi-step flows
+  - New `flow-schema.ts` with FlowStep, FlowDefinition types
+  - New `flow-validator.ts` for validation logic
+  - New MCP tool: `paradigm_flow_validate`
+  - Checks: gates exist in portal.yaml, steps are complete
+  - `.paradigm/flows.yaml` for flow definitions
+
+- **Flow-First Development Guidance** - IDE adapters updated
+  - Cursor: New `paradigm-flows.mdc` with flow-first protocol
+  - Claude: Flow validation section in CLAUDE.md
+  - Encourages defining flows before implementation
+
+- **TaskFlow Split Test Updates** - Enhanced case study document
+  - New pivots 6-9: Dangerous Operation, Documentation, Ripple, Flow-First
+  - 30-point scoring system: Peace of Mind, Cost Efficiency, Scale Readiness
+  - Paradigm-specific validation criteria per pivot
+
+### Changed
+
+- **Orchestrator** - Now uses task classification and security escalation
+- **MCP Tools** - `paradigm_orchestrate_inline` returns classification and cost preview in plan mode
+- **IDE Adapters** - Include flow-first development guidance
+
+---
+
 ## [1.7.0] - 2026-02-05
 
 ### Added

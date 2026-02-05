@@ -165,6 +165,57 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
 3. Update all references to note deprecation
 ```
 
+### Adding a Multi-Step Flow (Flow-First Development)
+
+For features that involve multiple steps, gates, and signals, **define the flow first**:
+
+```
+1. Create/update .paradigm/flows.yaml:
+   ```yaml
+   version: "1.0"
+   flows:
+     $task-assignment:
+       name: Task Assignment Flow
+       description: Assign a task to a team member
+       trigger: "PUT /api/tasks/:id/assign"
+       steps:
+         - type: gate
+           symbol: ^authenticated
+           description: User must be logged in
+         - type: gate
+           symbol: ^project-member
+           description: User must be project member
+         - type: action
+           symbol: @assign-task
+           description: Update task assignee
+         - type: signal
+           symbol: "!task-assigned"
+           description: Notify assignee
+       successSignal: "!task-assigned"
+   ```
+
+2. Validate flow before implementing:
+   ```bash
+   paradigm flow validate $task-assignment
+   ```
+
+3. Implement each step:
+   - Gates → middleware/auth checks
+   - Actions → business logic
+   - Signals → events/notifications
+
+4. Validate flow after implementing:
+   ```bash
+   paradigm flow validate $task-assignment --check-implementation
+   ```
+```
+
+**Why Flow-First?**
+- Ensures all auth gates are defined in portal.yaml
+- Documents the expected sequence of operations
+- Makes testing easier (test each step)
+- Provides clear handoff points for multi-agent work
+
 ---
 
 ## AI Agent Checklist
