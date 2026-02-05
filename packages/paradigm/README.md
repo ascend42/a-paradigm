@@ -33,12 +33,15 @@ paradigm tutorial
 | Command | Description |
 |---------|-------------|
 | `paradigm init` | Initialize Paradigm in current project |
-| `paradigm visualize` | Open the Dreamscape infinite canvas |
-| `paradigm status` | Show project overview |
-| `paradigm tutorial` | Interactive learning experience |
+| `paradigm shift` | Full setup: init + team + scan + sync all IDEs |
 | `paradigm sync` | Regenerate IDE instruction files |
+| `paradigm status` | Show project overview |
 | `paradigm doctor` | Health check and diagnostics |
-| `paradigm cursorrules` | Generate .cursorrules file |
+| `paradigm team init` | Initialize multi-agent configuration |
+| `paradigm team agents suggest` | Suggest agents for a task |
+| `paradigm team orchestrate` | Run multi-agent orchestration |
+| `paradigm visualize` | Open the Dreamscape infinite canvas |
+| `paradigm tutorial` | Interactive learning experience |
 
 ### IDE Sync
 

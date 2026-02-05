@@ -99,9 +99,17 @@ paradigm sync --all
 **Output files:**
 | IDE | Output File |
 |-----|-------------|
-| Cursor | `.cursorrules` |
+| Cursor | `.cursor/rules/*.mdc` (modern multi-file format) |
 | GitHub Copilot | `.github/copilot-instructions.md` |
 | Windsurf | `.windsurfrules` |
+| Claude | `CLAUDE.md` |
+
+**Cursor orchestration rules:**
+
+When syncing to Cursor, Paradigm generates `paradigm-orchestration.mdc` which instructs AI agents to use multi-agent orchestration for complex tasks. This file:
+- Lists available agents from `agents.yaml`
+- Defines when to use `paradigm_orchestrate_inline`
+- Provides workflow guidance for spawning subagents
 
 ---
 
@@ -422,6 +430,45 @@ paradigm team models --json
 - **Claude Code**: Fixed models (opus, sonnet, haiku)
 - **API Keys**: Discovers models from configured providers (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
 - **Fallback**: Basic Claude models
+
+### paradigm team agents suggest
+
+Suggest which agents should handle a task based on triggers defined in `agents.yaml`.
+
+```bash
+# Analyze a task and get agent suggestions
+paradigm team agents suggest "Add user authentication with JWT"
+
+# Output as JSON
+paradigm team agents suggest "Build @checkout with Stripe integration" --json
+```
+
+**What it returns:**
+- Agent suggestions ranked by confidence (high/medium/low)
+- Matched triggers (keywords and symbols)
+- Suggested workflow order (architect → builder → tester, etc.)
+- MCP orchestration hint
+
+**Example output:**
+```
+Suggested agents for this task:
+
+  Task: "Add user authentication with JWT"
+
+  ★ security (high)
+    Matched keywords: auth, security. You audit for security issues...
+    Matched: keyword:auth, keyword:security
+
+  ◆ architect (medium)
+    Matched keywords: add. You design system architecture...
+    Matched: keyword:add
+
+  Suggested workflow:
+    architect → security → builder
+
+  Or use MCP orchestration:
+    paradigm_orchestrate_inline({ task: "Add user authentication...", mode: "plan" })
+```
 
 ### paradigm team status
 
