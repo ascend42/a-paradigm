@@ -1,7 +1,7 @@
 /**
  * Claude CLI Provider
  *
- * Spawns agents by invoking the `claude` CLI command.
+ * Spawns agents by invoking the `claude` CLI command with streaming output.
  * Works if claude CLI is installed, regardless of API key.
  *
  * This is a fallback when:
@@ -11,7 +11,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
 import {
   AgentProvider,
   AgentModel,
@@ -21,6 +22,33 @@ import {
   MODEL_PRICING,
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';
+
+// ============================================================================
+// Types for Claude CLI stream-json output
+// ============================================================================
+
+interface StreamMessage {
+  type: 'assistant' | 'user' | 'system' | 'result';
+  message?: {
+    content?: Array<{
+      type: 'text' | 'tool_use' | 'tool_result';
+      text?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    }>;
+  };
+  subtype?: string;
+  duration_ms?: number;
+  duration_api_ms?: number;
+  num_turns?: number;
+  result?: string;
+  session_id?: string;
+  total_cost_usd?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+}
 
 // ============================================================================
 // Claude CLI Provider
@@ -82,7 +110,7 @@ export class ClaudeCliProvider implements AgentProvider {
   }
 
   /**
-   * Spawn an agent by invoking claude CLI
+   * Spawn an agent by invoking claude CLI with streaming output
    */
   async *spawn(
     agent: AgentDefinition,
@@ -100,32 +128,18 @@ export class ClaudeCliProvider implements AgentProvider {
     // Build the prompt
     const prompt = this.buildPrompt(agent, options);
 
-    // Create a temporary file for the prompt (for complex prompts)
-    const promptFile = path.join(
-      options.workingDirectory || process.cwd(),
-      '.paradigm',
-      'tasks',
-      `prompt-${Date.now()}.md`
-    );
-
-    // Ensure directory exists
-    const promptDir = path.dirname(promptFile);
-    if (!fs.existsSync(promptDir)) {
-      fs.mkdirSync(promptDir, { recursive: true });
-    }
-
-    fs.writeFileSync(promptFile, prompt);
-
     yield {
       type: 'text',
-      content: `Starting ${agent.name} agent via CLI...\n`,
+      content: `Starting ${agent.name} agent via CLI (streaming)...\n`,
       timestamp: new Date().toISOString(),
     };
 
-    // Spawn claude CLI process
+    // Spawn claude CLI process with streaming JSON output
     const args = [
-      '--print',  // Print output instead of interactive
-      '-p', prompt.slice(0, 4000),  // Truncate for CLI arg limit
+      '--print',                          // Non-interactive mode
+      '--permission-mode', 'acceptEdits', // Auto-accept to avoid prompts
+      '--output-format', 'stream-json',   // Streaming JSON for real-time output
+      '--no-session-persistence',         // Don't persist session (faster startup)
     ];
 
     // Add model if specified
@@ -133,32 +147,198 @@ export class ClaudeCliProvider implements AgentProvider {
       args.push('--model', options.model);
     }
 
-    try {
-      const output = await this.runClaude(args, options.workingDirectory);
+    // Add working directory
+    if (options.workingDirectory) {
+      args.push('--add-dir', options.workingDirectory);
+    }
 
-      yield {
+    // Add the prompt last (after all flags)
+    args.push('-p', prompt.slice(0, 8000));  // Truncate for CLI arg limit
+
+    // Stream messages from the CLI
+    const messageEmitter = new EventEmitter();
+    let totalUsage: TokenUsage = { input: 0, output: 0, total: 0 };
+    let lastError: string | null = null;
+    let completed = false;
+
+    // Start the process
+    const proc = spawn(this.claudePath, args, {
+      cwd: options.workingDirectory || process.cwd(),
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    // Buffer for incomplete JSON lines
+    let buffer = '';
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      buffer += data.toString();
+
+      // Process complete lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';  // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        try {
+          const msg: StreamMessage = JSON.parse(line);
+          messageEmitter.emit('message', msg);
+        } catch {
+          // Non-JSON output, emit as text
+          messageEmitter.emit('text', line);
+        }
+      }
+    });
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      const text = data.toString();
+      // Claude CLI writes progress to stderr
+      if (!text.includes('Error')) {
+        messageEmitter.emit('progress', text);
+      } else {
+        lastError = text;
+      }
+    });
+
+    proc.on('close', (code) => {
+      completed = true;
+      messageEmitter.emit('done', code);
+    });
+
+    proc.on('error', (err) => {
+      lastError = err.message;
+      messageEmitter.emit('error', err);
+    });
+
+    // Set up timeout
+    const timeoutMs = options.timeout || 3 * 60 * 1000;  // 3 minutes default
+    const timeoutHandle = setTimeout(() => {
+      proc.kill();
+      lastError = `Claude CLI timed out after ${timeoutMs / 1000}s`;
+      messageEmitter.emit('timeout');
+    }, timeoutMs);
+
+    // Create async iterator for messages
+    const messageQueue: AgentMessage[] = [];
+    let resolveNext: ((value: AgentMessage | null) => void) | null = null;
+
+    const pushMessage = (msg: AgentMessage) => {
+      if (resolveNext) {
+        resolveNext(msg);
+        resolveNext = null;
+      } else {
+        messageQueue.push(msg);
+      }
+    };
+
+    // Handle stream messages
+    messageEmitter.on('message', (msg: StreamMessage) => {
+      if (msg.type === 'assistant' && msg.message?.content) {
+        for (const content of msg.message.content) {
+          if (content.type === 'text' && content.text) {
+            pushMessage({
+              type: 'text',
+              content: content.text,
+              timestamp: new Date().toISOString(),
+            });
+          } else if (content.type === 'tool_use' && content.name) {
+            pushMessage({
+              type: 'tool_use',
+              content: `Using tool: ${content.name}`,
+              toolName: content.name,
+              toolInput: content.input,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      } else if (msg.type === 'result') {
+        // Final result with usage stats
+        if (msg.usage) {
+          totalUsage = {
+            input: msg.usage.input_tokens || 0,
+            output: msg.usage.output_tokens || 0,
+            total: (msg.usage.input_tokens || 0) + (msg.usage.output_tokens || 0),
+          };
+        }
+      }
+    });
+
+    messageEmitter.on('text', (text: string) => {
+      pushMessage({
         type: 'text',
-        content: output,
+        content: text + '\n',
         timestamp: new Date().toISOString(),
-      };
+      });
+    });
 
-      yield {
+    messageEmitter.on('progress', (text: string) => {
+      // Show progress dots or spinner text
+      pushMessage({
+        type: 'text',
+        content: '.',
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    messageEmitter.on('done', () => {
+      clearTimeout(timeoutHandle);
+      pushMessage({
         type: 'done',
         content: 'Agent completed',
-        usage: this.estimateUsage(prompt, output),
+        usage: totalUsage,
         timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
+      });
+    });
+
+    messageEmitter.on('timeout', () => {
+      pushMessage({
+        type: 'error',
+        content: lastError || 'Timeout',
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    messageEmitter.on('error', (err: Error) => {
+      clearTimeout(timeoutHandle);
+      pushMessage({
+        type: 'error',
+        content: err.message,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // Yield messages as they arrive
+    while (!completed || messageQueue.length > 0) {
+      if (messageQueue.length > 0) {
+        const msg = messageQueue.shift()!;
+        yield msg;
+        if (msg.type === 'done' || msg.type === 'error') {
+          break;
+        }
+      } else {
+        // Wait for next message
+        const msg = await new Promise<AgentMessage | null>((resolve) => {
+          resolveNext = resolve;
+          // Safety timeout to prevent infinite wait
+          setTimeout(() => resolve(null), 100);
+        });
+        if (msg) {
+          yield msg;
+          if (msg.type === 'done' || msg.type === 'error') {
+            break;
+          }
+        }
+      }
+    }
+
+    // Handle any error
+    if (lastError && !completed) {
       yield {
         type: 'error',
-        content: error instanceof Error ? error.message : String(error),
+        content: lastError,
         timestamp: new Date().toISOString(),
       };
-    } finally {
-      // Clean up prompt file
-      if (fs.existsSync(promptFile)) {
-        fs.unlinkSync(promptFile);
-      }
     }
   }
 
@@ -180,7 +360,7 @@ export class ClaudeCliProvider implements AgentProvider {
 
     if (options.context.systemPrompt) {
       parts.push('## Context');
-      parts.push(options.context.systemPrompt.slice(0, 2000)); // Truncate for CLI
+      parts.push(options.context.systemPrompt.slice(0, 3000)); // Truncate for CLI
       parts.push('');
     }
 
@@ -197,58 +377,8 @@ export class ClaudeCliProvider implements AgentProvider {
     }
 
     parts.push('## Instructions');
-    parts.push('Complete the task above. Be concise and focused.');
+    parts.push('Complete the task above. Be concise and focused. Keep response under 500 words.');
 
     return parts.join('\n');
-  }
-
-  private runClaude(args: string[], cwd?: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const proc = spawn(this.claudePath!, args, {
-        cwd: cwd || process.cwd(),
-        env: { ...process.env },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      proc.stdout?.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      proc.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      proc.on('close', (code) => {
-        if (code === 0) {
-          resolve(stdout);
-        } else {
-          reject(new Error(stderr || `Claude CLI exited with code ${code}`));
-        }
-      });
-
-      proc.on('error', (err) => {
-        reject(err);
-      });
-
-      // Timeout after 5 minutes
-      setTimeout(() => {
-        proc.kill();
-        reject(new Error('Claude CLI timed out'));
-      }, 5 * 60 * 1000);
-    });
-  }
-
-  private estimateUsage(prompt: string, output: string): TokenUsage {
-    // Rough estimate: ~4 chars per token
-    const input = Math.ceil(prompt.length / 4);
-    const outputTokens = Math.ceil(output.length / 4);
-    return {
-      input,
-      output: outputTokens,
-      total: input + outputTokens,
-    };
   }
 }
