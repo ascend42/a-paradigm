@@ -9,6 +9,15 @@ project: "a-paradigm"
 # See specs/disciplines.md for symbol interpretations per discipline
 discipline: auto  # auto-detect from project structure
 
+# Agent Provider - which backend to use for multi-agent orchestration
+# Options: auto, claude, claude-code, claude-cli, manual
+# - auto: Auto-detect best available (default)
+# - claude: Anthropic API (requires ANTHROPIC_API_KEY)
+# - claude-code: Claude Code Task tool (works with Max subscription)
+# - claude-cli: Spawn claude CLI processes (works with Max subscription)
+# - manual: File-based handoffs (always works, requires manual execution)
+agent-provider: auto
+
 # Guidelines for AI agents working in this codebase
 agent-guidelines:
   overview: |

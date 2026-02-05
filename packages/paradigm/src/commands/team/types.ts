@@ -20,6 +20,39 @@ export interface AgentDefinition {
   focus: AgentFocus;
   triggers: AgentTrigger[];
   handoff_to: string[];  // Agents this one can hand off to
+  /** Default model for this agent (facet) */
+  defaultModel?: 'opus' | 'sonnet' | 'haiku';
+  /** Provider override (optional) */
+  provider?: string;
+  /** Facet-specific limits */
+  limits?: FacetLimits;
+  /** Failure protocol */
+  protocol?: FacetProtocol;
+  /** Context patterns */
+  context?: {
+    include?: string[];
+    exclude?: string[];
+  };
+}
+
+export interface FacetLimits {
+  /** Maximum tokens this facet can use */
+  maxTokens?: number;
+  /** Maximum time in milliseconds */
+  maxTimeMs?: number;
+  /** Maximum retries on failure */
+  maxRetries?: number;
+}
+
+export interface FacetProtocol {
+  /** What to do on failure */
+  onFailure: 'retry' | 'fallback' | 'pause' | 'escalate' | 'abort';
+  /** Fallback facet if this one fails */
+  fallbackTo?: string;
+  /** Number of retries before escalating */
+  retriesBeforeEscalate?: number;
+  /** Human approval required for these actions */
+  requireApproval?: string[];
 }
 
 export interface TeamConfig {
@@ -97,7 +130,7 @@ export interface Handoff {
   acceptance_note?: string;
 }
 
-// Default agent definitions
+// Default agent definitions with facet configuration
 export const DEFAULT_AGENTS: Record<string, Omit<AgentDefinition, 'name'>> = {
   architect: {
     role: `You design system architecture, write specifications, and plan features.
@@ -112,6 +145,11 @@ When your spec is ready, hand off to Builder with 'paradigm team handoff --to bu
       { type: 'symbol', match: ['@*', '$*'] },
     ],
     handoff_to: ['builder', 'reviewer'],
+    defaultModel: 'opus',
+    context: {
+      include: ['specs/*.md', '.purpose', '**/.purpose', 'portal.yaml'],
+      exclude: ['src/**', 'tests/**', 'node_modules/**'],
+    },
   },
   builder: {
     role: `You implement code based on specifications from the Architect.
@@ -126,6 +164,11 @@ When implementation is ready, hand off to Reviewer with 'paradigm team handoff -
       { type: 'handoff', from: 'architect' },
     ],
     handoff_to: ['reviewer', 'architect'],
+    defaultModel: 'haiku',
+    context: {
+      include: ['src/**', 'tests/**', '{feature}.purpose'],
+      exclude: ['specs/*.md', 'node_modules/**'],
+    },
   },
   reviewer: {
     role: `You review code for correctness, security, and adherence to specs.
@@ -141,6 +184,11 @@ Hand back to Builder for fixes, or to Tester when approved.`,
       { type: 'handoff', from: 'builder' },
     ],
     handoff_to: ['builder', 'tester'],
+    defaultModel: 'sonnet',
+    context: {
+      include: ['src/**', 'specs/*.md', 'portal.yaml', '.purpose'],
+      exclude: ['tests/**', 'node_modules/**'],
+    },
   },
   tester: {
     role: `You verify implementations work correctly.
@@ -155,6 +203,11 @@ Report issues back to Builder. Update health.yaml when verified.`,
       { type: 'handoff', from: 'reviewer' },
     ],
     handoff_to: ['builder', 'architect'],
+    defaultModel: 'haiku',
+    context: {
+      include: ['tests/**', 'health.yaml', '{feature}.purpose'],
+      exclude: ['src/**', 'specs/**', 'node_modules/**'],
+    },
   },
   security: {
     role: `You audit for security issues, especially around ^gates.
@@ -168,5 +221,10 @@ Flag issues but do NOT implement fixes - hand to Builder for that.`,
       { type: 'keyword', match: ['security', 'audit', 'vulnerability', 'auth'] },
     ],
     handoff_to: ['builder', 'architect'],
+    defaultModel: 'opus',
+    context: {
+      include: ['portal.yaml', 'src/middleware/**', 'src/auth/**'],
+      exclude: ['src/routes/**', 'tests/**', 'node_modules/**'],
+    },
   },
 };

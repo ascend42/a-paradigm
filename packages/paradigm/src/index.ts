@@ -351,6 +351,80 @@ teamCmd
     await teamResetCommand(path, options);
   });
 
+// paradigm team spawn <agent>
+teamCmd
+  .command('spawn <agent> [path]')
+  .description('Spawn an AI agent to work on a task')
+  .requiredOption('-t, --task <task>', 'Task for the agent to perform')
+  .option('-m, --model <model>', 'Model to use: opus, sonnet, haiku')
+  .option('-p, --provider <provider>', 'Provider: auto, claude, claude-code, claude-cli, manual')
+  .option('--budget <budget>', 'Budget limits (e.g., "tokens=100000,cost=2")')
+  .option('--timeout <ms>', 'Timeout in milliseconds')
+  .option('--checkpoint', 'Pause for approval before writes/deletes')
+  .option('-q, --quiet', 'Suppress output')
+  .option('--json', 'Output as JSON')
+  .action(async (agent, path, options) => {
+    const { teamSpawnCommand } = await import('./commands/team/spawn.js');
+    await teamSpawnCommand(agent, path, options);
+  });
+
+// paradigm team orchestrate <task>
+teamCmd
+  .command('orchestrate <task> [path]')
+  .description('Orchestrate a multi-agent task')
+  .option('--solo', 'Run in solo mode (single Claude)')
+  .option('--faceted', 'Run in faceted mode (multi-agent, default)')
+  .option('--compare', 'Run both modes and compare results')
+  .option('-m, --model <model>', 'Orchestrator model: opus, sonnet, haiku')
+  .option('-p, --provider <provider>', 'Provider: auto, claude, claude-code, claude-cli, manual')
+  .option('--budget <budget>', 'Budget limits (e.g., "tokens=500000,cost=5")')
+  .option('--checkpoint', 'Pause for approval between agents')
+  .option('--live', 'Stream agent output live')
+  .option('-q, --quiet', 'Suppress output')
+  .option('--json', 'Output as JSON')
+  .action(async (task, path, options) => {
+    const { teamOrchestrateCommand } = await import('./commands/team/orchestrate.js');
+    await teamOrchestrateCommand(task, path, options);
+  });
+
+// paradigm team cost
+teamCmd
+  .command('cost [path]')
+  .description('Show cost summary for orchestrations')
+  .option('--from <date>', 'From date (ISO format)')
+  .option('--to <date>', 'To date (ISO format)')
+  .option('--days <n>', 'Last N days')
+  .option('-d, --detailed', 'Show detailed breakdown')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamCostCommand } = await import('./commands/team/cost.js');
+    await teamCostCommand(path, options);
+  });
+
+// paradigm team export
+teamCmd
+  .command('export [path]')
+  .description('Export orchestration data')
+  .option('-f, --format <format>', 'Output format: json, csv', 'json')
+  .option('--from <date>', 'From date (ISO format)')
+  .option('--to <date>', 'To date (ISO format)')
+  .option('-o, --output <file>', 'Output file path')
+  .action(async (path, options) => {
+    const { teamExportCommand } = await import('./commands/team/export.js');
+    await teamExportCommand(path, options);
+  });
+
+// paradigm team providers
+teamCmd
+  .command('providers [path]')
+  .description('Show available agent providers and their status')
+  .option('--set <provider>', 'Set preferred provider: auto, claude, claude-code, claude-cli, manual')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamProvidersCommand } = await import('./commands/team/providers.js');
+    await teamProvidersCommand(path, options);
+  });
+
 // Default team action (show status)
 teamCmd
   .action(async () => {
