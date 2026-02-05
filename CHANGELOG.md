@@ -5,6 +5,57 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-02-05
+
+### Added
+
+- **Parallel Builders** - Architect outputs file plans for parallel execution
+  - Architect agent now produces structured `filePlan` with sub-phases
+  - Files in the same sub-phase execute in parallel via multiple Task tool calls
+  - Sub-phases execute sequentially (respects dependencies)
+  - Each builder gets narrowed context: only assigned files + available files from earlier phases
+  - ~80% token savings per builder through context narrowing
+  - New types: `FilePlanGroup`, `BuilderStage`, `ParallelBuilderPlan`
+
+- **Background Orchestration** - Run orchestrations asynchronously
+  - `paradigm team orchestrate "task" --background` starts in background
+  - Notifications when complete: `--notify bell,desktop,file`
+  - New `BackgroundOrchestrator` class manages async orchestrations
+  - Status tracking: pending → running → completed/failed → accepted/rejected
+
+- **Orchestration Review Commands** - Review and accept/reject completed work
+  - `paradigm team diff <id>` - Show file changes from orchestration
+  - `paradigm team accept <id>` - Accept and merge changes
+  - `paradigm team reject <id>` - Reject and optionally cleanup created files
+  - `paradigm team status --running` - Show active background orchestrations
+  - `paradigm team status --id <id>` - Show specific orchestration status
+
+- **File Plan Protocol** - Structured architect output for builders
+  ```yaml
+  filePlan:
+    - group: types
+      subPhase: 0
+      files:
+        - path: src/types/index.ts
+          description: "Core interfaces"
+    - group: routes
+      subPhase: 2
+      files:
+        - path: src/routes/api.ts
+          description: "API endpoints"
+  ```
+
+### Changed
+
+- **Orchestrator** - Now detects file plans and spawns parallel builders
+  - `runParallelBuilders()` executes builders per sub-phase
+  - `parallelBuilderStats` added to `OrchestrationResult`
+  - Tracks: usedFilePlan, totalSubPhases, totalParallelBuilders, filesCreated
+
+- **Agent Prompts** - Architect prompt updated with file plan instructions
+  - Includes sub-phase ordering guidance (types → models → routes → app)
+  - File plan parsing functions: `parseFilePlan()`, `parseRelayWithFilePlan()`
+
 ## [1.5.0] - 2026-02-04
 
 ### Validated

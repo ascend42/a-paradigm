@@ -71,6 +71,36 @@ interface ExecutionStage {
   canRunParallel: boolean;
 }
 
+// File plan types for parallel builder execution
+interface FileAssignment {
+  path: string;
+  description: string;
+}
+
+interface FilePlanGroup {
+  group: string;
+  subPhase: number;
+  files: FileAssignment[];
+}
+
+interface BuilderStage {
+  subPhase: number;
+  builders: Array<{
+    agent: string;
+    group: string;
+    files: FileAssignment[];
+    /** Files from earlier sub-phases that are now available */
+    availableFiles: string[];
+  }>;
+}
+
+interface ParallelBuilderPlan {
+  hasFilePlan: boolean;
+  stages: BuilderStage[];
+  totalFiles: number;
+  totalBuilders: number;
+}
+
 interface OrchestrationPlan {
   task: string;
   mode: 'faceted' | 'solo';
@@ -134,17 +164,28 @@ You do NOT write implementation code - that's the Builder's job.
 3. Define data models, API contracts, and component interfaces
 4. Consider scalability, maintainability, and security
 5. Document flows that span multiple components
+6. **Create a file plan with dependency ordering for parallel builder execution**
 
 ## What You Produce
 - Specification documents (in specs/*.md or inline)
 - API contracts and data models
 - Architecture diagrams (as text descriptions)
 - Flow definitions using Paradigm $flow syntax
+- **Structured file plan for builders** (see File Plan Protocol)
 
 ## What You DON'T Do
 - Write implementation code
 - Create test files
-- Make changes to src/** files`,
+- Make changes to src/** files
+
+## File Plan Protocol
+When designing features, create a file plan that groups files by sub-phase:
+- **Sub-phase 0**: Types, interfaces, and constants (no dependencies)
+- **Sub-phase 1**: Core logic, models, utilities (depends on types)
+- **Sub-phase 2**: Routes, handlers, integration (depends on models)
+- **Sub-phase 3**: Tests (depends on implementation)
+
+Files in the same sub-phase can be built in parallel. Sub-phases execute sequentially.`,
 
   builder: `You are the BUILDER agent.
 
@@ -829,4 +870,255 @@ function logOrchestration(
   } catch {
     // Silently fail if we can't write the log
   }
+}
+
+// ============================================================================
+// File Plan Parsing & Builder Stage Planning
+// ============================================================================
+
+/**
+ * Parse file plan from architect's relay output (YAML content)
+ */
+function parseFilePlan(yamlContent: string): FilePlanGroup[] | undefined {
+  const filePlan: FilePlanGroup[] = [];
+
+  // Look for filePlan section
+  const filePlanMatch = yamlContent.match(/filePlan:\s*\n([\s\S]*?)(?=\n[a-z_]+:|$)/);
+  if (!filePlanMatch) {
+    return undefined;
+  }
+
+  const filePlanContent = filePlanMatch[1];
+  const lines = filePlanContent.split('\n');
+
+  let currentGroup: FilePlanGroup | null = null;
+  let inFiles = false;
+  let currentFile: Partial<FileAssignment> = {};
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // New group starts with "- group:"
+    if (trimmed.startsWith('- group:')) {
+      if (currentGroup) {
+        // Save last file from previous group
+        if (currentFile.path) {
+          currentGroup.files.push({
+            path: currentFile.path,
+            description: currentFile.description || '',
+          });
+          currentFile = {};
+        }
+        filePlan.push(currentGroup);
+      }
+      currentGroup = {
+        group: trimmed.split(':')[1].trim(),
+        subPhase: 0,
+        files: [],
+      };
+      inFiles = false;
+      continue;
+    }
+
+    if (!currentGroup) continue;
+
+    // Parse subPhase
+    if (trimmed.startsWith('subPhase:')) {
+      currentGroup.subPhase = parseInt(trimmed.split(':')[1].trim(), 10) || 0;
+      continue;
+    }
+
+    // Start of files array
+    if (trimmed === 'files:') {
+      inFiles = true;
+      continue;
+    }
+
+    if (inFiles) {
+      // New file entry starts with "- path:"
+      if (trimmed.startsWith('- path:')) {
+        // Save previous file if exists
+        if (currentFile.path) {
+          currentGroup.files.push({
+            path: currentFile.path,
+            description: currentFile.description || '',
+          });
+        }
+        currentFile = {
+          path: trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, ''),
+        };
+        continue;
+      }
+
+      // Description for current file
+      if (trimmed.startsWith('description:')) {
+        currentFile.description = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, '');
+        continue;
+      }
+    }
+  }
+
+  // Don't forget the last file and group
+  if (currentFile.path && currentGroup) {
+    currentGroup.files.push({
+      path: currentFile.path,
+      description: currentFile.description || '',
+    });
+  }
+  if (currentGroup) {
+    filePlan.push(currentGroup);
+  }
+
+  return filePlan.length > 0 ? filePlan : undefined;
+}
+
+/**
+ * Parse file plan from full response text (looks for yaml block)
+ */
+function parseFilePlanFromResponse(response: string): FilePlanGroup[] | undefined {
+  const yamlMatch = response.match(/```yaml\s*\n# Agent Relay\n([\s\S]*?)```/);
+  if (!yamlMatch) {
+    return undefined;
+  }
+  return parseFilePlan(yamlMatch[1]);
+}
+
+/**
+ * Plan builder stages from architect's file plan
+ *
+ * Takes the file plan and creates BuilderStage[] where:
+ * - Sub-phases execute sequentially
+ * - Builders within a sub-phase execute in parallel
+ * - Each builder gets narrowed context (only assigned files + available files)
+ */
+function planBuilderStages(filePlan: FilePlanGroup[] | undefined): ParallelBuilderPlan {
+  // Fallback: single builder (current behavior)
+  if (!filePlan || filePlan.length === 0) {
+    return {
+      hasFilePlan: false,
+      stages: [{
+        subPhase: 0,
+        builders: [{
+          agent: 'builder',
+          group: 'all',
+          files: [],
+          availableFiles: [],
+        }],
+      }],
+      totalFiles: 0,
+      totalBuilders: 1,
+    };
+  }
+
+  // Group by subPhase
+  const subPhases = new Map<number, FilePlanGroup[]>();
+  for (const group of filePlan) {
+    const existing = subPhases.get(group.subPhase) || [];
+    existing.push(group);
+    subPhases.set(group.subPhase, existing);
+  }
+
+  // Create stages in order
+  const stages: BuilderStage[] = [];
+  const sortedPhases = [...subPhases.keys()].sort((a, b) => a - b);
+  let availableFiles: string[] = [];
+  let totalBuilders = 0;
+  let totalFiles = 0;
+
+  for (const phase of sortedPhases) {
+    const groups = subPhases.get(phase)!;
+    const builders: BuilderStage['builders'] = [];
+
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      totalFiles += group.files.length;
+      totalBuilders++;
+
+      builders.push({
+        agent: `builder-${phase}-${i}`,
+        group: group.group,
+        files: group.files,
+        availableFiles: [...availableFiles],
+      });
+    }
+
+    stages.push({
+      subPhase: phase,
+      builders,
+    });
+
+    // After this phase completes, its files become available to next phases
+    for (const group of groups) {
+      for (const file of group.files) {
+        availableFiles.push(file.path);
+      }
+    }
+  }
+
+  return {
+    hasFilePlan: true,
+    stages,
+    totalFiles,
+    totalBuilders,
+  };
+}
+
+/**
+ * Build narrowed prompt for a parallel builder
+ * Each builder gets only the context it needs for its assigned files
+ */
+function buildParallelBuilderPrompt(
+  baseBuilderPrompt: string,
+  assignedFiles: FileAssignment[],
+  availableFiles: string[],
+  architectSpec: string,
+  groupName: string
+): string {
+  const parts: string[] = [];
+
+  // Start with base builder prompt
+  parts.push(baseBuilderPrompt);
+  parts.push('');
+  parts.push('---');
+  parts.push('');
+
+  // Specific assignment
+  parts.push('## Your Assignment');
+  parts.push('');
+  parts.push(`You are responsible for implementing the **${groupName}** group.`);
+  parts.push('');
+  parts.push('### Files to Create:');
+  for (const file of assignedFiles) {
+    parts.push(`- \`${file.path}\`: ${file.description}`);
+  }
+  parts.push('');
+
+  // Available files (from earlier sub-phases)
+  if (availableFiles.length > 0) {
+    parts.push('### Available Files (already created):');
+    parts.push('These files exist and you can import from them:');
+    for (const file of availableFiles) {
+      parts.push(`- \`${file}\``);
+    }
+    parts.push('');
+  }
+
+  // Architect spec
+  if (architectSpec) {
+    parts.push('### Architect Specification:');
+    parts.push(architectSpec);
+    parts.push('');
+  }
+
+  // Instructions
+  parts.push('### Instructions:');
+  parts.push('1. Create ONLY the files assigned to you');
+  parts.push('2. You can import from available files (already created)');
+  parts.push('3. Follow the architect\'s specification exactly');
+  parts.push('4. End with the standard Agent Relay block');
+
+  return parts.join('\n');
 }

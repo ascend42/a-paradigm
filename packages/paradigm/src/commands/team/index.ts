@@ -31,6 +31,7 @@ import {
   getAgent,
   getParadigmDir,
 } from './loader.js';
+import { BackgroundOrchestrator } from '../../core/background-orchestrator.js';
 
 interface InitOptions {
   force?: boolean;
@@ -39,6 +40,10 @@ interface InitOptions {
 
 interface StatusOptions {
   json?: boolean;
+  /** Show only running orchestrations */
+  running?: boolean;
+  /** Show specific orchestration ID */
+  id?: string;
 }
 
 interface HandoffOptions {
@@ -123,7 +128,17 @@ export async function teamInitCommand(targetPath: string | undefined, options: I
  */
 export async function teamStatusCommand(targetPath: string | undefined, options: StatusOptions) {
   const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
-  
+
+  // Check for specific orchestration ID
+  if (options.id) {
+    return showOrchestrationStatus(rootDir, options.id, options);
+  }
+
+  // Check for --running flag (show active orchestrations)
+  if (options.running) {
+    return showRunningOrchestrations(rootDir, options);
+  }
+
   const manifest = loadAgentsManifest(rootDir);
   if (!manifest) {
     if (options.json) {
@@ -133,10 +148,14 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
     }
     return;
   }
-  
+
   const state = loadTeamState(rootDir);
   const pending = getPendingHandoffs(rootDir);
-  
+
+  // Also check for running orchestrations
+  const bgOrchestrator = new BackgroundOrchestrator(rootDir);
+  const running = bgOrchestrator.getRunning();
+
   if (options.json) {
     console.log(JSON.stringify({
       team: manifest.team,
@@ -144,19 +163,35 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
       current: state.current,
       queue: state.queue,
       pending_handoffs: pending.length,
+      running_orchestrations: running.length,
       recent: state.recent.slice(0, 5),
     }, null, 2));
     return;
   }
-  
+
   console.log(chalk.blue('\n👥 Paradigm Team Status\n'));
   console.log(chalk.gray('─'.repeat(50)));
-  
+
   // Team info
   console.log(chalk.white(`Team: ${manifest.team.name}`));
   console.log(chalk.gray(`Agents: ${Object.keys(manifest.agents).join(', ')}`));
   console.log();
-  
+
+  // Running orchestrations
+  if (running.length > 0) {
+    console.log(chalk.cyan('Running Orchestrations:'));
+    for (const orch of running) {
+      const elapsed = orch.started
+        ? Math.floor((Date.now() - new Date(orch.started).getTime()) / 60000)
+        : 0;
+      console.log(`  ${chalk.yellow('▶')} ${orch.id}`);
+      console.log(chalk.gray(`    ${orch.task.slice(0, 40)}${orch.task.length > 40 ? '...' : ''}`));
+      console.log(chalk.gray(`    Running for ${elapsed}m | Mode: ${orch.mode}`));
+    }
+    console.log(chalk.gray(`\n  Use --running to see details, or \`tail -f <output_file>\` for logs`));
+    console.log();
+  }
+
   // Current agent
   if (state.current) {
     const elapsed = Date.now() - new Date(state.current.started).getTime();
@@ -173,7 +208,7 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
     console.log(chalk.gray('  No active agent'));
     console.log();
   }
-  
+
   // Pending handoffs
   if (pending.length > 0) {
     console.log(chalk.cyan('Pending Handoffs:'));
@@ -183,7 +218,7 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
     console.log(chalk.gray(`\n  Run \`paradigm team accept\` to accept a handoff`));
     console.log();
   }
-  
+
   // Queue
   if (state.queue.length > 0) {
     console.log(chalk.cyan('Queue:'));
@@ -192,7 +227,7 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
     }
     console.log();
   }
-  
+
   // Blocked
   if (state.blocked.length > 0) {
     console.log(chalk.red('Blocked:'));
@@ -201,24 +236,169 @@ export async function teamStatusCommand(targetPath: string | undefined, options:
     }
     console.log();
   }
-  
+
   // Recent activity
   if (state.recent.length > 0) {
     console.log(chalk.cyan('Recent Activity:'));
     for (const a of state.recent.slice(0, 5)) {
       const time = new Date(a.timestamp).toLocaleTimeString();
-      const status = a.result === 'success' ? chalk.green('✓') : 
-                     a.result === 'failed' ? chalk.red('✗') : 
+      const status = a.result === 'success' ? chalk.green('✓') :
+                     a.result === 'failed' ? chalk.red('✗') :
                      a.result === 'blocked' ? chalk.yellow('⊘') : chalk.gray('○');
       const handoff = a.handed_to ? ` → ${a.handed_to}` : '';
       console.log(`  ${status} ${time} ${chalk.gray(a.agent)}: ${a.task}${handoff}`);
     }
     console.log();
   }
-  
+
   console.log(chalk.gray('─'.repeat(50)));
-  console.log(chalk.gray('Commands: team status | team handoff --to <agent> | team accept | team check'));
+  console.log(chalk.gray('Commands: team status | team status --running | team diff <id> | team accept <id>'));
   console.log();
+}
+
+/**
+ * Show running orchestrations in detail
+ */
+async function showRunningOrchestrations(rootDir: string, options: StatusOptions): Promise<void> {
+  const bgOrchestrator = new BackgroundOrchestrator(rootDir);
+  const running = bgOrchestrator.listOrchestrations({ status: ['running', 'pending'] });
+  const completed = bgOrchestrator.listOrchestrations({ status: 'completed', limit: 5 });
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      running,
+      recently_completed: completed,
+    }, null, 2));
+    return;
+  }
+
+  console.log(chalk.blue('\n🔄 Running Orchestrations\n'));
+  console.log(chalk.gray('─'.repeat(60)));
+
+  if (running.length === 0) {
+    console.log(chalk.gray('  No orchestrations currently running.'));
+    console.log();
+  } else {
+    for (const orch of running) {
+      const elapsed = orch.started
+        ? Math.floor((Date.now() - new Date(orch.started).getTime()) / 60000)
+        : 0;
+      const statusIcon = orch.status === 'running' ? chalk.yellow('▶') : chalk.gray('○');
+
+      console.log(`  ${statusIcon} ${chalk.cyan(orch.id)}`);
+      console.log(chalk.white(`    Task: ${orch.task.slice(0, 50)}${orch.task.length > 50 ? '...' : ''}`));
+      console.log(chalk.gray(`    Status: ${orch.status} | Mode: ${orch.mode} | Duration: ${elapsed}m`));
+      console.log(chalk.gray(`    Output: ${orch.outputFile}`));
+      console.log();
+    }
+  }
+
+  if (completed.length > 0) {
+    console.log(chalk.cyan('Recently Completed:'));
+    for (const orch of completed) {
+      const statusIcon = orch.status === 'completed' ? chalk.green('✓') :
+                         orch.status === 'failed' ? chalk.red('✗') :
+                         orch.status === 'accepted' ? chalk.green('✓✓') :
+                         chalk.gray('○');
+      console.log(`  ${statusIcon} ${orch.id} - ${orch.task.slice(0, 40)}${orch.task.length > 40 ? '...' : ''}`);
+    }
+    console.log();
+  }
+
+  console.log(chalk.gray('─'.repeat(60)));
+  console.log(chalk.gray('Commands: team status <id> | team diff <id> | team accept <id>'));
+  console.log();
+}
+
+/**
+ * Show specific orchestration status
+ */
+async function showOrchestrationStatus(rootDir: string, id: string, options: StatusOptions): Promise<void> {
+  const bgOrchestrator = new BackgroundOrchestrator(rootDir);
+  const orch = bgOrchestrator.getOrchestration(id);
+
+  if (!orch) {
+    if (options.json) {
+      console.log(JSON.stringify({ error: 'Orchestration not found', id }));
+    } else {
+      console.log(chalk.red(`\nOrchestration not found: ${id}\n`));
+    }
+    return;
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify(orch, null, 2));
+    return;
+  }
+
+  const statusIcon = orch.status === 'running' ? chalk.yellow('▶') :
+                     orch.status === 'completed' ? chalk.green('✓') :
+                     orch.status === 'failed' ? chalk.red('✗') :
+                     orch.status === 'accepted' ? chalk.green('✓✓') :
+                     orch.status === 'rejected' ? chalk.red('✗✗') :
+                     chalk.gray('○');
+
+  console.log();
+  console.log(chalk.blue('━'.repeat(60)));
+  console.log(chalk.blue(`  Orchestration: ${orch.id}`));
+  console.log(chalk.blue('━'.repeat(60)));
+  console.log();
+  console.log(`  Status: ${statusIcon} ${orch.status}`);
+  console.log(chalk.gray(`  Task: ${orch.task}`));
+  console.log(chalk.gray(`  Mode: ${orch.mode}`));
+  console.log(chalk.gray(`  Created: ${orch.created}`));
+  if (orch.started) {
+    console.log(chalk.gray(`  Started: ${orch.started}`));
+  }
+  if (orch.completed) {
+    console.log(chalk.gray(`  Completed: ${orch.completed}`));
+  }
+  console.log();
+
+  if (orch.parallelBuilderStats) {
+    console.log(chalk.cyan('  Parallel Builders:'));
+    console.log(chalk.gray(`    Used file plan: ${orch.parallelBuilderStats.usedFilePlan ? 'Yes' : 'No'}`));
+    console.log(chalk.gray(`    Sub-phases: ${orch.parallelBuilderStats.totalSubPhases}`));
+    console.log(chalk.gray(`    Parallel builders: ${orch.parallelBuilderStats.totalParallelBuilders}`));
+    console.log(chalk.gray(`    Files created: ${orch.parallelBuilderStats.filesCreated}`));
+    console.log();
+  }
+
+  if (orch.artifacts.length > 0) {
+    console.log(chalk.cyan('  Artifacts:'));
+    for (const artifact of orch.artifacts) {
+      const icon = artifact.action === 'created' ? chalk.green('+') :
+                   artifact.action === 'modified' ? chalk.yellow('~') :
+                   chalk.red('-');
+      console.log(`    ${icon} ${artifact.path}`);
+    }
+    console.log();
+  }
+
+  if (orch.result) {
+    console.log(chalk.cyan('  Result:'));
+    console.log(chalk.gray(`    Agents spawned: ${orch.result.agentsSpawned}`));
+    console.log(chalk.gray(`    Total tokens: ${orch.result.totalTokens.total}`));
+    console.log(chalk.gray(`    Total cost: $${orch.result.totalCost.toFixed(4)}`));
+    console.log(chalk.gray(`    Duration: ${(orch.result.duration_ms / 1000).toFixed(1)}s`));
+    console.log();
+  }
+
+  if (orch.error) {
+    console.log(chalk.red(`  Error: ${orch.error}`));
+    console.log();
+  }
+
+  console.log(chalk.gray(`  Output file: ${orch.outputFile}`));
+  console.log();
+
+  if (orch.status === 'completed') {
+    console.log(chalk.cyan('  Actions:'));
+    console.log(chalk.gray(`    paradigm team diff ${orch.id}    # View changes`));
+    console.log(chalk.gray(`    paradigm team accept ${orch.id}  # Accept changes`));
+    console.log(chalk.gray(`    paradigm team reject ${orch.id}  # Reject changes`));
+    console.log();
+  }
 }
 
 /**
