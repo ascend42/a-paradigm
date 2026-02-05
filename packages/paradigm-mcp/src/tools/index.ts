@@ -25,6 +25,7 @@ import { getContextToolsList, handleContextTool, trackToolCall } from './context
 import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
+import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestration.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -194,6 +195,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getFlowsToolsList(),
           // Fixtures tools
           ...getFixturesToolsList(),
+          // Orchestration tools
+          ...getOrchestrationToolsList(),
         ],
       };
     }
@@ -818,6 +821,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
             const result = await handleFixturesTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try orchestration tools
+          if (name.startsWith('paradigm_orchestrate') || name === 'paradigm_agent_prompt') {
+            const result = await handleOrchestrationTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              // trackToolCall is handled inside the orchestration tool handlers
               return {
                 content: [{ type: 'text', text: result.text }],
               };
