@@ -77,13 +77,27 @@ export class ModelDiscovery {
    * Detect the current environment
    */
   detectEnvironment(): EnvironmentType {
-    // IDE detection (highest priority)
-    if (process.env.TERM_PROGRAM === 'cursor' || process.env.CURSOR_SESSION) {
-      return 'cursor';
-    }
+    // Claude Code detection (highest priority)
     if (process.env.CLAUDE_CODE === '1' || process.env.TERM_PROGRAM === 'claude') {
       return 'claude-code';
     }
+
+    // Cursor detection - Cursor is VSCode-based but has specific indicators
+    // Check for Cursor-specific env vars or paths
+    if (
+      process.env.TERM_PROGRAM === 'cursor' ||
+      process.env.CURSOR_SESSION ||
+      process.env.CURSOR_TRACE_ID ||
+      // Cursor sets VSCODE_* vars but with cursor in the path
+      (process.env.VSCODE_CWD && process.env.VSCODE_CWD.toLowerCase().includes('cursor')) ||
+      (process.env.VSCODE_NLS_CONFIG && process.env.VSCODE_NLS_CONFIG.toLowerCase().includes('cursor')) ||
+      // Check if running in Cursor's integrated terminal
+      (process.env.TERM_PROGRAM === 'vscode' && process.env.VSCODE_GIT_ASKPASS_NODE?.toLowerCase().includes('cursor'))
+    ) {
+      return 'cursor';
+    }
+
+    // VSCode detection (after Cursor check)
     if (process.env.TERM_PROGRAM === 'vscode' || process.env.VSCODE_PID) {
       return 'vscode';
     }

@@ -5,68 +5,16 @@
  * Supports model discovery from different environments (Cursor, Claude Code, API providers).
  */
 
-import * as readline from 'readline';
+import prompts from 'prompts';
 import chalk from 'chalk';
 import { ModelDiscovery } from '../../core/model-discovery.js';
 import {
   ModelInfo,
   ModelConfig,
-  ModelDiscoveryResult,
   AGENT_MODEL_RECOMMENDATIONS,
 } from './types.js';
-import { loadAgentsManifest, saveAgentsManifest, getParadigmDir } from './loader.js';
-import * as fs from 'fs';
+import { loadAgentsManifest, saveAgentsManifest } from './loader.js';
 import * as path from 'path';
-
-/**
- * Create a readline interface for interactive prompts
- */
-function createPrompt(): readline.Interface {
-  return readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-}
-
-/**
- * Ask a question and wait for answer
- */
-function ask(rl: readline.Interface, question: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      resolve(answer.trim());
-    });
-  });
-}
-
-/**
- * Display a numbered menu and get selection
- */
-async function askSelect(
-  rl: readline.Interface,
-  prompt: string,
-  choices: Array<{ name: string; value: string }>
-): Promise<string> {
-  console.log(prompt);
-  choices.forEach((choice, i) => {
-    console.log(chalk.gray(`    ${i + 1}. ${choice.name}`));
-  });
-
-  const answer = await ask(rl, chalk.cyan('    > '));
-  const index = parseInt(answer, 10) - 1;
-
-  if (index >= 0 && index < choices.length) {
-    return choices[index].value;
-  }
-
-  // If they entered a model ID directly
-  if (answer && !answer.match(/^\d+$/)) {
-    return answer;
-  }
-
-  // Default to first choice
-  return choices[0].value;
-}
 
 /**
  * Check if we should prompt for model configuration
@@ -77,8 +25,15 @@ export function shouldPromptForModels(): boolean {
     return false;
   }
 
-  // In Cursor - prompt for models
-  if (process.env.TERM_PROGRAM === 'cursor' || process.env.CURSOR_SESSION) {
+  // In Cursor - prompt for models (Cursor is VSCode-based)
+  if (
+    process.env.TERM_PROGRAM === 'cursor' ||
+    process.env.CURSOR_SESSION ||
+    process.env.CURSOR_TRACE_ID ||
+    (process.env.VSCODE_CWD && process.env.VSCODE_CWD.toLowerCase().includes('cursor')) ||
+    (process.env.VSCODE_NLS_CONFIG && process.env.VSCODE_NLS_CONFIG.toLowerCase().includes('cursor')) ||
+    (process.env.TERM_PROGRAM === 'vscode' && process.env.VSCODE_GIT_ASKPASS_NODE?.toLowerCase().includes('cursor'))
+  ) {
     return true;
   }
 
@@ -95,78 +50,89 @@ export function shouldPromptForModels(): boolean {
  * Prompt user to select models for each agent
  */
 export async function promptForAgentModels(
-  rootDir: string,
-  rl?: readline.Interface
+  rootDir: string
 ): Promise<Record<string, ModelConfig>> {
-  const shouldCloseRl = !rl;
-  if (!rl) {
-    rl = createPrompt();
-  }
-
   const discovery = new ModelDiscovery(rootDir);
   const result = await discovery.discover();
 
   console.log(chalk.cyan('\n  Configure Agent Models\n'));
-  console.log(chalk.gray(`    Detected environment: ${result.source}`));
-  console.log(chalk.gray(`    Found ${result.models.length} available models\n`));
+  console.log(chalk.gray(`    Environment: ${result.source}`));
+  console.log(chalk.gray(`    Available: ${result.models.length} models\n`));
 
   const models: Record<string, ModelConfig> = {};
   const tiers = discovery.groupByTier(result.models);
 
-  for (const agent of ['architect', 'builder', 'tester', 'reviewer', 'security']) {
+  // Build choices with tier indicators
+  const buildChoices = (agent: string) => {
     const rec = AGENT_MODEL_RECOMMENDATIONS[agent];
-
-    // Get tier-appropriate models
     const recommended = rec.tier === 'high' ? tiers.high :
                         rec.tier === 'medium' ? tiers.medium : tiers.low;
 
-    // Build choices with recommended first
-    const choices: Array<{ name: string; value: string }> = [];
+    // Get all models with tier labels, recommended first
+    const choices: Array<{ title: string; value: string; description?: string }> = [];
 
-    if (recommended.length > 0) {
+    // Add recommended models first
+    for (const model of recommended) {
+      const isFirst = choices.length === 0;
       choices.push({
-        name: `${recommended[0].name} (recommended)`,
-        value: recommended[0].id,
+        title: isFirst ? `${model.name} (recommended)` : model.name,
+        value: model.id,
+        description: `${model.provider} - ${rec.tier} tier`,
       });
-
-      for (let i = 1; i < Math.min(recommended.length, 3); i++) {
-        choices.push({
-          name: recommended[i].name,
-          value: recommended[i].id,
-        });
-      }
     }
 
-    // Add option to show all models
-    choices.push({ name: 'Show all models...', value: '__all__' });
-    choices.push({ name: 'Enter custom model ID...', value: '__custom__' });
+    // Add other models grouped by tier
+    const otherHigh = tiers.high.filter(m => !recommended.includes(m));
+    const otherMedium = tiers.medium.filter(m => !recommended.includes(m));
+    const otherLow = tiers.low.filter(m => !recommended.includes(m));
 
+    for (const model of otherHigh) {
+      choices.push({
+        title: model.name,
+        value: model.id,
+        description: `${model.provider} - high tier`,
+      });
+    }
+
+    for (const model of otherMedium) {
+      choices.push({
+        title: model.name,
+        value: model.id,
+        description: `${model.provider} - medium tier`,
+      });
+    }
+
+    for (const model of otherLow) {
+      choices.push({
+        title: model.name,
+        value: model.id,
+        description: `${model.provider} - low tier`,
+      });
+    }
+
+    return choices;
+  };
+
+  for (const agent of ['architect', 'builder', 'tester', 'reviewer', 'security']) {
+    const rec = AGENT_MODEL_RECOMMENDATIONS[agent];
     const label = agent.charAt(0).toUpperCase() + agent.slice(1);
-    console.log(chalk.white(`  ${label}`), chalk.gray(`(${rec.description}):`));
+    const choices = buildChoices(agent);
 
-    const selected = await askSelect(rl, '', choices);
+    const response = await prompts({
+      type: 'select',
+      name: 'model',
+      message: `${label} (${rec.description})`,
+      choices,
+      initial: 0,
+    }, {
+      onCancel: () => {
+        console.log(chalk.yellow('\n  Cancelled. Using defaults.\n'));
+        process.exit(0);
+      }
+    });
 
-    if (selected === '__all__') {
-      // Show full list
-      const allChoices = result.models.map(m => ({
-        name: `${m.name} (${m.provider})`,
-        value: m.id,
-      }));
-      console.log(chalk.gray('\n    All available models:'));
-      const fullSelected = await askSelect(rl, '', allChoices);
-      models[agent] = { id: fullSelected };
-    } else if (selected === '__custom__') {
-      const customModel = await ask(rl, chalk.cyan('    Enter model ID: '));
-      models[agent] = { id: customModel };
-    } else {
-      models[agent] = { id: selected };
-    }
-
-    console.log(chalk.green(`    ✓ ${label}: ${models[agent].id}\n`));
-  }
-
-  if (shouldCloseRl) {
-    rl.close();
+    models[agent] = { id: response.model };
+    console.log(chalk.green(`    ✓ ${label}: ${response.model}\n`));
   }
 
   return models;
@@ -277,21 +243,25 @@ export async function teamModelsCommand(
 
   // If interactive, offer to reconfigure
   if (process.stdin.isTTY && !options.json) {
-    const rl = createPrompt();
-
     console.log(chalk.gray('    ─────────────────────────────────────────'));
-    const action = await askSelect(rl, chalk.cyan('\n    What would you like to do?'), [
-      { name: 'Reconfigure all models', value: 'all' },
-      { name: 'Exit', value: 'exit' },
-    ]);
+
+    const { action } = await prompts({
+      type: 'select',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { title: 'Reconfigure all models', value: 'all' },
+        { title: 'Exit', value: 'exit' },
+      ],
+      initial: 1,
+    });
 
     if (action === 'all' && manifest) {
-      const models = await promptForAgentModels(rootDir, rl);
+      const models = await promptForAgentModels(rootDir);
 
       // Update manifest with new models
       for (const [agentName, config] of Object.entries(models)) {
         if (manifest.agents[agentName]) {
-          // Map full model IDs to simple names for agents.yaml compatibility
           manifest.agents[agentName].defaultModel = mapToSimpleModel(config.id);
         }
       }
@@ -299,8 +269,6 @@ export async function teamModelsCommand(
       saveAgentsManifest(rootDir, manifest);
       console.log(chalk.green('\n    ✓ Model configuration updated.\n'));
     }
-
-    rl.close();
   }
 }
 
@@ -314,11 +282,11 @@ function mapToSimpleModel(modelId: string): 'opus' | 'sonnet' | 'haiku' {
   // High tier -> opus
   if (
     id.includes('opus') ||
-    id.includes('gpt-4o') && !id.includes('mini') ||
-    id.includes('o1') && !id.includes('mini') ||
-    id.includes('pro') && !id.includes('mini') ||
+    (id.includes('gpt-4') && !id.includes('mini')) ||
+    (id.includes('o1') && !id.includes('mini')) ||
+    (id.includes('-pro') && !id.includes('mini')) ||
     id.includes('large') ||
-    id.includes('grok-2') && !id.includes('mini')
+    (id.includes('grok-2') && !id.includes('mini'))
   ) {
     return 'opus';
   }

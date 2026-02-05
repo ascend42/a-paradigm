@@ -19,23 +19,25 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@a-company/premise-core": "*",
     "@a-company/portal-core": "*",
     "@a-company/portal-manager": "*",
     "@a-company/portal-sdk": "*",
-    "@a-company/purpose-core": "*",
+    "@a-company/premise-core": "*",
     "@a-company/probe-core": "*",
+    "@a-company/purpose-core": "*",
     "@a-company/sentinel": "*",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "glob": "^10.3.10",
     "js-yaml": "^4.1.0",
     "open": "^10.0.3",
-    "ora": "^8.0.1"
+    "ora": "^8.0.1",
+    "prompts": "^2.4.2"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
+    "@types/prompts": "^2.4.9",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
   },
