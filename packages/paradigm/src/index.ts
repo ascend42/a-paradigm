@@ -481,6 +481,29 @@ teamCmd
     await teamModelsCommand(path, options);
   });
 
+// paradigm team agents <subcommand>
+const agentsCmd = teamCmd
+  .command('agents')
+  .description('Agent management commands');
+
+agentsCmd
+  .command('suggest <task>')
+  .description('Suggest agents for a task based on triggers')
+  .option('--json', 'Output as JSON')
+  .action(async (task, options) => {
+    const { agentsSuggestCommand } = await import('./commands/team/agents-suggest.js');
+    await agentsSuggestCommand(task, options);
+  });
+
+// Default agents action (help)
+agentsCmd
+  .action(() => {
+    console.log('\nUsage: paradigm team agents <command>\n');
+    console.log('Commands:');
+    console.log('  suggest <task>  Suggest agents for a task based on triggers');
+    console.log('\nRun `paradigm team agents suggest --help` for options.\n');
+  });
+
 // Default team action (show status)
 teamCmd
   .action(async () => {
