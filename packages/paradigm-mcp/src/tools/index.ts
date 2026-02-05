@@ -819,7 +819,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           }
 
           // Try flow tools
-          if (name === 'paradigm_flows_affected') {
+          if (name === 'paradigm_flows_affected' || name === 'paradigm_flow_validate') {
             const result = await handleFlowTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);

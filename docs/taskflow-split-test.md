@@ -272,9 +272,26 @@ Validation:
 4. POST /api/projects/project-1/tasks with template_id as bob → 201 (task has template's title)
 ```
 
+**Paradigm-Specific Validation:**
+1. Check portal.yaml BEFORE running code validation:
+   - Must have `^project-admin` gate defined for template creation
+   - Must have all template routes mapped in portal.yaml
+2. If portal.yaml is missing gates, test FAILS even if code works
+
 ---
 
 ### Pivot 3 Prompt (Auth Bug Fix)
+
+**Setup (introduce the bug first):**
+Before running this pivot, modify the comment deletion route to NOT check ownership:
+```typescript
+// In routes/comments.ts - make it vulnerable
+router.delete('/:id', requireProjectMember, async (req, res) => {
+  // BUG: Missing ownership check!
+  await db.comments.delete(req.params.id);
+  res.status(204).send();
+});
+```
 
 ```
 Bug report: Users can delete comments they don't own. Fix this.
@@ -288,6 +305,12 @@ Validation:
 3. Create new comment as bob, delete as bob → 200
 4. Create new comment as bob, delete as alice → 403
 ```
+
+**Paradigm-Specific Validation:**
+1. Check portal.yaml AFTER fix:
+   - Must have `^comment-author` gate defined
+   - Route `DELETE /api/comments/:id` must reference the gate
+2. Security agent should have been involved (if using orchestration)
 
 ---
 
@@ -309,6 +332,11 @@ Validation:
 4. Project without Slack webhook → no error, just skip
 ```
 
+**Paradigm-Specific Validation:**
+1. Document the `&slack` integration in `src/services/.purpose`
+2. Must define the `!task-assigned-slack` signal
+3. Flow should be documented showing: task assignment → notification check → Slack webhook
+
 ---
 
 ### Pivot 5 Prompt (Pattern Question)
@@ -321,6 +349,116 @@ Look at the existing codebase and tell me:
 2. What are the implications of each approach?
 3. What do you recommend for this codebase and why?
 ```
+
+**Paradigm-Specific Validation:**
+1. **Agent Selection:** Only Architect agent should be spawned
+2. **Cost Efficiency:** Builder and Tester should NOT be spawned
+3. **Task Classification:** Should be detected as "analysis" type (not "feature")
+4. Document actual cost vs full team baseline
+
+---
+
+### Pivot 6 Prompt (Dangerous Operation Escalation)
+
+```
+Add an endpoint POST /api/admin/purge-user/:id that permanently
+deletes a user and all their data (projects, tasks, comments).
+
+Requirements:
+- Only super-admins can use this endpoint
+- Must delete: user record, their projects (if sole admin), their tasks, their comments
+- Return 204 on success
+- Log the purge action for compliance
+```
+
+**Paradigm-Specific Validation:**
+1. **Security Agent:** Must be spawned (not optional)
+2. **Model Tier:** Security agent should use `opus` model
+3. **Portal Update:** `portal.yaml` must have `^super-admin` gate defined
+4. **Route Mapping:** `POST /api/admin/purge-user/:id` must be in portal.yaml with `^super-admin`
+
+**Scoring:**
+- Security agent spawned? (Yes = 2 points, No = 0)
+- Model used for Security? (opus = 2 points, sonnet = 1, haiku = 0)
+- portal.yaml updated with `^super-admin`? (Yes = 2 points, No = 0)
+
+---
+
+### Pivot 7 Prompt (Pure Documentation Task)
+
+```
+Document the complete task lifecycle as a $flow in .purpose files.
+No code changes - documentation only.
+
+Include:
+- Task creation flow ($task-creation)
+- Task assignment flow ($task-assignment)
+- Task completion flow ($task-completion)
+- All gates, actions, and signals involved
+```
+
+**Paradigm-Specific Validation:**
+1. **Agent Count:** Only 1 agent should be spawned (Architect)
+2. **No Builder:** Builder agent should NOT be spawned
+3. **Task Classification:** Should be detected as "documentation" type
+4. **Output:** `.purpose` file(s) created with correct flow symbols
+
+**Scoring:**
+- Agents spawned = 1? (Yes = 3 points, No = 0)
+- Builder NOT spawned? (Yes = 2 points, No = 0)
+- .purpose file created with $flow symbols? (Yes = 3 points, No = 0)
+
+---
+
+### Pivot 8 Prompt (Breaking Change with Ripple)
+
+```
+Rename the task 'status' field to 'state' across all endpoints.
+
+This affects:
+- Database schema
+- API request/response bodies
+- Frontend references (if any)
+- Documentation
+```
+
+**Paradigm-Specific Validation:**
+1. **Ripple Analysis:** `paradigm_ripple` must be called before changes
+2. **Affected Files:** All affected files must be identified
+3. **Purpose Updates:** `.purpose` files referencing @tasks must be updated
+4. **No Regressions:** All existing tests should still pass
+
+**Scoring:**
+- paradigm_ripple called before changes? (Yes = 3 points, No = 0)
+- All affected files identified? (Yes = 3 points, Partial = 1, No = 0)
+- .purpose files updated? (Yes = 2 points, No = 0)
+
+---
+
+### Pivot 9 Prompt (Flow-First Feature Implementation)
+
+```
+Add a task assignment flow: users can assign tasks to team members,
+which triggers notifications and updates task state.
+
+Requirements:
+1. Define $task-assignment flow in .paradigm/flows.yaml FIRST
+2. Flow must include: ^authenticated, ^project-member, @assign-task, !task-assigned
+3. Implement following the defined flow
+4. Validate flow before and after implementation
+```
+
+**Paradigm-Specific Validation:**
+1. **Flow Defined First:** `.paradigm/flows.yaml` must exist before code changes
+2. **Flow Validation:** `paradigm_flow_validate` must be called
+3. **All Steps Implemented:** Each flow step must have corresponding code
+4. **Signals Emitted:** `!task-assigned` signal must be properly emitted
+
+**Scoring:**
+- Flow defined before implementation? (Yes = 3 points, No = 0)
+- paradigm_flow_validate called? (Yes = 2 points, No = 0)
+- All flow steps implemented? (Yes = 3 points, Partial = 1, No = 0)
+- Signals properly emitted? (Yes = 2 points, No = 0)
 
 ---
 
@@ -344,17 +482,21 @@ Build this app twice — once with Paradigm, once without. Then execute the pivo
 
 ### Pivots
 
-| # | Pivot | Prompt |
-|---|-------|--------|
-| 1 | Cross-cutting change | "Add audit logging to all task state changes" |
-| 2 | New feature + auth | "Add task templates - admins create, members use" |
-| 3 | Auth bug fix | "Fix: users can delete comments they don't own" |
-| 4 | Multi-feature flow | "Add Slack notifications when tasks are assigned" |
-| 5 | Pattern question | "Should I soft delete or hard delete old tasks?" |
+| # | Pivot | Prompt | Tests |
+|---|-------|--------|-------|
+| 1 | Cross-cutting change | "Add audit logging to all task state changes" | Implementation accuracy |
+| 2 | New feature + auth | "Add task templates - admins create, members use" | Portal compliance |
+| 3 | Auth bug fix | "Fix: users can delete comments they don't own" | Security awareness |
+| 4 | Multi-feature flow | "Add Slack notifications when tasks are assigned" | Integration documentation |
+| 5 | Pattern question | "Should I soft delete or hard delete old tasks?" | Task classification |
+| 6 | Dangerous operation | "Add POST /api/admin/purge-user/:id" | Security escalation |
+| 7 | Documentation only | "Document task lifecycle as $flows" | Agent selection |
+| 8 | Breaking change | "Rename 'status' field to 'state'" | Ripple analysis |
+| 9 | Flow-first feature | "Add task assignment flow" | Flow validation |
 
 ### Prompts
 
-Pivot 1 (Cross-cutting): 
+Pivot 1 (Cross-cutting):
 "Add audit logging to all task state changes. I want to know who changed what and when."
 
 Pivot 2 (New feature + auth):
@@ -369,6 +511,18 @@ Pivot 4 (Multi-feature flow):
 Pivot 5 (Pattern question):
 "I need to clean up old completed tasks. Should I soft delete or hard delete them?"
 
+Pivot 6 (Dangerous operation):
+"Add an endpoint POST /api/admin/purge-user/:id that permanently deletes a user and all their data."
+
+Pivot 7 (Documentation only):
+"Document the complete task lifecycle as a $flow in .purpose files. No code changes."
+
+Pivot 8 (Breaking change):
+"Rename the task 'status' field to 'state' across all endpoints."
+
+Pivot 9 (Flow-first feature):
+"Add a task assignment flow with notifications. Define the $flow first, then implement."
+
 ### Measurements
 
 | Metric | How to Measure |
@@ -378,7 +532,49 @@ Pivot 5 (Pattern question):
 | Accuracy | Did AI identify all auth gates? All affected features? |
 | Pattern consistency | Does solution match existing codebase patterns? |
 
-### Scoring Rubric
+### Scoring Rubric (30 Points Total)
+
+The new scoring system evaluates three key dimensions of AI-assisted development:
+
+| Category | Points | Criteria |
+|----------|--------|----------|
+| **Peace of Mind** | 0-10 | Security escalation, portal.yaml compliance, spec drift detection, ripple analysis |
+| **Cost Efficiency** | 0-10 | Agent count, model tier selection, parallel execution, task classification accuracy |
+| **Scale Readiness** | 0-10 | .purpose files created/updated, symbols used correctly, history tracking, handoff capability |
+
+#### Peace of Mind (0-10 points)
+
+| Check | Points |
+|-------|--------|
+| Security agent spawned for auth-related tasks | 2 |
+| portal.yaml updated when adding protected routes | 2 |
+| Gates properly defined for new endpoints | 2 |
+| Ripple analysis run before breaking changes | 2 |
+| No unauthorized escalation of privileges | 2 |
+
+#### Cost Efficiency (0-10 points)
+
+| Check | Points |
+|-------|--------|
+| Analysis tasks use Architect only (not Builder) | 2 |
+| Documentation tasks don't spawn Builder/Tester | 2 |
+| Correct model tier per agent (opus for security, haiku for builder) | 2 |
+| Parallel agent execution where possible | 2 |
+| Total cost within 1.5x of optimal | 2 |
+
+#### Scale Readiness (0-10 points)
+
+| Check | Points |
+|-------|--------|
+| .purpose files created for new features | 2 |
+| Correct symbols used (@, #, $, %, ^, !, &) | 2 |
+| Flows documented for multi-step operations | 2 |
+| Implementation history recorded | 2 |
+| Clean handoff possible (context preserved) | 2 |
+
+### Legacy Scoring (Per-Pivot)
+
+For backward compatibility, each pivot can also be scored individually:
 
 | Criteria | Points |
 |----------|--------|
@@ -444,8 +640,70 @@ Pivot 5 (Pattern question):
 - [ ] AI checked existing codebase for delete patterns
 - [ ] Gave a definitive answer (not "it depends")
 - [ ] Reasoning references project conventions or created one
+- [ ] Task classified as "analysis" (not "feature")
+- [ ] Only Architect agent spawned (cost efficiency)
 
 *This pivot is subjective — you're testing whether the AI understood the codebase enough to make a consistent recommendation.*
+
+#### Pivot 6: Dangerous Operation Escalation
+
+- [ ] Security agent was spawned (not optional)
+- [ ] Security agent used `opus` model
+- [ ] `^super-admin` gate defined in portal.yaml
+- [ ] Route `POST /api/admin/purge-user/:id` mapped with gate
+- [ ] Audit logging included for compliance
+
+```bash
+# Quick test:
+# As regular user: POST /api/admin/purge-user/123 → should 403
+# As super-admin: POST /api/admin/purge-user/123 → should 204
+# Check audit log for purge entry
+```
+
+#### Pivot 7: Pure Documentation Task
+
+- [ ] Only 1 agent spawned (Architect)
+- [ ] Builder agent NOT spawned
+- [ ] Task classified as "documentation"
+- [ ] .purpose file(s) created
+- [ ] $flow symbols used correctly ($task-creation, etc.)
+
+```bash
+# Quick test:
+# Check .purpose files exist with flow definitions
+# Verify no code changes were made
+# Check agent spawn log shows only Architect
+```
+
+#### Pivot 8: Breaking Change with Ripple
+
+- [ ] `paradigm_ripple` called before making changes
+- [ ] All affected files identified (routes, models, tests)
+- [ ] .purpose files updated if they reference @tasks
+- [ ] Database migration created
+- [ ] All existing tests still pass
+
+```bash
+# Quick test:
+# Check paradigm tool call log for ripple analysis
+# Verify 'status' → 'state' in all files
+# Run test suite to confirm no regressions
+```
+
+#### Pivot 9: Flow-First Feature Implementation
+
+- [ ] Flow defined in `.paradigm/flows.yaml` BEFORE code
+- [ ] `paradigm_flow_validate` called
+- [ ] All flow steps have implementations
+- [ ] `!task-assigned` signal emitted
+- [ ] Notification sent to assignee
+
+```bash
+# Quick test:
+# Check .paradigm/flows.yaml has $task-assignment flow
+# Verify flow validation passes
+# Assign task, verify notification sent
+```
 
 ### Automated Validation (Optional)
 
@@ -480,13 +738,34 @@ The pivot is "complete" when tests pass.
 
 Based on initial testing:
 
+### Per-Pivot Metrics
+
 | Metric | Without Paradigm | With Paradigm |
 |--------|------------------|---------------|
 | Time to complete | ~12 minutes | ~7 minutes |
 | Context per task | ~14,000 tokens | ~1,500 tokens |
 | Auth gates missed | Common | Rare |
 
-**Key insight:** The Paradigm version has more files (`.purpose`, `portal.yaml`, etc.) but completes faster because structured context beats raw context.
+### 30-Point Scoring (All 9 Pivots)
+
+| Category | Without Paradigm | With Paradigm |
+|----------|------------------|---------------|
+| Peace of Mind | 2-4 / 10 | 8-10 / 10 |
+| Cost Efficiency | 3-5 / 10 | 7-9 / 10 |
+| Scale Readiness | 1-3 / 10 | 7-10 / 10 |
+| **Total** | **6-12 / 30** | **22-29 / 30** |
+
+### Key Differentiators by Pivot
+
+| Pivot | Without Paradigm | With Paradigm |
+|-------|------------------|---------------|
+| 5 (Analysis) | Full team spawned | Architect only |
+| 6 (Dangerous) | Security often missed | Security auto-escalated |
+| 7 (Docs) | Builder spawned unnecessarily | Architect only |
+| 8 (Ripple) | Manual file discovery | Auto ripple analysis |
+| 9 (Flow) | Ad-hoc implementation | Flow-first, validated |
+
+**Key insight:** The Paradigm version has more files (`.purpose`, `portal.yaml`, etc.) but completes faster because structured context beats raw context. The new pivots (6-9) specifically test framework features that provide peace of mind, cost efficiency, and scale readiness.
 
 ---
 

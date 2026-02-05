@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { minimatch } from 'minimatch';
 import {
   AgentModel,
   AgentMessage,
@@ -27,6 +28,11 @@ import {
   FilePlanGroup,
   FileAssignment,
 } from './agent-prompts.js';
+import {
+  classifyTask,
+  TaskClassification,
+  getRecommendedModel,
+} from './task-classifier.js';
 
 // ============================================================================
 // Types
@@ -120,6 +126,99 @@ const DEFAULT_AGENT_MODELS: Record<string, AgentModel> = {
   builder: 'haiku',
   tester: 'haiku',
 };
+
+// ============================================================================
+// Security Escalation Detection
+// ============================================================================
+
+/**
+ * Keywords that trigger automatic security agent involvement
+ * Language-agnostic - works across all codebases
+ */
+const SECURITY_ESCALATION_KEYWORDS = [
+  'auth',
+  'permission',
+  'admin',
+  'delete',
+  'purge',
+  'password',
+  'credential',
+  'token',
+  'secret',
+  'key',
+  'encrypt',
+  'decrypt',
+  'hash',
+  'session',
+  'oauth',
+  'jwt',
+  'role',
+  'access control',
+  'vulnerability',
+  'injection',
+  'xss',
+  'csrf',
+];
+
+/**
+ * Directory patterns that contain security-sensitive code
+ * Works across all languages - directory-based, not extension-based
+ */
+const SECURITY_ESCALATION_PATHS = [
+  '**/auth/**',
+  '**/middleware/**',
+  '**/security/**',
+  '**/gates/**',
+  '**/guards/**',
+  '**/policies/**',
+  '**/permissions/**',
+  '**/admin/**',
+];
+
+/**
+ * Determine if security agent should be escalated to required status
+ * @param task - Task description
+ * @param affectedFiles - Files that might be affected by this task
+ * @returns Whether security should be escalated
+ */
+function shouldEscalateSecurity(task: string, affectedFiles?: string[]): boolean {
+  const taskLower = task.toLowerCase();
+
+  // Check for security keywords in task
+  const hasKeyword = SECURITY_ESCALATION_KEYWORDS.some(k =>
+    taskLower.includes(k.toLowerCase())
+  );
+
+  // Check for gate symbols in task (Paradigm convention)
+  const hasGateSymbol = task.includes('^');
+
+  // Check for sensitive file paths
+  let hasSensitivePath = false;
+  if (affectedFiles) {
+    hasSensitivePath = affectedFiles.some(file =>
+      SECURITY_ESCALATION_PATHS.some(pattern => minimatch(file, pattern))
+    );
+  }
+
+  return hasKeyword || hasGateSymbol || hasSensitivePath;
+}
+
+// ============================================================================
+// Refactoring Detection
+// ============================================================================
+
+/**
+ * Keywords that indicate a refactoring task
+ */
+const REFACTOR_KEYWORDS = ['rename', 'refactor', 'migrate', 'restructure', 'move', 'reorganize'];
+
+/**
+ * Check if task is a refactoring task that needs ripple analysis
+ */
+function isRefactoringTask(task: string): boolean {
+  const taskLower = task.toLowerCase();
+  return REFACTOR_KEYWORDS.some(k => taskLower.includes(k));
+}
 
 // ============================================================================
 // Orchestrator
@@ -342,6 +441,25 @@ export class Orchestrator {
       };
     }
 
+    // Auto-ripple for refactoring tasks
+    let rippleContext = '';
+    if (isRefactoringTask(task)) {
+      const symbols = extractSymbols(task);
+      if (symbols.length > 0) {
+        // Build ripple analysis context for architect
+        const rippleResults: string[] = [];
+        rippleResults.push('## Auto-Ripple Analysis\n');
+        rippleResults.push('The following symbols are affected by this refactoring:');
+        rippleResults.push('');
+        for (const symbol of symbols.slice(0, 5)) { // Limit to 5 symbols
+          rippleResults.push(`- **${symbol}**: Check dependencies before renaming/moving`);
+        }
+        rippleResults.push('');
+        rippleResults.push('**Recommendation:** Run `paradigm_ripple` for each symbol before making changes.');
+        rippleContext = rippleResults.join('\n');
+      }
+    }
+
     // Analyze task to determine agent sequence with parallel stages
     const agentPlan = this.planAgentSequence(task, manifest.agents);
     const stages = this.groupByStage(agentPlan);
@@ -380,10 +498,11 @@ export class Orchestrator {
       // Build spawn promises for all agents in this stage
       const spawnPromises = stageAgents.map(async (step) => {
         // Determine model for this agent
-        const model =
+        // Priority: budget constraints > plan-specified model > defaults
+        const model: AgentModel =
           options.agentBudgets?.[step.agent]?.maxTokens
             ? 'haiku' // Use cheaper model if budget-constrained
-            : DEFAULT_AGENT_MODELS[step.agent] || 'sonnet';
+            : (step as any).model || DEFAULT_AGENT_MODELS[step.agent] || 'sonnet';
 
         // Build handoff context from dependencies
         let handoffContext = '';
@@ -397,8 +516,14 @@ export class Orchestrator {
         }
 
         // Build task with handoff context
-        const taskWithContext = handoffContext
-          ? `${step.subtask}\n\n## Context from previous agents:\n${handoffContext}`
+        // Add ripple context for architect if this is a refactoring task
+        let additionalContext = handoffContext;
+        if (step.agent === 'architect' && rippleContext) {
+          additionalContext = rippleContext + (handoffContext ? '\n\n---\n\n' + handoffContext : '');
+        }
+
+        const taskWithContext = additionalContext
+          ? `${step.subtask}\n\n## Context from previous agents:\n${additionalContext}`
           : step.subtask;
 
         const spawnerOptions: SpawnerOptions = {
@@ -636,21 +761,65 @@ export class Orchestrator {
    *
    * Returns execution stages where agents within a stage can run in parallel,
    * but stages execute sequentially (stage N+1 waits for stage N to complete).
+   *
+   * Uses task classification for intelligent agent selection:
+   * - Analysis tasks: Architect only
+   * - Documentation tasks: Architect only
+   * - Bug fixes: Security + Builder
+   * - Refactoring: Architect + Builder (with auto-ripple)
+   * - Features: Full team as needed
    */
   private planAgentSequence(
     task: string,
     agents: Record<string, any>
-  ): Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[] }> {
+  ): Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[]; model?: AgentModel }> {
     const symbols = extractSymbols(task);
     const taskLower = task.toLowerCase();
 
+    // Classify the task for intelligent agent selection
+    const classification = classifyTask(task);
+
     // Build plan with dependency information
-    const plan: Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[] }> = [];
+    const plan: Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[]; model?: AgentModel }> = [];
+
+    // Check for security escalation
+    const securityEscalated = shouldEscalateSecurity(task);
+
+    // Use classification-based agent selection for certain task types
+    if (classification.type === 'analysis') {
+      // Analysis tasks: Architect only
+      if (agents['architect']) {
+        plan.push({
+          agent: 'architect',
+          subtask: `Analyze and recommend: ${task}`,
+          required: true,
+          stage: 0,
+          dependsOn: [],
+          model: 'opus',
+        });
+      }
+      return plan;
+    }
+
+    if (classification.type === 'documentation') {
+      // Documentation tasks: Architect only (for consistency and quality)
+      if (agents['architect']) {
+        plan.push({
+          agent: 'architect',
+          subtask: `Document: ${task}`,
+          required: true,
+          stage: 0,
+          dependsOn: [],
+          model: 'sonnet', // Sonnet is sufficient for documentation
+        });
+      }
+      return plan;
+    }
 
     // Stage 0: Independent analysis agents (can run in parallel)
     const hasDesign = taskLower.includes('design') || taskLower.includes('architect') ||
                       taskLower.includes('plan') || taskLower.includes('spec');
-    const hasSecurity = taskLower.includes('auth') || taskLower.includes('security') ||
+    const hasSecurity = securityEscalated || taskLower.includes('auth') || taskLower.includes('security') ||
                         taskLower.includes('gate') || symbols.some((s) => s.startsWith('^'));
 
     if (hasDesign && agents['architect']) {
@@ -660,6 +829,7 @@ export class Orchestrator {
         required: true,
         stage: 0,
         dependsOn: [],
+        model: 'opus',
       });
     }
 
@@ -667,9 +837,12 @@ export class Orchestrator {
       plan.push({
         agent: 'security',
         subtask: `Review security aspects of: ${task}`,
-        required: false,
+        // Security is REQUIRED when escalated, optional otherwise
+        required: securityEscalated,
         stage: 0,  // Can run parallel with architect
         dependsOn: [],
+        // Use opus for escalated security reviews
+        model: securityEscalated ? 'opus' : 'opus',
       });
     }
 
@@ -686,6 +859,7 @@ export class Orchestrator {
         required: true,
         stage: dependsOn.length > 0 ? 1 : 0,
         dependsOn,
+        model: 'haiku',
       });
     }
 
@@ -702,6 +876,7 @@ export class Orchestrator {
         required: false,
         stage: reviewStage,
         dependsOn: builderInPlan ? ['builder'] : [],
+        model: 'sonnet',
       });
     }
 
@@ -712,19 +887,60 @@ export class Orchestrator {
         required: false,
         stage: reviewStage,  // Can run parallel with reviewer
         dependsOn: builderInPlan ? ['builder'] : [],
+        model: 'haiku',
       });
     }
 
-    // If no specific agents matched, use default flow with proper stages
+    // If no specific agents matched, use classification-guided defaults
     if (plan.length === 0) {
-      if (agents['architect']) {
-        plan.push({ agent: 'architect', subtask: `Design: ${task}`, required: true, stage: 0, dependsOn: [] });
+      // Use recommended agents from classification
+      const recommendedAgents = classification.recommendedAgents;
+
+      if (recommendedAgents.includes('architect') && agents['architect']) {
+        plan.push({
+          agent: 'architect',
+          subtask: `Design: ${task}`,
+          required: true,
+          stage: 0,
+          dependsOn: [],
+          model: getRecommendedModel('architect', classification),
+        });
       }
-      if (agents['builder']) {
-        plan.push({ agent: 'builder', subtask: `Implement: ${task}`, required: true, stage: 1, dependsOn: agents['architect'] ? ['architect'] : [] });
+
+      // Add security if recommended or escalated
+      if ((recommendedAgents.includes('security') || securityEscalated) && agents['security']) {
+        plan.push({
+          agent: 'security',
+          subtask: `Security review: ${task}`,
+          required: securityEscalated,
+          stage: 0,
+          dependsOn: [],
+          model: 'opus',
+        });
       }
-      if (agents['tester']) {
-        plan.push({ agent: 'tester', subtask: `Test: ${task}`, required: false, stage: 2, dependsOn: agents['builder'] ? ['builder'] : [] });
+
+      if (recommendedAgents.includes('builder') && agents['builder']) {
+        const hasPreviousStage = plan.length > 0;
+        plan.push({
+          agent: 'builder',
+          subtask: `Implement: ${task}`,
+          required: true,
+          stage: hasPreviousStage ? 1 : 0,
+          dependsOn: plan.filter(p => p.stage === 0).map(p => p.agent),
+          model: getRecommendedModel('builder', classification),
+        });
+      }
+
+      if (recommendedAgents.includes('tester') && agents['tester']) {
+        const builderStage = plan.find(p => p.agent === 'builder')?.stage ?? 0;
+        plan.push({
+          agent: 'tester',
+          subtask: `Test: ${task}`,
+          required: false,
+          stage: builderStage + 1,
+          dependsOn: agents['builder'] ? ['builder'] : [],
+          model: getRecommendedModel('tester', classification),
+        });
       }
     }
 

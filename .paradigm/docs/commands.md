@@ -338,15 +338,59 @@ paradigm purpose remember ./src/features/auth
 
 ## paradigm portal
 
-**Portal-related subcommands.**
+**Portal-related subcommands for authorization gate management.**
 
 ### paradigm portal validate
 
-Validate `portal.yaml` files.
+Validate `portal.yaml` files for schema compliance.
 
 ```bash
 paradigm portal validate
 paradigm portal validate ./portal.yaml
+```
+
+### paradigm portal check
+
+Check portal compliance - validate that gates defined in `portal.yaml` are actually used in the codebase, and find gate references that aren't defined.
+
+```bash
+# Run compliance check
+paradigm portal check
+
+# Output as JSON
+paradigm portal check --json
+```
+
+**What it checks:**
+- Gates declared in `portal.yaml` but never referenced in code
+- Gate references in code that aren't declared in `portal.yaml`
+- Uses language-agnostic grep patterns (works with any framework)
+
+**Sample output:**
+```
+Portal Compliance Check
+=======================
+
+Status: warnings
+
+Declared but unused (2):
+  ^premium-user
+  ^beta-tester
+
+Used but undeclared (1):
+  ^task-owner
+
+Suggestions:
+  - Remove unused gates or implement them in code
+  - Add ^task-owner to portal.yaml with description
+```
+
+### paradigm portal list
+
+List all gates defined in `portal.yaml`.
+
+```bash
+paradigm portal list
 ```
 
 ---

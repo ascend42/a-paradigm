@@ -12,6 +12,28 @@ import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 
+// Import task classification and cost estimation (via dynamic import to avoid circular deps)
+type TaskClassification = {
+  type: string;
+  complexity: string;
+  recommendedAgents: string[];
+  securityRequired: boolean;
+  costMultiplier: { min: number; max: number };
+  matchedKeywords: string[];
+  symbols: string[];
+};
+
+type CostPreview = {
+  agents: Array<{
+    name: string;
+    model: string;
+    estimatedTokens: number;
+    estimatedCost: number;
+  }>;
+  totalEstimatedCost: number;
+  comparisonToBaseline: string;
+};
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -401,6 +423,9 @@ async function handleOrchestrateInline(
   // Extract symbols from task
   const symbols = extractSymbols(task);
 
+  // Classify the task for intelligent agent selection
+  const classification = classifyTaskLocal(task);
+
   // Plan the agent sequence
   const plan = planAgentSequence(task, manifest.agents, agentOverride);
 
@@ -408,14 +433,25 @@ async function handleOrchestrateInline(
     // Get agent suggestions based on triggers
     const suggestedAgents = suggestAgentsForTask(task, manifest.agents);
 
-    // Return the plan with suggestions
+    // Generate cost preview
+    const costPreview = generateCostPreviewLocal(plan, classification);
+
+    // Return the plan with suggestions and cost preview
     const text = JSON.stringify({
       task,
       mode: 'plan',
+      classification: {
+        type: classification.type,
+        complexity: classification.complexity,
+        securityRequired: classification.securityRequired,
+        costMultiplier: classification.costMultiplier,
+      },
       plan,
       suggestedAgents,
+      costPreview,
       instructions: [
-        'Review suggested agents above based on task triggers',
+        'Review task classification and cost preview above',
+        'Review suggested agents based on task triggers',
         'Call again with mode="execute" to get full prompts for Task tool',
         'Stages marked canRunParallel: true can be launched simultaneously',
         'After each agent completes, pass handoff context to the next stage',
@@ -839,6 +875,191 @@ function getSymbolType(symbol: string): string {
     '~': 'deprecated',
   };
   return types[prefix] || 'unknown';
+}
+
+// ============================================================================
+// Task Classification (Local Implementation)
+// ============================================================================
+
+/** Keywords that indicate an analysis task (no code changes) */
+const ANALYSIS_KEYWORDS = [
+  'should', 'what', 'how', 'why', 'recommend', 'analyze', 'compare',
+  'evaluate', 'assess', 'review', 'explain', 'describe', 'investigate',
+  'which', 'best practice', 'trade-off', 'pros and cons',
+];
+
+/** Keywords that indicate documentation task */
+const DOCUMENTATION_KEYWORDS = [
+  'document', 'write docs', 'readme', '.purpose', 'purpose file',
+  'jsdoc', 'tsdoc', 'comments', 'docstring', 'api docs',
+];
+
+/** Keywords that indicate a bug fix */
+const BUGFIX_KEYWORDS = [
+  'bug', 'fix', 'broken', 'not working', 'issue', 'error', 'crash',
+  'fails', 'failing', 'wrong', 'incorrect', 'regression', 'patch',
+];
+
+/** Keywords that indicate refactoring */
+const REFACTOR_KEYWORDS = [
+  'rename', 'refactor', 'migrate', 'restructure', 'move', 'reorganize',
+  'clean up', 'cleanup', 'consolidate', 'extract', 'inline', 'simplify',
+];
+
+/** Keywords that indicate security-sensitive operations */
+const SECURITY_KEYWORDS = [
+  'auth', 'permission', 'admin', 'delete', 'purge', 'password',
+  'credential', 'token', 'secret', 'key', 'encrypt', 'decrypt',
+];
+
+/**
+ * Local task classification for MCP tool
+ */
+function classifyTaskLocal(task: string): TaskClassification {
+  const taskLower = task.toLowerCase();
+  const symbols = extractSymbols(task);
+
+  // Check keywords
+  const matchesKeywords = (keywords: string[]) =>
+    keywords.filter(k => taskLower.includes(k.toLowerCase()));
+
+  const analysisMatches = matchesKeywords(ANALYSIS_KEYWORDS);
+  const documentationMatches = matchesKeywords(DOCUMENTATION_KEYWORDS);
+  const bugfixMatches = matchesKeywords(BUGFIX_KEYWORDS);
+  const refactorMatches = matchesKeywords(REFACTOR_KEYWORDS);
+  const securityMatches = matchesKeywords(SECURITY_KEYWORDS);
+
+  // Determine type
+  let type: string;
+  let matchedKeywords: string[];
+
+  if (analysisMatches.length > 0 && bugfixMatches.length === 0 && refactorMatches.length === 0) {
+    type = 'analysis';
+    matchedKeywords = analysisMatches;
+  } else if (documentationMatches.length > 0 && bugfixMatches.length === 0) {
+    type = 'documentation';
+    matchedKeywords = documentationMatches;
+  } else if (bugfixMatches.length > 0) {
+    type = 'bugfix';
+    matchedKeywords = bugfixMatches;
+  } else if (refactorMatches.length > 0) {
+    type = 'refactor';
+    matchedKeywords = refactorMatches;
+  } else {
+    type = 'feature';
+    matchedKeywords = [];
+  }
+
+  // Determine complexity
+  let complexity: string = 'medium';
+  const wordCount = task.split(/\s+/).length;
+  if (symbols.length >= 5 || wordCount >= 100) complexity = 'high';
+  else if (symbols.length <= 1 && wordCount < 30) complexity = 'low';
+
+  // Security check
+  const securityRequired = securityMatches.length > 0 || symbols.some(s => s.startsWith('^'));
+
+  // Recommended agents based on type
+  const agentMapping: Record<string, string[]> = {
+    analysis: ['architect'],
+    documentation: ['architect'],
+    bugfix: ['security', 'builder'],
+    refactor: ['architect', 'builder'],
+    feature: ['architect', 'security', 'builder', 'tester'],
+  };
+
+  const costMultiplierMapping: Record<string, { min: number; max: number }> = {
+    analysis: { min: 0.3, max: 0.5 },
+    documentation: { min: 0.25, max: 0.45 },
+    bugfix: { min: 0.5, max: 0.8 },
+    refactor: { min: 0.6, max: 0.85 },
+    feature: { min: 0.8, max: 1.2 },
+  };
+
+  return {
+    type,
+    complexity,
+    recommendedAgents: agentMapping[type] || ['architect', 'builder'],
+    securityRequired,
+    costMultiplier: costMultiplierMapping[type] || { min: 0.8, max: 1.0 },
+    matchedKeywords,
+    symbols,
+  };
+}
+
+// ============================================================================
+// Cost Preview (Local Implementation)
+// ============================================================================
+
+/** Model pricing per 1M tokens */
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  opus: { input: 15.00, output: 75.00 },
+  sonnet: { input: 3.00, output: 15.00 },
+  haiku: { input: 0.25, output: 1.25 },
+};
+
+/** Base token estimates per agent */
+const AGENT_BASE_TOKENS: Record<string, { input: number; output: number }> = {
+  architect: { input: 8000, output: 4000 },
+  security: { input: 6000, output: 3000 },
+  reviewer: { input: 5000, output: 2000 },
+  builder: { input: 15000, output: 10000 },
+  tester: { input: 8000, output: 5000 },
+};
+
+/**
+ * Generate cost preview for orchestration plan
+ */
+function generateCostPreviewLocal(
+  plan: OrchestrationPlan,
+  classification: TaskClassification
+): CostPreview {
+  const agents: CostPreview['agents'] = [];
+  let totalCost = 0;
+
+  // Get complexity multiplier
+  const complexityMultiplier = classification.complexity === 'high' ? 1.5 :
+    classification.complexity === 'low' ? 0.6 : 1.0;
+
+  // Calculate costs for each agent in the plan
+  for (const stage of plan.stages) {
+    for (const agentStep of stage.agents) {
+      const base = AGENT_BASE_TOKENS[agentStep.name] || { input: 5000, output: 3000 };
+      const model = DEFAULT_MODELS[agentStep.name] || 'sonnet';
+      const pricing = MODEL_PRICING[model];
+
+      const input = Math.round(base.input * complexityMultiplier);
+      const output = Math.round(base.output * complexityMultiplier);
+      const total = input + output;
+
+      const cost = (input / 1_000_000) * pricing.input + (output / 1_000_000) * pricing.output;
+
+      agents.push({
+        name: agentStep.name,
+        model,
+        estimatedTokens: total,
+        estimatedCost: Math.round(cost * 10000) / 10000, // Round to 4 decimal places
+      });
+
+      totalCost += cost;
+    }
+  }
+
+  // Calculate baseline (full team)
+  let baselineCost = 0;
+  for (const [agent, base] of Object.entries(AGENT_BASE_TOKENS)) {
+    const model = DEFAULT_MODELS[agent] || 'sonnet';
+    const pricing = MODEL_PRICING[model];
+    baselineCost += (base.input / 1_000_000) * pricing.input + (base.output / 1_000_000) * pricing.output;
+  }
+
+  const ratio = baselineCost > 0 ? totalCost / baselineCost : 1;
+
+  return {
+    agents,
+    totalEstimatedCost: Math.round(totalCost * 10000) / 10000,
+    comparisonToBaseline: `${ratio.toFixed(2)}x`,
+  };
 }
 
 // ============================================================================
