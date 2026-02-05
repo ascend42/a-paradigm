@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.5.0] - 2026-02-04
 
+### Validated
+
+- **Portal Protocol Self-Test** - Built TaskFlow API to validate Portal Protocol effectiveness
+  - Test location: `/tmp/taskflow-paradigm-test/`
+  - Results documented in `SELF-TEST-RESULTS.md`
+  - **Key finding:** Following Portal Protocol from the start prevented auth bug (Pivot 3) from ever being introduced
+  - Called `paradigm_gates_for_route` 10 times during development
+  - Created `portal.yaml` with 8 gates and 21 route mappings
+  - Executed all 5 pivots from split test specification:
+    - Pivot 1: Cross-cutting change (audit logging) ✅
+    - Pivot 2: New feature + auth (task templates) ✅
+    - Pivot 3: Auth bug fix (comment deletion) ✅ Bug never existed
+    - Pivot 4: Multi-feature flow (Slack notifications) ✅
+    - Pivot 5: Pattern question (soft vs hard delete) ✅
+  - Validates that Portal Protocol guides AI to define gates before writing routes
+
 ### Changed
 
 - **README Branding** - Added logo and case study

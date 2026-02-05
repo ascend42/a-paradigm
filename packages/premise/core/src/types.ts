@@ -272,3 +272,63 @@ export interface SymbolIndex {
   /** Last aggregation timestamp */
   timestamp: number;
 }
+
+// ============================================
+// Testable Flow Types
+// ============================================
+
+/**
+ * A single step in a testable flow
+ */
+export interface FlowStep {
+  /** Unique step identifier within the flow */
+  id: string;
+  /** Human-readable description of what this step does */
+  action: string;
+  /** Symbol involved in this step (e.g., @tasks, ^auth, !event) */
+  symbol?: string;
+  /** Expected outcome or assertion */
+  expect?: string;
+}
+
+/**
+ * Validation configuration for a flow
+ */
+export interface FlowValidation {
+  /** Test command to run (e.g., "npm test -- --grep 'task creation'") */
+  command?: string;
+  /** Manual testing instructions */
+  manual?: string;
+}
+
+/**
+ * A testable flow defined in a .purpose file
+ */
+export interface TestableFlow {
+  /** Flow identifier (e.g., $task-creation) */
+  id: string;
+  /** Human-readable description */
+  description: string;
+  /** What triggers this flow (e.g., "POST /api/projects/:id/tasks") */
+  trigger?: string;
+  /** Ordered steps in the flow */
+  steps: FlowStep[];
+  /** Validation configuration */
+  validation?: FlowValidation;
+  /** File path where the flow is defined */
+  definedIn: string;
+}
+
+/**
+ * Index of all flows in the project
+ */
+export interface FlowIndex {
+  /** Schema version */
+  version: string;
+  /** When the index was generated */
+  generatedAt: string;
+  /** All flows indexed by ID */
+  flows: Record<string, TestableFlow>;
+  /** Mapping from symbol to flow IDs that use it */
+  symbolToFlows: Record<string, string[]>;
+}

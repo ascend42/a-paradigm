@@ -622,6 +622,10 @@ export async function initCommand(options: InitOptions) {
     
     if (fs.existsSync(templatesDir)) {
       copyDir(templatesDir, paradigmDir, projectName);
+      // Create fixtures.yaml if not already in templates
+      if (!fs.existsSync(path.join(paradigmDir, 'fixtures.yaml'))) {
+        createFixturesTemplate(paradigmDir);
+      }
       spinner.succeed(chalk.green('.paradigm/ created'));
     } else {
       spinner.warn(chalk.yellow('Templates not found, creating minimal structure'));
@@ -705,7 +709,7 @@ function createMinimalStructure(paradigmDir: string, projectName: string): void 
   fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
   fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
   // Note: prompts/ not created - served via MCP resources
-  
+
   const minimalConfig = `# Paradigm Configuration
 version: "1.0"
 project: "${projectName}"
@@ -756,6 +760,64 @@ conventions:
   - Use kebab-case for symbol IDs
   - ALWAYS use Paradigm logger, NEVER raw console.log/print
 `;
-  
+
   fs.writeFileSync(path.join(paradigmDir, 'config.yaml'), minimalConfig, 'utf8');
+
+  // Create fixtures.yaml template
+  createFixturesTemplate(paradigmDir);
+}
+
+/**
+ * Create fixtures.yaml template for test fixtures
+ */
+function createFixturesTemplate(paradigmDir: string): void {
+  const fixturesTemplate = `# Test Fixtures for Flow Validation
+# Use with paradigm_test_fixtures MCP tool
+version: "1.0"
+
+# User fixtures for authentication testing
+users:
+  admin:
+    id: "user-admin"
+    email: "admin@test.com"
+    role: "admin"
+    token: "Bearer test-admin-token"
+  member:
+    id: "user-member"
+    email: "member@test.com"
+    role: "member"
+    token: "Bearer test-member-token"
+  outsider:
+    id: "user-outsider"
+    email: "outsider@test.com"
+    token: "Bearer test-outsider-token"
+
+# Resource fixtures for entity testing
+resources:
+  project:
+    id: "project-1"
+    name: "Test Project"
+    members: ["user-member"]
+    admins: ["user-admin"]
+  task:
+    id: "task-1"
+    projectId: "project-1"
+    title: "Sample Task"
+    assignees: ["user-member"]
+
+# Payload fixtures for API testing
+payloads:
+  createProject:
+    name: "New Project"
+    description: "Test project description"
+  createTask:
+    title: "New Task"
+    description: "Task description"
+    assignees: []
+  updateTask:
+    title: "Updated Task"
+    status: "in-progress"
+`;
+
+  fs.writeFileSync(path.join(paradigmDir, 'fixtures.yaml'), fixturesTemplate, 'utf8');
 }
