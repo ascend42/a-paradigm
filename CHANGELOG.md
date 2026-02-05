@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `paradigm shift` now runs team init as Step 2/5
   - `paradigm shift --configure-models` enables model prompts during setup
 
+- **Cursor CLI Agent Provider** - Native parallel agent support for Cursor IDE
+  - New `cursor-cli` provider spawns agents via Cursor's `agent` CLI command
+  - Supports parallel agent execution in Cursor environment
+  - Auto-detected when running in Cursor (via environment variables)
+  - Prioritized over `claude-cli` when Cursor environment is detected
+  - `paradigm team providers` now shows `cursor-cli` availability
+
 ### Changed
 
 - **Team Init** - Now auto-detects environment and prompts for models in Cursor/interactive terminals

@@ -12,6 +12,7 @@
  * Available providers:
  * - claude: Anthropic API (requires ANTHROPIC_API_KEY)
  * - claude-code: Claude Code Task tool (works with Max)
+ * - cursor-cli: Cursor agent CLI (works in Cursor IDE)
  * - claude-cli: Claude CLI spawning (works with Max)
  * - manual: File-based handoff (always works)
  * - auto: Auto-detect best available (default)
@@ -31,7 +32,8 @@ let defaultProviderName: string | null = null;
 let initialized = false;
 
 // Provider priority order (best to fallback)
-const PROVIDER_PRIORITY = ['claude', 'claude-code', 'claude-cli', 'manual'];
+// cursor-cli is prioritized when running in Cursor environment
+const PROVIDER_PRIORITY = ['claude', 'claude-code', 'cursor-cli', 'claude-cli', 'manual'];
 
 // Valid provider names (including 'auto' for auto-detection)
 const VALID_PROVIDERS = ['auto', ...PROVIDER_PRIORITY];
@@ -322,6 +324,13 @@ export async function initializeProviders(rootDir?: string): Promise<void> {
   }
 
   try {
+    const { CursorCliProvider } = await import('./providers/cursor-cli.js');
+    registerProvider(new CursorCliProvider());
+  } catch {
+    // Cursor CLI provider not available
+  }
+
+  try {
     const { ClaudeCliProvider } = await import('./providers/claude-cli.js');
     registerProvider(new ClaudeCliProvider());
   } catch {
@@ -378,6 +387,8 @@ function getProviderReason(name: string): string {
       return 'Using Anthropic API (ANTHROPIC_API_KEY found)';
     case 'claude-code':
       return 'Using Claude Code Task tool (running in Claude Code)';
+    case 'cursor-cli':
+      return 'Using Cursor agent CLI (running in Cursor)';
     case 'claude-cli':
       return 'Using Claude CLI (claude command found)';
     case 'manual':
@@ -393,6 +404,8 @@ function getProviderUnavailableReason(name: string): string {
       return 'ANTHROPIC_API_KEY not set';
     case 'claude-code':
       return 'Not running inside Claude Code';
+    case 'cursor-cli':
+      return 'Not running in Cursor or agent CLI not found';
     case 'claude-cli':
       return 'claude CLI not found in PATH';
     case 'manual':
@@ -407,6 +420,7 @@ function getProviderBilling(name: string): 'api' | 'subscription' | 'none' {
     case 'claude':
       return 'api';
     case 'claude-code':
+    case 'cursor-cli':
     case 'claude-cli':
       return 'subscription';
     case 'manual':
