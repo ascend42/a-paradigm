@@ -193,6 +193,7 @@ export async function teamSpawnCommand(
 
   // Spawn the agent
   const result = await spawner.spawn(agentName, options.task, {
+    provider: options.provider,  // Pass explicit provider
     model: options.model,
     budget,
     timeout: options.timeout ? parseInt(options.timeout) : undefined,

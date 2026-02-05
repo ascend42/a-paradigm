@@ -305,20 +305,28 @@ export class Orchestrator {
       };
     }
 
-    // Analyze task to determine agent sequence
+    // Analyze task to determine agent sequence with parallel stages
     const agentPlan = this.planAgentSequence(task, manifest.agents);
+    const stages = this.groupByStage(agentPlan);
     const results: SpawnResult[] = [];
     let totalTokens: TokenUsage = { input: 0, output: 0, total: 0 };
     let totalCost = 0;
-    let handoffContext = '';
+    let handoffContexts: Map<string, string> = new Map();
     let success = true;
 
-    // Execute agents according to plan
-    for (const step of agentPlan) {
-      // Check for checkpoint before spawn
+    // Execute stages sequentially, agents within each stage in parallel
+    const sortedStages = Array.from(stages.keys()).sort((a, b) => a - b);
+
+    for (const stageNum of sortedStages) {
+      const stageAgents = stages.get(stageNum) || [];
+
+      if (stageAgents.length === 0) continue;
+
+      // Check for checkpoint before stage
       if (options.checkpoints?.beforeAgentSpawn && options.onCheckpoint) {
+        const agentNames = stageAgents.map(s => s.agent).join(', ');
         const approved = await options.onCheckpoint(
-          `Spawn ${step.agent} for: ${step.subtask}`
+          `Stage ${stageNum}: Spawn ${agentNames}${stageAgents.length > 1 ? ' (parallel)' : ''}`
         );
         if (!approved) {
           success = false;
@@ -326,65 +334,88 @@ export class Orchestrator {
         }
       }
 
-      // Determine model for this agent
-      const model =
-        options.agentBudgets?.[step.agent]?.maxTokens
-          ? 'haiku' // Use cheaper model if budget-constrained
-          : DEFAULT_AGENT_MODELS[step.agent] || 'sonnet';
+      // Build spawn promises for all agents in this stage
+      const spawnPromises = stageAgents.map(async (step) => {
+        // Determine model for this agent
+        const model =
+          options.agentBudgets?.[step.agent]?.maxTokens
+            ? 'haiku' // Use cheaper model if budget-constrained
+            : DEFAULT_AGENT_MODELS[step.agent] || 'sonnet';
 
-      // Build task with handoff context
-      const taskWithContext = handoffContext
-        ? `${step.subtask}\n\n## Context from previous agent:\n${handoffContext}`
-        : step.subtask;
+        // Build handoff context from dependencies
+        let handoffContext = '';
+        if (step.dependsOn.length > 0) {
+          const contexts = step.dependsOn
+            .map(dep => handoffContexts.get(dep))
+            .filter(Boolean);
+          if (contexts.length > 0) {
+            handoffContext = contexts.join('\n\n---\n\n');
+          }
+        }
 
-      const spawnerOptions: SpawnerOptions = {
-        model,
-        workingDirectory: options.workingDirectory || this.rootDir,
-        mcpServerPath: options.mcpServerPath,
-        budget: options.agentBudgets?.[step.agent] || options.budget,
-        onMessage: options.onMessage
-          ? (msg) => options.onMessage!(step.agent, msg)
-          : undefined,
-        onCheckpoint: options.onCheckpoint,
-      };
+        // Build task with handoff context
+        const taskWithContext = handoffContext
+          ? `${step.subtask}\n\n## Context from previous agents:\n${handoffContext}`
+          : step.subtask;
 
-      if (options.onAgentStart) {
-        options.onAgentStart(step.agent, step.subtask);
-      }
+        const spawnerOptions: SpawnerOptions = {
+          model,
+          workingDirectory: options.workingDirectory || this.rootDir,
+          mcpServerPath: options.mcpServerPath,
+          budget: options.agentBudgets?.[step.agent] || options.budget,
+          onMessage: options.onMessage
+            ? (msg) => options.onMessage!(step.agent, msg)
+            : undefined,
+          onCheckpoint: options.onCheckpoint,
+        };
 
-      // Spawn agent (parallel if possible)
-      const result = await this.spawner.spawn(step.agent, taskWithContext, spawnerOptions);
-      results.push(result);
+        if (options.onAgentStart) {
+          options.onAgentStart(step.agent, step.subtask);
+        }
 
-      if (options.onAgentComplete) {
-        options.onAgentComplete(step.agent, result);
-      }
+        // Spawn agent
+        const result = await this.spawner.spawn(step.agent, taskWithContext, spawnerOptions);
 
-      // Update totals
-      if (result.relay) {
-        totalTokens.input += result.relay.metrics.tokens_used.input;
-        totalTokens.output += result.relay.metrics.tokens_used.output;
-        totalTokens.total += result.relay.metrics.tokens_used.total;
-        totalCost += calculateCost(result.relay.metrics.tokens_used, model);
+        if (options.onAgentComplete) {
+          options.onAgentComplete(step.agent, result);
+        }
 
-        // Build handoff context for next agent
-        if (result.relay.handoff) {
-          handoffContext = result.relay.handoff.context;
-        } else {
-          handoffContext = `${step.agent} completed: ${result.relay.outputs.decisions.join(', ')}`;
+        return { step, result, model };
+      });
+
+      // Execute all agents in this stage in parallel
+      const stageResults = await Promise.all(spawnPromises);
+
+      // Process results
+      for (const { step, result, model } of stageResults) {
+        results.push(result);
+
+        // Update totals
+        if (result.relay) {
+          totalTokens.input += result.relay.metrics.tokens_used.input;
+          totalTokens.output += result.relay.metrics.tokens_used.output;
+          totalTokens.total += result.relay.metrics.tokens_used.total;
+          totalCost += calculateCost(result.relay.metrics.tokens_used, model);
+
+          // Store handoff context for dependent agents
+          const context = result.relay.handoff?.context ||
+            `${step.agent} completed: ${result.relay.outputs.decisions.join(', ') || 'task done'}`;
+          handoffContexts.set(step.agent, context);
+        }
+
+        // Check for failure
+        if (!result.success && step.required) {
+          success = false;
         }
       }
 
-      // Check for failure
-      if (!result.success && step.required) {
-        success = false;
-        break;
-      }
+      // If any required agent failed, stop
+      if (!success) break;
 
-      // Check for checkpoint after completion
+      // Check for checkpoint after stage completion
       if (options.checkpoints?.afterAgentComplete && options.onCheckpoint) {
         const approved = await options.onCheckpoint(
-          `${step.agent} completed. Continue to next agent?`
+          `Stage ${stageNum} completed. Continue to next stage?`
         );
         if (!approved) {
           break;
@@ -399,92 +430,122 @@ export class Orchestrator {
   // Private: Agent Planning
   // ==========================================================================
 
+  /**
+   * Plan agent sequence with parallel execution support
+   *
+   * Returns execution stages where agents within a stage can run in parallel,
+   * but stages execute sequentially (stage N+1 waits for stage N to complete).
+   */
   private planAgentSequence(
     task: string,
     agents: Record<string, any>
-  ): Array<{ agent: string; subtask: string; required: boolean; parallel?: string[] }> {
+  ): Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[] }> {
     const symbols = extractSymbols(task);
     const taskLower = task.toLowerCase();
 
-    // Simple heuristic-based planning
-    const plan: Array<{ agent: string; subtask: string; required: boolean }> = [];
+    // Build plan with dependency information
+    const plan: Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[] }> = [];
 
-    // Check for design/architecture keywords
-    if (
-      taskLower.includes('design') ||
-      taskLower.includes('architect') ||
-      taskLower.includes('plan') ||
-      taskLower.includes('spec')
-    ) {
+    // Stage 0: Independent analysis agents (can run in parallel)
+    const hasDesign = taskLower.includes('design') || taskLower.includes('architect') ||
+                      taskLower.includes('plan') || taskLower.includes('spec');
+    const hasSecurity = taskLower.includes('auth') || taskLower.includes('security') ||
+                        taskLower.includes('gate') || symbols.some((s) => s.startsWith('^'));
+
+    if (hasDesign && agents['architect']) {
       plan.push({
         agent: 'architect',
         subtask: `Design and specify: ${task}`,
         required: true,
+        stage: 0,
+        dependsOn: [],
       });
     }
 
-    // Check for security keywords
-    if (
-      taskLower.includes('auth') ||
-      taskLower.includes('security') ||
-      taskLower.includes('gate') ||
-      symbols.some((s) => s.startsWith('^'))
-    ) {
+    if (hasSecurity && agents['security']) {
       plan.push({
         agent: 'security',
         subtask: `Review security aspects of: ${task}`,
         required: false,
+        stage: 0,  // Can run parallel with architect
+        dependsOn: [],
       });
     }
 
-    // Default: always include builder for implementation
-    if (
-      taskLower.includes('build') ||
-      taskLower.includes('implement') ||
-      taskLower.includes('create') ||
-      taskLower.includes('add') ||
-      taskLower.includes('fix')
-    ) {
+    // Stage 1: Implementation (depends on design if present)
+    const hasImplementation = taskLower.includes('build') || taskLower.includes('implement') ||
+                              taskLower.includes('create') || taskLower.includes('add') ||
+                              taskLower.includes('fix');
+
+    if (hasImplementation && agents['builder']) {
+      const dependsOn = hasDesign && agents['architect'] ? ['architect'] : [];
       plan.push({
         agent: 'builder',
         subtask: `Implement: ${task}`,
         required: true,
+        stage: dependsOn.length > 0 ? 1 : 0,
+        dependsOn,
       });
     }
 
-    // Check for review keywords
-    if (taskLower.includes('review') || taskLower.includes('check')) {
+    // Stage 2: Review and Test (can run in parallel after implementation)
+    const hasReview = taskLower.includes('review') || taskLower.includes('check');
+    const hasTest = taskLower.includes('test') || taskLower.includes('verify') || taskLower.includes('validate');
+    const builderInPlan = plan.some(p => p.agent === 'builder');
+    const reviewStage = builderInPlan ? 2 : (hasDesign ? 1 : 0);
+
+    if (hasReview && agents['reviewer']) {
       plan.push({
         agent: 'reviewer',
         subtask: `Review: ${task}`,
         required: false,
+        stage: reviewStage,
+        dependsOn: builderInPlan ? ['builder'] : [],
       });
     }
 
-    // Check for test keywords
-    if (
-      taskLower.includes('test') ||
-      taskLower.includes('verify') ||
-      taskLower.includes('validate')
-    ) {
+    if (hasTest && agents['tester']) {
       plan.push({
         agent: 'tester',
         subtask: `Test and validate: ${task}`,
         required: false,
+        stage: reviewStage,  // Can run parallel with reviewer
+        dependsOn: builderInPlan ? ['builder'] : [],
       });
     }
 
-    // If no specific agents matched, use default flow
+    // If no specific agents matched, use default flow with proper stages
     if (plan.length === 0) {
-      plan.push(
-        { agent: 'architect', subtask: `Design: ${task}`, required: true },
-        { agent: 'builder', subtask: `Implement: ${task}`, required: true },
-        { agent: 'tester', subtask: `Test: ${task}`, required: false }
-      );
+      if (agents['architect']) {
+        plan.push({ agent: 'architect', subtask: `Design: ${task}`, required: true, stage: 0, dependsOn: [] });
+      }
+      if (agents['builder']) {
+        plan.push({ agent: 'builder', subtask: `Implement: ${task}`, required: true, stage: 1, dependsOn: agents['architect'] ? ['architect'] : [] });
+      }
+      if (agents['tester']) {
+        plan.push({ agent: 'tester', subtask: `Test: ${task}`, required: false, stage: 2, dependsOn: agents['builder'] ? ['builder'] : [] });
+      }
     }
 
-    // Filter to only available agents
-    return plan.filter((step) => agents[step.agent]);
+    // Sort by stage for sequential stage execution
+    return plan.sort((a, b) => a.stage - b.stage);
+  }
+
+  /**
+   * Group plan steps by stage for parallel execution
+   */
+  private groupByStage(
+    plan: Array<{ agent: string; subtask: string; required: boolean; stage: number; dependsOn: string[] }>
+  ): Map<number, Array<{ agent: string; subtask: string; required: boolean; dependsOn: string[] }>> {
+    const stages = new Map<number, Array<{ agent: string; subtask: string; required: boolean; dependsOn: string[] }>>();
+
+    for (const step of plan) {
+      const existing = stages.get(step.stage) || [];
+      existing.push({ agent: step.agent, subtask: step.subtask, required: step.required, dependsOn: step.dependsOn });
+      stages.set(step.stage, existing);
+    }
+
+    return stages;
   }
 
   // ==========================================================================

@@ -176,6 +176,7 @@ export class AgentSpawner {
       mcpServerPath: options.mcpServerPath,
       workingDirectory: options.workingDirectory || this.rootDir,
       checkpoints: options.checkpoints,
+      timeout: options.timeout,
     };
 
     // Track start time
