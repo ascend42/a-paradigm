@@ -174,10 +174,24 @@ Paradigm supports multi-agent orchestration via `paradigm team` commands:
 | `paradigm team orchestrate "task"` | AI orchestrator coordinates agents |
 | `paradigm team orchestrate "task" --solo` | Single Claude mode (no splitting) |
 | `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
+| `paradigm team agents suggest "task"` | Suggest agents based on task triggers |
 | `paradigm team providers` | Show available providers |
 | `paradigm team providers --set X` | Set preferred provider |
 | `paradigm team models` | View/configure agent model assignments |
 | `paradigm team models --refresh` | Re-discover models from environment |
+
+### Agent Suggestions
+
+Before orchestrating, you can preview which agents will be involved:
+
+```bash
+paradigm team agents suggest "Add user authentication with JWT"
+```
+
+Or via MCP (returns `suggestedAgents` in plan mode):
+```
+paradigm_orchestrate_inline({ task: "...", mode: "plan" })
+```
 
 ### Provider Cascade
 
