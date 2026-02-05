@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auto-Generated Orchestration Rules for Cursor** - Agents naturally use multi-agent workflows
+  - `paradigm sync cursor` now generates `paradigm-orchestration.mdc`
+  - MDC file includes: when to orchestrate, workflow steps, available agents, red flags
+  - Agents list auto-populated from `.paradigm/agents.yaml`
+  - `alwaysApply: true` ensures agents see orchestration guidance
+
+- **Agent Suggestion CLI** - Preview which agents will handle a task
+  - New command: `paradigm team agents suggest <task>`
+  - Analyzes task against agent triggers (keywords, symbols)
+  - Returns confidence levels (high/medium/low) with matched triggers
+  - Suggests workflow order (architect → builder → tester, etc.)
+  - `--json` flag for programmatic use
+
+- **Enhanced MCP Orchestration** - Better planning with agent suggestions
+  - `paradigm_orchestrate_inline` plan mode now returns `suggestedAgents` field
+  - Agent suggestions ranked by confidence based on trigger matching
+  - Updated tool description to be more directive about when to use orchestration
+
 - **Dynamic Model Discovery** - Automatically discover available AI models based on environment
   - Detects Cursor, Claude Code, VSCode, and API provider environments
   - Fetches models from provider APIs when keys are available
