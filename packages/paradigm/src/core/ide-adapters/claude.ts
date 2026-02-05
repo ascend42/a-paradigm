@@ -101,6 +101,59 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints');
     sections.push('');
 
+    // Portal Protocol - CRITICAL for auth-aware development
+    sections.push('## Portal Protocol (Authorization)');
+    sections.push('');
+    sections.push('**Portal.yaml is REQUIRED when the project has protected routes.**');
+    sections.push('');
+    sections.push('### When to Create portal.yaml');
+    sections.push('');
+    sections.push('Create `portal.yaml` in project root when:');
+    sections.push('- Adding any endpoint that requires authentication');
+    sections.push('- Adding role-based access (admin, member, owner)');
+    sections.push('- Adding resource ownership checks (user can only edit their own data)');
+    sections.push('');
+    sections.push('### Portal.yaml Structure');
+    sections.push('');
+    sections.push('```yaml');
+    sections.push('version: "1.0"');
+    sections.push('gates:');
+    sections.push('  ^authenticated:');
+    sections.push('    description: User must be logged in');
+    sections.push('    check: req.user != null');
+    sections.push('  ^project-admin:');
+    sections.push('    description: User must be admin of the project');
+    sections.push('    check: project.admins.includes(req.user.id)');
+    sections.push('  ^comment-author:');
+    sections.push('    description: User must be the comment author');
+    sections.push('    check: comment.authorId === req.user.id');
+    sections.push('');
+    sections.push('routes:');
+    sections.push('  "GET /api/projects/:id": [^authenticated, ^project-member]');
+    sections.push('  "PUT /api/projects/:id": [^authenticated, ^project-admin]');
+    sections.push('  "DELETE /api/comments/:id": [^authenticated, ^comment-author]');
+    sections.push('```');
+    sections.push('');
+    sections.push('### When Adding New Endpoints');
+    sections.push('');
+    sections.push('**ALWAYS update portal.yaml when adding routes:**');
+    sections.push('');
+    sections.push('1. Call `paradigm_gates_for_route` to get suggestions');
+    sections.push('2. Add the route to portal.yaml with required gates');
+    sections.push('3. Implement the gate checks in your middleware/code');
+    sections.push('4. Test that unauthorized access returns 403');
+    sections.push('');
+    sections.push('### Common Gate Patterns');
+    sections.push('');
+    sections.push('| Pattern | Gate Name | Description |');
+    sections.push('|---------|-----------|-------------|');
+    sections.push('| Any logged-in user | `^authenticated` | Basic auth check |');
+    sections.push('| Resource membership | `^{resource}-member` | User is member of resource |');
+    sections.push('| Resource admin | `^{resource}-admin` | User is admin of resource |');
+    sections.push('| Resource owner | `^{resource}-owner` | User owns the resource |');
+    sections.push('| Author only | `^{resource}-author` | User created the resource |');
+    sections.push('');
+
     // Context discovery - key for Claude
     sections.push('## Context Discovery');
     sections.push('');
@@ -108,7 +161,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('');
     sections.push('1. Check `.paradigm/config.yaml` for project configuration');
     sections.push('2. Read the `.purpose` file in the directory you\'re modifying');
-    sections.push('3. Check `portal.yaml` if touching authentication');
+    sections.push('3. Check `portal.yaml` for existing auth gates');
     sections.push('4. Check `.paradigm/docs/patterns.md` for coding patterns');
     sections.push('');
 
@@ -142,8 +195,16 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Understanding code | `paradigm_navigate` with explore intent |');
     sections.push('| Checking dependencies | `paradigm_related` for connections |');
     sections.push('| Getting oriented | `paradigm_status` for project overview |');
+    sections.push('| **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |');
+    sections.push('| **Validating changes** | `paradigm_flows_affected` for flow impact |');
+    sections.push('| **Getting test data** | `paradigm_test_fixtures` for fixtures |');
     sections.push('');
     sections.push('**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.');
+    sections.push('');
+    sections.push('**Authorization workflow:**');
+    sections.push('1. Adding endpoint? → Call `paradigm_gates_for_route`');
+    sections.push('2. Get suggested gates → Add them to `portal.yaml`');
+    sections.push('3. Implement gate checks → Test 403 responses');
     sections.push('');
 
     // Token budget reference
@@ -224,6 +285,50 @@ export class ClaudeAdapter implements IDEAdapter {
       sections.push(updateSection);
     }
 
+    // Flow Validation section
+    sections.push('## Flow Validation');
+    sections.push('');
+    sections.push('**After modifying symbols, validate affected flows:**');
+    sections.push('');
+    sections.push('1. Call `paradigm_flows_affected` with the symbol you modified');
+    sections.push('2. Get test fixtures with `paradigm_test_fixtures`');
+    sections.push('3. Run suggested validation commands or test manually');
+    sections.push('');
+    sections.push('**Example workflow:**');
+    sections.push('');
+    sections.push('```');
+    sections.push('# Check what flows are affected by @tasks');
+    sections.push('paradigm_flows_affected({ symbol: "@tasks" })');
+    sections.push('');
+    sections.push('# Get test user for auth testing');
+    sections.push('paradigm_test_fixtures({ category: "users", name: "member" })');
+    sections.push('');
+    sections.push('# Get payload for creating a task');
+    sections.push('paradigm_test_fixtures({ category: "payloads", name: "createTask" })');
+    sections.push('');
+    sections.push('# Run validation command from flows_affected response');
+    sections.push('```');
+    sections.push('');
+    sections.push('**Testable Flow Format in .purpose:**');
+    sections.push('');
+    sections.push('```yaml');
+    sections.push('flows:');
+    sections.push('  $task-creation:');
+    sections.push('    description: "Full task creation flow"');
+    sections.push('    trigger: "POST /api/projects/:id/tasks"');
+    sections.push('    steps:');
+    sections.push('      - id: validate');
+    sections.push('        action: "Check project membership"');
+    sections.push('        symbol: "^project-member"');
+    sections.push('        expect: "403 if not member"');
+    sections.push('      - id: create');
+    sections.push('        action: "Create task record"');
+    sections.push('        symbol: "@tasks"');
+    sections.push('    validation:');
+    sections.push('      command: "npm test -- --grep \'task creation\'"');
+    sections.push('```');
+    sections.push('');
+
     // Commit message format
     sections.push('## Commit Messages');
     sections.push('');
@@ -247,6 +352,8 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Empty search results | Check that .purpose files define symbols |');
     sections.push('| High context usage | Call `paradigm_handoff_prepare` |');
     sections.push('| Gate suggestions missing | Check that portal.yaml exists and defines gates |');
+    sections.push('| "Flow index not found" | Run `paradigm scan` and add flows to .purpose files |');
+    sections.push('| "Fixtures not found" | Create `.paradigm/fixtures.yaml` with test data |');
     sections.push('');
 
     // Maintaining Paradigm files section
@@ -257,11 +364,21 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Change Type | Action Required |');
     sections.push('|-------------|-----------------|');
     sections.push('| Add feature | Create `.purpose` in feature directory |');
-    sections.push('| Add route with auth | Update `portal.yaml` with gates |');
+    sections.push('| Add ANY protected route | Create/update `portal.yaml` with gates |');
+    sections.push('| Add ownership check | Add `^{resource}-owner` gate to `portal.yaml` |');
+    sections.push('| Add role-based access | Add `^{role}` gate to `portal.yaml` |');
     sections.push('| Add signal/event | Add to emitting feature\'s `.purpose` |');
     sections.push('| Add multi-step flow | Document as `$flow` in `.purpose` |');
     sections.push('| Rename/delete symbol | Update all `.purpose` references |');
     sections.push('| Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |');
+    sections.push('');
+    sections.push('**CRITICAL: Authorization requires portal.yaml**');
+    sections.push('');
+    sections.push('If your code has ANY of these, `portal.yaml` MUST exist:');
+    sections.push('- JWT/session authentication');
+    sections.push('- Role checks (admin, member, etc.)');
+    sections.push('- Ownership checks (user can only edit own resources)');
+    sections.push('- Protected API endpoints');
     sections.push('');
     sections.push('**Validation**: Run `paradigm doctor` to check for inconsistencies.');
     sections.push('');

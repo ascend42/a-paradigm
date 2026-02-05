@@ -54,13 +54,64 @@ Use these prefixes in documentation and commits:
 4. **Review:** Read the nearest `.purpose` file before making changes
 5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints
 
+## Portal Protocol (Authorization)
+
+**Portal.yaml is REQUIRED when the project has protected routes.**
+
+### When to Create portal.yaml
+
+Create `portal.yaml` in project root when:
+- Adding any endpoint that requires authentication
+- Adding role-based access (admin, member, owner)
+- Adding resource ownership checks (user can only edit their own data)
+
+### Portal.yaml Structure
+
+```yaml
+version: "1.0"
+gates:
+  ^authenticated:
+    description: User must be logged in
+    check: req.user != null
+  ^project-admin:
+    description: User must be admin of the project
+    check: project.admins.includes(req.user.id)
+  ^comment-author:
+    description: User must be the comment author
+    check: comment.authorId === req.user.id
+
+routes:
+  "GET /api/projects/:id": [^authenticated, ^project-member]
+  "PUT /api/projects/:id": [^authenticated, ^project-admin]
+  "DELETE /api/comments/:id": [^authenticated, ^comment-author]
+```
+
+### When Adding New Endpoints
+
+**ALWAYS update portal.yaml when adding routes:**
+
+1. Call `paradigm_gates_for_route` to get suggestions
+2. Add the route to portal.yaml with required gates
+3. Implement the gate checks in your middleware/code
+4. Test that unauthorized access returns 403
+
+### Common Gate Patterns
+
+| Pattern | Gate Name | Description |
+|---------|-----------|-------------|
+| Any logged-in user | `^authenticated` | Basic auth check |
+| Resource membership | `^{resource}-member` | User is member of resource |
+| Resource admin | `^{resource}-admin` | User is admin of resource |
+| Resource owner | `^{resource}-owner` | User owns the resource |
+| Author only | `^{resource}-author` | User created the resource |
+
 ## Context Discovery
 
 **Before making changes:**
 
 1. Check `.paradigm/config.yaml` for project configuration
 2. Read the `.purpose` file in the directory you're modifying
-3. Check `portal.yaml` if touching authentication
+3. Check `portal.yaml` for existing auth gates
 4. Check `.paradigm/docs/patterns.md` for coding patterns
 
 ## Paradigm Navigation
@@ -121,8 +172,14 @@ Before exploring this codebase:
 | Understanding code | `paradigm_navigate` with explore intent |
 | Checking dependencies | `paradigm_related` for connections |
 | Getting oriented | `paradigm_status` for project overview |
+| **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
+
+**Authorization workflow:**
+1. Adding endpoint? → Call `paradigm_gates_for_route`
+2. Get suggested gates → Add them to `portal.yaml`
+3. Implement gate checks → Test 403 responses
 
 ## Token Budget Reference
 
@@ -271,11 +328,21 @@ feat(@feature): add new capability
 | Change Type | Action Required |
 |-------------|-----------------|
 | Add feature | Create `.purpose` in feature directory |
-| Add route with auth | Update `portal.yaml` with gates |
+| Add ANY protected route | Create/update `portal.yaml` with gates |
+| Add ownership check | Add `^{resource}-owner` gate to `portal.yaml` |
+| Add role-based access | Add `^{role}` gate to `portal.yaml` |
 | Add signal/event | Add to emitting feature's `.purpose` |
 | Add multi-step flow | Document as `$flow` in `.purpose` |
 | Rename/delete symbol | Update all `.purpose` references |
 | Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |
+
+**CRITICAL: Authorization requires portal.yaml**
+
+If your code has ANY of these, `portal.yaml` MUST exist:
+- JWT/session authentication
+- Role checks (admin, member, etc.)
+- Ownership checks (user can only edit own resources)
+- Protected API endpoints
 
 **Validation**: Run `paradigm doctor` to check for inconsistencies.
 

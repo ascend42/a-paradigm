@@ -21,6 +21,11 @@ export type {
   AggregationResult,
   AggregationError,
   SymbolIndex,
+  // Testable Flow types
+  FlowStep,
+  FlowValidation,
+  TestableFlow,
+  FlowIndex,
 } from './types.js';
 
 export { SYMBOL_PREFIXES, PREFIX_TO_TYPE } from './types.js';

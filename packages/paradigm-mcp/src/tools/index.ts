@@ -23,8 +23,11 @@ import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
 import { getContextToolsList, handleContextTool, trackToolCall } from './context.js';
 import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
+import { getFlowsToolsList, handleFlowTool } from './flows.js';
+import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
+import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -187,6 +190,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getContextToolsList(),
           // Sentinel tools
           ...getSentinelToolsList(),
+          // Flow tools
+          ...getFlowsToolsList(),
+          // Fixtures tools
+          ...getFixturesToolsList(),
         ],
       };
     }
@@ -387,7 +394,43 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           if (totalAffected > 10) impact = 'high';
           else if (totalAffected > 3) impact = 'medium';
 
-          const text = JSON.stringify({
+          // Check for affected flows
+          const flowIndex = await loadFlowIndex(ctx.rootDir);
+          let flowImpact: {
+            totalFlows: number;
+            affectedFlows: Array<{
+              flowId: string;
+              impactLevel: string;
+              reason: string;
+            }>;
+            validationSuggestion?: string;
+          } | null = null;
+
+          if (flowIndex) {
+            const flowSummary = getFlowImpactSummary(flowIndex, symbol);
+            if (flowSummary.totalFlows > 0) {
+              // Upgrade impact if flows are affected
+              if (flowSummary.impactLevel === 'high' && impact === 'low') {
+                impact = 'medium';
+              } else if (flowSummary.impactLevel === 'high') {
+                impact = 'high';
+              }
+
+              flowImpact = {
+                totalFlows: flowSummary.totalFlows,
+                affectedFlows: flowSummary.affectedFlows.map(f => ({
+                  flowId: f.flowId,
+                  impactLevel: f.downstreamSteps.length > 2 ? 'high' : 'medium',
+                  reason: `Symbol is in step ${f.stepAffected.position}, affects ${f.downstreamSteps.length} downstream steps`,
+                })),
+                validationSuggestion: flowSummary.validationCommands.length > 0
+                  ? `Run: ${flowSummary.validationCommands[0]}`
+                  : undefined,
+              };
+            }
+          }
+
+          const response: Record<string, unknown> = {
             symbol: entry.symbol,
             type: entry.type,
             description: entry.description,
@@ -418,7 +461,14 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
               : impact === 'medium'
               ? 'Moderate impact - check direct dependencies for breaking changes'
               : 'Low impact - safe to modify with standard review',
-          }, null, 2);
+          };
+
+          // Add flow impact if present
+          if (flowImpact) {
+            response.affectedFlows = flowImpact;
+          }
+
+          const text = JSON.stringify(response, null, 2);
 
           trackToolCall(text.length, name);
           return {
@@ -744,6 +794,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           // Try sentinel tools
           if (name.startsWith('paradigm_sentinel_')) {
             const result = await handleSentinelTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try flow tools
+          if (name === 'paradigm_flows_affected') {
+            const result = await handleFlowTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try fixtures tools
+          if (name === 'paradigm_test_fixtures') {
+            const result = await handleFixturesTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

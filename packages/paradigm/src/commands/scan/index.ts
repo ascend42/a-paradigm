@@ -6,8 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
-import { aggregateFromDirectory } from '@a-company/premise-core';
+import * as yaml from 'js-yaml';
+import { aggregateFromDirectory, type FlowIndex, type TestableFlow, type FlowStep } from '@a-company/premise-core';
 import {
   generateScanIndex,
   serializeScanIndex,
@@ -137,6 +137,16 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   // Generate navigator.yaml for AI exploration
   await generateNavigator(rootDir, aggregation, { quiet: options.quiet });
 
+  // Generate flow index for testable flows
+  const flowIndex = await generateFlowIndex(rootDir, aggregation.purposeFiles, { quiet: options.quiet });
+  if (flowIndex && Object.keys(flowIndex.flows).length > 0) {
+    const flowIndexPath = path.join(rootDir, '.paradigm', 'flow-index.json');
+    fs.writeFileSync(flowIndexPath, JSON.stringify(flowIndex, null, 2), 'utf8');
+    if (!options.quiet) {
+      spinner.succeed(chalk.green(`Flow index generated (${Object.keys(flowIndex.flows).length} flows)`));
+    }
+  }
+
   // Summary
   if (!options.quiet) {
     console.log(chalk.gray(`\n  Output: ${outputPath}`));
@@ -201,4 +211,155 @@ export function getScanIndexAge(rootDir: string): number | null {
   }
 
   return null;
+}
+
+/**
+ * Extended flow format in .purpose files that supports testable flows
+ */
+interface ExtendedFlowDefinition {
+  description?: string;
+  trigger?: string;
+  steps?: Array<{
+    id: string;
+    action: string;
+    symbol?: string;
+    expect?: string;
+  }>;
+  validation?: {
+    command?: string;
+    manual?: string;
+  };
+  // Legacy fields
+  gates?: string[];
+  signals?: string[];
+  components?: string[];
+}
+
+/**
+ * Generate flow index from .purpose files
+ * Parses extended flow definitions with steps and validation
+ */
+async function generateFlowIndex(
+  rootDir: string,
+  purposeFiles: string[],
+  options: { quiet?: boolean }
+): Promise<FlowIndex | null> {
+  const flows: Record<string, TestableFlow> = {};
+  const symbolToFlows: Record<string, string[]> = {};
+
+  for (const filePath of purposeFiles) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const data = yaml.load(content) as { flows?: Record<string, ExtendedFlowDefinition> | unknown[] };
+
+      if (!data?.flows) continue;
+
+      // Handle both record format and array format
+      if (Array.isArray(data.flows)) {
+        // Array format: [{ name, steps, description }]
+        for (const flowItem of data.flows) {
+          const flow = flowItem as { name: string; description?: string; steps?: unknown[] };
+          if (!flow.name) continue;
+
+          const flowId = `$${flow.name}`;
+          const steps = parseFlowSteps(flow.steps);
+
+          if (steps.length > 0) {
+            const testableFlow: TestableFlow = {
+              id: flowId,
+              description: flow.description || '',
+              steps,
+              definedIn: path.relative(rootDir, filePath),
+            };
+
+            flows[flowId] = testableFlow;
+            indexFlowSymbols(flowId, steps, symbolToFlows);
+          }
+        }
+      } else {
+        // Record format: { flow-name: { description, steps, trigger, validation } }
+        for (const [name, flowDef] of Object.entries(data.flows as Record<string, ExtendedFlowDefinition>)) {
+          const flowId = name.startsWith('$') ? name : `$${name}`;
+          const steps = parseFlowSteps(flowDef.steps);
+
+          // Only include flows with steps (testable flows)
+          if (steps.length > 0) {
+            const testableFlow: TestableFlow = {
+              id: flowId,
+              description: flowDef.description || '',
+              trigger: flowDef.trigger,
+              steps,
+              validation: flowDef.validation,
+              definedIn: path.relative(rootDir, filePath),
+            };
+
+            flows[flowId] = testableFlow;
+            indexFlowSymbols(flowId, steps, symbolToFlows);
+          }
+        }
+      }
+    } catch (err) {
+      if (!options.quiet) {
+        console.warn(chalk.yellow(`  Warning: Could not parse flows from ${filePath}: ${(err as Error).message}`));
+      }
+    }
+  }
+
+  if (Object.keys(flows).length === 0) {
+    return null;
+  }
+
+  return {
+    version: '1.0',
+    generatedAt: new Date().toISOString(),
+    flows,
+    symbolToFlows,
+  };
+}
+
+/**
+ * Parse flow steps from various formats
+ */
+function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
+  if (!steps || !Array.isArray(steps)) return [];
+
+  const result: FlowStep[] = [];
+
+  for (let index = 0; index < steps.length; index++) {
+    const step = steps[index];
+    if (typeof step === 'object' && step !== null) {
+      const s = step as Record<string, unknown>;
+      const action = (s.action as string) || (s.description as string) || (s.component as string) || '';
+      if (action) {
+        result.push({
+          id: (s.id as string) || `step-${index + 1}`,
+          action,
+          symbol: s.symbol as string | undefined,
+          expect: s.expect as string | undefined,
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Index symbols used in flow steps
+ */
+function indexFlowSymbols(
+  flowId: string,
+  steps: FlowStep[],
+  symbolToFlows: Record<string, string[]>
+): void {
+  for (const step of steps) {
+    if (step.symbol) {
+      if (!symbolToFlows[step.symbol]) {
+        symbolToFlows[step.symbol] = [];
+      }
+      if (!symbolToFlows[step.symbol].includes(flowId)) {
+        symbolToFlows[step.symbol].push(flowId);
+      }
+    }
+  }
 }
