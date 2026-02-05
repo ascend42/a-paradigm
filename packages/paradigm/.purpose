@@ -59,6 +59,29 @@ features:
     description: "Reset team state for fresh start"
     components: ["#team-loader", "#state-resetter"]
 
+  team-spawn-command:
+    description: "Spawn an individual AI agent with a specific task"
+    components: ["#agent-spawner", "#context-builder", "#provider-registry"]
+    signals: ["!agent-spawned", "!agent-completed", "!agent-failed"]
+
+  team-orchestrate-command:
+    description: "Orchestrate multi-agent task with AI conductor"
+    components: ["#orchestrator", "#agent-spawner", "#budget-tracker", "#audit-logger"]
+    flows: ["$orchestration-flow"]
+    signals: ["!orchestration-started", "!orchestration-completed"]
+
+  team-providers-command:
+    description: "Show and configure agent providers (claude, claude-code, claude-cli, manual)"
+    components: ["#provider-registry"]
+
+  team-cost-command:
+    description: "View cost summary for orchestrations"
+    components: ["#audit-logger", "#budget-tracker"]
+
+  team-export-command:
+    description: "Export orchestration data as JSON/CSV"
+    components: ["#audit-logger"]
+
   mcp-setup-command:
     description: "Auto-configure MCP server for AI clients"
     components: ["#mcp-setup-handler", "#client-detector", "#config-generator"]
@@ -193,6 +216,30 @@ components:
     description: "Resets team state"
     used-by: ["@team-reset-command"]
 
+  agent-spawner:
+    description: "Spawns AI agents via provider abstraction"
+    used-by: ["@team-spawn-command", "@team-orchestrate-command"]
+
+  orchestrator:
+    description: "Coordinates multi-agent orchestration (solo/faceted modes)"
+    used-by: ["@team-orchestrate-command"]
+
+  context-builder:
+    description: "Builds role-specific context for token efficiency"
+    used-by: ["@team-spawn-command", "@team-orchestrate-command"]
+
+  provider-registry:
+    description: "Manages provider cascade (claude → claude-code → claude-cli → manual)"
+    used-by: ["@team-spawn-command", "@team-orchestrate-command", "@team-providers-command"]
+
+  budget-tracker:
+    description: "Tracks token usage and enforces budget limits"
+    used-by: ["@team-orchestrate-command", "@team-cost-command"]
+
+  audit-logger:
+    description: "Logs orchestrations to .paradigm/orchestrations/"
+    used-by: ["@team-orchestrate-command", "@team-cost-command", "@team-export-command"]
+
   mcp-setup-handler:
     description: "Handles MCP setup commands"
     used-by: ["@mcp-setup-command", "@mcp-status-command", "@mcp-list-command", "@mcp-remove-command"]
@@ -315,4 +362,29 @@ signals:
   mcp-configured:
     description: "MCP server configured for client"
     category: mcp
+    severity: info
+
+  agent-spawned:
+    description: "AI agent spawned successfully"
+    category: team
+    severity: info
+
+  agent-completed:
+    description: "AI agent completed task"
+    category: team
+    severity: info
+
+  agent-failed:
+    description: "AI agent failed task"
+    category: team
+    severity: error
+
+  orchestration-started:
+    description: "Multi-agent orchestration started"
+    category: team
+    severity: info
+
+  orchestration-completed:
+    description: "Multi-agent orchestration completed"
+    category: team
     severity: info

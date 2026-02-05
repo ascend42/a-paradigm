@@ -162,6 +162,42 @@ Before exploring this codebase:
 2. User runs: `paradigm team handoff --to <agent> --summary "..."`
 3. New session accepts with: `paradigm team accept <id>`
 
+## Multi-Agent Orchestration
+
+Paradigm supports multi-agent orchestration via `paradigm team` commands:
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `paradigm team spawn <agent> --task "..."` | Spawn a single agent |
+| `paradigm team orchestrate "task"` | AI orchestrator coordinates agents |
+| `paradigm team orchestrate "task" --solo` | Single Claude mode (no splitting) |
+| `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
+| `paradigm team providers` | Show available providers |
+| `paradigm team providers --set X` | Set preferred provider |
+
+### Provider Cascade
+
+Providers are tried in order until one is available:
+1. `claude` - Anthropic API (requires ANTHROPIC_API_KEY)
+2. `claude-code` - Claude Code Task tool (Max subscription)
+3. `claude-cli` - Spawn claude CLI processes
+4. `manual` - File-based handoffs (always available)
+
+Configure via:
+- Environment: `PARADIGM_AGENT_PROVIDER=claude-code`
+- Config: `agent-provider: claude-code` in `.paradigm/config.yaml`
+- CLI: `paradigm team providers --set claude-code`
+
+### Facets (Agent Roles)
+
+Each agent has role-specific configuration in `.paradigm/agents.yaml`:
+- `defaultModel`: opus, sonnet, or haiku
+- `context.include/exclude`: Files to load for that role
+- `limits.maxTokens`: Budget per agent
+- `protocol.relay`: How agent reports results
+
 ## MCP Workflow Protocol
 
 **Query before modifying** - Use MCP tools for token-efficient, fresh data:
