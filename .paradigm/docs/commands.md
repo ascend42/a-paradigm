@@ -398,7 +398,30 @@ Initialize team configuration with default agents.
 ```bash
 paradigm team init
 paradigm team init --force
+paradigm team init --configure-models  # Force model selection prompts
+paradigm team init --no-configure-models  # Skip model prompts
 ```
+
+### paradigm team models
+
+Configure or view agent model assignments. Discovers available models based on environment (Cursor, Claude Code, API providers).
+
+```bash
+# View current configuration and available models
+paradigm team models
+
+# Refresh model cache (re-discover from environment)
+paradigm team models --refresh
+
+# Output as JSON
+paradigm team models --json
+```
+
+**Environment Detection:**
+- **Cursor**: Shows all available models (Claude, GPT-4, Gemini, Grok, Llama, Mistral, etc.)
+- **Claude Code**: Fixed models (opus, sonnet, haiku)
+- **API Keys**: Discovers models from configured providers (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
+- **Fallback**: Basic Claude models
 
 ### paradigm team status
 

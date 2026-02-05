@@ -2,6 +2,72 @@
  * Types for Paradigm Multi-Agent Team Orchestration
  */
 
+// ============================================================================
+// Model Discovery Types
+// ============================================================================
+
+/**
+ * Information about an available AI model
+ */
+export interface ModelInfo {
+  /** Model ID (e.g., "claude-opus-4-5-20251101", "gpt-4o") */
+  id: string;
+  /** Human-readable name (e.g., "Claude Opus", "GPT-4o") */
+  name: string;
+  /** Provider (e.g., "anthropic", "openai", "google") */
+  provider: string;
+  /** Model family (e.g., "claude-4", "gpt-4", "gemini-2") */
+  family?: string;
+  /** Model capabilities */
+  capabilities?: {
+    maxInputTokens?: number;
+    maxOutputTokens?: number;
+    vision?: boolean;
+  };
+}
+
+/**
+ * Model configuration for an agent
+ */
+export interface ModelConfig {
+  /** The model ID to use */
+  id: string;
+  /** Optional provider hint */
+  provider?: string;
+}
+
+/**
+ * Result from model discovery
+ */
+export interface ModelDiscoveryResult {
+  /** Source of the discovered models */
+  source: 'cursor' | 'claude-code' | 'anthropic-api' | 'openai' | 'google' | 'xai' | 'openrouter' | 'multi-provider' | 'vscode' | 'fallback';
+  /** List of available models */
+  models: ModelInfo[];
+  /** Whether the result was loaded from cache */
+  cached: boolean;
+  /** Timestamp of discovery/cache */
+  timestamp: string;
+}
+
+/**
+ * Agent model tier recommendations
+ */
+export const AGENT_MODEL_RECOMMENDATIONS: Record<string, {
+  tier: 'high' | 'medium' | 'low';
+  description: string;
+}> = {
+  architect: { tier: 'high', description: 'Complex planning needs best reasoning' },
+  security: { tier: 'high', description: 'Deep security analysis' },
+  reviewer: { tier: 'medium', description: 'Balanced critique' },
+  builder: { tier: 'low', description: 'Fast implementation, lower cost' },
+  tester: { tier: 'low', description: 'Quick validation' },
+};
+
+// ============================================================================
+// Agent Types
+// ============================================================================
+
 export interface AgentFocus {
   reads: string[];    // Symbol patterns this agent can read (e.g., "@features", "^gates")
   writes: string[];   // File patterns this agent can write (e.g., "src/**", ".purpose")

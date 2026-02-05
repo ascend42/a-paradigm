@@ -11,6 +11,7 @@ import {
   Handoff,
   DEFAULT_AGENTS,
   AgentDefinition,
+  ModelConfig,
 } from './types.js';
 
 /**
@@ -214,17 +215,48 @@ export function getPendingHandoffs(rootDir: string): Handoff[] {
 
 /**
  * Generate default agents.yaml content
+ *
+ * @param projectName - Name of the project
+ * @param modelOverrides - Optional model configuration overrides per agent
  */
-export function generateDefaultManifest(projectName: string = 'project'): AgentsManifest {
+export function generateDefaultManifest(
+  projectName: string = 'project',
+  modelOverrides?: Record<string, ModelConfig>
+): AgentsManifest {
   const agents: Record<string, AgentDefinition> = {};
-  
+
   for (const [name, def] of Object.entries(DEFAULT_AGENTS)) {
     agents[name] = {
       name,
       ...def,
     };
+
+    // Apply model override if provided
+    if (modelOverrides && modelOverrides[name]) {
+      const modelId = modelOverrides[name].id.toLowerCase();
+
+      // Map full model IDs to simple names (opus/sonnet/haiku)
+      if (
+        modelId.includes('opus') ||
+        (modelId.includes('gpt-4') && !modelId.includes('mini')) ||
+        (modelId.includes('o1') && !modelId.includes('mini')) ||
+        (modelId.includes('pro') && !modelId.includes('mini')) ||
+        modelId.includes('large')
+      ) {
+        agents[name].defaultModel = 'opus';
+      } else if (
+        modelId.includes('haiku') ||
+        modelId.includes('mini') ||
+        modelId.includes('flash') ||
+        modelId.includes('small')
+      ) {
+        agents[name].defaultModel = 'haiku';
+      } else {
+        agents[name].defaultModel = 'sonnet';
+      }
+    }
   }
-  
+
   return {
     version: '1.0.0',
     team: {

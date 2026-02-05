@@ -5,6 +5,38 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-02-05
+
+### Added
+
+- **Dynamic Model Discovery** - Automatically discover available AI models based on environment
+  - Detects Cursor, Claude Code, VSCode, and API provider environments
+  - Fetches models from provider APIs when keys are available
+  - 24-hour caching to avoid repeated API calls
+  - Comprehensive presets for Cursor users (24+ models from 8 providers)
+
+- **Interactive Model Selection** - Configure agent models during team init
+  - `paradigm team init --configure-models` forces model selection prompts
+  - `paradigm team init --no-configure-models` skips prompts (default in Claude Code)
+  - Models grouped by tier (high/medium/low) with recommendations per agent role
+
+- **Team Models Command** - View and configure agent model assignments
+  - `paradigm team models` shows current configuration and available models
+  - `paradigm team models --refresh` clears cache and re-discovers models
+  - `paradigm team models --json` outputs machine-readable format
+
+- **Shift Command Enhancement** - Now includes team initialization
+  - `paradigm shift` now runs team init as Step 2/5
+  - `paradigm shift --configure-models` enables model prompts during setup
+
+### Changed
+
+- **Team Init** - Now auto-detects environment and prompts for models in Cursor/interactive terminals
+- **Agent Types** - Added `ModelInfo`, `ModelConfig`, `ModelDiscoveryResult` types
+- **Loader** - `generateDefaultManifest()` now accepts optional model overrides
+
+---
+
 ## [1.6.0] - 2026-02-05
 
 ### Added

@@ -176,6 +176,8 @@ Paradigm supports multi-agent orchestration via `paradigm team` commands:
 | `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
 | `paradigm team providers` | Show available providers |
 | `paradigm team providers --set X` | Set preferred provider |
+| `paradigm team models` | View/configure agent model assignments |
+| `paradigm team models --refresh` | Re-discover models from environment |
 
 ### Provider Cascade
 
@@ -197,6 +199,16 @@ Each agent has role-specific configuration in `.paradigm/agents.yaml`:
 - `context.include/exclude`: Files to load for that role
 - `limits.maxTokens`: Budget per agent
 - `protocol.relay`: How agent reports results
+
+### Model Selection
+
+Models are configured per agent based on task complexity:
+- **architect/security**: `opus` (complex reasoning)
+- **reviewer**: `sonnet` (balanced critique)
+- **builder/tester**: `haiku` (fast, cost-effective)
+
+Run `paradigm team models` to view/configure. In Cursor and interactive environments,
+`paradigm team init` prompts for model selection from all available providers.
 
 ## MCP Workflow Protocol
 
