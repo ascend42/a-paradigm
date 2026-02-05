@@ -28,11 +28,13 @@
     "@a-company/sentinel": "*",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
+    "glob": "^10.3.10",
     "js-yaml": "^4.1.0",
     "open": "^10.0.3",
     "ora": "^8.0.1"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
