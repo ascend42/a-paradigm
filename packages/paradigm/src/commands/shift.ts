@@ -18,12 +18,16 @@ import { initCommand } from './init.js';
 import { indexCommand } from './scan/index.js';
 import { syncCommand } from './sync.js';
 import { doctorCommand } from './doctor.js';
+import { teamInitCommand } from './team/index.js';
+import { agentsConfigured } from './team/loader.js';
 
 export interface ShiftOptions {
   force?: boolean;
   quick?: boolean;
   verify?: boolean;
   ide?: string;
+  /** Force model configuration prompts during team init */
+  configureModels?: boolean;
 }
 
 export async function shiftCommand(options: ShiftOptions = {}) {
@@ -47,7 +51,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   const spinner = ora();
 
   if (!isInitialized || options.force) {
-    spinner.start('Step 1/4: Initializing Paradigm...');
+    spinner.start('Step 1/5: Initializing Paradigm...');
     try {
       await initCommand({
         force: options.force,
@@ -61,12 +65,32 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       return;
     }
   } else {
-    spinner.succeed(chalk.gray('Step 1/4: Already initialized (use --force to reinit)'));
+    spinner.succeed(chalk.gray('Step 1/5: Already initialized (use --force to reinit)'));
   }
 
-  // Step 2: Scan/Index
+  // Step 2: Team init (if needed)
+  const teamConfigured = agentsConfigured(cwd);
+  if (!teamConfigured || options.force) {
+    spinner.start('Step 2/5: Initializing team configuration...');
+    try {
+      await teamInitCommand(cwd, {
+        force: options.force,
+        json: false,
+        configureModels: options.configureModels,
+        noConfigureModels: !options.configureModels,
+      });
+      spinner.succeed(chalk.green('Team configuration initialized'));
+    } catch (error) {
+      spinner.warn(chalk.yellow(`Team init warning: ${(error as Error).message}`));
+      // Don't fail - team init is optional
+    }
+  } else {
+    spinner.succeed(chalk.gray('Step 2/5: Team already configured (use --force to reinit)'));
+  }
+
+  // Step 3: Scan/Index
   if (!options.quick) {
-    spinner.start('Step 2/4: Scanning and indexing symbols...');
+    spinner.start('Step 3/5: Scanning and indexing symbols...');
     try {
       await indexCommand(cwd, { quiet: true });
       spinner.succeed(chalk.green('Symbols indexed'));
@@ -75,12 +99,12 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       // Don't fail - scan is optional
     }
   } else {
-    spinner.succeed(chalk.gray('Step 2/4: Skipped scan (--quick mode)'));
+    spinner.succeed(chalk.gray('Step 3/5: Skipped scan (--quick mode)'));
   }
 
-  // Step 3: Sync all IDEs
+  // Step 4: Sync all IDEs
   // Always generate both CLAUDE.md and .cursor/rules/ since users often have multiple AI tools
-  spinner.start('Step 3/4: Syncing IDE configurations...');
+  spinner.start('Step 4/5: Syncing IDE configurations...');
   try {
     const ideTargets = options.ide ? [options.ide] : ['claude', 'cursor', 'copilot', 'windsurf'];
     const syncResults: string[] = [];
@@ -103,9 +127,9 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     spinner.warn(chalk.yellow(`Sync warning: ${(error as Error).message}`));
   }
 
-  // Step 4: Doctor (verify)
+  // Step 5: Doctor (verify)
   if (options.verify) {
-    spinner.start('Step 4/4: Running health checks...');
+    spinner.start('Step 5/5: Running health checks...');
     try {
       const healthy = await doctorCommand({ quiet: true });
       if (healthy) {
@@ -117,7 +141,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       spinner.warn(chalk.yellow(`Doctor warning: ${(error as Error).message}`));
     }
   } else {
-    spinner.succeed(chalk.gray('Step 4/4: Skipped verify (use --verify to check health)'));
+    spinner.succeed(chalk.gray('Step 5/5: Skipped verify (use --verify to check health)'));
   }
 
   // Summary
@@ -134,6 +158,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   const files = [
     { path: '.paradigm/config.yaml', desc: 'Project configuration' },
     { path: '.paradigm/navigator.yaml', desc: 'Symbol navigation map' },
+    { path: '.paradigm/agents.yaml', desc: 'Team agent configuration' },
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: 'portal.yaml', desc: 'Authorization gates', optional: true },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },

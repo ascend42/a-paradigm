@@ -39,11 +39,12 @@ program
 // paradigm shift - one command to rule them all
 program
   .command('shift')
-  .description('Full project setup in one command (init + scan + sync all IDEs + doctor)')
+  .description('Full project setup in one command (init + team init + scan + sync all IDEs + doctor)')
   .option('-f, --force', 'Reinitialize even if already setup')
   .option('-q, --quick', 'Skip slow operations (scan)')
   .option('--verify', 'Run health checks after setup')
   .option('--ide <ide>', 'Target specific IDE instead of all')
+  .option('--configure-models', 'Force model configuration prompts for team agents')
   .action(async (options) => {
     const { shiftCommand } = await import('./commands/shift.js');
     await shiftCommand(options);
@@ -286,10 +287,16 @@ teamCmd
   .command('init [path]')
   .description('Initialize team configuration with default agents')
   .option('-f, --force', 'Overwrite existing configuration')
+  .option('--configure-models', 'Force model configuration prompts')
+  .option('--no-configure-models', 'Skip model configuration')
   .option('--json', 'Output as JSON')
   .action(async (path, options) => {
     const { teamInitCommand } = await import('./commands/team/index.js');
-    await teamInitCommand(path, options);
+    await teamInitCommand(path, {
+      ...options,
+      configureModels: options.configureModels,
+      noConfigureModels: options.configureModels === false,
+    });
   });
 
 teamCmd
@@ -461,6 +468,17 @@ teamCmd
   .action(async (path, options) => {
     const { teamProvidersCommand } = await import('./commands/team/providers.js');
     await teamProvidersCommand(path, options);
+  });
+
+// paradigm team models
+teamCmd
+  .command('models [path]')
+  .description('Configure or view agent model assignments')
+  .option('--refresh', 'Refresh model cache from environment')
+  .option('--json', 'Output as JSON')
+  .action(async (path, options) => {
+    const { teamModelsCommand } = await import('./commands/team/index.js');
+    await teamModelsCommand(path, options);
   });
 
 // Default team action (show status)

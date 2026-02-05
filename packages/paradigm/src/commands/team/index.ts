@@ -12,6 +12,7 @@ import {
   AgentsManifest,
   Handoff,
   TeamState,
+  ModelConfig,
 } from './types.js';
 import {
   loadAgentsManifest,
@@ -32,10 +33,22 @@ import {
   getParadigmDir,
 } from './loader.js';
 import { BackgroundOrchestrator } from '../../core/background-orchestrator.js';
+import {
+  shouldPromptForModels,
+  promptForAgentModels,
+  teamModelsCommand,
+} from './configure-models.js';
+
+// Re-export the models command
+export { teamModelsCommand } from './configure-models.js';
 
 interface InitOptions {
   force?: boolean;
   json?: boolean;
+  /** Force model configuration prompts */
+  configureModels?: boolean;
+  /** Skip model configuration */
+  noConfigureModels?: boolean;
 }
 
 interface StatusOptions {
@@ -68,28 +81,43 @@ export async function teamInitCommand(targetPath: string | undefined, options: I
   const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
   const projectName = path.basename(rootDir);
   const agentsPath = getAgentsPath(rootDir);
-  
+
   if (!options.json) {
-    console.log(chalk.blue('\n👥 Initialize Paradigm Team\n'));
+    console.log(chalk.blue('\n  Initialize Paradigm Team\n'));
   }
-  
+
   // Check if already exists
   if (agentsConfigured(rootDir) && !options.force) {
     if (options.json) {
       console.log(JSON.stringify({ error: 'Team already configured', path: agentsPath }));
     } else {
-      console.log(chalk.yellow(`Team already configured at ${agentsPath}`));
-      console.log(chalk.gray('Use --force to reinitialize.\n'));
+      console.log(chalk.yellow(`  Team already configured at ${agentsPath}`));
+      console.log(chalk.gray('  Use --force to reinitialize.\n'));
     }
     return;
   }
-  
-  // Generate default manifest
-  const manifest = generateDefaultManifest(projectName);
-  
+
+  // Determine if we should prompt for model configuration
+  let modelOverrides: Record<string, ModelConfig> | undefined;
+
+  const shouldConfigure =
+    options.configureModels ||
+    (shouldPromptForModels() && options.noConfigureModels !== true);
+
+  if (shouldConfigure && !options.json) {
+    try {
+      modelOverrides = await promptForAgentModels(rootDir);
+    } catch {
+      // If prompting fails (e.g., non-interactive), continue with defaults
+    }
+  }
+
+  // Generate default manifest with optional model overrides
+  const manifest = generateDefaultManifest(projectName, modelOverrides);
+
   // Save it
   saveAgentsManifest(rootDir, manifest);
-  
+
   // Initialize empty team state
   const state: TeamState = {
     current: null,
@@ -98,29 +126,35 @@ export async function teamInitCommand(targetPath: string | undefined, options: I
     blocked: [],
   };
   saveTeamState(rootDir, state);
-  
+
   if (options.json) {
-    console.log(JSON.stringify({ 
-      success: true, 
+    const agentModels: Record<string, string> = {};
+    for (const [name, agent] of Object.entries(manifest.agents)) {
+      agentModels[name] = agent.defaultModel || 'default';
+    }
+    console.log(JSON.stringify({
+      success: true,
       path: agentsPath,
       agents: Object.keys(manifest.agents),
+      models: agentModels,
     }));
     return;
   }
-  
-  console.log(chalk.green('✓ Team configuration created\n'));
-  console.log(chalk.gray(`  ${agentsPath}\n`));
-  
-  console.log(chalk.cyan('Available agents:'));
+
+  console.log(chalk.green('  ✓ Team configuration created\n'));
+  console.log(chalk.gray(`    ${agentsPath}\n`));
+
+  console.log(chalk.cyan('  Available agents:'));
   for (const [name, agent] of Object.entries(manifest.agents)) {
-    console.log(`  ${chalk.yellow(name.padEnd(12))} ${agent.role.split('\n')[0]}`);
+    const model = agent.defaultModel || 'default';
+    console.log(`    ${chalk.yellow(name.padEnd(12))} ${chalk.gray(`(${model})`)} ${agent.role.split('\n')[0]}`);
   }
-  
-  console.log(chalk.cyan('\nNext steps:'));
-  console.log(chalk.gray('  1. Review .paradigm/agents.yaml and customize roles'));
-  console.log(chalk.gray('  2. Run `paradigm team status` to see team state'));
-  console.log(chalk.gray('  3. Start a task with any agent (AI will auto-detect)'));
-  console.log(chalk.gray('  4. Use `paradigm team handoff --to <agent>` to hand off work\n'));
+
+  console.log(chalk.cyan('\n  Next steps:'));
+  console.log(chalk.gray('    1. Review .paradigm/agents.yaml and customize roles'));
+  console.log(chalk.gray('    2. Run `paradigm team models` to reconfigure models'));
+  console.log(chalk.gray('    3. Run `paradigm team status` to see team state'));
+  console.log(chalk.gray('    4. Use `paradigm team handoff --to <agent>` to hand off work\n'));
 }
 
 /**
