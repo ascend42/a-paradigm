@@ -295,6 +295,8 @@ teamCmd
 teamCmd
   .command('status [path]')
   .description('Show current team status')
+  .option('--running', 'Show only running orchestrations')
+  .option('--id <id>', 'Show specific orchestration')
   .option('--json', 'Output as JSON')
   .action(async (path, options) => {
     const { teamStatusCommand } = await import('./commands/team/index.js');
@@ -375,6 +377,8 @@ teamCmd
   .option('--solo', 'Run in solo mode (single Claude)')
   .option('--faceted', 'Run in faceted mode (multi-agent, default)')
   .option('--compare', 'Run both modes and compare results')
+  .option('--background', 'Run in background mode (returns immediately)')
+  .option('--notify <methods>', 'Notification methods: bell,desktop,file,webhook (default: bell)')
   .option('-m, --model <model>', 'Orchestrator model: opus, sonnet, haiku')
   .option('-p, --provider <provider>', 'Provider: auto, claude, claude-code, claude-cli, manual')
   .option('--budget <budget>', 'Budget limits (e.g., "tokens=500000,cost=5")')
@@ -385,6 +389,40 @@ teamCmd
   .action(async (task, path, options) => {
     const { teamOrchestrateCommand } = await import('./commands/team/orchestrate.js');
     await teamOrchestrateCommand(task, path, options);
+  });
+
+// paradigm team diff <orchestration-id>
+teamCmd
+  .command('diff <orchestration-id> [path]')
+  .description('Show diff of changes from a completed orchestration')
+  .option('--full', 'Show full file contents')
+  .option('--json', 'Output as JSON')
+  .action(async (orchestrationId, path, options) => {
+    const { teamDiffCommand } = await import('./commands/team/diff.js');
+    await teamDiffCommand(orchestrationId, path, options);
+  });
+
+// paradigm team accept-orch <orchestration-id>
+teamCmd
+  .command('accept-orch <orchestration-id> [path]')
+  .description('Accept orchestration changes')
+  .option('-n, --note <text>', 'Acceptance note')
+  .option('--json', 'Output as JSON')
+  .action(async (orchestrationId, path, options) => {
+    const { teamAcceptOrchestrationCommand } = await import('./commands/team/accept-orchestration.js');
+    await teamAcceptOrchestrationCommand(orchestrationId, path, options);
+  });
+
+// paradigm team reject-orch <orchestration-id>
+teamCmd
+  .command('reject-orch <orchestration-id> [path]')
+  .description('Reject orchestration changes')
+  .option('-r, --reason <text>', 'Rejection reason')
+  .option('--cleanup', 'Delete created files')
+  .option('--json', 'Output as JSON')
+  .action(async (orchestrationId, path, options) => {
+    const { teamRejectOrchestrationCommand } = await import('./commands/team/accept-orchestration.js');
+    await teamRejectOrchestrationCommand(orchestrationId, path, options);
   });
 
 // paradigm team cost

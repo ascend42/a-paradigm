@@ -22,6 +22,11 @@ import { loadFullContext, buildAgentContext, extractSymbols } from './context-bu
 import { BudgetTracker } from './budget-tracker.js';
 import { AuditLogger, OrchestrationLog } from './audit-logger.js';
 import { loadAgentsManifest } from '../commands/team/loader.js';
+import {
+  parseRelayWithFilePlan,
+  FilePlanGroup,
+  FileAssignment,
+} from './agent-prompts.js';
 
 // ============================================================================
 // Types
@@ -77,6 +82,31 @@ export interface OrchestrationResult {
   agentResults: SpawnResult[];
   log?: OrchestrationLog;
   error?: string;
+  /** Parallel builder execution details (if file plan was used) */
+  parallelBuilderStats?: {
+    usedFilePlan: boolean;
+    totalSubPhases: number;
+    totalParallelBuilders: number;
+    filesCreated: number;
+  };
+}
+
+// Types for parallel builder execution
+interface BuilderStage {
+  subPhase: number;
+  builders: Array<{
+    agent: string;
+    group: string;
+    files: FileAssignment[];
+    availableFiles: string[];
+  }>;
+}
+
+interface ParallelBuilderPlan {
+  hasFilePlan: boolean;
+  stages: BuilderStage[];
+  totalFiles: number;
+  totalBuilders: number;
 }
 
 // ============================================================================
@@ -156,6 +186,7 @@ export class Orchestrator {
         result.totalTokens = facetedResult.totalTokens;
         result.totalCost = facetedResult.totalCost;
         result.success = facetedResult.success;
+        result.parallelBuilderStats = facetedResult.parallelBuilderStats;
       }
 
       result.duration_ms = Date.now() - startTime;
@@ -294,6 +325,12 @@ export class Orchestrator {
     results: SpawnResult[];
     totalTokens: TokenUsage;
     totalCost: number;
+    parallelBuilderStats?: {
+      usedFilePlan: boolean;
+      totalSubPhases: number;
+      totalParallelBuilders: number;
+      filesCreated: number;
+    };
   }> {
     const manifest = loadAgentsManifest(this.rootDir);
     if (!manifest) {
@@ -313,6 +350,12 @@ export class Orchestrator {
     let totalCost = 0;
     let handoffContexts: Map<string, string> = new Map();
     let success = true;
+    let parallelBuilderStats: {
+      usedFilePlan: boolean;
+      totalSubPhases: number;
+      totalParallelBuilders: number;
+      filesCreated: number;
+    } | undefined;
 
     // Execute stages sequentially, agents within each stage in parallel
     const sortedStages = Array.from(stages.keys()).sort((a, b) => a - b);
@@ -401,6 +444,53 @@ export class Orchestrator {
           const context = result.relay.handoff?.context ||
             `${step.agent} completed: ${result.relay.outputs.decisions.join(', ') || 'task done'}`;
           handoffContexts.set(step.agent, context);
+
+          // Check if architect provided a file plan for parallel builders
+          if (step.agent === 'architect' && result.relay) {
+            // Try to parse file plan from the relay output
+            // The relay might contain the full response including YAML block
+            const filePlan = this.extractFilePlanFromRelay(result);
+
+            if (filePlan && filePlan.length > 0) {
+              // Plan parallel builder execution
+              const builderPlan = this.planBuilderStages(filePlan);
+
+              if (builderPlan.hasFilePlan && builderPlan.totalBuilders > 1) {
+                // Execute parallel builders instead of single builder
+                const parallelResult = await this.runParallelBuilders(
+                  builderPlan,
+                  handoffContexts.get('architect') || '',
+                  options
+                );
+
+                // Add parallel builder results
+                results.push(...parallelResult.results);
+                totalTokens.input += parallelResult.totalTokens.input;
+                totalTokens.output += parallelResult.totalTokens.output;
+                totalTokens.total += parallelResult.totalTokens.total;
+                totalCost += parallelResult.totalCost;
+
+                if (!parallelResult.success) {
+                  success = false;
+                }
+
+                // Record stats
+                parallelBuilderStats = {
+                  usedFilePlan: true,
+                  totalSubPhases: builderPlan.stages.length,
+                  totalParallelBuilders: builderPlan.totalBuilders,
+                  filesCreated: builderPlan.totalFiles,
+                };
+
+                // Skip the normal builder stage since we handled it with parallel builders
+                // Remove builder from remaining stages
+                for (const [stageKey, stageValue] of stages) {
+                  const filtered = stageValue.filter(s => s.agent !== 'builder');
+                  stages.set(stageKey, filtered);
+                }
+              }
+            }
+          }
         }
 
         // Check for failure
@@ -423,7 +513,118 @@ export class Orchestrator {
       }
     }
 
-    return { success, results, totalTokens, totalCost };
+    return { success, results, totalTokens, totalCost, parallelBuilderStats };
+  }
+
+  /**
+   * Extract file plan from architect's relay result
+   */
+  private extractFilePlanFromRelay(result: SpawnResult): FilePlanGroup[] | undefined {
+    if (!result.relay) return undefined;
+
+    // The relay might have the file plan in the handoff context or we need to parse from response
+    // For now, we'll look for a structured filePlan in the relay outputs
+    // This would typically come from parsing the full agent response
+
+    // Check if there's additional context that might contain the file plan
+    const handoffContext = result.relay.handoff?.context || '';
+
+    // Try to parse file plan from handoff context
+    if (handoffContext.includes('filePlan:')) {
+      return this.parseFilePlanFromText(handoffContext);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Parse file plan from text (simplified YAML parsing)
+   */
+  private parseFilePlanFromText(text: string): FilePlanGroup[] | undefined {
+    const filePlan: FilePlanGroup[] = [];
+
+    // Look for filePlan section
+    const filePlanMatch = text.match(/filePlan:\s*\n([\s\S]*?)(?=\n[a-z_]+:|$)/);
+    if (!filePlanMatch) {
+      return undefined;
+    }
+
+    const filePlanContent = filePlanMatch[1];
+    const lines = filePlanContent.split('\n');
+
+    let currentGroup: FilePlanGroup | null = null;
+    let inFiles = false;
+    let currentFile: Partial<FileAssignment> = {};
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      if (trimmed.startsWith('- group:')) {
+        if (currentGroup) {
+          if (currentFile.path) {
+            currentGroup.files.push({
+              path: currentFile.path,
+              description: currentFile.description || '',
+            });
+            currentFile = {};
+          }
+          filePlan.push(currentGroup);
+        }
+        currentGroup = {
+          group: trimmed.split(':')[1].trim(),
+          subPhase: 0,
+          files: [],
+        };
+        inFiles = false;
+        continue;
+      }
+
+      if (!currentGroup) continue;
+
+      if (trimmed.startsWith('subPhase:')) {
+        currentGroup.subPhase = parseInt(trimmed.split(':')[1].trim(), 10) || 0;
+        continue;
+      }
+
+      if (trimmed === 'files:') {
+        inFiles = true;
+        continue;
+      }
+
+      if (inFiles) {
+        if (trimmed.startsWith('- path:')) {
+          if (currentFile.path) {
+            currentGroup.files.push({
+              path: currentFile.path,
+              description: currentFile.description || '',
+            });
+          }
+          currentFile = {
+            path: trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, ''),
+          };
+          continue;
+        }
+
+        if (trimmed.startsWith('description:')) {
+          currentFile.description = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, '');
+          continue;
+        }
+      }
+    }
+
+    if (currentFile.path && currentGroup) {
+      currentGroup.files.push({
+        path: currentFile.path,
+        description: currentFile.description || '',
+      });
+    }
+    if (currentGroup) {
+      filePlan.push(currentGroup);
+    }
+
+    return filePlan.length > 0 ? filePlan : undefined;
   }
 
   // ==========================================================================
@@ -556,6 +757,233 @@ export class Orchestrator {
     const date = new Date().toISOString().slice(0, 10);
     const random = Math.random().toString(36).substring(2, 8);
     return `orch-${date}-${random}`;
+  }
+
+  // ==========================================================================
+  // Private: Parallel Builder Planning
+  // ==========================================================================
+
+  /**
+   * Plan parallel builder stages from architect's file plan
+   */
+  private planBuilderStages(filePlan: FilePlanGroup[] | undefined): ParallelBuilderPlan {
+    // Fallback: single builder (current behavior)
+    if (!filePlan || filePlan.length === 0) {
+      return {
+        hasFilePlan: false,
+        stages: [{
+          subPhase: 0,
+          builders: [{
+            agent: 'builder',
+            group: 'all',
+            files: [],
+            availableFiles: [],
+          }],
+        }],
+        totalFiles: 0,
+        totalBuilders: 1,
+      };
+    }
+
+    // Group by subPhase
+    const subPhases = new Map<number, FilePlanGroup[]>();
+    for (const group of filePlan) {
+      const existing = subPhases.get(group.subPhase) || [];
+      existing.push(group);
+      subPhases.set(group.subPhase, existing);
+    }
+
+    // Create stages in order
+    const stages: BuilderStage[] = [];
+    const sortedPhases = [...subPhases.keys()].sort((a, b) => a - b);
+    let availableFiles: string[] = [];
+    let totalBuilders = 0;
+    let totalFiles = 0;
+
+    for (const phase of sortedPhases) {
+      const groups = subPhases.get(phase)!;
+      const builders: BuilderStage['builders'] = [];
+
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        totalFiles += group.files.length;
+        totalBuilders++;
+
+        builders.push({
+          agent: `builder-${phase}-${i}`,
+          group: group.group,
+          files: group.files,
+          availableFiles: [...availableFiles],
+        });
+      }
+
+      stages.push({
+        subPhase: phase,
+        builders,
+      });
+
+      // After this phase completes, its files become available to next phases
+      for (const group of groups) {
+        for (const file of group.files) {
+          availableFiles.push(file.path);
+        }
+      }
+    }
+
+    return {
+      hasFilePlan: true,
+      stages,
+      totalFiles,
+      totalBuilders,
+    };
+  }
+
+  /**
+   * Build narrowed prompt for a parallel builder
+   */
+  private buildParallelBuilderPrompt(
+    assignedFiles: FileAssignment[],
+    availableFiles: string[],
+    architectContext: string,
+    groupName: string
+  ): string {
+    const parts: string[] = [];
+
+    parts.push(`You are a BUILDER agent responsible for implementing the **${groupName}** group.`);
+    parts.push('');
+    parts.push('## Your Assignment');
+    parts.push('');
+    parts.push('### Files to Create:');
+    for (const file of assignedFiles) {
+      parts.push(`- \`${file.path}\`: ${file.description}`);
+    }
+    parts.push('');
+
+    if (availableFiles.length > 0) {
+      parts.push('### Available Files (already created):');
+      parts.push('These files exist and you can import from them:');
+      for (const file of availableFiles) {
+        parts.push(`- \`${file}\``);
+      }
+      parts.push('');
+    }
+
+    if (architectContext) {
+      parts.push('### Context from Architect:');
+      parts.push(architectContext);
+      parts.push('');
+    }
+
+    parts.push('### Instructions:');
+    parts.push('1. Create ONLY the files assigned to you');
+    parts.push('2. You can import from available files (already created)');
+    parts.push('3. Follow existing patterns in the codebase');
+    parts.push('4. Use the Paradigm logger (not console.log)');
+    parts.push('5. End with the standard Agent Relay block');
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Execute parallel builder stages
+   * Sub-phases execute sequentially, builders within each sub-phase execute in parallel
+   */
+  private async runParallelBuilders(
+    builderPlan: ParallelBuilderPlan,
+    architectContext: string,
+    options: OrchestrationOptions
+  ): Promise<{
+    success: boolean;
+    results: SpawnResult[];
+    totalTokens: TokenUsage;
+    totalCost: number;
+  }> {
+    const results: SpawnResult[] = [];
+    let totalTokens: TokenUsage = { input: 0, output: 0, total: 0 };
+    let totalCost = 0;
+    let success = true;
+
+    for (const stage of builderPlan.stages) {
+      // Check for checkpoint before sub-phase
+      if (options.checkpoints?.beforeAgentSpawn && options.onCheckpoint) {
+        const builderNames = stage.builders.map(b => b.group).join(', ');
+        const approved = await options.onCheckpoint(
+          `Builder Sub-phase ${stage.subPhase}: ${builderNames}${stage.builders.length > 1 ? ' (parallel)' : ''}`
+        );
+        if (!approved) {
+          success = false;
+          break;
+        }
+      }
+
+      // Spawn all builders in this sub-phase in parallel
+      const spawnPromises = stage.builders.map(async (builder) => {
+        const taskPrompt = this.buildParallelBuilderPrompt(
+          builder.files,
+          builder.availableFiles,
+          architectContext,
+          builder.group
+        );
+
+        const spawnerOptions: SpawnerOptions = {
+          model: 'haiku', // Builders always use haiku
+          workingDirectory: options.workingDirectory || this.rootDir,
+          mcpServerPath: options.mcpServerPath,
+          budget: options.budget,
+          onMessage: options.onMessage
+            ? (msg) => options.onMessage!(builder.agent, msg)
+            : undefined,
+          onCheckpoint: options.onCheckpoint,
+        };
+
+        if (options.onAgentStart) {
+          options.onAgentStart(builder.agent, `Implement ${builder.group}`);
+        }
+
+        // Spawn using 'builder' agent definition
+        const result = await this.spawner.spawn('builder', taskPrompt, spawnerOptions);
+
+        if (options.onAgentComplete) {
+          options.onAgentComplete(builder.agent, result);
+        }
+
+        return { builder, result };
+      });
+
+      // Wait for all builders in this sub-phase to complete
+      const stageResults = await Promise.all(spawnPromises);
+
+      // Process results
+      for (const { builder, result } of stageResults) {
+        results.push(result);
+
+        if (result.relay) {
+          totalTokens.input += result.relay.metrics.tokens_used.input;
+          totalTokens.output += result.relay.metrics.tokens_used.output;
+          totalTokens.total += result.relay.metrics.tokens_used.total;
+          totalCost += calculateCost(result.relay.metrics.tokens_used, 'haiku');
+        }
+
+        if (!result.success) {
+          success = false;
+        }
+      }
+
+      // If any builder in this sub-phase failed, stop
+      if (!success) break;
+
+      // Check for checkpoint after sub-phase completion
+      if (options.checkpoints?.afterAgentComplete && options.onCheckpoint) {
+        const approved = await options.onCheckpoint(
+          `Sub-phase ${stage.subPhase} complete. Continue to next sub-phase?`
+        );
+        if (!approved) {
+          break;
+        }
+      }
+    }
+
+    return { success, results, totalTokens, totalCost };
   }
 }
 

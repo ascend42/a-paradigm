@@ -41,6 +41,17 @@ export interface AgentPrompt {
   subagentType: string;
 }
 
+export interface FileAssignment {
+  path: string;
+  description: string;
+}
+
+export interface FilePlanGroup {
+  group: string;
+  subPhase: number;
+  files: FileAssignment[];
+}
+
 export interface RelayOutput {
   status: 'success' | 'partial' | 'failed' | 'blocked';
   summary: string;
@@ -48,6 +59,8 @@ export interface RelayOutput {
   decisions: string[];
   handoffContext?: string;
   handoffTo?: string;
+  /** File plan for parallel builder execution (from architect) */
+  filePlan?: FilePlanGroup[];
 }
 
 // ============================================================================
@@ -66,17 +79,28 @@ You do NOT write implementation code - that's the Builder's job.
 3. Define data models, API contracts, and component interfaces
 4. Consider scalability, maintainability, and security
 5. Document flows that span multiple components
+6. **Create a file plan with dependency ordering for parallel builder execution**
 
 ## What You Produce
 - Specification documents (in specs/*.md or inline)
 - API contracts and data models
 - Architecture diagrams (as text descriptions)
 - Flow definitions using Paradigm $flow syntax
+- **Structured file plan for builders** (see Output Format)
 
 ## What You DON'T Do
 - Write implementation code
 - Create test files
 - Make changes to src/** files
+
+## File Plan Protocol
+When designing features, create a file plan that groups files by sub-phase:
+- **Sub-phase 0**: Types, interfaces, and constants (no dependencies)
+- **Sub-phase 1**: Core logic, models, utilities (depends on types)
+- **Sub-phase 2**: Routes, handlers, integration (depends on models)
+- **Sub-phase 3**: Tests (depends on implementation)
+
+Files in the same sub-phase can be built in parallel. Sub-phases execute sequentially.
 
 ## Handoff Protocol
 When your design is complete, summarize:
@@ -251,6 +275,57 @@ handoff_context: |
 
 This structured output helps the orchestrator track progress and pass context.`;
 
+const ARCHITECT_FILE_PLAN_INSTRUCTIONS = `
+## File Plan Format (REQUIRED for Architect)
+
+As an architect, you MUST include a filePlan in your relay output when handing off to builders.
+This enables parallel builder execution with proper dependency ordering:
+
+\`\`\`yaml
+# Agent Relay
+status: success
+summary: |
+  Designed the feature architecture
+filePlan:
+  # Sub-phase 0: Types/Interfaces (no dependencies)
+  - group: types
+    subPhase: 0
+    files:
+      - path: src/types/todo.ts
+        description: "Todo interface and enums"
+      - path: src/types/api.ts
+        description: "API request/response types"
+
+  # Sub-phase 1: Core logic (depends on types)
+  - group: models
+    subPhase: 1
+    files:
+      - path: src/models/todo.ts
+        description: "Todo CRUD operations"
+      - path: src/db/schema.ts
+        description: "Database schema"
+
+  # Sub-phase 2: Routes (depends on models)
+  - group: routes
+    subPhase: 2
+    files:
+      - path: src/routes/todos.ts
+        description: "Todo API endpoints"
+      - path: src/middleware/validation.ts
+        description: "Input validation"
+
+handoff_to: builder
+handoff_context: |
+  Implementation spec and file plan ready
+\`\`\`
+
+**Key rules:**
+- Files in the same subPhase can be built in PARALLEL (multiple builders)
+- SubPhases execute SEQUENTIALLY (0 → 1 → 2)
+- Group by logical component (types, models, routes, tests)
+- Each file needs path and description
+- Consider import dependencies when assigning subPhase`;
+
 // ============================================================================
 // Prompt Builder
 // ============================================================================
@@ -322,6 +397,11 @@ export function buildAgentPrompt(options: AgentPromptOptions): AgentPrompt {
   // Output format instructions
   if (includeOutputFormat) {
     parts.push(OUTPUT_FORMAT_INSTRUCTIONS);
+
+    // Add file plan instructions for architects
+    if (agent.name === 'architect') {
+      parts.push(ARCHITECT_FILE_PLAN_INSTRUCTIONS);
+    }
   }
 
   // Build the full prompt
@@ -505,4 +585,114 @@ export function getRolePrompt(agentName: string): string | undefined {
  */
 export function listAgentRoles(): string[] {
   return Object.keys(ROLE_PROMPTS);
+}
+
+/**
+ * Parse file plan from YAML content
+ * Handles the filePlan structure from architect relay output
+ */
+export function parseFilePlan(yamlContent: string): FilePlanGroup[] | undefined {
+  const filePlan: FilePlanGroup[] = [];
+
+  // Look for filePlan section
+  const filePlanMatch = yamlContent.match(/filePlan:\s*\n([\s\S]*?)(?=\n[a-z_]+:|$)/);
+  if (!filePlanMatch) {
+    return undefined;
+  }
+
+  const filePlanContent = filePlanMatch[1];
+  const lines = filePlanContent.split('\n');
+
+  let currentGroup: FilePlanGroup | null = null;
+  let inFiles = false;
+  let currentFile: Partial<FileAssignment> = {};
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // New group starts with "- group:"
+    if (trimmed.startsWith('- group:')) {
+      if (currentGroup) {
+        filePlan.push(currentGroup);
+      }
+      currentGroup = {
+        group: trimmed.split(':')[1].trim(),
+        subPhase: 0,
+        files: [],
+      };
+      inFiles = false;
+      continue;
+    }
+
+    if (!currentGroup) continue;
+
+    // Parse subPhase
+    if (trimmed.startsWith('subPhase:')) {
+      currentGroup.subPhase = parseInt(trimmed.split(':')[1].trim(), 10) || 0;
+      continue;
+    }
+
+    // Start of files array
+    if (trimmed === 'files:') {
+      inFiles = true;
+      continue;
+    }
+
+    if (inFiles) {
+      // New file entry starts with "- path:"
+      if (trimmed.startsWith('- path:')) {
+        if (currentFile.path) {
+          currentGroup.files.push({
+            path: currentFile.path,
+            description: currentFile.description || '',
+          });
+        }
+        currentFile = {
+          path: trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, ''),
+        };
+        continue;
+      }
+
+      // Description for current file
+      if (trimmed.startsWith('description:')) {
+        currentFile.description = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, '');
+        continue;
+      }
+    }
+  }
+
+  // Don't forget the last file and group
+  if (currentFile.path && currentGroup) {
+    currentGroup.files.push({
+      path: currentFile.path,
+      description: currentFile.description || '',
+    });
+  }
+  if (currentGroup) {
+    filePlan.push(currentGroup);
+  }
+
+  return filePlan.length > 0 ? filePlan : undefined;
+}
+
+/**
+ * Parse relay output with file plan support
+ */
+export function parseRelayWithFilePlan(response: string): RelayOutput | null {
+  const result = parseRelayOutput(response);
+  if (!result) return null;
+
+  // Try to parse file plan from the YAML content
+  const yamlMatch = response.match(/```yaml\s*\n# Agent Relay\n([\s\S]*?)```/);
+  if (yamlMatch) {
+    const filePlan = parseFilePlan(yamlMatch[1]);
+    if (filePlan) {
+      result.filePlan = filePlan;
+    }
+  }
+
+  return result;
 }

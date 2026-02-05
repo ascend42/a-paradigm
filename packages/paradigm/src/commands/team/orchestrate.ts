@@ -6,6 +6,7 @@
  *   paradigm team orchestrate "..." --solo       # Single Claude mode (for comparison)
  *   paradigm team orchestrate "..." --faceted    # Multi-agent mode (default)
  *   paradigm team orchestrate "..." --compare    # Run both and compare
+ *   paradigm team orchestrate "..." --background # Run in background
  */
 
 import * as path from 'path';
@@ -21,6 +22,10 @@ import {
   OrchestrationMode,
   OrchestrationResult,
 } from '../../core/orchestrator.js';
+import {
+  BackgroundOrchestrator,
+  BackgroundOrchestration,
+} from '../../core/background-orchestrator.js';
 import { loadAgentsManifest } from './loader.js';
 
 // ============================================================================
@@ -38,6 +43,10 @@ export interface OrchestrateCommandOptions {
   budget?: string;
   checkpoint?: boolean;
   live?: boolean;
+  /** Run in background mode */
+  background?: boolean;
+  /** Notification methods for background mode */
+  notify?: string;
 }
 
 // ============================================================================
@@ -110,6 +119,40 @@ export async function teamOrchestrateCommand(
     } else {
       console.log(chalk.red(`\nError: ${error instanceof Error ? error.message : error}\n`));
     }
+    return;
+  }
+
+  // Background mode
+  if (options.background) {
+    spinner.text = 'Starting background orchestration...';
+
+    const bgOrchestrator = new BackgroundOrchestrator(rootDir);
+    const notifyMethods: Array<'bell' | 'desktop' | 'file' | 'webhook'> = options.notify
+      ? options.notify.split(',').filter((m): m is 'bell' | 'desktop' | 'file' | 'webhook' =>
+          ['bell', 'desktop', 'file', 'webhook'].includes(m))
+      : ['bell'];
+
+    const bgOrch = await bgOrchestrator.startBackground(task, {
+      mode,
+      orchestratorModel: options.model,
+      budget,
+      notify: true,
+      notifyMethods,
+    });
+
+    spinner.stop();
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        id: bgOrch.id,
+        status: bgOrch.status,
+        outputFile: bgOrch.outputFile,
+        task: bgOrch.task,
+      }, null, 2));
+      return;
+    }
+
+    displayBackgroundStarted(bgOrch);
     return;
   }
 
@@ -346,5 +389,24 @@ function displayComparison(comparison: {
     console.log(chalk.gray('    Default to --faceted for complex tasks, --solo for simple ones.'));
   }
 
+  console.log();
+}
+
+function displayBackgroundStarted(orch: BackgroundOrchestration): void {
+  console.log();
+  console.log(chalk.blue('━'.repeat(60)));
+  console.log(chalk.blue('  Orchestration started in background'));
+  console.log(chalk.blue('━'.repeat(60)));
+  console.log();
+  console.log(chalk.white(`  ID: ${orch.id}`));
+  console.log(chalk.gray(`  Task: ${orch.task.slice(0, 50)}${orch.task.length > 50 ? '...' : ''}`));
+  console.log(chalk.gray(`  Mode: ${orch.mode}`));
+  console.log(chalk.gray(`  Status: ${orch.status}`));
+  console.log();
+  console.log(chalk.cyan('  Commands:'));
+  console.log(chalk.gray(`    Monitor:  paradigm team status ${orch.id}`));
+  console.log(chalk.gray(`    Logs:     tail -f ${orch.outputFile}`));
+  console.log(chalk.gray(`    Diff:     paradigm team diff ${orch.id}`));
+  console.log(chalk.gray(`    Accept:   paradigm team accept ${orch.id}`));
   console.log();
 }
