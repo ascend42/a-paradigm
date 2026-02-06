@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **MCP config now writes to `.mcp.json` at project root**: Claude Code requires `.mcp.json` at the project root — `.claude/settings.json` doesn't work for MCP server declarations. Both `paradigm sync claude` and `paradigm mcp setup` now write to `.mcp.json`. If an existing `.mcp.json` is present, the paradigm server is merged in alongside other servers.
+- **Added Claude Code to `paradigm mcp setup` detection**: The `mcp setup` command now detects Claude Code (via `.mcp.json` or `.claude/` directory) as a configurable client, alongside Cursor, Claude Desktop, Continue, and Cline.
 - **Updated stale model presets**: All preset model lists were outdated (Claude 3.5, GPT-4o, Grok 2, Gemini 2.0, Llama 3.x). Updated across all environments (Cursor, Anthropic API, OpenAI API, Google API, xAI API, VSCode/Copilot):
   - Anthropic: Claude Opus 4.6, Claude Sonnet 4.5, Claude Haiku 4.5
   - OpenAI: GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano, o3, o4 Mini, o3 Mini
