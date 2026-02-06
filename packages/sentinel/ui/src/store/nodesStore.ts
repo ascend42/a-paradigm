@@ -155,7 +155,7 @@ export const useNodesStore = create<NodesState>((set, get) => ({
   visibleTypes: ALL_TYPES,
   filterTags: [],
   searchQuery: '',
-  layoutMode: 'canvas',
+  layoutMode: 'grid',
   sortOption: 'type',
 
   setNodes: (nodes) => set({ nodes }),
