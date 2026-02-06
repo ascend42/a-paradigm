@@ -1,9 +1,9 @@
-version: '1.0'
+version: '2.0'
 antipatterns:
   - id: auth-001
     symbols:
-      - '@login'
-      - '@register'
+      - '#login-handler'
+      - '#register-handler'
       - ^authenticated
     description: Storing plain-text passwords in the database
     reason: Security vulnerability - passwords can be leaked if database is compromised
