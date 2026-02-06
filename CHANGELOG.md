@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-02-06
+
+### Changed
+
+- **`paradigm shift` always prompts for model configuration**: The interactive model selection step now runs automatically during `paradigm shift` — no need for `--configure-models` flag. This makes the setup experience more engaging and ensures agents are configured with the right models from the start.
+
+### Fixed
+
+- **Updated stale model presets**: All preset model lists were outdated (Claude 3.5, GPT-4o, Grok 2, Gemini 2.0, Llama 3.x). Updated across all environments (Cursor, Anthropic API, OpenAI API, Google API, xAI API, VSCode/Copilot):
+  - Anthropic: Claude Opus 4.6, Claude Sonnet 4.5, Claude Haiku 4.5
+  - OpenAI: GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano, o3, o4 Mini, o3 Mini
+  - Google: Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.0 Flash
+  - xAI: Grok 3, Grok 3 Mini
+  - Meta: Llama 4 Scout, Llama 4 Maverick
+  - DeepSeek: DeepSeek R1, DeepSeek V3
+- **Updated model tiering logic**: Added `nano`, `scout` to low-tier patterns; added `gpt-4.1`, `o3`, `o4`, `grok-3`, `maverick`, `deepseek-r1` to high-tier patterns; updated family extraction for new model families
+
 ## Sentinel [0.1.1] - 2026-02-06
 
 ### Added

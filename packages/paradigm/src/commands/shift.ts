@@ -69,36 +69,20 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   }
 
   // Step 2: Team init (if needed)
+  // Always run interactive model configuration — it's a fun step in the setup process
   const teamConfigured = agentsConfigured(cwd);
   if (!teamConfigured || options.force) {
-    // If configureModels is set, we'll have interactive prompts
-    // Don't use spinner during interactive mode
-    if (options.configureModels) {
-      console.log(chalk.cyan('Step 2/5: Initializing team configuration...'));
-      try {
-        await teamInitCommand(cwd, {
-          force: options.force,
-          json: false,
-          configureModels: true,
-          noConfigureModels: false,
-        });
-        console.log(chalk.green('  ✓ Team configuration initialized\n'));
-      } catch (error) {
-        console.log(chalk.yellow(`  ⚠ Team init warning: ${(error as Error).message}\n`));
-      }
-    } else {
-      spinner.start('Step 2/5: Initializing team configuration...');
-      try {
-        await teamInitCommand(cwd, {
-          force: options.force,
-          json: false,
-          configureModels: false,
-          noConfigureModels: true,
-        });
-        spinner.succeed(chalk.green('Team configuration initialized'));
-      } catch (error) {
-        spinner.warn(chalk.yellow(`Team init warning: ${(error as Error).message}`));
-      }
+    console.log(chalk.cyan('  Step 2/5: Initializing team configuration...'));
+    try {
+      await teamInitCommand(cwd, {
+        force: options.force,
+        json: false,
+        configureModels: true,
+        noConfigureModels: false,
+      });
+      console.log(chalk.green('  ✓ Team configuration initialized\n'));
+    } catch (error) {
+      console.log(chalk.yellow(`  ⚠ Team init warning: ${(error as Error).message}\n`));
     }
   } else {
     spinner.succeed(chalk.gray('Step 2/5: Team already configured (use --force to reinit)'));

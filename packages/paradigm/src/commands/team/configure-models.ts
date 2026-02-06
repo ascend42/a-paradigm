@@ -282,10 +282,14 @@ function mapToSimpleModel(modelId: string): 'opus' | 'sonnet' | 'haiku' {
   // High tier -> opus
   if (
     id.includes('opus') ||
-    (id.includes('gpt-4') && !id.includes('mini')) ||
+    (id.includes('gpt-4') && !id.includes('mini') && !id.includes('nano')) ||
+    (id === 'o3' || (id.includes('o3') && !id.includes('mini'))) ||
     (id.includes('o1') && !id.includes('mini')) ||
     (id.includes('-pro') && !id.includes('mini')) ||
     id.includes('large') ||
+    id.includes('maverick') ||
+    id.includes('deepseek-r1') ||
+    (id.includes('grok-3') && !id.includes('mini')) ||
     (id.includes('grok-2') && !id.includes('mini'))
   ) {
     return 'opus';
@@ -295,7 +299,9 @@ function mapToSimpleModel(modelId: string): 'opus' | 'sonnet' | 'haiku' {
   if (
     id.includes('haiku') ||
     id.includes('mini') ||
+    id.includes('nano') ||
     id.includes('flash') ||
+    id.includes('scout') ||
     id.includes('small')
   ) {
     return 'haiku';
