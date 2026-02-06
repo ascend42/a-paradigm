@@ -11,6 +11,7 @@ type ViewType = 'design' | 'incidents';
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('design');
   const [projectName, setProjectName] = useState<string | null>(null);
+  const [projectDir, setProjectDir] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const theme = useThemeStore((state) => state.theme);
@@ -28,6 +29,7 @@ function App() {
         if (response.ok) {
           const info = await response.json();
           setProjectName(info.projectName || null);
+          setProjectDir(info.projectDir || null);
         }
         setIsLoading(false);
       } catch (error) {
@@ -117,6 +119,11 @@ function App() {
         </div>
 
         <div className="view-tabs-right">
+          {projectDir && (
+            <div className="project-dir-badge" title={projectDir}>
+              {projectDir}
+            </div>
+          )}
           <div className="version-badge-inline">
             v{__PARADIGM_VERSION__}
           </div>
