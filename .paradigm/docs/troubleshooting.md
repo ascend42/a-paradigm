@@ -66,7 +66,7 @@ Common issues and their solutions.
        description: What it does
        gates: [^authenticated]      # Optional
        flows: [$checkout-flow]      # Optional
-       signals: [!success, !failed] # Optional
+       signals: ["!success", "!failed"] # Optional
    
    # Array format (also valid)
    features:
@@ -197,13 +197,23 @@ Common issues and their solutions.
    ```yaml
    # Wrong - missing quotes on special chars
    description: Use @ for features
-   
+
    # Correct
    description: "Use @ for features"
-   
+
+   # Wrong - ! is a YAML tag indicator, breaks parsing in arrays
+   signals: [!success, !failed]
+   steps:
+     - !payment-completed
+
+   # Correct - always quote ! signals in YAML
+   signals: ["!success", "!failed"]
+   steps:
+     - "!payment-completed"
+
    # Wrong - tabs instead of spaces
    	key: value
-   
+
    # Correct - 2 spaces
      key: value
    ```

@@ -11,10 +11,12 @@ import {
   extractStates,
   extractFlows,
   extractSignals,
+  extractAspects,
   extractSymbolReferences,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import type {
+  CodeAnchor,
   DreamFile,
   SymbolEntry,
   SymbolType,
@@ -126,6 +128,22 @@ export async function aggregateFromDream(
             filePath,
             data: item,
             description: item.description,
+          }));
+        }
+
+        // Extract aspects from purpose files
+        const aspects = extractAspects(parsed);
+        for (const [id, { item, filePath }] of aspects) {
+          symbols.push(createSymbolEntry({
+            id: `purpose-aspect-${id}`,
+            symbol: `~${id}`,
+            type: 'aspect',
+            source: 'purpose',
+            filePath,
+            data: item,
+            description: item.description,
+            anchors: item.anchors?.map(a => parseAnchorString(a)),
+            appliesTo: item['applies-to'],
           }));
         }
 
@@ -306,6 +324,35 @@ function createFlowSymbol(flow: Flow, filePath: string): SymbolEntry {
     data: flow,
     description: flow.description,
   });
+}
+
+/**
+ * Parse an anchor string into a CodeAnchor
+ * Formats: "file.ts", "file.ts:15", "file.ts:15-20", "file.ts:15,25,30"
+ */
+function parseAnchorString(raw: string): CodeAnchor {
+  const colonIndex = raw.lastIndexOf(':');
+  if (colonIndex === -1 || colonIndex === raw.length - 1) {
+    return { path: raw, lines: 0, raw };
+  }
+
+  const afterColon = raw.slice(colonIndex + 1);
+  const filePath = raw.slice(0, colonIndex);
+
+  // Check if it's a line reference (digits, dashes, commas)
+  if (!/^[\d,\- ]+$/.test(afterColon)) {
+    return { path: raw, lines: 0, raw };
+  }
+
+  if (afterColon.includes('-')) {
+    const [start, end] = afterColon.split('-').map(Number);
+    return { path: filePath, lines: [start, end], raw };
+  } else if (afterColon.includes(',')) {
+    const lines = afterColon.split(',').map(Number);
+    return { path: filePath, lines, raw };
+  } else {
+    return { path: filePath, lines: Number(afterColon), raw };
+  }
 }
 
 // Common framework aliases that look like symbols but aren't

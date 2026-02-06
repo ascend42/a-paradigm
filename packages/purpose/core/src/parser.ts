@@ -89,6 +89,15 @@ const StateDefinitionSchema = z.object({
   type: z.string().optional(),
 });
 
+// Aspects defined in .purpose files (cross-cutting concerns with code anchors)
+const AspectDefinitionSchema = z.object({
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  anchors: z.array(z.string()).optional(),
+  'applies-to': z.array(z.string()).optional(),
+  enforcement: z.string().optional(),
+});
+
 const ReferenceSchema = z.object({
   target: z.string(),
   type: z.string(),
@@ -113,6 +122,7 @@ const PurposeFileSchema = z.object({
   gates: z.record(GateDefinitionSchema).optional(),
   states: z.record(StateDefinitionSchema).optional(),
   signals: z.record(SignalDefinitionSchema).optional(),
+  aspects: z.record(AspectDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
   // Support both array format and record format for flows
   flows: z.union([

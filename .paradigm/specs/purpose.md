@@ -41,7 +41,7 @@ features:
     description: What this feature does
     gates: [^gate1, ^gate2]           # Required portals
     flows: [$flow-name]               # Multi-step processes
-    signals: [!signal1, !signal2]     # Events emitted
+    signals: ["!signal1", "!signal2"]   # Events emitted
     components: [#Component1]         # Components used
     states: [%user.preference]        # State accessed
     tags: [keyword1, keyword2]        # Searchable tags
@@ -145,12 +145,12 @@ features:
   login:
     description: Email/password authentication
     gates: [^public]
-    signals: [!login-success, !login-failed]
+    signals: ["!login-success", "!login-failed"]
 
   logout:
     description: End user session
     gates: [^authenticated]
-    signals: [!logout]
+    signals: ["!logout"]
 
 components:
   LoginForm:
@@ -170,7 +170,7 @@ features:
   add-to-cart:
     description: Add product to shopping cart
     gates: [^authenticated]
-    signals: [!cart-updated]
+    signals: ["!cart-updated"]
     components: [#CartButton, #ProductCard]
     states: [%cart.items]
 
@@ -178,7 +178,7 @@ features:
     description: Complete purchase flow
     gates: [^authenticated, ^has-cart]
     flows: [$checkout-flow]
-    signals: [!checkout-started, !checkout-completed, !payment-failed]
+    signals: ["!checkout-started", "!checkout-completed", "!payment-failed"]
     tags: [payment, critical]
 
 components:

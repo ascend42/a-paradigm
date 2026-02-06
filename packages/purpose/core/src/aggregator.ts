@@ -5,13 +5,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import type { 
-  AggregatedPurpose, 
-  PurposeFile, 
-  PurposeItem, 
+import type {
+  AggregatedPurpose,
+  PurposeFile,
+  PurposeItem,
   PurposeItemArray,
-  GateDefinition, 
-  StateDefinition, 
+  AspectDefinition,
+  GateDefinition,
+  StateDefinition,
   SignalDefinition,
   FlowDefinition,
   FlowWithSteps,
@@ -318,6 +319,23 @@ export function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, { 
   }
 
   return signals;
+}
+
+/**
+ * Extract all aspects from parsed purpose files
+ */
+export function extractAspects(parsedFiles: ParsedPurposeFile[]): Map<string, { item: AspectDefinition; filePath: string }> {
+  const aspects = new Map<string, { item: AspectDefinition; filePath: string }>();
+
+  for (const { filePath, data } of parsedFiles) {
+    if (data.aspects) {
+      for (const [id, item] of Object.entries(data.aspects)) {
+        aspects.set(id, { item, filePath });
+      }
+    }
+  }
+
+  return aspects;
 }
 
 /**

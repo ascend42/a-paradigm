@@ -27,6 +27,10 @@
       "type": "array",
       "items": { "$ref": "#/definitions/Flow" }
     },
+    "aspects": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/AspectDefinition" }
+    },
     "references": {
       "type": "array",
       "items": { "$ref": "#/definitions/Reference" }
@@ -79,6 +83,25 @@
         "component": { "type": "string" },
         "action": { "type": "string" },
         "description": { "type": "string" }
+      }
+    },
+    "AspectDefinition": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "anchors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "applies-to": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "enforcement": { "type": "string" }
       }
     },
     "Reference": {

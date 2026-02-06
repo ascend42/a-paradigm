@@ -35,7 +35,7 @@ I want to add a new @[FEATURE_NAME] feature.
 
 ## Related Symbols
 - Portals needed: [^portal-name if auth required]
-- Signals to emit: [!success-signal, !failure-signal]
+- Signals to emit: ["!success-signal", "!failure-signal"]
 - State affected: [%state.property]
 - Components to use/create: [#ComponentName]
 
@@ -91,7 +91,7 @@ Allow users to reset their password via email verification.
        description: Detailed description
        gates: [^authenticated]      # Portals required
        flows: [$checkout-flow]      # Flows this triggers
-       signals: [!success, !failed] # Events emitted
+       signals: ["!success", "!failed"] # Events emitted
        states: [%user.cart]         # State dependencies
        components: [#MyComponent]   # UI components used
    
