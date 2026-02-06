@@ -1,83 +1,207 @@
-version: 1.0.0
+# Paradigm MCP Server
+# Version: 2.0 (Symbol System v2)
+
 description: |
-  @a-company/paradigm-mcp - MCP (Model Context Protocol) server for Paradigm.
-  Exposes symbols, gates, flows, and analysis tools to AI assistants like Claude.
-  Technology agnostic - works with any language or framework.
+  MCP (Model Context Protocol) server for Paradigm. Exposes symbols, gates, flows,
+  and analysis tools to AI assistants like Claude. Technology agnostic - works
+  with any language or framework.
 
-features:
-  mcp-resources:
-    description: "Read-only data exposed via MCP protocol"
-    components: ["#symbols-resource", "#gates-resource", "#flows-resource"]
-    signals: ["!resource-read"]
+# ============================================
+# Components (#)
+# ============================================
 
-  mcp-tools:
-    description: "Actions AI can invoke via MCP protocol"
-    components: ["#search-tool", "#ripple-tool", "#related-tool", "#status-tool", "#gates-for-route-tool"]
-    signals: ["!tool-invoked"]
+#MCPServer:
+  description: Main MCP server entry point using @modelcontextprotocol/sdk
+  tags: [feature]
+  anchors:
+    - src/index.ts:1-100
+  components:
+    - "#ResourceHandlers"
+    - "#ToolHandlers"
+    - "#IndexLoader"
 
-  index-loading:
-    description: "Load project symbol index on startup"
-    components: ["#index-loader", "#context-manager"]
-    signals: ["!context-loaded", "!context-error"]
+#ResourceHandlers:
+  description: MCP resource handlers for paradigm:// URIs
+  tags: [feature, mcp]
+  anchors:
+    - src/resources.ts:1-200
+  signals:
+    - !resource-read
 
-components:
-  symbols-resource:
-    description: "paradigm://symbols and paradigm://symbol/{symbol}"
-    used-by: ["@mcp-resources"]
+#ToolHandlers:
+  description: MCP tool handlers for paradigm_* actions
+  tags: [feature, mcp]
+  anchors:
+    - src/tools/index.ts:1-100
+  components:
+    - "#CoreTools"
+    - "#WisdomTools"
+    - "#HistoryTools"
+    - "#NavigateTools"
+    - "#SentinelTools"
+    - "#TagsTools"
 
-  gates-resource:
-    description: "paradigm://gates with lock/key details"
-    used-by: ["@mcp-resources"]
+#CoreTools:
+  description: Core symbol tools (search, ripple, related, status, gates_for_route)
+  tags: [mcp]
+  anchors:
+    - src/tools/index.ts:100-800
+  signals:
+    - !tool-invoked
 
-  flows-resource:
-    description: "paradigm://flows with step sequences"
-    used-by: ["@mcp-resources"]
+#WisdomTools:
+  description: Team wisdom tools (context, record, expert)
+  tags: [mcp]
+  anchors:
+    - src/tools/wisdom.ts:1-350
 
-  search-tool:
-    description: "paradigm_search - find symbols by query"
-    used-by: ["@mcp-tools"]
+#HistoryTools:
+  description: Implementation history tools (context, record, validate, fragility)
+  tags: [mcp]
+  anchors:
+    - src/tools/history.ts:1-300
 
-  ripple-tool:
-    description: "paradigm_ripple - impact analysis"
-    used-by: ["@mcp-tools"]
+#NavigateTools:
+  description: Codebase navigation tools (find, explore, context)
+  tags: [mcp]
+  anchors:
+    - src/tools/navigate.ts:1-250
 
-  related-tool:
-    description: "paradigm_related - connected symbols"
-    used-by: ["@mcp-tools"]
+#SentinelTools:
+  description: Incident triage tools (triage, show, resolve, patterns, stats)
+  tags: [mcp]
+  anchors:
+    - src/tools/sentinel.ts:1-400
 
-  status-tool:
-    description: "paradigm_status - project overview"
-    used-by: ["@mcp-tools"]
+#TagsTools:
+  description: Tag bank tools for v2 symbol classification
+  tags: [mcp, v2]
+  anchors:
+    - src/tools/tags.ts:1-400
+  signals:
+    - !tag-suggested
 
-  gates-for-route-tool:
-    description: "paradigm_gates_for_route - suggest gates for a route"
-    used-by: ["@mcp-tools"]
+#ContextTools:
+  description: Context monitoring and handoff tools
+  tags: [mcp]
+  anchors:
+    - src/tools/context.ts:1-200
 
-  index-loader:
-    description: "Loads symbol index using premise-core"
-    used-by: ["@index-loading"]
+#IndexLoader:
+  description: Loads project symbol index using premise-core aggregator
+  tags: [integration]
+  anchors:
+    - src/utils/index-loader.ts:1-150
+  signals:
+    - !context-loaded
+    - !context-error
 
-  context-manager:
-    description: "Manages project context state"
-    used-by: ["@index-loading"]
+# ============================================
+# Flows ($)
+# ============================================
 
-signals:
-  resource-read:
-    description: "MCP resource was fetched"
-    category: mcp
-    severity: info
+$mcp-startup:
+  description: Server initialization and context loading
+  steps:
+    - "Parse command line args"
+    - "#IndexLoader"          # Load symbol index
+    - "!context-loaded"
+    - "#MCPServer"            # Start MCP server
+    - "Connect to transport"
 
-  tool-invoked:
-    description: "MCP tool was called"
-    category: mcp
-    severity: info
+$tool-execution:
+  description: Handle incoming MCP tool call
+  steps:
+    - "Receive CallToolRequest"
+    - "Route to handler"
+    - "#ToolHandlers"         # Execute tool
+    - "!tool-invoked"
+    - "Return result"
 
-  context-loaded:
-    description: "Project context successfully loaded"
-    category: mcp
-    severity: info
+$resource-fetch:
+  description: Handle incoming MCP resource request
+  steps:
+    - "Receive ReadResourceRequest"
+    - "#ResourceHandlers"     # Fetch resource
+    - "!resource-read"
+    - "Return content"
 
-  context-error:
-    description: "Failed to load project context"
-    category: mcp
-    severity: error
+$tag-suggestion:
+  description: AI suggests new tag for human review
+  tags: [v2]
+  steps:
+    - "AI calls paradigm_tags_suggest"
+    - "#TagsTools"            # Validate and add to suggested
+    - "!tag-suggested"
+    - "Human reviews in Sentinel UI"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+!context-loaded:
+  description: Project context successfully loaded from disk
+  tags: [audit]
+  payload:
+    projectName: string
+    symbolCount: number
+    timestamp: ISO8601
+
+!context-error:
+  description: Failed to load project context
+  tags: [error]
+  payload:
+    error: string
+    path: string
+
+!tool-invoked:
+  description: MCP tool was called by AI assistant
+  tags: [audit]
+  payload:
+    tool: string
+    args: object
+    tokenCount: number
+
+!resource-read:
+  description: MCP resource was fetched by AI assistant
+  tags: [audit]
+  payload:
+    uri: string
+    tokenCount: number
+
+!tag-suggested:
+  description: AI suggested a new tag for human review
+  tags: [v2, audit]
+  payload:
+    tag: string
+    reason: string
+    exampleSymbols: string[]
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~token-tracking:
+  description: All tool responses must track token usage for context management
+  tags: [compliance]
+  anchors:
+    - src/tools/context.ts:20-50
+    - src/tools/index.ts:270-275
+  applies-to:
+    - "#CoreTools"
+    - "#WisdomTools"
+    - "#HistoryTools"
+  enforcement: |
+    Every tool handler must call trackToolCall(text.length, name) before
+    returning to enable context monitoring and handoff recommendations.
+
+~v2-symbol-types:
+  description: All symbol type enums use v2 types only
+  tags: [compliance, v2]
+  anchors:
+    - src/tools/index.ts:110-115
+  applies-to:
+    - "#CoreTools"
+  enforcement: |
+    paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
+    paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects

@@ -1,0 +1,229 @@
+# Paradigm Sentinel - Symbolic Incident Triage
+# Version: 2.0 (Symbol System v2)
+
+description: |
+  Sentinel provides semantic incident recording, pattern matching, and failure triage.
+  It uses Paradigm symbols to contextualize errors and suggest resolutions based on
+  learned patterns.
+
+# ============================================
+# Components (#)
+# ============================================
+
+#IncidentStorage:
+  description: SQLite-based storage for incidents, patterns, and resolutions
+  tags: [feature, persistence]
+  anchors:
+    - src/storage.ts:1-500
+  signals:
+    - !incident-recorded
+    - !incident-resolved
+
+#PatternMatcher:
+  description: Matches incoming incidents to known failure patterns using symbolic criteria
+  tags: [feature, ml]
+  anchors:
+    - src/matcher.ts:1-200
+  signals:
+    - !pattern-matched
+    - !pattern-confidence-updated
+
+#IncidentEnricher:
+  description: Enriches incidents with symbol descriptions and context from the project index
+  tags: [feature]
+  anchors:
+    - src/enricher.ts:1-150
+
+#IncidentGrouper:
+  description: Groups similar incidents by common symbols and error patterns
+  tags: [feature]
+  anchors:
+    - src/grouper.ts:1-250
+
+#StatisticsEngine:
+  description: Calculates incident statistics, pattern effectiveness, and symbol health metrics
+  tags: [feature, analytics]
+  anchors:
+    - src/stats.ts:1-300
+
+#PatternSuggester:
+  description: Suggests new patterns from clustered incidents for human review
+  tags: [feature, ml]
+  anchors:
+    - src/suggester.ts:1-350
+  signals:
+    - !pattern-suggested
+
+#TimelineBuilder:
+  description: Builds flow timelines showing gate/signal sequence leading to failure
+  tags: [feature]
+  anchors:
+    - src/timeline.ts:1-150
+
+#SentinelServer:
+  description: Express server exposing REST API for incident and pattern management
+  tags: [feature, api]
+  anchors:
+    - src/server/index.ts:1-100
+  gates:
+    - ^api-authenticated
+
+#SentinelUI:
+  description: React application for visualizing incidents, patterns, and codebase symbols
+  tags: [feature, ui]
+  anchors:
+    - ui/src/App.tsx:1-150
+  components:
+    - #CanvasView
+    - #GridView
+    - #ListView
+    - #PropertiesPanel
+
+#CanvasView:
+  description: Interactive canvas for dragging and connecting symbol nodes
+  tags: [ui]
+  anchors:
+    - ui/src/components/Canvas/Canvas.tsx:1-100
+
+#GridView:
+  description: Column-based view grouping symbols by type
+  tags: [ui]
+  anchors:
+    - ui/src/components/Views/GridView.tsx:1-130
+
+#ListView:
+  description: Sortable table view of all symbols
+  tags: [ui]
+  anchors:
+    - ui/src/components/Views/ListView.tsx:1-130
+
+#PropertiesPanel:
+  description: Side panel for editing symbol properties, tags, and viewing references
+  tags: [ui]
+  anchors:
+    - ui/src/components/Panel/PropertiesPanel.tsx:1-350
+
+#NodesStore:
+  description: Zustand store managing symbol nodes, filters, and layout state
+  tags: [state]
+  anchors:
+    - ui/src/store/nodesStore.ts:1-420
+
+# ============================================
+# Flows ($)
+# ============================================
+
+$incident-triage:
+  description: Complete flow from incident recording to resolution suggestion
+  tags: [critical]
+  steps:
+    - "#IncidentStorage"      # Record incident
+    - "#PatternMatcher"       # Match to known patterns
+    - "#IncidentEnricher"     # Add symbol context
+    - "#IncidentGrouper"      # Group with similar
+    - "#PatternSuggester"     # Suggest new patterns
+  on-failure:
+    - "!triage-failed"
+
+$pattern-lifecycle:
+  description: Pattern creation through confidence validation
+  steps:
+    - "Create pattern from suggestion or manual input"
+    - "#PatternMatcher"       # Start matching
+    - "!pattern-matched"      # Track matches
+    - "#StatisticsEngine"     # Calculate confidence
+    - "!pattern-confidence-updated"
+
+$resolution-flow:
+  description: Incident investigation and resolution tracking
+  steps:
+    - "Investigate incident"
+    - "Apply fix"
+    - "#IncidentStorage"      # Mark resolved
+    - "!incident-resolved"
+    - "Track for recurrence"
+
+# ============================================
+# Gates (^)
+# ============================================
+
+^api-authenticated:
+  description: API requests require authentication when auth is configured
+  tags: [security]
+  anchors:
+    - src/server/index.ts:50-70
+  check: |
+    If SENTINEL_API_KEY is set, requests must include
+    Authorization: Bearer <key> header
+
+# ============================================
+# Signals (!)
+# ============================================
+
+!incident-recorded:
+  description: Emitted when a new incident is recorded in storage
+  tags: [audit]
+  payload:
+    incidentId: string
+    timestamp: ISO8601
+    symbols: object
+
+!pattern-matched:
+  description: Emitted when an incident matches a known failure pattern
+  payload:
+    incidentId: string
+    patternId: string
+    confidence: number
+
+!incident-resolved:
+  description: Emitted when an incident is marked as resolved
+  tags: [audit]
+  payload:
+    incidentId: string
+    patternId: string?
+    commitHash: string?
+
+!pattern-confidence-updated:
+  description: Emitted when pattern confidence score is recalculated
+  payload:
+    patternId: string
+    oldScore: number
+    newScore: number
+
+!pattern-suggested:
+  description: Emitted when AI suggests a new pattern from incident clusters
+  payload:
+    suggestion: object
+    incidentCount: number
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~symbolic-context-required:
+  description: All incidents MUST include at least one Paradigm symbol for triage to work
+  tags: [compliance]
+  anchors:
+    - src/storage.ts:100-120
+    - src/types.ts:28-36
+  applies-to:
+    - "#IncidentStorage"
+  enforcement: |
+    Incidents without symbolic context (feature, component, flow, gate, signal)
+    cannot be effectively triaged. The SymbolicContext interface requires at
+    least one symbol to be present.
+
+~confidence-tracking:
+  description: All pattern matches must update pattern confidence metrics
+  tags: [compliance]
+  anchors:
+    - src/matcher.ts:150-180
+    - src/stats.ts:200-250
+  applies-to:
+    - "#PatternMatcher"
+  enforcement: |
+    When a pattern matches an incident:
+    1. Increment timesMatched
+    2. Track resolution status
+    3. Recalculate confidence score
+    4. Emit !pattern-confidence-updated

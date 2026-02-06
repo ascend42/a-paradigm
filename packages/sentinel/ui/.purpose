@@ -1,0 +1,195 @@
+# Sentinel UI - Codebase Intelligence Visualization
+# Version: 2.0 (Symbol System v2)
+
+description: |
+  React application for visualizing Paradigm symbols, incidents, and patterns.
+  Provides canvas, grid, and list views with live editing capabilities.
+
+# ============================================
+# Components (#)
+# ============================================
+
+#App:
+  description: Root application component managing layout modes and theme
+  tags: [feature, ui]
+  anchors:
+    - src/App.tsx:1-150
+  components:
+    - "#Toolbar"
+    - "#CanvasView"
+    - "#GridView"
+    - "#ListView"
+    - "#PropertiesPanel"
+
+#Toolbar:
+  description: Top navigation with layout controls, filters, and theme toggle
+  tags: [ui]
+  anchors:
+    - src/components/Toolbar/Toolbar.tsx:1-290
+  components:
+    - "#LayoutToggle"
+    - "#TypeFilters"
+    - "#ZoomControls"
+
+#LayoutToggle:
+  description: Buttons to switch between canvas, grid, and list views
+  tags: [ui]
+  anchors:
+    - src/components/Toolbar/Toolbar.tsx:180-205
+
+#TypeFilters:
+  description: Toggle visibility of symbol types (#, $, ^, !, ~)
+  tags: [ui]
+  anchors:
+    - src/components/Toolbar/Toolbar.tsx:88-175
+
+#Canvas:
+  description: Infinite pan/zoom canvas for draggable symbol nodes
+  tags: [ui]
+  anchors:
+    - src/components/Canvas/Canvas.tsx:1-150
+  signals:
+    - !node-moved
+    - !node-selected
+
+#NodeRenderer:
+  description: Renders individual symbol nodes with type-specific styling
+  tags: [ui]
+  anchors:
+    - src/components/Nodes/NodeRenderer.tsx:1-105
+
+#ConnectionRenderer:
+  description: Renders reference arrows between connected nodes
+  tags: [ui]
+  anchors:
+    - src/components/Nodes/ConnectionRenderer.tsx:1-80
+
+#GridCard:
+  description: Card component for grid view symbol display
+  tags: [ui]
+  anchors:
+    - src/components/Views/GridView.tsx:28-58
+
+#ListRow:
+  description: Table row component for list view symbol display
+  tags: [ui]
+  anchors:
+    - src/components/Views/ListView.tsx:25-68
+
+#Autocomplete:
+  description: Dropdown for symbol search and selection
+  tags: [ui]
+  anchors:
+    - src/components/Input/Autocomplete.tsx:1-48
+
+# ============================================
+# State Management (#)
+# ============================================
+
+#NodesStore:
+  description: Zustand store for symbol nodes, selection, and filters
+  tags: [state]
+  anchors:
+    - src/store/nodesStore.ts:1-420
+  signals:
+    - !node-selected
+    - !filters-changed
+
+#CanvasStore:
+  description: Zustand store for canvas viewport (pan, zoom)
+  tags: [state]
+  anchors:
+    - src/store/canvasStore.ts:1-80
+
+#ThemeStore:
+  description: Zustand store for UI theme (spectrum, focus, deep)
+  tags: [state]
+  anchors:
+    - src/store/themeStore.ts:1-40
+
+# ============================================
+# Flows ($)
+# ============================================
+
+$load-symbols:
+  description: Fetch symbols from API and populate canvas
+  steps:
+    - "Fetch /api/symbols"
+    - "#NodesStore"           # Store nodes
+    - "Calculate grid positions"
+    - "#Canvas"               # Render nodes
+
+$edit-symbol:
+  description: Edit symbol properties via Properties Panel
+  steps:
+    - "Select node"
+    - "#PropertiesPanel"      # Open panel
+    - "Edit fields"
+    - "PUT /api/symbols/:id"  # Persist changes
+    - "!symbol-updated"
+
+$filter-symbols:
+  description: Filter visible symbols by type or tag
+  steps:
+    - "#TypeFilters"          # Toggle types
+    - "#NodesStore"           # Update filters
+    - "!filters-changed"
+    - "Reorganize visible nodes"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+!node-selected:
+  description: User clicked on a symbol node
+  payload:
+    nodeId: string
+    symbol: string
+
+!node-moved:
+  description: User dragged a node to new position
+  payload:
+    nodeId: string
+    position: { x: number, y: number }
+
+!filters-changed:
+  description: User toggled type or tag filters
+  payload:
+    visibleTypes: string[]
+    filterTags: string[]
+
+!symbol-updated:
+  description: Symbol properties were edited and saved
+  payload:
+    symbolId: string
+    updates: object
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~v2-symbols-only:
+  description: UI only renders v2 symbol types (#, $, ^, !, ~)
+  tags: [compliance]
+  anchors:
+    - src/types.ts:6-12
+    - src/store/nodesStore.ts:17-23
+  applies-to:
+    - "#NodesStore"
+    - "#NodeRenderer"
+  enforcement: |
+    SymbolType is restricted to: component, flow, gate, signal, aspect.
+    Legacy types (feature, state, idea, portal) are not rendered.
+    Use tags for classification instead.
+
+~responsive-layout:
+  description: UI adapts to viewport size for all layout modes
+  tags: [ux]
+  anchors:
+    - src/styles/main.css:1-50
+    - src/App.tsx:50-80
+  applies-to:
+    - "#App"
+    - "#Canvas"
+    - "#GridView"
+    - "#ListView"
