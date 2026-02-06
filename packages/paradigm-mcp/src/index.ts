@@ -42,6 +42,14 @@ function getContext(): ProjectContext {
 }
 
 /**
+ * Reload project context after writes to .purpose or portal.yaml.
+ * Called by purpose-portal tools after every successful mutation.
+ */
+async function reloadContext(): Promise<void> {
+  context = await loadProjectContext(projectDir);
+}
+
+/**
  * Main entry point
  */
 async function main() {
@@ -72,7 +80,7 @@ async function main() {
 
   // Register resources and tools
   registerResources(server, getContext);
-  registerTools(server, getContext);
+  registerTools(server, getContext, reloadContext);
 
   // Handle errors
   server.onerror = (error) => {
