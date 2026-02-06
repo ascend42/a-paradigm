@@ -117,13 +117,15 @@ export function generateLoggingRules(config: ParadigmConfig): string {
  */
 function getLogMethodForSymbol(symbol: string): string {
   const mapping: Record<string, string> = {
-    '@': 'feature',
     '#': 'component',
     '^': 'gate',
     '!': 'signal',
-    '%': 'state',
     '$': 'flow',
-    '&': 'integration',
+    '~': 'aspect',
+    // v1 backwards compat — all map to component() in v2
+    '@': 'component',
+    '%': 'component',
+    '&': 'component',
   };
   return mapping[symbol] || 'raw';
 }
