@@ -1,143 +1,220 @@
-# Paradigm Discipline Mappings
+# Paradigm Discipline Mappings (v2)
 
-> Paradigm v1.0 - Language and Discipline Agnostic
+> Paradigm v2.0 - Language and Discipline Agnostic
 
-Paradigm's symbol system is universal. This document shows how to interpret symbols across different development disciplines.
+Paradigm's symbol system v2 is universal. This document shows how to interpret symbols and apply tags across different development disciplines.
 
 ---
 
 ## Core Principle
 
-**Symbols describe WHAT, not HOW.**
+**Symbols describe STRUCTURE, tags describe CLASSIFICATION.**
 
-- `@` = User/system-facing capability
-- `#` = Reusable building block
+### Symbols (Structural - same across all disciplines)
+- `#` = Code unit (any documented component)
 - `$` = Multi-step process
-- `%` = State/configuration
-- `^` = Access control
+- `^` = Access control checkpoint
 - `!` = Events/side effects
-- `?` = Future possibilities
-- `~` = Deprecated
-- `&` = External dependency
+- `~` = Cross-cutting rule with enforcement
 
-The implementation details change per discipline, but the meaning stays constant.
+### Tags (Classification - vary by discipline)
+- `[feature]` = User/system-facing capability
+- `[integration]` = External dependency
+- `[state]` = State management
+- `[critical]` = High business impact
+- `[security]` = Security-sensitive
+
+The implementation details change per discipline, but the symbols stay constant.
 
 ---
 
 ## Web Development
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Routes/pages | `#` | `[feature]` | `#login-page`, `#checkout` |
+| API endpoints | `#` | `[feature]` | `#api-users`, `#api-orders` |
+| UI components | `#` | | `#Button`, `#Modal`, `#card` |
+| Utilities | `#` | | `#api-client`, `#date-formatter` |
+| External APIs | `#` | `[integration]` | `#stripe-client`, `#auth0-service` |
+| State stores | `#` | `[state]` | `#user-store`, `#cart-store` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Routes, pages, user actions | `@login`, `@checkout`, `@dashboard` |
-| `#` | UI components, utilities | `#Button`, `#api-client`, `#modal` |
 | `$` | User flows, wizards | `$onboarding`, `$checkout-flow` |
-| `%` | Client state, stores | `%user`, `%cart`, `%theme` |
 | `^` | Auth middleware, guards | `^authenticated`, `^admin-only` |
 | `!` | DOM events, notifications | `!form-submit`, `!notification-sent` |
-| `&` | APIs, SDKs, CDNs | `&stripe`, `&firebase`, `&auth0` |
+| `~` | Cross-cutting rules | `~rate-limited`, `~csrf-protected` |
 
 ---
 
 ## Backend Services
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| API endpoints | `#` | `[feature]` | `#users-create`, `#orders-process` |
+| Services | `#` | | `#database`, `#cache`, `#queue` |
+| External services | `#` | `[integration]` | `#postgres-client`, `#redis-client` |
+| Configuration | `#` | `[state]` | `#db-config`, `#rate-limits` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | API endpoints, RPC methods | `@users.create`, `@orders.process` |
-| `#` | Services, repositories, utils | `#database`, `#cache`, `#queue` |
-| `$` | Workflows, sagas, pipelines | `$order-fulfillment`, `$data-sync` |
-| `%` | Config, feature flags | `%db-connection`, `%rate-limits` |
+| `$` | Workflows, pipelines | `$order-fulfillment`, `$data-sync` |
 | `^` | Middleware, rate limits | `^api-key-required`, `^rate-limited` |
 | `!` | Events, webhooks, jobs | `!order-created`, `!email-sent` |
-| `&` | Databases, queues, caches | `&postgres`, `&redis`, `&rabbitmq` |
+| `~` | Cross-cutting rules | `~audit-logged`, `~encrypted` |
 
 ---
 
 ## Machine Learning / Data Science
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Models | `#` | `[feature]` | `#classifier-v2`, `#feature-extractor` |
+| Data loaders | `#` | | `#dataloader`, `#normalizer` |
+| Experiments | `#` | `[feature]` | `#experiment-a`, `#baseline` |
+| ML platforms | `#` | `[integration]` | `#wandb-client`, `#s3-client` |
+| Hyperparameters | `#` | `[state]` | `#model-config`, `#training-params` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Models, pipelines, experiments | `@classifier-v2`, `@feature-extraction` |
-| `#` | Data loaders, transforms, utils | `#dataloader`, `#normalizer`, `#metrics` |
 | `$` | Training runs, ETL pipelines | `$training-pipeline`, `$data-ingestion` |
-| `%` | Hyperparameters, configs | `%learning-rate`, `%batch-size` |
 | `^` | Data access, model permissions | `^data-scientist`, `^production-only` |
 | `!` | Training events, alerts | `!epoch-complete`, `!drift-detected` |
-| `&` | ML platforms, data sources | `&wandb`, `&s3`, `&bigquery` |
+| `~` | Cross-cutting rules | `~reproducible`, `~versioned` |
 
 ---
 
 ## Mobile Development
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Screens | `#` | `[feature]` | `#home-screen`, `#camera-capture` |
+| UI widgets | `#` | | `#card`, `#bottom-sheet` |
+| Native modules | `#` | `[integration]` | `#location-service`, `#push-service` |
+| App state | `#` | `[state]` | `#user-session`, `#settings` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Screens, user actions | `@home-screen`, `@camera-capture` |
-| `#` | UI widgets, native modules | `#card`, `#location-service` |
 | `$` | Navigation flows, deep links | `$onboarding`, `$purchase-flow` |
-| `%` | App state, preferences | `%user-session`, `%settings` |
 | `^` | Permissions, entitlements | `^camera-permission`, `^premium-user` |
 | `!` | Push notifications, lifecycle | `!push-received`, `!app-backgrounded` |
-| `&` | Native SDKs, services | `&firebase`, `&admob`, `&healthkit` |
+| `~` | Cross-cutting rules | `~offline-capable`, `~encrypted-storage` |
 
 ---
 
 ## Game Development
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Game mechanics | `#` | `[feature]` | `#attack`, `#inventory`, `#save-game` |
+| Game objects | `#` | | `#player`, `#enemy-ai`, `#physics` |
+| Game services | `#` | `[integration]` | `#steamworks-client`, `#photon-client` |
+| Game state | `#` | `[state]` | `#player-stats`, `#world-state` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Game mechanics, player actions | `@attack`, `@inventory-open`, `@save-game` |
-| `#` | Game objects, systems | `#player`, `#enemy-ai`, `#physics` |
 | `$` | Game loops, cutscenes | `$combat-loop`, `$tutorial-sequence` |
-| `%` | Game state, player stats | `%player-health`, `%score`, `%level` |
 | `^` | Multiplayer auth, cheats | `^multiplayer-session`, `^dev-mode` |
 | `!` | Game events, triggers | `!enemy-killed`, `!level-complete` |
-| `&` | Game services, engines | `&steamworks`, `&unity`, `&photon` |
+| `~` | Cross-cutting rules | `~deterministic`, `~network-synced` |
 
 ---
 
 ## Embedded / IoT
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Device functions | `#` | `[feature]` | `#read-sensor`, `#actuate-motor` |
+| Drivers | `#` | | `#spi-driver`, `#gpio-handler` |
+| Protocols | `#` | `[integration]` | `#mqtt-client`, `#lora-client` |
+| Device config | `#` | `[state]` | `#device-id`, `#sampling-config` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Device functions, commands | `@read-sensor`, `@actuate-motor` |
-| `#` | Drivers, HAL layers | `#spi-driver`, `#gpio-handler` |
 | `$` | State machines, protocols | `$boot-sequence`, `$handshake` |
-| `%` | Device config, registers | `%device-id`, `%sampling-rate` |
 | `^` | Security, firmware signing | `^secure-boot`, `^authenticated-cmd` |
 | `!` | Interrupts, events | `!data-ready`, `!watchdog-timeout` |
-| `&` | Peripherals, protocols | `&i2c`, `&mqtt`, `&lora` |
+| `~` | Cross-cutting rules | `~power-optimized`, `~real-time` |
 
 ---
 
 ## Infrastructure / DevOps
 
+### Components (`#`) with Tags
+
+| Use Case | Symbol | Tags | Examples |
+|----------|--------|------|----------|
+| Operations | `#` | `[feature]` | `#deploy`, `#rollback`, `#scale` |
+| Modules | `#` | | `#vpc-module`, `#backup-script` |
+| Cloud services | `#` | `[integration]` | `#aws-client`, `#k8s-client` |
+| Environment config | `#` | `[state]` | `#prod-secrets`, `#feature-flags` |
+
+### Other Symbols
+
 | Symbol | Interpretation | Examples |
 |--------|---------------|----------|
-| `@` | Operations, runbooks | `@deploy`, `@rollback`, `@scale` |
-| `#` | Terraform modules, scripts | `#vpc-module`, `#backup-script` |
-| `$` | CI/CD pipelines, workflows | `$release-pipeline`, `$disaster-recovery` |
-| `%` | Environment config | `%prod-secrets`, `%feature-flags` |
+| `$` | CI/CD pipelines | `$release-pipeline`, `$disaster-recovery` |
 | `^` | IAM, security policies | `^admin-access`, `^vpc-restricted` |
 | `!` | Alerts, incidents | `!high-cpu`, `!deployment-failed` |
-| `&` | Cloud services, tools | `&aws`, `&kubernetes`, `&datadog` |
+| `~` | Cross-cutting rules | `~immutable-infra`, `~zero-downtime` |
 
 ---
 
 ## Custom Disciplines
 
-Projects can define their own discipline mapping in `.paradigm/config.yaml`:
+Projects can define their own discipline mapping in `.paradigm/config.yaml` and add domain-specific tags to `.paradigm/tags.yaml`:
 
+### config.yaml
 ```yaml
 discipline: custom
 
-# Custom symbol interpretations
-symbol-interpretations:
-  "@": "Patient treatments"
-  "#": "Medical protocols"
-  "$": "Care pathways"
-  "%": "Patient state"
-  "^": "HIPAA compliance"
-  "!": "Clinical alerts"
-  "&": "EHR systems"
+# Symbol interpretations are always the same (v2)
+# Customize tags for your domain in tags.yaml
+```
+
+### tags.yaml
+```yaml
+# Project-specific tags
+project:
+  patient:
+    description: "Patient-related components"
+    color: "#4CAF50"
+    applies-to: ["#"]
+
+  hipaa:
+    description: "HIPAA compliance required"
+    color: "#F44336"
+    applies-to: ["#", "^", "~"]
+
+  clinical:
+    description: "Clinical workflow components"
+    color: "#2196F3"
+    applies-to: ["#", "$"]
 ```
 
 ---
@@ -148,33 +225,36 @@ symbol-interpretations:
 ```yaml
 symbol-mapping:
   "src/core/**": "#"
-  "src/features/**": "@"
+  "src/features/**": "#"      # Use [feature] tag
   "src/services/**": "#"
-  "src/state/**": "%"
+  "src/integrations/**": "#"  # Use [integration] tag
+  "src/state/**": "#"         # Use [state] tag
+  "src/middleware/**": "^"
   "src/events/**": "!"
-  "src/integrations/**": "&"
+  "src/flows/**": "$"
+  "src/aspects/**": "~"
 ```
 
 ### ML Project
 ```yaml
 symbol-mapping:
-  "models/**": "@"
+  "models/**": "#"      # Use [feature] tag
   "data/**": "#"
   "pipelines/**": "$"
-  "config/**": "%"
-  "experiments/**": "@"
+  "config/**": "#"      # Use [state] tag
+  "experiments/**": "#" # Use [feature] tag
 ```
 
 ### Game Project
 ```yaml
 symbol-mapping:
-  "gameplay/**": "@"
+  "gameplay/**": "#"    # Use [feature] tag
   "systems/**": "#"
   "entities/**": "#"
-  "state/**": "%"
+  "state/**": "#"       # Use [state] tag
   "events/**": "!"
 ```
 
 ---
 
-*Paradigm is the protocol. Your discipline is the implementation.*
+*Paradigm is the protocol. Tags are your vocabulary. Your discipline is the implementation.*

@@ -5,6 +5,105 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-05
+
+### Breaking Changes
+
+- **Symbol System v2**: Reduced from 9 symbols to 5 operational symbols
+  - Removed: `@` (feature), `&` (integration), `%` (state), `?` (idea)
+  - These are now tags: `[feature]`, `[integration]`, `[state]`, `[idea]`
+  - `~` (aspect) now REQUIRES code anchors - unanchored aspects are invalid
+  - Added: Tag bank system (`.paradigm/tags.yaml`)
+
+### Added
+
+- **Tag Bank System**: Classification via tags instead of symbol prefixes
+  - Core tags: `feature`, `integration`, `state`, `critical`, `deprecated`, `idea`, `security`, `compliance`
+  - Project-specific tags in `.paradigm/tags.yaml`
+  - AI-suggested tags with human approval workflow
+  - `suggested` section for AI to propose new tags
+
+- **Anchors**: Line-based code references (`file.ts:15-20`)
+  - Required for aspects (`~`)
+  - Optional for other symbols
+  - Format: single line (`file.ts:15`), range (`file.ts:15-20`), multiple (`file.ts:15,25,30`)
+
+- **New Aspect Symbol (`~`)**: Cross-cutting rules with enforcement
+  - Aspects MUST have code anchors pointing to enforcement code
+  - `applies-to` patterns for automatic symbol matching
+  - `enforcement` field for compliance instructions
+  - Examples: `~audit-required`, `~rate-limited`, `~encrypted`
+
+- **MCP Tools**:
+  - `paradigm_tags()` - List, search, and manage tags
+  - `paradigm_tags_suggest()` - AI proposes new tags for human review
+  - `paradigm_aspect_check()` - Verify aspect anchors and coverage
+
+- **Sentinel UI**:
+  - Updated for v2 symbol types (#, $, ^, !, ~)
+  - Tag display in all views (Grid, List, Canvas)
+  - Properties Panel shows v2 symbol types
+
+- **Migration Support**:
+  - `parseLegacySymbol()` for parsing old @, %, ?, & symbols
+  - `parseAnySymbol()` for handling both v1 and v2 formats
+  - Legacy symbols auto-convert to #component with appropriate tags
+
+### Changed
+
+- **`#` Component is now universal**: All code units use `#` prefix
+  - Features: `#checkout` with `tags: [feature]` (was `@checkout`)
+  - Integrations: `#stripe-client` with `tags: [integration]` (was `&stripe`)
+  - State: `#user-store` with `tags: [state]` (was `%user-store`)
+  - Ideas: `#new-feature` with `tags: [idea]` (was `?new-feature`)
+
+- **Logger methods updated**:
+  - Removed: `log.feature()`, `log.integration()`, `log.state()`
+  - Added: `log.aspect()`
+  - All code units now use `log.component()`
+
+- **`.purpose` file format updated**:
+  - Version bumped to "2.0"
+  - `tags` field for classification
+  - `anchors` field for code references
+  - Old `features:` sections should use `#` prefix with `[feature]` tag
+
+- **config.yaml version bumped to "2.0"**:
+  - `symbol-system` updated with 5 operational symbols
+  - Added `tag-bank` configuration section
+  - Updated `logging.symbol-mapping` for v2
+
+- **CLAUDE.md updated for v2**:
+  - New symbol table with 5 operational symbols
+  - Tag bank explanation
+  - Anchor format documentation
+  - Updated logger examples
+
+### Migration
+
+Run `paradigm migrate v2 --dry-run` to preview changes, then `paradigm migrate v2` to execute.
+
+**Manual steps required:**
+1. Add anchors to all `~aspect` symbols
+2. Review and approve AI-suggested tags
+3. Update any custom tooling that parses symbols
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `CLAUDE.md` | Updated symbol table, logger examples, conventions |
+| `.paradigm/config.yaml` | v2 symbol system, tag bank config |
+| `.paradigm/specs/symbols.md` | Complete rewrite for v2 |
+| `.paradigm/specs/symbols-v2.md` | NEW - Full v2 specification |
+| `.paradigm/specs/logger.md` | Updated methods and examples |
+| `.paradigm/specs/disciplines.md` | Updated for v2 symbols + tags |
+| `.paradigm/tags.yaml` | NEW - Tag bank definitions |
+| `.paradigm/prompts/*.md` | Updated for v2 syntax |
+| `examples/shopflow/**/.purpose` | Converted to v2 format |
+
+---
+
 ## [1.9.0] - 2026-02-05
 
 ### Added

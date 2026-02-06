@@ -10,34 +10,22 @@ interface NodeRendererProps {
   node: SymbolEntry;
 }
 
+// v2 symbol types
 const TYPE_TO_PREFIX: Record<SymbolType, string> = {
-  feature: '@',
   component: '#',
   flow: '$',
-  state: '%',
-  aspect: '~',
-  portal: '^',
+  gate: '^',
   signal: '!',
-  idea: '?',
+  aspect: '~',
 };
 
-// Helper to get display name (handles compound ideas)
-function getDisplayName(symbol: string, type: SymbolType, ideaType?: SymbolType): string {
-  if (type === 'idea' && ideaType) {
-    // Compound idea: ?@subscription -> "subscription"
-    return symbol.slice(2);
-  }
-  // Standard: @subscription -> "subscription"
+// Helper to get display name
+function getDisplayName(symbol: string): string {
   return symbol.slice(1);
 }
 
-// Helper to get display prefix (handles compound ideas)
-function getDisplayPrefix(type: SymbolType, ideaType?: SymbolType): string {
-  if (type === 'idea' && ideaType) {
-    // Show both ? and inner prefix for compound ideas
-    const innerPrefix = TYPE_TO_PREFIX[ideaType];
-    return `?${innerPrefix}`; // e.g., "?@"
-  }
+// Helper to get display prefix
+function getDisplayPrefix(type: SymbolType): string {
   return TYPE_TO_PREFIX[type];
 }
 
@@ -45,8 +33,8 @@ export function NodeRenderer({ node }: NodeRendererProps) {
   const { selectedId, selectNode, hoverNode } = useNodesStore();
 
   const isSelected = selectedId === node.id;
-  const prefix = getDisplayPrefix(node.type, node.ideaType);
-  const name = getDisplayName(node.symbol, node.type, node.ideaType);
+  const prefix = getDisplayPrefix(node.type);
+  const name = getDisplayName(node.symbol);
 
   // Get position or use default
   const position = node.position || { x: Math.random() * 400, y: Math.random() * 400 };
@@ -59,11 +47,10 @@ export function NodeRenderer({ node }: NodeRendererProps) {
     [node.id, selectNode]
   );
 
-  // Build CSS classes including compound idea type
+  // Build CSS classes
   const nodeClasses = [
     `node`,
     `node--${node.type}`,
-    node.ideaType ? `node--idea-${node.ideaType}` : '',
     isSelected ? 'selected' : '',
   ].filter(Boolean).join(' ');
 
@@ -81,9 +68,6 @@ export function NodeRenderer({ node }: NodeRendererProps) {
       <div className="node-header">
         <span className="node-symbol">{prefix}</span>
         <span className="node-name">{name}</span>
-        {node.ideaType && (
-          <span className="node-idea-type">Idea: {node.ideaType}</span>
-        )}
       </div>
       {node.description && (
         <div className="node-description">{node.description}</div>

@@ -11,15 +11,13 @@ interface AutocompleteProps {
   onHover: (index: number) => void;
 }
 
+// v2 symbol types
 const TYPE_COLORS: Record<SymbolType, string> = {
-  feature: 'var(--color-feature)',
   component: 'var(--color-component)',
   flow: 'var(--color-flow)',
-  state: 'var(--color-state)',
-  aspect: 'var(--color-aspect)',
-  portal: 'var(--color-portal)',
+  gate: 'var(--color-gate)',
   signal: 'var(--color-signal)',
-  idea: 'var(--color-idea)',
+  aspect: 'var(--color-aspect)',
 };
 
 export function Autocomplete({ suggestions, selectedIndex, onSelect, onHover }: AutocompleteProps) {

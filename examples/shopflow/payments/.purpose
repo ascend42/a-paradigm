@@ -1,7 +1,7 @@
-# Payments Module
+# Payments Module (v2)
 # Handles all payment processing and checkout logic
 
-version: "1.0.0"
+version: "2.0.0"
 
 description: |
   Process payments securely through Stripe, supporting multiple payment
@@ -20,39 +20,54 @@ rules:
   refund_window: "Support refunds within 30-day window"
   error_messaging: "Display clear error messages for failed payments"
 
-features:
-  "@payment-processing":
-    description: "Core Stripe integration for payments"
-  "@order-confirmation":
-    description: "Post-purchase confirmation and receipt"
+# Features are now #components with [feature] tag
+#payment-processing:
+  description: "Core Stripe integration for payments"
+  tags: [feature, integration, stripe, critical]
+  gates: [^authenticated, ^valid-cart]
+  signals: [!payment-success, !payment-failed]
+  aspects: [~audit-required]
 
-components:
-  "#PaymentForm":
-    description: "Stripe Elements-powered payment form"
-  "#StripeProvider":
-    description: "Stripe.js initialization wrapper"
-  "#ConfirmationPage":
-    description: "Order success page with receipt"
+#order-confirmation:
+  description: "Post-purchase confirmation and receipt"
+  tags: [feature]
+  signals: [!confirmation-sent]
 
-flows:
-  - name: "Checkout Flow"
-    description: "Complete purchase journey"
-    steps:
-      - component: "Cart"
-        action: "review"
-        description: "Cart review"
-      - component: "ShippingForm"
-        action: "collect_address"
-        description: "Shipping address"
-      - component: "PaymentForm"
-        action: "collect_payment"
-        description: "Payment method"
-      - component: "OrderReview"
-        action: "review"
-        description: "Order review"
-      - component: "PaymentProcessor"
-        action: "process"
-        description: "Processing"
-      - component: "ConfirmationPage"
-        action: "display"
-        description: "Confirmation"
+# UI Components
+#PaymentForm:
+  description: "Stripe Elements-powered payment form"
+  tags: [integration, stripe]
+
+#StripeProvider:
+  description: "Stripe.js initialization wrapper"
+  tags: [integration, stripe]
+
+#ConfirmationPage:
+  description: "Order success page with receipt"
+
+# Flows
+$checkout-flow:
+  description: "Complete purchase journey"
+  tags: [critical, revenue]
+  steps:
+    - "#cart-review"
+    - "#ShippingForm"
+    - "^authenticated"
+    - "#PaymentForm"
+    - "^valid-cart"
+    - "#payment-processing"
+    - "!payment-success"
+    - "#ConfirmationPage"
+  on-failure:
+    - "!payment-failed"
+    - "#error-handler"
+
+# Aspects (cross-cutting rules with required anchors)
+~audit-required:
+  description: "All payment operations must be logged for compliance"
+  tags: [compliance, security]
+  anchors:
+    - payments/middleware/audit.ts:1-50
+  applies-to:
+    - "#payment-processing"
+    - "#refund-processing"

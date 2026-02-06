@@ -4,12 +4,19 @@
  * Central registry of all symbols across Purpose, Gate, and Dream sources
  */
 
-import type {
-  SymbolEntry,
-  SymbolType,
-  SourceType,
-  SymbolIndex,
-  AggregationResult,
+import {
+  PREFIX_TO_TYPE,
+  SYMBOL_PREFIXES,
+  LEGACY_PREFIX_TO_TYPE,
+  isValidPrefix,
+  isLegacyPrefix,
+  type SymbolEntry,
+  type SymbolType,
+  type LegacySymbolType,
+  type SourceType,
+  type SymbolIndex,
+  type AggregationResult,
+  type CodeAnchor,
 } from './types.js';
 
 /**
@@ -168,22 +175,21 @@ export function getAllTags(index: SymbolIndex): string[] {
 }
 
 /**
- * Get symbol counts by type
+ * Get symbol counts by type (v2)
  */
 export function getSymbolCounts(index: SymbolIndex): Record<SymbolType, number> {
   const counts: Record<SymbolType, number> = {
-    feature: 0,
     component: 0,
     flow: 0,
-    state: 0,
-    aspect: 0,
     gate: 0,
     signal: 0,
-    idea: 0,
+    aspect: 0,
   };
 
   for (const [type, symbols] of index.byType) {
-    counts[type] = symbols.length;
+    if (type in counts) {
+      counts[type as SymbolType] = symbols.length;
+    }
   }
 
   return counts;
@@ -197,81 +203,190 @@ export function getAllSymbols(index: SymbolIndex): SymbolEntry[] {
 }
 
 /**
- * Parse a symbol string to extract type and name
+ * Parse a symbol string to extract type and name (v2)
+ *
+ * Valid prefixes: # $ ^ ! ~
+ * Legacy prefixes (@ % ? &) return null - use parseLegacySymbol for migration
  */
-export function parseSymbol(symbol: string): { type: SymbolType; name: string; ideaType?: SymbolType } | null {
+export function parseSymbol(symbol: string): { type: SymbolType; name: string } | null {
   if (symbol.length < 2) return null;
 
-  // CRITICAL: Check compound idea prefixes FIRST (?@, ?#, ?!, etc.)
-  // This must come before single prefix check to avoid mis-parsing
-  if (symbol.startsWith('?') && symbol.length >= 3) {
-    const secondChar = symbol[1];
-    const prefixToType: Record<string, SymbolType> = {
-      '@': 'feature',
-      '#': 'component',
-      '$': 'flow',
-      '%': 'state',
-      '~': 'aspect',
-      '^': 'gate',
-      '!': 'signal',
-    };
-    
-    if (secondChar in prefixToType) {
-      // Compound idea: ?@subscription -> idea for a feature
-      return {
-        type: 'idea',
-        name: symbol.slice(2), // Remove "?@"
-        ideaType: prefixToType[secondChar],
-      };
-    }
-    // Simple idea: ?subscription
-    return { type: 'idea', name: symbol.slice(1) };
-  }
-
-  // Standard single-prefix parsing
   const prefix = symbol[0];
   const name = symbol.slice(1);
 
-  const prefixToType: Record<string, SymbolType> = {
-    '@': 'feature',
-    '#': 'component',
-    '$': 'flow',
-    '%': 'state',
-    '~': 'aspect',
-    '^': 'gate',
-    '!': 'signal',
-    '?': 'idea',
-  };
+  // Only accept v2 prefixes
+  if (!isValidPrefix(prefix)) {
+    return null;
+  }
 
-  const type = prefixToType[prefix];
-  if (!type) return null;
-
+  const type = PREFIX_TO_TYPE[prefix];
   return { type, name };
 }
 
 /**
- * Create a symbol string from type and name
+ * Parse a legacy v1 symbol (for migration support)
+ *
+ * @deprecated Use tags instead of @ % ? & prefixes
  */
-export function createSymbolString(type: SymbolType, name: string): string {
-  const prefixes: Record<SymbolType, string> = {
-    feature: '@',
-    component: '#',
-    flow: '$',
-    state: '%',
-    aspect: '~',
-    gate: '^',
-    signal: '!',
-    idea: '?',
+export function parseLegacySymbol(symbol: string): {
+  type: LegacySymbolType;
+  name: string;
+  suggestedTag: string;
+  migratedSymbol: string;
+} | null {
+  if (symbol.length < 2) return null;
+
+  const prefix = symbol[0];
+  const name = symbol.slice(1);
+
+  if (!isLegacyPrefix(prefix)) {
+    return null;
+  }
+
+  const type = LEGACY_PREFIX_TO_TYPE[prefix];
+
+  // Map legacy type to suggested tag
+  const tagMap: Record<LegacySymbolType, string> = {
+    feature: 'feature',
+    state: 'state',
+    idea: 'idea',
+    integration: 'integration',
   };
 
-  return `${prefixes[type]}${name}`;
+  return {
+    type,
+    name,
+    suggestedTag: tagMap[type],
+    migratedSymbol: `#${name}`, // All legacy symbols become #component
+  };
 }
 
 /**
- * Validate a symbol string format
+ * Parse any symbol (v2 or legacy) - useful for migration
+ */
+export function parseAnySymbol(symbol: string): {
+  type: SymbolType | LegacySymbolType;
+  name: string;
+  isLegacy: boolean;
+  suggestedTag?: string;
+} | null {
+  // Try v2 first
+  const v2Result = parseSymbol(symbol);
+  if (v2Result) {
+    return { ...v2Result, isLegacy: false };
+  }
+
+  // Try legacy
+  const legacyResult = parseLegacySymbol(symbol);
+  if (legacyResult) {
+    return {
+      type: legacyResult.type,
+      name: legacyResult.name,
+      isLegacy: true,
+      suggestedTag: legacyResult.suggestedTag,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Create a symbol string from type and name (v2)
+ */
+export function createSymbolString(type: SymbolType, name: string): string {
+  return `${SYMBOL_PREFIXES[type]}${name}`;
+}
+
+/**
+ * Validate a symbol string format (v2 only)
  */
 export function isValidSymbol(symbol: string): boolean {
   return parseSymbol(symbol) !== null;
+}
+
+/**
+ * Check if a symbol uses legacy v1 format
+ */
+export function isLegacySymbol(symbol: string): boolean {
+  if (symbol.length < 2) return false;
+  return isLegacyPrefix(symbol[0]);
+}
+
+/**
+ * Parse an anchor string into a CodeAnchor object
+ *
+ * Formats:
+ * - file.ts:15 (single line)
+ * - file.ts:15-20 (range)
+ * - file.ts:15,25,30 (multiple lines)
+ */
+export function parseAnchor(anchor: string): CodeAnchor | null {
+  const colonIndex = anchor.lastIndexOf(':');
+  if (colonIndex === -1) {
+    // No line reference, just file path
+    return {
+      path: anchor,
+      lines: 1,
+      raw: anchor,
+    };
+  }
+
+  const path = anchor.slice(0, colonIndex);
+  const lineSpec = anchor.slice(colonIndex + 1);
+
+  // Check for range (15-20)
+  if (lineSpec.includes('-')) {
+    const [start, end] = lineSpec.split('-').map(Number);
+    if (isNaN(start) || isNaN(end)) return null;
+    return {
+      path,
+      lines: [start, end],
+      raw: anchor,
+    };
+  }
+
+  // Check for multiple lines (15,25,30)
+  if (lineSpec.includes(',')) {
+    const lines = lineSpec.split(',').map(Number);
+    if (lines.some(isNaN)) return null;
+    return {
+      path,
+      lines,
+      raw: anchor,
+    };
+  }
+
+  // Single line
+  const line = Number(lineSpec);
+  if (isNaN(line)) return null;
+  return {
+    path,
+    lines: line,
+    raw: anchor,
+  };
+}
+
+/**
+ * Validate that an aspect has required anchors
+ */
+export function validateAspectAnchors(entry: SymbolEntry): {
+  valid: boolean;
+  errors: string[];
+} {
+  if (entry.type !== 'aspect') {
+    return { valid: true, errors: [] };
+  }
+
+  const errors: string[] = [];
+
+  if (!entry.anchors || entry.anchors.length === 0) {
+    errors.push(`Aspect ${entry.symbol} requires at least one code anchor`);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
 
 /**

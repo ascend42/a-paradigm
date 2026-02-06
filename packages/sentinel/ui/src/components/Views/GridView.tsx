@@ -6,18 +6,16 @@ import { useMemo } from 'react';
 import type { SymbolEntry, SymbolType } from '../../types';
 import { useNodesStore } from '../../store/nodesStore';
 
+// v2 symbol types
 const TYPE_INFO: Record<SymbolType, { prefix: string; label: string; color: string }> = {
-  feature: { prefix: '@', label: 'Features', color: 'var(--color-feature)' },
   component: { prefix: '#', label: 'Components', color: 'var(--color-component)' },
   flow: { prefix: '$', label: 'Flows', color: 'var(--color-flow)' },
-  portal: { prefix: '^', label: 'Gates', color: 'var(--color-portal)' },
+  gate: { prefix: '^', label: 'Gates', color: 'var(--color-gate)' },
   signal: { prefix: '!', label: 'Signals', color: 'var(--color-signal)' },
-  state: { prefix: '%', label: 'States', color: 'var(--color-state)' },
   aspect: { prefix: '~', label: 'Aspects', color: 'var(--color-aspect)' },
-  idea: { prefix: '?', label: 'Ideas', color: 'var(--color-idea)' },
 };
 
-const TYPE_ORDER: SymbolType[] = ['feature', 'component', 'flow', 'portal', 'signal', 'state', 'aspect', 'idea'];
+const TYPE_ORDER: SymbolType[] = ['component', 'flow', 'gate', 'signal', 'aspect'];
 
 interface GridCardProps {
   node: SymbolEntry;
@@ -27,7 +25,7 @@ interface GridCardProps {
 
 function GridCard({ node, isSelected, onClick }: GridCardProps) {
   const info = TYPE_INFO[node.type];
-  const name = node.symbol.slice(node.type === 'idea' && node.ideaType ? 2 : 1);
+  const name = node.symbol.slice(1); // Remove prefix
 
   return (
     <div
@@ -61,21 +59,20 @@ export function GridView() {
   const { getSortedNodes, selectedId, selectNode, visibleTypes } = useNodesStore();
   const nodes = getSortedNodes();
 
-  // Group nodes by type
+  // Group nodes by type (v2)
   const groupedNodes = useMemo(() => {
     const groups: Record<SymbolType, SymbolEntry[]> = {
-      feature: [],
       component: [],
       flow: [],
-      portal: [],
+      gate: [],
       signal: [],
-      state: [],
       aspect: [],
-      idea: [],
     };
 
     nodes.forEach((node) => {
-      groups[node.type].push(node);
+      if (groups[node.type]) {
+        groups[node.type].push(node);
+      }
     });
 
     return groups;

@@ -1,7 +1,7 @@
 # Paradigm Configuration
 # Source of truth for AI-assisted development in this project
 
-version: "1.0"
+version: "2.0"
 project: "a-paradigm"
 
 # Discipline (optional) - helps AI understand your domain
@@ -22,128 +22,129 @@ agent-provider: auto
 # Guidelines for AI agents working in this codebase
 agent-guidelines:
   overview: |
-    This project uses Paradigm for structured AI-assisted development.
+    This project uses Paradigm v2 for structured AI-assisted development.
     All context, symbols, and specifications live in the .paradigm/ directory.
-  
+
+    v2 uses 5 operational symbols (#, $, ^, !, ~) plus a tag bank for classification.
+
   how-to-use:
     - "Check .paradigm/specs/ for philosophy and patterns before making changes"
-    - "Reference symbols using prefixes: @feature #component ^portal !signal %state $flow"
+    - "Reference symbols using prefixes: #component $flow ^gate !signal ~aspect"
+    - "Use tags for classification: [feature], [integration], [state], [idea]"
     - "Use the Paradigm logger instead of raw console.log/print statements"
+    - "Aspects (~) MUST have code anchors - no unanchored aspects allowed"
     - "Run `paradigm probe` with screenshots to map UI to code"
     - "Check .paradigm/docs/ for command reference and troubleshooting"
     - "Read .index.yaml files first when navigating documentation"
     - "Use `paradigm team handoff` when approaching context limits"
-  
+
   update-rules:
-    - "When adding a feature, create/update the nearest .purpose file"
-    - "When adding authorization, update portal.yaml"
-    - "When exploring ideas, use ?symbol prefix"
+    - "When adding a feature, create/update .purpose with #name and tags: [feature]"
+    - "When adding authorization, update portal.yaml with ^gate"
+    - "When adding cross-cutting rules, create ~aspect with required anchors"
+    - "When exploring ideas, add [idea] tag to the symbol"
     - "Always update references when renaming symbols"
 
-# Symbol system - the shared language between code and AI
+# Symbol system v2 - the shared language between code and AI
+# Uses 5 operational symbols plus a tag bank for classification
 symbol-system:
-  "@":
-    name: Feature
-    description: User-facing capabilities and functionality
-    owner: purpose
-    examples: ["@checkout", "@user-login", "@search"]
   "#":
     name: Component
-    description: Reusable code units, UI components, or modules
-    owner: purpose
-    examples: ["#Button", "#api-client", "#AuthProvider"]
+    description: Any documented code unit (function, class, module, service)
+    examples: ["#PaymentService", "#login-handler", "#Button"]
   "$":
     name: Flow
-    description: Multi-step processes or user journeys
-    owner: shared
+    description: Multi-step processes with defined sequence
     examples: ["$checkout-flow", "$onboarding", "$auth-flow"]
-  "%":
-    name: State
-    description: Global or user state conditions
-    owner: purpose
-    examples: ["%user.authenticated", "%cart.items", "%app.loading"]
   "^":
-    name: Portal
-    description: Access control points and authorization rules
-    owner: portal
-    examples: ["^auth-required", "^admin-only", "^rate-limited"]
+    name: Gate
+    description: Authorization/validation checkpoints
+    examples: ["^authenticated", "^admin-only", "^rate-limited"]
   "!":
     name: Signal
-    description: Events, errors, and side effects
-    owner: portal
+    description: Events emitted for side effects
     examples: ["!login-success", "!payment-failed", "!rate-limited"]
-  "?":
-    name: Idea
-    description: Free-form exploration and future possibilities
-    owner: premise
-    examples: ["?subscription-model", "?ai-recommendations"]
   "~":
-    name: Deprecated
-    description: Features or components marked for removal
-    owner: shared
-    examples: ["~legacy-api", "~v1-auth", "~old-dashboard"]
-  "&":
-    name: Integration
-    description: External services and third-party connections
-    owner: shared
-    examples: ["&stripe", "&supabase", "&resend", "&google-calendar"]
+    name: Aspect
+    description: Rules/constraints with required code anchors
+    examples: ["~audit-required", "~cached", "~encrypted"]
+
+# Tag bank configuration
+# Tags replace classification symbols (@feature, &integration, %state, ?idea)
+tag-bank:
+  # Path to tag definitions file
+  file: tags.yaml
+
+  # Core tags (always available)
+  # See tags.yaml for full definitions
+  core-tags:
+    - feature      # User-facing functionality (was @)
+    - integration  # External service connection (was &)
+    - state        # Application state management (was %)
+    - idea         # Proposed, not implemented (was ?)
+    - deprecated   # Scheduled for removal
+    - critical     # Major business impact
+    - security     # Security-sensitive
+    - compliance   # Regulatory requirement
+
+  # Allow AI to suggest new tags (requires human approval)
+  allow-suggestions: true
 
 # Logging configuration
 logging:
   # Include logging rules in generated IDE instructions
   enforce: true
-  
+
   # Default log level (debug, info, warn, error)
   default-level: debug
-  
-  # Map directory patterns to symbol types for logging
-  # These are generic patterns - customize for your project structure
+
+  # Map directory patterns to symbol types for logging (v2)
+  # All code units use #component; gates, signals, flows, aspects use their symbols
   symbol-mapping:
-    # Features/Capabilities (@)
-    "features/**": "@"
-    "routes/**": "@"
-    "api/**": "@"
-    "endpoints/**": "@"
-    "commands/**": "@"
-    "models/**": "@"        # ML models as features
-    
-    # Components/Building Blocks (#)
+    # All code directories use #component
+    "features/**": "#"
+    "routes/**": "#"
+    "api/**": "#"
+    "endpoints/**": "#"
+    "commands/**": "#"
+    "models/**": "#"
     "components/**": "#"
     "lib/**": "#"
     "utils/**": "#"
     "services/**": "#"
     "core/**": "#"
-    "drivers/**": "#"       # Embedded
-    "systems/**": "#"       # Game dev
-    
-    # Access Control (^)
+    "drivers/**": "#"
+    "systems/**": "#"
+    "integrations/**": "#"
+    "external/**": "#"
+    "vendors/**": "#"
+    "stores/**": "#"
+    "state/**": "#"
+    "reducers/**": "#"
+    "config/**": "#"
+
+    # Gates (^)
     "middleware/**": "^"
     "auth/**": "^"
     "guards/**": "^"
     "policies/**": "^"
-    
-    # State (%)
-    "stores/**": "%"
-    "state/**": "%"
-    "reducers/**": "%"
-    "config/**": "%"
-    
-    # Events/Signals (!)
+
+    # Signals (!)
     "events/**": "!"
     "handlers/**": "!"
     "listeners/**": "!"
     "hooks/**": "!"
-    
-    # Flows/Processes ($)
+
+    # Flows ($)
     "flows/**": "$"
     "sagas/**": "$"
     "workflows/**": "$"
-    "pipelines/**": "$"     # ML/Data pipelines
-    
-    # Integrations (&)
-    "integrations/**": "&"
-    "external/**": "&"
-    "vendors/**": "&"
+    "pipelines/**": "$"
+
+    # Aspects (~)
+    "aspects/**": "~"
+    "rules/**": "~"
+    "constraints/**": "~"
 
 # Probe configuration for visual discovery
 probe:
@@ -179,20 +180,22 @@ purpose-required:
 
 # Custom symbols (extend the core set)
 # custom-symbols:
-#   "§": 
+#   "§":
 #     name: "Domain"
 #     description: "Domain-specific concepts"
 #     examples: ["§patient", "§transaction"]
 
 # Coding conventions
 conventions:
-  - "Use kebab-case for all symbol IDs (feature-name, not featureName)"
+  - "Use kebab-case for symbol IDs (#feature-name, not #featureName)"
+  - "Use PascalCase for class-like components (#PaymentService, #UserProfile)"
   - "Document flows when logic spans 3+ components"
-  - "Reference related items using symbol prefixes (@ # $ % ~ ^ ! ?)"
-  - "Add descriptions to all features and portals"
-  - "Update .purpose files when changing feature behavior"
-  - "Keep portals minimal - one responsibility per portal"
-  - "Use signals for side effects, not direct state mutations"
+  - "Reference related items using symbol prefixes (# $ ^ ! ~) and tags"
+  - "Add descriptions to all components and gates"
+  - "Update .purpose files when changing behavior"
+  - "Keep gates minimal - one responsibility per gate"
+  - "Use signals for side effects, not direct mutations"
+  - "Aspects (~) MUST have code anchors - no unanchored aspects"
   - "ALWAYS use Paradigm logger, NEVER raw console.log/print"
 
 # AI agent context management

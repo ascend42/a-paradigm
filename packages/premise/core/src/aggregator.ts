@@ -14,7 +14,6 @@ import {
   extractSymbolReferences,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
-import { parseSymbol } from './symbol-index.js';
 import type {
   DreamFile,
   SymbolEntry,
@@ -44,17 +43,18 @@ export async function aggregateFromDream(
         const parsed = await getAllPurposeFiles(sourcePath);
         purposeFiles.push(...parsed.map((p) => p.filePath));
 
-        // Extract features
+        // Extract features (v2: now #components with [feature] tag)
         const features = extractFeatures(parsed);
         for (const [id, { item, filePath }] of features) {
           symbols.push(createSymbolEntry({
             id: `purpose-feature-${id}`,
-            symbol: `@${id}`,
-            type: 'feature',
+            symbol: `#${id}`,
+            type: 'component',
             source: 'purpose',
             filePath,
             data: item,
             description: item.description,
+            tags: ['feature'],
           }));
         }
 
@@ -86,17 +86,18 @@ export async function aggregateFromDream(
           }));
         }
 
-        // Extract states from purpose files
+        // Extract states from purpose files (v2: now #components with [state] tag)
         const states = extractStates(parsed);
         for (const [id, { item, filePath }] of states) {
           symbols.push(createSymbolEntry({
             id: `purpose-state-${id}`,
-            symbol: `%${id}`,
-            type: 'state',
+            symbol: `#${id}`,
+            type: 'component',
             source: 'purpose',
             filePath,
             data: item,
             description: item.description,
+            tags: ['state'],
           }));
         }
 
@@ -219,7 +220,9 @@ export async function aggregateFromDream(
   // Add dream-native nodes
   for (const node of dreamFile.nodes) {
     // Skip if this is a reference to an existing symbol (no content)
-    if (!node.content && node.type !== 'idea') {
+    // v2: 'idea' is now a tag, not a type - check for symbols with [idea] tag
+    const hasIdeaTag = node.tags?.includes('idea');
+    if (!node.content && !hasIdeaTag) {
       // Find existing symbol and update position
       const existing = symbols.find((s) => s.symbol === node.symbol);
       if (existing) {
@@ -229,15 +232,10 @@ export async function aggregateFromDream(
       }
     }
 
-    // Parse symbol to check for compound idea type
-    const parsed = parseSymbol(node.symbol);
-    const ideaType = parsed?.ideaType;
-
     symbols.push(createSymbolEntry({
       id: node.id,
       symbol: node.symbol,
       type: node.type,
-      ideaType,
       source: 'dream',
       filePath: '.premise',
       data: node,

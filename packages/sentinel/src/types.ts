@@ -25,14 +25,24 @@ export interface ErrorDetails {
   type?: string; // TypeError, NetworkError, etc.
 }
 
+/**
+ * Symbolic context for incidents
+ *
+ * v2 Note: feature, state, and integration are now #component with tags.
+ * These fields are kept for backward compatibility with existing incidents.
+ * New incidents should use 'component' with appropriate tags.
+ */
 export interface SymbolicContext {
-  feature?: string; // @checkout, @auth
+  /** @deprecated v2: Use component with tags: [feature] */
+  feature?: string; // @checkout, @auth → #checkout [feature]
   component?: string; // #PaymentForm, #AuthService
   flow?: string; // $checkout-flow, $onboarding
   gate?: string; // ^authenticated, ^payment-validated
   signal?: string; // !payment-authorized, !login-success
-  state?: string; // %user.authenticated, %cart.hasItems
-  integration?: string; // &stripe, &auth0
+  /** @deprecated v2: Use component with tags: [state] */
+  state?: string; // %user.authenticated → #user.authenticated [state]
+  /** @deprecated v2: Use component with tags: [integration] */
+  integration?: string; // &stripe → #stripe [integration]
 }
 
 export interface FlowPosition {
@@ -114,14 +124,25 @@ export type ResolutionStrategy =
   | 'escalate';
 export type PatternPriority = 'low' | 'medium' | 'high' | 'critical';
 
+/**
+ * Symbol criteria for pattern matching
+ *
+ * v2 Note: feature, state, and integration are now #component with tags.
+ * These fields are kept for backward compatibility with existing patterns.
+ */
 export interface PatternSymbolCriteria {
+  /** @deprecated v2: Use component with tags filter */
   feature?: string | string[];
   component?: string | string[];
   flow?: string | string[];
   gate?: string | string[];
   signal?: string | string[];
+  /** @deprecated v2: Use component with tags filter */
   state?: string | string[];
+  /** @deprecated v2: Use component with tags filter */
   integration?: string | string[];
+  /** v2: Filter by tags instead of legacy symbol types */
+  tags?: string | string[];
 }
 
 export interface PatternCriteria {

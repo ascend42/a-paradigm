@@ -1,6 +1,6 @@
 # a-paradigm - Claude Context
 
-> **Paradigm v1.0** | For Claude Code, Claude API, and Claude-native interfaces
+> **Paradigm v2.0** | For Claude Code, Claude API, and Claude-native interfaces
 
 ## Project Overview
 
@@ -30,21 +30,49 @@ portal.yaml            → Security/auth definitions
 2. `paradigm_ripple` to check impact
 3. `paradigm_history_fragility` for stability warnings
 
-## Symbol System
+## Symbol System v2
 
-Use these prefixes in documentation and commits:
+Paradigm v2 uses **5 operational symbols** for code structure + a **tag bank** for classification.
 
-| Symbol | Meaning | Example |
-|--------|---------|---------|
-| `@` | Feature | `@checkout` |
-| `#` | Component | `#Button` |
-| `$` | Flow | `$checkout-flow` |
-| `%` | State | `%user.authenticated` |
-| `^` | Portal | `^auth-required` |
-| `!` | Signal | `!login-success` |
-| `?` | Idea | `?subscription-model` |
-| `~` | Deprecated | `~legacy-api` |
-| `&` | Integration | `&stripe` |
+### Operational Symbols
+
+| Symbol | Name | Purpose | Example |
+|--------|------|---------|---------|
+| `#` | Component | Any documented code unit | `#PaymentService`, `#login-handler` |
+| `$` | Flow | Multi-step process with sequence | `$checkout-flow`, `$onboarding` |
+| `^` | Gate | Authorization checkpoint | `^authenticated`, `^admin-only` |
+| `!` | Signal | Event for side effects | `!payment-completed`, `!login-failed` |
+| `~` | Aspect | Rule with required code anchor | `~audit-required`, `~rate-limited` |
+
+### Tag Bank (Classification)
+
+Instead of symbol prefixes for classification, use tags in brackets:
+
+| Old Symbol | New Approach | Example |
+|------------|--------------|---------|
+| `@feature` | `[feature]` tag on `#` | `#checkout` with `tags: [feature, critical]` |
+| `&integration` | `[integration]` tag on `#` | `#stripe-service` with `tags: [integration, stripe]` |
+| `%state` | `[state]` tag on `#` | `#user-store` with `tags: [state]` |
+| `?idea` | `[idea]` tag on any symbol | Any symbol with `tags: [idea]` |
+| `~deprecated` | `[deprecated]` tag | Any symbol with `tags: [deprecated]` |
+
+Tags are defined in `.paradigm/tags.yaml` with core, project, and suggested sections.
+
+### Anchors (Required for Aspects)
+
+Aspects (`~`) must have code anchors pointing to enforcement code:
+
+```yaml
+~audit-required:
+  description: All financial operations must log
+  tags: [compliance, security]
+  anchors:  # REQUIRED for aspects
+    - src/middleware/audit.ts:15-35
+    - src/decorators/auditable.ts:1-20
+  applies-to: ["#*Service"]
+```
+
+Anchor format: `file.ts:15` (single line), `file.ts:15-20` (range), `file.ts:15,25,30` (multiple)
 
 ## First Actions for New Sessions
 
@@ -144,9 +172,11 @@ Before exploring this codebase:
 3. Check `paradigm_ripple` for impact
 
 **Using MCP Tools:**
-- `paradigm_navigate({ intent: "find", target: "@checkout" })` - locate symbol
+- `paradigm_navigate({ intent: "find", target: "#checkout" })` - locate symbol
 - `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area
 - `paradigm_navigate({ intent: "context", task: "add login" })` - task context
+- `paradigm_tags({ action: "list" })` - view available tags
+- `paradigm_aspect_check({ aspect: "~audit-required" })` - verify aspect anchors
 
 ## Context Monitoring Protocol
 
@@ -294,28 +324,28 @@ Reference content is served via MCP resources instead of being stored locally:
 - `lib/*`
 - `packages/*`
 
-## Paradigm Logging
+## Paradigm Logging (v2)
 
 **IMPORTANT:** Use the Paradigm logger instead of raw console.log/print.
 
 ```
-// Use this pattern:
-log.feature('@login').info('Starting login', { email });
+// Use this pattern (v2 - all code units use #component):
+log.component('#login-handler').info('Starting login', { email });
 log.component('#database').debug('Query executed', { duration });
 log.gate('^authenticated').warn('Access denied', { userId });
 log.signal('!login-success').info('User authenticated');
+log.aspect('~audit-required').debug('Audit logged', { operation });
 ```
 
-### Symbol Mapping by Directory
+### Symbol Mapping by Directory (v2)
 
 | Directory | Symbol | Logger Method |
 |-----------|--------|---------------|
-| `features/**` | `@` | `log.feature()` |
-| `routes/**` | `@` | `log.feature()` |
-| `api/**` | `@` | `log.feature()` |
-| `endpoints/**` | `@` | `log.feature()` |
-| `commands/**` | `@` | `log.feature()` |
-| `models/**` | `@` | `log.feature()` |
+| `features/**` | `#` | `log.component()` |
+| `routes/**` | `#` | `log.component()` |
+| `api/**` | `#` | `log.component()` |
+| `endpoints/**` | `#` | `log.component()` |
+| `commands/**` | `#` | `log.component()` |
 | `components/**` | `#` | `log.component()` |
 | `lib/**` | `#` | `log.component()` |
 | `utils/**` | `#` | `log.component()` |
@@ -323,14 +353,17 @@ log.signal('!login-success').info('User authenticated');
 | `core/**` | `#` | `log.component()` |
 | `drivers/**` | `#` | `log.component()` |
 | `systems/**` | `#` | `log.component()` |
+| `integrations/**` | `#` | `log.component()` |
+| `external/**` | `#` | `log.component()` |
+| `vendors/**` | `#` | `log.component()` |
+| `stores/**` | `#` | `log.component()` |
+| `state/**` | `#` | `log.component()` |
+| `reducers/**` | `#` | `log.component()` |
+| `config/**` | `#` | `log.component()` |
 | `middleware/**` | `^` | `log.gate()` |
 | `auth/**` | `^` | `log.gate()` |
 | `guards/**` | `^` | `log.gate()` |
 | `policies/**` | `^` | `log.gate()` |
-| `stores/**` | `%` | `log.state()` |
-| `state/**` | `%` | `log.state()` |
-| `reducers/**` | `%` | `log.state()` |
-| `config/**` | `%` | `log.state()` |
 | `events/**` | `!` | `log.signal()` |
 | `handlers/**` | `!` | `log.signal()` |
 | `listeners/**` | `!` | `log.signal()` |
@@ -339,39 +372,42 @@ log.signal('!login-success').info('User authenticated');
 | `sagas/**` | `$` | `log.flow()` |
 | `workflows/**` | `$` | `log.flow()` |
 | `pipelines/**` | `$` | `log.flow()` |
-| `integrations/**` | `&` | `log.integration()` |
-| `external/**` | `&` | `log.integration()` |
-| `vendors/**` | `&` | `log.integration()` |
+| `aspects/**` | `~` | `log.aspect()` |
+| `rules/**` | `~` | `log.aspect()` |
 
 See `.paradigm/specs/logger.md` for full specification.
 
 ## Conventions
 
 - Use kebab-case for all symbol IDs (feature-name, not featureName)
+- Use PascalCase for class-like components (#PaymentService, #UserProfile)
 - Document flows when logic spans 3+ components
-- Reference related items using symbol prefixes (@ # $ % ~ ^ ! ?)
-- Add descriptions to all features and portals
+- Reference related items using symbol prefixes (# $ ^ ! ~) and tags ([feature], [integration])
+- Add descriptions to all components and gates
 - Update .purpose files when changing feature behavior
-- Keep portals minimal - one responsibility per portal
+- Keep gates minimal - one responsibility per gate
 - Use signals for side effects, not direct state mutations
+- Aspects (`~`) MUST have code anchors - no unanchored aspects allowed
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
 
 ## When to Update Paradigm Files
 
-- When adding a feature, create/update the nearest .purpose file
-- When adding authorization, update portal.yaml
-- When exploring ideas, use ?symbol prefix
+- When adding a feature, create/update the nearest .purpose file with `#component` and `[feature]` tag
+- When adding authorization, update portal.yaml with `^gate`
+- When exploring ideas, add `[idea]` tag to the symbol
+- When adding cross-cutting rules, create `~aspect` with required code anchors
 - Always update references when renaming symbols
 
 ## Commit Messages
 
-Use symbols in commits:
+Use symbols in commits (v2 style):
 ```
-feat(@feature): add new capability
+feat(#feature-name): add new capability
 
-- Add @feature-name view
+- Add #feature-name view [feature]
 - Create #component-name
 - Emit !signal-name on success
+- Apply ~audit-required aspect
 ```
 
 ## Troubleshooting
@@ -390,14 +426,17 @@ feat(@feature): add new capability
 
 | Change Type | Action Required |
 |-------------|-----------------|
-| Add feature | Create `.purpose` in feature directory |
-| Add ANY protected route | Create/update `portal.yaml` with gates |
+| Add feature | Create `.purpose` with `#name` and `tags: [feature]` |
+| Add integration | Create `.purpose` with `#name` and `tags: [integration, service-name]` |
+| Add ANY protected route | Create/update `portal.yaml` with `^gates` |
 | Add ownership check | Add `^{resource}-owner` gate to `portal.yaml` |
 | Add role-based access | Add `^{role}` gate to `portal.yaml` |
-| Add signal/event | Add to emitting feature's `.purpose` |
+| Add signal/event | Add `!signal` to emitting component's `.purpose` |
 | Add multi-step flow | Document as `$flow` in `.purpose` |
+| Add cross-cutting rule | Create `~aspect` with required anchors |
 | Rename/delete symbol | Update all `.purpose` references |
 | Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |
+| Propose new tag | Add to `suggested` in `.paradigm/tags.yaml` |
 
 **CRITICAL: Authorization requires portal.yaml**
 
