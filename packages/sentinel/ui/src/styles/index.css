@@ -272,6 +272,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  min-height: 0;
 }
 
 /* ============================================
@@ -376,6 +377,8 @@ body {
   flex-direction: column;
   flex: 1;
   position: relative;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .design-content {
@@ -383,6 +386,7 @@ body {
   display: flex;
   overflow: hidden;
   position: relative;
+  min-height: 0;
 }
 
 /* ============================================
