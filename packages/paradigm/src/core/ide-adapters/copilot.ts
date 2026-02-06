@@ -17,6 +17,7 @@ import {
   generateConventions,
   generateUpdateRules,
   generateCommandsReference,
+  generateCommitConvention,
 } from './base.js';
 
 /**
@@ -129,6 +130,12 @@ export class CopilotAdapter implements IDEAdapter {
       content: this.generateAgentHintsInstructions(),
     });
 
+    // 9. Commit conventions
+    generatedFiles.push({
+      path: 'paradigm-commits.instructions.md',
+      content: this.generateCommitsInstructions(),
+    });
+
     return generatedFiles;
   }
 
@@ -199,28 +206,23 @@ Purpose files (\`.purpose\`) define the context for directories.
 # Directory context
 description: What this directory contains and why
 
-# Features (@ symbol)
-features:
-  feature-name:
-    description: What this feature does
-    gates: [^gate1, ^gate2]       # Required portals
-    signals: [!signal1]           # Events emitted
-    components: [#Component1]     # Components used
-
-# Components (# symbol)  
+# Components (# symbol) — all documented code units
 components:
-  ComponentName:
+  component-name:
     description: What this component does
-    used-by: [@feature1, @feature2]
+    tags: [feature]                # Classification via tag bank
+    gates: [^gate1, ^gate2]       # Required gates
+    signals: [!signal1]           # Events emitted
+    used-by: [#other-component]
 \`\`\`
 
-## Symbol References
+## Symbol References (v2)
 
-- Reference features: \`@feature-name\`
-- Reference components: \`#ComponentName\`
-- Reference portals: \`^portal-name\`
-- Reference signals: \`!signal-name\`
+- Reference components: \`#component-name\`
 - Reference flows: \`$flow-name\`
+- Reference gates: \`^gate-name\`
+- Reference signals: \`!signal-name\`
+- Reference aspects: \`~aspect-name\`
 `;
   }
 
@@ -315,7 +317,7 @@ Instead of reading large context files, query Paradigm CLI on-demand for fresh, 
 
 | Before doing this... | Run this command |
 |---------------------|------------------|
-| Modifying a symbol | \`paradigm ripple @symbol --json\` |
+| Modifying a symbol | \`paradigm ripple #symbol --json\` |
 | Debugging an error | \`paradigm echo ERROR_CODE --json\` |
 | Starting a session | \`paradigm thread --json\` |
 | Understanding relationships | \`paradigm constellation\` |
@@ -327,7 +329,7 @@ Instead of reading large context files, query Paradigm CLI on-demand for fresh, 
 
 \`\`\`bash
 # See what depends on what you're changing
-paradigm ripple @checkout --json
+paradigm ripple #checkout --json
 
 # Output includes: upstream deps, downstream effects, flow membership
 \`\`\`
@@ -356,10 +358,10 @@ paradigm beacon --json
 
 \`\`\`bash
 # Get specific symbol
-jq '.stars["@checkout"]' .paradigm/constellation.json
+jq '.stars["#checkout"]' .paradigm/constellation.json
 
-# Find what requires a portal
-jq '[.stars | to_entries[] | select(.value.portals[]? == "^authenticated") | .key]' .paradigm/constellation.json
+# Find what requires a gate
+jq '[.stars | to_entries[] | select(.value.gates[]? == "^authenticated") | .key]' .paradigm/constellation.json
 
 # List all flows
 jq '.orbits | keys' .paradigm/constellation.json
@@ -370,6 +372,16 @@ jq '.orbits | keys' .paradigm/constellation.json
 - **Fresh data**: Always current, not stale from file generation
 - **Precise**: Only get the data you need
 - **Token-efficient**: ~100 tokens per query vs ~2000 upfront
+`;
+  }
+  /**
+   * Commit conventions instructions
+   */
+  private generateCommitsInstructions(): string {
+    // No frontmatter = always available for reference
+    return `# Paradigm Commit Conventions
+
+${generateCommitConvention()}
 `;
   }
 }

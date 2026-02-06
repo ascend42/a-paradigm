@@ -47,6 +47,18 @@ extract_symbols() {
 
 SYMBOLS=$(extract_symbols)
 
+# Extract symbols from commit message Symbols: trailer
+MSG_SYMBOLS=$(echo "$COMMIT_MSG" | grep -E '^Symbols:' | sed 's/^Symbols: //' | tr -d ' ')
+if [ -n "$MSG_SYMBOLS" ]; then
+  if [ -n "$SYMBOLS" ]; then
+    SYMBOLS="$SYMBOLS,$MSG_SYMBOLS"
+  else
+    SYMBOLS="$MSG_SYMBOLS"
+  fi
+  # Deduplicate
+  SYMBOLS=$(echo "$SYMBOLS" | tr ',' '\\n' | sort -u | tr '\\n' ',' | sed 's/,$//')
+fi
+
 # Determine intent from commit message
 determine_intent() {
   case "$COMMIT_MSG" in
@@ -59,7 +71,7 @@ determine_intent() {
 
 INTENT=$(determine_intent)
 
-# Only record if we found symbols and .paradigm/history exists
+# Record if we found symbols (from .purpose or commit message) and .paradigm/history exists
 if [ -n "$SYMBOLS" ] && [ -d ".paradigm/history" ]; then
   # Generate entry ID
   if [ -f ".paradigm/history/log.jsonl" ]; then

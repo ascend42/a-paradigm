@@ -5,6 +5,29 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-02-06
+
+### Added
+
+- **`Symbols:` trailer protocol for commits**: New commit convention where a `Symbols:` trailer line lists all affected symbols machine-readably. The post-commit hook now parses this trailer to capture symbols for history, supplementing the existing `.purpose`-based extraction. Symbols from both sources are deduplicated.
+
+- **Shared `generateCommitConvention()` in base.ts**: All IDE adapters now use a single shared function for commit convention output, ensuring consistency across Claude, Cursor, Copilot, and Windsurf.
+
+- **Commit conventions in all IDE adapters**: Previously only Claude had (v1) commit guidance. Now all adapters include the v2 commit convention with `Symbols:` trailer:
+  - Cursor: new `paradigm-commits.mdc` (alwaysApply: true)
+  - Copilot: new `paradigm-commits.instructions.md`
+  - Windsurf: commit convention added to `.windsurfrules` output
+
+### Fixed
+
+- **v1 symbol remnants across all IDE adapters**:
+  - `claude.ts`: `Paradigm v1.0` → `v2.0`, `@create-task` → `#create-task`, `@tasks` → `#tasks`, `feat(@feature)` → uses shared v2 convention, nested context `@%?` symbols → `#$^!~`
+  - `cursor.ts`: frontmatter `@features, ^portals` → `#components, $flows, ^gates, !signals, ~aspects`, `.purpose` example rewritten from v1 to v2, agent hints `@symbol`/`@checkout` → `#`, `portals` → `gates`, flow steps `@validate-task-input`/`@create-task` → `#`, `@symbols` → `#symbols`
+  - `copilot.ts`: `.purpose` example and agent hints — same v1→v2 fixes as Cursor
+  - `base.ts`: navigator example `@checkout` → `#checkout`
+
+- **Post-commit hook relaxed recording condition**: Previously required symbols from `.purpose` files AND history directory. Now records when symbols come from either `.purpose` extraction or commit message `Symbols:` trailer.
+
 ## [2.0.3] - 2026-02-06
 
 ### Added
