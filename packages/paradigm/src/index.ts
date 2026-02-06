@@ -1192,5 +1192,16 @@ triageCmd
     await triageListCommand(options);
   });
 
+// paradigm sentinel - Launch the unified codebase intelligence UI
+program
+  .command('sentinel [path]')
+  .description('Launch the Sentinel UI - unified codebase intelligence visualizer')
+  .option('-p, --port <port>', 'Port to run on', '3838')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (path, options) => {
+    const { sentinelCommand } = await import('./commands/sentinel.js');
+    await sentinelCommand(path, options);
+  });
+
 // Parse and run
 program.parse();

@@ -5,6 +5,50 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-02-05
+
+### Added
+
+- **Sentinel UI Improvements** - Unified codebase intelligence visualizer enhancements
+  - **Layout Modes** - Three view options for browsing symbols:
+    - Canvas view: Free-form infinite canvas (default)
+    - Grid view: Columns grouped by type (features, components, gates, etc.)
+    - List view: Sortable table format
+  - **Sorting Options** - Sort symbols by:
+    - A-Z (alphabetical)
+    - By Type (features → components → flows → gates → signals → states)
+    - Recently Updated
+    - Stale First (oldest modifications first)
+  - **Live Editing** - Edit symbols and persist changes to `.purpose` files:
+    - Description edits write back to source files
+    - Tag additions/removals persist to files
+    - Cached index (`.paradigm/index.json`) also updated
+    - `PUT /api/symbols/:id` endpoint for programmatic updates
+  - **GridView Component** - New column-based view grouped by symbol type
+  - **ListView Component** - New table view with clickable sort headers
+
+### Changed
+
+- **Dark Mode Selection** - Fixed harsh selection styling in deep theme:
+  - Type-specific selection glow (each type uses its own color)
+  - Softer glow intensity for dark mode
+  - Removed generic red border on selection
+- **Node Dragging** - Disabled free-form dragging in browse mode
+  - Nodes now use click-to-select (no drag)
+  - Dragging will be re-enabled in future flow editor mode
+- **Timeline Hidden** - Removed from default view
+  - Will be shown when flow editing mode is implemented
+  - Command input repositioned to bottom of screen
+- **Toolbar** - Added layout toggle buttons and sort dropdown
+  - Zoom controls only show in canvas mode
+
+### Files Added
+
+- `packages/sentinel/ui/src/components/Views/GridView.tsx`
+- `packages/sentinel/ui/src/components/Views/ListView.tsx`
+
+---
+
 ## [1.8.0] - 2026-02-05
 
 ### Added
