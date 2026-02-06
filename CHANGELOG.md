@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - DeepSeek: DeepSeek R1, DeepSeek V3
 - **Updated model tiering logic**: Added `nano`, `scout` to low-tier patterns; added `gpt-4.1`, `o3`, `o4`, `grok-3`, `maverick`, `deepseek-r1` to high-tier patterns; updated family extraction for new model families
 - **Fixed v1 logger examples in templates**: `log.feature('@login')` → `log.component('#login-handler')` in upgrade.ts and IDE adapter templates
+- **Self-audit: migrated all Paradigm project files to v2 symbols**:
+  - Root `.purpose`: replaced all `@feature` refs with `#component` + tags, removed `%state`/`states:` section, added `#team-orchestration` feature, updated relationships
+  - `.paradigm/wisdom/antipatterns.yaml`: `@login` → `#login-handler`, `@register` → `#register-handler`
+  - `.paradigm/agents.yaml`: architect focus/triggers changed from `@features`/`@*` to `#components`/`#*`
+  - `.paradigm/docs/patterns.md`: full rewrite — all examples now use v2 logger methods, added `~aspect` pattern section, added v2 method reference table
+  - `.paradigm/docs/error-patterns.md`: replaced `log.feature()`, `log.integration()` with `log.component()`
+  - `base.ts` IDE adapter: `getLogMethodForSymbol()` now includes `~aspect`, v1 prefixes (`@`, `%`, `&`) map to `component()`
 
 ## Sentinel [0.1.1] - 2026-02-06
 
