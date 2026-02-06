@@ -5,15 +5,13 @@
 import type { SymbolEntry, SymbolType } from '../../types';
 import { useNodesStore, type SortOption } from '../../store/nodesStore';
 
+// v2 symbol types
 const TYPE_INFO: Record<SymbolType, { prefix: string; label: string; color: string }> = {
-  feature: { prefix: '@', label: 'Feature', color: 'var(--color-feature)' },
   component: { prefix: '#', label: 'Component', color: 'var(--color-component)' },
   flow: { prefix: '$', label: 'Flow', color: 'var(--color-flow)' },
-  portal: { prefix: '^', label: 'Gate', color: 'var(--color-portal)' },
+  gate: { prefix: '^', label: 'Gate', color: 'var(--color-gate)' },
   signal: { prefix: '!', label: 'Signal', color: 'var(--color-signal)' },
-  state: { prefix: '%', label: 'State', color: 'var(--color-state)' },
   aspect: { prefix: '~', label: 'Aspect', color: 'var(--color-aspect)' },
-  idea: { prefix: '?', label: 'Idea', color: 'var(--color-idea)' },
 };
 
 interface ListRowProps {
@@ -24,7 +22,7 @@ interface ListRowProps {
 
 function ListRow({ node, isSelected, onClick }: ListRowProps) {
   const info = TYPE_INFO[node.type];
-  const name = node.symbol.slice(node.type === 'idea' && node.ideaType ? 2 : 1);
+  const name = node.symbol.slice(1); // Remove prefix
 
   // Format modified date
   const modifiedDate = node.modified

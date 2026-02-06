@@ -27,6 +27,7 @@ import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
 import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestration.js';
+import { getTagsToolsList, handleTagsTool } from './tags.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -108,8 +109,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
                 },
                 type: {
                   type: 'string',
-                  enum: ['feature', 'component', 'gate', 'flow', 'signal', 'state', 'idea'],
-                  description: 'Optional: filter by symbol type',
+                  enum: ['component', 'flow', 'gate', 'signal', 'aspect'],
+                  description: 'Optional: filter by symbol type (v2: #component, $flow, ^gate, !signal, ~aspect)',
                 },
                 limit: {
                   type: 'number',
@@ -198,6 +199,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getFixturesToolsList(),
           // Orchestration tools
           ...getOrchestrationToolsList(),
+          // Tags tools (v2 symbol system)
+          ...getTagsToolsList(),
         ],
       };
     }
@@ -553,19 +556,19 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
 
           const text = JSON.stringify({
             project: ctx.projectName,
+            symbolSystem: 'v2',
             counts: {
-              '@ features': counts.feature,
               '# components': counts.component,
               '$ flows': counts.flow,
-              '% states': counts.state,
               '^ gates': counts.gate,
               '! signals': counts.signal,
-              '? ideas': counts.idea,
+              '~ aspects': counts.aspect,
             },
             total,
             examples,
             hasPortalYaml: ctx.gateConfig !== null,
             purposeFiles: ctx.aggregation.purposeFiles.length,
+            note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification',
             environment: {
               os: platform,
               shell,
@@ -845,6 +848,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
             const result = await handleOrchestrationTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               // trackToolCall is handled inside the orchestration tool handlers
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try tags tools (v2 symbol system)
+          if (name.startsWith('paradigm_tags') || name === 'paradigm_aspect_check') {
+            const result = await handleTagsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
               return {
                 content: [{ type: 'text', text: result.text }],
               };

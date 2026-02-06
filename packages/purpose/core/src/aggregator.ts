@@ -321,28 +321,37 @@ export function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, { 
 }
 
 /**
- * Extracted symbol reference from feature/component data
+ * Extracted symbol reference from feature/component data (v2)
+ *
+ * v2 changes:
+ * - 'state' is no longer a symbol type - states are now #components with [state] tag
+ * - 'flow', 'gate', 'signal', 'component', 'aspect' are the valid reference types
  */
 export interface ExtractedSymbolRef {
   symbol: string;
-  type: 'flow' | 'gate' | 'signal' | 'state' | 'component';
+  type: 'flow' | 'gate' | 'signal' | 'component' | 'aspect';
   sourceSymbol: string;
   filePath: string;
 }
 
 /**
- * Extract symbol references ($, ^, !, %) from feature/component data
+ * Extract symbol references ($, ^, !, #, ~) from feature/component data (v2)
  * This captures references like flows: [$checkout-flow], gates: [^authenticated]
+ *
+ * v2 changes:
+ * - Features are now #components with tags, not @features
+ * - States are now #components with [state] tag, not %states
  */
 export function extractSymbolReferences(parsedFiles: ParsedPurposeFile[]): ExtractedSymbolRef[] {
   const refs: ExtractedSymbolRef[] = [];
   const seen = new Set<string>();
 
   for (const { filePath, data } of parsedFiles) {
-    // Process features
+    // Process features (v2: these are components with [feature] tag)
     const featureEntries = normalizeItemsToEntries(data.features);
     for (const [id, item] of featureEntries) {
-      extractRefsFromItem(`@${id}`, item, filePath, refs, seen);
+      // v2: use # prefix instead of @ for features
+      extractRefsFromItem(`#${id}`, item, filePath, refs, seen);
     }
 
     // Process components
@@ -396,12 +405,15 @@ function extractRefsFromItem(
     }
   }
 
+  // v2: states are now #components with [state] tag
   if (item.states) {
     for (const state of item.states) {
-      const symbol = state.startsWith('%') ? state : `%${state}`;
+      // Convert legacy %state to #component
+      const symbol = state.startsWith('#') ? state :
+                     state.startsWith('%') ? `#${state.slice(1)}` : `#${state}`;
       if (!seen.has(symbol)) {
         seen.add(symbol);
-        refs.push({ symbol, type: 'state', sourceSymbol, filePath });
+        refs.push({ symbol, type: 'component', sourceSymbol, filePath });
       }
     }
   }
@@ -429,31 +441,39 @@ function extractRefsFromItem(
 }
 
 /**
- * Extract symbol references from text using regex
+ * Extract symbol references from text using regex (v2)
+ *
+ * v2 symbols: # $ ^ ! ~
+ * Legacy % is converted to # for backward compatibility
  */
 function extractSymbolsFromText(text: string): Array<{ symbol: string; type: ExtractedSymbolRef['type'] }> {
   const results: Array<{ symbol: string; type: ExtractedSymbolRef['type'] }> = [];
-  
-  // Match $flow, ^gate, !signal, %state patterns
-  const pattern = /([$^!%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
+
+  // Match v2 symbols: #component, $flow, ^gate, !signal, ~aspect
+  // Also match legacy %state for backward compatibility (converts to #component)
+  const pattern = /([$^!#~%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
   let match;
-  
+
   while ((match = pattern.exec(text)) !== null) {
     const prefix = match[1];
     const id = match[2];
-    const symbol = `${prefix}${id}`;
-    
+
+    let symbol: string;
     let type: ExtractedSymbolRef['type'];
+
     switch (prefix) {
-      case '$': type = 'flow'; break;
-      case '^': type = 'gate'; break;
-      case '!': type = 'signal'; break;
-      case '%': type = 'state'; break;
+      case '#': type = 'component'; symbol = `#${id}`; break;
+      case '$': type = 'flow'; symbol = `$${id}`; break;
+      case '^': type = 'gate'; symbol = `^${id}`; break;
+      case '!': type = 'signal'; symbol = `!${id}`; break;
+      case '~': type = 'aspect'; symbol = `~${id}`; break;
+      // Legacy: %state → #component
+      case '%': type = 'component'; symbol = `#${id}`; break;
       default: continue;
     }
-    
+
     results.push({ symbol, type });
   }
-  
+
   return results;
 }

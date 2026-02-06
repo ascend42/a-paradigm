@@ -1,0 +1,154 @@
+# Paradigm Tag Bank
+# Classification via tags instead of symbol prefixes
+#
+# Tags are organized into:
+# - core: Universal vocabulary (applies to all projects)
+# - project: Domain-specific vocabulary (customize per project)
+# - suggested: AI-proposed tags pending human approval
+
+version: "1.0"
+
+# Core tags - universal vocabulary
+# These tags are available in all Paradigm projects
+core:
+  # Classification tags (replacing old symbol prefixes)
+  feature:
+    description: |
+      User-facing functionality. Apply to components that provide
+      direct user value: routes, API endpoints, UI features.
+      Equivalent to old @feature prefix.
+    color: "#4CAF50"  # Green
+    applies-to: ["#"]
+    aliases: ["user-facing", "capability"]
+
+  integration:
+    description: |
+      External service connection. Apply to components that communicate
+      with third-party services: payment processors, databases, APIs.
+      Equivalent to old &integration prefix.
+    color: "#2196F3"  # Blue
+    applies-to: ["#"]
+    aliases: ["external", "third-party"]
+
+  state:
+    description: |
+      Manages application state. Apply to stores, reducers, context
+      providers, configuration managers.
+      Equivalent to old %state prefix.
+    color: "#9C27B0"  # Purple
+    applies-to: ["#"]
+    aliases: ["store", "reducer", "context"]
+
+  idea:
+    description: |
+      Proposed, not yet implemented. Apply to symbols representing
+      future possibilities or exploration.
+      Equivalent to old ?idea prefix.
+    color: "#FF9800"  # Orange
+    applies-to: ["#", "$"]
+    aliases: ["proposed", "future", "exploration"]
+
+  deprecated:
+    description: |
+      Scheduled for removal. Apply to symbols that exist but should
+      not be used in new code. Include removal timeline if known.
+      Replaces old ~deprecated behavior.
+    color: "#9E9E9E"  # Gray
+    applies-to: ["#", "$", "^", "!", "~"]
+    aliases: ["legacy", "obsolete"]
+
+  # Severity/importance tags
+  critical:
+    description: |
+      Failure causes major business impact. Apply to components where
+      bugs would directly affect revenue, security, or core functionality.
+      Requires extra review and testing.
+    color: "#F44336"  # Red
+    applies-to: ["#", "$", "^"]
+    aliases: ["high-priority", "essential"]
+
+  # Domain tags
+  security:
+    description: |
+      Security-sensitive code. Apply to authentication, authorization,
+      encryption, input validation, and other security-related components.
+      Requires security review before changes.
+    color: "#E91E63"  # Pink
+    applies-to: ["#", "^", "~"]
+    aliases: ["auth", "sensitive"]
+
+  compliance:
+    description: |
+      Regulatory requirement. Apply to code that exists to satisfy
+      legal, compliance, or audit requirements (GDPR, PCI, HIPAA, SOC2).
+      Changes require compliance review.
+    color: "#795548"  # Brown
+    applies-to: ["~", "^"]
+    aliases: ["regulatory", "audit", "legal"]
+
+  # Code quality tags
+  tested:
+    description: |
+      Has comprehensive test coverage. Apply to components with
+      unit tests, integration tests, or e2e tests.
+    color: "#8BC34A"  # Light Green
+    applies-to: ["#", "$"]
+
+  documented:
+    description: |
+      Has comprehensive documentation. Apply to components with
+      complete API docs, usage examples, and architecture notes.
+    color: "#03A9F4"  # Light Blue
+    applies-to: ["#", "$", "^"]
+
+  experimental:
+    description: |
+      Experimental or unstable. API may change without notice.
+      Not for production use. Requires additional review.
+    color: "#FF5722"  # Deep Orange
+    applies-to: ["#", "$"]
+    aliases: ["unstable", "beta", "wip"]
+
+# Project-specific tags
+# Customize these for your domain
+project:
+  # Example service integrations
+  stripe:
+    description: Stripe payment integration components
+    color: "#635BFF"  # Stripe purple
+    applies-to: ["#"]
+
+  postgres:
+    description: PostgreSQL database operations
+    color: "#336791"  # Postgres blue
+    applies-to: ["#"]
+
+  redis:
+    description: Redis cache operations
+    color: "#DC382D"  # Redis red
+    applies-to: ["#"]
+
+  # Example domain tags
+  revenue:
+    description: Affects company revenue directly
+    color: "#4CAF50"  # Green (money)
+    applies-to: ["$", "#"]
+
+  onboarding:
+    description: Part of user onboarding flow
+    color: "#00BCD4"  # Cyan
+    applies-to: ["#", "$"]
+
+# Suggested tags - AI-proposed, pending human approval
+# AI agents can add entries here; humans approve by moving to 'project'
+#
+# Format:
+# - tag: suggested-tag-name
+#   proposed-by: claude  # or other agent ID
+#   proposed-at: 2024-01-15T10:30:00Z
+#   reason: "Why this tag would be useful"
+#   applies-to: ["#"]
+#   example-symbols:
+#     - "#symbol-one"
+#     - "#symbol-two"
+suggested: []

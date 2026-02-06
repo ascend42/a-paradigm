@@ -12,23 +12,15 @@ export type LayoutMode = 'canvas' | 'grid' | 'list';
 // Sort options
 export type SortOption = 'alpha' | 'type' | 'updated' | 'stale';
 
-// Helper to build symbol from type and name
-function buildSymbol(type: SymbolType, name: string, ideaType?: SymbolType): string {
+// Helper to build symbol from type and name (v2)
+function buildSymbol(type: SymbolType, name: string): string {
   const prefixMap: Record<SymbolType, string> = {
-    feature: '@',
     component: '#',
     flow: '$',
-    state: '%',
-    aspect: '~',
-    portal: '^',
+    gate: '^',
     signal: '!',
-    idea: '?',
+    aspect: '~',
   };
-
-  if (type === 'idea' && ideaType) {
-    // Compound idea: ?@name
-    return `?${prefixMap[ideaType]}${name}`;
-  }
 
   return `${prefixMap[type]}${name}`;
 }
@@ -79,15 +71,13 @@ interface NodesState {
   getSelectedNode: () => SymbolEntry | undefined;
 }
 
+// v2 symbol types
 const ALL_TYPES: SymbolType[] = [
-  'feature',
   'component',
   'flow',
-  'state',
-  'aspect',
-  'portal',
+  'gate',
   'signal',
-  'idea',
+  'aspect',
 ];
 
 /**
@@ -133,16 +123,13 @@ function apiSymbolsToEntries(symbols: ApiSymbol[]): SymbolEntry[] {
   }));
 }
 
-// Type order for sorting
+// Type order for sorting (v2)
 const TYPE_ORDER: Record<SymbolType, number> = {
-  feature: 1,
-  component: 2,
-  flow: 3,
-  portal: 4,
-  signal: 5,
-  state: 6,
-  aspect: 7,
-  idea: 8,
+  component: 1,
+  flow: 2,
+  gate: 3,
+  signal: 4,
+  aspect: 5,
 };
 
 export const useNodesStore = create<NodesState>((set, get) => ({
@@ -214,13 +201,8 @@ export const useNodesStore = create<NodesState>((set, get) => ({
         if (parsed) {
           // Extract name without prefix
           const name = parsed.name;
-          const newSymbol = buildSymbol(updates.type, name, updates.ideaType ?? node.ideaType);
+          const newSymbol = buildSymbol(updates.type, name);
           finalUpdates.symbol = newSymbol;
-
-          // Clear ideaType if changing from idea to non-idea
-          if (node.type === 'idea' && updates.type !== 'idea') {
-            finalUpdates.ideaType = undefined;
-          }
         }
       }
 
@@ -229,11 +211,6 @@ export const useNodesStore = create<NodesState>((set, get) => ({
         const parsed = parseSymbol(updates.symbol);
         if (parsed) {
           finalUpdates.type = parsed.type;
-          if (parsed.ideaType) {
-            finalUpdates.ideaType = parsed.ideaType;
-          } else if (parsed.type !== 'idea') {
-            finalUpdates.ideaType = undefined;
-          }
         }
       }
 

@@ -1,4 +1,4 @@
-# Trace Flow Prompt
+# Trace Flow Prompt (v2)
 
 Use this prompt when you need to understand or debug a multi-step process.
 
@@ -62,27 +62,27 @@ Need to understand where the flow might be getting stuck.
 2. **Document each step:**
    ```
    $checkout-flow
-   
+
    Step 1: cart
-   - Component: #CartPage
+   - Component: #CartPage [feature]
    - Entry: User clicks "Checkout"
    - Exit signal: !checkout-started
    - Next: shipping
-   
+
    Step 2: shipping
    - Component: #ShippingForm
-   - Portal: ^authenticated
+   - Gate: ^authenticated
    - Validates: address, shipping method
    - Exit signal: !shipping-confirmed
    - Next: payment
-   
+
    ...
    ```
 
 3. **Identify checkpoints:**
-   - Portals that must pass
+   - Gates that must pass
    - Signals that should emit
-   - State changes expected
+   - Aspects that apply (e.g., ~audit-required)
 
 4. **Debug assistance:**
    - Where logs should appear
@@ -95,16 +95,16 @@ Need to understand where the flow might be getting stuck.
 
 1. **Enable full logging:**
    ```bash
-   LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,@
+   LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,#
    ```
 
 2. **Check for step signals:**
    - Each step should emit a signal on entry/exit
    - Missing signal = step didn't complete
 
-3. **Verify state transitions:**
-   - %order.status should change at each step
-   - Stuck status = process interrupted
+3. **Verify component status:**
+   - Check #component logs for each step
+   - Look for error signals (!-prefixed)
 
 4. **Look for error signals:**
    - !payment-failed
@@ -112,6 +112,46 @@ Need to understand where the flow might be getting stuck.
    - !validation-error
 
 5. **Check external services:**
-   - Payment processor responses
-   - Email service confirmations
-   - Inventory system updates
+   - Payment processor responses (#payment-processor logs)
+   - Email service confirmations (#email-service logs)
+   - Inventory system updates (#inventory-service logs)
+
+6. **Verify aspect compliance:**
+   - ~audit-required aspects should log audit entries
+   - Missing audit logs may indicate skipped steps
+
+---
+
+## v2 Flow Definition Format
+
+```yaml
+# In .purpose file
+$checkout-flow:
+  description: Complete purchase from cart to confirmation
+  tags: [critical, revenue]
+  steps:
+    - ^authenticated       # Gate: must be logged in
+    - #validate-cart       # Component: check inventory
+    - #calculate-totals    # Component: tax, shipping
+    - ^payment-authorized  # Gate: payment method valid
+    - #process-payment     # Component: charge card
+    - !payment-completed   # Signal: trigger fulfillment
+    - #send-confirmation   # Component: email receipt
+  on-failure:
+    - !checkout-failed
+    - #notify-support
+  aspects:
+    - ~audit-required      # All steps must be audited
+```
+
+---
+
+## v2 Symbol Reference
+
+| Symbol | Purpose in Flows |
+|--------|------------------|
+| `$` | Flow definition |
+| `#` | Component steps |
+| `^` | Gate checkpoints |
+| `!` | Signals emitted |
+| `~` | Aspects that apply |

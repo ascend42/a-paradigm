@@ -1,7 +1,7 @@
-# Shopping Features Module
+# Shopping Features Module (v2)
 # Core shopping experience features
 
-version: "1.0.0"
+version: "2.0.0"
 
 description: |
   Deliver an intuitive, fast, and delightful shopping experience
@@ -17,18 +17,27 @@ rules:
   optimistic_updates: "Cart updates are optimistic with rollback on error"
   infinite_scroll: "Infinite scroll for product grids (batch of 20)"
 
-features:
-  "@product-search":
-    description: "Full-text search with filters and facets"
-  "@quick-view":
-    description: "Preview product details without leaving the grid"
+# Features are now #components with [feature] tag
+#product-search:
+  description: "Full-text search with filters and facets"
+  tags: [feature]
+  signals: [!search-executed, !search-empty]
 
-components:
-  "#ProductGrid":
-    description: "Responsive grid of product cards with infinite scroll"
-  "#FilterPanel":
-    description: "Category, price, and attribute filters"
-  "#QuickViewModal":
-    description: "Modal overlay for quick product preview"
-  "#CartItem":
-    description: "Single cart line item with quantity controls"
+#quick-view:
+  description: "Preview product details without leaving the grid"
+  tags: [feature]
+
+# UI Components
+#ProductGrid:
+  description: "Responsive grid of product cards with infinite scroll"
+
+#FilterPanel:
+  description: "Category, price, and attribute filters"
+
+#QuickViewModal:
+  description: "Modal overlay for quick product preview"
+  components: [#Modal]
+
+#CartItem:
+  description: "Single cart line item with quantity controls"
+  signals: [!quantity-changed, !item-removed]

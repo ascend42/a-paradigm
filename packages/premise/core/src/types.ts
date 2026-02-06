@@ -1,23 +1,42 @@
 /**
- * Core types for Dream - the aggregation and ideation layer
+ * Core types for Paradigm - the aggregation and ideation layer
+ *
+ * Symbol System v2:
+ * - 5 operational symbols: # $ ^ ! ~
+ * - Classification via tags instead of symbol prefixes
+ * - Aspects (~) require code anchors
  */
 
 // ============================================
-// Symbol Types
+// Symbol Types (v2)
 // ============================================
 
 /**
- * Symbol type identifiers
+ * Symbol type identifiers (v2 - 5 operational symbols)
+ *
+ * Removed in v2 (now tags):
+ * - 'feature' (@) -> use #component with tags: [feature]
+ * - 'state' (%) -> use #component with tags: [state]
+ * - 'idea' (?) -> use any symbol with tags: [idea]
+ * - 'integration' (&) -> use #component with tags: [integration]
  */
 export type SymbolType =
-  | 'feature'    // @ - from Purpose
-  | 'component'  // # - from Purpose
-  | 'flow'       // $ - shared
-  | 'state'      // % - from Purpose
-  | 'aspect'     // ~ - from Purpose
-  | 'gate'       // ^ - from Gate
-  | 'signal'     // ! - from Gate
-  | 'idea';      // ? - Dream-native
+  | 'component'  // # - Any documented code unit
+  | 'flow'       // $ - Multi-step process
+  | 'gate'       // ^ - Authorization checkpoint
+  | 'signal'     // ! - Event for side effects
+  | 'aspect';    // ~ - Rule with required code anchor
+
+/**
+ * Legacy symbol types (v1) - kept for migration support
+ * @deprecated Use tags instead: [feature], [state], [idea], [integration]
+ */
+export type LegacySymbolType = 'feature' | 'state' | 'idea' | 'integration';
+
+/**
+ * All symbol types including legacy (for migration)
+ */
+export type AnySymbolType = SymbolType | LegacySymbolType;
 
 /**
  * Source type identifiers
@@ -25,32 +44,56 @@ export type SymbolType =
 export type SourceType = 'purpose' | 'gate' | 'dream';
 
 /**
- * Symbol prefix mapping
+ * Symbol prefix mapping (v2)
  */
 export const SYMBOL_PREFIXES: Record<SymbolType, string> = {
-  feature: '@',
   component: '#',
   flow: '$',
-  state: '%',
-  aspect: '~',
   gate: '^',
   signal: '!',
-  idea: '?',
+  aspect: '~',
 };
 
 /**
- * Reverse mapping: prefix to type
+ * Reverse mapping: prefix to type (v2)
  */
 export const PREFIX_TO_TYPE: Record<string, SymbolType> = {
-  '@': 'feature',
   '#': 'component',
   '$': 'flow',
-  '%': 'state',
-  '~': 'aspect',
   '^': 'gate',
   '!': 'signal',
-  '?': 'idea',
+  '~': 'aspect',
 };
+
+/**
+ * Legacy prefix mapping (v1) - for migration support
+ * @deprecated These prefixes are no longer valid in v2
+ */
+export const LEGACY_PREFIX_TO_TYPE: Record<string, LegacySymbolType> = {
+  '@': 'feature',
+  '%': 'state',
+  '?': 'idea',
+  '&': 'integration',
+};
+
+/**
+ * All valid symbol prefixes (v2)
+ */
+export const VALID_PREFIXES = ['#', '$', '^', '!', '~'] as const;
+
+/**
+ * Check if a prefix is valid in v2
+ */
+export function isValidPrefix(prefix: string): prefix is typeof VALID_PREFIXES[number] {
+  return VALID_PREFIXES.includes(prefix as typeof VALID_PREFIXES[number]);
+}
+
+/**
+ * Check if a prefix is a legacy v1 prefix
+ */
+export function isLegacyPrefix(prefix: string): boolean {
+  return ['@', '%', '?', '&'].includes(prefix);
+}
 
 /**
  * Position on the canvas
@@ -61,17 +104,28 @@ export interface Position {
 }
 
 /**
+ * Code anchor reference (v2)
+ * Format: file.ts:15 (single line), file.ts:15-20 (range), file.ts:15,25,30 (multiple)
+ */
+export interface CodeAnchor {
+  /** File path */
+  path: string;
+  /** Line number(s) - can be single, range, or array */
+  lines: number | [number, number] | number[];
+  /** Raw anchor string as defined */
+  raw: string;
+}
+
+/**
  * A symbol entry in the unified index
  */
 export interface SymbolEntry {
   /** Unique identifier (uuid for dream-native, derived for others) */
   id: string;
-  /** Full symbol with prefix (e.g., "@checkout") */
+  /** Full symbol with prefix (e.g., "#checkout") */
   symbol: string;
   /** Symbol type */
   type: SymbolType;
-  /** For compound ideas (?@, ?#, etc.), the type this idea represents */
-  ideaType?: SymbolType;
   /** Where this symbol comes from */
   source: SourceType;
   /** File path where it's defined */
@@ -84,14 +138,20 @@ export interface SymbolEntry {
   referencedBy: string[];
   /** Canvas position (if placed) */
   position?: Position;
-  /** User-assigned tags */
+  /** User-assigned tags (v2 classification) */
   tags?: string[];
+  /** Code anchors - REQUIRED for aspects (~) */
+  anchors?: CodeAnchor[];
   /** Description text */
   description?: string;
   /** Creation timestamp (for dream-native) */
   created?: string;
   /** Last modified timestamp */
   modified?: string;
+  /** For aspects: patterns this aspect applies to */
+  appliesTo?: string[];
+  /** For aspects: enforcement description */
+  enforcement?: string;
 }
 
 // ============================================

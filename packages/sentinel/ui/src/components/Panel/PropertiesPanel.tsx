@@ -7,21 +7,19 @@ import { useNodesStore } from '../../store/nodesStore';
 import type { SymbolType } from '../../types';
 import { parseSymbol } from '../../types';
 
+// v2 symbol types
 const TYPE_LABELS: Record<SymbolType, string> = {
-  feature: 'Feature',
   component: 'Component',
   flow: 'Flow',
-  state: 'State',
-  aspect: 'Aspect',
-  portal: 'Gate',
+  gate: 'Gate',
   signal: 'Signal',
-  idea: 'Idea',
+  aspect: 'Aspect',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
   purpose: 'Purpose',
-  portal: 'Gate',
-  premise: 'Dream',
+  gate: 'Gate',
+  dream: 'Dream',
 };
 
 export function PropertiesPanel() {
@@ -86,7 +84,7 @@ export function PropertiesPanel() {
     if (field === 'symbol' && typeof value === 'string') {
       const parsed = parseSymbol(value);
       if (!parsed) {
-        alert('Invalid symbol format. Must start with @, #, $, %, ~, ^, !, or ?');
+        alert('Invalid symbol format. Must start with #, $, ^, !, or ~ (v2 symbols)');
         return;
       }
     }

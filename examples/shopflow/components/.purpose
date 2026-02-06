@@ -1,7 +1,7 @@
-# Shared Components Library
+# Shared Components Library (v2)
 # Reusable UI components across ShopFlow
 
-version: "1.0.0"
+version: "2.0.0"
 
 description: |
   Maintain a consistent, accessible, and beautiful component library
@@ -19,18 +19,29 @@ rules:
   storybook: "Storybook stories required for each component"
   typescript: "Props must be fully typed with TypeScript"
 
-components:
-  "#Button":
-    description: "Primary action button with variants"
-  "#Input":
-    description: "Text input with validation states"
-  "#FormField":
-    description: "Form field wrapper with label and error display"
-  "#Modal":
-    description: "Accessible modal dialog"
-  "#Toast":
-    description: "Notification toast messages"
-  "#Skeleton":
-    description: "Loading placeholder skeleton"
-  "#Badge":
-    description: "Status and count badges"
+# UI Components (all use # prefix)
+#Button:
+  description: "Primary action button with variants"
+  tags: [tested, documented]
+
+#Input:
+  description: "Text input with validation states"
+  tags: [tested, documented]
+
+#FormField:
+  description: "Form field wrapper with label and error display"
+  tags: [tested, documented]
+
+#Modal:
+  description: "Accessible modal dialog"
+  tags: [tested, documented]
+
+#Toast:
+  description: "Notification toast messages"
+  signals: [!toast-shown, !toast-dismissed]
+
+#Skeleton:
+  description: "Loading placeholder skeleton"
+
+#Badge:
+  description: "Status and count badges"

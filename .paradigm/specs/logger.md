@@ -1,6 +1,6 @@
-# Paradigm Logger Specification
+# Paradigm Logger Specification (v2)
 
-The Paradigm Logger creates a **shared language between code, developers, and AI agents** using Paradigm's symbol system. It replaces raw `console.log`/`print` statements with structured, filterable, symbol-typed logs.
+The Paradigm Logger creates a **shared language between code, developers, and AI agents** using Paradigm's symbol system v2. It replaces raw `console.log`/`print` statements with structured, filterable, symbol-typed logs.
 
 ---
 
@@ -13,25 +13,24 @@ The Paradigm Logger creates a **shared language between code, developers, and AI
 console.log('User logged in', userId);
 print(f"Query took {duration}ms")
 
-// GOOD - Paradigm logger
-log.feature('@login').info('User logged in', { userId });
+// GOOD - Paradigm logger (v2)
+log.component('#login-handler').info('User logged in', { userId });
 log.component('#database').debug('Query executed', { duration });
 ```
 
 ---
 
-## API Design (Language-Agnostic)
+## API Design (v2 - Language-Agnostic)
 
 ### Logger Object
 
 ```
-log.feature('@symbol')    → SymbolLogger   // For @features
-log.component('#symbol')  → SymbolLogger   // For #components
-log.gate('^symbol')       → SymbolLogger   // For ^portals (gates)
-log.signal('!symbol')     → SymbolLogger   // For !signals
-log.state('%symbol')      → SymbolLogger   // For %state
-log.flow('$symbol')       → SymbolLogger   // For $flows
-log.raw('?symbol')        → SymbolLogger   // For any symbol
+log.component('#symbol')  → SymbolLogger   // For #components (universal code units)
+log.gate('^symbol')       → SymbolLogger   // For ^gates (authorization)
+log.signal('!symbol')     → SymbolLogger   // For !signals (events)
+log.flow('$symbol')       → SymbolLogger   // For $flows (multi-step processes)
+log.aspect('~symbol')     → SymbolLogger   // For ~aspects (cross-cutting rules)
+log.raw('symbol')         → SymbolLogger   // For any symbol without prefix validation
 ```
 
 ### SymbolLogger Methods
@@ -59,7 +58,7 @@ log.raw('?symbol')        → SymbolLogger   // For any symbol
 | Level | Priority | When to Use |
 |-------|----------|-------------|
 | `debug` | 0 | Internal state, cache hits, queries — verbose dev info |
-| `info` | 1 | Feature entry/exit, successful operations |
+| `info` | 1 | Component entry/exit, successful operations |
 | `warn` | 2 | Denied access, retries, recoverable issues |
 | `error` | 3 | Exceptions, unrecoverable failures |
 
@@ -67,45 +66,49 @@ log.raw('?symbol')        → SymbolLogger   // For any symbol
 
 ---
 
-## Symbol Usage by Location
+## Symbol Usage by Location (v2)
+
+In v2, all code units use `#component`. The tag system handles classification.
 
 | Directory Pattern | Symbol | Log Method |
 |-------------------|--------|------------|
-| `features/`, `routes/`, `api/` | `@` | `log.feature()` |
+| `features/`, `routes/`, `api/` | `#` | `log.component()` |
 | `components/`, `lib/`, `utils/` | `#` | `log.component()` |
-| `middleware/`, `auth/`, `guards/` | `^` | `log.gate()` |
-| `stores/`, `state/`, `reducers/` | `%` | `log.state()` |
-| `events/`, `handlers/`, `listeners/` | `!` | `log.signal()` |
-| `flows/`, `sagas/`, `workflows/` | `$` | `log.flow()` |
+| `services/`, `core/`, `drivers/` | `#` | `log.component()` |
+| `integrations/`, `external/`, `vendors/` | `#` | `log.component()` |
+| `stores/`, `state/`, `reducers/` | `#` | `log.component()` |
+| `config/`, `models/` | `#` | `log.component()` |
+| `middleware/`, `auth/`, `guards/`, `policies/` | `^` | `log.gate()` |
+| `events/`, `handlers/`, `listeners/`, `hooks/` | `!` | `log.signal()` |
+| `flows/`, `sagas/`, `workflows/`, `pipelines/` | `$` | `log.flow()` |
+| `aspects/`, `rules/`, `constraints/` | `~` | `log.aspect()` |
 
 ---
 
 ## Common Patterns
 
-### Feature Entry/Exit
+### Component Entry/Exit
 
 ```
 function login(email, password):
-    tracker = log.feature('@login').start('Starting @login', { email })
-    
+    tracker = log.component('#login-handler').start('Starting login', { email })
+
     try:
         user = authenticate(email, password)
         log.signal('!login-success').info('User authenticated', { userId: user.id })
-        tracker.success('@login completed', { userId: user.id })
+        tracker.success('Login completed', { userId: user.id })
         return user
     catch error:
         log.signal('!login-failed').warn('Login failed', { email, error })
-        tracker.error('@login failed', { error })
+        tracker.error('Login failed', { error })
         throw error
 ```
 
-### Portal Checks
-
-For simple portal logging:
+### Gate Checks
 
 ```
 function requireAuth(request):
-    log.gate('^authenticated').debug('Checking ^authenticated')
+    log.gate('^authenticated').debug('Checking gate')
 
     user = getUser(request)
     if not user:
@@ -124,7 +127,7 @@ function requireAuth(request):
 ```
 function query(sql, params):
     tracker = log.component('#database').start('Executing query')
-    
+
     try:
         result = db.execute(sql, params)
         tracker.success('Query completed', { rows: result.length })
@@ -134,13 +137,48 @@ function query(sql, params):
         throw error
 ```
 
-### State Changes
+### Integration Components
+
+```
+function processPayment(amount, token):
+    tracker = log.component('#stripe-client').start('Processing payment', { amount })
+
+    try:
+        result = stripe.charges.create({ amount, source: token })
+        log.signal('!payment-completed').info('Payment processed', { chargeId: result.id })
+        tracker.success('Payment completed', { chargeId: result.id })
+        return result
+    catch error:
+        log.signal('!payment-failed').error('Payment failed', { error })
+        tracker.error('Payment failed', { error })
+        throw error
+```
+
+### Aspect Enforcement
+
+```
+function auditMiddleware(request, next):
+    log.aspect('~audit-required').debug('Audit middleware invoked', { path: request.path })
+
+    before = captureState()
+    result = next(request)
+    after = captureState()
+
+    log.aspect('~audit-required').info('Operation audited', {
+        path: request.path,
+        changes: diff(before, after)
+    })
+
+    return result
+```
+
+### State Components
 
 ```
 function setAuthenticated(value):
-    log.state('%user.authenticated').info('State changing', { 
-        from: state.authenticated, 
-        to: value 
+    log.component('#user-store').info('State changing', {
+        from: state.authenticated,
+        to: value
     })
     state.authenticated = value
 ```
@@ -164,8 +202,9 @@ LOG_LEVEL=error    # Show errors only
 ```bash
 # Environment variable (comma-separated)
 PARADIGM_SYMBOLS=!          # Signals only — high-level overview
-PARADIGM_SYMBOLS=@,^,!      # Features, portals, signals — auth debugging
+PARADIGM_SYMBOLS=#,^,!      # Components, gates, signals — auth debugging
 PARADIGM_SYMBOLS=#          # Components only — infrastructure debugging
+PARADIGM_SYMBOLS=~          # Aspects only — rule enforcement debugging
 ```
 
 ### Common Filter Recipes
@@ -173,8 +212,9 @@ PARADIGM_SYMBOLS=#          # Components only — infrastructure debugging
 | Use Case | Level | Symbols | What You See |
 |----------|-------|---------|--------------|
 | High-level overview | info | `!` | Just events/signals |
-| Auth debugging | debug | `@,^,!` | Features, portals, signals |
+| Auth debugging | debug | `#,^,!` | Components, gates, signals |
 | Infrastructure | debug | `#,!` | Components and signals |
+| Rule enforcement | debug | `~,!` | Aspects and signals |
 | Minimal | warn | (all) | Warnings and errors only |
 
 ---
@@ -184,7 +224,7 @@ PARADIGM_SYMBOLS=#          # Components only — infrastructure debugging
 ### Development (Pretty)
 
 ```
-16:42:15.123 @login INFO  Starting @login {"email":"user@example.com"}
+16:42:15.123 #login-handler INFO  Starting login {"email":"user@example.com"}
 16:42:15.456 #database DEBUG Query executed {"table":"users","duration":"45ms"}
 16:42:15.789 !login-success INFO User authenticated {"userId":"abc123"}
 ```
@@ -192,7 +232,7 @@ PARADIGM_SYMBOLS=#          # Components only — infrastructure debugging
 ### Production (JSON)
 
 ```json
-{"timestamp":"2026-01-14T00:42:15.123Z","level":"info","symbol":"@login","symbolType":"feature","message":"Starting @login","email":"user@example.com"}
+{"timestamp":"2026-01-14T00:42:15.123Z","level":"info","symbol":"#login-handler","symbolType":"component","message":"Starting login","email":"user@example.com"}
 ```
 
 ---
@@ -205,7 +245,7 @@ Track requests across multiple log statements:
 correlationId = createCorrelationId()
 
 withCorrelation(correlationId, () => {
-    log.feature('@checkout').info('Starting checkout')
+    log.component('#checkout').info('Starting checkout')
     log.component('#payment').info('Processing payment')
     log.signal('!checkout-complete').info('Order placed')
     // All logs include the same correlationId
@@ -218,7 +258,7 @@ withCorrelation(correlationId, () => {
 
 When implementing the Paradigm logger in a new language:
 
-- [ ] Symbol-typed methods: `log.feature()`, `log.component()`, etc.
+- [ ] Symbol-typed methods: `log.component()`, `log.gate()`, `log.signal()`, `log.flow()`, `log.aspect()`
 - [ ] Log levels: debug, info, warn, error
 - [ ] Duration tracking: `.start()` → `.success()` / `.error()`
 - [ ] Structured data parameter on all methods
@@ -246,7 +286,7 @@ For authorization decisions that need to be validated by AI agents, use the **Po
 ```
 
 Use cases:
-- **`log.gate()`** - General gate/portal-related logging and debugging
+- **`log.gate()`** - General gate-related logging and debugging
 - **`portal.check()`** - Authorization decisions that need validation
 
 See [Portal Validation Specification](./portal-validation.md) for full details.

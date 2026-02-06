@@ -1,7 +1,7 @@
-# Authentication Module
+# Authentication Module (v2)
 # Handles all user authentication and session management
 
-version: "1.0.0"
+version: "2.0.0"
 
 description: |
   Provide secure, frictionless authentication that supports multiple
@@ -19,18 +19,32 @@ rules:
   rate_limiting: "Rate limit login attempts (5 per minute per IP)"
   oauth_support: "Support OAuth providers (Google, GitHub, Apple)"
 
-features:
-  "@user-login":
-    description: "Email/password and OAuth authentication"
-  "@user-register":
-    description: "New account creation with email verification"
-  "@password-reset":
-    description: "Secure password recovery flow"
+# Features are now #components with [feature] tag
+#user-login:
+  description: "Email/password and OAuth authentication"
+  tags: [feature, security]
+  gates: [^rate-limited]
+  signals: [!login-success, !login-failed]
 
-components:
-  "#AuthProvider":
-    description: "React context provider for auth state"
-  "#LoginForm":
-    description: "Email/password login form with validation"
-  "#RegisterForm":
-    description: "New user registration form"
+#user-register:
+  description: "New account creation with email verification"
+  tags: [feature, security]
+  gates: [^rate-limited]
+  signals: [!registration-success, !registration-failed]
+
+#password-reset:
+  description: "Secure password recovery flow"
+  tags: [feature, security]
+  gates: [^rate-limited]
+  signals: [!reset-requested, !reset-completed]
+
+# UI Components
+#AuthProvider:
+  description: "React context provider for auth state"
+  tags: [state]
+
+#LoginForm:
+  description: "Email/password login form with validation"
+
+#RegisterForm:
+  description: "New user registration form"
