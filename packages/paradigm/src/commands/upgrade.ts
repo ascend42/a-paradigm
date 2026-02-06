@@ -443,7 +443,7 @@ Use the Paradigm logger instead of raw console.log/print statements.
 ## API
 
 \`\`\`
-log.feature('@login').info('Starting login', { email })
+log.component('#login-handler').info('Starting login', { email })
 log.component('#database').debug('Query executed', { duration })
 log.gate('^authenticated').warn('Access denied', { userId })
 log.signal('!login-success').info('User authenticated')

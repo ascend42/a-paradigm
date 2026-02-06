@@ -87,7 +87,7 @@ export function generateLoggingRules(config: ParadigmConfig): string {
   lines.push('');
   lines.push('```');
   lines.push('// Use this pattern:');
-  lines.push('log.feature(\'@login\').info(\'Starting login\', { email });');
+  lines.push('log.component(\'#login-handler\').info(\'Starting login\', { email });');
   lines.push('log.component(\'#database\').debug(\'Query executed\', { duration });');
   lines.push('log.gate(\'^authenticated\').warn(\'Access denied\', { userId });');
   lines.push('log.signal(\'!login-success\').info(\'User authenticated\');');
