@@ -600,14 +600,20 @@ ${terminalGuidance}
    - Check if parallel execution is possible
 
 2. **Execute:** \`paradigm_orchestrate_inline({ task: "...", mode: "execute" })\`
-   - Get full prompts for each agent stage
+   - Get full prompts and execution strategy
    - Note which stages can run in parallel
 
-3. **Spawn subagents:** Use Task tool for each agent prompt
-   - Parallel stages: Launch multiple Task calls in one message
-   - Sequential stages: Wait for completion before next stage
+3. **Follow the plan sequentially:**
+   - For each stage/agent, adopt that role's prompt and focus areas
+   - Stage 0 (architect): Design and spec only — do NOT write implementation code
+   - Stage 1 (builder): Implement following the architect's design
+   - Stage 2 (tester/reviewer): Verify and test the implementation
+   - Pass context between phases as if handing off to a teammate
 
-4. **Record history:** \`paradigm_history_record({ type: "implement", symbols: [...], description: "..." })\`
+4. **For true parallel execution**, suggest user runs:
+   \`paradigm team orchestrate "task description"\`
+
+5. **Record history:** \`paradigm_history_record({ type: "implement", symbols: [...], description: "..." })\`
 
 ## Available Agents
 
