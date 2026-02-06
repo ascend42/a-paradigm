@@ -1,15 +1,86 @@
 /**
  * Symbol index loader for the server
+ *
+ * Uses premise-core aggregator for symbol extraction, with fallback
+ * to local scanning if premise-core is unavailable.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import chalk from 'chalk';
+
+// =============================================================================
+// Paradigm Logger (inline for Sentinel)
+// =============================================================================
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+interface LogData {
+  [key: string]: unknown;
+}
+
+// Default to 'info' - set SENTINEL_LOG_LEVEL=error to quiet, =debug for verbose
+const LOG_LEVEL = process.env.SENTINEL_LOG_LEVEL || process.env.LOG_LEVEL || 'info';
+const LOG_LEVELS: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+
+function shouldLog(level: LogLevel): boolean {
+  return LOG_LEVELS[level] >= LOG_LEVELS[LOG_LEVEL as LogLevel];
+}
+
+function formatData(data?: LogData): string {
+  if (!data) return '';
+  const entries = Object.entries(data)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    .join(' ');
+  return chalk.gray(` ${entries}`);
+}
+
+const log = {
+  component(name: string) {
+    const symbol = chalk.magenta(`#${name}`);
+    return {
+      debug: (msg: string, data?: LogData) => {
+        if (shouldLog('debug')) console.log(`${chalk.gray('○')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      info: (msg: string, data?: LogData) => {
+        if (shouldLog('info')) console.log(`${chalk.blue('ℹ')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      warn: (msg: string, data?: LogData) => {
+        if (shouldLog('warn')) console.log(`${chalk.yellow('⚠')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      error: (msg: string, data?: LogData) => {
+        if (shouldLog('error')) console.error(`${chalk.red('✖')} ${symbol} ${msg}${formatData(data)}`);
+      },
+    };
+  },
+  flow(name: string) {
+    const symbol = chalk.yellow(`$${name}`);
+    return {
+      debug: (msg: string, data?: LogData) => {
+        if (shouldLog('debug')) console.log(`${chalk.gray('○')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      info: (msg: string, data?: LogData) => {
+        if (shouldLog('info')) console.log(`${chalk.blue('ℹ')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      warn: (msg: string, data?: LogData) => {
+        if (shouldLog('warn')) console.log(`${chalk.yellow('⚠')} ${symbol} ${msg}${formatData(data)}`);
+      },
+      error: (msg: string, data?: LogData) => {
+        if (shouldLog('error')) console.error(`${chalk.red('✖')} ${symbol} ${msg}${formatData(data)}`);
+      },
+    };
+  },
+};
+
+// =============================================================================
+// Types
+// =============================================================================
 
 export interface SymbolEntry {
   id: string;
   symbol: string;
-  type: 'feature' | 'component' | 'flow' | 'state' | 'aspect' | 'portal' | 'signal' | 'idea';
-  source: 'purpose' | 'portal' | 'premise';
+  type: 'component' | 'flow' | 'gate' | 'signal' | 'aspect';
+  source: 'purpose' | 'gate' | 'dream' | 'premise';
   filePath: string;
   data: Record<string, unknown>;
   description?: string;
@@ -24,6 +95,16 @@ export interface ParadigmConfig {
   version?: string;
   conventions?: Record<string, unknown>;
 }
+
+// Common framework aliases that look like symbols but aren't
+const SYMBOL_BLOCKLIST = new Set([
+  '$lib', '$env', '$app', '$service-worker',
+  '$virtual', '$schema', '$ref', '$id', '$type',
+]);
+
+// =============================================================================
+// Config Loading
+// =============================================================================
 
 /**
  * Load Paradigm configuration from .paradigm/config.yaml
@@ -61,39 +142,109 @@ export async function loadParadigmConfig(projectDir: string): Promise<ParadigmCo
 
     return config;
   } catch (error) {
-    console.error('Failed to load Paradigm config:', error);
+    log.component('config-loader').error('Failed to load Paradigm config', { error: String(error) });
     return {};
   }
 }
+
+// =============================================================================
+// Symbol Loading - Primary (premise-core)
+// =============================================================================
+
+/**
+ * Load symbol index using premise-core aggregator
+ */
+async function loadWithPremiseCore(projectDir: string): Promise<SymbolEntry[] | null> {
+  try {
+    // Dynamic import to handle cases where premise-core isn't available
+    const { aggregateFromDirectory } = await import('@a-company/premise-core');
+
+    log.flow('load-symbols').info('Using premise-core aggregator', { path: projectDir });
+
+    const result = await aggregateFromDirectory(projectDir);
+
+    // Log what was found
+    const counts: Record<string, number> = {};
+    for (const sym of result.symbols) {
+      counts[sym.type] = (counts[sym.type] || 0) + 1;
+    }
+
+    log.flow('load-symbols').info('Aggregation complete', {
+      total: result.symbols.length,
+      ...counts,
+      purposeFiles: result.purposeFiles.length,
+      gateFiles: result.gateFiles.length,
+    });
+
+    if (result.errors.length > 0) {
+      for (const err of result.errors) {
+        log.component('aggregator').warn('Aggregation error', {
+          source: err.source,
+          file: err.filePath,
+          message: err.message,
+        });
+      }
+    }
+
+    // Log each source file
+    for (const file of result.purposeFiles) {
+      log.component('purpose-loader').info('Loaded .purpose file', { file: path.relative(projectDir, file) });
+    }
+    for (const file of result.gateFiles) {
+      log.component('gate-loader').info('Loaded portal.yaml', { file: path.relative(projectDir, file) });
+    }
+
+    return result.symbols as SymbolEntry[];
+  } catch (error) {
+    log.component('premise-core').warn('premise-core not available, using fallback scanner', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+// =============================================================================
+// Symbol Loading - Fallback (local scanner)
+// =============================================================================
 
 /**
  * Load symbol index from .paradigm/index.json or scan .purpose files
  */
 export async function loadSymbolIndex(projectDir: string): Promise<SymbolEntry[]> {
+  log.flow('load-symbols').info('Loading symbols', { projectDir });
+
   // First try to load from cached index
   const indexPath = path.join(projectDir, '.paradigm', 'index.json');
 
   if (fs.existsSync(indexPath)) {
     try {
+      log.component('index-loader').info('Found cached index', { path: indexPath });
       const content = fs.readFileSync(indexPath, 'utf-8');
       const index = JSON.parse(content);
-      if (Array.isArray(index.entries)) {
-        return index.entries;
-      }
-      if (Array.isArray(index)) {
-        return index;
+      const entries = Array.isArray(index.entries) ? index.entries : (Array.isArray(index) ? index : null);
+
+      if (entries) {
+        log.flow('load-symbols').info('Loaded from cached index', { count: entries.length });
+        return entries;
       }
     } catch (error) {
-      console.error('Failed to load symbol index:', error);
+      log.component('index-loader').error('Failed to load cached index', { error: String(error) });
     }
   }
 
-  // Fall back to scanning .purpose files
+  // Try premise-core aggregator
+  const premiseResult = await loadWithPremiseCore(projectDir);
+  if (premiseResult) {
+    return premiseResult;
+  }
+
+  // Fall back to local scanning
+  log.flow('load-symbols').info('Using fallback scanner');
   return scanPurposeFiles(projectDir);
 }
 
 /**
- * Scan project for .purpose files and extract symbols
+ * Scan project for .purpose files and extract symbols (fallback)
  */
 async function scanPurposeFiles(projectDir: string): Promise<SymbolEntry[]> {
   const symbols: SymbolEntry[] = [];
@@ -112,32 +263,38 @@ async function scanPurposeFiles(projectDir: string): Promise<SymbolEntry[]> {
   // Also check for portal.yaml
   const portalPath = path.join(projectDir, 'portal.yaml');
   if (fs.existsSync(portalPath)) {
+    log.component('gate-loader').debug('Found portal.yaml', { path: 'portal.yaml' });
     try {
       const content = fs.readFileSync(portalPath, 'utf-8');
-      // Extract gates from portal.yaml
-      const gateMatches = content.matchAll(/^\s*\^([a-z-]+):/gm);
-      for (const match of gateMatches) {
-        const gateName = match[1];
-        const id = `portal-${gateName}`;
-        if (!seenIds.has(id)) {
-          seenIds.add(id);
-          symbols.push({
-            id,
-            symbol: `^${gateName}`,
-            type: 'portal',
-            source: 'portal',
-            filePath: 'portal.yaml',
-            data: {},
-            references: [],
-            referencedBy: [],
-          });
+      // Extract gates from portal.yaml (keys under 'gates:' section)
+      const gatesSection = content.match(/^gates:\s*\n((?:  .+\n)*)/m);
+      if (gatesSection) {
+        const gateMatches = gatesSection[1].matchAll(/^  ([a-z][a-z0-9-]*):/gm);
+        for (const match of gateMatches) {
+          const gateName = match[1];
+          const id = `gate-${gateName}`;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            symbols.push({
+              id,
+              symbol: `^${gateName}`,
+              type: 'gate',
+              source: 'gate',
+              filePath: 'portal.yaml',
+              data: {},
+              references: [],
+              referencedBy: [],
+            });
+            log.component('gate-loader').debug('Extracted gate', { symbol: `^${gateName}` });
+          }
         }
       }
-    } catch {
-      // Ignore errors
+    } catch (error) {
+      log.component('gate-loader').error('Failed to parse portal.yaml', { error: String(error) });
     }
   }
 
+  log.flow('load-symbols').info('Fallback scan complete', { count: symbols.length });
   return symbols;
 }
 
@@ -151,7 +308,7 @@ async function scanDirectory(
   projectDir: string
 ): Promise<void> {
   // Skip common non-source directories
-  const skipDirs = ['node_modules', '.git', 'dist', 'build', '.paradigm', 'coverage', '.next'];
+  const skipDirs = ['node_modules', '.git', 'dist', 'build', '.paradigm', 'coverage', '.next', '.svelte-kit'];
 
   let entries: fs.Dirent[];
   try {
@@ -169,6 +326,8 @@ async function scanDirectory(
       }
     } else if (entry.name === '.purpose') {
       // Parse .purpose file
+      const relativePath = path.relative(projectDir, fullPath);
+      log.component('purpose-loader').debug('Scanning .purpose file', { path: relativePath });
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         const parsed = parsePurposeFile(content, fullPath, projectDir);
@@ -176,42 +335,36 @@ async function scanDirectory(
           if (!seenIds.has(symbol.id)) {
             seenIds.add(symbol.id);
             symbols.push(symbol);
+            log.component('purpose-loader').debug('Extracted symbol', {
+              symbol: symbol.symbol,
+              type: symbol.type,
+              file: relativePath,
+            });
           }
         }
-      } catch {
-        // Ignore parse errors
+      } catch (error) {
+        log.component('purpose-loader').error('Failed to parse .purpose file', {
+          path: relativePath,
+          error: String(error),
+        });
       }
     }
   }
 }
 
 /**
- * Parse a .purpose file and extract symbols
+ * Parse a .purpose file and extract symbols (fallback parser)
+ *
+ * IMPORTANT: All regex patterns require a LETTER after the symbol prefix
+ * to avoid false positives from prices ($420), imports ($lib), etc.
  */
 function parsePurposeFile(content: string, filePath: string, projectDir: string): SymbolEntry[] {
   const symbols: SymbolEntry[] = [];
   const relativePath = path.relative(projectDir, filePath);
 
-  // Extract feature (@)
-  const featureMatch = content.match(/^@([a-z0-9-]+)/m);
-  if (featureMatch) {
-    const name = featureMatch[1];
-    symbols.push({
-      id: `feature-${name}`,
-      symbol: `@${name}`,
-      type: 'feature',
-      source: 'purpose',
-      filePath: relativePath,
-      data: {},
-      description: extractDescription(content, `@${name}`),
-      references: extractReferences(content),
-      referencedBy: [],
-      tags: extractTags(content),
-    });
-  }
-
-  // Extract components (#)
-  const componentMatches = content.matchAll(/^#([a-z0-9-]+)/gm);
+  // Extract components (#) - require letter after #
+  // Pattern: #component-name at start of line or after whitespace
+  const componentMatches = content.matchAll(/(?:^|\s)#([a-z][a-z0-9-]*)/gm);
   for (const match of componentMatches) {
     const name = match[1];
     symbols.push({
@@ -228,14 +381,23 @@ function parsePurposeFile(content: string, filePath: string, projectDir: string)
     });
   }
 
-  // Extract flows ($)
-  const flowMatches = content.matchAll(/\$([a-z0-9-]+)/gm);
+  // Extract flows ($) - require letter after $
+  // This prevents matching $420 (prices), $0 (variables), $lib (imports)
+  const flowMatches = content.matchAll(/\$([a-z][a-z0-9-]*)/gm);
   for (const match of flowMatches) {
     const name = match[1];
-    if (!symbols.find((s) => s.symbol === `$${name}`)) {
+    const symbol = `$${name}`;
+
+    // Skip blocklisted symbols (framework aliases)
+    if (SYMBOL_BLOCKLIST.has(symbol)) {
+      log.component('purpose-loader').debug('Skipping blocklisted symbol', { symbol });
+      continue;
+    }
+
+    if (!symbols.find((s) => s.symbol === symbol)) {
       symbols.push({
         id: `flow-${name}`,
-        symbol: `$${name}`,
+        symbol,
         type: 'flow',
         source: 'purpose',
         filePath: relativePath,
@@ -246,8 +408,8 @@ function parsePurposeFile(content: string, filePath: string, projectDir: string)
     }
   }
 
-  // Extract signals (!)
-  const signalMatches = content.matchAll(/!([a-z0-9-]+)/gm);
+  // Extract signals (!) - require letter after !
+  const signalMatches = content.matchAll(/!([a-z][a-z0-9-]*)/gm);
   for (const match of signalMatches) {
     const name = match[1];
     if (!symbols.find((s) => s.symbol === `!${name}`)) {
@@ -264,15 +426,33 @@ function parsePurposeFile(content: string, filePath: string, projectDir: string)
     }
   }
 
-  // Extract gates/portals (^)
-  const gateMatches = content.matchAll(/\^([a-z0-9-]+)/gm);
+  // Extract gates (^) - require letter after ^
+  const gateMatches = content.matchAll(/\^([a-z][a-z0-9-]*)/gm);
   for (const match of gateMatches) {
     const name = match[1];
     if (!symbols.find((s) => s.symbol === `^${name}`)) {
       symbols.push({
-        id: `portal-${name}`,
+        id: `gate-${name}`,
         symbol: `^${name}`,
-        type: 'portal',
+        type: 'gate',
+        source: 'purpose',
+        filePath: relativePath,
+        data: {},
+        references: [],
+        referencedBy: [],
+      });
+    }
+  }
+
+  // Extract aspects (~) - require letter after ~
+  const aspectMatches = content.matchAll(/~([a-z][a-z0-9-]*)/gm);
+  for (const match of aspectMatches) {
+    const name = match[1];
+    if (!symbols.find((s) => s.symbol === `~${name}`)) {
+      symbols.push({
+        id: `aspect-${name}`,
+        symbol: `~${name}`,
+        type: 'aspect',
         source: 'purpose',
         filePath: relativePath,
         data: {},
@@ -300,12 +480,18 @@ function extractDescription(content: string, symbol: string): string | undefined
 
 /**
  * Extract references to other symbols
+ * Requires letter after prefix to avoid false positives
  */
 function extractReferences(content: string): string[] {
   const refs: Set<string> = new Set();
-  const refMatches = content.matchAll(/[@#$!^%]([a-z0-9-]+)/g);
+  // Match symbols with letter after prefix
+  const refMatches = content.matchAll(/[@#$!^~]([a-z][a-z0-9-]*)/g);
   for (const match of refMatches) {
-    refs.add(match[0]);
+    const symbol = match[0];
+    // Skip blocklisted
+    if (!SYMBOL_BLOCKLIST.has(symbol)) {
+      refs.add(symbol);
+    }
   }
   return Array.from(refs);
 }
@@ -415,6 +601,7 @@ export async function updateSymbol(
 
       // Write the file
       fs.writeFileSync(filePath, content, 'utf-8');
+      log.component('symbol-updater').info('Updated symbol', { symbol: symbol.symbol, file: symbol.filePath });
 
       // Update the cached index if it exists
       const indexPath = path.join(projectDir, '.paradigm', 'index.json');
@@ -451,7 +638,7 @@ export async function updateSymbol(
 
     return { success: true }; // No changes needed
   } catch (error) {
-    console.error('Failed to update symbol:', error);
+    log.component('symbol-updater').error('Failed to update symbol', { error: String(error) });
     return { success: false, error: 'Failed to write file' };
   }
 }

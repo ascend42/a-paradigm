@@ -440,6 +440,15 @@ function extractRefsFromItem(
   }
 }
 
+// Common framework aliases that look like symbols but aren't
+// SvelteKit: $lib, $env, $app, $service-worker
+// Vite: $virtual
+// Other: $schema (JSON schema), $ref (JSON reference)
+const SYMBOL_BLOCKLIST = new Set([
+  '$lib', '$env', '$app', '$service-worker',
+  '$virtual', '$schema', '$ref', '$id', '$type',
+]);
+
 /**
  * Extract symbol references from text using regex (v2)
  *
@@ -471,6 +480,9 @@ function extractSymbolsFromText(text: string): Array<{ symbol: string; type: Ext
       case '%': type = 'component'; symbol = `#${id}`; break;
       default: continue;
     }
+
+    // Skip common framework aliases
+    if (SYMBOL_BLOCKLIST.has(symbol)) continue;
 
     results.push({ symbol, type });
   }

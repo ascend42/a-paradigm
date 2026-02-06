@@ -308,6 +308,15 @@ function createFlowSymbol(flow: Flow, filePath: string): SymbolEntry {
   });
 }
 
+// Common framework aliases that look like symbols but aren't
+// SvelteKit: $lib, $env, $app, $service-worker
+// Vite: $virtual
+// Other: $schema (JSON schema), $ref (JSON reference)
+const SYMBOL_BLOCKLIST = new Set([
+  '$lib', '$env', '$app', '$service-worker',
+  '$virtual', '$schema', '$ref', '$id', '$type',
+]);
+
 /**
  * Resolve cross-references between symbols
  */
@@ -319,8 +328,10 @@ function resolveReferences(symbols: SymbolEntry[]): void {
     const dataStr = JSON.stringify(symbol.data);
     // Match compound ideas (?@, ?#, etc.) OR single prefixes
     // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
-    const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[\w-]+/g;
-    const matches = dataStr.match(refPattern) || [];
+    // IMPORTANT: First char after prefix must be a letter to avoid false positives
+    // like $420 (prices), $0 (variables)
+    const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[a-zA-Z][\w-]*/g;
+    const matches = (dataStr.match(refPattern) || []).filter(m => !SYMBOL_BLOCKLIST.has(m));
 
     for (const match of matches) {
       if (match !== symbol.symbol && symbolMap.has(match)) {

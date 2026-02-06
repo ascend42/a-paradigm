@@ -5,6 +5,40 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-02-05
+
+### Fixed
+
+- **Symbol false positives**: Fixed regex patterns that incorrectly matched prices (`$420`), variables (`$0`), and framework aliases (`$lib`, `$env`, `$app`) as flow symbols
+  - Changed regex from `[\w-]+` to `[a-zA-Z][\w-]*` requiring letter after prefix
+  - Added blocklist for common framework aliases (SvelteKit `$lib/$env/$app`, Vite `$virtual`, JSON `$schema/$ref`)
+  - Fixed in: `premise-core`, `purpose-core`, and Sentinel fallback parser
+
+- **Sentinel symbol loading**: Fixed Sentinel using its own fallback parser instead of premise-core
+  - Sentinel now uses premise-core aggregator as primary source
+  - Falls back to local scanner only if premise-core unavailable
+  - Local scanner updated with same regex fixes
+
+- **portal.yaml gate parsing**: Fixed gates not being extracted from portal.yaml
+  - Updated fallback parser to properly extract gates from `gates:` section
+  - Documented correct portal.yaml format (locks as array, prizes as objects)
+
+### Added
+
+- **Paradigm logging in Sentinel**: Added structured logging following paradigm patterns
+  - Server startup logs: `#sentinel-server`
+  - Symbol loading logs: `$load-symbols`, `#purpose-loader`, `#gate-loader`
+  - API route logs: `^api-symbols`
+  - Default log level: `info` (shows file loading, aggregation results)
+  - Configurable via `SENTINEL_LOG_LEVEL` env var (`debug`, `info`, `warn`, `error`)
+
+- **v2 migration prompt**: Added `.paradigm/prompts/update-to-v2.md` with comprehensive handoff prompt for updating projects to Symbol System v2
+
+### Changed
+
+- **Sentinel types updated to v2**: SymbolEntry type now uses v2 types (`component`, `flow`, `gate`, `signal`, `aspect`)
+- **Logging on by default**: Sentinel now logs symbol loading and API access at `info` level by default
+
 ## [2.0.0] - 2026-02-05
 
 ### Breaking Changes
