@@ -237,7 +237,7 @@ export class ModelDiscovery {
 
       // Filter to only chat models
       const chatModels = data.data.filter((m) =>
-        m.id.includes('gpt-4') || m.id.includes('o1') || m.id.includes('o3')
+        m.id.includes('gpt-4') || m.id.includes('o1') || m.id.includes('o3') || m.id.includes('o4')
       );
 
       return {
@@ -409,15 +409,16 @@ export class ModelDiscovery {
    * Get VSCode/Copilot models
    */
   private getVSCodeModels(): ModelDiscoveryResult {
-    // VSCode with Copilot typically has access to GPT models
+    // VSCode with Copilot typically has access to GPT and Claude models
     return {
       source: 'vscode',
       models: [
-        { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', family: 'gpt-4' },
-        { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', family: 'gpt-4' },
-        { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'openai', family: 'gpt-4' },
-        { id: 'o1', name: 'OpenAI o1', provider: 'openai', family: 'o1' },
-        { id: 'o1-mini', name: 'OpenAI o1 Mini', provider: 'openai', family: 'o1' },
+        { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'o3', name: 'OpenAI o3', provider: 'openai', family: 'o3' },
+        { id: 'o4-mini', name: 'OpenAI o4 Mini', provider: 'openai', family: 'o4' },
+        { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'anthropic', family: 'claude-4' },
       ],
       cached: false,
       timestamp: new Date().toISOString(),
@@ -430,40 +431,38 @@ export class ModelDiscovery {
   private getCursorPresets(): ModelInfo[] {
     return [
       // Anthropic Claude models
-      { id: 'claude-3.5-opus', name: 'Claude 3.5 Opus', provider: 'anthropic', family: 'claude-3.5' },
-      { id: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', family: 'claude-3.5' },
-      { id: 'claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'anthropic', family: 'claude-3.5' },
+      { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'anthropic', family: 'claude-4' },
+      { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'anthropic', family: 'claude-4' },
+      { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', provider: 'anthropic', family: 'claude-4' },
 
       // OpenAI GPT models
-      { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', family: 'gpt-4' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', family: 'gpt-4' },
-      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'openai', family: 'gpt-4' },
-      { id: 'o1', name: 'OpenAI o1', provider: 'openai', family: 'o1' },
-      { id: 'o1-mini', name: 'OpenAI o1 Mini', provider: 'openai', family: 'o1' },
+      { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'openai', family: 'gpt-4.1' },
+      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'openai', family: 'gpt-4.1' },
+      { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'openai', family: 'gpt-4.1' },
+      { id: 'o3', name: 'OpenAI o3', provider: 'openai', family: 'o3' },
+      { id: 'o4-mini', name: 'OpenAI o4 Mini', provider: 'openai', family: 'o4' },
       { id: 'o3-mini', name: 'OpenAI o3 Mini', provider: 'openai', family: 'o3' },
 
       // Google Gemini models
-      { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro', provider: 'google', family: 'gemini-2' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google', family: 'gemini-2.5' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google', family: 'gemini-2.5' },
       { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google', family: 'gemini-2' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'google', family: 'gemini-1.5' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'google', family: 'gemini-1.5' },
 
       // xAI Grok models
-      { id: 'grok-2', name: 'Grok 2', provider: 'xai', family: 'grok' },
-      { id: 'grok-2-mini', name: 'Grok 2 Mini', provider: 'xai', family: 'grok' },
+      { id: 'grok-3', name: 'Grok 3', provider: 'xai', family: 'grok' },
+      { id: 'grok-3-mini', name: 'Grok 3 Mini', provider: 'xai', family: 'grok' },
 
       // Meta Llama models
-      { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'meta', family: 'llama-3' },
-      { id: 'llama-3.2-90b', name: 'Llama 3.2 90B', provider: 'meta', family: 'llama-3' },
+      { id: 'llama-4-scout', name: 'Llama 4 Scout', provider: 'meta', family: 'llama-4' },
+      { id: 'llama-4-maverick', name: 'Llama 4 Maverick', provider: 'meta', family: 'llama-4' },
 
       // Mistral models
       { id: 'mistral-large', name: 'Mistral Large', provider: 'mistral', family: 'mistral' },
-      { id: 'mistral-medium', name: 'Mistral Medium', provider: 'mistral', family: 'mistral' },
       { id: 'codestral', name: 'Codestral', provider: 'mistral', family: 'codestral' },
 
       // DeepSeek models
+      { id: 'deepseek-r1', name: 'DeepSeek R1', provider: 'deepseek', family: 'deepseek' },
       { id: 'deepseek-v3', name: 'DeepSeek V3', provider: 'deepseek', family: 'deepseek' },
-      { id: 'deepseek-coder', name: 'DeepSeek Coder', provider: 'deepseek', family: 'deepseek' },
 
       // Cohere models
       { id: 'command-r-plus', name: 'Command R+', provider: 'cohere', family: 'command' },
@@ -478,10 +477,9 @@ export class ModelDiscovery {
     return {
       source: 'anthropic-api',
       models: [
-        { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5', provider: 'anthropic', family: 'claude-4' },
-        { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic', family: 'claude-4' },
-        { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'anthropic', family: 'claude-3.5' },
-        { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'anthropic', family: 'claude-3.5' },
+        { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'anthropic', family: 'claude-4' },
+        { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'anthropic', family: 'claude-4' },
+        { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', provider: 'anthropic', family: 'claude-4' },
       ],
       cached: false,
       timestamp: new Date().toISOString(),
@@ -495,11 +493,12 @@ export class ModelDiscovery {
     return {
       source: 'openai',
       models: [
-        { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', family: 'gpt-4' },
-        { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', family: 'gpt-4' },
-        { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'openai', family: 'gpt-4' },
-        { id: 'o1', name: 'OpenAI o1', provider: 'openai', family: 'o1' },
-        { id: 'o1-mini', name: 'OpenAI o1 Mini', provider: 'openai', family: 'o1' },
+        { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'openai', family: 'gpt-4.1' },
+        { id: 'o3', name: 'OpenAI o3', provider: 'openai', family: 'o3' },
+        { id: 'o4-mini', name: 'OpenAI o4 Mini', provider: 'openai', family: 'o4' },
+        { id: 'o3-mini', name: 'OpenAI o3 Mini', provider: 'openai', family: 'o3' },
       ],
       cached: false,
       timestamp: new Date().toISOString(),
@@ -513,10 +512,9 @@ export class ModelDiscovery {
     return {
       source: 'google',
       models: [
-        { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro', provider: 'google', family: 'gemini-2' },
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google', family: 'gemini-2.5' },
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google', family: 'gemini-2.5' },
         { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google', family: 'gemini-2' },
-        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'google', family: 'gemini-1.5' },
-        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'google', family: 'gemini-1.5' },
       ],
       cached: false,
       timestamp: new Date().toISOString(),
@@ -530,8 +528,8 @@ export class ModelDiscovery {
     return {
       source: 'xai',
       models: [
-        { id: 'grok-2', name: 'Grok 2', provider: 'xai', family: 'grok' },
-        { id: 'grok-2-mini', name: 'Grok 2 Mini', provider: 'xai', family: 'grok' },
+        { id: 'grok-3', name: 'Grok 3', provider: 'xai', family: 'grok' },
+        { id: 'grok-3-mini', name: 'Grok 3 Mini', provider: 'xai', family: 'grok' },
       ],
       cached: false,
       timestamp: new Date().toISOString(),
@@ -582,16 +580,20 @@ export class ModelDiscovery {
    */
   private extractFamily(id: string, defaultFamily: string): string {
     const patterns: Array<[RegExp, string]> = [
-      [/claude-4|claude-opus-4|claude-sonnet-4/i, 'claude-4'],
+      [/claude-4|claude-opus-4|claude-sonnet-4|claude-haiku-4/i, 'claude-4'],
       [/claude-3\.5|claude-3-5/i, 'claude-3.5'],
       [/claude-3/i, 'claude-3'],
+      [/gpt-4\.1/i, 'gpt-4.1'],
       [/gpt-4o/i, 'gpt-4o'],
       [/gpt-4/i, 'gpt-4'],
-      [/o1/i, 'o1'],
+      [/o4/i, 'o4'],
       [/o3/i, 'o3'],
+      [/o1/i, 'o1'],
+      [/gemini-2\.5/i, 'gemini-2.5'],
       [/gemini-2/i, 'gemini-2'],
       [/gemini-1\.5/i, 'gemini-1.5'],
       [/grok/i, 'grok'],
+      [/llama-4/i, 'llama-4'],
       [/llama/i, 'llama'],
       [/mistral/i, 'mistral'],
     ];
@@ -679,25 +681,31 @@ export class ModelDiscovery {
       const id = model.id.toLowerCase();
       const combined = `${name} ${id}`;
 
-      // Check for low-tier indicators (mini, flash, haiku, small)
+      // Check for low-tier indicators (mini, flash, haiku, nano, small)
       const isLowTier =
         name.includes('haiku') ||
         miniPattern.test(combined) ||
+        name.includes('nano') ||
         (flashPattern.test(combined) && !name.includes('flash-thinking')) ||
         smallPattern.test(combined) ||
+        name.includes('scout') ||
         name.includes('instant');
 
       // Check for high-tier indicators
       const isHighTier =
         name.includes('opus') ||
-        (name.includes('gpt-4') && !miniPattern.test(combined)) ||
-        (id.includes('o1') && !miniPattern.test(combined) && !id.includes('o1-')) ||
-        id === 'o1' ||
+        (name.includes('gpt-4') && !miniPattern.test(combined) && !name.includes('nano')) ||
+        (id.includes('gpt-4.1') && !miniPattern.test(combined) && !id.includes('nano')) ||
+        (id === 'o3' || (id.includes('o3') && !miniPattern.test(combined))) ||
+        (id === 'o1' || (id.includes('o1') && !miniPattern.test(combined) && !id.includes('o1-'))) ||
         // Pro models (Gemini Pro, etc.) but not mini variants
         (id.includes('-pro') && !miniPattern.test(combined)) ||
+        (id.includes('grok-3') && !miniPattern.test(combined)) ||
         (id.includes('grok-2') && !miniPattern.test(combined)) ||
         name.includes('large') ||
+        name.includes('maverick') ||
         name.includes('command r+') ||
+        id.includes('deepseek-r1') ||
         id.includes('deepseek-v3');
 
       if (isLowTier) {
