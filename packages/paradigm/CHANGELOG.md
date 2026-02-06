@@ -6,6 +6,55 @@ All notable changes to Paradigm will be documented in this file.
 
 ### Added
 
+- **Claude Code Agent Teams Provider** (`claude-code-teams`)
+  - New provider for Claude Code's experimental Agent Teams feature
+  - Native parallel teammate spawning via shared task lists
+  - Role-specific constraints (design-only for architect/security)
+  - Delegate mode support for team leads
+  - Enable with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
+### Changed
+
+- **Orchestration Enforcement** — agents now call `paradigm_orchestrate_inline` for complex tasks
+  - CLAUDE.md template: added "Before Implementing" pre-task checklist with orchestration triggers
+  - CLAUDE.md template: added orchestration rows to MCP Workflow Protocol table
+  - CLAUDE.md template: rewrote Multi-Agent Orchestration section from informational to prescriptive
+  - Tool description updated from "IMPORTANT" to "REQUIRED before implementing features" with examples
+
+- **Classification→Planning Disconnect Fix**
+  - `planAgentSequence` now uses `classifyTaskLocal()` output for agent selection
+  - Analysis tasks → architect only (was: architect+builder+tester)
+  - Documentation tasks → architect only (was: architect+builder+tester)
+  - Bug fixes → security+builder (was: architect+builder+tester)
+  - Feature tasks → full team (unchanged)
+
+- **IDE-Aware Execute Mode**
+  - Execute mode now returns dual-format output for any IDE
+  - `claudeCode`: Task tool instructions for Claude Code
+  - `sequential`: Step-by-step role adoption for Cursor and other IDEs
+  - `cli`: `paradigm team orchestrate` command for terminal-based parallelism
+  - Removed Claude Code-specific `taskToolExample`
+
+- **Cursor Orchestration Support**
+  - `.mdc` template: replaced "Use Task tool" (unreachable in Cursor) with sequential self-orchestration
+  - `.mdc` template: references `paradigm team orchestrate` for true parallel execution
+
+- **Provider Cascade** — updated to 6 providers
+  - New order: `claude → claude-code-teams → claude-code → cursor-cli → claude-cli → manual`
+
+### Fixed
+
+- **Cursor CLI Model Mapping** — updated from deprecated model IDs
+  - `opus`: `claude-3.5-opus` → `claude-opus-4-6`
+  - `sonnet`: `claude-3.5-sonnet` → `claude-sonnet-4-5-20250929`
+  - `haiku`: `claude-3.5-haiku` → `claude-haiku-4-5-20251001`
+
+---
+
+## [1.4.0]
+
+### Added
+
 - **Multi-Agent Orchestration** (`paradigm team orchestrate`)
   - AI orchestrator (Claude) coordinates specialized agents
   - Solo mode: single Claude handles entire task

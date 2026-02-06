@@ -82,6 +82,13 @@ Anchor format: `file.ts:15` (single line), `file.ts:15-20` (range), `file.ts:15,
 4. **Review:** Read the nearest `.purpose` file before making changes
 5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints
 
+## Before Implementing (Every Task)
+
+1. **Is this task complex?** (3+ files, security + implementation, multiple features)
+   → Call `paradigm_orchestrate_inline` with mode="plan" BEFORE writing code
+2. **Does it affect existing symbols?** → Call `paradigm_ripple`
+3. **Does it add API endpoints?** → Call `paradigm_gates_for_route`
+
 ## Portal Protocol (Authorization)
 
 **Portal.yaml is REQUIRED when the project has protected routes.**
@@ -194,9 +201,23 @@ Before exploring this codebase:
 
 ## Multi-Agent Orchestration
 
-Paradigm supports multi-agent orchestration via `paradigm team` commands:
+For complex tasks, use orchestration to get the right agents and avoid wasted tokens.
 
-### Commands
+### When to Orchestrate
+
+**Call `paradigm_orchestrate_inline` with mode="plan" BEFORE implementing when:**
+- Task affects 3+ files
+- Task involves security/auth AND implementation
+- Task mentions multiple features or symbols
+- Building a new feature end-to-end
+
+```
+paradigm_orchestrate_inline({ task: "Add user authentication with JWT", mode: "plan" })
+```
+
+This returns the right agent team, cost estimate, and execution plan. Then call with mode="execute" to get full prompts.
+
+### CLI Commands
 
 | Command | Description |
 |---------|-------------|
@@ -210,27 +231,15 @@ Paradigm supports multi-agent orchestration via `paradigm team` commands:
 | `paradigm team models` | View/configure agent model assignments |
 | `paradigm team models --refresh` | Re-discover models from environment |
 
-### Agent Suggestions
-
-Before orchestrating, you can preview which agents will be involved:
-
-```bash
-paradigm team agents suggest "Add user authentication with JWT"
-```
-
-Or via MCP (returns `suggestedAgents` in plan mode):
-```
-paradigm_orchestrate_inline({ task: "...", mode: "plan" })
-```
-
 ### Provider Cascade
 
 Providers are tried in order until one is available:
 1. `claude` - Anthropic API (requires ANTHROPIC_API_KEY)
-2. `claude-code` - Claude Code Task tool (Max subscription)
-3. `cursor-cli` - Cursor agent CLI (auto-detected in Cursor IDE)
-4. `claude-cli` - Spawn claude CLI processes
-5. `manual` - File-based handoffs (always available)
+2. `claude-code-teams` - Claude Code Agent Teams (experimental, parallel)
+3. `claude-code` - Claude Code Task tool (Max subscription)
+4. `cursor-cli` - Cursor agent CLI (auto-detected in Cursor IDE)
+5. `claude-cli` - Spawn claude CLI processes
+6. `manual` - File-based handoffs (always available)
 
 Configure via:
 - Environment: `PARADIGM_AGENT_PROVIDER=claude-code`
@@ -266,6 +275,8 @@ Run `paradigm team models` to view/configure. In Cursor and interactive environm
 | Checking dependencies | `paradigm_related` for connections |
 | Getting oriented | `paradigm_status` for project overview |
 | **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
+| **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
+| **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 

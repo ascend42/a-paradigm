@@ -11,6 +11,7 @@
  *
  * Available providers:
  * - claude: Anthropic API (requires ANTHROPIC_API_KEY)
+ * - claude-code-teams: Claude Code Agent Teams (experimental, parallel)
  * - claude-code: Claude Code Task tool (works with Max)
  * - cursor-cli: Cursor agent CLI (works in Cursor IDE)
  * - claude-cli: Claude CLI spawning (works with Max)
@@ -32,8 +33,9 @@ let defaultProviderName: string | null = null;
 let initialized = false;
 
 // Provider priority order (best to fallback)
+// claude-code-teams is prioritized when Agent Teams is enabled
 // cursor-cli is prioritized when running in Cursor environment
-const PROVIDER_PRIORITY = ['claude', 'claude-code', 'cursor-cli', 'claude-cli', 'manual'];
+const PROVIDER_PRIORITY = ['claude', 'claude-code-teams', 'claude-code', 'cursor-cli', 'claude-cli', 'manual'];
 
 // Valid provider names (including 'auto' for auto-detection)
 const VALID_PROVIDERS = ['auto', ...PROVIDER_PRIORITY];
@@ -317,6 +319,13 @@ export async function initializeProviders(rootDir?: string): Promise<void> {
   }
 
   try {
+    const { ClaudeCodeTeamsProvider } = await import('./providers/claude-code-teams.js');
+    registerProvider(new ClaudeCodeTeamsProvider(dir));
+  } catch {
+    // Claude Code Teams provider not available
+  }
+
+  try {
     const { ClaudeCodeTaskProvider } = await import('./providers/claude-code.js');
     registerProvider(new ClaudeCodeTaskProvider(dir));
   } catch {
@@ -385,6 +394,8 @@ function getProviderReason(name: string): string {
   switch (name) {
     case 'claude':
       return 'Using Anthropic API (ANTHROPIC_API_KEY found)';
+    case 'claude-code-teams':
+      return 'Using Claude Code Agent Teams (experimental, parallel teammates)';
     case 'claude-code':
       return 'Using Claude Code Task tool (running in Claude Code)';
     case 'cursor-cli':
@@ -402,6 +413,8 @@ function getProviderUnavailableReason(name: string): string {
   switch (name) {
     case 'claude':
       return 'ANTHROPIC_API_KEY not set';
+    case 'claude-code-teams':
+      return 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS not set or not in Claude Code';
     case 'claude-code':
       return 'Not running inside Claude Code';
     case 'cursor-cli':
@@ -419,6 +432,7 @@ function getProviderBilling(name: string): 'api' | 'subscription' | 'none' {
   switch (name) {
     case 'claude':
       return 'api';
+    case 'claude-code-teams':
     case 'claude-code':
     case 'cursor-cli':
     case 'claude-cli':

@@ -350,14 +350,14 @@ export class CursorCliProvider implements AgentProvider {
    * Map Paradigm model tiers to Cursor model names
    */
   private mapToCursorModel(model: AgentModel): string | null {
-    // Cursor supports various models, map our tiers to common choices
+    // Cursor supports various models, map our tiers to current Claude model IDs
     switch (model) {
       case 'opus':
-        return 'claude-3.5-opus';  // Or 'gpt-4o' for OpenAI
+        return 'claude-opus-4-6';
       case 'sonnet':
-        return 'claude-3.5-sonnet';
+        return 'claude-sonnet-4-5-20250929';
       case 'haiku':
-        return 'claude-3.5-haiku';
+        return 'claude-haiku-4-5-20251001';
       default:
         return null;
     }

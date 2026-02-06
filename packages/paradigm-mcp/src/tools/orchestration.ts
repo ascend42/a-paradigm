@@ -313,11 +313,11 @@ export function getOrchestrationToolsList() {
   return [
     {
       name: 'paradigm_orchestrate_inline',
-      description: `IMPORTANT: For complex tasks (3+ files, security + implementation, multiple features), call this tool FIRST before implementing.
+      description: `REQUIRED before implementing features. Call with mode="plan" to get the right agents and cost estimate. Skipping this for complex tasks leads to missed security reviews and wasted tokens.
 
 Plans and coordinates multi-agent task execution within the same session.
 - mode: "plan" - See suggested agents, estimated tokens, and get orchestration plan
-- mode: "execute" - Get full prompts ready for Task tool
+- mode: "execute" - Get full prompts and execution strategy for any IDE
 
 After getting prompts, launch agents using the Task tool. Stages marked canRunParallel: true can be launched simultaneously in a single message.
 
@@ -325,7 +325,13 @@ When to use this tool:
 - Task affects 3+ files
 - Task involves security/auth AND implementation
 - Task mentions multiple features (@symbols)
-- Building a new feature end-to-end`,
+- Building a new feature end-to-end
+
+Examples:
+- "Add user authentication with JWT" → architect + security + builder + tester
+- "Should I use soft delete or hard delete?" → architect only (analysis)
+- "Fix the login bug" → security + builder
+- "Refactor the payment module" → architect + builder`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -426,8 +432,8 @@ async function handleOrchestrateInline(
   // Classify the task for intelligent agent selection
   const classification = classifyTaskLocal(task);
 
-  // Plan the agent sequence
-  const plan = planAgentSequence(task, manifest.agents, agentOverride);
+  // Plan the agent sequence (pass classification for intelligent defaults)
+  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification);
 
   if (mode === 'plan') {
     // Get agent suggestions based on triggers
@@ -452,7 +458,7 @@ async function handleOrchestrateInline(
       instructions: [
         'Review task classification and cost preview above',
         'Review suggested agents based on task triggers',
-        'Call again with mode="execute" to get full prompts for Task tool',
+        'Call again with mode="execute" to get full prompts and execution strategy',
         'Stages marked canRunParallel: true can be launched simultaneously',
         'After each agent completes, pass handoff context to the next stage',
       ],
@@ -505,19 +511,43 @@ async function handleOrchestrateInline(
     symbols,
     totalAgents: plan.estimatedAgents,
     stages: stagePrompts,
+
+    // IDE-agnostic execution instructions
     executionInstructions: [
       'Execute stages in order (stage 0, then stage 1, etc.)',
-      'Agents within a stage can be run in parallel using multiple Task tool calls',
+      'Agents within a stage can be run in parallel if your environment supports it',
       'Pass handoff context between stages',
-      'After each agent completes, look for the Agent Relay block in their response',
+      'After each phase, summarize what was done before starting the next',
     ],
-    taskToolExample: {
-      note: 'Use the Task tool with these parameters for each agent:',
+
+    // Claude Code: Use Task tool for parallel agent spawning
+    claudeCode: {
+      method: 'Task tool',
       example: {
         description: stagePrompts[0]?.agents[0]?.taskDescription || 'Agent task',
         prompt: '(see agent prompts above)',
         subagent_type: 'general-purpose',
       },
+      parallel: 'Launch multiple Task calls in one message for parallel stages',
+    },
+
+    // Cursor / other IDEs: Sequential self-orchestration
+    sequential: {
+      method: 'Execute each role in sequence within this session',
+      steps: plan.stages.map((s, i) => ({
+        stage: i,
+        rolePrompt: `Adopt the ${s.agents[0]?.name} role. Focus ONLY on: ${s.agents.map(a => a.task).join(', ')}`,
+        constraint: i === 0 ? 'Design/plan only — do NOT write implementation code' :
+                    i === plan.stages.length - 1 ? 'Verify and test — do NOT change implementation' :
+                    'Implement following the design from the previous stage',
+      })),
+    },
+
+    // CLI delegation: For true parallelism from any environment
+    cli: {
+      method: 'paradigm team orchestrate',
+      command: `paradigm team orchestrate "${task}"`,
+      note: 'Spawns independent agent processes — works from any terminal',
     },
   };
 
@@ -591,7 +621,8 @@ async function handleAgentPrompt(
 function planAgentSequence(
   task: string,
   agents: Record<string, AgentDefinition>,
-  agentOverride?: string[]
+  agentOverride?: string[],
+  classification?: TaskClassification
 ): OrchestrationPlan {
   const symbols = extractSymbols(task);
   const taskLower = task.toLowerCase();
@@ -689,28 +720,37 @@ function planAgentSequence(
       });
     }
 
-    // Default flow if no specific agents matched
+    // Default flow if no specific agents matched — use classification's recommendedAgents
     if (plannedAgents.length === 0) {
-      if (agents['architect']) {
-        plannedAgents.push({ name: 'architect', task: `Design: ${task}`, required: true, stage: 0, dependsOn: [] });
-      }
-      if (agents['builder']) {
+      const recommended = classification?.recommendedAgents || ['architect', 'builder', 'tester'];
+      const taskVerbs: Record<string, string> = {
+        architect: 'Design',
+        security: 'Review security of',
+        builder: 'Implement',
+        tester: 'Test',
+        reviewer: 'Review',
+      };
+
+      let currentStage = 0;
+      let previousAgent: string | null = null;
+
+      for (const agentName of recommended) {
+        if (!agents[agentName]) continue;
+
+        const dependsOn = previousAgent ? [previousAgent] : [];
+        const verb = taskVerbs[agentName] || 'Process';
+        const isRequired = agentName === 'architect' || agentName === 'builder';
+
         plannedAgents.push({
-          name: 'builder',
-          task: `Implement: ${task}`,
-          required: true,
-          stage: agents['architect'] ? 1 : 0,
-          dependsOn: agents['architect'] ? ['architect'] : [],
+          name: agentName,
+          task: `${verb}: ${task}`,
+          required: isRequired,
+          stage: currentStage,
+          dependsOn,
         });
-      }
-      if (agents['tester']) {
-        plannedAgents.push({
-          name: 'tester',
-          task: `Test: ${task}`,
-          required: false,
-          stage: agents['builder'] ? 2 : (agents['architect'] ? 1 : 0),
-          dependsOn: agents['builder'] ? ['builder'] : [],
-        });
+
+        previousAgent = agentName;
+        currentStage++;
       }
     }
   }
