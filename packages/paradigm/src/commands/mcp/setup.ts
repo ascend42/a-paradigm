@@ -96,11 +96,29 @@ function detectContinue(): AIClient {
   };
 }
 
+function detectClaudeCode(): AIClient {
+  // Claude Code uses .mcp.json at project root
+  const projectMcpJson = path.join(process.cwd(), '.mcp.json');
+  const claudeDir = path.join(process.cwd(), '.claude');
+
+  // Detected if .mcp.json exists or .claude/ directory exists (Claude Code project)
+  const detected = fs.existsSync(projectMcpJson) || fs.existsSync(claudeDir);
+
+  return {
+    name: 'Claude Code',
+    id: 'claude-code',
+    detected,
+    configPath: projectMcpJson,
+    configType: 'project',
+    instructions: 'Restart Claude Code session to activate MCP',
+  };
+}
+
 function detectCline(): AIClient {
   // Cline stores config in VS Code settings or project-level
   const projectClineDir = path.join(process.cwd(), '.cline');
   const detected = fs.existsSync(projectClineDir);
-  
+
   return {
     name: 'Cline (VS Code)',
     id: 'cline',
@@ -114,6 +132,7 @@ function detectCline(): AIClient {
 function detectAllClients(): AIClient[] {
   return [
     detectCursor(),
+    detectClaudeCode(),
     detectClaudeDesktop(),
     detectContinue(),
     detectCline(),
