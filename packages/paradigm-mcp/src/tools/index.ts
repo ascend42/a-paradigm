@@ -28,6 +28,7 @@ import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
 import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestration.js';
 import { getTagsToolsList, handleTagsTool } from './tags.js';
+import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-portal.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -90,7 +91,7 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
 /**
  * Register all MCP tools
  */
-export function registerTools(server: Server, getContext: () => ProjectContext) {
+export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: () => Promise<void>) {
   // List available tools
   server.setRequestHandler(
     ListToolsRequestSchema,
@@ -201,6 +202,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           ...getOrchestrationToolsList(),
           // Tags tools (v2 symbol system)
           ...getTagsToolsList(),
+          // Purpose & Portal file management tools
+          ...getPurposePortalToolsList(),
         ],
       };
     }
@@ -857,6 +860,18 @@ export function registerTools(server: Server, getContext: () => ProjectContext) 
           // Try tags tools (v2 symbol system)
           if (name.startsWith('paradigm_tags') || name === 'paradigm_aspect_check') {
             const result = await handleTagsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try purpose & portal file management tools
+          if (name.startsWith('paradigm_purpose_') || name.startsWith('paradigm_portal_')) {
+            const reload = reloadContext || (async () => {});
+            const result = await handlePurposePortalTool(name, args as Record<string, unknown>, ctx, reload);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {
