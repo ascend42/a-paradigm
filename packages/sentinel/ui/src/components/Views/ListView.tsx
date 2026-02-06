@@ -102,27 +102,29 @@ export function ListView() {
 
   return (
     <div className="list-view">
-      <table className="list-table">
-        <thead>
-          <tr>
-            <SortHeader label="Symbol" sortKey="alpha" currentSort={sortOption} onSort={setSortOption} />
-            <SortHeader label="Type" sortKey="type" currentSort={sortOption} onSort={setSortOption} />
-            <th className="list-header">Description</th>
-            <th className="list-header">Tags</th>
-            <SortHeader label="Modified" sortKey="updated" currentSort={sortOption} onSort={setSortOption} />
-          </tr>
-        </thead>
-        <tbody>
-          {nodes.map((node) => (
-            <ListRow
-              key={node.id}
-              node={node}
-              isSelected={selectedId === node.id}
-              onClick={() => selectNode(node.id)}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="list-table-container">
+        <table className="list-table">
+          <thead>
+            <tr>
+              <SortHeader label="Symbol" sortKey="alpha" currentSort={sortOption} onSort={setSortOption} />
+              <SortHeader label="Type" sortKey="type" currentSort={sortOption} onSort={setSortOption} />
+              <th className="list-header">Description</th>
+              <th className="list-header">Tags</th>
+              <SortHeader label="Modified" sortKey="updated" currentSort={sortOption} onSort={setSortOption} />
+            </tr>
+          </thead>
+          <tbody>
+            {nodes.map((node) => (
+              <ListRow
+                key={node.id}
+                node={node}
+                isSelected={selectedId === node.id}
+                onClick={() => selectNode(node.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

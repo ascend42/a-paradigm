@@ -1652,9 +1652,11 @@ body {
 
 .grid-view {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
   background: var(--canvas-bg);
+  display: flex;
+  flex-direction: column;
 }
 
 .grid-view--empty {
@@ -1667,7 +1669,9 @@ body {
 .grid-columns {
   display: grid;
   gap: 16px;
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .grid-column {
@@ -1677,6 +1681,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--panel-border);
+  min-height: 0;
 }
 
 .grid-column-header {
@@ -1712,10 +1717,12 @@ body {
 .grid-column-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
 }
 
 .grid-card {
@@ -1789,9 +1796,18 @@ body {
 
 .list-view {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
   background: var(--canvas-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.list-table-container {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
 .list-view--empty {
