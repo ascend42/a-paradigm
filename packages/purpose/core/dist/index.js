@@ -412,7 +412,7 @@ function extractSymbolReferences(parsedFiles) {
   for (const { filePath, data } of parsedFiles) {
     const featureEntries = normalizeItemsToEntries(data.features);
     for (const [id, item] of featureEntries) {
-      extractRefsFromItem(`@${id}`, item, filePath, refs, seen);
+      extractRefsFromItem(`#${id}`, item, filePath, refs, seen);
     }
     const componentEntries = normalizeItemsToEntries(data.components);
     for (const [id, item] of componentEntries) {
@@ -451,10 +451,10 @@ function extractRefsFromItem(sourceSymbol, item, filePath, refs, seen) {
   }
   if (item.states) {
     for (const state of item.states) {
-      const symbol = state.startsWith("%") ? state : `%${state}`;
+      const symbol = state.startsWith("#") ? state : state.startsWith("%") ? `#${state.slice(1)}` : `#${state}`;
       if (!seen.has(symbol)) {
         seen.add(symbol);
-        refs.push({ symbol, type: "state", sourceSymbol, filePath });
+        refs.push({ symbol, type: "component", sourceSymbol, filePath });
       }
     }
   }
@@ -477,31 +477,56 @@ function extractRefsFromItem(sourceSymbol, item, filePath, refs, seen) {
     }
   }
 }
+var SYMBOL_BLOCKLIST = /* @__PURE__ */ new Set([
+  "$lib",
+  "$env",
+  "$app",
+  "$service-worker",
+  "$virtual",
+  "$schema",
+  "$ref",
+  "$id",
+  "$type"
+]);
 function extractSymbolsFromText(text) {
   const results = [];
-  const pattern = /([$^!%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
+  const pattern = /([$^!#~%])([a-zA-Z][a-zA-Z0-9._-]*)/g;
   let match;
   while ((match = pattern.exec(text)) !== null) {
     const prefix = match[1];
     const id = match[2];
-    const symbol = `${prefix}${id}`;
+    let symbol;
     let type;
     switch (prefix) {
+      case "#":
+        type = "component";
+        symbol = `#${id}`;
+        break;
       case "$":
         type = "flow";
+        symbol = `$${id}`;
         break;
       case "^":
         type = "gate";
+        symbol = `^${id}`;
         break;
       case "!":
         type = "signal";
+        symbol = `!${id}`;
         break;
+      case "~":
+        type = "aspect";
+        symbol = `~${id}`;
+        break;
+      // Legacy: %state → #component
       case "%":
-        type = "state";
+        type = "component";
+        symbol = `#${id}`;
         break;
       default:
         continue;
     }
+    if (SYMBOL_BLOCKLIST.has(symbol)) continue;
     results.push({ symbol, type });
   }
   return results;

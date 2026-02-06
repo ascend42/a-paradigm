@@ -323,17 +323,25 @@ declare function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, {
     filePath: string;
 }>;
 /**
- * Extracted symbol reference from feature/component data
+ * Extracted symbol reference from feature/component data (v2)
+ *
+ * v2 changes:
+ * - 'state' is no longer a symbol type - states are now #components with [state] tag
+ * - 'flow', 'gate', 'signal', 'component', 'aspect' are the valid reference types
  */
 interface ExtractedSymbolRef {
     symbol: string;
-    type: 'flow' | 'gate' | 'signal' | 'state' | 'component';
+    type: 'flow' | 'gate' | 'signal' | 'component' | 'aspect';
     sourceSymbol: string;
     filePath: string;
 }
 /**
- * Extract symbol references ($, ^, !, %) from feature/component data
+ * Extract symbol references ($, ^, !, #, ~) from feature/component data (v2)
  * This captures references like flows: [$checkout-flow], gates: [^authenticated]
+ *
+ * v2 changes:
+ * - Features are now #components with tags, not @features
+ * - States are now #components with [state] tag, not %states
  */
 declare function extractSymbolReferences(parsedFiles: ParsedPurposeFile[]): ExtractedSymbolRef[];
 
