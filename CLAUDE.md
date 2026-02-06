@@ -411,14 +411,35 @@ See `.paradigm/specs/logger.md` for full specification.
 
 ## Commit Messages
 
-Use symbols in commits (v2 style):
-```
-feat(#feature-name): add new capability
+Use v2 symbols in commits for history tracking:
 
-- Add #feature-name view [feature]
-- Create #component-name
-- Emit !signal-name on success
-- Apply ~audit-required aspect
+### Format
+```
+type(#primary-symbol): short description
+
+- Detail with #component references
+- Gate changes: ^gate-name
+- Signals emitted: !signal-name
+
+Symbols: #symbol-a, #symbol-b, !signal-c
+```
+
+### Convention
+- **Subject**: `type(#symbol): description` — primary symbol in parens
+- **Body**: Reference affected symbols with prefixes (# $ ^ ! ~)
+- **Trailer**: `Symbols: #a, #b, !c` — machine-readable list of ALL affected symbols
+- The `Symbols:` trailer is parsed by the post-commit hook for automatic history capture
+
+### Examples
+```
+feat(#payment-form): add Apple Pay support
+
+- Add #apple-pay-button component
+- Update $checkout-flow with new payment step
+- Emit !payment-method-added signal
+- Gate: ^authenticated required
+
+Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
 
 ## Troubleshooting

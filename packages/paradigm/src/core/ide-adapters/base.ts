@@ -260,7 +260,7 @@ export function generateNavigationSection(config: ParadigmConfig): string {
   lines.push('3. Check `paradigm_ripple` for impact');
   lines.push('');
   lines.push('**Using MCP Tools:**');
-  lines.push('- `paradigm_navigate({ intent: "find", target: "@checkout" })` - locate symbol');
+  lines.push('- `paradigm_navigate({ intent: "find", target: "#checkout" })` - locate symbol');
   lines.push('- `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area');
   lines.push('- `paradigm_navigate({ intent: "context", task: "add login" })` - task context');
   lines.push('');
@@ -320,6 +320,49 @@ export function getOsInfo(): { platform: string; isWindows: boolean; shell: stri
   const isWindows = platform === 'win32';
   const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
   return { platform, isWindows, shell };
+}
+
+/**
+ * Generate commit convention section with Symbols: trailer protocol
+ */
+export function generateCommitConvention(): string {
+  const lines: string[] = [];
+
+  lines.push('## Commit Messages');
+  lines.push('');
+  lines.push('Use v2 symbols in commits for history tracking:');
+  lines.push('');
+  lines.push('### Format');
+  lines.push('```');
+  lines.push('type(#primary-symbol): short description');
+  lines.push('');
+  lines.push('- Detail with #component references');
+  lines.push('- Gate changes: ^gate-name');
+  lines.push('- Signals emitted: !signal-name');
+  lines.push('');
+  lines.push('Symbols: #symbol-a, #symbol-b, !signal-c');
+  lines.push('```');
+  lines.push('');
+  lines.push('### Convention');
+  lines.push('- **Subject**: `type(#symbol): description` — primary symbol in parens');
+  lines.push('- **Body**: Reference affected symbols with prefixes (# $ ^ ! ~)');
+  lines.push('- **Trailer**: `Symbols: #a, #b, !c` — machine-readable list of ALL affected symbols');
+  lines.push('- The `Symbols:` trailer is parsed by the post-commit hook for automatic history capture');
+  lines.push('');
+  lines.push('### Examples');
+  lines.push('```');
+  lines.push('feat(#payment-form): add Apple Pay support');
+  lines.push('');
+  lines.push('- Add #apple-pay-button component');
+  lines.push('- Update $checkout-flow with new payment step');
+  lines.push('- Emit !payment-method-added signal');
+  lines.push('- Gate: ^authenticated required');
+  lines.push('');
+  lines.push('Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added');
+  lines.push('```');
+  lines.push('');
+
+  return lines.join('\n');
 }
 
 /**

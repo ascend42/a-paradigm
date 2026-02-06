@@ -15,6 +15,7 @@ import {
   generateConventions,
   generateUpdateRules,
   generateCommandsReference,
+  generateCommitConvention,
   generateFooter,
 } from './base.js';
 
@@ -67,6 +68,9 @@ export class WindsurfAdapter implements IDEAdapter {
 
     // Conventions
     sections.push(generateConventions(config));
+
+    // Commit conventions
+    sections.push(generateCommitConvention());
 
     // Commands reference
     sections.push(generateCommandsReference());

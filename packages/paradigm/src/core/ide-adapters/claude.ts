@@ -15,6 +15,7 @@ import {
   generateUpdateRules,
   generateNavigationSection,
   generateTerminalGuidance,
+  generateCommitConvention,
 } from './base.js';
 
 export class ClaudeAdapter implements IDEAdapter {
@@ -38,7 +39,7 @@ export class ClaudeAdapter implements IDEAdapter {
     // Claude-specific header (optimized for Claude's preferences)
     sections.push(`# ${projectName} - Claude Context`);
     sections.push('');
-    sections.push('> **Paradigm v1.0** | For Claude Code, Claude API, and Claude-native interfaces');
+    sections.push('> **Paradigm v2.0** | For Claude Code, Claude API, and Claude-native interfaces');
     sections.push('');
 
     // Project overview
@@ -351,7 +352,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('      - type: gate');
     sections.push('        symbol: ^project-member');
     sections.push('      - type: action');
-    sections.push('        symbol: "@create-task"');
+    sections.push('        symbol: "#create-task"');
     sections.push('      - type: signal');
     sections.push('        symbol: "!task-created"');
     sections.push('    successSignal: "!task-created"');
@@ -383,23 +384,13 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('**After modifying symbols, check affected flows:**');
     sections.push('');
     sections.push('```');
-    sections.push('# Check what flows are affected by @tasks');
-    sections.push('paradigm_flows_affected({ symbol: "@tasks" })');
+    sections.push('# Check what flows are affected by #tasks');
+    sections.push('paradigm_flows_affected({ symbol: "#tasks" })');
     sections.push('```');
     sections.push('');
 
-    // Commit message format
-    sections.push('## Commit Messages');
-    sections.push('');
-    sections.push('Use symbols in commits:');
-    sections.push('```');
-    sections.push('feat(@feature): add new capability');
-    sections.push('');
-    sections.push('- Add @feature-name view');
-    sections.push('- Create #component-name');
-    sections.push('- Emit !signal-name on success');
-    sections.push('```');
-    sections.push('');
+    // Commit message format (shared v2 convention with Symbols: trailer)
+    sections.push(generateCommitConvention());
 
     // Troubleshooting section
     sections.push('## Troubleshooting');
@@ -530,7 +521,7 @@ export class ClaudeAdapter implements IDEAdapter {
     // Symbol system reminder (compact)
     sections.push('## Symbols');
     sections.push('');
-    sections.push('`@` feature | `#` component | `$` flow | `%` state | `^` gate | `!` signal | `?` idea');
+    sections.push('`#` component | `$` flow | `^` gate | `!` signal | `~` aspect');
     sections.push('');
 
     sections.push('---');
