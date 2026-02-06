@@ -458,7 +458,7 @@ description: |
     - src/features/checkout/index.ts:1-200
   gates: [^authenticated]
   flows: [$checkout-flow]
-  signals: [!checkout-started, !checkout-completed]
+  signals: ["!checkout-started", "!checkout-completed"]
 
 #CartReview:
   description: Cart review component

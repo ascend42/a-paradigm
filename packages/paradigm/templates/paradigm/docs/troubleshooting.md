@@ -66,7 +66,7 @@ Common issues and their solutions.
        description: What it does
        gates: [^authenticated]      # Optional
        flows: [$checkout-flow]      # Optional
-       signals: [!success, !failed] # Optional
+       signals: ["!success", "!failed"] # Optional
    
    # Array format (also valid)
    features:

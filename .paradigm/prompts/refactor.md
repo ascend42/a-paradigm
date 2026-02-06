@@ -149,9 +149,9 @@ When refactoring changes component structure, update the .purpose file:
 
 #retry-handler:
   description: Automatic retry logic with backoff
-  signals: [!network-retry]
+  signals: ["!network-retry"]
 
 #error-handler:
   description: Centralized error processing
-  signals: [!api-error]
+  signals: ["!api-error"]
 ```

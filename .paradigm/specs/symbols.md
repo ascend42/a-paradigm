@@ -59,8 +59,8 @@ The universal anchor point for documented code. A component is any code unit wor
     - $checkout-flow
     - ^authenticated
   emits:
-    - !payment-completed
-    - !payment-failed
+    - "!payment-completed"
+    - "!payment-failed"
 ```
 
 ### What Qualifies as a Component
@@ -98,16 +98,16 @@ $checkout-flow:
   description: Complete purchase from cart to confirmation
   tags: [critical, revenue]
   steps:
-    - ^authenticated       # Gate: must be logged in
-    - #validate-cart       # Component: check inventory
-    - #calculate-totals    # Component: tax, shipping
-    - ^payment-authorized  # Gate: payment method valid
-    - #process-payment     # Component: charge card
-    - !payment-completed   # Signal: trigger fulfillment
-    - #send-confirmation   # Component: email receipt
+    - "^authenticated"       # Gate: must be logged in
+    - "#validate-cart"       # Component: check inventory
+    - "#calculate-totals"    # Component: tax, shipping
+    - "^payment-authorized"  # Gate: payment method valid
+    - "#process-payment"     # Component: charge card
+    - "!payment-completed"   # Signal: trigger fulfillment
+    - "#send-confirmation"   # Component: email receipt
   on-failure:
-    - !checkout-failed
-    - #notify-support
+    - "!checkout-failed"
+    - "#notify-support"
 ```
 
 ### Flow Characteristics
@@ -402,7 +402,7 @@ Symbols reference each other in documentation:
   tags: [feature, critical]
   gates: [^authenticated, ^valid-order]  # Gates required
   flows: [$order-processing]             # Flows triggered
-  signals: [!order-complete, !order-failed]
+  signals: ["!order-complete", "!order-failed"]
   components: [#validator, #processor]
 
 # These references are automatically indexed by `paradigm status`
@@ -415,7 +415,7 @@ Symbols reference each other in documentation:
 |-------|-------------|---------|
 | `gates:` | `^` Gate | `[^authenticated, ^premium]` |
 | `flows:` | `$` Flow | `[$checkout-flow, $onboarding]` |
-| `signals:` | `!` Signal | `[!success, !failed]` |
+| `signals:` | `!` Signal | `["!success", "!failed"]` |
 | `components:` | `#` Component | `[#Button, #Modal]` |
 | `aspects:` | `~` Aspect | `[~audit-required, ~cached]` |
 

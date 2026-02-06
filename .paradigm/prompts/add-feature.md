@@ -35,7 +35,7 @@ I want to add a new #[FEATURE_NAME] feature.
 
 ## Related Symbols
 - Gates needed: [^gate-name if auth required]
-- Signals to emit: [!success-signal, !failure-signal]
+- Signals to emit: ["!success-signal", "!failure-signal"]
 - Components to use/create: [#ComponentName]
 - Aspects to apply: [~audit-required if needed]
 
@@ -99,7 +99,7 @@ Allow users to reset their password via email verification.
        - src/features/[feature-name]/index.ts:1-50
      gates: [^authenticated]         # Gates required
      flows: [$checkout-flow]         # Flows this triggers
-     signals: [!success, !failed]    # Events emitted
+     signals: ["!success", "!failed"]  # Events emitted
      components: [#MyComponent]      # UI components used
    ```
 

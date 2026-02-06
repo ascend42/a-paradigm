@@ -17,6 +17,7 @@ export type {
   GateDefinition,
   StateDefinition,
   SignalDefinition,
+  AspectDefinition,
   Reference,
   ParseResult,
   ParseError,
@@ -50,6 +51,7 @@ export {
   extractStates,
   extractFlows,
   extractSignals,
+  extractAspects,
   extractSymbolReferences,
 } from './aggregator.js';
 

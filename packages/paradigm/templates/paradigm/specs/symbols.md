@@ -258,7 +258,7 @@ features:
     description: Complete order processing
     gates: [^authenticated, ^valid-order]  # Portals required
     flows: [$order-processing]             # Flows triggered
-    signals: [!order-complete, !order-failed]
+    signals: ["!order-complete", "!order-failed"]
     states: [%user.cart, %order.status]    # State dependencies
     components: [#validator, #processor]
     integrations: [&stripe, &inventory-api]
@@ -277,7 +277,7 @@ Features and components can declare symbol references using these arrays:
 |-------|-------------|---------|
 | `gates:` | `^` Portal | `[^authenticated, ^premium]` |
 | `flows:` | `$` Flow | `[$checkout-flow, $onboarding]` |
-| `signals:` | `!` Signal | `[!success, !failed]` |
+| `signals:` | `!` Signal | `["!success", "!failed"]` |
 | `states:` | `%` State | `[%user.cart, %order.total]` |
 | `components:` | `#` Component | `[#Button, #Modal]` |
 

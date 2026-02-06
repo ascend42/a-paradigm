@@ -65,6 +65,22 @@ export interface StateDefinition {
 }
 
 /**
+ * An aspect defined in a purpose file (cross-cutting concern with required code anchors)
+ */
+export interface AspectDefinition {
+  /** Human-readable description */
+  description?: string;
+  /** Classification tags */
+  tags?: string[];
+  /** Code anchors - REQUIRED for aspects (file paths to enforcement code) */
+  anchors?: string[];
+  /** Glob patterns for symbols this aspect applies to */
+  'applies-to'?: string[];
+  /** Description of how this aspect should be enforced */
+  enforcement?: string;
+}
+
+/**
  * A signal defined in a purpose file
  */
 export interface SignalDefinition {
@@ -148,6 +164,8 @@ export interface PurposeFile {
   states?: Record<string, StateDefinition>;
   /** Signals defined in this scope */
   signals?: Record<string, SignalDefinition>;
+  /** Aspects (cross-cutting concerns) defined in this scope */
+  aspects?: Record<string, AspectDefinition>;
   /** Relationships between symbols */
   relationships?: Relationship[];
   /** Flows defined in this scope (array format with steps) */

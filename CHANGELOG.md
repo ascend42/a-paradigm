@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-02-05
+
+### Fixed
+
+- **YAML `!` signal quoting in docs**: All documentation examples now correctly quote `!` signals in YAML arrays (e.g., `["!success", "!failed"]` instead of `[!success, !failed]`). The `!` character is a YAML tag indicator and breaks parsing when unquoted in flow sequences. Fixed across 15 files including specs, templates, prompts, and examples.
+
+- **Troubleshooting docs**: Added `!` quoting guidance to the "Common YAML issues" section alongside existing `@` quoting advice.
+
+### Added
+
+- **Top-level `aspects:` support in `.purpose` files**: The parser now recognizes `aspects:` as a top-level key in `.purpose` files, allowing projects to define aspect symbols (`~aspect-name`) with descriptions, tags, anchors, applies-to patterns, and enforcement rules.
+  - Added `AspectDefinition` type to `purpose-core`
+  - Added `AspectDefinitionSchema` (Zod) to parser
+  - Added `extractAspects()` function to purpose-core aggregator
+  - Wired aspect extraction into premise-core aggregator with anchor string parsing
+  - Updated `schema.json` with `AspectDefinition`
+  - Previously, top-level `aspects:` sections were silently stripped by Zod validation, causing aspect symbols to be missing from `paradigm scan` output
+
 ## [2.0.1] - 2026-02-05
 
 ### Fixed

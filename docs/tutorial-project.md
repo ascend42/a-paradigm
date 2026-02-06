@@ -154,7 +154,7 @@ Episode 1 end state
        description: "@task-management: Create, update, delete, and organize tasks"
        components: [#TaskForm, #TaskList, #TaskCard]
        gates: [^authenticated]
-       signals: [!task-created, !task-completed, !task-deleted]
+       signals: ["!task-created", "!task-completed", "!task-deleted"]
        flows: [$task-creation-flow]
    ```
 
@@ -164,26 +164,26 @@ Episode 1 end state
        description: "@project-organization: Group tasks into projects"
        components: [#ProjectCard, #ProjectList, #ProjectSelector]
        gates: [^authenticated]
-       signals: [!project-created]
+       signals: ["!project-created"]
    
      user-authentication:
        description: "@user-authentication: Login, logout, session management"
        components: [#LoginForm, #LogoutButton, #AuthProvider]
        gates: [^public]
-       signals: [!login-success, !login-failed, !logout]
+       signals: ["!login-success", "!login-failed", "!logout"]
        flows: [$auth-flow]
    
      admin-dashboard:
        description: "@admin-dashboard: User management and system settings"
        components: [#UserManager, #SettingsPanel]
        gates: [^admin]
-       signals: [!user-banned, !settings-updated]
+       signals: ["!user-banned", "!settings-updated"]
    
      notifications:
        description: "@notifications: Alert users about task updates"
        components: [#NotificationBell, #NotificationList]
        gates: [^authenticated]
-       signals: [!notification-sent, !notification-read]
+       signals: ["!notification-sent", "!notification-read"]
    ```
 
 4. **Add components section**

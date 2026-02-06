@@ -281,7 +281,7 @@ features:
   checkout:
     description: Complete purchase flow
     gates: [^authenticated, ^has-items]
-    signals: [!checkout-complete, !payment-failed]
+    signals: ["!checkout-complete", "!payment-failed"]
     components: [#CheckoutForm, #PaymentProcessor]
 ```
 
