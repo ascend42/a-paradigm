@@ -33,7 +33,7 @@ agents:
       When your spec is ready, hand off to Builder with 'paradigm team handoff --to builder'.
     focus:
       reads:
-        - "@features"
+        - "#components"
         - $flows
         - specs/*.md
         - health.yaml
@@ -49,7 +49,7 @@ agents:
           - spec
       - type: symbol
         match:
-          - "@*"
+          - "#*"
           - $*
     handoff_to:
       - builder
