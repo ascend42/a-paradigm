@@ -6,6 +6,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import chalk from 'chalk';
 
 import { createSymbolsRouter } from './routes/symbols.js';
 import { createInfoRouter } from './routes/info.js';
@@ -15,6 +16,31 @@ import { createPatternsRouter } from './routes/patterns.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Paradigm-style logger for server
+const log = {
+  component(name: string) {
+    const symbol = chalk.magenta(`#${name}`);
+    return {
+      info: (msg: string, data?: Record<string, unknown>) => {
+        const dataStr = data ? chalk.gray(` ${Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')}`) : '';
+        console.log(`${chalk.blue('ℹ')} ${symbol} ${msg}${dataStr}`);
+      },
+      success: (msg: string, data?: Record<string, unknown>) => {
+        const dataStr = data ? chalk.gray(` ${Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')}`) : '';
+        console.log(`${chalk.green('✔')} ${symbol} ${msg}${dataStr}`);
+      },
+      warn: (msg: string, data?: Record<string, unknown>) => {
+        const dataStr = data ? chalk.gray(` ${Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')}`) : '';
+        console.log(`${chalk.yellow('⚠')} ${symbol} ${msg}${dataStr}`);
+      },
+      error: (msg: string, data?: Record<string, unknown>) => {
+        const dataStr = data ? chalk.gray(` ${Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')}`) : '';
+        console.error(`${chalk.red('✖')} ${symbol} ${msg}${dataStr}`);
+      },
+    };
+  },
+};
 
 export interface ServerOptions {
   port: number;
@@ -73,17 +99,20 @@ export function createApp(options: ServerOptions): Express {
 export async function startServer(options: ServerOptions): Promise<void> {
   const app = createApp(options);
 
+  log.component('sentinel-server').info('Starting server', { port: options.port });
+  log.component('sentinel-server').info('Project directory', { path: options.projectDir });
+
   return new Promise((resolve, reject) => {
     const server = app.listen(options.port, () => {
-      console.log(`Sentinel server running at http://localhost:${options.port}`);
-      console.log(`Project: ${options.projectDir}`);
+      log.component('sentinel-server').success('Server running', { url: `http://localhost:${options.port}` });
 
       if (options.open) {
         // Dynamic import for 'open' package
         import('open').then((openModule) => {
           openModule.default(`http://localhost:${options.port}`);
+          log.component('sentinel-server').info('Opened browser');
         }).catch(() => {
-          console.log('Could not open browser automatically');
+          log.component('sentinel-server').warn('Could not open browser automatically');
         });
       }
 
@@ -92,7 +121,9 @@ export async function startServer(options: ServerOptions): Promise<void> {
 
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${options.port} is already in use`);
+        log.component('sentinel-server').error('Port already in use', { port: options.port });
+      } else {
+        log.component('sentinel-server').error('Server error', { error: err.message });
       }
       reject(err);
     });
