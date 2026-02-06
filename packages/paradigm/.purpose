@@ -1,390 +1,637 @@
-version: 1.0.0
+version: 2.0.0
 description: |
-  @a-company/paradigm - The unified CLI for the Paradigm framework.
-  Entry point for all Paradigm commands including init, sync, status, beacon, 
-  constellation, ripple, thread, echo, probe, lint, cost, team, and more.
+  #paradigm-cli - The unified CLI for the Paradigm framework.
+  Entry point for all Paradigm commands including shift, init, scan, sync, team, mcp, and more.
 
 features:
+  # ── Core Commands ──────────────────────────────────────────────
+  shift-command:
+    description: "Full project setup in one command (init → team init → scan → sync → doctor)"
+    tags: [command, core]
+    path: src/commands/shift.ts
+    components: ["#init-handler", "#team-loader", "#manifest-generator", "#model-configurator"]
+    flows: ["$shift-flow"]
+
   init-command:
     description: "Initialize Paradigm in a project with smart detection"
+    tags: [command, core]
+    path: src/commands/init.ts
     components: ["#init-handler", "#template-copier", "#detection-engine"]
     flows: ["$init-flow"]
     signals: ["!init-success", "!init-skipped"]
 
+  setup-command:
+    description: "Interactive setup wizard for new projects"
+    tags: [command, core]
+    path: src/commands/setup.ts
+    components: ["#setup-wizard"]
+
+  upgrade-command:
+    description: "Patch existing projects with new features and migrate from legacy format"
+    tags: [command, core]
+    path: src/commands/upgrade.ts
+    components: ["#upgrade-handler"]
+
+  doctor-command:
+    description: "Health check and diagnostics for Paradigm setup"
+    tags: [command, core]
+    path: src/commands/doctor.ts
+    components: ["#doctor-handler", "#health-checker"]
+
+  # ── Discovery & Navigation ────────────────────────────────────
+  scan-command:
+    description: "Generate navigator.yaml and scan index for codebase exploration"
+    tags: [command, discovery]
+    path: src/commands/scan/index.ts
+    components: ["#scan-handler", "#navigator-generator"]
+
+  scan-auto-command:
+    description: "Auto-generate .purpose files from code analysis (React, Vue, routes, auth, signals)"
+    tags: [command, discovery]
+    path: src/commands/scan/auto.ts
+    components: ["#auto-scan-handler", "#component-detector", "#route-detector", "#auth-detector", "#signal-detector"]
+
+  status-command:
+    description: "Show project symbol status, counts, and configuration overview"
+    tags: [command, discovery]
+    path: src/commands/status.ts
+    components: ["#status-handler", "#symbol-counter"]
+
+  beacon-command:
+    description: "Generate quick-start orientation for AI agents (beacon.md)"
+    tags: [command, discovery]
+    path: src/commands/beacon.ts
+    components: ["#beacon-handler", "#markdown-generator"]
+
+  constellation-command:
+    description: "Generate symbol relationship graph (constellation.json)"
+    tags: [command, discovery]
+    path: src/commands/constellation.ts
+    components: ["#constellation-handler", "#graph-builder"]
+
+  ripple-command:
+    description: "Analyze change impact upstream/downstream for a symbol"
+    tags: [command, discovery]
+    path: src/commands/ripple.ts
+    components: ["#ripple-handler", "#impact-analyzer"]
+
+  echo-command:
+    description: "Error-to-symbol mapping from echoes.yaml"
+    tags: [command, discovery]
+    path: src/commands/echo.ts
+    components: ["#echo-handler", "#error-mapper"]
+
+  probe-command:
+    description: "Visual discovery via screenshots for scan indexing"
+    tags: [command, discovery]
+    path: src/commands/probe/index.ts
+    components: ["#probe-handler", "#image-processor"]
+
+  # ── IDE & Sync ────────────────────────────────────────────────
   sync-command:
-    description: "Sync .paradigm/ to IDE instruction files"
+    description: "Generate IDE instruction files from .paradigm/ config (CLAUDE.md, .cursorrules, etc.)"
+    tags: [command, sync]
+    path: src/commands/sync.ts
     components: ["#sync-handler", "#ide-adapters"]
     flows: ["$sync-flow"]
 
-  status-command:
-    description: "Show project symbol status and counts"
-    components: ["#status-handler", "#symbol-counter"]
+  cursorrules-command:
+    description: "Generate .cursorrules from .paradigm config"
+    tags: [command, sync]
+    path: src/commands/cursorrules.ts
+    components: ["#cursorrules-handler"]
 
+  watch-command:
+    description: "Watch for changes and auto-sync configuration"
+    tags: [command, sync]
+    path: src/commands/watch.ts
+    components: ["#watch-handler"]
+
+  # ── Validation & Quality ──────────────────────────────────────
   lint-command:
     description: "Validate .purpose files for schema errors with --fix auto-repair"
+    tags: [command, quality]
+    path: src/commands/lint.ts
     components: ["#lint-handler", "#yaml-fixer", "#schema-validator"]
     signals: ["!lint-error", "!lint-fixed"]
 
   cost-command:
     description: "Analyze token costs - static vs MCP dynamic loading"
+    tags: [command, quality]
+    path: src/commands/cost.ts
     components: ["#cost-handler", "#token-estimator"]
 
-  scan-auto-command:
-    description: "Auto-generate .purpose files from code analysis"
-    components: ["#auto-scan-handler", "#component-detector", "#route-detector", "#auth-detector", "#signal-detector"]
+  summary-command:
+    description: "Generate project.md with statistics"
+    tags: [command, quality]
+    path: src/commands/summary.ts
+    components: ["#summary-handler"]
 
+  # ── Purpose & Premise ─────────────────────────────────────────
+  purpose-validate-command:
+    description: "Validate purpose files against schema"
+    tags: [command, purpose]
+    path: src/commands/purpose/validate.ts
+    components: ["#purpose-validator"]
+
+  purpose-remember-command:
+    description: "Aggregate and display purpose context"
+    tags: [command, purpose]
+    path: src/commands/purpose/remember.ts
+    components: ["#purpose-aggregator"]
+
+  premise-aggregate-command:
+    description: "Aggregate all premise sources (flows, symbols, signals)"
+    tags: [command, premise]
+    path: src/commands/premise/aggregate.ts
+    components: ["#premise-aggregator"]
+
+  premise-snapshot-command:
+    description: "Create a timeline snapshot of premise state"
+    tags: [command, premise]
+    path: src/commands/premise/snapshot.ts
+    components: ["#premise-snapshotter"]
+
+  # ── Portal (Authorization) ────────────────────────────────────
+  portal-validate-command:
+    description: "Validate portal.yaml gate configuration"
+    tags: [command, portal]
+    path: src/commands/portal/validate.ts
+    components: ["#portal-validator"]
+
+  portal-check-command:
+    description: "Check portal.yaml compliance - verify gates are used and declared"
+    tags: [command, portal]
+    path: src/commands/portal/check.ts
+    components: ["#portal-checker"]
+
+  portal-test-command:
+    description: "Generate and run gate tests"
+    tags: [command, portal]
+    path: src/commands/portal/test.ts
+    components: ["#portal-tester"]
+
+  portal-watch-command:
+    description: "Launch Portal Viewer - real-time visualization dashboard"
+    tags: [command, portal]
+    path: src/commands/portal/watch.ts
+    components: ["#portal-viewer"]
+
+  # ── Team (Multi-Agent Orchestration) ──────────────────────────
   team-init-command:
-    description: "Initialize multi-agent team configuration"
-    components: ["#team-loader", "#manifest-generator"]
-
-  team-status-command:
-    description: "Show current agent, pending handoffs, activity log"
-    components: ["#team-loader", "#state-reporter"]
-
-  team-handoff-command:
-    description: "Hand off task with context to another agent"
-    components: ["#team-loader", "#handoff-creator"]
-    signals: ["!handoff-created"]
-
-  team-accept-command:
-    description: "Accept a pending handoff and become active agent"
-    components: ["#team-loader", "#handoff-acceptor"]
-    signals: ["!handoff-accepted"]
-
-  team-history-command:
-    description: "Show full activity timeline with handoffs"
-    components: ["#team-loader", "#history-reporter"]
-
-  team-reset-command:
-    description: "Reset team state for fresh start"
-    components: ["#team-loader", "#state-resetter"]
+    description: "Initialize multi-agent team configuration with interactive model selection"
+    tags: [command, team]
+    path: src/commands/team/index.ts
+    components: ["#team-loader", "#manifest-generator", "#model-configurator"]
 
   team-spawn-command:
     description: "Spawn an individual AI agent with a specific task"
+    tags: [command, team]
+    path: src/commands/team/spawn.ts
     components: ["#agent-spawner", "#context-builder", "#provider-registry"]
     signals: ["!agent-spawned", "!agent-completed", "!agent-failed"]
 
   team-orchestrate-command:
-    description: "Orchestrate multi-agent task with AI conductor"
+    description: "Orchestrate multi-agent task with AI conductor (solo/faceted/compare modes)"
+    tags: [command, team]
+    path: src/commands/team/orchestrate.ts
     components: ["#orchestrator", "#agent-spawner", "#budget-tracker", "#audit-logger"]
     flows: ["$orchestration-flow"]
     signals: ["!orchestration-started", "!orchestration-completed"]
 
+  team-models-command:
+    description: "Configure or view agent model assignments"
+    tags: [command, team]
+    path: src/commands/team/configure-models.ts
+    components: ["#model-configurator", "#model-discovery"]
+
   team-providers-command:
-    description: "Show and configure agent providers (claude, claude-code, claude-cli, manual)"
+    description: "Show and configure agent providers (claude, claude-code, cursor-cli, manual)"
+    tags: [command, team]
+    path: src/commands/team/providers.ts
     components: ["#provider-registry"]
 
+  team-agents-suggest-command:
+    description: "Suggest agents for a task based on classification triggers"
+    tags: [command, team]
+    path: src/commands/team/agents-suggest.ts
+    components: ["#agent-classifier"]
+
+  team-accept-command:
+    description: "Accept orchestration changes with optional notes"
+    tags: [command, team]
+    path: src/commands/team/accept-orchestration.ts
+    components: ["#orchestration-acceptor"]
+
+  team-diff-command:
+    description: "Show diff from completed orchestration"
+    tags: [command, team]
+    path: src/commands/team/diff.ts
+    components: ["#orchestration-differ"]
+
   team-cost-command:
-    description: "View cost summary for orchestrations"
+    description: "View cost summary for orchestrations with filtering"
+    tags: [command, team]
+    path: src/commands/team/cost.ts
     components: ["#audit-logger", "#budget-tracker"]
 
   team-export-command:
     description: "Export orchestration data as JSON/CSV"
+    tags: [command, team]
+    path: src/commands/team/export.ts
     components: ["#audit-logger"]
 
+  # ── MCP ────────────────────────────────────────────────────────
   mcp-setup-command:
-    description: "Auto-configure MCP server for AI clients"
+    description: "Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue, Cline)"
+    tags: [command, mcp]
+    path: src/commands/mcp/setup.ts
     components: ["#mcp-setup-handler", "#client-detector", "#config-generator"]
     signals: ["!mcp-configured"]
 
-  mcp-status-command:
-    description: "Show MCP configuration status across clients"
-    components: ["#mcp-setup-handler", "#status-checker"]
+  # ── Knowledge & History ────────────────────────────────────────
+  wisdom-command:
+    description: "Team preferences, antipatterns, decisions, and expertise management"
+    tags: [command, knowledge]
+    path: src/commands/wisdom/index.ts
+    components: ["#wisdom-handler"]
 
-  mcp-list-command:
-    description: "List all configured MCP servers across clients"
-    components: ["#mcp-setup-handler", "#server-lister"]
+  history-command:
+    description: "Implementation log, validation, and fragility tracking"
+    tags: [command, knowledge]
+    path: src/commands/history/index.ts
+    components: ["#history-handler"]
 
-  mcp-remove-command:
-    description: "Remove MCP server from client configs"
-    components: ["#mcp-setup-handler", "#config-remover"]
-
-  beacon-command:
-    description: "Generate/show beacon.md for AI orientation"
-    components: ["#beacon-handler", "#markdown-generator"]
-
-  constellation-command:
-    description: "Generate symbol graph JSON/YAML"
-    components: ["#constellation-handler", "#graph-builder"]
-
-  ripple-command:
-    description: "Analyze change impact upstream/downstream"
-    components: ["#ripple-handler", "#impact-analyzer"]
+  hooks-command:
+    description: "Git hooks for automatic history capture (install/uninstall/status)"
+    tags: [command, knowledge]
+    path: src/commands/hooks/index.ts
+    components: ["#hooks-handler"]
 
   thread-command:
-    description: "Session continuity management"
+    description: "Session continuity management (thread.md)"
+    tags: [command, knowledge]
+    path: src/commands/thread.ts
     components: ["#thread-handler", "#session-storage"]
 
-  echo-command:
-    description: "Error-to-symbol mapping"
-    components: ["#echo-handler", "#error-mapper"]
+  # ── Sentinel & Triage ──────────────────────────────────────────
+  sentinel-command:
+    description: "Launch the unified codebase intelligence UI"
+    tags: [command, sentinel]
+    path: src/commands/sentinel.ts
+    components: ["#sentinel-launcher"]
 
-  probe-command:
-    description: "Visual discovery via screenshots"
-    components: ["#probe-handler", "#image-processor"]
+  triage-command:
+    description: "Sentinel CLI for incident triage, pattern management, and statistics"
+    tags: [command, sentinel]
+    path: src/commands/triage/index.ts
+    components: ["#triage-handler"]
 
-  doctor-command:
-    description: "Health check and diagnostics"
-    components: ["#doctor-handler", "#health-checker"]
+  # ── Experimental ───────────────────────────────────────────────
+  dream-aggregate-command:
+    description: "Aggregate all dream sources (concepts, ideas, aspirations)"
+    tags: [command, experimental]
+    path: src/commands/dream/aggregate.ts
+    components: ["#dream-aggregator"]
+
+  dream-snapshot-command:
+    description: "Create a timeline snapshot of dream state"
+    tags: [command, experimental]
+    path: src/commands/dream/snapshot.ts
+    components: ["#dream-snapshotter"]
+
+  tutorial-command:
+    description: "Interactive tutorial with curriculum state tracking"
+    tags: [command, experimental]
+    path: src/commands/tutorial/index.ts
+    components: ["#tutorial-handler"]
+
+# ── Internal Components ──────────────────────────────────────────
 
 components:
+  # Core
   init-handler:
     description: "Handles paradigm init command logic"
-    used-by: ["@init-command"]
+    path: src/commands/init.ts
+    used-by: ["#init-command", "#shift-command"]
 
   template-copier:
-    description: "Copies templates to project"
-    used-by: ["@init-command"]
+    description: "Copies templates to project .paradigm/"
+    used-by: ["#init-command"]
 
   detection-engine:
     description: "Detects existing IDE files and project type"
-    used-by: ["@init-command"]
+    used-by: ["#init-command"]
 
+  # Sync & IDE
   sync-handler:
     description: "Handles paradigm sync command logic"
-    used-by: ["@sync-command"]
+    path: src/commands/sync.ts
+    used-by: ["#sync-command", "#shift-command"]
 
   ide-adapters:
     description: "Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)"
-    used-by: ["@sync-command"]
+    used-by: ["#sync-command"]
 
+  # Validation
   lint-handler:
     description: "Handles paradigm lint command"
-    used-by: ["@lint-command"]
+    path: src/commands/lint.ts
+    used-by: ["#lint-command"]
 
   yaml-fixer:
     description: "Auto-fixes YAML issues (quotes symbols, converts markdown)"
-    used-by: ["@lint-command"]
+    used-by: ["#lint-command"]
 
   schema-validator:
     description: "Validates .purpose files against schema"
-    used-by: ["@lint-command"]
+    used-by: ["#lint-command"]
 
   cost-handler:
     description: "Handles paradigm cost command"
-    used-by: ["@cost-command"]
+    path: src/commands/cost.ts
+    used-by: ["#cost-command"]
 
   token-estimator:
     description: "Estimates token counts for context files"
-    used-by: ["@cost-command"]
+    used-by: ["#cost-command"]
+
+  # Scan
+  scan-handler:
+    description: "Handles paradigm scan command"
+    path: src/commands/scan/index.ts
+    used-by: ["#scan-command", "#shift-command"]
 
   auto-scan-handler:
-    description: "Handles paradigm scan auto command"
-    used-by: ["@scan-auto-command"]
+    description: "Handles paradigm scan --auto command"
+    path: src/commands/scan/auto.ts
+    used-by: ["#scan-auto-command"]
+
+  navigator-generator:
+    description: "Generates navigator.yaml for AI exploration"
+    path: src/commands/scan/navigator.ts
+    used-by: ["#scan-command"]
 
   component-detector:
     description: "Detects React/Vue/Angular components"
-    used-by: ["@scan-auto-command"]
+    used-by: ["#scan-auto-command"]
 
   route-detector:
     description: "Detects routes (Express, Next.js, React Router)"
-    used-by: ["@scan-auto-command"]
+    used-by: ["#scan-auto-command"]
 
   auth-detector:
     description: "Detects auth middleware and gates"
-    used-by: ["@scan-auto-command"]
+    used-by: ["#scan-auto-command"]
 
   signal-detector:
     description: "Detects events, errors, toast notifications"
-    used-by: ["@scan-auto-command"]
+    used-by: ["#scan-auto-command"]
 
+  # Team
   team-loader:
     description: "Loads agents.yaml and team-state.yaml"
-    used-by: ["@team-init-command", "@team-status-command", "@team-handoff-command", "@team-accept-command", "@team-history-command", "@team-reset-command"]
+    path: src/commands/team/loader.ts
+    used-by: ["#team-init-command", "#team-spawn-command", "#team-orchestrate-command"]
 
   manifest-generator:
     description: "Generates default agents.yaml"
-    used-by: ["@team-init-command"]
-
-  state-reporter:
-    description: "Reports current team state"
-    used-by: ["@team-status-command"]
-
-  handoff-creator:
-    description: "Creates handoff files"
-    used-by: ["@team-handoff-command"]
-
-  handoff-acceptor:
-    description: "Accepts and processes handoffs"
-    used-by: ["@team-accept-command"]
-
-  history-reporter:
-    description: "Reports activity timeline"
-    used-by: ["@team-history-command"]
-
-  state-resetter:
-    description: "Resets team state"
-    used-by: ["@team-reset-command"]
+    used-by: ["#team-init-command"]
 
   agent-spawner:
     description: "Spawns AI agents via provider abstraction"
-    used-by: ["@team-spawn-command", "@team-orchestrate-command"]
+    path: src/commands/team/spawn.ts
+    used-by: ["#team-spawn-command", "#team-orchestrate-command"]
 
   orchestrator:
     description: "Coordinates multi-agent orchestration (solo/faceted modes)"
-    used-by: ["@team-orchestrate-command"]
+    path: src/commands/team/orchestrate.ts
+    used-by: ["#team-orchestrate-command"]
 
   context-builder:
     description: "Builds role-specific context for token efficiency"
-    used-by: ["@team-spawn-command", "@team-orchestrate-command"]
+    used-by: ["#team-spawn-command", "#team-orchestrate-command"]
 
   provider-registry:
-    description: "Manages provider cascade (claude → claude-code → claude-cli → manual)"
-    used-by: ["@team-spawn-command", "@team-orchestrate-command", "@team-providers-command"]
+    description: "Manages provider cascade (claude → claude-code → cursor-cli → manual)"
+    path: src/commands/team/providers.ts
+    used-by: ["#team-spawn-command", "#team-orchestrate-command", "#team-providers-command"]
 
   budget-tracker:
     description: "Tracks token usage and enforces budget limits"
-    used-by: ["@team-orchestrate-command", "@team-cost-command"]
+    used-by: ["#team-orchestrate-command", "#team-cost-command"]
 
   audit-logger:
     description: "Logs orchestrations to .paradigm/orchestrations/"
-    used-by: ["@team-orchestrate-command", "@team-cost-command", "@team-export-command"]
+    used-by: ["#team-orchestrate-command", "#team-cost-command", "#team-export-command"]
 
+  model-configurator:
+    description: "Interactive prompts for configuring agent model assignments"
+    path: src/commands/team/configure-models.ts
+    used-by: ["#team-models-command", "#team-init-command", "#shift-command"]
+
+  model-discovery:
+    description: "Discovers available AI models from APIs, remote manifest, and presets"
+    path: src/core/model-discovery.ts
+    tags: [core]
+    used-by: ["#model-configurator"]
+
+  agent-classifier:
+    description: "Classifies tasks and suggests appropriate agents"
+    path: src/commands/team/agents-suggest.ts
+    used-by: ["#team-agents-suggest-command", "#team-orchestrate-command"]
+
+  # MCP
   mcp-setup-handler:
     description: "Handles MCP setup commands"
-    used-by: ["@mcp-setup-command", "@mcp-status-command", "@mcp-list-command", "@mcp-remove-command"]
+    path: src/commands/mcp/setup.ts
+    used-by: ["#mcp-setup-command"]
 
   client-detector:
     description: "Detects installed AI clients (Cursor, Claude Desktop, Continue, Cline)"
-    used-by: ["@mcp-setup-command"]
+    used-by: ["#mcp-setup-command"]
 
   config-generator:
     description: "Generates MCP config for each client"
-    used-by: ["@mcp-setup-command"]
+    used-by: ["#mcp-setup-command"]
 
-  status-checker:
-    description: "Checks MCP configuration status"
-    used-by: ["@mcp-status-command"]
-
-  server-lister:
-    description: "Lists configured MCP servers"
-    used-by: ["@mcp-list-command"]
-
-  config-remover:
-    description: "Removes MCP server from configs"
-    used-by: ["@mcp-remove-command"]
-
+  # Discovery
   status-handler:
     description: "Handles paradigm status command"
-    used-by: ["@status-command"]
+    path: src/commands/status.ts
+    used-by: ["#status-command"]
 
   symbol-counter:
     description: "Counts symbols by type"
-    used-by: ["@status-command"]
+    used-by: ["#status-command"]
 
   beacon-handler:
     description: "Generates beacon.md content"
-    used-by: ["@beacon-command"]
-
-  markdown-generator:
-    description: "Generates markdown output"
-    used-by: ["@beacon-command"]
+    path: src/commands/beacon.ts
+    used-by: ["#beacon-command"]
 
   constellation-handler:
     description: "Builds constellation graph"
-    used-by: ["@constellation-command"]
+    path: src/commands/constellation.ts
+    used-by: ["#constellation-command"]
 
   graph-builder:
     description: "Builds symbol relationship graph"
-    used-by: ["@constellation-command"]
+    used-by: ["#constellation-command"]
 
   ripple-handler:
     description: "Performs ripple analysis"
-    used-by: ["@ripple-command"]
+    path: src/commands/ripple.ts
+    used-by: ["#ripple-command"]
 
   impact-analyzer:
     description: "Analyzes upstream/downstream impact"
-    used-by: ["@ripple-command"]
-
-  thread-handler:
-    description: "Manages thread.md operations"
-    used-by: ["@thread-command"]
-
-  session-storage:
-    description: "Stores session state in thread.md"
-    used-by: ["@thread-command"]
+    used-by: ["#ripple-command"]
 
   echo-handler:
     description: "Handles echo lookups"
-    used-by: ["@echo-command"]
+    path: src/commands/echo.ts
+    used-by: ["#echo-command"]
 
   error-mapper:
     description: "Maps error codes to symbols"
-    used-by: ["@echo-command"]
+    used-by: ["#echo-command"]
 
   probe-handler:
     description: "Handles probe command"
-    used-by: ["@probe-command"]
+    path: src/commands/probe/index.ts
+    used-by: ["#probe-command"]
 
   image-processor:
     description: "Processes screenshot input"
-    used-by: ["@probe-command"]
+    used-by: ["#probe-command"]
 
   doctor-handler:
     description: "Runs health checks"
-    used-by: ["@doctor-command"]
+    path: src/commands/doctor.ts
+    used-by: ["#doctor-command"]
 
   health-checker:
     description: "Validates project setup"
-    used-by: ["@doctor-command"]
+    used-by: ["#doctor-command"]
+
+  thread-handler:
+    description: "Manages thread.md operations"
+    path: src/commands/thread.ts
+    used-by: ["#thread-command"]
+
+  session-storage:
+    description: "Stores session state in thread.md"
+    used-by: ["#thread-command"]
+
+  # Knowledge
+  wisdom-handler:
+    description: "Manages team preferences, antipatterns, decisions, and expertise"
+    path: src/commands/wisdom/index.ts
+    used-by: ["#wisdom-command"]
+
+  history-handler:
+    description: "Manages implementation log, validation, and fragility"
+    path: src/commands/history/index.ts
+    used-by: ["#history-command"]
+
+  hooks-handler:
+    description: "Manages git hooks for automatic history capture"
+    path: src/commands/hooks/index.ts
+    used-by: ["#hooks-command"]
+
+  # Sentinel
+  sentinel-launcher:
+    description: "Launches the Sentinel codebase intelligence UI"
+    path: src/commands/sentinel.ts
+    used-by: ["#sentinel-command"]
+
+  triage-handler:
+    description: "Handles Sentinel CLI triage commands"
+    path: src/commands/triage/index.ts
+    used-by: ["#triage-command"]
+
+  # Purpose & Premise
+  purpose-validator:
+    description: "Validates purpose files against schema"
+    path: src/commands/purpose/validate.ts
+    used-by: ["#purpose-validate-command"]
+
+  purpose-aggregator:
+    description: "Aggregates and displays purpose context"
+    path: src/commands/purpose/remember.ts
+    used-by: ["#purpose-remember-command"]
+
+  premise-aggregator:
+    description: "Aggregates all premise sources"
+    path: src/commands/premise/aggregate.ts
+    used-by: ["#premise-aggregate-command"]
+
+  premise-snapshotter:
+    description: "Creates timeline snapshots of premise state"
+    path: src/commands/premise/snapshot.ts
+    used-by: ["#premise-snapshot-command"]
+
+  # Portal
+  portal-validator:
+    description: "Validates portal.yaml configuration"
+    path: src/commands/portal/validate.ts
+    used-by: ["#portal-validate-command"]
+
+  portal-checker:
+    description: "Checks portal.yaml compliance"
+    path: src/commands/portal/check.ts
+    used-by: ["#portal-check-command"]
+
+  portal-tester:
+    description: "Generates and runs gate tests"
+    path: src/commands/portal/test.ts
+    used-by: ["#portal-test-command"]
+
+  portal-viewer:
+    description: "Real-time portal visualization dashboard"
+    path: src/commands/portal/watch.ts
+    used-by: ["#portal-watch-command"]
+
+# ── Signals ──────────────────────────────────────────────────────
 
 signals:
   init-success:
     description: "Paradigm initialized successfully"
-    category: cli
-    severity: info
+    tags: [cli]
 
   init-skipped:
     description: "Paradigm init skipped (already exists)"
-    category: cli
-    severity: info
+    tags: [cli]
 
   lint-error:
     description: "Lint found validation errors"
-    category: cli
-    severity: error
+    tags: [cli]
 
   lint-fixed:
     description: "Lint auto-fixed issues"
-    category: cli
-    severity: info
-
-  handoff-created:
-    description: "Team handoff created"
-    category: team
-    severity: info
-
-  handoff-accepted:
-    description: "Team handoff accepted"
-    category: team
-    severity: info
+    tags: [cli]
 
   mcp-configured:
     description: "MCP server configured for client"
-    category: mcp
-    severity: info
+    tags: [mcp]
 
   agent-spawned:
     description: "AI agent spawned successfully"
-    category: team
-    severity: info
+    tags: [team]
 
   agent-completed:
     description: "AI agent completed task"
-    category: team
-    severity: info
+    tags: [team]
 
   agent-failed:
     description: "AI agent failed task"
-    category: team
-    severity: error
+    tags: [team]
 
   orchestration-started:
     description: "Multi-agent orchestration started"
-    category: team
-    severity: info
+    tags: [team]
 
   orchestration-completed:
     description: "Multi-agent orchestration completed"
-    category: team
-    severity: info
+    tags: [team]

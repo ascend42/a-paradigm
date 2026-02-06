@@ -2,10 +2,11 @@
  * Model Discovery
  *
  * Dynamically discovers available AI models based on the environment:
- * - Cursor IDE: Uses cursor CLI or known presets
- * - Claude Code: Fixed list (opus/sonnet/haiku)
- * - API providers: Fetches from REST APIs when API keys are available
- * - Fallback: Comprehensive presets for all major providers
+ * 1. API providers: Fetches live model lists when API keys are available
+ * 2. Remote manifest: Fetches models.json from GitHub (updated without CLI release)
+ * 3. Hardcoded fallback: Last-resort presets compiled into the CLI
+ *
+ * Environments: Cursor IDE, Claude Code, VSCode, multi-provider, fallback
  */
 
 import { exec } from 'child_process';
@@ -15,6 +16,10 @@ import * as path from 'path';
 import { ModelInfo, ModelDiscoveryResult } from '../commands/team/types.js';
 
 const execAsync = promisify(exec);
+
+/** Remote manifest URL — update models.json in the repo to push new models without a CLI release */
+const MANIFEST_URL = 'https://raw.githubusercontent.com/ascend42/a-paradigm/main/models.json';
+const MANIFEST_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
  * Detected environment type
@@ -33,10 +38,99 @@ export type EnvironmentType =
  */
 export class ModelDiscovery {
   private cacheFile: string;
+  private manifestCacheFile: string;
   private cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
+  private rootDir: string;
 
   constructor(rootDir: string) {
+    this.rootDir = rootDir;
     this.cacheFile = path.join(rootDir, '.paradigm', 'model-cache.json');
+    this.manifestCacheFile = path.join(rootDir, '.paradigm', 'model-manifest-cache.json');
+  }
+
+  /**
+   * Fetch the remote model manifest (cached for 7 days).
+   * Returns null on any failure — callers fall back to hardcoded presets.
+   */
+  private async fetchManifest(): Promise<Record<string, any> | null> {
+    // Check manifest cache
+    try {
+      if (fs.existsSync(this.manifestCacheFile)) {
+        const raw = fs.readFileSync(this.manifestCacheFile, 'utf8');
+        const cached = JSON.parse(raw);
+        const age = Date.now() - new Date(cached._fetchedAt).getTime();
+        if (age < MANIFEST_CACHE_TTL) {
+          return cached;
+        }
+      }
+    } catch {
+      // Ignore corrupt cache
+    }
+
+    // Fetch fresh
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(MANIFEST_URL, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!response.ok) return null;
+
+      const manifest = await response.json() as Record<string, any>;
+
+      // Cache it
+      try {
+        const dir = path.dirname(this.manifestCacheFile);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(this.manifestCacheFile, JSON.stringify({ ...manifest, _fetchedAt: new Date().toISOString() }, null, 2));
+      } catch {
+        // Ignore cache write errors
+      }
+
+      return manifest;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get models for a provider from the remote manifest.
+   * Returns null if manifest unavailable or provider not found.
+   */
+  private async getManifestModels(provider: string): Promise<ModelInfo[] | null> {
+    const manifest = await this.fetchManifest();
+    if (!manifest?.providers?.[provider]) return null;
+    return manifest.providers[provider] as ModelInfo[];
+  }
+
+  /**
+   * Get environment-specific models from the remote manifest.
+   * Returns null if manifest unavailable or environment not found.
+   */
+  private async getManifestEnvironment(env: string): Promise<ModelInfo[] | null> {
+    const manifest = await this.fetchManifest();
+    if (!manifest?.environments?.[env]) return null;
+
+    const envConfig = manifest.environments[env];
+
+    // Direct model list
+    if (envConfig.models) {
+      return envConfig.models as ModelInfo[];
+    }
+
+    // Include-based: aggregate models from listed providers
+    if (envConfig.include) {
+      const models: ModelInfo[] = [];
+      for (const providerName of envConfig.include) {
+        const providerModels = manifest.providers?.[providerName];
+        if (providerModels) {
+          models.push(...(providerModels as ModelInfo[]));
+        }
+      }
+      return models.length > 0 ? models : null;
+    }
+
+    return null;
   }
 
   /**
@@ -59,7 +153,7 @@ export class ModelDiscovery {
         result = this.getClaudeCodeModels();
         break;
       case 'vscode':
-        result = this.getVSCodeModels();
+        result = await this.getVSCodeModels();
         break;
       case 'multi-provider':
         result = await this.discoverMultiProviderModels();
@@ -191,13 +285,13 @@ export class ModelDiscovery {
       });
 
       if (!response.ok) {
-        return this.getAnthropicPresets();
+        return await this.getAnthropicPresets();
       }
 
       const data = await response.json() as { data?: Array<{ id: string; display_name?: string }> };
 
       if (!data.data || data.data.length === 0) {
-        return this.getAnthropicPresets();
+        return await this.getAnthropicPresets();
       }
 
       return {
@@ -212,7 +306,7 @@ export class ModelDiscovery {
         timestamp: new Date().toISOString(),
       };
     } catch {
-      return this.getAnthropicPresets();
+      return await this.getAnthropicPresets();
     }
   }
 
@@ -226,13 +320,13 @@ export class ModelDiscovery {
       });
 
       if (!response.ok) {
-        return this.getOpenAIPresets();
+        return await this.getOpenAIPresets();
       }
 
       const data = await response.json() as { data?: Array<{ id: string }> };
 
       if (!data.data) {
-        return this.getOpenAIPresets();
+        return await this.getOpenAIPresets();
       }
 
       // Filter to only chat models
@@ -252,7 +346,7 @@ export class ModelDiscovery {
         timestamp: new Date().toISOString(),
       };
     } catch {
-      return this.getOpenAIPresets();
+      return await this.getOpenAIPresets();
     }
   }
 
@@ -267,13 +361,13 @@ export class ModelDiscovery {
       );
 
       if (!response.ok) {
-        return this.getGooglePresets();
+        return await this.getGooglePresets();
       }
 
       const data = await response.json() as { models?: Array<{ name: string; displayName?: string }> };
 
       if (!data.models) {
-        return this.getGooglePresets();
+        return await this.getGooglePresets();
       }
 
       return {
@@ -290,7 +384,7 @@ export class ModelDiscovery {
         timestamp: new Date().toISOString(),
       };
     } catch {
-      return this.getGooglePresets();
+      return await this.getGooglePresets();
     }
   }
 
@@ -304,13 +398,13 @@ export class ModelDiscovery {
       });
 
       if (!response.ok) {
-        return this.getXAIPresets();
+        return await this.getXAIPresets();
       }
 
       const data = await response.json() as { data?: Array<{ id: string }> };
 
       if (!data.data) {
-        return this.getXAIPresets();
+        return await this.getXAIPresets();
       }
 
       return {
@@ -325,7 +419,7 @@ export class ModelDiscovery {
         timestamp: new Date().toISOString(),
       };
     } catch {
-      return this.getXAIPresets();
+      return await this.getXAIPresets();
     }
   }
 
@@ -379,10 +473,11 @@ export class ModelDiscovery {
         timestamp: new Date().toISOString(),
       };
     } catch {
-      // Fallback to known Cursor models
+      // Try remote manifest → hardcoded presets
+      const manifest = await this.getManifestEnvironment('cursor');
       return {
-        source: 'cursor',
-        models: this.getCursorPresets(),
+        source: manifest ? 'cursor-manifest' : 'cursor',
+        models: manifest || this.getCursorPresets(),
         cached: false,
         timestamp: new Date().toISOString(),
       };
@@ -408,8 +503,14 @@ export class ModelDiscovery {
   /**
    * Get VSCode/Copilot models
    */
-  private getVSCodeModels(): ModelDiscoveryResult {
-    // VSCode with Copilot typically has access to GPT and Claude models
+  private async getVSCodeModels(): Promise<ModelDiscoveryResult> {
+    // Try remote manifest first
+    const manifest = await this.getManifestEnvironment('vscode');
+    if (manifest) {
+      return { source: 'vscode-manifest', models: manifest, cached: false, timestamp: new Date().toISOString() };
+    }
+
+    // Hardcoded fallback
     return {
       source: 'vscode',
       models: [
@@ -471,9 +572,13 @@ export class ModelDiscovery {
   }
 
   /**
-   * Get Anthropic preset models
+   * Get Anthropic preset models (manifest → hardcoded)
    */
-  private getAnthropicPresets(): ModelDiscoveryResult {
+  private async getAnthropicPresets(): Promise<ModelDiscoveryResult> {
+    const manifest = await this.getManifestModels('anthropic');
+    if (manifest) {
+      return { source: 'anthropic-manifest', models: manifest, cached: false, timestamp: new Date().toISOString() };
+    }
     return {
       source: 'anthropic-api',
       models: [
@@ -487,9 +592,13 @@ export class ModelDiscovery {
   }
 
   /**
-   * Get OpenAI preset models
+   * Get OpenAI preset models (manifest → hardcoded)
    */
-  private getOpenAIPresets(): ModelDiscoveryResult {
+  private async getOpenAIPresets(): Promise<ModelDiscoveryResult> {
+    const manifest = await this.getManifestModels('openai');
+    if (manifest) {
+      return { source: 'openai-manifest', models: manifest, cached: false, timestamp: new Date().toISOString() };
+    }
     return {
       source: 'openai',
       models: [
@@ -506,9 +615,13 @@ export class ModelDiscovery {
   }
 
   /**
-   * Get Google preset models
+   * Get Google preset models (manifest → hardcoded)
    */
-  private getGooglePresets(): ModelDiscoveryResult {
+  private async getGooglePresets(): Promise<ModelDiscoveryResult> {
+    const manifest = await this.getManifestModels('google');
+    if (manifest) {
+      return { source: 'google-manifest', models: manifest, cached: false, timestamp: new Date().toISOString() };
+    }
     return {
       source: 'google',
       models: [
@@ -522,9 +635,13 @@ export class ModelDiscovery {
   }
 
   /**
-   * Get xAI preset models
+   * Get xAI preset models (manifest → hardcoded)
    */
-  private getXAIPresets(): ModelDiscoveryResult {
+  private async getXAIPresets(): Promise<ModelDiscoveryResult> {
+    const manifest = await this.getManifestModels('xai');
+    if (manifest) {
+      return { source: 'xai-manifest', models: manifest, cached: false, timestamp: new Date().toISOString() };
+    }
     return {
       source: 'xai',
       models: [

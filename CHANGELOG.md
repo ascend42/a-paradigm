@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.3] - 2026-02-06
 
+### Added
+
+- **Remote model manifest**: Model discovery now fetches `models.json` from GitHub before falling back to hardcoded presets. Update the manifest to push new models without a CLI release. Discovery priority: API keys (live) → remote manifest (7-day cache) → hardcoded fallback.
+
+- **CLI commands as #components**: Migrated `packages/paradigm/.purpose` from v1 to v2 symbols. All 41 CLI commands now have `#component` entries with `path:`, `tags:`, and `used-by:` fields pointing to source files. Agents can now find any command via `paradigm_search` or `paradigm_navigate`.
+
 ### Changed
 
 - **`paradigm shift` always prompts for model configuration**: The interactive model selection step now runs automatically during `paradigm shift` — no need for `--configure-models` flag. This makes the setup experience more engaging and ensures agents are configured with the right models from the start.
@@ -21,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Meta: Llama 4 Scout, Llama 4 Maverick
   - DeepSeek: DeepSeek R1, DeepSeek V3
 - **Updated model tiering logic**: Added `nano`, `scout` to low-tier patterns; added `gpt-4.1`, `o3`, `o4`, `grok-3`, `maverick`, `deepseek-r1` to high-tier patterns; updated family extraction for new model families
+- **Fixed v1 logger examples in templates**: `log.feature('@login')` → `log.component('#login-handler')` in upgrade.ts and IDE adapter templates
 
 ## Sentinel [0.1.1] - 2026-02-06
 
