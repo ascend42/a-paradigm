@@ -70,30 +70,13 @@ The AI never needed to read the implementation — the contracts were explicit.
 
 ## Installation
 
-### Recommended: Clone and Build
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/ascend42/a-paradigm.git
-cd a-paradigm
-
-# 2. Install dependencies and build
-npm install && npm run build
-
-# 3. Install CLI globally
-npm link @a-company/paradigm
-
-# 4. Verify installation
-paradigm --version
-```
-
-### Quick Install (One Command)
-
-For public repositories, you can use the install script:
+### Quick Install (Recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh | bash
 ```
+
+This clones, builds, and installs the `paradigm` and `paradigm-mcp` CLIs globally.
 
 Or download and inspect first:
 
@@ -103,20 +86,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### Alternative: Local Install Script
-
-If you already cloned the repo:
-
-```bash
-cd a-paradigm
-./install.sh
-```
-
-**What the install script does:**
-- Installs dependencies
-- Builds all packages
-- Installs the `paradigm` CLI globally
-- Verifies installation
+### Manual Install
 
 ```bash
 # 1. Clone and build
@@ -125,11 +95,16 @@ cd a-paradigm
 npm install && npm run build
 
 # 2. Install CLI globally
-npm link @a-company/paradigm
+cd packages/paradigm && npm install -g . && cd ../..
 
-# 3. Verify
+# 3. Install MCP server globally
+cd packages/paradigm-mcp && npm install -g . && cd ../..
+
+# 4. Verify
 paradigm --version
 ```
+
+> **Note:** Paradigm is not yet published to npm. Install from source using the methods above. npm registry publishing is planned.
 
 ---
 
@@ -384,6 +359,8 @@ paradigm mcp setup --client all
 
 ### Manual Configuration
 
+The `cwd` field tells the MCP server which project's `.paradigm/` to read. Set it to your project's root directory.
+
 **Cursor** (`.cursor/mcp.json` in your project):
 ```json
 {
@@ -405,6 +382,37 @@ paradigm mcp setup --client all
       "command": "paradigm-mcp",
       "args": ["."],
       "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Claude Code** (`~/.claude/settings.json` — works across all projects):
+```json
+{
+  "mcpServers": {
+    "my-project": {
+      "command": "paradigm-mcp",
+      "args": ["."],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+**Multiple projects** — add one entry per project:
+```json
+{
+  "mcpServers": {
+    "project-a": {
+      "command": "paradigm-mcp",
+      "args": ["."],
+      "cwd": "/path/to/project-a"
+    },
+    "project-b": {
+      "command": "paradigm-mcp",
+      "args": ["."],
+      "cwd": "/path/to/project-b"
     }
   }
 }
@@ -479,8 +487,8 @@ npm install
 # Build all packages
 npm run build
 
-# Link CLI globally for testing
-cd packages/paradigm && npm link
+# Install CLI globally for testing
+cd packages/paradigm && npm install -g .
 ```
 
 ## Migrating from Horizon
