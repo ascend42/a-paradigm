@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.11] - 2026-02-07
+
+### Added
+
+- **10 aspects (~) with verified code anchors**: Added `~yaml-config-loading`, `~zod-validated`, `~symbol-typed-logging`, `~mcp-tool-handler`, `~ide-adapter-pattern`, `~provider-cascade`, `~express-server`, `~budget-enforced`, `~file-glob-discovery`, `~correlation-tracked` — each pointing to real `file:line-range` anchors in the source. This is Paradigm's most distinctive symbol type and was previously unrepresented in the project's own metadata.
+
+- **7 new flows ($)**: `$install-flow`, `$symbol-aggregation`, `$purpose-parsing`, `$ide-sync-flow`, `$agent-orchestration-flow`, `$portal-validation-flow`, `$mcp-request-flow` — documenting multi-step processes end-to-end. Total flows: 12 (up from 6).
+
+- **4 new sub-module .purpose files**: Granular coverage for `packages/paradigm/src/core/` (14 components), `packages/paradigm/src/core/ide-adapters/` (6 components), `packages/paradigm/src/core/providers/` (6 components + 2 signals), `packages/logger/` (6 components). Total .purpose files: 15 (up from 11).
+
+- **Sentinel portal.yaml**: Authorization topology for Sentinel API with `^api-authenticated` and `^admin-only` gates across 6 routes.
+
+- **Aspect/flow links on 6 existing .purpose files**: Root `.purpose`, `purpose/core`, `portal/core`, `premise/core`, `paradigm-mcp`, and `sentinel` enriched with cross-references to the new aspects and flows.
+
+### Changed
+
+- Total symbol count: **287** (up from ~244). 10 aspects, 12 flows, 6 gates, 31 signals, 228 components.
+
 ## [2.0.10] - 2026-02-07
 
 ### Fixed

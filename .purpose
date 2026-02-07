@@ -9,314 +9,310 @@ context:
   - All packages publish to @a-company scope
   - The CLI (`paradigm`) is the main user interface
   - Sentinel is the unified codebase intelligence UI
-
 features:
   cli-commands:
     description: Core CLI commands for managing Paradigm projects
-    tags: [feature, core]
-    components:
-      - '#commander-setup'
-      - '#ora-spinners'
-      - '#chalk-output'
     flows:
       - $init-flow
       - $sync-flow
     signals:
       - '!command-success'
       - '!command-error'
-
+    components:
+      - '#commander-setup'
+      - '#ora-spinners'
+      - '#chalk-output'
   symbol-system:
-    description: "The shared language between code, developers, and AI (v2: #, $, ^, !, ~ + tag bank)"
-    tags: [feature, core]
+    description: 'The shared language between code, developers, and AI (v2: #, $, ^, !, ~ + tag bank)'
+    aspects:
+      ~yaml-config-loading: true
+      ~zod-validated: true
+      ~file-glob-discovery: true
     components:
       - '#symbol-parser'
       - '#symbol-index'
-
   ide-sync:
     description: Generate IDE instruction files from .paradigm/ config
-    tags: [feature, sync]
+    aspects:
+      ~ide-adapter-pattern: true
+    flows:
+      - $sync-flow
+      - $ide-sync-flow
     components:
       - '#cursor-adapter'
       - '#copilot-adapter'
       - '#windsurf-adapter'
       - '#claude-adapter'
-    flows:
-      - $sync-flow
-
   visual-discovery:
     description: Map screenshots to code via probe/scan
-    tags: [feature, discovery]
+    flows:
+      - $probe-flow
     components:
       - '#probe-protocol'
       - '#scan-generator'
-    flows:
-      - $probe-flow
-
   agent-efficiency:
     description: Tools for token-efficient AI development
-    tags: [feature, core]
+    signals:
+      - '!context-loaded'
+      - '!ripple-analyzed'
     components:
       - '#beacon'
       - '#constellation'
       - '#ripple'
       - '#thread'
       - '#echo'
-    signals:
-      - '!context-loaded'
-      - '!ripple-analyzed'
-
+    aspects:
+      ~symbol-typed-logging: true
+      ~correlation-tracked: true
   mcp-server:
     description: Model Context Protocol server for AI assistants
-    tags: [feature, integration, mcp]
-    components:
-      - '#mcp-resources'
-      - '#mcp-tools'
-      - '#index-loader'
+    aspects:
+      ~mcp-tool-handler: true
     signals:
       - '!server-started'
       - '!resource-fetched'
       - '!tool-called'
-
+    components:
+      - '#mcp-resources'
+      - '#mcp-tools'
+      - '#index-loader'
   sentinel-dashboard:
     description: Unified codebase intelligence UI with symbol visualization
-    tags: [feature, core]
+    aspects:
+      ~express-server: true
     components:
       - '#sentinel-ui'
       - '#node-renderer'
       - '#connection-lines'
       - '#properties-panel'
-
   portal-authorization:
     description: Runtime authorization with visual testing
-    tags: [feature, security]
+    flows:
+      - $authorization-flow
+    gates:
+      - ^authenticated
+      - ^subscription-required
+      - ^admin-only
     components:
       - '#portal-core'
       - '#portal-sdk'
       - '#portal-viewer'
       - '#portal-manager'
-    gates:
-      - ^authenticated
-      - ^subscription-required
-      - ^admin-only
-    flows:
-      - $authorization-flow
-
   team-orchestration:
     description: Multi-agent coordination with model selection, spawning, and orchestration
-    tags: [feature, team]
+    aspects:
+      ~provider-cascade: true
+      ~budget-enforced: true
+    flows:
+      - $orchestration-flow
+      - $agent-orchestration-flow
+    signals:
+      - '!agent-spawned'
+      - '!orchestration-completed'
     components:
       - '#agent-spawner'
       - '#orchestrator'
       - '#model-discovery'
       - '#provider-registry'
       - '#model-configurator'
-    flows:
-      - $orchestration-flow
-    signals:
-      - '!agent-spawned'
-      - '!orchestration-completed'
-
 components:
   commander-setup:
     description: CLI framework setup with Commander.js
-    used-by: ["#cli-commands"]
-
   symbol-parser:
     description: Parses symbols from .purpose and portal.yaml files
-    used-by: ["#symbol-system"]
-
   symbol-index:
     description: In-memory index of all project symbols
-    used-by: ["#symbol-system", "#agent-efficiency"]
-
   cursor-adapter:
     description: Generates .cursor/rules/*.mdc files
-    used-by: ["#ide-sync"]
-
   copilot-adapter:
     description: Generates .github/copilot-instructions.md files
-    used-by: ["#ide-sync"]
-
   windsurf-adapter:
     description: Generates .windsurfrules file
-    used-by: ["#ide-sync"]
-
   claude-adapter:
     description: Generates CLAUDE.md file
-    used-by: ["#ide-sync"]
-
   beacon:
     description: Quick-start orientation for AI agents
-    used-by: ["#agent-efficiency"]
-
   constellation:
     description: Machine-readable symbol graph in JSON/YAML
-    used-by: ["#agent-efficiency"]
-
   ripple:
     description: Change impact analysis tool
-    used-by: ["#agent-efficiency"]
-
   thread:
     description: Session continuity between AI agents
-    used-by: ["#agent-efficiency"]
-
   echo:
     description: Error-to-symbol mapping
-    used-by: ["#agent-efficiency"]
-
   mcp-resources:
     description: Read-only data exposed via MCP protocol
-    used-by: ["#mcp-server"]
-
   mcp-tools:
     description: Actions AI can invoke via MCP protocol
-    used-by: ["#mcp-server"]
-
   index-loader:
     description: Loads project symbol index for MCP server
-    used-by: ["#mcp-server"]
-
   sentinel-ui:
     description: React app for unified codebase intelligence
-    used-by: ["#sentinel-dashboard"]
-
   node-renderer:
     description: Renders symbol nodes on the canvas
-    used-by: ["#sentinel-dashboard"]
-
   connection-lines:
     description: SVG lines connecting related symbols
-    used-by: ["#sentinel-dashboard"]
-
   properties-panel:
     description: Side panel showing selected symbol details
-    used-by: ["#sentinel-dashboard"]
-
   portal-core:
     description: Core parsing and validation for portal.yaml
-    used-by: ["#portal-authorization"]
-
   portal-sdk:
     description: Runtime SDK for checking gates in applications
-    used-by: ["#portal-authorization"]
-
   portal-viewer:
     description: Real-time visualization of authorization flows
-    used-by: ["#portal-authorization"]
-
   portal-manager:
     description: Test generation and flow management
-    used-by: ["#portal-authorization"]
-
   probe-protocol:
     description: Protocol for visual-to-code mapping
-    used-by: ["#visual-discovery"]
-
   scan-generator:
     description: Generates scan-index.json for component mapping
-    used-by: ["#visual-discovery"]
-
   agent-spawner:
     description: Spawns AI agents via provider abstraction
-    used-by: ["#team-orchestration"]
-
   orchestrator:
     description: Coordinates multi-agent orchestration (solo/faceted modes)
-    used-by: ["#team-orchestration"]
-
   model-discovery:
     description: Discovers available AI models from APIs, remote manifest, and presets
-    used-by: ["#team-orchestration"]
-
   provider-registry:
     description: Manages provider cascade (claude → claude-code → cursor-cli → manual)
-    used-by: ["#team-orchestration"]
-
   model-configurator:
     description: Interactive prompts for configuring agent model assignments
-    used-by: ["#team-orchestration"]
-
-flows:
-  init-flow:
-    description: "Initialize Paradigm in a new project"
-    steps:
-      - Detect existing IDE files
-      - Create .paradigm/ directory
-      - Generate config.yaml
-      - Copy templates
-      - Run initial sync
-
-  sync-flow:
-    description: "Sync .paradigm/ to IDE instruction files"
-    steps:
-      - Load .paradigm/config.yaml
-      - Detect target IDE
-      - Generate adapter-specific files
-      - Write to appropriate locations
-
-  probe-flow:
-    description: "Visual discovery workflow"
-    steps:
-      - Receive screenshot
-      - Match against scan-index.json
-      - Return component mappings
-      - Suggest code locations
-
-  authorization-flow:
-    description: "Runtime gate checking"
-    steps:
-      - Request reaches gate
-      - Evaluate keys against context
-      - Grant or deny access
-      - Emit signal
-
-  orchestration-flow:
-    description: "Multi-agent task coordination"
-    steps:
-      - Classify task complexity
-      - Select agent team and models
-      - Spawn agents (parallel where possible)
-      - Collect results and handoff
-      - Log orchestration to audit
-
 signals:
   command-success:
-    description: "CLI command completed successfully"
-    tags: [cli]
-
+    description: CLI command completed successfully
   command-error:
-    description: "CLI command failed with error"
-    tags: [cli]
-
+    description: CLI command failed with error
   context-loaded:
-    description: "Project context loaded into agent tools"
-    tags: [agent]
-
+    description: Project context loaded into agent tools
   ripple-analyzed:
-    description: "Impact analysis completed"
-    tags: [agent]
-
+    description: Impact analysis completed
   server-started:
-    description: "MCP server started and listening"
-    tags: [mcp]
-
+    description: MCP server started and listening
   resource-fetched:
-    description: "MCP resource was read by client"
-    tags: [mcp]
-
+    description: MCP resource was read by client
   tool-called:
-    description: "MCP tool was invoked by client"
-    tags: [mcp]
-
+    description: MCP tool was invoked by client
   agent-spawned:
-    description: "AI agent spawned successfully"
-    tags: [team]
-
+    description: AI agent spawned successfully
   orchestration-completed:
-    description: "Multi-agent orchestration completed"
-    tags: [team]
-
+    description: Multi-agent orchestration completed
+aspects:
+  yaml-config-loading:
+    description: All config files (.purpose, portal.yaml, premise) parsed via js-yaml with consistent error handling
+    tags:
+      - infrastructure
+      - parsing
+    anchors:
+      - packages/purpose/core/src/parser.ts:183-197
+      - packages/portal/core/src/parser.ts:38-46
+      - packages/premise/core/src/parser.ts:126-135
+    applies-to:
+      - '#yaml-parser'
+      - '#portal-core'
+      - '#aggregator'
+  zod-validated:
+    description: Input validated through Zod schemas before processing — ensures type-safe parsing of all config files
+    tags:
+      - validation
+      - type-safety
+    anchors:
+      - packages/purpose/core/src/parser.ts:16-150
+      - packages/purpose/core/src/parser.ts:210-228
+      - packages/premise/core/src/parser.ts:31-90
+    applies-to:
+      - '#zod-schemas'
+      - '#symbol-parser'
+      - '#aggregator'
+  symbol-typed-logging:
+    description: All logging uses symbol-prefixed methods (component/gate/signal/flow/aspect) instead of raw console.log
+    tags:
+      - observability
+      - convention
+    anchors:
+      - packages/logger/src/logger.ts:112-130
+      - packages/logger/src/logger.ts:64-97
+    applies-to:
+      - '#paradigm-logger'
+      - '#symbol-logger'
+  mcp-tool-handler:
+    description: MCP tools follow a registration + dispatch pattern — tools declared in ListToolsRequest, dispatched in CallToolRequest
+    tags:
+      - pattern
+      - mcp
+    anchors:
+      - packages/paradigm-mcp/src/tools/index.ts:94-210
+      - packages/paradigm-mcp/src/tools/index.ts:212-886
+    applies-to:
+      - '#mcp-tools'
+      - '#CoreTools'
+      - '#WisdomTools'
+      - '#HistoryTools'
+  ide-adapter-pattern:
+    description: IDE output generated via adapter interface — shared base class with per-IDE overrides for Cursor, Claude, Copilot, Windsurf
+    tags:
+      - pattern
+      - extensibility
+    anchors:
+      - packages/paradigm/src/core/ide-adapters/base.ts:12-388
+      - packages/paradigm/src/core/ide-adapters/cursor.ts:44-92
+    applies-to:
+      - '#cursor-adapter'
+      - '#claude-adapter'
+      - '#copilot-adapter'
+      - '#windsurf-adapter'
+  provider-cascade:
+    description: Agent providers tried in priority order (claude → claude-code-teams → claude-code → cursor-cli → claude-cli → manual) with automatic fallback
+    tags:
+      - pattern
+      - resilience
+    anchors:
+      - packages/paradigm/src/core/provider-registry.ts:158-219
+      - packages/paradigm/src/core/provider-registry.ts:36-38
+    applies-to:
+      - '#provider-registry'
+      - '#agent-spawner'
+  express-server:
+    description: HTTP/WS servers follow Express middleware pattern with CORS, JSON parsing, and static file serving
+    tags:
+      - pattern
+      - infrastructure
+    anchors:
+      - packages/sentinel/src/server/index.ts:54-94
+      - packages/portal/viewer/src/server.ts:56-69
+    applies-to:
+      - '#SentinelServer'
+      - '#portal-viewer'
+  budget-enforced:
+    description: Token budgets checked before and during agent execution — prevents runaway costs in orchestration
+    tags:
+      - compliance
+      - cost-control
+    anchors:
+      - packages/paradigm/src/core/budget-tracker.ts:69-163
+      - packages/paradigm/src/core/budget-tracker.ts:168-221
+    applies-to:
+      - '#budget-tracker'
+      - '#orchestrator'
+  file-glob-discovery:
+    description: Config files (.purpose, portal.yaml) discovered via glob patterns with consistent ignore rules (node_modules, dist, .git)
+    tags:
+      - infrastructure
+      - discovery
+    anchors:
+      - packages/purpose/core/src/aggregator.ts:111-126
+      - packages/portal/core/src/parser.ts:281-291
+    applies-to:
+      - '#aggregator'
+      - '#portal-core'
+  correlation-tracked:
+    description: Requests traced via AsyncLocalStorage correlation IDs — propagated through async call chains without manual threading
+    tags:
+      - observability
+      - tracing
+    anchors:
+      - packages/logger/src/correlation.ts:1-17
+    applies-to:
+      - '#paradigm-logger'
+      - '#correlation-tracker'
 relationships:
   - '#cli-commands USES #commander-setup, #ora-spinners, #chalk-output'
   - '#symbol-system USES #symbol-parser, #symbol-index'
@@ -326,3 +322,50 @@ relationships:
   - '#sentinel-dashboard USES #sentinel-ui, #node-renderer, #connection-lines'
   - '#portal-authorization USES #portal-core, #portal-sdk, #portal-viewer'
   - '#team-orchestration USES #agent-spawner, #orchestrator, #model-discovery'
+flows:
+  init-flow:
+    description: Initialize Paradigm in a new project
+    steps:
+      - Detect existing IDE files
+      - Create .paradigm/ directory
+      - Generate config.yaml
+      - Copy templates
+      - Run initial sync
+  sync-flow:
+    description: Sync .paradigm/ to IDE instruction files
+    steps:
+      - Load .paradigm/config.yaml
+      - Detect target IDE
+      - Generate adapter-specific files
+      - Write to appropriate locations
+  probe-flow:
+    description: Visual discovery workflow
+    steps:
+      - Receive screenshot
+      - Match against scan-index.json
+      - Return component mappings
+      - Suggest code locations
+  authorization-flow:
+    description: Runtime gate checking
+    steps:
+      - Request reaches gate
+      - Evaluate keys against context
+      - Grant or deny access
+      - Emit signal
+  orchestration-flow:
+    description: Multi-agent task coordination
+    steps:
+      - Classify task complexity
+      - Select agent team and models
+      - Spawn agents (parallel where possible)
+      - Collect results and handoff
+      - Log orchestration to audit
+  install-flow:
+    description: Install Paradigm CLI and MCP server from source
+    steps:
+      - Clone repository
+      - npm install dependencies
+      - npm run build all packages
+      - npm install -g paradigm
+      - npm install -g paradigm-mcp
+      - Verify installation with paradigm doctor

@@ -1,0 +1,44 @@
+version: 2.0.0
+description: |
+  Agent provider implementations. Each provider knows how to spawn an AI agent
+  and collect its results. Providers are tried in cascade order until one is available.
+
+components:
+  claude-provider:
+    description: Anthropic API direct — requires ANTHROPIC_API_KEY environment variable
+    path: claude.ts
+    aspects: ["~provider-cascade"]
+
+  claude-code-provider:
+    description: Claude Code Task tool — requires Max subscription
+    path: claude-code.ts
+    aspects: ["~provider-cascade"]
+
+  claude-code-teams-provider:
+    description: Parallel agent execution via Claude Code teams (experimental)
+    path: claude-code-teams.ts
+    aspects: ["~provider-cascade"]
+
+  cursor-cli-provider:
+    description: Cursor agent CLI — auto-detected when running in Cursor IDE
+    path: cursor-cli.ts
+    aspects: ["~provider-cascade"]
+
+  claude-cli-provider:
+    description: Spawn claude CLI processes directly
+    path: claude-cli.ts
+    aspects: ["~provider-cascade"]
+
+  manual-provider:
+    description: File-based handoffs — always available as ultimate fallback
+    path: manual.ts
+    aspects: ["~provider-cascade"]
+
+signals:
+  provider-selected:
+    description: A provider was selected from the cascade for agent spawning
+    tags: [team]
+
+  provider-unavailable:
+    description: A provider was tried but not available, falling back to next
+    tags: [team, warning]

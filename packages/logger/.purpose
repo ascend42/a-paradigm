@@ -1,0 +1,38 @@
+version: 2.0.0
+description: |
+  Paradigm Logger — structured logging with symbol-typed methods.
+  Instead of raw console.log, all code uses log.component(), log.gate(),
+  log.signal(), log.flow(), log.aspect() for semantic observability.
+
+components:
+  paradigm-logger:
+    description: Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)
+    path: src/logger.ts
+    aspects: ["~symbol-typed-logging"]
+
+  symbol-logger:
+    description: Per-symbol logger instances returned by component/gate/signal/flow/aspect methods
+    path: src/logger.ts
+    aspects: ["~symbol-typed-logging"]
+
+  formatter-pretty:
+    description: Human-readable colored output with symbol prefixes and timestamps
+    path: src/formatters.ts
+
+  formatter-json:
+    description: Machine-readable JSON output for log aggregation pipelines
+    path: src/formatters.ts
+
+  correlation-tracker:
+    description: AsyncLocalStorage-based correlation ID propagation through async call chains
+    path: src/correlation.ts
+    aspects: ["~correlation-tracked"]
+
+  duration-tracker:
+    description: Operation timing utility for measuring and logging execution duration
+    path: src/logger.ts
+
+signals:
+  log-emitted:
+    description: A structured log entry was written
+    tags: [observability]

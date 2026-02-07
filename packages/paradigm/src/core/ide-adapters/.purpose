@@ -1,0 +1,48 @@
+version: 2.0.0
+description: |
+  IDE adapter layer — generates IDE-specific instruction files from .paradigm/ configuration.
+  Each adapter implements a shared interface from the base class, overriding detection and
+  generation methods for its target IDE.
+
+components:
+  adapter-base:
+    description: Shared generation helpers — symbol table, logger spec, navigation, context sections
+    path: base.ts
+    aspects: ["~ide-adapter-pattern"]
+
+  cursor-adapter:
+    description: Generate .cursor/rules/*.mdc files with frontmatter and rule sections
+    path: cursor.ts
+    aspects: ["~ide-adapter-pattern"]
+
+  claude-adapter:
+    description: Generate CLAUDE.md markdown file with full project context
+    path: claude.ts
+    aspects: ["~ide-adapter-pattern"]
+
+  copilot-adapter:
+    description: Generate .github/copilot-instructions.md for GitHub Copilot
+    path: copilot.ts
+    aspects: ["~ide-adapter-pattern"]
+
+  windsurf-adapter:
+    description: Generate .windsurfrules file for Windsurf IDE
+    path: windsurf.ts
+    aspects: ["~ide-adapter-pattern"]
+
+  adapter-registry:
+    description: IDE adapter discovery, selection, and factory
+    path: index.ts
+
+flows:
+  ide-sync-flow:
+    description: Sync .paradigm/ to IDE instruction files
+    steps:
+      - component: "#adapter-registry"
+        action: Detect target IDE from project files
+      - component: "#adapter-base"
+        action: Load config, specs, and docs
+      - component: "#cursor-adapter"
+        action: Generate IDE-specific output files
+      - component: "#adapter-registry"
+        action: Write files to appropriate locations

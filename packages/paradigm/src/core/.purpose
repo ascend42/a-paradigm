@@ -1,0 +1,100 @@
+version: 2.0.0
+description: |
+  Core orchestration and configuration engine for the Paradigm CLI.
+  Contains agent management, budget tracking, IDE adapters, provider registry,
+  and all internal logic that powers the CLI commands.
+
+components:
+  orchestrator:
+    description: Multi-agent task conductor supporting solo and faceted modes
+    path: orchestrator.ts
+    aspects: ["~budget-enforced"]
+    flows: ["$agent-orchestration-flow"]
+
+  agent-spawner:
+    description: Spawn individual agents with task, context, and budget constraints
+    path: agent-spawner.ts
+    aspects: ["~provider-cascade"]
+
+  agent-matcher:
+    description: Classify tasks and match appropriate agent teams based on triggers
+    path: agent-matcher.ts
+
+  agent-prompts:
+    description: Generate agent-specific prompts with role context and handoff data
+    path: agent-prompts.ts
+
+  model-discovery:
+    description: Discover available LLM models from APIs, remote manifest, and presets
+    path: model-discovery.ts
+
+  provider-registry:
+    description: Registry for agent providers with priority cascade and availability checking
+    path: provider-registry.ts
+    aspects: ["~provider-cascade"]
+
+  task-classifier:
+    description: Classify task complexity (simple/moderate/complex) and assign models
+    path: task-classifier.ts
+
+  budget-tracker:
+    description: Track token and cost budgets during orchestration execution
+    path: budget-tracker.ts
+    aspects: ["~budget-enforced"]
+
+  cost-estimator:
+    description: Estimate token costs for models based on pricing data
+    path: cost-estimator.ts
+
+  context-builder:
+    description: Build AI context from symbols, files, and role-specific includes/excludes
+    path: context-builder.ts
+
+  flow-validator:
+    description: Validate flow definitions against the actual codebase implementation
+    path: flow-validator.ts
+
+  portal-compliance:
+    description: Validate portal.yaml gates are used in routes and routes reference declared gates
+    path: portal-compliance.ts
+
+  audit-logger:
+    description: Log orchestration execution details and costs to .paradigm/orchestrations/
+    path: audit-logger.ts
+
+  background-orchestrator:
+    description: Run orchestration in background with progress reporting
+    path: background-orchestrator.ts
+
+flows:
+  agent-orchestration-flow:
+    description: Orchestrate a multi-agent task from classification through execution
+    steps:
+      - component: "#task-classifier"
+        action: Classify task complexity and match agent team
+      - component: "#budget-tracker"
+        action: Check token/cost budget availability
+      - component: "#agent-spawner"
+        action: Spawn agents in parallel where possible
+      - component: "#orchestrator"
+        action: Collect results and handle handoffs
+      - component: "#audit-logger"
+        action: Log execution and costs
+    signals: ["!orchestration-started", "!orchestration-completed"]
+
+signals:
+  orchestration-started:
+    description: Multi-agent orchestration has begun
+    tags: [team]
+
+  orchestration-completed:
+    description: Multi-agent orchestration finished successfully
+    tags: [team]
+
+  agent-spawned:
+    description: Individual agent spawned via provider
+    tags: [team]
+
+  budget-exceeded:
+    description: Token or cost budget limit was reached
+    tags: [team, warning]

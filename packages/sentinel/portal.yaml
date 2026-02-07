@@ -1,0 +1,25 @@
+version: "1.0"
+
+gates:
+  api-authenticated:
+    description: API requests require valid API key or session token
+    type: auth
+    location: middleware
+    check: req.headers.authorization === `Bearer ${SENTINEL_API_KEY}`
+    prizes: []
+
+  admin-only:
+    description: Admin-level operations (pattern management, incident resolution)
+    type: role
+    location: route-handler
+    requires: [api-authenticated]
+    check: req.user.role === 'admin'
+    prizes: []
+
+routes:
+  "GET /api/incidents": [^api-authenticated]
+  "POST /api/incidents": [^api-authenticated]
+  "POST /api/incidents/:id/resolve": [^api-authenticated, ^admin-only]
+  "GET /api/patterns": [^api-authenticated]
+  "POST /api/patterns": [^api-authenticated, ^admin-only]
+  "GET /api/stats": [^api-authenticated]

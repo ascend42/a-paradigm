@@ -10,6 +10,11 @@ features:
     components:
       - '#aggregator'
       - '#source-loader'
+    flows:
+      - $symbol-aggregation
+    aspects:
+      ~yaml-config-loading: true
+      ~zod-validated: true
   symbol-indexing:
     description: '@symbol-indexing: Build searchable symbol index'
     states:
@@ -43,3 +48,21 @@ signals:
     description: '!aggregation-complete: Symbol aggregation finished'
     category: premise
     severity: info
+flows:
+  symbol-aggregation:
+    description: Aggregate all symbols from .purpose and portal.yaml files into a unified index
+    signals:
+      - '!aggregation-complete'
+    steps:
+      - component: '#aggregator'
+        action: Find all .purpose files via glob
+      - component: '#source-loader'
+        action: Parse each file with yaml + Zod validation
+      - component: '#symbol-extractor'
+        action: Extract components, gates, signals, flows, aspects
+      - component: '#symbol-index'
+        action: Build searchable in-memory index
+      - component: '#reference-tracker'
+        action: Resolve cross-file symbol references
+      - component: '#graph-builder'
+        action: Build relationship graph

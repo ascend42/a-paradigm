@@ -31,8 +31,11 @@ description: |
 #ToolHandlers:
   description: MCP tool handlers for paradigm_* actions
   tags: [feature, mcp]
+  aspects: ["~mcp-tool-handler"]
   anchors:
     - src/tools/index.ts:1-100
+  flows:
+    - $mcp-request-flow
   components:
     - "#CoreTools"
     - "#WisdomTools"
@@ -134,6 +137,20 @@ $tag-suggestion:
     - "#TagsTools"            # Validate and add to suggested
     - "!tag-suggested"
     - "Human reviews in Sentinel UI"
+
+$mcp-request-flow:
+  description: Handle an incoming MCP request from stdio through to response
+  steps:
+    - "Receive request via stdio transport"
+    - "#MCPServer"            # Parse JSON-RPC request
+    - "#IndexLoader"          # Ensure project context is loaded
+    - "Route to tool or resource handler"
+    - "#ToolHandlers"         # Dispatch to appropriate handler
+    - "#ContextTools"         # Track token usage
+    - "Return formatted response"
+  signals:
+    - "!tool-invoked"
+    - "!resource-read"
 
 # ============================================
 # Signals (!)
