@@ -6,10 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import chalk from 'chalk';
-import { log } from '../utils/logger.js';
-import { 
-  ParadigmConfig, 
-  getDefaultParadigmConfig, 
+import {
+  ParadigmConfig,
   serializeParadigmConfig,
   DEFAULT_SYMBOL_SYSTEM,
   DEFAULT_CONVENTIONS
@@ -143,6 +141,7 @@ function generateConfigFromAnswers(answers: SetupAnswers, projectName: string): 
   };
 
   // Add states based on answers
+  if (!config.states) config.states = {};
   if (answers.hasAuth && answers.hasAuth !== 'none') {
     config.states.user = {
       authenticated: { type: 'boolean', default: false, description: 'User is logged in' },

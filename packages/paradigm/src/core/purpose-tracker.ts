@@ -95,15 +95,6 @@ const DIRECTORY_SYMBOL_PREFIX: Record<string, string> = {
 // ============================================================================
 
 /**
- * Check if a path is within a feature directory
- */
-function isFeatureDirectory(filePath: string): boolean {
-  return FEATURE_DIRECTORIES.some(dir =>
-    filePath.includes(`/${dir}/`) || filePath.startsWith(dir)
-  );
-}
-
-/**
  * Check if a file is a feature file (vs config, test, etc.)
  */
 function isFeatureFile(filePath: string): boolean {
@@ -305,8 +296,8 @@ export function detectNewFiles(
  * @returns List of undocumented symbols
  */
 export function findUndocumentedSymbols(
-  symbols: string[],
-  rootDir: string
+  _symbols: string[],
+  _rootDir: string
 ): string[] {
   // This would integrate with the scan index
   // For now, return empty (would need index integration)

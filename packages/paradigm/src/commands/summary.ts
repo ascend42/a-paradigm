@@ -6,7 +6,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../utils/logger.js';
 import { aggregateFromDirectory } from '@a-company/premise-core';
 import { detectIDE, getAdapter } from '../core/ide-adapters/index.js';
 
@@ -39,26 +38,22 @@ export async function summaryCommand() {
 
   // Count by type
   const counts: Record<string, { count: number; examples: string[] }> = {
-    features: { count: 0, examples: [] },
     components: { count: 0, examples: [] },
     flows: { count: 0, examples: [] },
     gates: { count: 0, examples: [] },
     signals: { count: 0, examples: [] },
-    state: { count: 0, examples: [] },
-    ideas: { count: 0, examples: [] },
+    aspects: { count: 0, examples: [] },
   };
 
   for (const symbol of aggregation.symbols) {
     const type = symbol.type;
-    const key = type === 'feature' ? 'features'
-      : type === 'component' ? 'components'
+    const key = type === 'component' ? 'components'
       : type === 'flow' ? 'flows'
       : type === 'gate' ? 'gates'
       : type === 'signal' ? 'signals'
-      : type === 'state' ? 'state'
-      : type === 'idea' ? 'ideas'
+      : type === 'aspect' ? 'aspects'
       : null;
-    
+
     if (key && counts[key]) {
       counts[key].count++;
       if (counts[key].examples.length < 3) {

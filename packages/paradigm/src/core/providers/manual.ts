@@ -15,7 +15,6 @@ import {
   AgentModel,
   AgentMessage,
   SpawnOptions,
-  TokenUsage,
   MODEL_PRICING,
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';

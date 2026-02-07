@@ -147,8 +147,8 @@ premiseCmd
   .command('aggregate [path]')
   .description('Aggregate all sources into symbol index')
   .action(async (path = '.') => {
-    const { dreamAggregateCommand } = await import('./commands/premise/aggregate.js');
-    await dreamAggregateCommand(path);
+    const { premiseAggregateCommand } = await import('./commands/premise/aggregate.js');
+    await premiseAggregateCommand(path);
   });
 
 premiseCmd
@@ -156,8 +156,8 @@ premiseCmd
   .description('Create a timeline snapshot')
   .option('-d, --description <desc>', 'Snapshot description')
   .action(async (name, options) => {
-    const { dreamSnapshotCommand } = await import('./commands/premise/snapshot.js');
-    await dreamSnapshotCommand(name, options.description);
+    const { premiseSnapshotCommand } = await import('./commands/premise/snapshot.js');
+    await premiseSnapshotCommand(name, options.description);
   });
 
 // paradigm sync

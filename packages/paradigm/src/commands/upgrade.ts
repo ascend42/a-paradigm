@@ -8,7 +8,6 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../utils/logger.js';
 import { parseParadigmConfig, serializeParadigmConfig, type ParadigmConfig } from '../core/paradigm-config.js';
 import { loadParadigmFiles, syncToIDE, detectIDE } from '../core/ide-adapters/index.js';
 
@@ -220,7 +219,7 @@ async function migrateLegacy(
   rootDir: string,
   projectName: string,
   options: UpgradeOptions,
-  spinner: ora.Ora
+  spinner: ReturnType<typeof ora>
 ): Promise<UpgradeResult> {
   const paradigmFile = path.join(rootDir, '.paradigm');
   const paradigmDir = path.join(rootDir, '.paradigm');
@@ -317,7 +316,7 @@ async function upgradeScan(
   rootDir: string,
   projectName: string,
   options: UpgradeOptions,
-  spinner: ora.Ora
+  spinner: ReturnType<typeof ora>
 ): Promise<UpgradeResult> {
   const paradigmDir = path.join(rootDir, '.paradigm');
   const scanIndexPath = path.join(paradigmDir, 'scan-index.json');
@@ -401,7 +400,7 @@ async function upgradeScan(
 async function upgradeLogger(
   rootDir: string,
   options: UpgradeOptions,
-  spinner: ora.Ora
+  spinner: ReturnType<typeof ora>
 ): Promise<UpgradeResult> {
   const paradigmDir = path.join(rootDir, '.paradigm');
   const loggerSpecPath = path.join(paradigmDir, 'specs', 'logger.md');
@@ -509,9 +508,9 @@ function copyTemplates(src: string, dest: string, projectName: string): void {
  */
 async function migrateFromHorizon(
   rootDir: string,
-  projectName: string,
+  _projectName: string,
   options: UpgradeOptions,
-  spinner: ora.Ora
+  spinner: ReturnType<typeof ora>
 ): Promise<UpgradeResult> {
   const horizonDir = path.join(rootDir, '.horizon');
   const paradigmDir = path.join(rootDir, '.paradigm');

@@ -40,12 +40,10 @@ export class ModelDiscovery {
   private cacheFile: string;
   private manifestCacheFile: string;
   private cacheTTL = 24 * 60 * 60 * 1000; // 24 hours
-  private rootDir: string;
 
-  constructor(rootDir: string) {
-    this.rootDir = rootDir;
-    this.cacheFile = path.join(rootDir, '.paradigm', 'model-cache.json');
-    this.manifestCacheFile = path.join(rootDir, '.paradigm', 'model-manifest-cache.json');
+  constructor(_rootDir: string) {
+    this.cacheFile = path.join(_rootDir, '.paradigm', 'model-cache.json');
+    this.manifestCacheFile = path.join(_rootDir, '.paradigm', 'model-manifest-cache.json');
   }
 
   /**

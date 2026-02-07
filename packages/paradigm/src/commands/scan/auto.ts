@@ -11,7 +11,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { log } from '../../utils/logger.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import * as yaml from 'js-yaml';
@@ -36,12 +35,6 @@ interface GeneratedPurpose {
   content: string;
   symbols: DetectedSymbol[];
   isNew: boolean;
-}
-
-interface ScanResult {
-  symbols: DetectedSymbol[];
-  generated: GeneratedPurpose[];
-  skipped: string[];
 }
 
 // File patterns to scan
@@ -452,7 +445,7 @@ function detectSignals(rootDir: string): DetectedSymbol[] {
 /**
  * Group symbols by directory for .purpose file generation
  */
-function groupSymbolsByDirectory(symbols: DetectedSymbol[], rootDir: string): Map<string, DetectedSymbol[]> {
+function groupSymbolsByDirectory(symbols: DetectedSymbol[], _rootDir: string): Map<string, DetectedSymbol[]> {
   const groups = new Map<string, DetectedSymbol[]>();
   
   for (const symbol of symbols) {

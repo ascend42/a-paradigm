@@ -34,8 +34,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
   // Check .paradigm directory
   const paradigmDir = path.join(cwd, '.paradigm');
-  const paradigmFile = path.join(cwd, '.paradigm');
-  
+
   if (fs.existsSync(paradigmDir)) {
     const stat = fs.statSync(paradigmDir);
     

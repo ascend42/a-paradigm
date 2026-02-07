@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import { Orchestrator, OrchestrationOptions, OrchestrationResult } from './orchestrator.js';
 
 // ============================================================================
@@ -81,7 +81,6 @@ export class BackgroundOrchestrator {
     const id = this.generateId();
     const outputFile = path.join(this.orchestrationsDir, `${id}.output`);
     const logFile = path.join(this.orchestrationsDir, `${id}.log`);
-    const metaFile = path.join(this.orchestrationsDir, `${id}.yaml`);
 
     // Create initial metadata
     const orchestration: BackgroundOrchestration = {
@@ -188,7 +187,7 @@ export class BackgroundOrchestrator {
   /**
    * Accept orchestration changes
    */
-  async accept(id: string, options: { note?: string } = {}): Promise<boolean> {
+  async accept(id: string, _options: { note?: string } = {}): Promise<boolean> {
     const orch = this.getOrchestration(id);
     if (!orch) return false;
 
@@ -388,14 +387,14 @@ export class BackgroundOrchestrator {
             }
             options.onMessage?.(source, message);
           },
-          onAgentStart: (agent, agentTask) => {
+          onAgentStart: (agent, agentTask, model) => {
             outputStream.write(`\n▶ ${agent}: ${agentTask}\n`);
-            options.onAgentStart?.(agent, agentTask);
+            options.onAgentStart?.(agent, agentTask, model);
           },
-          onAgentComplete: (agent, agentResult) => {
+          onAgentComplete: (agent, agentResult, model) => {
             const status = agentResult.success ? '✓' : '✗';
             outputStream.write(`${status} ${agent} completed\n`);
-            options.onAgentComplete?.(agent, agentResult);
+            options.onAgentComplete?.(agent, agentResult, model);
           },
         });
 

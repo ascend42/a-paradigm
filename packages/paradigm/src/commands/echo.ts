@@ -8,7 +8,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
 import { log } from '../utils/logger.js';
 
 export interface EchoOptions {
@@ -74,7 +73,6 @@ function parseEchoes(content: string): EchoesData {
   let currentError: string | null = null;
   let currentEntry: EchoEntry = {};
   let inRipple = false;
-  let rippleIndent = 0;
 
   for (const line of lines) {
     // Skip comments and empty lines
@@ -298,7 +296,7 @@ export async function echoInitCommand(targetPath?: string, options: EchoOptions 
 /**
  * List all echoes
  */
-export async function echoListCommand(targetPath?: string, options: EchoOptions = {}) {
+export async function echoListCommand(targetPath?: string, _options: EchoOptions = {}) {
   const cwd = process.cwd();
   const absolutePath = targetPath ? path.resolve(cwd, targetPath) : cwd;
   const echoesPath = path.join(absolutePath, '.paradigm', 'echoes.yaml');

@@ -13,7 +13,6 @@ import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
-  getSymbolsByType,
   getAllSymbols,
   getSymbolCounts,
   type SymbolEntry,
@@ -47,22 +46,6 @@ interface BeaconJSON {
   };
 }
 
-/**
- * Group symbols by their directory
- */
-function groupByDirectory(symbols: SymbolEntry[]): Map<string, SymbolEntry[]> {
-  const groups = new Map<string, SymbolEntry[]>();
-  
-  for (const symbol of symbols) {
-    const dir = path.dirname(symbol.filePath);
-    if (!groups.has(dir)) {
-      groups.set(dir, []);
-    }
-    groups.get(dir)!.push(symbol);
-  }
-  
-  return groups;
-}
 
 /**
  * Find key files in the project
@@ -126,7 +109,7 @@ function generateBeacon(
   symbols: SymbolEntry[],
   landmarks: { path: string; description: string }[],
   pathways: { name: string; path: string }[],
-  rootDir: string
+  _rootDir: string
 ): string {
   const lines: string[] = [];
   
@@ -141,36 +124,23 @@ function generateBeacon(
   lines.push('');
   lines.push('```');
   
-  // Group features by what they require
-  const features = symbols.filter(s => s.type === 'feature');
+  // Group components by what they require
   const components = symbols.filter(s => s.type === 'component');
   const gates = symbols.filter(s => s.type === 'gate');
   
-  // Show features with their gates
-  for (const feature of features.slice(0, 10)) {
-    const featureGates = feature.references.filter(r => r.startsWith('^'));
-    const featureComponents = feature.references.filter(r => r.startsWith('#'));
-    
-    let line = `${feature.symbol.padEnd(20)} → ${path.dirname(feature.filePath).padEnd(25)}`;
-    if (featureGates.length > 0) {
-      line += ` → ${featureGates.join(', ')}`;
+  // Show components with their gates
+  for (const component of components.slice(0, 15)) {
+    const componentGates = component.references.filter(r => r.startsWith('^'));
+
+    let line = `${component.symbol.padEnd(20)} → ${path.dirname(component.filePath).padEnd(25)}`;
+    if (componentGates.length > 0) {
+      line += ` → ${componentGates.join(', ')}`;
     }
     lines.push(line);
   }
-  
-  if (features.length > 10) {
-    lines.push(`... and ${features.length - 10} more features`);
-  }
-  
-  // Show key components
-  if (components.length > 0) {
-    lines.push('');
-    for (const component of components.slice(0, 5)) {
-      lines.push(`${component.symbol.padEnd(20)} → ${path.dirname(component.filePath)}`);
-    }
-    if (components.length > 5) {
-      lines.push(`... and ${components.length - 5} more components`);
-    }
+
+  if (components.length > 15) {
+    lines.push(`... and ${components.length - 15} more components`);
   }
   
   lines.push('```');
@@ -178,14 +148,14 @@ function generateBeacon(
   
   // Gates summary
   if (gates.length > 0) {
-    lines.push('## Portals (Authorization Gates)');
+    lines.push('## Gates (Authorization)');
     lines.push('');
     for (const gate of gates.slice(0, 6)) {
       const desc = gate.description ? ` - ${gate.description}` : '';
       lines.push(`- \`${gate.symbol}\`${desc}`);
     }
     if (gates.length > 6) {
-      lines.push(`- ... and ${gates.length - 6} more portals`);
+      lines.push(`- ... and ${gates.length - 6} more gates`);
     }
     lines.push('');
   }
@@ -215,14 +185,11 @@ function generateBeacon(
   lines.push('');
   lines.push('| Symbol | Type | Meaning |');
   lines.push('|--------|------|---------|');
-  lines.push('| `@` | Feature | User-facing capability |');
-  lines.push('| `#` | Component | Reusable code unit |');
-  lines.push('| `^` | Portal | Authorization gate |');
-  lines.push('| `!` | Signal | Event or side effect |');
+  lines.push('| `#` | Component | Any documented code unit |');
   lines.push('| `$` | Flow | Multi-step process |');
-  lines.push('| `%` | State | Data condition |');
-  lines.push('| `~` | Deprecated | Marked for removal |');
-  lines.push('| `?` | Idea | Future possibility |');
+  lines.push('| `^` | Gate | Authorization checkpoint |');
+  lines.push('| `!` | Signal | Event for side effects |');
+  lines.push('| `~` | Aspect | Rule with code anchor |');
   lines.push('');
   
   // For More Context
@@ -242,7 +209,7 @@ function generateBeacon(
   return lines.join('\n');
 }
 
-export async function beaconCommand(targetPath?: string, options: BeaconOptions = {}) {
+export async function beaconCommand(targetPath?: string, options: BeaconOptions = {}): Promise<BeaconJSON | void> {
   const cwd = process.cwd();
   const absolutePath = targetPath ? path.resolve(cwd, targetPath) : cwd;
   const projectName = path.basename(absolutePath);
@@ -295,27 +262,26 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
 
     // JSON output mode
     if (options.json) {
-      const features = symbols.filter(s => s.type === 'feature');
-      const components = symbols.filter(s => s.type === 'component');
-      const gates = symbols.filter(s => s.type === 'gate');
+      const jsonComponents = symbols.filter(s => s.type === 'component');
+      const jsonGates = symbols.filter(s => s.type === 'gate');
       const counts = getSymbolCounts(index);
-      
+
       const jsonOutput: BeaconJSON = {
         project: projectName,
         generated: new Date().toISOString(),
         symbols: {
-          features: features.map(f => ({
+          features: jsonComponents.filter(c => c.tags?.includes('feature')).map(f => ({
             symbol: f.symbol,
             path: path.dirname(f.filePath),
-            portals: f.references.filter(r => r.startsWith('^')).length > 0 
+            portals: f.references.filter(r => r.startsWith('^')).length > 0
               ? f.references.filter(r => r.startsWith('^'))
               : undefined,
           })),
-          components: components.map(c => ({
+          components: jsonComponents.map(c => ({
             symbol: c.symbol,
             path: path.dirname(c.filePath),
           })),
-          portals: gates.map(g => ({
+          portals: jsonGates.map(g => ({
             symbol: g.symbol,
             description: g.description,
           })),
@@ -323,7 +289,7 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
         landmarks,
         pathways,
         stats: {
-          features: counts.feature,
+          features: jsonComponents.filter(c => c.tags?.includes('feature')).length,
           components: counts.component,
           portals: counts.gate,
           total: Object.values(counts).reduce((a, b) => a + b, 0),
@@ -354,7 +320,7 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
     fs.writeFileSync(beaconPath, beaconContent, 'utf8');
     log.component('beacon-file').success('Beacon file written', { path: beaconPath });
 
-    spinner.succeed('Beacon generated');
+    spinner?.succeed('Beacon generated');
     tracker.success('Beacon generated', { path: beaconPath, symbols: symbols.length });
 
     if (!options.quiet) {
@@ -362,9 +328,11 @@ export async function beaconCommand(targetPath?: string, options: BeaconOptions 
       
       console.log(chalk.white('\nBeacon Contents'));
       console.log(chalk.gray('─'.repeat(40)));
-      console.log(`  Features:    ${chalk.blue(counts.feature.toString())}`);
       console.log(`  Components:  ${chalk.green(counts.component.toString())}`);
-      console.log(`  Portals:     ${chalk.red(counts.gate.toString())}`);
+      console.log(`  Flows:       ${chalk.yellow(counts.flow.toString())}`);
+      console.log(`  Gates:       ${chalk.red(counts.gate.toString())}`);
+      console.log(`  Signals:     ${chalk.cyan(counts.signal.toString())}`);
+      console.log(`  Aspects:     ${chalk.magenta(counts.aspect.toString())}`);
       console.log(`  Landmarks:   ${chalk.cyan(landmarks.length.toString())}`);
       console.log(`  Pathways:    ${chalk.yellow(pathways.length.toString())}`);
       

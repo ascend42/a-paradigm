@@ -41,7 +41,7 @@ export { claudeAdapter } from './claude.js';
 /**
  * Registry of all available IDE adapters
  */
-export const adapters: IDEAdapterRegistry = new Map([
+export const adapters: IDEAdapterRegistry = new Map<string, IDEAdapter>([
   ['cursor', cursorAdapter],
   ['copilot', copilotAdapter],
   ['windsurf', windsurfAdapter],

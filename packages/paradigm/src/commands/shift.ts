@@ -61,7 +61,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       spinner.succeed(chalk.green('Paradigm initialized'));
     } catch (error) {
       spinner.fail(chalk.red(`Init failed: ${(error as Error).message}`));
-      tracker.failure('Shift failed at init', { error: (error as Error).message });
+      tracker.error('Shift failed at init', { error: (error as Error).message });
       return;
     }
   } else {

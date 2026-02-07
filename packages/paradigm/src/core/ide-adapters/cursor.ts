@@ -16,7 +16,6 @@ import {
   generateOverview,
   generateSymbolSystem,
   generateLoggingRules,
-  generateScanProtocol,
   generateConventions,
   generateUpdateRules,
   generateCommandsReference,

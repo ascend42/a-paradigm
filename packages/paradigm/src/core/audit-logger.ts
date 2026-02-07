@@ -11,9 +11,6 @@ import * as yaml from 'js-yaml';
 import {
   AgentModel,
   TokenUsage,
-  calculateCost,
-  formatCost,
-  formatTokens,
 } from './agent-provider.js';
 import { OrchestrationMode } from './orchestrator.js';
 
@@ -76,13 +73,11 @@ export interface OrchestrationSummary {
 // ============================================================================
 
 export class AuditLogger {
-  private rootDir: string;
   private logsDir: string;
   private currentLog: OrchestrationLog | null = null;
 
-  constructor(rootDir: string) {
-    this.rootDir = rootDir;
-    this.logsDir = path.join(rootDir, '.paradigm', 'orchestrations');
+  constructor(_rootDir: string) {
+    this.logsDir = path.join(_rootDir, '.paradigm', 'orchestrations');
   }
 
   // ==========================================================================

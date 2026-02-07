@@ -9,7 +9,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../utils/logger.js';
 import { findPurposeFiles } from '@a-company/purpose-core';
 import { findGateFiles } from '@a-company/portal-core';
 
@@ -77,15 +76,6 @@ function getFileTokens(filePath: string, rootDir: string): FileTokens | null {
   } catch {
     return null;
   }
-}
-
-/**
- * Format bytes for display
- */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

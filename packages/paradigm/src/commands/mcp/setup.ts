@@ -258,33 +258,6 @@ function getProjectName(): string {
   return path.basename(process.cwd());
 }
 
-// Interactive selection (simple version without inquirer)
-async function selectClient(clients: AIClient[]): Promise<AIClient | null> {
-  const detectedClients = clients.filter(c => c.detected);
-  
-  if (detectedClients.length === 0) {
-    return null;
-  }
-  
-  if (detectedClients.length === 1) {
-    return detectedClients[0];
-  }
-  
-  // Show options and let user choose
-  console.log(chalk.cyan('\nMultiple AI clients detected. Select one:\n'));
-  detectedClients.forEach((client, i) => {
-    const scope = client.configType === 'project' ? '(project-level)' : '(user-level)';
-    console.log(`  ${chalk.yellow(`[${i + 1}]`)} ${client.name} ${chalk.gray(scope)}`);
-  });
-  console.log(`  ${chalk.yellow(`[${detectedClients.length + 1}]`)} All detected clients`);
-  console.log();
-  
-  // For non-interactive, default to first detected
-  console.log(chalk.gray('  (Use --client=<id> to specify, or configure manually)'));
-  console.log(chalk.gray(`  Available IDs: ${detectedClients.map(c => c.id).join(', ')}\n`));
-  
-  return null; // Return null to indicate manual selection needed
-}
 
 // Main command
 export async function mcpSetupCommand(options: SetupOptions) {
@@ -527,10 +500,9 @@ function getServersFromConfig(client: AIClient): ServerInfo[] {
 // List all configured MCP servers across all clients
 export async function mcpListCommand(options: { json?: boolean }) {
   console.log(chalk.blue('\n🔌 Configured MCP Servers\n'));
-  
+
   const clients = detectAllClients();
   const currentProjectPath = process.cwd();
-  const currentProjectName = getProjectName();
   const allClientServers: ClientServers[] = [];
   
   let totalServers = 0;
@@ -553,15 +525,13 @@ export async function mcpListCommand(options: { json?: boolean }) {
     for (const server of servers) {
       const isCurrentProject = server.cwd === currentProjectPath;
       const icon = isCurrentProject ? chalk.green('●') : chalk.gray('○');
-      const nameDisplay = isCurrentProject 
-        ? chalk.green(server.name) 
+      const nameDisplay = isCurrentProject
+        ? chalk.green(server.name)
         : chalk.white(server.name);
       const cwdDisplay = isCurrentProject
         ? chalk.green('(current)')
         : chalk.gray(server.cwd);
-      
-      // Pad the name for alignment
-      const paddedName = server.name.padEnd(20);
+
       console.log(`  ${icon} ${nameDisplay.padEnd(20)} → ${cwdDisplay}`);
     }
     console.log();

@@ -5,12 +5,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { log } from '../../utils/logger.js';
 import { generateTests } from '@a-company/portal-manager';
 import { scanComponents, generateComponentReport } from '@a-company/portal-manager';
-import { checkGateway, validateGateway } from '@a-company/portal-manager';
-import { parseGateConfig, createGate } from '@a-company/portal-core';
-import { setGateClient } from '@a-company/portal-sdk';
+import { validateGateway } from '@a-company/portal-manager';
+import { parseGateConfig } from '@a-company/portal-core';
+import { setGateClient, createGate } from '@a-company/portal-sdk';
 import type { GatewayTestCase } from '@a-company/portal-manager';
 
 /**
@@ -98,7 +97,7 @@ export async function gateTestCommand(
 
     try {
       const config = await parseGateConfig(gateConfigPath);
-      const client = createGate(config);
+      const client = await createGate(gateConfigPath);
       setGateClient(client);
 
       const gate = config.gates.find((g) => g.id === options.gate);

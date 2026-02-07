@@ -10,7 +10,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { log } from '../../utils/logger.js';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import ora from 'ora';
@@ -283,7 +282,7 @@ function buildSkipPatterns(rootDir: string): {
 function buildSymbolMap(
   symbols: SymbolInfo[],
   purposeFiles: string[],
-  rootDir: string
+  _rootDir: string
 ): Record<string, string> {
   const symbolMap: Record<string, string> = {};
 
