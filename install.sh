@@ -79,7 +79,7 @@ echo ""
 echo -e "${BLUE}Packing...${NC}"
 cd "$TEMP_DIR/packages/paradigm"
 TARBALL=$(npm pack --silent 2>/dev/null)
-cd "$OLDPWD"
+cd "$HOME"
 
 # Install
 if [ "$INSTALL_TYPE" = "local" ]; then
