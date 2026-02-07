@@ -84,7 +84,7 @@ Look in `.paradigm/constellation.json`:
 {
   "orbits": {
     "$checkout-flow": {
-      "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+      "sequence": ["#cart", "#shipping", "#payment", "#confirmation"]
     }
   }
 }
@@ -115,24 +115,24 @@ Flows may reference gate sequences:
    ```
    $checkout-flow
    
-   Step 1: @cart
+   Step 1: #cart
    - Component: #CartPage
    - Entry: User clicks "Checkout"
    - Exit signal: !checkout-started
-   - Next: @shipping
-   
-   Step 2: @shipping
+   - Next: #shipping
+
+   Step 2: #shipping
    - Component: #ShippingForm
-   - Portal: ^authenticated
+   - Gate: ^authenticated
    - Validates: address, shipping method
    - Exit signal: !shipping-confirmed
-   - Next: @payment
+   - Next: #payment
    
    ...
    ```
 
 3. **Identify checkpoints:**
-   - Portals that must pass
+   - Gates that must pass
    - Signals that should emit
    - State changes expected
 
@@ -148,7 +148,7 @@ Flows may reference gate sequences:
 ### 1. Enable Full Logging
 
 ```bash
-LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,@
+LOG_LEVEL=debug PARADIGM_SYMBOLS=$,!,#
 ```
 
 ### 2. Check for Step Signals
@@ -160,11 +160,11 @@ Each step should emit a signal on entry/exit:
 ### 3. Verify State Transitions
 
 ```
-%order.status should change at each step:
-  @cart      → "cart"
-  @shipping  → "shipping"
-  @payment   → "payment"
-  @confirm   → "confirmed"
+order.status should change at each step:
+  #cart      → "cart"
+  #shipping  → "shipping"
+  #payment   → "payment"
+  #confirm   → "confirmed"
 
 Stuck status = process interrupted
 ```

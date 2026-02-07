@@ -10,7 +10,7 @@ Creates `.paradigm/beacon.md` - a compact, agent-optimized summary providing imm
 
 **Generates a markdown file with:**
 - **Constellation map** - Visual overview of features, components, and their relationships
-- **Portal summary** - Authorization gates and access control
+- **Gate summary** - Authorization gates and access control
 - **Landmarks** - Key files (config, types, API utils, etc.)
 - **Pathways** - Available task prompts (add-feature, refactor, debug-auth, etc.)
 - **Symbol reference** - Quick symbol system reminder
@@ -39,7 +39,7 @@ Creates `.paradigm/beacon.md` - a compact, agent-optimized summary providing imm
 
 ### ✅ Run after:
 - **`paradigm init`** - Generate initial beacon
-- **Adding features** - New @features, #components
+- **Adding features** - New #components, $flows
 - **Restructuring** - Major code organization changes
 - **Team onboarding** - Fresh beacon for new members
 
@@ -83,9 +83,9 @@ paradigm beacon ./src
 
 Beacon Contents
 ────────────────────────────────────────
-  Features:    5
-  Components:  12
-  Portals:     2
+  Components:  17
+  Gates:       2
+  Signals:     8
   Landmarks:   6
   Pathways:    4
 
@@ -106,14 +106,14 @@ Tip
 
 ## Constellation (Symbol Map)
 
-@checkout           → src/features/checkout → ^authenticated, ^payment-ready
-@dashboard          → src/features/dashboard → ^authenticated
+#checkout           → src/features/checkout → ^authenticated, ^payment-ready
+#dashboard          → src/features/dashboard → ^authenticated
 #Button             → src/components/Button.tsx
 #Modal              → src/components/Modal.tsx
 ... and 8 more features
 ... and 15 more components
 
-## Portals (Authorization Gates)
+## Gates (Authorization)
 
 - `^authenticated` - User must be logged in
 - `^admin` - Admin access required
@@ -135,9 +135,9 @@ Tip
 
 | Symbol | Type | Meaning |
 |--------|------|---------|
-| `@` | Feature | User-facing capability |
-| `#` | Component | Reusable code unit |
-| `^` | Portal | Authorization gate |
+| `#` | Component | Any documented code unit |
+| `$` | Flow | Multi-step process |
+| `^` | Gate | Authorization checkpoint |
 ... (full symbol table)
 
 ## For More Context
@@ -190,7 +190,7 @@ git commit -m "docs: update AI context"
 ### AI Agent Session Start
 ```
 AI: [Reads beacon.md]
-AI: "I see you have 5 features, including @checkout and @dashboard"
+AI: "I see you have 5 features, including #checkout and #dashboard"
 AI: [Proceeds with specific task using constellation.json for details]
 ```
 
@@ -238,7 +238,7 @@ Use both - beacon for speed, constellation for depth.
 
 ### Features (up to 10)
 ```
-@feature-name → path/to/feature → ^required-portals
+#feature-name → path/to/feature → ^required-gates
 ```
 
 ### Components (up to 5)
@@ -246,9 +246,9 @@ Use both - beacon for speed, constellation for depth.
 #ComponentName → path/to/component
 ```
 
-### Portals (up to 6)
+### Gates (up to 6)
 ```
-- `^portal-name` - Description from portal.yaml
+- `^gate-name` - Description from portal.yaml
 ```
 
 ### Landmarks (up to 8)
@@ -279,17 +279,17 @@ Returns:
   "project": "my-app",
   "generated": "2026-02-04T12:00:00Z",
   "symbols": {
-    "features": [...],
     "components": [...],
-    "portals": [...]
+    "gates": [...],
+    "signals": [...]
   },
   "landmarks": [...],
   "pathways": [...],
   "stats": {
-    "features": 5,
-    "components": 12,
-    "portals": 2,
-    "total": 19
+    "components": 17,
+    "gates": 2,
+    "signals": 8,
+    "total": 27
   }
 }
 ```
@@ -307,7 +307,7 @@ cat .paradigm/beacon.md  # Review orientation
 
 **Example 2: After adding features**
 ```bash
-# Added @login, @signup features
+# Added #login, #signup features
 paradigm beacon --refresh
 # Beacon now shows new features
 ```

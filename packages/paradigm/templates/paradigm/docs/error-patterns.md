@@ -142,17 +142,17 @@ function query_database(query, params):
 Always use the Paradigm logger:
 
 ```
-// Feature context
-log.feature('@checkout').error('Payment failed', { reason, order_id })
+// Component context (features)
+log.component('#checkout').error('Payment failed', { reason, order_id })
 
-// Component context  
+// Component context (infrastructure)
 log.component('#database').error('Connection lost', { host })
 
-// Portal context
+// Gate context
 log.gate('^auth').warn('Access denied', { user_id, resource })
 
-// Integration context
-log.integration('&stripe').error('API error', { status, message })
+// Component context (integrations)
+log.component('#stripe-client').error('API error', { status, message })
 ```
 
 ## Graceful Degradation
@@ -212,4 +212,4 @@ if error:
 
 ---
 
-*Part of Paradigm v1.0 - Language Agnostic*
+*Part of Paradigm v2.0 - Language Agnostic*

@@ -47,7 +47,7 @@ paradigm mcp setup --client all
 Static:  [Load all context] → [Work on task]
          (Even irrelevant symbols consume tokens)
 
-Dynamic: [Minimal context] → [Need @checkout info?] → [Query MCP] → [Continue]
+Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Continue]
          (Only fetch what's actually needed)
 ```
 
@@ -269,7 +269,7 @@ Resources are read-only data Claude can fetch:
 | Resource URI | Description |
 |--------------|-------------|
 | `paradigm://symbols` | All symbols with counts |
-| `paradigm://symbol/@checkout` | Single symbol details (URL-encoded) |
+| `paradigm://symbol/#checkout` | Single symbol details (URL-encoded) |
 | `paradigm://symbols/type/feature` | All features |
 | `paradigm://symbols/type/gate` | All gates |
 | `paradigm://symbols/type/flow` | All flows |
@@ -313,13 +313,13 @@ The MCP server also provides a `paradigm://context/agent-protocol` resource with
 > **You:** "What would break if I removed the ^authenticated gate?"
 >
 > **Claude:** *[calls paradigm_ripple with symbol="^authenticated"]* 
-> "Removing ^authenticated would affect 12 features directly: @checkout, @profile, @settings, @dashboard... and 8 more features indirectly through ^admin-only which requires it."
+> "Removing ^authenticated would affect 12 features directly: #checkout, #profile, #settings, #dashboard... and 8 more features indirectly through ^admin-only which requires it."
 
 **Finding Related Code:**
 > **You:** "What components are used by the checkout feature?"
 >
-> **Claude:** *[calls paradigm_related with symbol="@checkout"]*
-> "The @checkout feature uses these components: #CheckoutForm, #PaymentProcessor, #CartSummary, and #AddressSelector."
+> **Claude:** *[calls paradigm_related with symbol="#checkout"]*
+> "The #checkout feature uses these components: #CheckoutForm, #PaymentProcessor, #CartSummary, and #AddressSelector."
 
 **Route Protection:**
 > **You:** "What gates should I add to POST /api/admin/users?"
@@ -331,7 +331,7 @@ The MCP server also provides a `paradigm://context/agent-protocol` resource with
 > **You:** "Give me an overview of this project's structure."
 >
 > **Claude:** *[calls paradigm_status]*
-> "This project has 45 features, 89 components, 12 gates, 8 flows, and 23 signals. The main feature areas are @user-management, @billing, and @reporting..."
+> "This project has 45 features, 89 components, 12 gates, 8 flows, and 23 signals. The main feature areas are #user-management, #billing, and #reporting..."
 
 ---
 

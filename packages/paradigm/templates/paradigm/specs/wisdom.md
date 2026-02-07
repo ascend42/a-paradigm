@@ -35,7 +35,7 @@ updated: "2026-02-02T10:00:00Z"
 
 # Symbol-indexed preferences
 by_symbol:
-  "@checkout":
+  "#checkout":
     patterns:
       - "Always use optimistic UI for cart updates"
       - "Show skeleton loaders during payment processing"
@@ -43,7 +43,7 @@ by_symbol:
     performance: "Target < 100ms cart update latency"
     ux: "Never block UI during background sync"
 
-  "@search":
+  "#search":
     patterns:
       - "Debounce input by 300ms"
       - "Show instant results from local cache"
@@ -75,7 +75,7 @@ version: "1.0"
 
 antipatterns:
   - id: "api-001"
-    symbols: ["@api", "#api-client"]
+    symbols: ["#api-client"]
     description: "Do NOT use axios interceptors for auth token refresh"
     reason: "Caused race conditions when multiple requests trigger refresh simultaneously"
     alternative: "Use a token refresh queue with mutex, implemented in AuthService"
@@ -84,7 +84,7 @@ antipatterns:
     added_by: "alice"
 
   - id: "state-001"
-    symbols: ["%cart", "@checkout"]
+    symbols: ["#cart-store", "#checkout"]
     description: "Do NOT store cart items in localStorage"
     reason: "Caused sync issues with server state, stale data after login"
     alternative: "Use server as source of truth, localStorage only for guest carts"
@@ -104,18 +104,18 @@ version: "1.0"
 
 experts:
   - name: "alice"
-    symbols: ["@checkout", "&stripe", "^payment-required"]
+    symbols: ["#checkout", "#stripe-client", "^payment-required"]
     areas: ["payments", "billing", "subscriptions"]
     contact: "alice@company.com"
     notes: "Built the original payment system"
 
   - name: "bob"
-    symbols: ["@search", "#SearchIndex"]
+    symbols: ["#search", "#SearchIndex"]
     areas: ["search", "elasticsearch", "performance"]
     contact: "#team-search on Slack"
 
   - name: "carol"
-    symbols: ["^authenticated", "@login", "@signup"]
+    symbols: ["^authenticated", "#login-handler", "#signup-handler"]
     areas: ["auth", "security", "oauth"]
     notes: "Security team lead"
 ```
@@ -127,7 +127,7 @@ id: "001"
 title: "Use JWT for API Authentication"
 status: accepted  # proposed | accepted | deprecated | superseded
 date: "2026-01-15"
-symbols: ["^authenticated", "@login", "@api"]
+symbols: ["^authenticated", "#login-handler", "#api-client"]
 
 context: |
   We need to authenticate API requests from web and mobile clients.
@@ -182,7 +182,7 @@ Get relevant wisdom before implementing changes.
 {
   "name": "paradigm_wisdom_context",
   "arguments": {
-    "symbols": ["@checkout", "#payment-form"],
+    "symbols": ["#checkout", "#payment-form"],
     "include_global": true
   }
 }
@@ -200,7 +200,7 @@ Record new team learning.
   "arguments": {
     "type": "antipattern",
     "id": "api-002",
-    "symbols": ["@api"],
+    "symbols": ["#api-client"],
     "description": "Do NOT use...",
     "reason": "Because...",
     "alternative": "Instead..."
@@ -216,7 +216,7 @@ Find human experts.
 {
   "name": "paradigm_wisdom_expert",
   "arguments": {
-    "symbol": "@checkout"
+    "symbol": "#checkout"
   }
 }
 ```
@@ -228,7 +228,7 @@ Find human experts.
 paradigm wisdom
 
 # Show wisdom for a symbol
-paradigm wisdom show @checkout
+paradigm wisdom show #checkout
 
 # Initialize wisdom directory
 paradigm wisdom init
@@ -236,7 +236,7 @@ paradigm wisdom init
 # Add antipattern
 paradigm wisdom add-antipattern \
   --id "api-002" \
-  --symbols "@api" \
+  --symbols "#api-client" \
   --description "Do NOT..." \
   --reason "Because..." \
   --alternative "Instead..."
@@ -245,12 +245,12 @@ paradigm wisdom add-antipattern \
 paradigm wisdom decide \
   --id "002" \
   --title "API Versioning Strategy" \
-  --symbols "@api" \
+  --symbols "#api-client" \
   --context "We need to version our API..." \
   --decision "Use URL path versioning..."
 
 # Find experts
-paradigm wisdom expert @checkout
+paradigm wisdom expert #checkout
 paradigm wisdom expert --area payments
 ```
 
@@ -266,9 +266,9 @@ Before modifying code, AI agents should:
 Example:
 
 ```
-Agent: "I need to modify @checkout to add Apple Pay"
+Agent: "I need to modify #checkout to add Apple Pay"
 
-1. Call paradigm_wisdom_context(symbols: ["@checkout", "&stripe"])
+1. Call paradigm_wisdom_context(symbols: ["#checkout", "#stripe-client"])
    → Gets: "Use optimistic UI", "Require e2e for payment methods"
    → Antipattern: "Don't use interceptors for auth"
    → Decision: "JWT for API auth"

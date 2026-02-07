@@ -12,13 +12,13 @@ Before debugging, gather context:
    - File: `.paradigm/echoes.yaml`
    - Run: `paradigm echo AUTH_REQUIRED` (or relevant error code)
 
-2. **Review portal definitions:**
+2. **Review gate definitions:**
    - File: `portal.yaml`
-   - Look for the `^portal-name` that's failing
+   - Look for the `^gate-name` that's failing
 
 3. **Check ripple effects:**
-   - Run: `paradigm ripple ^authenticated` (or relevant portal)
-   - Understand what depends on this portal
+   - Run: `paradigm ripple ^authenticated` (or relevant gate)
+   - Understand what depends on this gate
 
 ---
 
@@ -37,8 +37,8 @@ Help me debug the authentication/authorization flow.
 [What's actually happening]
 
 ## Relevant Symbols
-- Feature: @[feature-name]
-- Portals: ^[portal-name]
+- Component: #[component-name]
+- Gates: ^[gate-name]
 - Signals seen: ![signal-name]
 
 ## Steps to Reproduce
@@ -69,11 +69,11 @@ Users are being logged out unexpectedly after 5 minutes.
 Users should stay logged in until they explicitly log out or after 24 hours of inactivity.
 
 ## Actual Behavior
-The ^authenticated portal fails after ~5 minutes, redirecting to login.
+The ^authenticated gate fails after ~5 minutes, redirecting to login.
 
 ## Relevant Symbols
-- Feature: @login
-- Portals: ^authenticated
+- Component: #login-handler
+- Gates: ^authenticated
 - Signals seen: !session-expired (appearing in logs)
 
 ## Steps to Reproduce
@@ -84,7 +84,7 @@ The ^authenticated portal fails after ~5 minutes, redirecting to login.
 
 ## Log Output
 ```
-10:00:00 @login INFO Starting @login {"email":"user@example.com"}
+10:00:00 #login-handler INFO Starting login {"email":"user@example.com"}
 10:00:01 !login-success INFO User authenticated {"userId":"123"}
 10:05:02 ^authenticated WARN Access denied - session expired {"userId":"123"}
 10:05:02 !session-expired WARN Session expired {"userId":"123"}
@@ -100,9 +100,9 @@ The ^authenticated portal fails after ~5 minutes, redirecting to login.
 
 ## Debugging Steps
 
-### 1. Check Portal Configuration
+### 1. Check Gate Configuration
 
-Review the portal definition:
+Review the gate definition:
 - File: `portal.yaml`
 - Look for: `^authenticated` gate definition
 
@@ -120,7 +120,7 @@ gates:
 ### 2. Filter Logs to Auth Symbols
 
 ```bash
-PARADIGM_SYMBOLS=@login,^authenticated,!session-expired LOG_LEVEL=debug
+PARADIGM_SYMBOLS=#login-handler,^authenticated,!session-expired LOG_LEVEL=debug
 ```
 
 ### 3. Trace the Auth Flow
@@ -131,9 +131,9 @@ paradigm ripple ^authenticated
 ```
 
 This shows:
-- What features depend on this portal
+- What components depend on this gate
 - What signals are related
-- Where the portal is defined
+- Where the gate is defined
 
 ### 4. Check the Constellation
 
@@ -143,7 +143,7 @@ paradigm constellation
 
 Then look in `.paradigm/constellation.json` for:
 - `^authenticated` relationships
-- What `requiredBy` this portal
+- What `requiredBy` this gate
 
 ---
 
@@ -152,7 +152,7 @@ Then look in `.paradigm/constellation.json` for:
 | Issue | Likely Cause | Check |
 |-------|--------------|-------|
 | Session expires early | Token expiry mismatch | JWT exp claim vs config |
-| Portal always fails | Missing context | Check keys expression |
+| Gate always fails | Missing context | Check keys expression |
 | Intermittent failures | Clock skew | Server time sync |
 | After deployment | Code change | Git diff on auth files |
 

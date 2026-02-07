@@ -293,7 +293,7 @@ syncs_with:
 |---------|----------------|----------|
 | Entity relationships | `.premise` | DESIGN.md#data-models, migrations |
 | Features & flows | `.purpose` | DESIGN.md (relevant sections) |
-| Access control | `portal.yaml` | .purpose portal references |
+| Access control | `portal.yaml` | .purpose gate references |
 | SQL schemas | DESIGN.md#data-models | migrations (implementation) |
 | UX patterns | DESIGN.md#ux-system | platform components |
 

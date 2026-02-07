@@ -22,7 +22,7 @@ generated: "2026-02-02T10:00:00Z"
 structure:
   features:
     paths: ["src/features/", "features/"]
-    symbol: "@"
+    symbol: "#"
   components:
     paths: ["src/components/", "lib/"]
     symbol: "#"
@@ -34,7 +34,7 @@ structure:
     symbol: "$"
   integrations:
     paths: ["integrations/", "external/"]
-    symbol: "&"
+    symbol: "#"
 
 key_files:
   config: [".paradigm/config.yaml", "package.json"]
@@ -47,7 +47,7 @@ skip_patterns:
   unless_docs: ["docs/", "*.md"]
 
 symbols:
-  "@checkout": "src/features/checkout/"
+  "#checkout": "src/features/checkout/"
   "#Button": "src/components/Button.tsx"
   "^authenticated": "middleware/auth.ts"
 ```
@@ -106,8 +106,8 @@ Query the navigator for targeted exploration.
 
 ```typescript
 // Find a symbol
-paradigm_navigate({ intent: "find", target: "@checkout" })
-// → { paths: ["src/features/checkout/"], symbols: ["@checkout"], ... }
+paradigm_navigate({ intent: "find", target: "#checkout" })
+// → { paths: ["src/features/checkout/"], symbols: ["#checkout"], ... }
 
 // Explore an area
 paradigm_navigate({ intent: "explore", target: "authentication" })
@@ -115,7 +115,7 @@ paradigm_navigate({ intent: "explore", target: "authentication" })
 
 // Get context for a task
 paradigm_navigate({ intent: "context", task: "add Apple Pay to checkout" })
-// → { paths: ["src/features/checkout/", ".paradigm/config.yaml"], symbols: ["@checkout", "&stripe"], ... }
+// → { paths: ["src/features/checkout/", ".paradigm/config.yaml"], symbols: ["#checkout", "#stripe-client"], ... }
 ```
 
 ### Output
@@ -149,7 +149,7 @@ The navigator teaches AI tools an efficient exploration pattern:
    → Wastes tokens scanning node_modules
 
 ✅ GOOD (targeted):
-   paradigm_navigate({ intent: "find", target: "@checkout" })
+   paradigm_navigate({ intent: "find", target: "#checkout" })
    → Returns: src/features/checkout/
    → Read only what's needed
 ```

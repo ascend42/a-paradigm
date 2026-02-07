@@ -229,7 +229,7 @@ export function useSandboxAction() {
       return apiCall();
     }
 
-    log.state('%sandbox').info('Action intercepted', {
+    log.component('#sandbox-store').info('Action intercepted', {
       action: options.actionName,
       isInSandbox: true,
     });
@@ -625,7 +625,7 @@ After implementation, verify:
 - [ ] Subscribe modal shows when performing gated actions
 - [ ] Pending changes count displays correctly
 - [ ] Sandbox banner shows in demo mode
-- [ ] Portal logs show sandbox access
+- [ ] Gate logs show sandbox access
 - [ ] Authenticated users bypass sandbox mode
 
 ---

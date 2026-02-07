@@ -209,7 +209,7 @@ CLAUDE.md  (comprehensive context file)
 npx create-react-app my-app
 cd my-app
 paradigm init --quick
-# Edit .purpose to define @login, @dashboard, etc.
+# Edit .purpose to define #login, #dashboard, etc.
 ```
 
 **Example 2: Existing Node.js API**

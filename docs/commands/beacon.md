@@ -39,7 +39,7 @@ Creates `.paradigm/beacon.md` - a compact, agent-optimized summary providing imm
 
 ### ✅ Run after:
 - **`paradigm init`** - Generate initial beacon
-- **Adding features** - New @features, #components
+- **Adding features** - New #features, #components
 - **Restructuring** - Major code organization changes
 - **Team onboarding** - Fresh beacon for new members
 
@@ -106,8 +106,8 @@ Tip
 
 ## Constellation (Symbol Map)
 
-@checkout           → src/features/checkout → ^authenticated, ^payment-ready
-@dashboard          → src/features/dashboard → ^authenticated
+#checkout           → src/features/checkout → ^authenticated, ^payment-ready
+#dashboard          → src/features/dashboard → ^authenticated
 #Button             → src/components/Button.tsx
 #Modal              → src/components/Modal.tsx
 ... and 8 more features
@@ -135,10 +135,11 @@ Tip
 
 | Symbol | Type | Meaning |
 |--------|------|---------|
-| `@` | Feature | User-facing capability |
-| `#` | Component | Reusable code unit |
-| `^` | Portal | Authorization gate |
-... (full symbol table)
+| `#` | Component | Any documented code unit |
+| `^` | Gate | Authorization checkpoint |
+| `!` | Signal | Event for side effects |
+| `$` | Flow | Multi-step process |
+| `~` | Aspect | Rule with code anchor |
 
 ## For More Context
 
@@ -190,7 +191,7 @@ git commit -m "docs: update AI context"
 ### AI Agent Session Start
 ```
 AI: [Reads beacon.md]
-AI: "I see you have 5 features, including @checkout and @dashboard"
+AI: "I see you have 5 features, including #checkout and #dashboard"
 AI: [Proceeds with specific task using constellation.json for details]
 ```
 
@@ -238,7 +239,7 @@ Use both - beacon for speed, constellation for depth.
 
 ### Features (up to 10)
 ```
-@feature-name → path/to/feature → ^required-portals
+#feature-name → path/to/feature → ^required-portals
 ```
 
 ### Components (up to 5)
@@ -246,9 +247,9 @@ Use both - beacon for speed, constellation for depth.
 #ComponentName → path/to/component
 ```
 
-### Portals (up to 6)
+### Gates (up to 6)
 ```
-- `^portal-name` - Description from portal.yaml
+- `^gate-name` - Description from portal.yaml
 ```
 
 ### Landmarks (up to 8)
@@ -307,7 +308,7 @@ cat .paradigm/beacon.md  # Review orientation
 
 **Example 2: After adding features**
 ```bash
-# Added @login, @signup features
+# Added #login, #signup features
 paradigm beacon --refresh
 # Beacon now shows new features
 ```

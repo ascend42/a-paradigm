@@ -8,15 +8,11 @@ Rich IDE support for the [Paradigm](https://github.com/ascend42/a-paradigm) symb
 
 Paradigm symbols are highlighted across all supported file types:
 
-- `@feature` - Features (functions, capabilities)
-- `#component` - Components (classes, modules)
+- `#component` - Components (any documented code unit) with `[feature]` tag for features
 - `^gate` - Gates (authorization, permissions)
 - `!signal` - Signals (events, notifications)
 - `$flow` - Flows (processes, workflows)
-- `%state` - State (data, configuration)
-- `?idea` - Ideas (proposals, drafts)
-- `~deprecated` - Deprecated items
-- `&integration` - External integrations
+- `~aspect` - Aspects (cross-cutting rules with code anchors)
 
 ### Hover Information
 
@@ -60,7 +56,7 @@ Reference counts shown above symbol definitions in `.purpose` files:
 
 ### Symbol Autocomplete
 
-Type a symbol prefix (`@`, `#`, `^`, etc.) to get autocomplete suggestions.
+Type a symbol prefix (`#`, `^`, `!`, `$`, `~`) to get autocomplete suggestions.
 
 ### Quick Fixes
 

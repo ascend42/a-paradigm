@@ -108,16 +108,16 @@ Common issues and their solutions.
    ```bash
    # Correct
    LOG_LEVEL=debug
-   PARADIGM_SYMBOLS=!,@
-   
+   PARADIGM_SYMBOLS=!,#
+
    # Wrong (spaces)
-   PARADIGM_SYMBOLS=!, @
+   PARADIGM_SYMBOLS=!, #
    ```
 
 2. **Verify variable is exported:**
    ```bash
    export LOG_LEVEL=debug
-   export PARADIGM_SYMBOLS='!,@'
+   export PARADIGM_SYMBOLS='!,#'
    ```
 
 3. **Browser: Check localStorage:**
@@ -128,7 +128,7 @@ Common issues and their solutions.
 
 4. **Browser: Check URL params:**
    ```
-   ?logLevel=debug&symbols=!,@
+   ?logLevel=debug&symbols=!,#
    ```
 
 5. **Clear and reset:**
@@ -196,10 +196,10 @@ Common issues and their solutions.
 2. **Common YAML issues:**
    ```yaml
    # Wrong - missing quotes on special chars
-   description: Use @ for features
+   description: Use # for components
 
    # Correct
-   description: "Use @ for features"
+   description: "Use # for components"
 
    # Wrong - ! is a YAML tag indicator, breaks parsing in arrays
    signals: [!success, !failed]
@@ -328,7 +328,7 @@ Common issues and their solutions.
 
 2. **Filter symbols in production:**
    ```bash
-   # Only errors and signals
+   # Only signals
    PARADIGM_SYMBOLS=!
    LOG_LEVEL=warn
    ```
@@ -431,19 +431,18 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
 ## Symbol System
 | Symbol | Name | Use For |
 |--------|------|---------|
-| `@` | Feature | User-facing capabilities |
-| `#` | Component | Reusable modules |
-| `^` | Portal | Access control |
-| `!` | Signal | Events/side effects |
+| `#` | Component | Any documented code unit |
 | `$` | Flow | Multi-step processes |
-| `%` | State | App state |
+| `^` | Gate | Access control |
+| `!` | Signal | Events/side effects |
+| `~` | Aspect | Rule with code anchor |
 
 ## Paradigm Logger
 **NEVER use console.log. ALWAYS use Paradigm logger.**
 
 | Directory | Method |
 |-----------|--------|
-| `features/` | `log.feature()` |
+| `features/` | `log.component()` |
 | `components/` | `log.component()` |
 | `middleware/` | `log.gate()` |
 

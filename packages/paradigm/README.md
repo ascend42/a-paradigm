@@ -104,15 +104,15 @@ paradigm dream snapshot     # Save current state
 
 Paradigm's symbol system is universal. The same symbols work across:
 
-| Discipline | Example `@` | Example `#` | Example `&` |
-|------------|-------------|-------------|-------------|
-| Web | `@checkout` | `#Button` | `&stripe` |
-| Backend | `@users.create` | `#database` | `&postgres` |
-| ML | `@classifier-v2` | `#dataloader` | `&wandb` |
-| Mobile | `@home-screen` | `#card` | `&firebase` |
-| Game | `@attack` | `#enemy-ai` | `&steamworks` |
-| Embedded | `@read-sensor` | `#spi-driver` | `&mqtt` |
-| DevOps | `@deploy` | `#vpc-module` | `&kubernetes` |
+| Discipline | Feature `#` | Gate `^` | Signal `!` |
+|------------|-------------|----------|------------|
+| Web | `#checkout` | `^authenticated` | `!payment-completed` |
+| Backend | `#user-service` | `^admin` | `!user-created` |
+| ML | `#classifier-v2` | `^model-validated` | `!training-complete` |
+| Mobile | `#home-screen` | `^biometric-auth` | `!push-received` |
+| Game | `#attack-system` | `^level-unlocked` | `!enemy-defeated` |
+| Embedded | `#spi-driver` | `^calibrated` | `!sensor-read` |
+| DevOps | `#vpc-module` | `^deploy-approved` | `!deploy-complete` |
 
 See `specs/disciplines.md` for complete mappings.
 

@@ -60,14 +60,14 @@ Add to your Claude Desktop configuration:
 ```javascript
 // Plan mode: Get suggested agents and execution plan
 paradigm_orchestrate_inline({
-  task: "Build @payment-system with Stripe integration",
+  task: "Build #payment-system with Stripe integration",
   mode: "plan"
 })
 // Returns: plan, suggestedAgents, estimated tokens
 
 // Execute mode: Get full prompts for Task tool
 paradigm_orchestrate_inline({
-  task: "Build @payment-system with Stripe integration",
+  task: "Build #payment-system with Stripe integration",
   mode: "execute"
 })
 // Returns: stage prompts ready for spawning subagents
@@ -85,7 +85,7 @@ User: "What would break if I remove ^authenticated gate?"
 
 AI calls: paradigm_ripple({ symbol: "^authenticated" })
 
-AI: "Removing ^authenticated would affect 12 features including @checkout, @profile, and @settings..."
+AI: "Removing ^authenticated would affect 12 components including #checkout, #profile, and #settings..."
 ```
 
 ### Orchestration Example

@@ -19,8 +19,8 @@ Help me debug the authentication/authorization flow.
 [What's actually happening]
 
 ## Relevant Symbols
-- Feature: @[feature-name]
-- Portals: ^[portal-name]
+- Component: #[component-name]
+- Gates: ^[gate-name]
 - Signals seen: ![signal-name]
 
 ## Steps to Reproduce
@@ -51,11 +51,11 @@ Users are being logged out unexpectedly after 5 minutes.
 Users should stay logged in until they explicitly log out or after 24 hours of inactivity.
 
 ## Actual Behavior
-The ^authenticated portal fails after ~5 minutes, redirecting to login.
+The ^authenticated gate fails after ~5 minutes, redirecting to login.
 
 ## Relevant Symbols
-- Feature: @login
-- Portals: ^authenticated
+- Component: #login-handler
+- Gates: ^authenticated
 - Signals seen: !session-expired (appearing in logs)
 
 ## Steps to Reproduce
@@ -66,7 +66,7 @@ The ^authenticated portal fails after ~5 minutes, redirecting to login.
 
 ## Log Output
 ```
-10:00:00 @login INFO Starting @login {"email":"user@example.com"}
+10:00:00 #login-handler INFO Starting #login-handler {"email":"user@example.com"}
 10:00:01 !login-success INFO User authenticated {"userId":"123"}
 10:05:02 ^authenticated WARN Access denied - session expired {"userId":"123"}
 10:05:02 !session-expired WARN Session expired {"userId":"123"}
@@ -84,13 +84,13 @@ The ^authenticated portal fails after ~5 minutes, redirecting to login.
 
 1. **Filter logs to auth-related symbols:**
    ```bash
-   PARADIGM_SYMBOLS=@,^,! LOG_LEVEL=debug
+   PARADIGM_SYMBOLS=#,^,! LOG_LEVEL=debug
    ```
 
 2. **Check portal definitions in `portal.yaml`**
 
 3. **Trace the flow:**
-   - @login → token creation
+   - #login-handler → token creation
    - ^authenticated → token validation
    - !session-expired → why triggered?
 

@@ -49,7 +49,8 @@ The probe index at `.paradigm/probe-index.json` contains:
   },
   "features": {
     "checkout": {
-      "symbol": "@checkout",
+      "symbol": "#checkout",
+      "tags": ["feature"],
       "path": "src/features/checkout/",
       "description": "Purchase completion flow"
     }
@@ -62,18 +63,19 @@ The probe index at `.paradigm/probe-index.json` contains:
   },
   "state": {
     "cart": {
-      "symbol": "%cart",
+      "symbol": "#cart-store",
+      "tags": ["state"],
       "slices": ["items", "total", "discount"]
     }
   },
-  "portals": {
+  "gates": {
     "auth-required": {
       "symbol": "^auth-required",
       "description": "User must be logged in"
     }
   },
   "symbolMap": {
-    "@checkout": { "category": "features", "id": "checkout" },
+    "#checkout": { "category": "features", "id": "checkout" },
     "#Button": { "category": "components", "id": "Button" }
   }
 }
@@ -100,14 +102,14 @@ When responding to a probe request, format results as:
 | Price Display | `#PriceDisplay` | `src/components/PriceDisplay.tsx` | ●●●○ |
 
 ### Features
-- **`@checkout`** — Handles the checkout process shown in the image
+- **`#checkout`** — Handles the checkout process shown in the image
 
 ### Flows
 - **`$checkout-flow`** — Steps: cart → shipping → **payment** ← (current) → confirmation
 
 ### State
-- `%cart.items` — Powers the item list
-- `%cart.total` — Drives the price display
+- `#cart-store.items` — Powers the item list
+- `#cart-store.total` — Drives the price display
 
 ### Portals
 - `^auth-required` — User must be logged in to access this screen
@@ -165,7 +167,7 @@ Once results are returned, users can:
 1. **Reference specific items**: "I want to modify `#CheckoutButton`"
 2. **Ask about flows**: "Walk me through `$checkout-flow`"
 3. **Check portals**: "What permissions does `^premium-checkout` require?"
-4. **Explore state**: "What components use `%cart.items`?"
+4. **Explore state**: "What components use `#cart-store.items`?"
 5. **Fill gaps**: "Create a `#CouponInput` component for the uncovered element"
 
 ---

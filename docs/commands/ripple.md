@@ -53,28 +53,28 @@ Shows what would be affected if you modify a symbol, what it depends on, and whi
 
 ```bash
 # Analyze a symbol
-paradigm ripple @checkout
+paradigm ripple #checkout
 paradigm ripple #Button
 paradigm ripple ^authenticated
 paradigm ripple !login-success
 
 # Custom depth (default 1)
-paradigm ripple @feature --depth 2
+paradigm ripple #feature --depth 2
 
 # JSON output (for tooling)
-paradigm ripple @feature --json
+paradigm ripple #feature --json
 
 # Quiet mode (no console output, just JSON)
-paradigm ripple @feature --quiet --json
+paradigm ripple #feature --quiet --json
 
 # Target specific directory
-paradigm ripple @feature ./src
+paradigm ripple #feature ./src
 ```
 
 ## Output
 
 ```
-🌊 Ripple Analysis for @checkout
+🌊 Ripple Analysis for #checkout
 
 Symbol Info
 ──────────────────────────────────────────────────
@@ -90,7 +90,7 @@ Symbol Info
 
 ⬇️  Downstream (What would be affected)
 ──────────────────────────────────────────────────
-  Features:    @admin-dashboard
+  Features:    #admin-dashboard
   Components:  (none)
   Signals:     !checkout-complete
 
@@ -110,7 +110,7 @@ Symbol Info
 
 ### Symbol Info
 Basic information about the analyzed symbol:
-- Type (@feature, #component, etc.)
+- Type (#feature, #component, etc.)
 - File path
 - Description from `.purpose`
 - Tags (if any)
@@ -123,7 +123,7 @@ What this symbol needs to function:
 
 ### Downstream Impact
 What depends on this symbol:
-- **Features** (@) - Features that use this
+- **Features** (#) - Features that use this
 - **Components** (#) - Components that depend on this
 - **Signals** (!) - Events that this triggers/consumes
 
@@ -146,12 +146,12 @@ Which workflows include this:
 **Standard workflow:**
 ```bash
 # 1. Check impact before changes
-paradigm ripple @feature
+paradigm ripple #feature
 
 # 2. Make changes
 
 # 3. Verify affected symbols
-paradigm ripple @affected-feature
+paradigm ripple #affected-feature
 
 # 4. Update constellation
 paradigm constellation
@@ -160,7 +160,7 @@ paradigm constellation
 **With MCP tools:**
 ```
 AI: [Calls paradigm_ripple before modifying]
-AI: "I see @checkout has 3 dependents. Proceeding carefully."
+AI: "I see #checkout has 3 dependents. Proceeding carefully."
 AI: [Makes changes]
 AI: [Tests affected dependents]
 ```
@@ -179,7 +179,7 @@ paradigm ripple #Button
 ### Safe Deletion
 ```bash
 # Want to remove a feature
-paradigm ripple @old-feature
+paradigm ripple #old-feature
 
 # If 0 dependents: Safe to remove
 # If >0 dependents: Must update/migrate first
@@ -187,11 +187,11 @@ paradigm ripple @old-feature
 
 ### Code Review
 ```bash
-# PR changes @checkout
-paradigm ripple @checkout
+# PR changes #checkout
+paradigm ripple #checkout
 
 # Verify PR also updates:
-# - @admin-dashboard (dependent)
+# - #admin-dashboard (dependent)
 # - Tests for both features
 ```
 
@@ -222,16 +222,16 @@ done | sort -t: -k2 -nr
 
 ```json
 {
-  "symbol": "@checkout",
+  "symbol": "#checkout",
   "type": "feature",
   "path": "src/features/checkout/index.tsx",
   "description": "Purchase completion",
   
   "requires": ["^authenticated", "^payment-ready", "%cart"],
-  "requiredBy": ["@admin-dashboard", "$checkout-flow"],
+  "requiredBy": ["#admin-dashboard", "$checkout-flow"],
   
   "downstream": {
-    "features": ["@admin-dashboard"],
+    "features": ["#admin-dashboard"],
     "components": [],
     "signals": ["!checkout-complete"]
   },
@@ -263,7 +263,7 @@ paradigm ripple #Button
 
 **Example 2: Safe feature removal**
 ```bash
-paradigm ripple @experimental-feature
+paradigm ripple #experimental-feature
 
 # Output: 0 dependents
 # Action: Safe to delete
@@ -282,7 +282,7 @@ paradigm ripple ^authenticated
 #!/bin/bash
 # check-pr-impact.sh
 
-for symbol in $(git diff main... | grep -o '@[a-z-]*' | sort -u); do
+for symbol in $(git diff main... | grep -o '#[a-z-]*' | sort -u); do
   echo "Checking impact of $symbol..."
   paradigm ripple "$symbol" --json | jq '{symbol: .symbol, dependents: (.requiredBy | length)}'
 done
@@ -302,7 +302,7 @@ done
 ### Impact Matrix
 ```bash
 # Create impact matrix for all features
-for feature in @login @checkout @dashboard; do
+for feature in #login #checkout #dashboard; do
   count=$(paradigm ripple "$feature" --json | jq '.requiredBy | length')
   echo "$feature: $count dependents"
 done

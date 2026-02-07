@@ -1,131 +1,164 @@
-# Paradigm Symbol System
+# Paradigm Symbol System v2
 
-> Paradigm v1.0 - Language & Discipline Agnostic
+> Paradigm v2.0 - Simplified, Anchor-First Symbols with Tag-Based Classification
 
-The symbol system creates a **shared language** between code, developers, and AI agents. Each symbol prefix identifies a specific type of element in the codebase.
+The symbol system creates a **shared language** between code, developers, and AI agents. Version 2 reduces cognitive load by using **5 operational symbols** plus a **tag bank** for classification.
 
-**Paradigm is universal.** The symbols mean the same thing whether you're building a web app, training an ML model, writing firmware, or deploying infrastructure. See `specs/disciplines.md` for discipline-specific interpretations.
-
-## Symbol Reference
-
-| Symbol | Name | Owner | Description |
-|--------|------|-------|-------------|
-| `@` | Feature | Purpose | User-facing capabilities and functionality |
-| `#` | Component | Purpose | Reusable code units, UI components, modules |
-| `$` | Flow | Shared | Multi-step processes or user journeys |
-| `%` | State | Purpose | Global or user state conditions |
-| `^` | Portal | Portal | Access control points, authorization rules |
-| `!` | Signal | Portal | Events, errors, and side effects |
-| `?` | Idea | Premise | Free-form exploration, future possibilities |
-| `~` | Deprecated | Shared | Features/components marked for removal |
-| `&` | Integration | Shared | External services and third-party connections |
+**Paradigm is universal.** The symbols mean the same thing whether you're building a web app, training an ML model, writing firmware, or deploying infrastructure.
 
 ---
 
-## When to Use Each Symbol
+## Why v2?
 
-### `@` Features
+The original v1 system had 9 symbols (`@`, `#`, `$`, `%`, `^`, `!`, `?`, `~`, `&`). In practice:
 
-Use for **user-facing operations** — things a user can do or experience.
+1. **AI agents rarely used them** - Choosing between `@feature` vs `#component` vs `&integration` added cognitive load
+2. **Classification symbols added noise** - `@feature` and `&integration` are classifications, not operational concepts
+3. **Aspects had no enforcement** - Rules like "all payments require audit logging" were documentation without teeth
 
-```
-@login          - User authentication
-@checkout       - Purchase completion
-@search         - Content search
-@profile-edit   - Profile modification
-@message-send   - Sending messages
-```
-
-**Where:** Entry points, API routes, user actions, feature directories.
-
-**In code (pseudocode):**
-```
-// At feature entry
-log.feature('@login').info('Starting @login', { email })
-
-// At feature exit  
-log.signal('!login-success').info('User authenticated', { user_id })
-```
+**Solution**: 5 operational symbols + a tag bank for classification.
 
 ---
 
-### `#` Components
+## Symbol Reference (v2)
 
-Use for **infrastructure and reusable modules** — building blocks of features.
+| Symbol | Name | Purpose | Example |
+|--------|------|---------|---------|
+| `#` | Component | Any documented code unit (function, class, module, service) | `#PaymentService`, `#login-handler` |
+| `$` | Flow | Multi-step process with defined sequence | `$checkout-flow`, `$onboarding` |
+| `^` | Gate | Authorization/validation checkpoint | `^authenticated`, `^admin-only` |
+| `!` | Signal | Event emitted for side effects | `!payment-completed`, `!login-failed` |
+| `~` | Aspect | Rule/constraint with required code anchor | `~audit-required`, `~rate-limited` |
 
+### What Changed from v1
+
+| Old Symbol | New Approach |
+|------------|--------------|
+| `@feature` | Tag: `[feature]` on a `#component` |
+| `&integration` | Tag: `[integration]` on a `#component` |
+| `%state` | Tag: `[state]` on a `#component` |
+| `?idea` | Tag: `[idea]` on any symbol |
+| `~deprecated` | Tag: `[deprecated]` on any symbol |
+
+---
+
+## Component (`#`)
+
+The universal anchor point for documented code. A component is any code unit worth naming.
+
+### Definition
+
+```yaml
+# In .purpose file
+#PaymentService:
+  description: Handles all payment processing
+  tags: [feature, integration, stripe]
+  anchors:
+    - src/services/payment.ts:1-150
+  references:
+    - $checkout-flow
+    - ^authenticated
+  emits:
+    - "!payment-completed"
+    - "!payment-failed"
 ```
-#Button         - UI button component
-#Modal          - Dialog component
-#api-client     - HTTP client wrapper
-#database       - Database connection
-#redis-cache    - Caching layer
-```
 
-**Where:** Component directories, utility libraries, shared modules.
+### What Qualifies as a Component
 
-**In code (pseudocode):**
+- Functions with business logic
+- Classes/modules
+- API endpoints
+- React components
+- Database models
+- Configuration objects
+- CLI commands
+
+### Naming Convention
+
+- **PascalCase** for classes/components: `#PaymentService`, `#UserProfile`
+- **kebab-case** for functions/endpoints: `#process-payment`, `#get-user`
+
+### In Code (Logging)
+
 ```
 log.component('#database').debug('Query executed', { table, duration })
-log.component('#cache').warn('Cache miss, fetching from source', { key })
+log.component('#PaymentService').info('Payment processed', { amount })
 ```
 
 ---
 
-### `$` Flows
+## Flow (`$`)
 
-Use for **multi-step processes** — user journeys that span multiple components.
+Multi-step processes with defined sequence. Flows connect components.
 
+### Definition
+
+```yaml
+$checkout-flow:
+  description: Complete purchase from cart to confirmation
+  tags: [critical, revenue]
+  steps:
+    - "^authenticated"       # Gate: must be logged in
+    - "#validate-cart"       # Component: check inventory
+    - "#calculate-totals"    # Component: tax, shipping
+    - "^payment-authorized"  # Gate: payment method valid
+    - "#process-payment"     # Component: charge card
+    - "!payment-completed"   # Signal: trigger fulfillment
+    - "#send-confirmation"   # Component: email receipt
+  on-failure:
+    - "!checkout-failed"
+    - "#notify-support"
 ```
-$checkout-flow     - Cart → Shipping → Payment → Confirmation
-$onboarding        - Signup → Verify → Profile → Tutorial
-$password-reset    - Request → Email → Verify → Reset
-```
 
-**Where:** Flow definitions, saga files, orchestration logic.
+### Flow Characteristics
 
-**In code (pseudocode):**
+- Has a defined start and end
+- Steps execute in sequence (with possible branches)
+- Gates can block progression
+- Signals trigger side effects
+- Failure paths are explicit
+
+### In Code (Logging)
+
 ```
 log.flow('$checkout-flow').info('Step completed', { step: 'shipping', next: 'payment' })
 ```
 
 ---
 
-### `%` State
+## Gate (`^`)
 
-Use for **application state** — reactive data that drives UI and behavior.
+Authorization and validation checkpoints. Gates either pass or block.
 
-```
-%user.authenticated    - Is user logged in?
-%user.role             - User's access level
-%cart.items            - Items in shopping cart
-%cart.total            - Cart total price
-%app.loading           - Global loading state
-```
+### Definition
 
-**Where:** State stores, reducers, context providers.
-
-**In code (pseudocode):**
-```
-log.state('%user.authenticated').info('State changed', { from: false, to: true })
-```
-
----
-
-### `^` Portals
-
-Use for **authorization and access control** — checkpoints that allow or deny access.
-
-```
-^authenticated         - Must be logged in
-^admin-only           - Must be admin
-^premium-required     - Must have premium subscription
-^rate-limited         - Subject to rate limiting
-^verified-email       - Must have verified email
+```yaml
+^payment-authorized:
+  description: Verify payment method is valid and has sufficient funds
+  tags: [security, payment]
+  anchors:
+    - src/middleware/payment-auth.ts:25-45
+  check: |
+    user.paymentMethod != null &&
+    user.paymentMethod.verified &&
+    cart.total <= user.paymentMethod.limit
+  blocks:
+    - $checkout-flow
+    - #process-refund
 ```
 
-**Where:** Middleware, guards, authorization logic.
+### Gate Patterns
 
-**In code (pseudocode):**
+| Pattern | Example | Use Case |
+|---------|---------|----------|
+| Identity | `^authenticated` | User is logged in |
+| Role | `^admin` | User has admin role |
+| Ownership | `^resource-owner` | User owns the resource |
+| State | `^cart-not-empty` | Precondition met |
+| External | `^payment-authorized` | Third-party validation |
+
+### In Code (Logging)
+
 ```
 log.gate('^authenticated').debug('Checking gate')
 log.gate('^authenticated').warn('Access denied', { user_id, resource })
@@ -134,21 +167,38 @@ log.gate('^authenticated').debug('Gate passed', { user_id })
 
 ---
 
-### `!` Signals
+## Signal (`!`)
 
-Use for **events and side effects** — things that happen as a result of actions.
+Events emitted for side effects. Signals decouple producers from consumers.
 
+### Definition
+
+```yaml
+!payment-completed:
+  description: Emitted when payment successfully processes
+  tags: [critical, audit]
+  anchors:
+    - src/services/payment.ts:89
+  payload:
+    orderId: string
+    amount: number
+    currency: string
+    timestamp: ISO8601
+  triggers:
+    - #send-receipt
+    - #update-inventory
+    - #notify-fulfillment
+    - #log-audit-trail
 ```
-!login-success        - User successfully logged in
-!login-failed         - Login attempt failed
-!payment-processed    - Payment completed
-!email-sent           - Email was sent
-!rate-limit-exceeded  - Too many requests
-```
 
-**Where:** Event emitters, side effect handlers, notification systems.
+### Signal Naming
 
-**In code (pseudocode):**
+- **Past tense** for completed actions: `!payment-completed`, `!user-registered`
+- **Present tense** for ongoing: `!processing-started`
+- **Noun** for state changes: `!low-inventory`, `!rate-limit-exceeded`
+
+### In Code (Logging)
+
 ```
 log.signal('!login-success').info('User authenticated', { user_id })
 log.signal('!payment-failed').error('Payment declined', { reason })
@@ -156,191 +206,238 @@ log.signal('!payment-failed').error('Payment declined', { reason })
 
 ---
 
-### `?` Ideas
+## Aspect (`~`)
 
-Use for **exploration and future possibilities** — not yet implemented.
+**Rules and constraints with REQUIRED code anchors.** Aspects are the enforcement mechanism for cross-cutting concerns.
+
+### Definition
+
+```yaml
+~audit-required:
+  description: All financial operations must log to audit trail
+  tags: [compliance, security]
+  anchors:  # REQUIRED - must point to actual enforcement code
+    - src/middleware/audit.ts:15-35
+    - src/decorators/auditable.ts:1-20
+  applies-to:
+    - "#*Service"        # All services
+    - "$*-payment-*"     # All payment flows
+    - "^payment-*"       # All payment gates
+  enforcement: |
+    Every component matching applies-to patterns must:
+    1. Import the @auditable decorator
+    2. Wrap operations in audit context
+    3. Log before/after state for mutations
+  examples:
+    correct: |
+      @auditable('payment')
+      async processPayment(order: Order) {
+        // Implementation
+      }
+    incorrect: |
+      async processPayment(order: Order) {
+        // Missing audit decorator!
+      }
+```
+
+### Anchor Requirement
+
+**Aspects MUST have anchors.** An aspect without code backing it is just documentation that will be ignored.
+
+```yaml
+# INVALID - no anchors
+~secure-passwords:
+  description: Passwords must be hashed with bcrypt
+  applies-to: ["#*Auth*"]
+
+# VALID - has enforcement code
+~secure-passwords:
+  description: Passwords must be hashed with bcrypt
+  anchors:
+    - src/utils/password.ts:10-25      # The hashing function
+    - src/middleware/auth.ts:45-60     # The validation check
+  applies-to: ["#*Auth*"]
+```
+
+### Anchor Format
+
+Line-based references for precision:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Single line | `file.ts:15` | Specific line |
+| Line range | `file.ts:15-20` | Lines 15 through 20 |
+| Multiple lines | `file.ts:15,25,30` | Specific lines |
+| Glob with range | `src/auth/*.ts:1-50` | All files, lines 1-50 |
+
+### Common Aspect Patterns
+
+| Aspect | Purpose | Typical Anchors |
+|--------|---------|-----------------|
+| `~audit-required` | Compliance logging | Middleware, decorators |
+| `~rate-limited` | API protection | Rate limiter config |
+| `~cached` | Performance | Cache wrapper functions |
+| `~validated` | Input safety | Validation schemas |
+| `~encrypted` | Data protection | Encryption utilities |
+| `~idempotent` | Retry safety | Idempotency key handlers |
+
+### In Code (Logging)
 
 ```
-?ai-recommendations   - AI-powered suggestions
-?subscription-model   - Possible subscription feature
-?dark-mode           - Dark theme support
-?mobile-app          - Native mobile version
+log.aspect('~audit-required').debug('Audit logged', { operation, user })
+log.aspect('~rate-limited').warn('Rate limit exceeded', { ip, endpoint })
 ```
-
-**Where:** Premise files, planning documents, ideation.
 
 ---
 
-### `~` Deprecated
+## Tag Bank System
 
-Use for **features or components marked for removal** — still exists but should not be used.
+Tags replace classification symbols. They live in `.paradigm/tags.yaml`.
 
+### Structure
+
+```yaml
+# .paradigm/tags.yaml
+version: "1.0"
+
+# Core tags - universal vocabulary
+core:
+  feature:
+    description: User-facing functionality
+    color: "#4CAF50"
+    applies-to: ["#"]
+
+  integration:
+    description: External service connection
+    color: "#2196F3"
+    applies-to: ["#"]
+
+  state:
+    description: Manages application state
+    color: "#9C27B0"
+    applies-to: ["#"]
+
+  critical:
+    description: Failure causes major business impact
+    color: "#F44336"
+    applies-to: ["#", "$", "^"]
+
+  deprecated:
+    description: Scheduled for removal
+    color: "#9E9E9E"
+    applies-to: ["#", "$", "^", "!", "~"]
+
+  idea:
+    description: Proposed, not yet implemented
+    color: "#FF9800"
+    applies-to: ["#", "$"]
+
+  security:
+    description: Security-sensitive code
+    color: "#E91E63"
+    applies-to: ["#", "^", "~"]
+
+  compliance:
+    description: Regulatory requirement
+    color: "#795548"
+    applies-to: ["~", "^"]
+
+# Project tags - domain-specific vocabulary
+project:
+  stripe:
+    description: Stripe payment integration
+    color: "#635BFF"
+    applies-to: ["#"]
+
+# Suggested tags - AI can propose, human approves
+suggested: []
 ```
-~legacy-api          - Old API being phased out
-~v1-auth             - Previous auth system
-~old-dashboard       - Dashboard being replaced
+
+### Tag Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `description` | Yes | What the tag means (for AI context) |
+| `color` | No | Hex color for UI display |
+| `applies-to` | No | Symbol types this tag is valid for |
+| `aliases` | No | Alternative names (for AI matching) |
+
+### Using Tags in .purpose Files
+
+```yaml
+# In .purpose file
+#checkout:
+  description: Shopping cart checkout feature
+  tags: [feature, revenue, critical]
+  anchors:
+    - src/features/checkout/index.ts:1-200
+
+#stripe-integration:
+  description: Stripe payment integration
+  tags: [integration, stripe]
+  anchors:
+    - src/services/stripe.ts:1-150
 ```
-
-**Where:** Code comments, changelog, migration notes.
-
-**In code:**
-```
-// ~legacy-api: Use @new-api instead. Removal planned for v2.0.
-```
-
----
-
-### `&` Integrations
-
-Use for **external services and third-party connections** — dependencies outside your codebase.
-
-```
-&stripe              - Payment processing
-&supabase            - Database and auth
-&resend              - Email delivery
-&google-calendar     - Calendar integration
-&aws-s3              - File storage
-```
-
-**Where:** Integration modules, API wrappers, configuration.
-
-**In code (pseudocode):**
-```
-log.integration('&stripe').info('Payment processed', { amount })
-log.integration('&postgres').error('Query failed', { error })
-```
-
----
-
-#### Compound Ideas (`?@`, `?#`, `?!`, etc.)
-
-Ideas can specify what type of symbol they're exploring by using a compound prefix:
-
-```
-?@subscription-model      - Idea for a feature
-?#dark-mode-toggle        - Idea for a component
-?$express-checkout        - Idea for a flow
-?%user-preferences        - Idea for state
-?~performance-optimization - Idea for an aspect
-?^premium-access          - Idea for a portal
-?!payment-webhook         - Idea for a signal
-```
-
-**Why use compound ideas?**
-- **Categorization**: Makes it clear what type of symbol the idea relates to
-- **Discoverability**: In the Prism visualizer, compound ideas connect to their target symbol type
-- **Planning**: Helps organize ideas by what they would become if implemented
-
-**Simple vs Compound:**
-- `?subscription-model` - General idea, no specific type
-- `?@subscription-model` - Idea specifically for a feature
 
 ---
 
 ## Symbol Naming Conventions
 
-1. **Use kebab-case**: `@user-login` not `@userLogin`
-2. **Be specific**: `@checkout-payment` not `@pay`
-3. **Use dots for hierarchy**: `%user.authenticated`, `%cart.items`
-4. **Use tilde for aspects**: `@login~validation`
-5. **Match file structure**: Features in `features/` use `@`, components in `components/` use `#`
+1. **Use kebab-case for IDs**: `#user-login` not `#userLogin`
+2. **Use PascalCase for classes**: `#PaymentService`, `#UserProfile`
+3. **Be specific**: `#checkout-payment` not `#pay`
+4. **Use dots for hierarchy in tags only**: Tags can be namespaced like `[payments:stripe]`
+5. **Match file structure**: Code in `features/` gets `[feature]` tag, `services/` gets component
 
 ---
 
 ## Cross-Referencing
 
-Symbols can reference each other in documentation:
+Symbols reference each other in documentation:
 
 ```yaml
-# In .purpose file (any project type)
-features:
-  process-order:
-    description: Complete order processing
-    gates: [^authenticated, ^valid-order]  # Portals required
-    flows: [$order-processing]             # Flows triggered
-    signals: ["!order-complete", "!order-failed"]
-    states: [%user.cart, %order.status]    # State dependencies
-    components: [#validator, #processor]
-    integrations: [&stripe, &inventory-api]
+# In .purpose file
+#process-order:
+  description: Complete order processing
+  tags: [feature, critical]
+  gates: [^authenticated, ^valid-order]  # Gates required
+  flows: [$order-processing]             # Flows triggered
+  signals: ["!order-complete", "!order-failed"]
+  components: [#validator, #processor]
 
 # These references are automatically indexed by `paradigm status`
 # and appear in the constellation graph
 ```
 
-This creates a traceable web of relationships that AI agents can follow.
-
 ### Symbol Reference Arrays
-
-Features and components can declare symbol references using these arrays:
 
 | Array | Symbol Type | Example |
 |-------|-------------|---------|
-| `gates:` | `^` Portal | `[^authenticated, ^premium]` |
+| `gates:` | `^` Gate | `[^authenticated, ^premium]` |
 | `flows:` | `$` Flow | `[$checkout-flow, $onboarding]` |
 | `signals:` | `!` Signal | `["!success", "!failed"]` |
-| `states:` | `%` State | `[%user.cart, %order.total]` |
 | `components:` | `#` Component | `[#Button, #Modal]` |
-
-**Symbol Extraction:**
-
-The indexer also extracts symbols from description text:
-```yaml
-features:
-  checkout:
-    description: "Processes orders for %user.authenticated users via $checkout-flow"
-    # %user.authenticated and $checkout-flow are auto-extracted
-```
+| `aspects:` | `~` Aspect | `[~audit-required, ~cached]` |
 
 ---
 
-## FTUX (First Time User Experience) Symbols
+## Migration from v1
 
-The FTUX system uses symbols to identify guided experience components:
+### Automatic Conversion
 
-### Flow Symbol for Journeys
+Run `paradigm migrate v2` to automatically convert:
 
-```
-$ftux                     - FTUX system flow
-$ftux-window-shopper      - Window shopper journey
-$ftux-new-signup          - New user onboarding
-$ftux-upgrade-prompt      - Upgrade encouragement flow
-```
+- `@feature` → `#feature` with tag `[feature]`
+- `&stripe` → `#stripe` with tag `[integration]`
+- `%userState` → `#userState` with tag `[state]`
+- `?newIdea` → `#newIdea` with tag `[idea]`
 
-### Signal Symbols for Events
+### Manual Review Required
 
-```
-!ftux-event-shown         - FTUX event displayed to user
-!ftux-event-complete      - User completed FTUX event
-!ftux-event-dismissed     - User dismissed FTUX event
-!ftux-journey-complete    - User completed entire journey
-!ftux-journey-abandoned   - User left mid-journey
-```
+- All `~` symbols flagged for anchor addition
+- Sentinel shows "Aspects need anchors" warning until resolved
 
-### State Symbols for Tracking
-
-```
-%ftux.active-event        - Currently displayed FTUX event
-%ftux.journey-progress    - Progress through active journey
-%ftux.completed-events    - Set of completed event IDs
-%sandbox.pending-changes  - Count of local changes in sandbox mode
-```
-
-### Component Targeting
-
-FTUX targets components via `data-ftux-id` attributes:
-
-```html
-<Button data-ftux-id="add-lead-button">Add Lead</Button>
-```
-
-Reference components in events and logs:
-
-```
-log.flow('$ftux').info('Targeting component', { 
-  componentId: 'add-lead-button',
-  effect: 'tooltip',
-});
-```
+---
 
 ## Discipline-Specific Examples
 

@@ -147,9 +147,9 @@ MCP Server        MCP Setup Guide
 Visual grid showing symbols with examples:
 
 ```
-@checkout     Feature        User-facing capability
+#checkout     Feature        User-facing capability
 #Button       Component      Reusable code unit
-^admin        Portal         Authorization gate
+^admin        Gate           Authorization checkpoint
 !error        Signal         Event or side effect
 $purchase     Flow           Multi-step process
 %user.auth    State          Data condition
@@ -345,7 +345,7 @@ gates:
 paradigm constellation
 
 # Query it with jq
-jq '.stars["@checkout"]' .paradigm/constellation.json
+jq '.stars["#checkout"]' .paradigm/constellation.json
 ```
 
 **Benefits:**
@@ -390,8 +390,8 @@ jq '.stars["@checkout"]' .paradigm/constellation.json
 Traditional: AI loads .cursorrules → 2000 tokens → works on task
             (Even if only 5% is relevant)
 
-With MCP:   AI needs info about @checkout →
-            Calls paradigm_ripple("@checkout") →
+With MCP:   AI needs info about #checkout →
+            Calls paradigm_ripple("#checkout") →
             Gets 100 tokens of targeted context
 ```
 
@@ -402,7 +402,7 @@ With MCP:   AI needs info about @checkout →
 | Resource | What It Returns |
 |----------|-----------------|
 | `paradigm://symbols` | All symbols with counts |
-| `paradigm://symbol/@checkout` | Single symbol details |
+| `paradigm://symbol/#checkout` | Single symbol details |
 | `paradigm://symbols/type/gate` | All gates |
 | `paradigm://gates` | Detailed gate definitions |
 | `paradigm://flows` | All flow definitions |
@@ -439,7 +439,7 @@ With MCP:   AI needs info about @checkout →
 
 > **You:** "What would break if I removed the ^authenticated gate?"
 >
-> **Claude:** *[calls paradigm_ripple]* "Removing ^authenticated would affect 12 features including @checkout, @profile, and @settings. Here's the full impact..."
+> **Claude:** *[calls paradigm_ripple]* "Removing ^authenticated would affect 12 features including #checkout, #profile, and #settings. Here's the full impact..."
 
 **Benefits:**
 - Token efficient — only fetch what's needed
@@ -467,8 +467,8 @@ With MCP:   AI needs info about @checkout →
 **Example:**
 ```typescript
 // Instead of: glob **/*.ts (thousands of files)
-paradigm_navigate({ intent: "find", target: "@checkout" })
-// Returns: { paths: ["src/features/checkout/"], symbols: ["@checkout"] }
+paradigm_navigate({ intent: "find", target: "#checkout" })
+// Returns: { paths: ["src/features/checkout/"], symbols: ["#checkout"] }
 ```
 
 **Benefits:**
@@ -496,7 +496,7 @@ paradigm_navigate({ intent: "find", target: "@checkout" })
 # .paradigm/wisdom/antipatterns.yaml
 antipatterns:
   - id: "api-001"
-    symbols: ["@api", "#api-client"]
+    symbols: ["#api", "#api-client"]
     description: "Do NOT use axios interceptors for auth token refresh"
     reason: "Caused race conditions when multiple requests trigger refresh"
     alternative: "Use a token refresh queue with mutex"
@@ -526,10 +526,10 @@ antipatterns:
 ```bash
 # Check fragility before modifying
 paradigm history fragile
-# → @search: HIGH fragility (3 rollbacks in last 10 changes)
+# → #search: HIGH fragility (3 rollbacks in last 10 changes)
 
 # See what changed together
-paradigm history show @checkout
+paradigm history show #checkout
 # → Often changes with #payment-form (89% correlation)
 ```
 
@@ -938,17 +938,13 @@ API Reference
 
 ## Appendix: Symbol Quick Reference
 
-| Symbol | Name | Domain | Example | Description |
-|--------|------|--------|---------|-------------|
-| `@` | Feature | Purpose | `@checkout` | User-facing capability |
-| `#` | Component | Purpose | `#Button` | Reusable code unit |
-| `^` | Portal | Portal | `^authenticated` | Authorization gate |
-| `!` | Signal | Portal | `!login-failed` | Event or side effect |
-| `$` | Flow | Shared | `$purchase-flow` | Multi-step process |
-| `%` | State | Purpose | `%user.authenticated` | Data condition |
-| `~` | Deprecated | Shared | `~legacy-api` | Marked for removal |
-| `?` | Idea | Premise | `?add-export` | Future possibility |
-| `&` | Integration | Shared | `&stripe` | External service |
+| Symbol | Name | Example | Description |
+|--------|------|---------|-------------|
+| `#` | Component | `#checkout`, `#Button` | Any documented code unit |
+| `$` | Flow | `$purchase-flow` | Multi-step process with sequence |
+| `^` | Gate | `^authenticated` | Authorization checkpoint |
+| `!` | Signal | `!login-failed` | Event for side effects |
+| `~` | Aspect | `~audit-required` | Rule with required code anchor |
 
 ---
 

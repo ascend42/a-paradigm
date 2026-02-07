@@ -1,18 +1,18 @@
 ---
 id: purpose
 title: Purpose File Schema
-version: 1.0.0
-updated: 2026-02-02
+version: 2.0.0
+updated: 2026-02-06
 tags: [purpose, schema, context, yaml]
 canonical_for: [purpose-files, directory-context]
 related:
-  - ./symbols.md (symbol reference)
+  - ./symbols-v2.md (symbol reference)
   - ./context.md (documentation indexing)
 ---
 
-# Purpose File Schema
+# Purpose File Schema (v2)
 
-Purpose files (`.purpose`) define contextual metadata for directories. They tell AI agents what a directory contains, what features it implements, and how components relate to each other.
+Purpose files (`.purpose`) define contextual metadata for directories. They tell AI agents what a directory contains, what symbols it defines, and how they relate to each other.
 
 ---
 
@@ -35,103 +35,104 @@ Place `.purpose` files in:
 # Optional: description of the directory
 description: What this directory contains and its role in the project
 
-# Features (@ symbol) - User-facing capabilities
-features:
-  feature-name:
-    description: What this feature does
-    gates: [^gate1, ^gate2]           # Required portals
-    flows: [$flow-name]               # Multi-step processes
-    signals: ["!signal1", "!signal2"]   # Events emitted
-    components: [#Component1]         # Components used
-    states: [%user.preference]        # State accessed
-    tags: [keyword1, keyword2]        # Searchable tags
-
-# Components (# symbol) - Reusable modules
-components:
-  ComponentName:
+# Components (#) - Any documented code unit
+# Use tags for classification: [feature], [integration], [state], [ui], etc.
+symbols:
+  #component-name:
     description: What this component does
-    used-by: [@feature1, @feature2]   # Features using this
-    uses: [#OtherComponent]           # Dependencies
-    tags: [ui, form, etc]
+    tags: [feature, critical]             # Classification tags
+    gates: [^gate1, ^gate2]              # Required gates
+    flows: [$flow-name]                  # Multi-step processes
+    signals: ["!signal1", "!signal2"]    # Events emitted
+    uses: [#OtherComponent]             # Dependencies
+    used-by: [#parent-component]        # Dependents
 
-# Gates (^ symbol) - Authorization checkpoints
-gates:
-  gate-name:
+  # Gates (^) - Authorization checkpoints
+  ^gate-name:
     description: What access this controls
-    locks: [lock-description]         # Requirements
-    tags: [auth, admin, etc]
+    locks: [lock-description]
+    tags: [auth, admin]
 
-# Signals (! symbol) - Events and side effects
-signals:
-  signal-name:
+  # Signals (!) - Events and side effects
+  !signal-name:
     description: What triggers this event
-    emitted-by: [@feature]            # Source
-    category: [auth, analytics, etc]
+    emitted-by: [#component]
+    tags: [auth, analytics]
 
-# Flows ($ symbol) - Multi-step processes
-flows:
-  flow-name:
+  # Flows ($) - Multi-step processes
+  $flow-name:
     description: What this process accomplishes
     steps: [step1, step2, step3]
     gates: [^required-gate]
 
-# States (% symbol) - Application state
-states:
-  state.path:
-    description: What this state represents
-    type: boolean | string | number | object
-    default: value
+  # Aspects (~) - Cross-cutting rules with code anchors
+  ~aspect-name:
+    description: Rule enforced across components
+    anchors:                             # REQUIRED for aspects
+      - src/middleware/audit.ts:15-35
+    applies-to: ["#*Service"]
+    tags: [compliance, security]
 ```
 
 ---
 
 ## Record vs Array Format
 
-Both formats are valid for defining items:
+Both formats are valid for defining symbols:
 
 ### Record Format (Recommended)
 
 ```yaml
-features:
-  login:
+symbols:
+  #login:
     description: User authentication
+    tags: [feature]
     gates: [^authenticated]
 
-  checkout:
+  #checkout:
     description: Purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
 ```
 
 ### Array Format
 
 ```yaml
-features:
-  - id: login
+symbols:
+  - id: "#login"
     description: User authentication
+    tags: [feature]
     gates: [^authenticated]
 
-  - id: checkout
+  - id: "#checkout"
     description: Purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
 ```
 
 ---
 
-## Symbol References
+## Symbol References (v2)
 
-Reference other symbols using their prefixes:
+Reference symbols using these 5 operational prefixes:
 
-| Symbol | Meaning | Example |
-|--------|---------|---------|
-| `@` | Feature | `@login`, `@checkout` |
-| `#` | Component | `#Button`, `#Modal` |
-| `^` | Gate | `^authenticated`, `^admin` |
-| `!` | Signal | `!login-success`, `!error` |
-| `$` | Flow | `$onboarding`, `$checkout-flow` |
-| `%` | State | `%user.authenticated` |
-| `?` | Idea | `?subscription-model` |
-| `~` | Deprecated | `~legacy-api` |
-| `&` | Integration | `&stripe`, `&analytics` |
+| Symbol | Name | Example | Purpose |
+|--------|------|---------|---------|
+| `#` | Component | `#login`, `#Button` | Any documented code unit |
+| `$` | Flow | `$onboarding`, `$checkout-flow` | Multi-step process |
+| `^` | Gate | `^authenticated`, `^admin` | Authorization checkpoint |
+| `!` | Signal | `!login-success`, `!error` | Event or side effect |
+| `~` | Aspect | `~audit-required` | Cross-cutting rule (requires anchors) |
+
+Classification uses **tags** instead of symbol prefixes:
+
+| Tag | Replaces | Example |
+|-----|----------|---------|
+| `[feature]` | old `@feature` | `#checkout` with `tags: [feature]` |
+| `[integration]` | old `&integration` | `#stripe-client` with `tags: [integration, stripe]` |
+| `[state]` | old `%state` | `#user-store` with `tags: [state]` |
+| `[idea]` | old `?idea` | Any symbol with `tags: [idea]` |
+| `[deprecated]` | old `~deprecated` | Any symbol with `tags: [deprecated]` |
 
 ---
 
@@ -141,21 +142,23 @@ Reference other symbols using their prefixes:
 # src/features/auth/.purpose
 description: Authentication and user session management
 
-features:
-  login:
+symbols:
+  #login:
     description: Email/password authentication
+    tags: [feature]
     gates: [^public]
     signals: ["!login-success", "!login-failed"]
 
-  logout:
+  #logout:
     description: End user session
+    tags: [feature]
     gates: [^authenticated]
     signals: ["!logout"]
 
-components:
-  LoginForm:
+  #LoginForm:
     description: Login UI with validation
-    used-by: [@login]
+    tags: [ui]
+    used-by: [#login]
 ```
 
 ---
@@ -166,34 +169,33 @@ components:
 # src/features/checkout/.purpose
 description: E-commerce checkout and payment processing
 
-features:
-  add-to-cart:
+symbols:
+  #add-to-cart:
     description: Add product to shopping cart
+    tags: [feature]
     gates: [^authenticated]
     signals: ["!cart-updated"]
-    components: [#CartButton, #ProductCard]
-    states: [%cart.items]
+    uses: [#CartButton, #ProductCard]
 
-  checkout:
+  #checkout:
     description: Complete purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
     flows: [$checkout-flow]
     signals: ["!checkout-started", "!checkout-completed", "!payment-failed"]
-    tags: [payment, critical]
 
-components:
-  CartButton:
+  #CartButton:
     description: Add to cart button with quantity selector
-    used-by: [@add-to-cart]
     tags: [ui, interactive]
+    used-by: [#add-to-cart]
 
-  CheckoutForm:
+  #CheckoutForm:
     description: Payment and shipping form
-    used-by: [@checkout]
+    tags: [ui]
+    used-by: [#checkout]
     uses: [#AddressForm, #PaymentForm]
 
-flows:
-  checkout-flow:
+  $checkout-flow:
     description: Multi-step checkout process
     steps:
       - Review cart
@@ -202,22 +204,19 @@ flows:
       - Confirm order
     gates: [^authenticated, ^has-cart]
 
-signals:
-  cart-updated:
+  !cart-updated:
     description: Cart contents changed
-    emitted-by: [@add-to-cart]
-    category: cart
+    emitted-by: [#add-to-cart]
+    tags: [cart]
 
-  checkout-completed:
+  !checkout-completed:
     description: Order successfully placed
-    emitted-by: [@checkout]
-    category: purchase
+    emitted-by: [#checkout]
+    tags: [purchase]
 
-states:
-  cart.items:
+  #cart-store:
     description: Items currently in cart
-    type: array
-    default: []
+    tags: [state]
 ```
 
 ---
@@ -236,6 +235,7 @@ Common validation errors:
 - Invalid symbol references
 - Circular dependencies
 - Unknown symbol types
+- Aspects missing required anchors
 
 ---
 
@@ -243,10 +243,11 @@ Common validation errors:
 
 1. **Keep descriptions concise** - One sentence explaining purpose
 2. **Use consistent naming** - kebab-case for IDs (`feature-name` not `featureName`)
-3. **Reference related symbols** - Link features to gates, signals, components
-4. **Add tags for searchability** - Help AI find relevant code
+3. **Reference related symbols** - Link components to gates, signals, flows
+4. **Use tags for classification** - `[feature]`, `[integration]`, `[state]`, `[ui]`, etc.
 5. **Update when code changes** - Keep purpose files in sync with implementation
 6. **Place at appropriate level** - Directory-level for shared context, feature-level for specifics
+7. **Anchor all aspects** - `~` symbols must have `anchors` pointing to enforcement code
 
 ---
 
