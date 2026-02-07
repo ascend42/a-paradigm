@@ -95,7 +95,7 @@ New developer asks: "What's the checkout flow?"
 **Find what you need instantly**:
 
 **Auto-generated tags**:
-- From file paths: `@checkout` → "payments", "commerce", "revenue"
+- From file paths: `#checkout` → "payments", "commerce", "revenue"
 - From dependencies: Uses `&stripe` → "stripe", "payments"
 - From commit messages: Extract common terms
 - From portal rules: `^authenticated` → "security", "auth"
@@ -436,7 +436,7 @@ Each path is sequence of symbols with explanations:
 ```yaml
 path: new-developer-onboarding
 steps:
-  - symbol: @user-management
+  - symbol: #user-management
     explanation: "Our user system. We use Auth0..."
     next: ^authenticated
     

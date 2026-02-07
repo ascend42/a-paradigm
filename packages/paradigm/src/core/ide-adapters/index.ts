@@ -357,10 +357,12 @@ export function writeMcpConfig(
   let configPath: string;
 
   // Determine the config path based on IDE
-  // Claude Code and Cursor both use .mcp.json at project root
-  // Cursor also supports .cursor/mcp.json but .mcp.json is the universal standard
+  // Cursor reads from .cursor/mcp.json (project-level)
+  // Claude Code reads from .mcp.json at project root
   switch (ideName) {
     case 'cursor':
+      configPath = path.join(rootDir, '.cursor', 'mcp.json');
+      break;
     case 'claude':
       configPath = path.join(rootDir, '.mcp.json');
       break;

@@ -28,8 +28,8 @@ I need to refactor [COMPONENT/FEATURE/AREA].
 
 ## Symbols Involved
 - Components: #[names]
-- Features: @[names]
-- State: %[names]
+- Gates: ^[names]
+- Signals: ![names]
 
 ## Additional Context
 [Any other relevant info]
@@ -60,12 +60,12 @@ The API client is a single 500-line file with all endpoints, error handling, and
 
 ## Constraints
 - Must maintain same public API (other features depend on it)
-- Can't change how @login and @checkout call the client
+- Can't change how #login-handler and #checkout call the client
 - Keep bundle size reasonable
 
 ## Symbols Involved
 - Components: #api-client, #http-wrapper
-- Features that use it: @login, @checkout, @profile
+- Components that use it: #login-handler, #checkout, #profile
 - Signals: !api-error, !network-retry
 
 ## Additional Context

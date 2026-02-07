@@ -196,5 +196,5 @@ paradigm_context_check → paradigm_handoff_prepare → paradigm team handoff �
 1. **Check Periodically**: Don't wait until context is full
 2. **Summarize Well**: Include specific file paths and symbols
 3. **List Next Steps**: Make it easy to continue
-4. **Reference Symbols**: Use @feature, #component prefixes
+4. **Reference Symbols**: Use #component, ^gate, !signal prefixes
 5. **Note Blockers**: Document any unresolved issues

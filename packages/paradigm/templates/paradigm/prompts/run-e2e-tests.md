@@ -1,14 +1,14 @@
-# Run Portal E2E Tests
+# Run Gate E2E Tests
 
-> Paradigm Prompt - AI Agent Guide for Portal E2E Testing
+> Paradigm Prompt - AI Agent Guide for Gate E2E Testing
 
-Use this prompt when executing Portal-Driven E2E tests to validate authorization flows.
+Use this prompt when executing Gate-Driven E2E tests to validate authorization flows.
 
 ---
 
 ## Context
 
-You are validating authorization flows using the Portal Validation system. The application emits structured console logs (`^portal` checks) that document every authorization decision. Your job is to navigate to protected routes and verify that portal checks match expectations.
+You are validating authorization flows using the Portal Validation system. The application emits structured console logs (`^gate` checks) that document every authorization decision. Your job is to navigate to protected routes and verify that gate checks match expectations.
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ scenarios:
     steps:
       - navigate: /leads
         expect:
-          portal: ^authenticated
+          gate: ^authenticated
           decision: DENY
           redirectTo: /login
 ```
@@ -91,9 +91,9 @@ type:
 1. Use `browser_type` with selector and text
 2. Continue to next step
 
-### Step 4: Parse Portal Check Results
+### Step 4: Parse Gate Check Results
 
-Read console output and find portal checks.
+Read console output and find gate checks.
 
 #### Visual Format
 Look for lines containing:
@@ -126,12 +126,12 @@ For each expected result:
 
 ```yaml
 expect:
-  portal: ^authenticated
+  gate: ^authenticated
   decision: DENY
   redirectTo: /login
 ```
 
-1. Find the portal check for the specified gate
+1. Find the gate check for the specified gate
 2. Compare `decision` (ALLOW/DENY)
 3. If `redirectTo` specified and decision is DENY, verify current URL
 
@@ -140,7 +140,7 @@ expect:
 Create a summary table:
 
 ```markdown
-## Portal E2E Test Results
+## Gate E2E Test Results
 
 **Date**: 2026-01-25
 **Environment**: localhost:5173
@@ -150,7 +150,7 @@ Create a summary table:
 
 ### Results
 
-| Scenario | Step | Portal | Expected | Actual | Status |
+| Scenario | Step | Gate | Expected | Actual | Status |
 |----------|------|--------|----------|--------|--------|
 | unauthenticated-protected | /leads | ^authenticated | DENY | DENY | ✅ |
 | starter-basic-access | /leads | ^subscription-required | ALLOW | ALLOW | ✅ |
@@ -191,7 +191,7 @@ Create a summary table:
   steps:
     - navigate: /leads
       expect:
-        portal: ^subscription-required
+        gate: ^subscription-required
         decision: ALLOW
 ```
 
@@ -207,7 +207,7 @@ Create a summary table:
 2. **Navigate to /leads**
    - Browser already at /leads after login
    - Read console messages
-   - Find portal check:
+   - Find gate check:
      ```
      🚪 PORTAL CHECK: ^subscription-required
      ├─ Decision: ✅ ALLOW
@@ -236,9 +236,9 @@ Typically stored in environment variables or test config:
 
 ---
 
-## Common Portal Checks
+## Common Gate Checks
 
-| Portal | Requires | Routes |
+| Gate | Requires | Routes |
 |--------|----------|--------|
 | `^authenticated` | Valid session | All protected routes |
 | `^public-only` | No session | /login, /signup, / |
@@ -251,10 +251,10 @@ Typically stored in environment variables or test config:
 
 ## Troubleshooting
 
-### Portal Check Not Found in Logs
+### Gate Check Not Found in Logs
 
-1. **Portal validation not enabled**: Set `VITE_ENABLE_PORTAL_VALIDATION=true`
-2. **Route doesn't have portal check**: Add `portal.check()` to route guard
+1. **Gate validation not enabled**: Set `VITE_ENABLE_PORTAL_VALIDATION=true`
+2. **Route doesn't have gate check**: Add `portal.check()` to route guard
 3. **Check completed before console read**: Add wait after navigation
 
 ### Wrong Decision
@@ -275,17 +275,17 @@ Typically stored in environment variables or test config:
 
 After running tests, analyze coverage:
 
-1. **List all portals** from `portal.yaml`
-2. **Find tested portals** from scenario files
+1. **List all gates** from `portal.yaml`
+2. **Find tested gates** from scenario files
 3. **Identify gaps**:
-   - Portals without any test
-   - Portals only tested for ALLOW (not DENY)
-   - Portals only tested for DENY (not ALLOW)
+   - Gates without any test
+   - Gates only tested for ALLOW (not DENY)
+   - Gates only tested for DENY (not ALLOW)
 
 ```markdown
 ## Coverage Report
 
-| Portal | Tested | ALLOW Test | DENY Test |
+| Gate | Tested | ALLOW Test | DENY Test |
 |--------|--------|------------|-----------|
 | ^authenticated | ✅ | ✅ | ✅ |
 | ^subscription-required | ✅ | ✅ | ✅ |
@@ -293,7 +293,7 @@ After running tests, analyze coverage:
 | ^agency-required | ✅ | ❌ | ✅ |
 | ^super-admin | ❌ | ❌ | ❌ |
 
-**Coverage**: 4/5 portals tested (80%)
+**Coverage**: 4/5 gates tested (80%)
 **Recommendation**: Add tests for ^super-admin
 ```
 
@@ -322,7 +322,7 @@ The AI agent uses Cursor's browser tools for validation:
 5. browser_click(ref="submit")
 6. browser_wait_for(time=2)
 7. browser_navigate("/leads")
-8. browser_console_messages() - read portal checks
+8. browser_console_messages() - read gate checks
 9. [Parse output and validate against expectations]
 ```
 
@@ -334,7 +334,7 @@ Before submitting test results:
 
 - [ ] All scenarios executed
 - [ ] Console output captured for each step
-- [ ] Portal decisions extracted and compared
+- [ ] Gate decisions extracted and compared
 - [ ] Failures documented with context
 - [ ] Coverage analysis completed
 - [ ] Recommendations provided for gaps

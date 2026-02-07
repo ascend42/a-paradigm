@@ -25,7 +25,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 - [`paradigm doctor`](./commands/doctor.md) - Run health checks on Paradigm setup
 
 ### Concepts & Patterns
-- [Symbol System](../CLAUDE.md#symbol-system) - Understanding @, #, $, %, ^, !, ? symbols
+- [Symbol System](../CLAUDE.md#symbol-system-v2) - Understanding #, $, ^, !, ~ symbols
 - [Paradigm Logger](../.paradigm/specs/logger.md) - Structured logging specification
 - [Purpose Files](../CONTRIBUTING.md#purpose-files) - Feature and component context files
 
@@ -59,7 +59,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 | `paradigm sync` | Update IDE files | After config changes |
 | `paradigm beacon` | Generate AI orientation | Weekly or after features |
 | `paradigm constellation` | Build symbol graph | With beacon |
-| `paradigm ripple @symbol` | Check change impact | Before every modification |
+| `paradigm ripple #symbol` | Check change impact | Before every modification |
 | `paradigm doctor` | Health check | When troubleshooting |
 | `paradigm index` | Visual discovery | Optional, for screenshots |
 | `paradigm mcp setup` | Configure AI tools | Once per machine |
@@ -77,7 +77,7 @@ paradigm doctor
 
 ### Before Refactoring
 ```bash
-paradigm ripple @feature-to-change
+paradigm ripple #feature-to-change
 # Review impact, then make changes
 paradigm beacon --refresh
 ```

@@ -17,7 +17,7 @@ agent-guidelines:
   
   how-to-use:
     - "Check .paradigm/specs/ for philosophy and patterns before making changes"
-    - "Reference symbols using prefixes: @feature #component ^portal !signal %state $flow"
+    - "Reference symbols using prefixes: #component ^gate !signal $flow ~aspect"
     - "Use the Paradigm logger instead of raw console.log/print statements"
     - "Run `paradigm probe` with screenshots to map UI to code"
     - "Check .paradigm/docs/ for command reference and troubleshooting"
@@ -27,56 +27,37 @@ agent-guidelines:
   update-rules:
     - "When adding a feature, create/update the nearest .purpose file"
     - "When adding authorization, update portal.yaml"
-    - "When exploring ideas, use ?symbol prefix"
+    - "When exploring ideas, use [idea] tag on any symbol"
     - "Always update references when renaming symbols"
 
-# Symbol system - the shared language between code and AI
+# Symbol system v2 - the shared language between code and AI
+# 5 operational symbols + tag bank for classification
 symbol-system:
-  "@":
-    name: Feature
-    description: User-facing capabilities and functionality
-    owner: purpose
-    examples: ["@checkout", "@user-login", "@search"]
   "#":
     name: Component
-    description: Reusable code units, UI components, or modules
+    description: Any documented code unit (feature, service, module, integration)
     owner: purpose
-    examples: ["#Button", "#api-client", "#AuthProvider"]
+    examples: ["#checkout", "#login-handler", "#Button", "#stripe-client"]
   "$":
     name: Flow
     description: Multi-step processes or user journeys
     owner: shared
     examples: ["$checkout-flow", "$onboarding", "$auth-flow"]
-  "%":
-    name: State
-    description: Global or user state conditions
-    owner: purpose
-    examples: ["%user.authenticated", "%cart.items", "%app.loading"]
   "^":
-    name: Portal
+    name: Gate
     description: Access control points and authorization rules
     owner: portal
-    examples: ["^auth-required", "^admin-only", "^rate-limited"]
+    examples: ["^authenticated", "^admin-only", "^rate-limited"]
   "!":
     name: Signal
-    description: Events, errors, and side effects
-    owner: portal
+    description: Events emitted for side effects
+    owner: purpose
     examples: ["!login-success", "!payment-failed", "!rate-limited"]
-  "?":
-    name: Idea
-    description: Free-form exploration and future possibilities
-    owner: premise
-    examples: ["?subscription-model", "?ai-recommendations"]
   "~":
-    name: Deprecated
-    description: Features or components marked for removal
-    owner: shared
-    examples: ["~legacy-api", "~v1-auth", "~old-dashboard"]
-  "&":
-    name: Integration
-    description: External services and third-party connections
-    owner: shared
-    examples: ["&stripe", "&supabase", "&resend", "&google-calendar"]
+    name: Aspect
+    description: Cross-cutting rules with required code anchors
+    owner: purpose
+    examples: ["~audit-required", "~rate-limited", "~cached"]
 
 # Logging configuration
 logging:
@@ -89,15 +70,13 @@ logging:
   # Map directory patterns to symbol types for logging
   # These are generic patterns - customize for your project structure
   symbol-mapping:
-    # Features/Capabilities (@)
-    "features/**": "@"
-    "routes/**": "@"
-    "api/**": "@"
-    "endpoints/**": "@"
-    "commands/**": "@"
-    "models/**": "@"        # ML models as features
-    
-    # Components/Building Blocks (#)
+    # Components (#) - all code units
+    "features/**": "#"
+    "routes/**": "#"
+    "api/**": "#"
+    "endpoints/**": "#"
+    "commands/**": "#"
+    "models/**": "#"
     "components/**": "#"
     "lib/**": "#"
     "utils/**": "#"
@@ -105,57 +84,49 @@ logging:
     "core/**": "#"
     "drivers/**": "#"       # Embedded
     "systems/**": "#"       # Game dev
-    
-    # Access Control (^)
+    "stores/**": "#"
+    "state/**": "#"
+    "reducers/**": "#"
+    "config/**": "#"
+    "integrations/**": "#"
+    "external/**": "#"
+    "vendors/**": "#"
+
+    # Gates (^) - access control
     "middleware/**": "^"
     "auth/**": "^"
     "guards/**": "^"
     "policies/**": "^"
-    
-    # State (%)
-    "stores/**": "%"
-    "state/**": "%"
-    "reducers/**": "%"
-    "config/**": "%"
-    
-    # Events/Signals (!)
+
+    # Signals (!) - events
     "events/**": "!"
     "handlers/**": "!"
     "listeners/**": "!"
     "hooks/**": "!"
-    
-    # Flows/Processes ($)
+
+    # Flows ($) - multi-step processes
     "flows/**": "$"
     "sagas/**": "$"
     "workflows/**": "$"
     "pipelines/**": "$"     # ML/Data pipelines
-    
-    # Integrations (&)
-    "integrations/**": "&"
-    "external/**": "&"
-    "vendors/**": "&"
+
+    # Aspects (~) - cross-cutting rules
+    "aspects/**": "~"
+    "rules/**": "~"
 
 # Probe configuration for visual discovery
 probe:
   enabled: true
   auto-include: true
 
-# Project states
-states:
-  user:
-    authenticated:
-      type: boolean
-      default: false
-      description: User is logged in
-    role:
-      type: enum
-      values: [guest, user, admin]
-      description: User access level
-  app:
-    loading:
-      type: boolean
-      default: false
-      description: App is loading
+# Project states (define as #components with [state] tag in .purpose files)
+# states:
+#   user-store:
+#     description: User authentication state
+#     tags: [state]
+#   app-store:
+#     description: Application loading state
+#     tags: [state]
 
 # Where .purpose files should exist
 # Customize these patterns for your project structure
@@ -178,10 +149,10 @@ purpose-required:
 conventions:
   - "Use kebab-case for all symbol IDs (feature-name, not featureName)"
   - "Document flows when logic spans 3+ components"
-  - "Reference related items using symbol prefixes (@ # $ % ~ ^ ! ?)"
-  - "Add descriptions to all features and portals"
+  - "Reference related items using symbol prefixes (# $ ^ ! ~)"
+  - "Add descriptions to all components and gates"
   - "Update .purpose files when changing feature behavior"
-  - "Keep portals minimal - one responsibility per portal"
+  - "Keep gates minimal - one responsibility per gate"
   - "Use signals for side effects, not direct state mutations"
   - "ALWAYS use Paradigm logger, NEVER raw console.log/print"
 

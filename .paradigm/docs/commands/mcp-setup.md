@@ -109,7 +109,7 @@ Next steps:
 
 Then try asking your AI:
   "What features are in the my-project project?"
-  "What would break if I changed @feature-name?"
+  "What would break if I changed #feature-name?"
 ```
 
 ## Configuration Files

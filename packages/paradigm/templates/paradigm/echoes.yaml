@@ -10,16 +10,16 @@ errors:
   #   symbol: "^authenticated"
   #   location: "src/middleware/auth.ts"
   #   ripple:
-  #     - "@checkout"
-  #     - "@profile"
-  #     - "@settings"
+  #     - "#checkout"
+  #     - "#profile"
+  #     - "#settings"
   #   resolution: "Ensure user token is passed in request headers"
 
   # CART_EMPTY:
   #   symbol: "^has-items"
   #   location: "src/features/cart/guards.ts"
   #   ripple:
-  #     - "@checkout"
+  #     - "#checkout"
   #   resolution: "Add items to cart before checkout"
 
   # Add your error mappings below

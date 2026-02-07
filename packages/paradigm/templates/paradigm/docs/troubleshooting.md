@@ -108,16 +108,16 @@ Common issues and their solutions.
    ```bash
    # Correct
    LOG_LEVEL=debug
-   PARADIGM_SYMBOLS=!,@
+   PARADIGM_SYMBOLS=!,#
    
    # Wrong (spaces)
-   PARADIGM_SYMBOLS=!, @
+   PARADIGM_SYMBOLS=!, #
    ```
 
 2. **Verify variable is exported:**
    ```bash
    export LOG_LEVEL=debug
-   export PARADIGM_SYMBOLS='!,@'
+   export PARADIGM_SYMBOLS='!,#'
    ```
 
 3. **Browser: Check localStorage:**
@@ -418,24 +418,23 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
 ```markdown
 # project-name - Paradigm Context
 
-## Symbol System
+## Symbol System (v2)
 | Symbol | Name | Use For |
 |--------|------|---------|
-| `@` | Feature | User-facing capabilities |
-| `#` | Component | Reusable modules |
-| `^` | Portal | Access control |
-| `!` | Signal | Events/side effects |
+| `#` | Component | All code units (features, services, integrations) |
+| `^` | Gate | Access control / authorization |
+| `!` | Signal | Events / side effects |
 | `$` | Flow | Multi-step processes |
-| `%` | State | App state |
+| `~` | Aspect | Cross-cutting rules with code anchors |
 
 ## Paradigm Logger
 **NEVER use console.log. ALWAYS use Paradigm logger.**
 
 | Directory | Method |
 |-----------|--------|
-| `features/` | `log.feature()` |
-| `components/` | `log.component()` |
-| `middleware/` | `log.gate()` |
+| `features/`, `components/` | `log.component()` |
+| `middleware/`, `auth/` | `log.gate()` |
+| `events/`, `handlers/` | `log.signal()` |
 
 ## Key Files
 | File | Purpose |

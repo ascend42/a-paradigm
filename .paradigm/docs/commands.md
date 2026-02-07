@@ -259,9 +259,9 @@ paradigm summary
 ## Symbol Counts
 | Type | Count | Examples |
 |------|-------|----------|
-| @features | 12 | @login, @checkout |
+| #features | 12 | #login, #checkout |
 | #components | 24 | #Button, #Modal |
-| ^portals | 5 | ^authenticated |
+| ^gates | 5 | ^authenticated |
 
 ## Health Status
 - All specs present ✓
@@ -484,7 +484,7 @@ Suggest which agents should handle a task based on triggers defined in `agents.y
 paradigm team agents suggest "Add user authentication with JWT"
 
 # Output as JSON
-paradigm team agents suggest "Build @checkout with Stripe integration" --json
+paradigm team agents suggest "Build #checkout with Stripe integration" --json
 ```
 
 **What it returns:**
@@ -620,8 +620,8 @@ Show wisdom overview or for a specific symbol.
 paradigm wisdom
 
 # For a symbol
-paradigm wisdom show @checkout
-paradigm wisdom show @checkout --json
+paradigm wisdom show #checkout
+paradigm wisdom show #checkout --json
 ```
 
 ### paradigm wisdom init
@@ -640,7 +640,7 @@ Add a new antipattern (what NOT to do).
 ```bash
 paradigm wisdom add-antipattern \
   --id "api-001" \
-  --symbols "@api,#api-client" \
+  --symbols "#api,#api-client" \
   --description "Do NOT use axios interceptors for auth" \
   --reason "Causes race conditions with token refresh" \
   --alternative "Use wrapper function with explicit token handling"
@@ -654,7 +654,7 @@ Create a new decision record (ADR).
 paradigm wisdom decide \
   --id "001" \
   --title "Authentication Approach" \
-  --symbols "^authenticated,@login" \
+  --symbols "^authenticated,#login" \
   --context "Need to choose auth method" \
   --decision "Use JWT with refresh tokens" \
   --status accepted
@@ -666,7 +666,7 @@ Find experts for a symbol or area.
 
 ```bash
 # By symbol
-paradigm wisdom expert @checkout
+paradigm wisdom expert #checkout
 
 # By area
 paradigm wisdom expert --area payments
@@ -687,8 +687,8 @@ Show history overview or for a specific symbol.
 paradigm history
 
 # For a symbol
-paradigm history show @checkout
-paradigm history show @checkout --limit 20 --json
+paradigm history show #checkout
+paradigm history show #checkout --limit 20 --json
 ```
 
 ### paradigm history init
@@ -724,7 +724,7 @@ Record an implementation event.
 ```bash
 paradigm history record \
   --type implement \
-  --symbols "@checkout" \
+  --symbols "#checkout" \
   --description "Added Apple Pay support" \
   --intent feature \
   --commit abc123
@@ -847,7 +847,7 @@ Query the navigator for targeted exploration:
 
 ```bash
 # Find a symbol
-paradigm_navigate({ intent: "find", target: "@checkout" })
+paradigm_navigate({ intent: "find", target: "#checkout" })
 
 # Explore an area
 paradigm_navigate({ intent: "explore", target: "authentication" })

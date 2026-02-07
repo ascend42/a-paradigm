@@ -132,7 +132,7 @@ With Paradigm:   Security ↘
 
 | Challenge | How Paradigm Solves It |
 |-----------|------------------------|
-| Finding relevant code | Symbol system (`@feature`, `#component`) |
+| Finding relevant code | Symbol system (`#feature`, `#component`) |
 | Understanding impact | `paradigm_ripple` shows dependencies |
 | Maintaining auth | `portal.yaml` is single source of truth |
 | Tracking changes | History recording for every modification |
@@ -257,7 +257,7 @@ To deliver on the promise reliably, these improvements are needed:
 1. **Post-Task Prompts** (High)
    ```
    After feature implementation:
-   "No .purpose file found for @new-feature. Create one? [Y/n]"
+   "No .purpose file found for #new-feature. Create one? [Y/n]"
    ```
 
 2. **Auto-Ripple for Refactoring** (High)
@@ -464,7 +464,7 @@ Document the complete task lifecycle as a $flow in .purpose files.
 Requirements:
 - Create $task-lifecycle flow covering all task state changes
 - Document all !signals emitted (create, update, assign, delete)
-- Reference the @tasks feature and ^gates involved
+- Reference the #tasks feature and ^gates involved
 - No code changes - documentation only
 ```
 
@@ -474,7 +474,7 @@ Requirements:
 | Agents spawned | 1 (Architect only) | Right-sized for docs |
 | Builder spawned? | No | Not needed for docs |
 | .purpose file created? | Yes | Documentation conventions followed |
-| Symbols used correctly? | $flow, !signal, @feature, ^gate | Symbol system enforced |
+| Symbols used correctly? | $flow, !signal, #feature, ^gate | Symbol system enforced |
 
 **Why this matters:** Documentation tasks shouldn't cost as much as implementation tasks. This proves the orchestrator understands the difference.
 

@@ -88,7 +88,7 @@ your-project/
 | Command | What It Does |
 |---------|--------------|
 | `paradigm status` | Show symbol counts and project health |
-| `paradigm ripple @symbol` | Impact analysis before modifying a symbol |
+| `paradigm ripple #symbol` | Impact analysis before modifying a symbol |
 | `paradigm search "query"` | Find symbols by name/description |
 | `paradigm thread save "message"` | Record session progress |
 | `paradigm echo ERROR_CODE` | Find symbols related to an error |

@@ -4,68 +4,68 @@ Common patterns for working with Paradigm symbols and the logger.
 
 ---
 
-## Feature Pattern
+## Component Pattern (Features)
 
-Features (`@`) are user-facing operations. They should be logged at entry and exit.
+Components with `[feature]` tag are user-facing operations. They should be logged at entry and exit.
 
 ```
-// Feature: @login
+// Component: #login-handler [feature]
 
 function login(email, password):
     // 1. Log entry with start() for duration tracking
-    tracker = log.feature('@login').start('Starting @login', { email })
-    
+    tracker = log.component('#login-handler').start('Starting login', { email })
+
     try:
         // 2. Perform the operation
         user = authenticate(email, password)
-        
+
         // 3. Emit success signal
-        log.signal('!login-success').info('User authenticated', { 
-            userId: user.id 
+        log.signal('!login-success').info('User authenticated', {
+            userId: user.id
         })
-        
+
         // 4. Log successful completion with duration
-        tracker.success('@login completed', { userId: user.id })
-        
+        tracker.success('Login completed', { userId: user.id })
+
         return user
-        
+
     catch error:
         // 5. Emit failure signal
-        log.signal('!login-failed').warn('Login failed', { 
-            email, 
-            error: error.message 
+        log.signal('!login-failed').warn('Login failed', {
+            email,
+            error: error.message
         })
-        
+
         // 6. Log failure with duration
-        tracker.error('@login failed', { error: error.message })
-        
+        tracker.error('Login failed', { error: error.message })
+
         throw error
 ```
 
 **Key points:**
-- Use `log.feature('@name').start()` at entry
+- Use `log.component('#name').start()` at entry
 - Emit `!success` and `!failed` signals
 - Always call `tracker.success()` or `tracker.error()`
 
 ---
 
-## Portal Pattern
+## Gate Pattern
 
-Portals (`^`) are authorization checkpoints. Log before and after the check.
+Gates (`^`) are authorization checkpoints. Log before and after the check.
 
 ```
-// Portal: ^authenticated
+// Gate: ^authenticated
 
 function requireAuth(request, next):
-    // 1. Log portal check start
+    // 1. Log gate check start
     log.gate('^authenticated').debug('Checking ^authenticated', {
         path: request.path,
         method: request.method
     })
-    
+
     // 2. Perform authorization check
     user = getSessionUser(request)
-    
+
     if not user:
         // 3. Log denial
         log.gate('^authenticated').warn('Access denied - no session', {
@@ -73,13 +73,13 @@ function requireAuth(request, next):
             ip: request.ip
         })
         return unauthorized("Authentication required")
-    
+
     // 4. Log success
-    log.gate('^authenticated').debug('Portal passed', {
+    log.gate('^authenticated').debug('Gate passed', {
         userId: user.id,
         path: request.path
     })
-    
+
     // 5. Continue to next handler
     return next()
 ```
@@ -141,48 +141,48 @@ class Database:
 
 ---
 
-## State Pattern
+## State Component Pattern
 
-State (`%`) represents application state. Log changes with before/after values.
+State components (`#` with `[state]` tag) manage application state. Log changes with before/after values.
 
 ```
-// State: %user.authenticated
+// Component: #user-store [state]
 
 class AuthStore:
     authenticated = false
     user = null
-    
+
     function login(token, userData):
         // 1. Log state change with context
-        log.state('%user.authenticated').info('Authenticating user', {
+        log.component('#user-store').info('Authenticating user', {
             from: this.authenticated,
             to: true,
             userId: userData.id
         })
-        
+
         // 2. Update state
         this.authenticated = true
         this.user = userData
         this.token = token
-        
+
         // 3. Emit signal
         log.signal('!login-success').info('User session established', {
             userId: userData.id
         })
-    
+
     function logout():
         previousUser = this.user?.id
-        
-        log.state('%user.authenticated').info('Logging out user', {
+
+        log.component('#user-store').info('Logging out user', {
             from: this.authenticated,
             to: false,
             userId: previousUser
         })
-        
+
         this.authenticated = false
         this.user = null
         this.token = null
-        
+
         log.signal('!logout').info('User session ended', {
             userId: previousUser
         })
@@ -277,7 +277,7 @@ Consistent error handling with Paradigm logging:
 
 ```
 function riskyOperation():
-    tracker = log.feature('@risky-op').start('Starting operation')
+    tracker = log.component('#risky-op').start('Starting operation')
     
     try:
         // Happy path
@@ -317,7 +317,7 @@ function loggingMiddleware(request, next):
     correlationId = request.headers['x-correlation-id'] or generateId()
     
     return withCorrelation(correlationId, async () => {
-        tracker = log.feature('@' + request.path).start('Request started', {
+        tracker = log.component('#' + request.path).start('Request started', {
             method: request.method,
             path: request.path
         })

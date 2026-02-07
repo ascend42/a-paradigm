@@ -1,4 +1,4 @@
-# Add Portal Prompt
+# Add Gate Prompt
 
 Use this prompt when you need to add authorization/access control.
 
@@ -7,15 +7,15 @@ Use this prompt when you need to add authorization/access control.
 ## Prompt Template
 
 ```
-I need to add authorization portal ^[PORTAL_NAME].
+I need to add authorization gate ^[GATE_NAME].
 
 ## Purpose
-[What this portal protects and why]
+[What this gate protects and why]
 
 ## Requirements
 - Who can pass: [conditions]
 - Who is blocked: [conditions]
-- When it applies: [routes/features]
+- When it applies: [routes/components]
 
 ## Behavior on Denial
 - Response: [401/403/redirect]
@@ -23,8 +23,8 @@ I need to add authorization portal ^[PORTAL_NAME].
 - User feedback: [message/redirect]
 
 ## Related Symbols
-- Features protected: @[feature-names]
-- Existing portals to combine with: ^[portal-names]
+- Components protected: #[component-names]
+- Existing gates to combine with: ^[gate-names]
 
 ## Additional Context
 [Any other relevant info]
@@ -35,7 +35,7 @@ I need to add authorization portal ^[PORTAL_NAME].
 ## Example
 
 ```
-I need to add authorization portal ^premium-only.
+I need to add authorization gate ^premium-only.
 
 ## Purpose
 Restrict certain features to users with an active premium subscription.
@@ -43,7 +43,7 @@ Restrict certain features to users with an active premium subscription.
 ## Requirements
 - Who can pass: Users with subscription.status === 'active' and subscription.tier === 'premium'
 - Who is blocked: Free users, expired subscriptions, basic tier
-- When it applies: @advanced-analytics, @bulk-export, @priority-support
+- When it applies: #advanced-analytics, #bulk-export, #priority-support
 
 ## Behavior on Denial
 - Response: 403 Forbidden
@@ -51,24 +51,24 @@ Restrict certain features to users with an active premium subscription.
 - User feedback: Redirect to /upgrade with message "This feature requires Premium"
 
 ## Related Symbols
-- Features protected: @advanced-analytics, @bulk-export, @priority-support
-- Existing portals to combine with: ^authenticated (must be logged in first)
+- Components protected: #advanced-analytics, #bulk-export, #priority-support
+- Existing gates to combine with: ^authenticated (must be logged in first)
 
 ## Additional Context
-- Subscription data is in %user.subscription
+- Subscription data is in user.subscription (managed by #user-store)
 - We use Stripe for billing
-- Should work with existing ^authenticated portal (chain them)
+- Should work with existing ^authenticated gate (chain them)
 ```
 
 ---
 
-## Portal Implementation Checklist
+## Gate Implementation Checklist
 
 The AI should:
 
 1. **Add to portal.yaml:**
    ```yaml
-   # Either 'gates:' or 'portals:' key works
+   # In portal.yaml
    gates:
      premium-only:
        description: Requires active premium subscription
@@ -82,7 +82,7 @@ The AI should:
            oneTime: false
    ```
 
-2. **Implement portal middleware:**
+2. **Implement gate middleware:**
    ```
    function requirePremium(request, next):
        log.gate('^premium-only').debug('Checking ^premium-only')
@@ -98,7 +98,7 @@ The AI should:
            })
            return forbidden("Premium subscription required")
        
-       log.gate('^premium-only').debug('Portal passed')
+       log.gate('^premium-only').debug('Gate passed')
        return next()
    ```
 
@@ -107,11 +107,11 @@ The AI should:
    - Apply before feature handlers
 
 4. **Update .purpose files:**
-   - Add portal reference to protected features
+   - Add gate reference to protected components
 
 5. **Test scenarios:**
    - No subscription
    - Expired subscription
    - Basic tier
    - Active premium
-   - Combined with other portals
+   - Combined with other gates

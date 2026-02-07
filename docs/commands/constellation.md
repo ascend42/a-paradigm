@@ -9,7 +9,7 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
 ## What It Does
 
 **Builds a comprehensive graph with:**
-- **Stars** - Every symbol (@features, #components, ^portals, etc.)
+- **Stars** - Every symbol (#components, ^gates, !signals, $flows, etc.)
 - **Relationships** - What requires what, what references what
 - **Categorized references** - Portals, signals, components, features, flows, states
 - **Bidirectional tracking** - Both `references` and `referencedBy`
@@ -22,7 +22,7 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
   "version": "1.0",
   "project": "my-app",
   "stars": {
-    "@checkout": {
+    "#checkout": {
       "type": "feature",
       "path": "src/features/checkout/index.tsx",
       "portals": ["^authenticated", "^payment-ready"],
@@ -34,7 +34,7 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
   },
   "orbits": {
     "$checkout-flow": {
-      "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+      "sequence": ["#cart", "#shipping", "#payment", "#confirmation"]
     }
   },
   "stats": { "features": 5, "components": 12, "portals": 2, "total": 19 }
@@ -100,7 +100,7 @@ paradigm constellation ./src
 
 Constellation Stats
 ────────────────────────────────────────
-  @ Features       5
+  # Features       5
   # Components     12
   ^ Portals        2
   ! Signals        8
@@ -114,7 +114,7 @@ Constellation Stats
 
 Sample Star
 ────────────────────────────────────────
-  @checkout
+  #checkout
     portals: ^authenticated, ^payment-ready
     components: #Button, #Form, #PaymentWidget
     referencedBy: $checkout-flow
@@ -128,7 +128,7 @@ Each star represents a symbol with its relationships:
 
 ```json
 {
-  "@checkout": {
+  "#checkout": {
     "type": "feature",
     "path": "src/features/checkout/index.tsx",
     "description": "Purchase completion flow",
@@ -144,7 +144,7 @@ Each star represents a symbol with its relationships:
     "references": ["^authenticated", "#Button", "!checkout-started"],
     
     // What references THIS symbol
-    "referencedBy": ["$checkout-flow", "@admin-dashboard"]
+    "referencedBy": ["$checkout-flow", "#admin-dashboard"]
   }
 }
 ```
@@ -157,7 +157,7 @@ Flow sequences showing order:
 {
   "$checkout-flow": {
     "description": "Complete purchase journey",
-    "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+    "sequence": ["#cart", "#shipping", "#payment", "#confirmation"]
   }
 }
 ```
@@ -171,7 +171,7 @@ paradigm beacon           # Quick orientation
 paradigm constellation    # Detailed graph
 
 # Use constellation for analysis
-paradigm ripple @checkout  # Uses constellation data
+paradigm ripple #checkout  # Uses constellation data
 ```
 
 **AI agent workflow:**
@@ -198,10 +198,10 @@ paradigm beacon
 paradigm constellation
 
 # Analyze impact
-paradigm ripple @feature-to-change
+paradigm ripple #feature-to-change
 
 # Review constellation to see all affected symbols
-jq '.stars["@feature-to-change"].referencedBy' .paradigm/constellation.json
+jq '.stars["#feature-to-change"].referencedBy' .paradigm/constellation.json
 ```
 
 ### Architecture Review
@@ -350,7 +350,7 @@ jq '.stars | to_entries[] | select(.value.type == "feature" and (.value.portals 
 
 **Problem: "Missing relationships"**
 - Solution: Add references in `.purpose` files
-- Format: `references: ["@other", "#component"]`
+- Format: `references: ["#other", "#component"]`
 
 **Problem: "Constellation outdated"**
 - Solution: Run `paradigm constellation` after changes

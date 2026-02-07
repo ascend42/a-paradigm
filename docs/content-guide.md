@@ -109,7 +109,7 @@ know what your app does. Let me show you why, and how to fix it."
 
 5:20 - First .purpose file (180s)
 - Create a simple feature definition
-- Explain symbols (@, #, ^, !, $, %)
+- Explain symbols (#, ^, !, $, ~)
 - Run paradigm status
 
 8:20 - paradigm sync (120s)
@@ -146,17 +146,17 @@ the symbol system - the shared language between you and AI."
 
 1:20 - The Symbols (5-6 min, ~45s each)
 
-@ Feature
-- User-facing capability
-- Example: @checkout, @user-login
-- When to use: "If a user would say 'I want to...'"
+# Component (Feature)
+- User-facing capability or code unit
+- Example: #checkout, #user-login
+- When to use: "If a user would say 'I want to...'" or a reusable building block
 
 # Component
 - Reusable code unit
 - Example: #Button, #api-client
 - When to use: Building block, used by features
 
-^ Portal (Gate)
+^ Gate
 - Authorization checkpoint
 - Example: ^authenticated, ^admin-only
 - When to use: "Who can access this?"
@@ -230,7 +230,7 @@ what would break before making changes? Let's build that."
 - How AI uses this for relationships
 
 5:30 - Ripple (120s)
-- paradigm ripple @checkout
+- paradigm ripple #checkout
 - Show upstream/downstream impact
 - Demo: Ask AI "what would break?" - it queries ripple
 - --json output
@@ -463,7 +463,7 @@ for the tutorial project where we build this from scratch."
 5. Building a symbol vocabulary for your project
 6. CTA: Symbol reference card download
 
-**Key quote:** "@checkout means the same thing in code, docs, and AI prompts. That's the point."
+**Key quote:** "#checkout means the same thing in code, docs, and AI prompts. That's the point."
 
 ---
 
@@ -541,7 +541,7 @@ for the tutorial project where we build this from scratch."
 |-------|-------------|------|
 | V1: What is Paradigm | Three pillars diagram | "AI Context Problem SOLVED" |
 | V2: Getting Started | Terminal + check mark | "5 Min Setup" |
-| V3: Symbol System | Symbol icons grid | "@ # ^ ! $ %" |
+| V3: Symbol System | Symbol icons grid | "# ^ ! $ ~" |
 | V4: Agent Efficiency | Brain + lightning | "10x AI Productivity" |
 | V5: MCP Server | Claude + connection | "Live AI Context" |
 | V6: Portal | Lock/unlock visual | "Visual Auth" |
@@ -550,12 +550,11 @@ for the tutorial project where we build this from scratch."
 ### Color Palette
 
 Use Paradigm's symbol colors:
-- Feature blue (@) — #3b82f6
 - Component green (#) — #22c55e
-- Portal red (^) — #ef4444
+- Gate red (^) — #ef4444
 - Signal yellow (!) — #eab308
 - Flow purple ($) — #8b5cf6
-- State cyan (%) — #06b6d4
+- Aspect gray (~) — #6b7280
 
 ### Typography
 
@@ -608,10 +607,10 @@ Not because it's dumb.
 Because it has no structure.
 
 Paradigm gives your project a shared language:
-@ Features
 # Components
 ^ Gates
 ! Signals
+$ Flows
 
 One source of truth. Every IDE. Every AI.
 

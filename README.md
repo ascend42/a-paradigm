@@ -235,12 +235,13 @@ Paradigm uses symbols to create a shared language between code, developers, and 
 
 | Symbol | Name | Example | Meaning |
 |--------|------|---------|---------|
-| `@` | Feature | `@checkout` | User-facing capability |
-| `#` | Component | `#Button` | Reusable code unit |
-| `^` | Portal | `^authenticated` | Authorization gate |
+| `#` | Component | `#checkout`, `#Button` | Any documented code unit |
+| `$` | Flow | `$checkout-flow` | Multi-step process |
+| `^` | Gate | `^authenticated` | Authorization checkpoint |
 | `!` | Signal | `!login-failed` | Event or side effect |
-| `$` | Flow | `$purchase-flow` | Multi-step process |
-| `%` | State | `%user.authenticated` | Data condition |
+| `~` | Aspect | `~audit-required` | Cross-cutting rule with code anchor |
+
+Classification uses **tags** instead of symbol prefixes: `[feature]`, `[integration]`, `[state]`, `[idea]`, etc. Tags are defined in `.paradigm/tags.yaml`.
 
 These symbols work everywhere — in code comments, documentation, AI prompts, and visual tools.
 
@@ -269,8 +270,8 @@ paradigm scan auto         # Auto-generate .purpose from code analysis
 paradigm beacon            # Quick-start orientation for AI
 paradigm beacon --json     # Machine-readable output
 paradigm constellation     # Generate symbol relationship graph
-paradigm ripple @checkout  # Impact analysis before changes
-paradigm ripple @checkout --json
+paradigm ripple #checkout  # Impact analysis before changes
+paradigm ripple #checkout --json
 ```
 
 ### Session Continuity
@@ -305,7 +306,7 @@ Paradigm is designed to make AI agents faster and more context-aware:
 |---------|--------------|---------|
 | **Beacon** | Quick-start orientation file | `paradigm beacon` |
 | **Constellation** | Machine-readable symbol graph | `paradigm constellation` |
-| **Ripple** | Change impact analysis | `paradigm ripple @symbol` |
+| **Ripple** | Change impact analysis | `paradigm ripple #symbol` |
 | **Thread** | Session continuity | `paradigm thread` |
 | **Echo** | Error-to-symbol mapping | `paradigm echo ERROR_CODE` |
 | **Cost** | Token usage analysis | `paradigm cost` |
@@ -317,14 +318,14 @@ Paradigm is designed to make AI agents faster and more context-aware:
 **Cost analysis** shows the savings: `paradigm cost` compares static context vs MCP, typically showing 80-90% token reduction.
 
 ```bash
-# AI runs this before modifying @checkout
-paradigm ripple @checkout --json
+# AI runs this before modifying #checkout
+paradigm ripple #checkout --json
 
 # AI debugs an error
 paradigm echo AUTH_REQUIRED --json
 
 # AI queries constellation directly
-jq '.stars["@checkout"]' .paradigm/constellation.json
+jq '.stars["#checkout"]' .paradigm/constellation.json
 ```
 
 ## MCP Server (AI Integration)
@@ -355,7 +356,7 @@ Paradigm uses an MCP-first approach where reference content is served on-demand 
 | Resource/Tool | Purpose |
 |---------------|---------|
 | `paradigm://symbols` | Query all project symbols |
-| `paradigm://symbol/@checkout` | Get single symbol details |
+| `paradigm://symbol/#checkout` | Get single symbol details |
 | `paradigm://prompts` | List available prompt templates |
 | `paradigm://prompts/add-feature` | Get specific prompt content |
 | `paradigm://docs/commands` | CLI command reference |

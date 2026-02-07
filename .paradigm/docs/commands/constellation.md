@@ -9,9 +9,9 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
 ## What It Does
 
 **Builds a comprehensive graph with:**
-- **Stars** - Every symbol (@features, #components, ^portals, etc.)
+- **Stars** - Every symbol (#components, $flows, ^gates, etc.)
 - **Relationships** - What requires what, what references what
-- **Categorized references** - Portals, signals, components, features, flows, states
+- **Categorized references** - Gates, signals, components, flows, states
 - **Bidirectional tracking** - Both `references` and `referencedBy`
 - **Orbits** - Flow sequences showing order of operations
 - **Statistics** - Counts by symbol type
@@ -22,10 +22,11 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
   "version": "1.0",
   "project": "my-app",
   "stars": {
-    "@checkout": {
-      "type": "feature",
+    "#checkout": {
+      "type": "component",
       "path": "src/features/checkout/index.tsx",
-      "portals": ["^authenticated", "^payment-ready"],
+      "tags": ["feature"],
+      "gates": ["^authenticated", "^payment-ready"],
       "components": ["#Button", "#Form", "#PaymentWidget"],
       "signals": ["!checkout-started", "!payment-complete"],
       "references": ["^authenticated", "^payment-ready", "#Button"],
@@ -34,10 +35,10 @@ Creates `.paradigm/constellation.json` - a machine-readable graph of all symbols
   },
   "orbits": {
     "$checkout-flow": {
-      "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+      "sequence": ["#cart", "#shipping", "#payment", "#confirmation"]
     }
   },
-  "stats": { "features": 5, "components": 12, "portals": 2, "total": 19 }
+  "stats": { "components": 17, "gates": 2, "signals": 8, "flows": 3, "total": 30 }
 }
 ```
 
@@ -100,12 +101,11 @@ paradigm constellation ./src
 
 Constellation Stats
 ────────────────────────────────────────
-  @ Features       5
-  # Components     12
-  ^ Portals        2
+  # Components     17
+  ^ Gates          2
   ! Signals        8
   $ Flows          3
-  % States         4
+  ~ Aspects        0
 ────────────────────────────────────────
   Total stars:    34
   Total orbits:   3
@@ -114,8 +114,8 @@ Constellation Stats
 
 Sample Star
 ────────────────────────────────────────
-  @checkout
-    portals: ^authenticated, ^payment-ready
+  #checkout
+    gates: ^authenticated, ^payment-ready
     components: #Button, #Form, #PaymentWidget
     referencedBy: $checkout-flow
 ```
@@ -128,23 +128,23 @@ Each star represents a symbol with its relationships:
 
 ```json
 {
-  "@checkout": {
-    "type": "feature",
+  "#checkout": {
+    "type": "component",
     "path": "src/features/checkout/index.tsx",
     "description": "Purchase completion flow",
-    "tags": ["ecommerce", "critical"],
-    
+    "tags": ["feature", "ecommerce", "critical"],
+
     // Categorized outgoing references
-    "portals": ["^authenticated", "^payment-ready"],
+    "gates": ["^authenticated", "^payment-ready"],
     "components": ["#Button", "#Form", "#PaymentWidget"],
     "signals": ["!checkout-started", "!payment-complete"],
     "flows": ["$checkout-flow"],
-    
+
     // All outgoing references
     "references": ["^authenticated", "#Button", "!checkout-started"],
-    
+
     // What references THIS symbol
-    "referencedBy": ["$checkout-flow", "@admin-dashboard"]
+    "referencedBy": ["$checkout-flow", "#admin-dashboard"]
   }
 }
 ```
@@ -157,7 +157,7 @@ Flow sequences showing order:
 {
   "$checkout-flow": {
     "description": "Complete purchase journey",
-    "sequence": ["@cart", "@shipping", "@payment", "@confirmation"]
+    "sequence": ["#cart", "#shipping", "#payment", "#confirmation"]
   }
 }
 ```
@@ -171,7 +171,7 @@ paradigm beacon           # Quick orientation
 paradigm constellation    # Detailed graph
 
 # Use constellation for analysis
-paradigm ripple @checkout  # Uses constellation data
+paradigm ripple #checkout  # Uses constellation data
 ```
 
 **AI agent workflow:**
@@ -198,10 +198,10 @@ paradigm beacon
 paradigm constellation
 
 # Analyze impact
-paradigm ripple @feature-to-change
+paradigm ripple #feature-to-change
 
 # Review constellation to see all affected symbols
-jq '.stars["@feature-to-change"].referencedBy' .paradigm/constellation.json
+jq '.stars["#feature-to-change"].referencedBy' .paradigm/constellation.json
 ```
 
 ### Architecture Review
@@ -213,7 +213,7 @@ paradigm constellation
 cat .paradigm/constellation.json | jq '.stats'
 
 # Check specific relationships
-jq '.stars | to_entries | map(select(.value.portals | length > 0))' .paradigm/constellation.json
+jq '.stars | to_entries | map(select(.value.gates | length > 0))' .paradigm/constellation.json
 ```
 
 ### Automated Analysis
@@ -221,8 +221,8 @@ jq '.stars | to_entries | map(select(.value.portals | length > 0))' .paradigm/co
 # CI/CD integration
 paradigm constellation --quiet
 
-# Find features without portals (security check)
-jq '.stars | to_entries | map(select(.value.type == "feature" and (.value.portals | length == 0)))' .paradigm/constellation.json
+# Find components without gates (security check)
+jq '.stars | to_entries | map(select(.value.gates | length == 0))' .paradigm/constellation.json
 ```
 
 ## Tips & Gotchas
@@ -246,11 +246,11 @@ jq '.stars | to_entries | map(select(.value.type == "feature" and (.value.portal
 **Using `jq` (JSON query tool):**
 
 ```bash
-# Get all features
-jq '.stars | to_entries | map(select(.value.type == "feature"))' .paradigm/constellation.json
+# Get all components
+jq '.stars | to_entries | map(select(.value.type == "component"))' .paradigm/constellation.json
 
 # Find what requires auth
-jq '.stars | to_entries | map(select(.value.portals[]? == "^authenticated"))' .paradigm/constellation.json
+jq '.stars | to_entries | map(select(.value.gates[]? == "^authenticated"))' .paradigm/constellation.json
 
 # List all flows
 jq '.orbits | keys' .paradigm/constellation.json
@@ -286,15 +286,12 @@ The `stats` object provides symbol counts:
 
 ```json
 {
-  "features": 5,
-  "components": 12,
-  "portals": 2,
+  "components": 17,
+  "gates": 2,
   "signals": 8,
   "flows": 3,
-  "states": 4,
   "aspects": 0,
-  "ideas": 2,
-  "total": 36
+  "total": 30
 }
 ```
 
@@ -311,7 +308,7 @@ ls -lh .paradigm/constellation.json  # Check size
 ```bash
 paradigm constellation
 # What requires authentication?
-jq '.stars | to_entries[] | select(.value.portals[]? == "^authenticated") | .key' .paradigm/constellation.json
+jq '.stars | to_entries[] | select(.value.gates[]? == "^authenticated") | .key' .paradigm/constellation.json
 ```
 
 **Example 3: Visualize flows**
@@ -325,8 +322,8 @@ cat .paradigm/constellation.yaml
 ```bash
 # Check for security issues
 paradigm constellation --quiet
-jq '.stars | to_entries[] | select(.value.type == "feature" and (.value.portals | length == 0)) | {feature: .key, path: .value.path}' .paradigm/constellation.json
-# Alert if critical features lack portals
+jq '.stars | to_entries[] | select(.value.gates | length == 0) | {component: .key, path: .value.path}' .paradigm/constellation.json
+# Alert if components lack gates
 ```
 
 ## Performance
@@ -350,7 +347,7 @@ jq '.stars | to_entries[] | select(.value.type == "feature" and (.value.portals 
 
 **Problem: "Missing relationships"**
 - Solution: Add references in `.purpose` files
-- Format: `references: ["@other", "#component"]`
+- Format: `references: ["#other", "#component"]`
 
 **Problem: "Constellation outdated"**
 - Solution: Run `paradigm constellation` after changes

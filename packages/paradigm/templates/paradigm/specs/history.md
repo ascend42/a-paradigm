@@ -28,9 +28,9 @@ The History system captures the **temporal and empirical dimension** of developm
 Append-only, one JSON object per line. Never edit - only append.
 
 ```jsonl
-{"id":"h0001","ts":"2026-02-02T10:00:00Z","type":"implement","symbols":["@checkout"],"author":{"type":"agent","id":"builder"},"commit":"abc123","intent":"feature","files":["src/checkout/page.tsx"],"description":"Added Apple Pay support"}
+{"id":"h0001","ts":"2026-02-02T10:00:00Z","type":"implement","symbols":["#checkout"],"author":{"type":"agent","id":"builder"},"commit":"abc123","intent":"feature","files":["src/checkout/page.tsx"],"description":"Added Apple Pay support"}
 {"id":"h0002","ts":"2026-02-02T10:30:00Z","type":"validate","ref":"h0001","symbols":[],"author":{"type":"agent","id":"tester"},"result":"pass","tests":{"passed":15,"failed":0}}
-{"id":"h0003","ts":"2026-02-03T09:00:00Z","type":"rollback","ref":"h0001","symbols":["@checkout"],"author":{"type":"human","id":"alice"},"reason":"Performance regression on mobile"}
+{"id":"h0003","ts":"2026-02-03T09:00:00Z","type":"rollback","ref":"h0001","symbols":["#checkout"],"author":{"type":"human","id":"alice"},"reason":"Performance regression on mobile"}
 ```
 
 ### Entry Types
@@ -69,8 +69,8 @@ version: "1.0"
 generated: "2026-02-02T12:00:00Z"
 
 by_symbol:
-  "@checkout":
-    symbol: "@checkout"
+  "#checkout":
+    symbol: "#checkout"
     total_changes: 45
     last_modified: "2026-02-02T10:00:00Z"
     stability_score: 0.87    # 0.0-1.0, higher is better
@@ -85,8 +85,8 @@ by_symbol:
       human: ["alice", "bob"]
       agent: ["builder", "fixer"]
 
-  "@search":
-    symbol: "@search"
+  "#search":
+    symbol: "#search"
     total_changes: 23
     last_modified: "2026-01-28T15:00:00Z"
     stability_score: 0.62
@@ -97,16 +97,16 @@ by_symbol:
       agent: ["builder"]
 
 co_changes:
-  - symbols: ["@checkout", "#payment-form"]
+  - symbols: ["#checkout", "#payment-form"]
     frequency: 15        # Changed together 15 times
-    correlation: 0.89    # 89% of @checkout changes include #payment-form
+    correlation: 0.89    # 89% of #checkout changes include #payment-form
 
-  - symbols: ["@search", "#search-index"]
+  - symbols: ["#search", "#search-index"]
     frequency: 12
     correlation: 0.78
 
 fragile_symbols:
-  - symbol: "@search"
+  - symbol: "#search"
     fragility: high
     reason: "3 rollbacks in last 10 changes"
 
@@ -124,16 +124,16 @@ total_validations: 156
 pass_rate: 0.92
 
 by_symbol:
-  "@checkout":
-    symbol: "@checkout"
+  "#checkout":
+    symbol: "#checkout"
     last_validated: "2026-02-02T10:30:00Z"
     last_result: pass
     pass_count: 45
     fail_count: 3
     coverage: 0.87
 
-  "@search":
-    symbol: "@search"
+  "#search":
+    symbol: "#search"
     last_validated: "2026-01-28T16:00:00Z"
     last_result: fail
     pass_count: 18
@@ -183,7 +183,7 @@ Get history before modifying symbols.
 {
   "name": "paradigm_history_context",
   "arguments": {
-    "symbols": ["@checkout", "#payment-form"]
+    "symbols": ["#checkout", "#payment-form"]
   }
 }
 ```
@@ -199,7 +199,7 @@ Record an implementation event.
   "name": "paradigm_history_record",
   "arguments": {
     "type": "implement",
-    "symbols": ["@checkout"],
+    "symbols": ["#checkout"],
     "intent": "feature",
     "description": "Added Apple Pay support",
     "commit": "abc123",
@@ -231,7 +231,7 @@ Check fragility before modifying.
 {
   "name": "paradigm_history_fragility",
   "arguments": {
-    "symbols": ["@search", "@checkout"]
+    "symbols": ["#search", "#checkout"]
   }
 }
 ```
@@ -245,7 +245,7 @@ Check fragility before modifying.
 paradigm history
 
 # Show history for a symbol
-paradigm history show @checkout
+paradigm history show #checkout
 
 # Initialize history directory
 paradigm history init
@@ -259,7 +259,7 @@ paradigm history reindex
 # Record an implementation
 paradigm history record \
   --type implement \
-  --symbols "@checkout" \
+  --symbols "#checkout" \
   --description "Added Apple Pay" \
   --intent feature
 
@@ -302,14 +302,14 @@ Before modifying code, AI agents should:
 Example:
 
 ```
-Agent: "I need to modify @search to add filters"
+Agent: "I need to modify #search to add filters"
 
-1. Call paradigm_history_fragility(symbols: ["@search"])
+1. Call paradigm_history_fragility(symbols: ["#search"])
    → fragility: "high"
    → reason: "3 rollbacks in last 10 changes"
    → recommendation: "Add extra test coverage"
 
-2. Call paradigm_history_context(symbols: ["@search"])
+2. Call paradigm_history_context(symbols: ["#search"])
    → Recent: 2 rollbacks, 1 performance issue
    → Co-changes: often changes with #search-index
    → Contributors: carol (human), builder (agent)

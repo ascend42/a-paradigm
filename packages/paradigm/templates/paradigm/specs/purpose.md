@@ -35,24 +35,16 @@ Place `.purpose` files in:
 # Optional: description of the directory
 description: What this directory contains and its role in the project
 
-# Features (@ symbol) - User-facing capabilities
-features:
-  feature-name:
-    description: What this feature does
-    gates: [^gate1, ^gate2]           # Required portals
+# Components (# symbol) - All code units
+components:
+  component-name:
+    description: What this component does
+    tags: [feature, keyword]          # Classification via tags
+    gates: [^gate1, ^gate2]           # Required gates
     flows: [$flow-name]               # Multi-step processes
     signals: ["!signal1", "!signal2"]   # Events emitted
     components: [#Component1]         # Components used
-    states: [%user.preference]        # State accessed
-    tags: [keyword1, keyword2]        # Searchable tags
-
-# Components (# symbol) - Reusable modules
-components:
-  ComponentName:
-    description: What this component does
-    used-by: [@feature1, @feature2]   # Features using this
-    uses: [#OtherComponent]           # Dependencies
-    tags: [ui, form, etc]
+    aspects: [~aspect-name]           # Cross-cutting rules
 
 # Gates (^ symbol) - Authorization checkpoints
 gates:
@@ -65,7 +57,7 @@ gates:
 signals:
   signal-name:
     description: What triggers this event
-    emitted-by: [@feature]            # Source
+    emitted-by: [#component]          # Source
     category: [auth, analytics, etc]
 
 # Flows ($ symbol) - Multi-step processes
@@ -75,12 +67,12 @@ flows:
     steps: [step1, step2, step3]
     gates: [^required-gate]
 
-# States (% symbol) - Application state
-states:
-  state.path:
-    description: What this state represents
-    type: boolean | string | number | object
-    default: value
+# Aspects (~ symbol) - Cross-cutting rules with anchors
+aspects:
+  aspect-name:
+    description: What this aspect enforces
+    anchors: [file.ts:15-30]          # REQUIRED code anchors
+    applies-to: ["#*Service"]         # Matching patterns
 ```
 
 ---
@@ -92,26 +84,30 @@ Both formats are valid for defining items:
 ### Record Format (Recommended)
 
 ```yaml
-features:
-  login:
+components:
+  login-handler:
     description: User authentication
+    tags: [feature]
     gates: [^authenticated]
 
   checkout:
     description: Purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
 ```
 
 ### Array Format
 
 ```yaml
-features:
-  - id: login
+components:
+  - id: login-handler
     description: User authentication
+    tags: [feature]
     gates: [^authenticated]
 
   - id: checkout
     description: Purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
 ```
 
@@ -123,15 +119,11 @@ Reference other symbols using their prefixes:
 
 | Symbol | Meaning | Example |
 |--------|---------|---------|
-| `@` | Feature | `@login`, `@checkout` |
-| `#` | Component | `#Button`, `#Modal` |
+| `#` | Component | `#Button`, `#login-handler` |
 | `^` | Gate | `^authenticated`, `^admin` |
 | `!` | Signal | `!login-success`, `!error` |
 | `$` | Flow | `$onboarding`, `$checkout-flow` |
-| `%` | State | `%user.authenticated` |
-| `?` | Idea | `?subscription-model` |
-| `~` | Deprecated | `~legacy-api` |
-| `&` | Integration | `&stripe`, `&analytics` |
+| `~` | Aspect | `~audit-required`, `~rate-limited` |
 
 ---
 
@@ -141,21 +133,23 @@ Reference other symbols using their prefixes:
 # src/features/auth/.purpose
 description: Authentication and user session management
 
-features:
-  login:
+components:
+  login-handler:
     description: Email/password authentication
+    tags: [feature]
     gates: [^public]
     signals: ["!login-success", "!login-failed"]
 
-  logout:
+  logout-handler:
     description: End user session
+    tags: [feature]
     gates: [^authenticated]
     signals: ["!logout"]
 
-components:
   LoginForm:
     description: Login UI with validation
-    used-by: [@login]
+    tags: [ui]
+    components: [#login-handler]
 ```
 
 ---
@@ -166,31 +160,30 @@ components:
 # src/features/checkout/.purpose
 description: E-commerce checkout and payment processing
 
-features:
+components:
   add-to-cart:
     description: Add product to shopping cart
+    tags: [feature]
     gates: [^authenticated]
     signals: ["!cart-updated"]
     components: [#CartButton, #ProductCard]
-    states: [%cart.items]
 
   checkout:
     description: Complete purchase flow
+    tags: [feature, critical]
     gates: [^authenticated, ^has-cart]
     flows: [$checkout-flow]
     signals: ["!checkout-started", "!checkout-completed", "!payment-failed"]
-    tags: [payment, critical]
 
-components:
   CartButton:
     description: Add to cart button with quantity selector
-    used-by: [@add-to-cart]
     tags: [ui, interactive]
+    components: [#add-to-cart]
 
   CheckoutForm:
     description: Payment and shipping form
-    used-by: [@checkout]
-    uses: [#AddressForm, #PaymentForm]
+    tags: [ui]
+    components: [#AddressForm, #PaymentForm]
 
 flows:
   checkout-flow:
@@ -205,19 +198,13 @@ flows:
 signals:
   cart-updated:
     description: Cart contents changed
-    emitted-by: [@add-to-cart]
+    emitted-by: [#add-to-cart]
     category: cart
 
   checkout-completed:
     description: Order successfully placed
-    emitted-by: [@checkout]
+    emitted-by: [#checkout]
     category: purchase
-
-states:
-  cart.items:
-    description: Items currently in cart
-    type: array
-    default: []
 ```
 
 ---

@@ -10,7 +10,7 @@ Creates `.paradigm/scan-index.json` (also called `probe-index.json`) - a machine
 
 **Scans your codebase for:**
 - Components with visual tags (#Button, #Modal, #Card)
-- Features and their UI surfaces (@checkout, @dashboard)
+- Features and their UI surfaces (#checkout, #dashboard)
 - Flows and their visual steps ($checkout-flow)
 - State that affects UI (%cart, %user)
 - Portals that control UI access (^authenticated)
@@ -27,7 +27,7 @@ Creates `.paradigm/scan-index.json` (also called `probe-index.json`) - a machine
       "description": "Primary action button"
     }
   },
-  "features": { /* @features with UI paths */ },
+  "features": { /* #features with UI paths */ },
   "flows": { /* $flows with visual steps */ },
   "symbolMap": { /* quick symbol → path lookup */ }
 }
@@ -239,7 +239,7 @@ Once index is generated:
   
   "features": {
     "checkout": {
-      "symbol": "@checkout",
+      "symbol": "#checkout",
       "path": "src/features/checkout/",
       "screens": ["cart", "shipping", "payment"],
       "description": "Purchase completion"
@@ -254,7 +254,7 @@ Once index is generated:
   },
   
   "symbolMap": {
-    "@checkout": { "category": "features", "id": "checkout" },
+    "#checkout": { "category": "features", "id": "checkout" },
     "#Button": { "category": "components", "id": "Button" }
   }
 }

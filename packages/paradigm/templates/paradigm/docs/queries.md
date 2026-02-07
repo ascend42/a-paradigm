@@ -33,18 +33,12 @@ jq '.stats' .paradigm/constellation.json
 ### Get a Specific Symbol
 
 ```bash
-jq '.stars["@checkout"]' .paradigm/constellation.json
+jq '.stars["#checkout"]' .paradigm/constellation.json
 ```
 
 ---
 
 ## Filter by Type
-
-### All Features (@)
-
-```bash
-jq '[.stars | to_entries[] | select(.value.type == "feature") | .key]' .paradigm/constellation.json
-```
 
 ### All Components (#)
 
@@ -52,7 +46,7 @@ jq '[.stars | to_entries[] | select(.value.type == "feature") | .key]' .paradigm
 jq '[.stars | to_entries[] | select(.value.type == "component") | .key]' .paradigm/constellation.json
 ```
 
-### All Portals (^)
+### All Gates (^)
 
 ```bash
 jq '[.stars | to_entries[] | select(.value.type == "gate") | .key]' .paradigm/constellation.json
@@ -68,37 +62,37 @@ jq '[.stars | to_entries[] | select(.value.type == "signal") | .key]' .paradigm/
 
 ## Relationship Queries
 
-### What Requires a Specific Portal
+### What Requires a Specific Gate
 
 ```bash
 # Find all symbols that require ^authenticated
-jq '[.stars | to_entries[] | select(.value.portals[]? == "^authenticated") | .key]' .paradigm/constellation.json
+jq '[.stars | to_entries[] | select(.value.gates[]? == "^authenticated") | .key]' .paradigm/constellation.json
 ```
 
 ### What a Symbol References
 
 ```bash
-# Get all references from @checkout
-jq '.stars["@checkout"].references' .paradigm/constellation.json
+# Get all references from #checkout
+jq '.stars["#checkout"].references' .paradigm/constellation.json
 ```
 
 ### What References a Symbol
 
 ```bash
-# Get everything that references @checkout
-jq '.stars["@checkout"].referencedBy' .paradigm/constellation.json
+# Get everything that references #checkout
+jq '.stars["#checkout"].referencedBy' .paradigm/constellation.json
 ```
 
-### Get Symbol's Portals
+### Get Symbol's Gates
 
 ```bash
-jq '.stars["@checkout"].portals' .paradigm/constellation.json
+jq '.stars["#checkout"].gates' .paradigm/constellation.json
 ```
 
 ### Get Symbol's Components
 
 ```bash
-jq '.stars["@checkout"].components' .paradigm/constellation.json
+jq '.stars["#checkout"].components' .paradigm/constellation.json
 ```
 
 ---
@@ -137,17 +131,17 @@ jq '[.stars | to_entries[] | select(.value.path | startswith("src/features/auth"
 ### Get Symbol's Location
 
 ```bash
-jq '.stars["@checkout"].path' .paradigm/constellation.json
+jq '.stars["#checkout"].path' .paradigm/constellation.json
 ```
 
 ---
 
 ## Combined Queries
 
-### Features with Multiple Portal Dependencies
+### Components with Multiple Gate Dependencies
 
 ```bash
-jq '[.stars | to_entries[] | select(.value.type == "feature") | select((.value.portals // []) | length > 1) | {symbol: .key, portals: .value.portals}]' .paradigm/constellation.json
+jq '[.stars | to_entries[] | select(.value.type == "component") | select((.value.gates // []) | length > 1) | {symbol: .key, gates: .value.gates}]' .paradigm/constellation.json
 ```
 
 ### High-Impact Symbols (Referenced by Many)
@@ -169,11 +163,11 @@ jq '[.stars | to_entries[] | select(.value.description == null) | .key]' .paradi
 | What you need | jq query |
 |--------------|----------|
 | All symbols | `.stars \| keys` |
-| Specific symbol | `.stars["@name"]` |
-| All features | `[.stars \| to_entries[] \| select(.value.type == "feature") \| .key]` |
-| What requires X | `[.stars \| to_entries[] \| select(.value.portals[]? == "^X") \| .key]` |
-| References from X | `.stars["@X"].references` |
-| References to X | `.stars["@X"].referencedBy` |
+| Specific symbol | `.stars["#name"]` |
+| All components | `[.stars \| to_entries[] \| select(.value.type == "component") \| .key]` |
+| What requires X | `[.stars \| to_entries[] \| select(.value.gates[]? == "^X") \| .key]` |
+| References from X | `.stars["#X"].references` |
+| References to X | `.stars["#X"].referencedBy` |
 | All flows | `.orbits \| keys` |
 | Flow sequence | `.orbits["$flow"].sequence` |
 
@@ -188,12 +182,12 @@ jq '[.stars | to_entries[] | select(.value.description == null) | .key]' .paradi
 
 2. **Compact output (no pretty-print):**
    ```bash
-   jq -c '.stars["@checkout"]' .paradigm/constellation.json
+   jq -c '.stars["#checkout"]' .paradigm/constellation.json
    ```
 
 3. **Raw strings (no quotes):**
    ```bash
-   jq -r '.stars["@checkout"].path' .paradigm/constellation.json
+   jq -r '.stars["#checkout"].path' .paradigm/constellation.json
    ```
 
 4. **Count results:**
@@ -203,4 +197,4 @@ jq '[.stars | to_entries[] | select(.value.description == null) | .key]' .paradi
 
 ---
 
-*For more complex queries, consider using `paradigm ripple @symbol --json` which provides pre-computed impact analysis.*
+*For more complex queries, consider using `paradigm ripple #symbol --json` which provides pre-computed impact analysis.*

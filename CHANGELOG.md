@@ -5,6 +5,27 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.5] - 2026-02-06
+
+### Added
+
+- **Logger package (`@a-company/paradigm-logger`)**: Full v2 logger implementation in `packages/logger/src/` — previously an empty scaffold. Implements `ParadigmLogger` class with `.component()`, `.gate()`, `.signal()`, `.flow()`, `.aspect()`, `.raw()` methods, each returning a `SymbolLogger` with debug/info/warn/error/start. Includes duration tracking (`.start()` → `.success()`/`.error()`), pretty format (ANSI colors, dev) and JSON format (production), level filtering via `LOG_LEVEL`, symbol filtering via `PARADIGM_SYMBOLS`, and correlation ID support via `AsyncLocalStorage`. Builds as CJS + ESM + DTS.
+
+### Fixed
+
+- **MCP config path for Cursor**: `writeMcpConfig()` was writing both Cursor and Claude configs to `.mcp.json` at project root. Cursor only reads from `.cursor/mcp.json`. Now Cursor writes to `.cursor/mcp.json` and Claude Code writes to `.mcp.json`.
+
+- **v1 symbol cleanup across 40+ files**: Replaced `@feature`/`@checkout`/`@login` → `#component` refs, `log.feature()`/`log.state()`/`log.integration()` → `log.component()`, `^portal` → `^gate`, `%state` → `#state-store [state]`, `&integration` → `#component [integration]` across:
+  - `.paradigm/specs/` — purpose.md (full v2 rewrite), navigator.md, history.md, probe.md, context-tracking.md, wisdom.md
+  - `.paradigm/docs/` — commands.md, troubleshooting.md, ai-maintenance-protocol.md, and 5 files in commands/
+  - `docs/` — 12 files including guides, command refs, content-guide, website outline
+  - `packages/paradigm/templates/` — all spec, doc, and prompt templates shipped to new projects
+  - `.github/instructions/` — purpose, agent-hints, logging instruction files
+  - `.github/copilot-instructions.md`, `packages/paradigm-mcp/README.md`, `packages/paradigm-vscode/README.md`, `packages/paradigm/README.md`
+  - Root `README.md` symbol table rewritten from 6 v1 symbols to 5 v2 symbols + tag bank
+
+- **Deleted 4 stale architect task files** from `.paradigm/tasks/`
+
 ## [2.0.4] - 2026-02-06
 
 ### Added

@@ -18,12 +18,12 @@ These changes REQUIRE .purpose updates before the task is complete:
 
 | Change Type | Update Required | Example |
 |-------------|-----------------|---------|
-| **Add new feature** | Create `.purpose` in feature directory | Adding `@user-profiles` feature |
+| **Add new feature** | Create `.purpose` in feature directory | Adding `#user-profiles` feature |
 | **Add new signal** | Add to signals section | Emitting `!payment-failed` |
 | **Add new gate requirement** | Add to gates section | Route now requires `^premium-user` |
 | **Add new flow** | Document the flow steps | Creating `$password-reset` flow |
-| **Rename symbol** | Update symbol name everywhere | `@checkout` → `@purchase` |
-| **Delete feature/component** | Remove or mark `~deprecated` | Removing `@legacy-auth` |
+| **Rename symbol** | Update symbol name everywhere | `#checkout` → `#purchase` |
+| **Delete feature/component** | Remove or mark `[deprecated]` | Removing `#legacy-auth` |
 
 ### SHOULD Update (Recommended)
 
@@ -33,7 +33,7 @@ These changes benefit from .purpose updates but aren't blocking:
 |-------------|-------------------|---------|
 | Add significant new endpoint | Update routes section | New `/api/tasks/bulk-update` |
 | Change component interface | Update dependencies | `#database` now requires Redis |
-| Add new integration | Add to integrations | Connecting `&slack` |
+| Add new integration | Add to integrations | Connecting `#slack-service` `[integration]` |
 | Significant refactor | Update description | Rewriting task scheduler |
 
 ### MAY Skip (Low Priority)
@@ -93,9 +93,10 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
 1. Create directory: src/features/{feature-name}/
 2. Create .purpose file:
    ```yaml
-   feature: @{feature-name}
+   feature: #{feature-name}
    description: |
      {What this feature does}
+   tags: [feature]
 
    components:
      #{component}: {description}
@@ -107,7 +108,7 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
      ^{gate}: {who can access}
 
    dependencies:
-     - @{other-feature}
+     - #{other-feature}
    ```
 3. Update portal.yaml with routes
 4. Run `paradigm scan` to index
@@ -123,7 +124,7 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
      !{new-signal}:
        description: Emitted when {event}
        payload: {type}
-       consumers: [@{feature1}, @{feature2}]
+       consumers: [#{feature1}, #{feature2}]
    ```
 3. Update consuming features' .purpose files with dependency
 ```
@@ -151,15 +152,16 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
 ### Deprecating a Symbol
 
 ```
-1. Rename symbol prefix to ~:
-   - @old-feature → ~old-feature
+1. Add `[deprecated]` tag to the symbol:
+   - #old-feature gets `tags: [deprecated]`
 2. Add deprecation note:
    ```yaml
-   feature: ~old-feature
+   feature: #old-feature
    status: deprecated
+   tags: [deprecated]
    deprecated:
      since: "2024-01-15"
-     reason: "Replaced by @new-feature"
+     reason: "Replaced by #new-feature"
      migration: "See docs/migrations/old-to-new.md"
    ```
 3. Update all references to note deprecation
@@ -186,7 +188,7 @@ For features that involve multiple steps, gates, and signals, **define the flow 
            symbol: ^project-member
            description: User must be project member
          - type: action
-           symbol: @assign-task
+           symbol: #assign-task
            description: Update task assignee
          - type: signal
            symbol: "!task-assigned"
@@ -269,7 +271,7 @@ paradigm beacon          # See updated symbols
 
 ### 1. Forgetting to Update After Rename
 
-**Bad**: Rename `@checkout` to `@purchase` in code but not in .purpose files
+**Bad**: Rename `#checkout` to `#purchase` in code but not in .purpose files
 **Fix**: Use find-replace across all .purpose and portal.yaml files
 
 ### 2. Adding Gates in Code but Not portal.yaml

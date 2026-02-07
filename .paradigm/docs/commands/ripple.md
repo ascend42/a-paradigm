@@ -9,8 +9,8 @@ Shows what would be affected if you modify a symbol, what it depends on, and whi
 ## What It Does
 
 **Analyzes a symbol to show:**
-- **Upstream dependencies** - What this symbol requires (portals, states, flows)
-- **Downstream impact** - What would break if you change this (features, components, signals)
+- **Upstream dependencies** - What this symbol requires (gates, states, flows)
+- **Downstream impact** - What would break if you change this (components, signals)
 - **Flow membership** - Which flows include this symbol (step X of Y)
 - **Direct relationships** - What it references and what references it
 - **Impact level** - Low, Medium, High, or Critical
@@ -53,44 +53,44 @@ Shows what would be affected if you modify a symbol, what it depends on, and whi
 
 ```bash
 # Analyze a symbol
-paradigm ripple @checkout
+paradigm ripple #checkout
 paradigm ripple #Button
 paradigm ripple ^authenticated
 paradigm ripple !login-success
 
 # Custom depth (default 1)
-paradigm ripple @feature --depth 2
+paradigm ripple #feature --depth 2
 
 # JSON output (for tooling)
-paradigm ripple @feature --json
+paradigm ripple #feature --json
 
 # Quiet mode (no console output, just JSON)
-paradigm ripple @feature --quiet --json
+paradigm ripple #feature --quiet --json
 
 # Target specific directory
-paradigm ripple @feature ./src
+paradigm ripple #feature ./src
 ```
 
 ## Output
 
 ```
-🌊 Ripple Analysis for @checkout
+🌊 Ripple Analysis for #checkout
 
 Symbol Info
 ──────────────────────────────────────────────────
-  Type:        feature
+  Type:        component
   Path:        src/features/checkout/index.tsx
   Description: Purchase completion flow
 
 ⬆️  Upstream (What this requires)
 ──────────────────────────────────────────────────
-  Portals:  ^authenticated, ^payment-ready
-  States:   %cart
+  Gates:    ^authenticated, ^payment-ready
+  States:   #cart-state
   Flows:    $checkout-flow
 
 ⬇️  Downstream (What would be affected)
 ──────────────────────────────────────────────────
-  Features:    @admin-dashboard
+  Components:  #admin-dashboard
   Components:  (none)
   Signals:     !checkout-complete
 
@@ -110,20 +110,19 @@ Symbol Info
 
 ### Symbol Info
 Basic information about the analyzed symbol:
-- Type (@feature, #component, etc.)
+- Type (#component, $flow, ^gate, etc.)
 - File path
 - Description from `.purpose`
 - Tags (if any)
 
 ### Upstream Dependencies
 What this symbol needs to function:
-- **Portals** (^) - Authorization requirements
-- **States** (%) - Data dependencies
+- **Gates** (^) - Authorization requirements
+- **States** (#) - Data dependencies (components with [state] tag)
 - **Flows** ($) - Process dependencies
 
 ### Downstream Impact
 What depends on this symbol:
-- **Features** (@) - Features that use this
 - **Components** (#) - Components that depend on this
 - **Signals** (!) - Events that this triggers/consumes
 
@@ -146,12 +145,12 @@ Which workflows include this:
 **Standard workflow:**
 ```bash
 # 1. Check impact before changes
-paradigm ripple @feature
+paradigm ripple #feature
 
 # 2. Make changes
 
 # 3. Verify affected symbols
-paradigm ripple @affected-feature
+paradigm ripple #affected-feature
 
 # 4. Update constellation
 paradigm constellation
@@ -160,7 +159,7 @@ paradigm constellation
 **With MCP tools:**
 ```
 AI: [Calls paradigm_ripple before modifying]
-AI: "I see @checkout has 3 dependents. Proceeding carefully."
+AI: "I see #checkout has 3 dependents. Proceeding carefully."
 AI: [Makes changes]
 AI: [Tests affected dependents]
 ```
@@ -179,7 +178,7 @@ paradigm ripple #Button
 ### Safe Deletion
 ```bash
 # Want to remove a feature
-paradigm ripple @old-feature
+paradigm ripple #old-feature
 
 # If 0 dependents: Safe to remove
 # If >0 dependents: Must update/migrate first
@@ -187,11 +186,11 @@ paradigm ripple @old-feature
 
 ### Code Review
 ```bash
-# PR changes @checkout
-paradigm ripple @checkout
+# PR changes #checkout
+paradigm ripple #checkout
 
 # Verify PR also updates:
-# - @admin-dashboard (dependent)
+# - #admin-dashboard (dependent)
 # - Tests for both features
 ```
 
@@ -222,23 +221,22 @@ done | sort -t: -k2 -nr
 
 ```json
 {
-  "symbol": "@checkout",
-  "type": "feature",
+  "symbol": "#checkout",
+  "type": "component",
   "path": "src/features/checkout/index.tsx",
   "description": "Purchase completion",
   
-  "requires": ["^authenticated", "^payment-ready", "%cart"],
-  "requiredBy": ["@admin-dashboard", "$checkout-flow"],
+  "requires": ["^authenticated", "^payment-ready", "#cart-state"],
+  "requiredBy": ["#admin-dashboard", "$checkout-flow"],
   
   "downstream": {
-    "features": ["@admin-dashboard"],
-    "components": [],
+    "components": ["#admin-dashboard"],
     "signals": ["!checkout-complete"]
   },
-  
+
   "upstream": {
-    "portals": ["^authenticated", "^payment-ready"],
-    "states": ["%cart"],
+    "gates": ["^authenticated", "^payment-ready"],
+    "states": ["#cart-state"],
     "flows": ["$checkout-flow"]
   },
   
@@ -263,13 +261,13 @@ paradigm ripple #Button
 
 **Example 2: Safe feature removal**
 ```bash
-paradigm ripple @experimental-feature
+paradigm ripple #experimental-feature
 
 # Output: 0 dependents
 # Action: Safe to delete
 ```
 
-**Example 3: Refactoring portal**
+**Example 3: Refactoring gate**
 ```bash
 paradigm ripple ^authenticated
 
@@ -282,7 +280,7 @@ paradigm ripple ^authenticated
 #!/bin/bash
 # check-pr-impact.sh
 
-for symbol in $(git diff main... | grep -o '@[a-z-]*' | sort -u); do
+for symbol in $(git diff main... | grep -o '#[a-z-]*' | sort -u); do
   echo "Checking impact of $symbol..."
   paradigm ripple "$symbol" --json | jq '{symbol: .symbol, dependents: (.requiredBy | length)}'
 done
@@ -302,7 +300,7 @@ done
 ### Impact Matrix
 ```bash
 # Create impact matrix for all features
-for feature in @login @checkout @dashboard; do
+for feature in #login #checkout #dashboard; do
   count=$(paradigm ripple "$feature" --json | jq '.requiredBy | length')
   echo "$feature: $count dependents"
 done

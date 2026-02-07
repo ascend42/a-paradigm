@@ -13,7 +13,7 @@ Before starting, gather context:
 
 2. **Check the constellation** for similar features:
    - File: `.paradigm/constellation.json`
-   - Look for patterns in existing `@feature` symbols
+   - Look for patterns in existing `#component` symbols with `[feature]` tag
 
 3. **Review existing .purpose files** for format reference:
    - Example: Look in `src/features/` directories for `.purpose` files
@@ -23,7 +23,7 @@ Before starting, gather context:
 ## Prompt Template
 
 ```
-I want to add a new @[FEATURE_NAME] feature.
+I want to add a new #[FEATURE_NAME] feature.
 
 ## Description
 [What the feature does - user perspective]
@@ -34,10 +34,10 @@ I want to add a new @[FEATURE_NAME] feature.
 - [Requirement 3]
 
 ## Related Symbols
-- Portals needed: [^portal-name if auth required]
+- Gates needed: [^gate-name if auth required]
 - Signals to emit: ["!success-signal", "!failure-signal"]
-- State affected: [%state.property]
 - Components to use/create: [#ComponentName]
+- Aspects: [~aspect-name if cross-cutting rules apply]
 
 ## Additional Context
 [Any extra context, constraints, or preferences]
@@ -48,7 +48,7 @@ I want to add a new @[FEATURE_NAME] feature.
 ## Example
 
 ```
-I want to add a new @password-reset feature.
+I want to add a new #password-reset feature.
 
 ## Description
 Allow users to reset their password via email verification.
@@ -61,14 +61,13 @@ Allow users to reset their password via email verification.
 - User is logged in after reset
 
 ## Related Symbols
-- Portals needed: ^rate-limited (prevent abuse)
+- Gates needed: ^rate-limited (prevent abuse)
 - Signals to emit: !reset-requested, !reset-completed, !reset-failed
-- State affected: %user.authenticated (after successful reset)
 - Components to use/create: #PasswordResetForm, #EmailInput
 
 ## Additional Context
 - Use existing email service (#email-service)
-- Follow same validation as @signup
+- Follow same validation as #signup-handler
 ```
 
 ---
@@ -86,23 +85,24 @@ Allow users to reset their password via email verification.
    description: What this feature does
    
    # Record format (recommended)
-   features:
+   components:
      [feature-name]:
        description: Detailed description
-       gates: [^authenticated]      # Portals required
+       tags: [feature]
+       gates: [^authenticated]      # Gates required
        flows: [$checkout-flow]      # Flows this triggers
        signals: ["!success", "!failed"] # Events emitted
-       states: [%user.cart]         # State dependencies
-       components: [#MyComponent]   # UI components used
-   
+       components: [#MyComponent]   # Other components used
+
    # Array format (also supported)
-   features:
+   components:
      - id: [feature-name]
        description: Detailed description
+       tags: [feature]
        gates: [^authenticated]
    ```
 
-3. **Define portals (if authorization needed):**
+3. **Define gates (if authorization needed):**
    - Edit: `portal.yaml`
    - Reference: See `^authenticated` pattern for example
 
@@ -138,7 +138,7 @@ Allow users to reset their password via email verification.
 
 1. **Update the thread:**
    ```bash
-   paradigm thread save "Added @[feature-name] feature"
+   paradigm thread save "Added #[feature-name] feature"
    ```
 
 2. **Refresh the beacon:**
@@ -148,5 +148,5 @@ Allow users to reset their password via email verification.
 
 3. **Check ripple effects:**
    ```bash
-   paradigm ripple @[feature-name]
+   paradigm ripple #[feature-name]
    ```

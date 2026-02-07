@@ -1,14 +1,14 @@
-# Validate Portals
+# Validate Gates
 
-Use this prompt when you need to validate that authorization gates (portals) are working correctly by reading browser console output.
+Use this prompt when you need to validate that authorization gates are working correctly by reading browser console output.
 
 ---
 
 ## Overview
 
-Portal Validation allows you to verify authorization flows by:
+Gate Validation allows you to verify authorization flows by:
 1. Navigating to protected routes in the browser
-2. Reading structured console output from portal checks
+2. Reading structured console output from gate checks
 3. Validating decisions match expected behavior
 
 ---
@@ -39,7 +39,7 @@ For each scenario:
 2. **Navigate to the target route** using browser tools
 3. **Read the console output** looking for `🚪 PORTAL CHECK:` blocks
 
-### Step 3: Parse Portal Check Output
+### Step 3: Parse Gate Check Output
 
 Look for blocks like this in the console:
 
@@ -68,7 +68,7 @@ Extract:
 ### Step 5: Report Results
 
 ```markdown
-## Portal Validation Results
+## Gate Validation Results
 
 ### Scenario 1: Logged-out user → /dashboard
 - **Gate**: ^authenticated
@@ -183,7 +183,7 @@ When you receive console messages, look for:
 
 1. Setup: Login as subscribed admin
 2. Navigate to /admin/billing
-3. Expect multiple PORTAL CHECK blocks:
+3. Expect multiple GATE CHECK blocks:
    - ^authenticated → ALLOW
    - ^subscription-required → ALLOW (or bypass)
    - ^admin-only → ALLOW
@@ -194,11 +194,11 @@ When you receive console messages, look for:
 
 ## Troubleshooting
 
-### No Portal Check Output
+### No Gate Check Output
 
 If you don't see `🚪 PORTAL CHECK` in the console:
 
-1. **Check environment**: Portal validation may be disabled
+1. **Check environment**: Gate validation may be disabled
    - Look for `VITE_ENABLE_PORTAL_VALIDATION=true` in `.env`
 2. **Check implementation**: Route guard may not use `portal.check()`
 3. **Check console level**: Browser console may be filtering messages
@@ -227,14 +227,14 @@ If a gate allows when you expect DENY:
 Copy and fill out for each validation session:
 
 ```markdown
-## Portal Validation Session
+## Gate Validation Session
 
 **Date**: [DATE]
 **Tester**: AI Agent
 **Environment**: [localhost:5173 / staging / production]
 
 ### Pre-Conditions
-- [ ] Portal validation is enabled
+- [ ] Gate validation is enabled
 - [ ] Test user accounts are available
 - [ ] Routes to test are identified
 
@@ -263,9 +263,9 @@ Copy and fill out for each validation session:
 
 ## Integration with Test Checklist
 
-When validating portals as part of a broader test plan:
+When validating gates as part of a broader test plan:
 
-1. Refer to `TESTING_CHECKLIST.md` section "Portal Validation Methodology"
+1. Refer to `TESTING_CHECKLIST.md` section "Gate Validation Methodology"
 2. Update checklist items as you validate each gate
 3. Log issues in the Issue Tracking table
 4. Note any discrepancies between expected and actual behavior
@@ -274,6 +274,6 @@ When validating portals as part of a broader test plan:
 
 ## See Also
 
-- [Portal Validation Specification](../specs/portal-validation.md) - Technical spec
+- [Gate Validation Specification](../specs/portal-validation.md) - Technical spec
 - [Logger Specification](../specs/logger.md) - General Paradigm logging
-- [Symbols Reference](../specs/symbols.md) - Symbol system including `^` portals
+- [Symbols Reference](../specs/symbols.md) - Symbol system including `^` gates
