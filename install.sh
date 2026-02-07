@@ -75,20 +75,26 @@ npm run build --silent
 echo -e "${GREEN}✓ Build complete${NC}"
 echo ""
 
+# Capture npm prefix before we leave temp dir (used for verification later)
+NPM_PREFIX="$(npm config get prefix)"
+
 # Pack tarball (avoids cwd issues when temp dir is deleted)
 echo -e "${BLUE}Packing...${NC}"
 cd "$TEMP_DIR/packages/paradigm"
 TARBALL=$(npm pack --silent 2>/dev/null)
-cd "$HOME"
+TARBALL_PATH="$TEMP_DIR/packages/paradigm/$TARBALL"
+
+# Return to a safe directory before install + cleanup
+cd "$HOME" || cd /
 
 # Install
 if [ "$INSTALL_TYPE" = "local" ]; then
     echo -e "${BLUE}Installing locally (current project)...${NC}"
-    npm install "$TEMP_DIR/packages/paradigm/$TARBALL"
+    npm install "$TARBALL_PATH"
     echo -e "${GREEN}✓ Installed locally${NC}"
 else
     echo -e "${BLUE}Installing globally...${NC}"
-    npm install -g "$TEMP_DIR/packages/paradigm/$TARBALL" --silent
+    npm install -g "$TARBALL_PATH" --silent
     echo -e "${GREEN}✓ Installed globally${NC}"
 fi
 
@@ -98,28 +104,26 @@ echo -e "${BLUE}Cleaning up...${NC}"
 rm -rf "$TEMP_DIR"
 echo -e "${GREEN}✓ Cleanup complete${NC}"
 
-# Verify installation
+# Verify installation (no npm calls — npm crashes if cwd was deleted in parent shell)
 echo ""
 echo -e "${BLUE}Verifying installation...${NC}"
 
-# Resolve the npm global bin path directly (command -v won't work in piped shells)
-NPM_BIN="$(npm config get prefix)/bin"
-PARADIGM_BIN="$NPM_BIN/paradigm"
+PARADIGM_BIN="$NPM_PREFIX/bin/paradigm"
 
-if [ -f "$PARADIGM_BIN" ] || command -v paradigm &> /dev/null; then
-    INSTALLED_VERSION=$("${PARADIGM_BIN:-paradigm}" --version 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
-    echo -e "${GREEN}✓ Paradigm v$INSTALLED_VERSION installed successfully${NC}"
+if [ -f "$PARADIGM_BIN" ] || [ -L "$PARADIGM_BIN" ] || command -v paradigm &> /dev/null; then
+    INSTALLED_VERSION=$("$PARADIGM_BIN" --version 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+    echo -e "${GREEN}✓ Paradigm v${INSTALLED_VERSION:-unknown} installed successfully${NC}"
 
     # Check if npm bin is in PATH
     if ! command -v paradigm &> /dev/null; then
         echo ""
         echo -e "${YELLOW}Note: Add npm global bin to your PATH if not already:${NC}"
-        echo "  export PATH=\"\$PATH:$NPM_BIN\""
+        echo "  export PATH=\"\$PATH:$NPM_PREFIX/bin\""
     fi
 else
     echo -e "${RED}❌ Installation verification failed${NC}"
     echo "You may need to add npm global bin to your PATH:"
-    echo "  export PATH=\"\$PATH:$NPM_BIN\""
+    echo "  export PATH=\"\$PATH:$NPM_PREFIX/bin\""
     exit 1
 fi
 
