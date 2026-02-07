@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2026-02-07
+
+### Fixed
+
+- **Install script: permanent source directory**: Rewrote `install.sh` to clone to `~/.paradigm-cli/` instead of `/tmp/`. `npm install -g .` creates symlinks back to source files — the old temp dir cleanup broke every install. Now installs both `paradigm` and `paradigm-mcp` CLIs, supports re-running for updates (git pull + rebuild), and warns users not to delete the source directory.
+
 ## [2.0.8] - 2026-02-07
 
 ### Fixed

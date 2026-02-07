@@ -76,7 +76,7 @@ The AI never needed to read the implementation — the contracts were explicit.
 curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh | bash
 ```
 
-This clones, builds, and installs the `paradigm` and `paradigm-mcp` CLIs globally.
+This clones to `~/.paradigm-cli/`, builds, and installs the `paradigm` and `paradigm-mcp` CLIs globally. Re-running the same command will update to the latest version.
 
 Or download and inspect first:
 
@@ -86,12 +86,14 @@ chmod +x install.sh
 ./install.sh
 ```
 
+> **Note:** The source directory at `~/.paradigm-cli/` must be kept — the global CLIs symlink to it. To uninstall: `npm uninstall -g @a-company/paradigm @a-company/paradigm-mcp && rm -rf ~/.paradigm-cli`
+
 ### Manual Install
 
 ```bash
-# 1. Clone and build
-git clone https://github.com/ascend42/a-paradigm.git
-cd a-paradigm
+# 1. Clone and build (keep this directory — CLIs symlink to it)
+git clone https://github.com/ascend42/a-paradigm.git ~/.paradigm-cli
+cd ~/.paradigm-cli
 npm install && npm run build
 
 # 2. Install CLI globally
