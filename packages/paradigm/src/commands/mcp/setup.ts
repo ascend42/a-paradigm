@@ -151,8 +151,8 @@ function generateMCPConfig(client: AIClient, projectPath: string, projectName: s
           {
             transport: {
               type: 'stdio',
-              command: 'npx',
-              args: ['@a-company/paradigm-mcp'],
+              command: 'paradigm-mcp',
+              args: ['.'],
               cwd: projectPath,
             },
           },
@@ -160,13 +160,13 @@ function generateMCPConfig(client: AIClient, projectPath: string, projectName: s
       },
     };
   }
-  
+
   // Standard MCP format (Cursor, Claude Desktop, Cline)
   return {
     mcpServers: {
       [serverName]: {
-        command: 'npx',
-        args: ['@a-company/paradigm-mcp'],
+        command: 'paradigm-mcp',
+        args: ['.'],
         cwd: projectPath,
       },
     },

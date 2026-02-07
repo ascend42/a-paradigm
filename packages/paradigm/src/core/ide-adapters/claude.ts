@@ -444,12 +444,13 @@ export class ClaudeAdapter implements IDEAdapter {
   /**
    * Generate MCP configuration for Claude
    */
-  generateMcpConfig(): McpConfig {
+  generateMcpConfig(rootDir: string): McpConfig {
     return {
       mcpServers: {
         paradigm: {
-          command: 'npx',
-          args: ['@a-company/paradigm-mcp'],
+          command: 'paradigm-mcp',
+          args: ['.'],
+          cwd: rootDir,
         },
       },
     };
