@@ -75,22 +75,22 @@ npm run build --silent
 echo -e "${GREEN}✓ Build complete${NC}"
 echo ""
 
+# Pack tarball (avoids cwd issues when temp dir is deleted)
+echo -e "${BLUE}Packing...${NC}"
+cd "$TEMP_DIR/packages/paradigm"
+TARBALL=$(npm pack --silent 2>/dev/null)
+cd "$OLDPWD"
+
 # Install
 if [ "$INSTALL_TYPE" = "local" ]; then
     echo -e "${BLUE}Installing locally (current project)...${NC}"
-    npm pack --silent
-    PACKAGE_FILE=$(ls paradigm-*.tgz)
-    cd "$OLDPWD"
-    npm install "$TEMP_DIR/$PACKAGE_FILE"
+    npm install "$TEMP_DIR/packages/paradigm/$TARBALL"
     echo -e "${GREEN}✓ Installed locally${NC}"
 else
     echo -e "${BLUE}Installing globally...${NC}"
-    cd "$TEMP_DIR/packages/paradigm"
-    npm install -g . --silent
+    npm install -g "$TEMP_DIR/packages/paradigm/$TARBALL" --silent
     echo -e "${GREEN}✓ Installed globally${NC}"
 fi
-
-cd "$OLDPWD"
 
 # Cleanup
 echo ""
