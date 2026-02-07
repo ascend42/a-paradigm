@@ -17,7 +17,7 @@ import {
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import type {
   CodeAnchor,
-  DreamFile,
+  PremiseFile,
   SymbolEntry,
   SymbolType,
   SourceType,
@@ -26,20 +26,20 @@ import type {
 } from './types.js';
 
 /**
- * Aggregate all symbols from a dream configuration
+ * Aggregate all symbols from a premise configuration
  */
-export async function aggregateFromDream(
-  dreamFile: DreamFile,
+export async function aggregateFromPremise(
+  premiseFile: PremiseFile,
   rootDir: string
 ): Promise<AggregationResult> {
   const symbols: SymbolEntry[] = [];
   const errors: AggregationError[] = [];
   const purposeFiles: string[] = [];
-  const gateFiles: string[] = [];
+  const portalFiles: string[] = [];
 
   // Aggregate from Purpose sources
-  if (dreamFile.sources.purpose) {
-    for (const source of dreamFile.sources.purpose) {
+  if (premiseFile.sources.purpose) {
+    for (const source of premiseFile.sources.purpose) {
       const sourcePath = path.resolve(rootDir, source.path);
       try {
         const parsed = await getAllPurposeFiles(sourcePath);
@@ -177,19 +177,19 @@ export async function aggregateFromDream(
     }
   }
 
-  // Aggregate from Gate sources
-  if (dreamFile.sources.gate) {
-    for (const source of dreamFile.sources.gate) {
+  // Aggregate from Portal sources
+  if (premiseFile.sources.portal) {
+    for (const source of premiseFile.sources.portal) {
       const sourcePath = path.resolve(rootDir, source.path);
       try {
         // Check if it's a specific file or directory
         let gateConfig: ParsedGateConfig;
         if (sourcePath.endsWith('.yaml') || sourcePath.endsWith('.yml')) {
           gateConfig = await parseGateConfig(sourcePath);
-          gateFiles.push(sourcePath);
+          portalFiles.push(sourcePath);
         } else {
           const files = await findGateFiles(sourcePath);
-          gateFiles.push(...files);
+          portalFiles.push(...files);
           if (files.length > 0) {
             gateConfig = await parseGateConfig(files[0]);
             // Merge additional files
@@ -213,7 +213,7 @@ export async function aggregateFromDream(
               id: `gate-signal-${gate.id}-${prize.id}`,
               symbol: `!${prize.id}`,
               type: 'signal',
-              source: 'gate',
+              source: 'portal',
               filePath: sourcePath,
               data: prize,
               description: `Signal from gate ${gate.id}`,
@@ -227,7 +227,7 @@ export async function aggregateFromDream(
         }
       } catch (e: unknown) {
         errors.push({
-          source: 'gate',
+          source: 'portal',
           filePath: sourcePath,
           message: (e as Error).message,
         });
@@ -235,8 +235,8 @@ export async function aggregateFromDream(
     }
   }
 
-  // Add dream-native nodes
-  for (const node of dreamFile.nodes) {
+  // Add premise-native nodes
+  for (const node of premiseFile.nodes) {
     // Skip if this is a reference to an existing symbol (no content)
     // v2: 'idea' is now a tag, not a type - check for symbols with [idea] tag
     const hasIdeaTag = node.tags?.includes('idea');
@@ -254,7 +254,7 @@ export async function aggregateFromDream(
       id: node.id,
       symbol: node.symbol,
       type: node.type,
-      source: 'dream',
+      source: 'premise',
       filePath: '.premise',
       data: node,
       description: node.content,
@@ -271,7 +271,7 @@ export async function aggregateFromDream(
   return {
     symbols,
     purposeFiles,
-    gateFiles,
+    portalFiles,
     errors,
     timestamp: Date.now(),
   };
@@ -303,7 +303,7 @@ function createGateSymbol(gate: Gate, filePath: string): SymbolEntry {
     id: `gate-${gate.id}`,
     symbol: `^${gate.id}`,
     type: 'gate',
-    source: 'gate',
+    source: 'portal',
     filePath,
     data: gate,
     description: gate.description,
@@ -319,7 +319,7 @@ function createFlowSymbol(flow: Flow, filePath: string): SymbolEntry {
     id: `gate-flow-${flow.id}`,
     symbol: `$${flow.id}`,
     type: 'flow',
-    source: 'gate',
+    source: 'portal',
     filePath,
     data: flow,
     description: flow.description,
@@ -398,11 +398,11 @@ function resolveReferences(symbols: SymbolEntry[]): void {
 }
 
 /**
- * Aggregate from a directory without a .premise file
+ * Aggregate symbols from a directory without a .premise file
  */
 export async function aggregateFromDirectory(rootDir: string): Promise<AggregationResult> {
-  // Create a default dream file configuration
-  const dreamFile: DreamFile = {
+  // Create a default premise file configuration
+  const premiseFile: PremiseFile = {
     version: '1.0.0',
     metadata: {
       name: path.basename(rootDir),
@@ -411,7 +411,7 @@ export async function aggregateFromDirectory(rootDir: string): Promise<Aggregati
     },
     sources: {
       purpose: [{ path: './' }],
-      gate: [{ path: './' }],
+      portal: [{ path: './' }],
     },
     nodes: [],
     connections: [],
@@ -420,5 +420,5 @@ export async function aggregateFromDirectory(rootDir: string): Promise<Aggregati
     },
   };
 
-  return aggregateFromDream(dreamFile, rootDir);
+  return aggregateFromPremise(premiseFile, rootDir);
 }

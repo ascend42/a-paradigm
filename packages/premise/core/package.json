@@ -1,6 +1,6 @@
 {
   "name": "@a-company/premise-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Symbol aggregation and project knowledge management",
   "type": "module",
   "main": "./dist/index.js",

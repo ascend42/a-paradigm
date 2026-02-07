@@ -13,7 +13,8 @@ All context, symbols, and specifications live in the .paradigm/ directory.
 ## How to Use Paradigm
 
 - Check .paradigm/specs/ for philosophy and patterns before making changes
-- Reference symbols using prefixes: @feature #component ^portal !signal %state $flow
+- Reference symbols using prefixes: #component $flow ^gate !signal ~aspect
+- Classify with tags: [feature], [integration], [state], [idea], [deprecated]
 - Use the Paradigm logger instead of raw console.log/print statements
 - Run `paradigm probe` with screenshots to map UI to code
 - Check .paradigm/docs/ for command reference and troubleshooting
@@ -23,7 +24,7 @@ All context, symbols, and specifications live in the .paradigm/ directory.
 
 ## When to Update Paradigm Files
 
-- When adding a feature, create/update the nearest .purpose file
-- When adding authorization, update portal.yaml
-- When exploring ideas, use ?symbol prefix
+- When adding a feature, create/update the nearest .purpose file with `#component` and `[feature]` tag
+- When adding authorization, update portal.yaml with `^gate`
+- When adding cross-cutting rules, create `~aspect` with required code anchors
 - Always update references when renaming symbols

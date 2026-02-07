@@ -41,7 +41,7 @@ A step-by-step tutorial project that demonstrates all Paradigm features by build
 |------------------|---------------------|
 | `.purpose` files | Defining features, components |
 | `portal.yaml` | Authorization gates (public, auth, owner, admin) |
-| Symbol system | All 8 symbol types in context |
+| Symbol system | 5 operational symbols + tag bank in context |
 | Beacon | AI orientation at session start |
 | Constellation | Querying symbol relationships |
 | Ripple | Impact analysis before changes |
@@ -140,7 +140,7 @@ Episode 1 end state
 1. **Plan features with AI**
    ```
    You: "Help me plan the features for a task management app"
-   AI: [Suggests features, uses @ prefix]
+   AI: [Suggests features, uses # prefix with [feature] tag]
    ```
 
 2. **Create root `.purpose`**
@@ -151,7 +151,7 @@ Episode 1 end state
    
    features:
      task-management:
-       description: "@task-management: Create, update, delete, and organize tasks"
+       description: "Create, update, delete, and organize tasks"
        components: [#TaskForm, #TaskList, #TaskCard]
        gates: [^authenticated]
        signals: ["!task-created", "!task-completed", "!task-deleted"]
@@ -161,26 +161,26 @@ Episode 1 end state
 3. **Add more features**
    ```yaml
      project-organization:
-       description: "@project-organization: Group tasks into projects"
+       description: "Group tasks into projects"
        components: [#ProjectCard, #ProjectList, #ProjectSelector]
        gates: [^authenticated]
        signals: ["!project-created"]
    
      user-authentication:
-       description: "@user-authentication: Login, logout, session management"
+       description: "Login, logout, session management"
        components: [#LoginForm, #LogoutButton, #AuthProvider]
        gates: [^public]
        signals: ["!login-success", "!login-failed", "!logout"]
        flows: [$auth-flow]
    
      admin-dashboard:
-       description: "@admin-dashboard: User management and system settings"
+       description: "User management and system settings"
        components: [#UserManager, #SettingsPanel]
        gates: [^admin]
        signals: ["!user-banned", "!settings-updated"]
    
      notifications:
-       description: "@notifications: Alert users about task updates"
+       description: "Alert users about task updates"
        components: [#NotificationBell, #NotificationList]
        gates: [^authenticated]
        signals: ["!notification-sent", "!notification-read"]
@@ -191,15 +191,15 @@ Episode 1 end state
    components:
      TaskForm:
        description: "#TaskForm: Form for creating/editing tasks"
-       used-by: [@task-management]
+       used-by: [#task-management]
    
      TaskList:
        description: "#TaskList: Displays list of tasks with filters"
-       used-by: [@task-management]
+       used-by: [#task-management]
    
      TaskCard:
        description: "#TaskCard: Individual task display card"
-       used-by: [@task-management]
+       used-by: [#task-management]
    
      # ... more components
    ```
@@ -216,7 +216,7 @@ Episode 1 end state
    paradigm constellation
    ```
    - Show the JSON output
-   - Query with jq: `jq '.stars["@task-management"]'`
+   - Query with jq: `jq '.stars["#task-management"]'`
 
 #### End State
 ```yaml
@@ -228,7 +228,7 @@ Episode 1 end state
 
 #### AI Interaction Demo
 ```
-You: "What components are used by @task-management?"
+You: "What components are used by #task-management?"
 AI: [Queries constellation, returns accurate list]
 ```
 
@@ -354,12 +354,12 @@ Episode 3 end state + basic React/Next.js scaffolding
 2. **Start a coding session**
    ```
    You: "I want to implement the task creation feature"
-   AI: [Reads beacon, knows about @task-management]
+   AI: [Reads beacon, knows about #task-management]
    ```
 
 3. **AI checks impact before coding**
    ```
-   AI: [Runs paradigm ripple @task-management]
+   AI: [Runs paradigm ripple #task-management]
    "Before I make changes, let me check what this connects to..."
    ```
 
@@ -405,7 +405,7 @@ Episode 3 end state + basic React/Next.js scaffolding
 #### AI Interaction Demo
 ```
 Session 1:
-You: "Implement task creation for @task-management"
+You: "Implement task creation for #task-management"
 AI: [Implements, tracks in thread]
 
 Session 2:
@@ -472,7 +472,7 @@ Episode 4 end state
    You: "What would break if I removed ^authenticated?"
    Claude: [Calls paradigm_ripple]
    "Removing ^authenticated would affect 4 features: 
-    @task-management, @project-organization, @admin-dashboard, @notifications"
+    #task-management, #project-organization, #admin-dashboard, #notifications"
    ```
 
 7. **Live demo: Finding code**
@@ -495,7 +495,7 @@ Episode 4 end state
 #### AI Interaction Demo
 ```
 Claude: "I can see TaskFlow has:
-- 5 features including @task-management and @admin-dashboard
+- 5 features including #task-management and #admin-dashboard
 - 5 gates with ^authenticated being the most used
 - 12 components
 
@@ -551,14 +551,14 @@ Episode 5 end state + some running code
    - Show all symbols as nodes
 
 6. **Explore relationships**
-   - Click @task-management
+   - Click #task-management
    - See connections to components, gates, signals
    - Navigate to related symbols
 
 7. **Use for planning**
    ```
    You: "I want to add task comments. What does that touch?"
-   AI: [Looking at Prism] "@task-management, probably needs new 
+   AI: [Looking at Prism] "#task-management, probably needs new
        #CommentForm component, ^task-owner or ^project-member gate"
    ```
 
@@ -573,7 +573,7 @@ Episode 5 end state + some running code
 #### AI Interaction Demo
 ```
 You: "Looking at Prism, what's the most connected feature?"
-AI: "@task-management has the most connections - 
+AI: "#task-management has the most connections -
      3 components, 1 gate, 3 signals, 1 flow.
      It's the core of the application."
 ```
@@ -591,11 +591,11 @@ AI: "@task-management has the most connections -
 
 | Type | Symbol | Description |
 |------|--------|-------------|
-| **@ Feature** | @task-management | Core task CRUD |
-| | @project-organization | Project grouping |
-| | @user-authentication | Auth system |
-| | @admin-dashboard | Admin features |
-| | @notifications | Alert system |
+| **# Component** | #task-management | Core task CRUD `[feature]` |
+| | #project-organization | Project grouping `[feature]` |
+| | #user-authentication | Auth system `[feature]` |
+| | #admin-dashboard | Admin features `[feature]` |
+| | #notifications | Alert system `[feature]` |
 | **# Component** | #TaskForm | Task create/edit form |
 | | #TaskList | Task list display |
 | | #TaskCard | Individual task card |
@@ -628,10 +628,6 @@ AI: "@task-management has the most connections -
 | **$ Flow** | $task-creation-flow | Create task process |
 | | $auth-flow | Authentication process |
 | | $project-onboarding | New project setup |
-| **% State** | %user.authenticated | User is logged in |
-| | %user.role | User's role |
-| | %task.filters | Active task filters |
-| | %project.selected | Selected project |
 
 ---
 
@@ -706,9 +702,9 @@ gates:
 # Mistake: Reference a feature that doesn't exist
 components:
   TaskCard:
-    used-by: [@old-feature]  # Doesn't exist!
+    used-by: [#old-feature]  # Doesn't exist!
 ```
-**How Paradigm catches it:** `paradigm ripple @old-feature` shows no connections
+**How Paradigm catches it:** `paradigm ripple #old-feature` shows no connections
 
 #### 4. Stale Documentation
 ```
@@ -730,11 +726,11 @@ You: "I'm building a task management app called TaskFlow.
 
 AI: "Let's define the core features for TaskFlow:
 
-1. @task-management - Core task operations (CRUD, status)
-2. @project-organization - Grouping tasks into projects  
-3. @user-authentication - Login/logout/session
-4. @admin-dashboard - Admin-only features
-5. @notifications - Alerting users
+1. #task-management - Core task operations (CRUD, status)
+2. #project-organization - Grouping tasks into projects
+3. #user-authentication - Login/logout/session
+4. #admin-dashboard - Admin-only features
+5. #notifications - Alerting users
 
 Each feature should reference:
 - Components it uses (#)
@@ -748,14 +744,14 @@ Want me to draft the .purpose file?"
 
 ```
 [Session 1]
-You: "Implement task creation for @task-management"
+You: "Implement task creation for #task-management"
 
 AI: "I'll implement task creation. Let me first check what 
      this connects to...
      
-     [Runs paradigm ripple @task-management]
-     
-     @task-management uses #TaskForm, #TaskList, #TaskCard
+     [Runs paradigm ripple #task-management]
+
+     #task-management uses #TaskForm, #TaskList, #TaskCard
      and requires ^authenticated.
      
      [Implements createTask function]
@@ -770,7 +766,7 @@ You: "What was I working on?"
 
 AI: "[Reads thread.md]
      
-     Last session you implemented task creation for @task-management.
+     Last session you implemented task creation for #task-management.
      
      Still TODO:
      - Add validation (you noted: using Zod)
@@ -789,16 +785,16 @@ Claude: [Calls paradigm_ripple with symbol="^authenticated"]
 "Removing ^authenticated would have significant impact:
 
 DIRECTLY AFFECTED (4 features):
-- @task-management - Would become public
-- @project-organization - Would become public  
-- @admin-dashboard - Would lose auth chain (^admin requires ^authenticated)
-- @notifications - Would become public
+- #task-management - Would become public
+- #project-organization - Would become public
+- #admin-dashboard - Would lose auth chain (^admin requires ^authenticated)
+- #notifications - Would become public
 
 INDIRECTLY AFFECTED (1 feature):
-- @admin-dashboard via ^admin dependency
+- #admin-dashboard via ^admin dependency
 
-RECOMMENDATION: High impact change. If you need public task 
-viewing, consider creating a separate @public-tasks feature 
+RECOMMENDATION: High impact change. If you need public task
+viewing, consider creating a separate #public-tasks feature
 with ^public gate instead of removing ^authenticated."
 ```
 

@@ -16,7 +16,7 @@ import ora from 'ora';
 import { log } from '../utils/logger.js';
 import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultGateConfig } from '@a-company/portal-core';
-import { getDefaultDreamContent } from '@a-company/premise-core';
+import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand, scanIndexExists } from './scan/index.js';
 
@@ -637,10 +637,10 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Create .premise file
-  const dreamPath = path.join(cwd, '.premise');
-  if (!fs.existsSync(dreamPath) || options.force) {
+  const premisePath = path.join(cwd, '.premise');
+  if (!fs.existsSync(premisePath) || options.force) {
     spinner.start('Creating .premise...');
-    fs.writeFileSync(dreamPath, getDefaultDreamContent(projectName));
+    fs.writeFileSync(premisePath, getDefaultPremiseContent(projectName));
     spinner.succeed(chalk.green('.premise created'));
   }
 

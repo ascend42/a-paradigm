@@ -219,8 +219,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   }
 
   // Check .premise file
-  const dreamPath = path.join(cwd, '.premise');
-  if (fs.existsSync(dreamPath)) {
+  const premisePath = path.join(cwd, '.premise');
+  if (fs.existsSync(premisePath)) {
     results.push({
       name: '.premise',
       status: 'ok',

@@ -16,7 +16,7 @@ import {
 } from '../core/paradigm-config.js';
 import { writeCursorrules, cursorrrulesExists, CursorRulesMode } from '../core/cursorrules.js';
 import { getDefaultPurposeContent } from '@a-company/purpose-core';
-import { getDefaultDreamContent } from '@a-company/premise-core';
+import { getDefaultPremiseContent } from '@a-company/premise-core';
 
 interface SetupAnswers {
   sourceDir?: string;
@@ -347,9 +347,9 @@ export async function setupCommand(targetPath: string | undefined, options: Setu
   console.log(chalk.green('\n✅ Created .paradigm configuration'));
   
   // Write .premise if it doesn't exist
-  const dreamPath = path.join(rootDir, '.premise');
-  if (!fs.existsSync(dreamPath)) {
-    fs.writeFileSync(dreamPath, getDefaultDreamContent(projectName), 'utf8');
+  const premisePath = path.join(rootDir, '.premise');
+  if (!fs.existsSync(premisePath)) {
+    fs.writeFileSync(premisePath, getDefaultPremiseContent(projectName), 'utf8');
     console.log(chalk.green('✅ Created .premise file'));
   }
   

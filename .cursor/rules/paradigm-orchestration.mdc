@@ -9,7 +9,7 @@ alwaysApply: true
 **ALWAYS call `paradigm_orchestrate_inline` FIRST when:**
 - Task affects 3+ files
 - Task involves security/auth AND implementation
-- Task mentions multiple features (@symbols)
+- Task mentions multiple features (#symbols)
 - Building a new feature end-to-end
 - User explicitly requests multi-agent workflow
 

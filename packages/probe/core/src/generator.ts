@@ -16,11 +16,11 @@ import type {
 // Re-export for convenience
 export type { ScanIndex };
 
-const HORIZON_VERSION = '0.1.0';
+const PARADIGM_VERSION = '0.1.0';
 const SCHEMA_VERSION = '1.0.0';
 
 /**
- * Input from dream aggregation
+ * Input from premise aggregation
  */
 export interface AggregationInput {
   symbols: Array<{
@@ -36,7 +36,7 @@ export interface AggregationInput {
     referencedBy?: string[];
   }>;
   purposeFiles: string[];
-  gateFiles: string[];
+  portalFiles: string[];
 }
 
 /**
@@ -108,11 +108,11 @@ function createMeta(projectName: string, input: AggregationInput): ScanIndexMeta
     version: SCHEMA_VERSION,
     project: projectName,
     generatedAt: new Date().toISOString(),
-    paradigmVersion: HORIZON_VERSION,
+    paradigmVersion: PARADIGM_VERSION,
     sources: {
       purposeFiles: input.purposeFiles.length,
-      gateFiles: input.gateFiles.length,
-      dreamFiles: input.symbols.filter(s => s.source === 'dream').length > 0 ? 1 : 0,
+      portalFiles: input.portalFiles.length,
+      premiseFiles: input.symbols.filter(s => s.source === 'premise').length > 0 ? 1 : 0,
     },
   };
 }

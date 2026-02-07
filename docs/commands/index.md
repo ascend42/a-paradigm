@@ -12,8 +12,7 @@ Creates `.paradigm/scan-index.json` (also called `probe-index.json`) - a machine
 - Components with visual tags (#Button, #Modal, #Card)
 - Features and their UI surfaces (#checkout, #dashboard)
 - Flows and their visual steps ($checkout-flow)
-- State that affects UI (%cart, %user)
-- Portals that control UI access (^authenticated)
+- Gates that control UI access (^authenticated)
 
 **Generates:**
 ```json
@@ -99,7 +98,7 @@ Scan Index Generated
   Components:  15
   Features:    8
   Flows:       3
-  Portals:     2
+  Gates:       2
   Total:       28
 
   Output: .paradigm/scan-index.json

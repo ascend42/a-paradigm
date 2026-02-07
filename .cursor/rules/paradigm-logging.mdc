@@ -1,30 +1,31 @@
 ---
-description: Paradigm logger usage for TypeScript/JavaScript code
+description: Paradigm v2 logger usage for TypeScript/JavaScript code
 globs: **/*.{ts,tsx,js,jsx}
 alwaysApply: false
 ---
-## Paradigm Logging
+## Paradigm Logging (v2)
 
 **IMPORTANT:** Use the Paradigm logger instead of raw console.log/print.
 
 ```
-// Use this pattern:
-log.feature('@login').info('Starting login', { email });
+// v2 logger API — all code units use log.component():
+log.component('#login-handler').info('Starting login', { email });
 log.component('#database').debug('Query executed', { duration });
 log.gate('^authenticated').warn('Access denied', { userId });
 log.signal('!login-success').info('User authenticated');
+log.flow('$checkout').info('Step completed', { step: 2 });
+log.aspect('~audit-required').debug('Audit logged', { operation });
 ```
 
 ### Symbol Mapping by Directory
 
 | Directory | Symbol | Logger Method |
 |-----------|--------|---------------|
-| `features/**` | `@` | `log.feature()` |
-| `routes/**` | `@` | `log.feature()` |
-| `api/**` | `@` | `log.feature()` |
-| `endpoints/**` | `@` | `log.feature()` |
-| `commands/**` | `@` | `log.feature()` |
-| `models/**` | `@` | `log.feature()` |
+| `features/**` | `#` | `log.component()` |
+| `routes/**` | `#` | `log.component()` |
+| `api/**` | `#` | `log.component()` |
+| `endpoints/**` | `#` | `log.component()` |
+| `commands/**` | `#` | `log.component()` |
 | `components/**` | `#` | `log.component()` |
 | `lib/**` | `#` | `log.component()` |
 | `utils/**` | `#` | `log.component()` |
@@ -32,14 +33,17 @@ log.signal('!login-success').info('User authenticated');
 | `core/**` | `#` | `log.component()` |
 | `drivers/**` | `#` | `log.component()` |
 | `systems/**` | `#` | `log.component()` |
+| `integrations/**` | `#` | `log.component()` |
+| `external/**` | `#` | `log.component()` |
+| `vendors/**` | `#` | `log.component()` |
+| `stores/**` | `#` | `log.component()` |
+| `state/**` | `#` | `log.component()` |
+| `reducers/**` | `#` | `log.component()` |
+| `config/**` | `#` | `log.component()` |
 | `middleware/**` | `^` | `log.gate()` |
 | `auth/**` | `^` | `log.gate()` |
 | `guards/**` | `^` | `log.gate()` |
 | `policies/**` | `^` | `log.gate()` |
-| `stores/**` | `%` | `log.state()` |
-| `state/**` | `%` | `log.state()` |
-| `reducers/**` | `%` | `log.state()` |
-| `config/**` | `%` | `log.state()` |
 | `events/**` | `!` | `log.signal()` |
 | `handlers/**` | `!` | `log.signal()` |
 | `listeners/**` | `!` | `log.signal()` |
@@ -48,8 +52,7 @@ log.signal('!login-success').info('User authenticated');
 | `sagas/**` | `$` | `log.flow()` |
 | `workflows/**` | `$` | `log.flow()` |
 | `pipelines/**` | `$` | `log.flow()` |
-| `integrations/**` | `&` | `log.integration()` |
-| `external/**` | `&` | `log.integration()` |
-| `vendors/**` | `&` | `log.integration()` |
+| `aspects/**` | `~` | `log.aspect()` |
+| `rules/**` | `~` | `log.aspect()` |
 
 See `.paradigm/specs/logger.md` for full specification.

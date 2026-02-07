@@ -57,7 +57,7 @@ export interface ScanElement {
   id: string;
   /** Display name */
   name: string;
-  /** Full symbol with prefix (e.g., "@checkout", "#Button") */
+  /** Full symbol with prefix (e.g., "#checkout", "#Button") */
   symbol: string;
   /** Category of this element */
   category: ScanCategory;
@@ -178,8 +178,8 @@ export interface ScanIndexMeta {
   /** Source files scanned */
   sources: {
     purposeFiles: number;
-    gateFiles: number;
-    dreamFiles: number;
+    portalFiles: number;
+    premiseFiles: number;
   };
 }
 

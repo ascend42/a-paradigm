@@ -48,7 +48,7 @@ export function generateCursorrules(
   lines.push('This project uses Paradigm for structured AI context:');
   lines.push('- `.purpose` files define features, components, and context');
   lines.push('- `portal.yaml` files define authorization topology');
-  lines.push('- `.premise` files aggregate everything into the Dreamscape');
+  lines.push('- `.premise` files aggregate the project symbol graph');
   lines.push('');
 
   // How to use
@@ -134,7 +134,7 @@ export function generateCursorrules(
   lines.push('| `paradigm visualize` | Open the Dreamscape visualizer |');
   lines.push('| `paradigm purpose validate` | Validate .purpose files |');
   lines.push('| `paradigm gate validate` | Validate portal.yaml files |');
-  lines.push('| `paradigm dream aggregate` | Aggregate all symbols |');
+  lines.push('| `paradigm premise aggregate` | Aggregate all symbols |');
   lines.push('| `paradigm cursorrules` | Regenerate this .cursorrules file |');
   lines.push('');
 

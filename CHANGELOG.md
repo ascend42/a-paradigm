@@ -5,6 +5,39 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2026-02-06
+
+### Changed
+
+- **v2 release cleanup across 84 files** (~11,800 lines removed, ~500 added): Comprehensive pass to make the entire codebase v2-consistent before release.
+
+- **Deleted `examples/` directory**: Removed v1/Horizon-era shopflow example and pattern docs (will be replaced with links to real projects).
+
+- **Moved planning docs to `.plans/`**: Relocated 5 internal planning docs (`CASE-STUDY.md`, `CASE-STUDY-RECOMMENDATIONS.md`, `paradigm-website-outline.md`, `paradigm-visualizer-sentinel.md`, `taskflow-split-test.md`) out of `docs/`.
+
+- **Rewrote IDE rules for v2**: `.windsurfrules` and 8 `.cursor/rules/*.mdc` files fully rewritten — v1 9-symbol table → v2 5-symbol + tag bank, v1 logger calls → v2 API, "portals" → "gates".
+
+- **Rewrote `packages/paradigm/README.md`**: Updated from v0.4.0/v1 symbols to current version with v2 symbol system, tag bank, and current command list.
+
+- **Added `packages/logger/README.md`**: Documents the v2 logger API (`component()`, `gate()`, `signal()`, `flow()`, `aspect()`, `raw()`).
+
+- **Updated docs**: `docs/commands/` (constellation, ripple, index, beacon) — "Portals" → "Gates", removed `%state` rows. `docs/tutorial-project.md` — all `@feature` → `#component` with `[feature]` tags, removed `%state` rows. `docs/content-guide.md` — "8 symbols" → "5 operational symbols". `docs/README.md` — fixed GitHub URLs to `ascend42/a-paradigm`.
+
+- **Updated `CONTRIBUTING.md`**: Replaced stale `prism/` package reference with actual packages, added `Symbols:` trailer convention.
+
+- **Updated `DISTRIBUTION.md`**: Version references updated throughout.
+
+- **Resolved open questions in `symbols-v2.md`**: Marked 4 open items as decided/deferred.
+
+### Fixed
+
+- **Internal source renames (breaking API changes)**:
+  - `premise-core` (0.1.0 → 0.2.0): `DreamFile` → `PremiseFile`, `DreamNode` → `PremiseNode`, all `Dream*` types → `Premise*`. `SourceType` enum `'gate' | 'dream'` → `'portal' | 'premise'`. `AggregationResult.gateFiles` → `.portalFiles`. `PremiseFile.sources.gate` → `.sources.portal`. Functions: `parseDreamFile` → `parsePremiseFile`, `aggregateFromDream` → `aggregateFromPremise`, etc.
+  - `probe-core` (0.1.0 → 0.2.0): `HORIZON_VERSION` → `PARADIGM_VERSION`, `AggregationInput.gateFiles` → `.portalFiles`, `horizonVersion` → `paradigmVersion` in schema.
+  - `paradigm` CLI (1.4.0 → 1.5.0): `dreamPath` → `premisePath` in init/setup/doctor, `paradigm dream aggregate` → `paradigm premise aggregate` in cursorrules generator, `'gate' | 'dream'` → `'portal' | 'premise'` in config types.
+  - `sentinel`: `source: 'gate'` → `'portal'`, `result.gateFiles` → `result.portalFiles` in symbol loader.
+  - `paradigm-vscode`: `'@feature-name'` → `'#component-name'` in snippets.
+
 ## [2.0.5] - 2026-02-06
 
 ### Added

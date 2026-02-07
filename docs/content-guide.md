@@ -131,30 +131,26 @@ the symbol system - the shared language between you and AI."
 
 ### Video 3: "The Symbol System Explained" (8-10 min)
 
-**Goal:** Viewer understands all 8 symbols and when to use each.
+**Goal:** Viewer understands the 5 operational symbols and tag bank.
 
 **Script Outline:**
 
 ```
 0:00 - Hook (20s)
-"8 symbols. One shared language. Let's decode them."
+"5 symbols. One shared language. Let's decode them."
 
 0:20 - Why symbols matter (60s)
 - Prefixes that work everywhere
 - Code, docs, AI prompts, visual tools
 - Show: same symbol in different contexts
 
-1:20 - The Symbols (5-6 min, ~45s each)
-
-# Component (Feature)
-- User-facing capability or code unit
-- Example: #checkout, #user-login
-- When to use: "If a user would say 'I want to...'" or a reusable building block
+1:20 - The Symbols (5-6 min, ~60s each)
 
 # Component
-- Reusable code unit
-- Example: #Button, #api-client
-- When to use: Building block, used by features
+- Any documented code unit
+- Example: #checkout, #Button, #api-client
+- When to use: Any named code worth documenting
+- Classify with tags: [feature], [integration], [state]
 
 ^ Gate
 - Authorization checkpoint
@@ -169,20 +165,12 @@ the symbol system - the shared language between you and AI."
 $ Flow
 - Multi-step process
 - Example: $checkout-flow, $onboarding
-- When to use: Spans multiple features/components
+- When to use: Spans multiple components
 
-% State
-- Data conditions
-- Example: %user.authenticated, %cart.items
-- When to use: Checking or referencing state
-
-~ Aspect (deprecated marker)
-- Cross-cutting or deprecated
-- Example: ~legacy-api
-
-? Idea
-- Future possibilities
-- Example: ?add-export-feature
+~ Aspect
+- Cross-cutting rule with required code anchor
+- Example: ~audit-required, ~rate-limited
+- When to use: Enforcing rules across multiple components
 
 7:20 - Live Demo (90s)
 - Add symbols to a real .purpose file
@@ -457,8 +445,8 @@ for the tutorial project where we build this from scratch."
 
 **Outline:**
 1. Why naming things matters
-2. The 8 symbols deep dive (with examples)
-3. Symbol naming conventions
+2. The 5 operational symbols deep dive (with examples)
+3. The tag bank for classification
 4. Symbols in different contexts (code, docs, AI)
 5. Building a symbol vocabulary for your project
 6. CTA: Symbol reference card download

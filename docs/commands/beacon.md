@@ -10,7 +10,7 @@ Creates `.paradigm/beacon.md` - a compact, agent-optimized summary providing imm
 
 **Generates a markdown file with:**
 - **Constellation map** - Visual overview of features, components, and their relationships
-- **Portal summary** - Authorization gates and access control
+- **Gate summary** - Authorization gates and access control
 - **Landmarks** - Key files (config, types, API utils, etc.)
 - **Pathways** - Available task prompts (add-feature, refactor, debug-auth, etc.)
 - **Symbol reference** - Quick symbol system reminder
@@ -85,7 +85,7 @@ Beacon Contents
 ────────────────────────────────────────
   Features:    5
   Components:  12
-  Portals:     2
+  Gates:       2
   Landmarks:   6
   Pathways:    4
 
@@ -113,7 +113,7 @@ Tip
 ... and 8 more features
 ... and 15 more components
 
-## Portals (Authorization Gates)
+## Gates (Authorization)
 
 - `^authenticated` - User must be logged in
 - `^admin` - Admin access required
@@ -239,7 +239,7 @@ Use both - beacon for speed, constellation for depth.
 
 ### Features (up to 10)
 ```
-#feature-name → path/to/feature → ^required-portals
+#component-name → path/to/component → ^required-gates
 ```
 
 ### Components (up to 5)
@@ -282,14 +282,14 @@ Returns:
   "symbols": {
     "features": [...],
     "components": [...],
-    "portals": [...]
+    "gates": [...]
   },
   "landmarks": [...],
   "pathways": [...],
   "stats": {
     "features": 5,
     "components": 12,
-    "portals": 2,
+    "gates": 2,
     "total": 19
   }
 }

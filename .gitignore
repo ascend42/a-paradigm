@@ -14,7 +14,7 @@ build/
 out/
 *.tsbuildinfo
 
-# Horizon generated files (regenerate with horizon index/summary)
+# Legacy generated files (pre-Paradigm)
 .horizon/scan-index.json
 .horizon/project.md
 .horizon.backup

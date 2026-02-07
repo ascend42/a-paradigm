@@ -80,7 +80,7 @@ export interface SymbolEntry {
   id: string;
   symbol: string;
   type: 'component' | 'flow' | 'gate' | 'signal' | 'aspect';
-  source: 'purpose' | 'gate' | 'dream' | 'premise';
+  source: 'purpose' | 'portal' | 'premise';
   filePath: string;
   data: Record<string, unknown>;
   description?: string;
@@ -173,7 +173,7 @@ async function loadWithPremiseCore(projectDir: string): Promise<SymbolEntry[] | 
       total: result.symbols.length,
       ...counts,
       purposeFiles: result.purposeFiles.length,
-      gateFiles: result.gateFiles.length,
+      portalFiles: result.portalFiles.length,
     });
 
     if (result.errors.length > 0) {
@@ -190,7 +190,7 @@ async function loadWithPremiseCore(projectDir: string): Promise<SymbolEntry[] | 
     for (const file of result.purposeFiles) {
       log.component('purpose-loader').info('Loaded .purpose file', { file: path.relative(projectDir, file) });
     }
-    for (const file of result.gateFiles) {
+    for (const file of result.portalFiles) {
       log.component('gate-loader').info('Loaded portal.yaml', { file: path.relative(projectDir, file) });
     }
 
@@ -279,7 +279,7 @@ async function scanPurposeFiles(projectDir: string): Promise<SymbolEntry[]> {
               id,
               symbol: `^${gateName}`,
               type: 'gate',
-              source: 'gate',
+              source: 'portal',
               filePath: 'portal.yaml',
               data: {},
               references: [],

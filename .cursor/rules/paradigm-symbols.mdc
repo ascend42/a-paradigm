@@ -1,21 +1,41 @@
 ---
-description: Paradigm symbol system - understand @features, #components, ^portals, etc.
+description: Paradigm v2 symbol system - 5 operational symbols + tag bank
 alwaysApply: true
 ---
-## Symbol System
+## Symbol System (v2)
 
-Use these prefixes to reference project elements:
+5 operational symbols for code structure:
 
 | Symbol | Name | Description |
 |--------|------|-------------|
-| `@` | Feature | User-facing capabilities and functionality |
-| `#` | Component | Reusable code units, UI components, or modules |
+| `#` | Component | Any documented code unit (features, services, UI, utils) |
 | `$` | Flow | Multi-step processes or user journeys |
-| `%` | State | Global or user state conditions |
-| `^` | Portal | Access control points and authorization rules |
+| `^` | Gate | Access control points and authorization rules |
 | `!` | Signal | Events, errors, and side effects |
-| `?` | Idea | Free-form exploration and future possibilities |
-| `~` | Deprecated | Features or components marked for removal |
-| `&` | Integration | External services and third-party connections |
+| `~` | Aspect | Cross-cutting rules with required code anchors |
 
-See `.paradigm/specs/symbols.md` for complete reference.
+### Tag Bank (Classification)
+
+Use tags in brackets instead of dedicated symbol prefixes:
+
+| Tag | Purpose | Example |
+|-----|---------|---------|
+| `[feature]` | User-facing capability | `#checkout` with `tags: [feature]` |
+| `[integration]` | External service | `#stripe-service` with `tags: [integration, stripe]` |
+| `[state]` | State management | `#user-store` with `tags: [state]` |
+| `[idea]` | Future possibility | Any symbol with `tags: [idea]` |
+| `[deprecated]` | Marked for removal | Any symbol with `tags: [deprecated]` |
+
+### Aspects Require Anchors
+
+Aspects (`~`) must point to enforcement code:
+
+```yaml
+~audit-required:
+  description: All financial operations must log
+  anchors:
+    - src/middleware/audit.ts:15-35
+  applies-to: ["#*Service"]
+```
+
+See `.paradigm/specs/symbols-v2.md` for complete reference.

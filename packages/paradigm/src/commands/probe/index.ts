@@ -114,7 +114,7 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     {
       symbols: aggregation.symbols,
       purposeFiles: aggregation.purposeFiles,
-      gateFiles: aggregation.gateFiles,
+      portalFiles: aggregation.portalFiles,
     },
     {
       projectName,

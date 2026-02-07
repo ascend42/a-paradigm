@@ -1,5 +1,5 @@
 /**
- * paradigm dream aggregate - Aggregate all sources
+ * paradigm premise aggregate - Aggregate all sources
  */
 
 import * as fs from 'fs';
@@ -8,18 +8,18 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../../utils/logger.js';
 import {
-  aggregateFromDream,
+  aggregateFromPremise,
   aggregateFromDirectory,
-  parseDreamFile,
+  parsePremiseFile,
   buildSymbolIndex,
   getSymbolCounts,
 } from '@a-company/premise-core';
 
-export async function dreamAggregateCommand(targetPath: string) {
+export async function premiseAggregateCommand(targetPath: string) {
   const cwd = process.cwd();
   const absolutePath = path.resolve(cwd, targetPath);
 
-  console.log(chalk.blue('\n🔮 Aggregating Dream...\n'));
+  console.log(chalk.blue('\n🔮 Aggregating Premise...\n'));
 
   const spinner = ora('Loading sources...').start();
 
@@ -27,9 +27,9 @@ export async function dreamAggregateCommand(targetPath: string) {
     let result;
     
     // Check for .premise file
-    const dreamPath = path.join(absolutePath, '.premise');
-    if (fs.existsSync(dreamPath)) {
-      const { data, errors } = parseDreamFile(dreamPath);
+    const premisePath = path.join(absolutePath, '.premise');
+    if (fs.existsSync(premisePath)) {
+      const { data, errors } = parsePremiseFile(premisePath);
       if (errors.length > 0) {
         spinner.warn('Warnings parsing .premise file');
         for (const error of errors) {
@@ -42,7 +42,7 @@ export async function dreamAggregateCommand(targetPath: string) {
       if (data && !errors.some(e => e.includes('Required'))) {
         // Only use .premise file if it's valid (no required field errors)
         try {
-          result = await aggregateFromDream(data, absolutePath);
+          result = await aggregateFromPremise(data, absolutePath);
         } catch (error) {
           // If aggregation fails, fall back to directory aggregation
           console.log(chalk.yellow(`  ⚠ Error using .premise file: ${(error as Error).message}`));
@@ -64,7 +64,7 @@ export async function dreamAggregateCommand(targetPath: string) {
     console.log(chalk.white('\nSources'));
     console.log(chalk.gray('─'.repeat(40)));
     console.log(`  Purpose files:  ${chalk.cyan(result.purposeFiles.length.toString())}`);
-    console.log(`  Gate files:     ${chalk.cyan(result.gateFiles.length.toString())}`);
+    console.log(`  Gate files:     ${chalk.cyan(result.portalFiles.length.toString())}`);
 
     console.log(chalk.white('\nSymbol Index'));
     console.log(chalk.gray('─'.repeat(40)));

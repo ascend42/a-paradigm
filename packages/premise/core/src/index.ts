@@ -1,7 +1,7 @@
 /**
  * @a-company/premise-core
  *
- * Dream aggregation, symbol index, and canvas state management
+ * Premise aggregation, symbol index, and canvas state management
  */
 
 // Types
@@ -10,14 +10,14 @@ export type {
   SourceType,
   Position,
   SymbolEntry,
-  DreamSourceConfig,
-  DreamNode,
-  DreamConnection,
-  DreamGroup,
+  PremiseSourceConfig,
+  PremiseNode,
+  PremiseConnection,
+  PremiseGroup,
   Viewport,
-  DreamLayout,
-  DreamSnapshot,
-  DreamFile,
+  PremiseLayout,
+  PremiseSnapshot,
+  PremiseFile,
   AggregationResult,
   AggregationError,
   SymbolIndex,
@@ -32,12 +32,12 @@ export { SYMBOL_PREFIXES, PREFIX_TO_TYPE } from './types.js';
 
 // Parser
 export {
-  parseDreamFile,
-  parseDreamContent,
-  createEmptyDreamFile,
-  serializeDreamFile,
-  getDefaultDreamContent,
-  addDreamNode,
+  parsePremiseFile,
+  parsePremiseContent,
+  createEmptyPremiseFile,
+  serializePremiseFile,
+  getDefaultPremiseContent,
+  addPremiseNode,
   updateNodePosition,
   addConnection,
   createSnapshot,
@@ -45,7 +45,7 @@ export {
 
 // Aggregator
 export {
-  aggregateFromDream,
+  aggregateFromPremise,
   aggregateFromDirectory,
 } from './aggregator.js';
 

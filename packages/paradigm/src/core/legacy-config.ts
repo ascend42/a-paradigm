@@ -65,7 +65,7 @@ export interface SymbolSystem {
 export interface SymbolDefinition {
   name: string;
   description: string;
-  owner: 'purpose' | 'gate' | 'dream' | 'shared';
+  owner: 'purpose' | 'portal' | 'premise' | 'shared';
   examples: string[];
 }
 

@@ -361,7 +361,7 @@ async function upgradeScan(
           project: projectName,
           generatedAt: new Date().toISOString(),
           paradigmVersion: '0.2.0',
-          sources: { purposeFiles: 0, gateFiles: 0, dreamFiles: 0 },
+          sources: { purposeFiles: 0, portalFiles: 0, premiseFiles: 0 },
         },
         components: {},
         features: {},
