@@ -341,12 +341,11 @@ function renameInRefArrays(item: PurposeItem, oldRef: string, newRef: string): b
     }
   }
 
-  // Also check aspects (which is Record<string, unknown> on PurposeItem)
-  if (item.aspects && typeof item.aspects === 'object') {
-    const aspects = item.aspects as Record<string, unknown>;
-    if (oldRef in aspects) {
-      aspects[newRef] = aspects[oldRef];
-      delete aspects[oldRef];
+  // Also check aspects (array of string references)
+  if (item.aspects && Array.isArray(item.aspects)) {
+    const idx = item.aspects.indexOf(oldRef);
+    if (idx !== -1) {
+      item.aspects[idx] = newRef;
       modified = true;
     }
   }

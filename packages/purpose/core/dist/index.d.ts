@@ -104,8 +104,8 @@ interface PurposeItem {
     tests?: string[];
     /** Legacy rules (use aspects instead) */
     rules?: Record<string, unknown>;
-    /** Cross-cutting concerns and metadata */
-    aspects?: Record<string, unknown>;
+    /** Aspect references (~aspect-name) */
+    aspects?: string[];
     /** Flow references ($flow-name) */
     flows?: string[];
     /** Gate references (^gate-name) */

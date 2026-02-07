@@ -446,6 +446,16 @@ function extractRefsFromItem(
     }
   }
 
+  if (item.aspects) {
+    for (const aspect of item.aspects) {
+      const symbol = aspect.startsWith('~') ? aspect : `~${aspect}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: 'aspect', sourceSymbol, filePath });
+      }
+    }
+  }
+
   // Also extract from description using regex
   if (item.description) {
     const descRefs = extractSymbolsFromText(item.description);

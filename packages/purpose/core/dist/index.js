@@ -7,7 +7,7 @@ var PurposeItemSchema = z.object({
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
-  aspects: z.record(z.unknown()).optional(),
+  aspects: z.array(z.string()).optional(),
   // Symbol reference arrays
   flows: z.array(z.string()).optional(),
   gates: z.array(z.string()).optional(),
@@ -498,6 +498,15 @@ function extractRefsFromItem(sourceSymbol, item, filePath, refs, seen) {
       if (!seen.has(symbol)) {
         seen.add(symbol);
         refs.push({ symbol, type: "component", sourceSymbol, filePath });
+      }
+    }
+  }
+  if (item.aspects) {
+    for (const aspect of item.aspects) {
+      const symbol = aspect.startsWith("~") ? aspect : `~${aspect}`;
+      if (!seen.has(symbol)) {
+        seen.add(symbol);
+        refs.push({ symbol, type: "aspect", sourceSymbol, filePath });
       }
     }
   }

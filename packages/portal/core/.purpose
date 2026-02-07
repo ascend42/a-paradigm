@@ -6,7 +6,7 @@ features:
   portal-parsing:
     description: '@portal-parsing: Parse portal.yaml into structured data'
     aspects:
-      ~yaml-config-loading: true
+      - "~yaml-config-loading"
     flows:
       - $portal-validation-flow
     signals:
@@ -24,7 +24,7 @@ features:
       - '#validator'
       - '#topology-checker'
     aspects:
-      ~file-glob-discovery: true
+      - "~file-glob-discovery"
 components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from portal.yaml'

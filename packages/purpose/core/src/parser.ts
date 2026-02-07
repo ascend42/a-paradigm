@@ -18,7 +18,7 @@ const PurposeItemSchema = z.object({
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
-  aspects: z.record(z.unknown()).optional(),
+  aspects: z.array(z.string()).optional(),
   // Symbol reference arrays
   flows: z.array(z.string()).optional(),
   gates: z.array(z.string()).optional(),

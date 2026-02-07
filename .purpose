@@ -25,16 +25,16 @@ features:
   symbol-system:
     description: 'The shared language between code, developers, and AI (v2: #, $, ^, !, ~ + tag bank)'
     aspects:
-      ~yaml-config-loading: true
-      ~zod-validated: true
-      ~file-glob-discovery: true
+      - "~yaml-config-loading"
+      - "~zod-validated"
+      - "~file-glob-discovery"
     components:
       - '#symbol-parser'
       - '#symbol-index'
   ide-sync:
     description: Generate IDE instruction files from .paradigm/ config
     aspects:
-      ~ide-adapter-pattern: true
+      - "~ide-adapter-pattern"
     flows:
       - $sync-flow
       - $ide-sync-flow
@@ -62,12 +62,12 @@ features:
       - '#thread'
       - '#echo'
     aspects:
-      ~symbol-typed-logging: true
-      ~correlation-tracked: true
+      - "~symbol-typed-logging"
+      - "~correlation-tracked"
   mcp-server:
     description: Model Context Protocol server for AI assistants
     aspects:
-      ~mcp-tool-handler: true
+      - "~mcp-tool-handler"
     signals:
       - '!server-started'
       - '!resource-fetched'
@@ -79,7 +79,7 @@ features:
   sentinel-dashboard:
     description: Unified codebase intelligence UI with symbol visualization
     aspects:
-      ~express-server: true
+      - "~express-server"
     components:
       - '#sentinel-ui'
       - '#node-renderer'
@@ -101,8 +101,8 @@ features:
   team-orchestration:
     description: Multi-agent coordination with model selection, spawning, and orchestration
     aspects:
-      ~provider-cascade: true
-      ~budget-enforced: true
+      - "~provider-cascade"
+      - "~budget-enforced"
     flows:
       - $orchestration-flow
       - $agent-orchestration-flow
