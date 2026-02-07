@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.10] - 2026-02-07
+
+### Fixed
+
+- **MCP config generation uses `paradigm-mcp` instead of `npx`**: All MCP config generators (Cursor adapter, Claude adapter, `mcp setup` command) now emit `"command": "paradigm-mcp"` with `"args": ["."]` and `"cwd"` pointing to project root. The old `npx @a-company/paradigm-mcp` config never worked because the package isn't on npm. `paradigm shift` and `paradigm mcp setup` now produce working `.cursor/mcp.json` and `.mcp.json` out of the box.
+
 ## [2.0.9] - 2026-02-07
 
 ### Fixed

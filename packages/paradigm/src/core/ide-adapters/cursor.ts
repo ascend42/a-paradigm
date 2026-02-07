@@ -778,12 +778,13 @@ paradigm flow validate $task-creation
   /**
    * Generate MCP configuration for Cursor
    */
-  generateMcpConfig(): McpConfig {
+  generateMcpConfig(rootDir: string): McpConfig {
     return {
       mcpServers: {
         paradigm: {
-          command: 'npx',
-          args: ['@a-company/paradigm-mcp'],
+          command: 'paradigm-mcp',
+          args: ['.'],
+          cwd: rootDir,
         },
       },
     };

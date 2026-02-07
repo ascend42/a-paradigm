@@ -72,6 +72,7 @@ export interface McpConfig {
     paradigm: {
       command: string;
       args: string[];
+      cwd?: string;
     };
   };
 }
@@ -102,7 +103,7 @@ export interface IDEAdapter {
   generateFiles?(files: ParadigmFiles, rootDir?: string): GeneratedFile[];
 
   /** Generate MCP configuration for this IDE (optional) */
-  generateMcpConfig?(): McpConfig;
+  generateMcpConfig?(rootDir: string): McpConfig;
 
   /** Generate nested context files for directories with .purpose files (optional) */
   generateNestedContexts?(rootDir: string, files: ParadigmFiles): GeneratedFile[];

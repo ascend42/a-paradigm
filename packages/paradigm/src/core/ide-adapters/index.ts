@@ -353,7 +353,7 @@ export function writeMcpConfig(
     };
   }
 
-  const mcpConfig = adapter.generateMcpConfig();
+  const mcpConfig = adapter.generateMcpConfig(rootDir);
   let configPath: string;
 
   // Determine the config path based on IDE
