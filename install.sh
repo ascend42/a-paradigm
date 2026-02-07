@@ -101,13 +101,25 @@ echo -e "${GREEN}✓ Cleanup complete${NC}"
 # Verify installation
 echo ""
 echo -e "${BLUE}Verifying installation...${NC}"
-if command -v paradigm &> /dev/null; then
-    INSTALLED_VERSION=$(paradigm --version 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+
+# Resolve the npm global bin path directly (command -v won't work in piped shells)
+NPM_BIN="$(npm config get prefix)/bin"
+PARADIGM_BIN="$NPM_BIN/paradigm"
+
+if [ -f "$PARADIGM_BIN" ] || command -v paradigm &> /dev/null; then
+    INSTALLED_VERSION=$("${PARADIGM_BIN:-paradigm}" --version 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
     echo -e "${GREEN}✓ Paradigm v$INSTALLED_VERSION installed successfully${NC}"
+
+    # Check if npm bin is in PATH
+    if ! command -v paradigm &> /dev/null; then
+        echo ""
+        echo -e "${YELLOW}Note: Add npm global bin to your PATH if not already:${NC}"
+        echo "  export PATH=\"\$PATH:$NPM_BIN\""
+    fi
 else
     echo -e "${RED}❌ Installation verification failed${NC}"
     echo "You may need to add npm global bin to your PATH:"
-    echo "  export PATH=\"\$PATH:\$(npm config get prefix)/bin\""
+    echo "  export PATH=\"\$PATH:$NPM_BIN\""
     exit 1
 fi
 
