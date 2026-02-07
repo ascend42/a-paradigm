@@ -86,7 +86,7 @@ if [ "$INSTALL_TYPE" = "local" ]; then
 else
     echo -e "${BLUE}Installing globally...${NC}"
     cd "$TEMP_DIR/packages/paradigm"
-    npm link --silent
+    npm install -g . --silent
     echo -e "${GREEN}✓ Installed globally${NC}"
 fi
 
