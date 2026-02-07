@@ -5,6 +5,11 @@ description: |
 features:
   purpose-parsing:
     description: '@purpose-parsing: Parse .purpose files into structured data'
+    aspects:
+      ~yaml-config-loading: true
+      ~zod-validated: true
+    flows:
+      - $purpose-parsing
     signals:
       - '!parse-success'
       - '!parse-error'
@@ -24,6 +29,8 @@ features:
     components:
       - '#aggregator'
       - '#symbol-extractor'
+    aspects:
+      ~file-glob-discovery: true
 components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from .purpose files'
@@ -54,3 +61,18 @@ signals:
     description: '!validation-failed: Validation found issues'
     category: purpose
     severity: warn
+flows:
+  purpose-parsing:
+    description: Parse a .purpose file from raw YAML into validated structured data
+    signals:
+      - '!parse-success'
+      - '!parse-error'
+    steps:
+      - component: '#yaml-parser'
+        action: Read YAML file and parse with js-yaml
+      - component: '#zod-schemas'
+        action: Validate parsed data against PurposeFileSchema
+      - component: '#symbol-extractor'
+        action: Extract components, gates, signals, flows, aspects from validated data
+      - component: '#validator'
+        action: Return structured PurposeFile or validation errors

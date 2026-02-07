@@ -63,6 +63,7 @@ description: |
 #SentinelServer:
   description: Express server exposing REST API for incident and pattern management
   tags: [feature, api]
+  aspects: ["~express-server"]
   anchors:
     - src/server/index.ts:1-100
   gates:

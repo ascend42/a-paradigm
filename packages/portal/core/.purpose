@@ -5,6 +5,10 @@ description: |
 features:
   portal-parsing:
     description: '@portal-parsing: Parse portal.yaml into structured data'
+    aspects:
+      ~yaml-config-loading: true
+    flows:
+      - $portal-validation-flow
     signals:
       - '!parse-success'
       - '!parse-error'
@@ -19,6 +23,8 @@ features:
     components:
       - '#validator'
       - '#topology-checker'
+    aspects:
+      ~file-glob-discovery: true
 components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from portal.yaml'
@@ -45,3 +51,20 @@ signals:
     description: '!validation-failed: Portal validation found issues'
     category: portal
     severity: warn
+flows:
+  portal-validation-flow:
+    description: Validate portal.yaml gate configuration and route compliance
+    signals:
+      - '!validation-passed'
+      - '!validation-failed'
+    steps:
+      - component: '#yaml-parser'
+        action: Find and parse portal.yaml via glob
+      - component: '#gate-schemas'
+        action: Validate gate definitions against Zod schemas
+      - component: '#topology-checker'
+        action: Check for circular dependencies in gate requires
+      - component: '#validator'
+        action: Validate routes reference declared gates
+      - component: '#validator'
+        action: Report issues and compliance status
