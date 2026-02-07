@@ -1,20 +1,21 @@
 ---
-description: Paradigm CLI queries for AI agents - prefer CLI over reading large files
+description: Paradigm CLI and MCP queries for AI agents - prefer queries over reading large files
 alwaysApply: true
 ---
-# Agent CLI Queries (Token-Efficient)
+# Agent Queries (Token-Efficient)
 
-Instead of reading large context files, query Paradigm CLI on-demand for fresh, precise data.
+Instead of reading large context files, query Paradigm MCP tools or CLI on-demand for fresh, precise data.
 
 ## When to Query
 
-| Before doing this... | Run this command |
-|---------------------|------------------|
-| Modifying a symbol | `paradigm ripple @symbol --json` |
-| Debugging an error | `paradigm echo ERROR_CODE --json` |
-| Starting a session | `paradigm thread --json` |
-| Understanding relationships | `paradigm constellation` |
-| Getting oriented | `paradigm beacon --json` |
+| Before doing this... | Call this MCP tool |
+|---------------------|-------------------|
+| Modifying a symbol | `paradigm_ripple` with the symbol |
+| Understanding code | `paradigm_navigate` with explore intent |
+| Checking dependencies | `paradigm_related` for connections |
+| Getting oriented | `paradigm_status` for project overview |
+| Adding API endpoint | `paradigm_gates_for_route` for auth gates |
+| Building a feature (3+ files) | `paradigm_orchestrate_inline` mode="plan" |
 
 ## Query Patterns
 
@@ -22,7 +23,7 @@ Instead of reading large context files, query Paradigm CLI on-demand for fresh, 
 
 ```bash
 # See what depends on what you're changing
-paradigm ripple @checkout --json
+paradigm ripple #checkout --json
 
 # Output includes: upstream deps, downstream effects, flow membership
 ```
@@ -51,10 +52,10 @@ paradigm beacon --json
 
 ```bash
 # Get specific symbol
-jq '.stars["@checkout"]' .paradigm/constellation.json
+jq '.stars["#checkout"]' .paradigm/constellation.json
 
-# Find what requires a portal
-jq '[.stars | to_entries[] | select(.value.portals[]? == "^authenticated") | .key]' .paradigm/constellation.json
+# Find what requires a gate
+jq '[.stars | to_entries[] | select(.value.gates[]? == "^authenticated") | .key]' .paradigm/constellation.json
 
 # List all flows
 jq '.orbits | keys' .paradigm/constellation.json

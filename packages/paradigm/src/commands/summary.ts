@@ -128,7 +128,7 @@ export async function summaryCommand() {
   lines.push('## Source Files');
   lines.push('');
   lines.push(`- Purpose files: ${aggregation.purposeFiles.length}`);
-  lines.push(`- Gate files: ${aggregation.gateFiles.length}`);
+  lines.push(`- Gate files: ${aggregation.portalFiles.length}`);
   lines.push('');
   
   lines.push('## Health Status');

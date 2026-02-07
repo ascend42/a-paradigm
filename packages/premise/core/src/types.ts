@@ -41,7 +41,7 @@ export type AnySymbolType = SymbolType | LegacySymbolType;
 /**
  * Source type identifiers
  */
-export type SourceType = 'purpose' | 'gate' | 'dream';
+export type SourceType = 'purpose' | 'portal' | 'premise';
 
 /**
  * Symbol prefix mapping (v2)
@@ -120,7 +120,7 @@ export interface CodeAnchor {
  * A symbol entry in the unified index
  */
 export interface SymbolEntry {
-  /** Unique identifier (uuid for dream-native, derived for others) */
+  /** Unique identifier (uuid for premise-native, derived for others) */
   id: string;
   /** Full symbol with prefix (e.g., "#checkout") */
   symbol: string;
@@ -144,7 +144,7 @@ export interface SymbolEntry {
   anchors?: CodeAnchor[];
   /** Description text */
   description?: string;
-  /** Creation timestamp (for dream-native) */
+  /** Creation timestamp (for premise-native) */
   created?: string;
   /** Last modified timestamp */
   modified?: string;
@@ -155,13 +155,13 @@ export interface SymbolEntry {
 }
 
 // ============================================
-// Dream File Types
+// Premise File Types
 // ============================================
 
 /**
  * Source configuration in a .premise file
  */
-export interface DreamSourceConfig {
+export interface PremiseSourceConfig {
   /** Path to scan for files */
   path: string;
   /** Include patterns */
@@ -171,16 +171,16 @@ export interface DreamSourceConfig {
 }
 
 /**
- * A dream-native node
+ * A premise-native node on the canvas
  */
-export interface DreamNode {
+export interface PremiseNode {
   /** Unique identifier */
   id: string;
   /** Symbol with prefix */
   symbol: string;
   /** Node type */
   type: SymbolType;
-  /** Content (for dream-native nodes) */
+  /** Content (for premise-native nodes) */
   content?: string;
   /** Canvas position */
   position: Position;
@@ -195,7 +195,7 @@ export interface DreamNode {
 /**
  * A connection between nodes
  */
-export interface DreamConnection {
+export interface PremiseConnection {
   /** Source symbol */
   from: string;
   /** Target symbol */
@@ -209,7 +209,7 @@ export interface DreamConnection {
 /**
  * A group of nodes
  */
-export interface DreamGroup {
+export interface PremiseGroup {
   /** Group identifier */
   id: string;
   /** Group name */
@@ -232,17 +232,17 @@ export interface Viewport {
 /**
  * Canvas layout state
  */
-export interface DreamLayout {
+export interface PremiseLayout {
   /** Current viewport */
   viewport: Viewport;
   /** Node groups */
-  groups?: DreamGroup[];
+  groups?: PremiseGroup[];
 }
 
 /**
  * A timeline snapshot
  */
-export interface DreamSnapshot {
+export interface PremiseSnapshot {
   /** Snapshot identifier */
   id: string;
   /** Snapshot name */
@@ -253,16 +253,16 @@ export interface DreamSnapshot {
   description?: string;
   /** Frozen state */
   state: {
-    nodes: DreamNode[];
-    connections: DreamConnection[];
-    layout: DreamLayout;
+    nodes: PremiseNode[];
+    connections: PremiseConnection[];
+    layout: PremiseLayout;
   };
 }
 
 /**
  * The .premise file structure
  */
-export interface DreamFile {
+export interface PremiseFile {
   /** Schema version */
   version: string;
   /** Project metadata */
@@ -273,17 +273,17 @@ export interface DreamFile {
   };
   /** External sources to aggregate */
   sources: {
-    purpose?: DreamSourceConfig[];
-    gate?: DreamSourceConfig[];
+    purpose?: PremiseSourceConfig[];
+    portal?: PremiseSourceConfig[];
   };
-  /** Dream-native nodes */
-  nodes: DreamNode[];
+  /** Premise-native nodes */
+  nodes: PremiseNode[];
   /** Manual connections */
-  connections: DreamConnection[];
+  connections: PremiseConnection[];
   /** Canvas layout */
-  layout: DreamLayout;
+  layout: PremiseLayout;
   /** Timeline snapshots */
-  snapshots?: DreamSnapshot[];
+  snapshots?: PremiseSnapshot[];
 }
 
 // ============================================
@@ -298,8 +298,8 @@ export interface AggregationResult {
   symbols: SymbolEntry[];
   /** Purpose files found */
   purposeFiles: string[];
-  /** Gate files found */
-  gateFiles: string[];
+  /** Portal files found */
+  portalFiles: string[];
   /** Errors encountered */
   errors: AggregationError[];
   /** Timestamp of aggregation */

@@ -1,15 +1,15 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://horizon.dev/schemas/scan-index.json",
-  "title": "Horizon Scan Index",
-  "description": "Index file for horizon scan - maps visual elements to code",
+  "$id": "https://paradigm.dev/schemas/scan-index.json",
+  "title": "Paradigm Scan Index",
+  "description": "Index file for paradigm scan - maps visual elements to code",
   "type": "object",
   "required": ["$meta", "components", "features", "flows", "state", "gates", "signals", "screens", "symbolMap"],
   "properties": {
     "$meta": {
       "type": "object",
       "description": "Index metadata",
-      "required": ["version", "project", "generatedAt", "horizonVersion", "sources"],
+      "required": ["version", "project", "generatedAt", "paradigmVersion", "sources"],
       "properties": {
         "version": {
           "type": "string",
@@ -24,16 +24,16 @@
           "format": "date-time",
           "description": "When the index was generated"
         },
-        "horizonVersion": {
+        "paradigmVersion": {
           "type": "string",
-          "description": "Horizon version that generated this"
+          "description": "Paradigm version that generated this"
         },
         "sources": {
           "type": "object",
           "properties": {
             "purposeFiles": { "type": "integer" },
-            "gateFiles": { "type": "integer" },
-            "dreamFiles": { "type": "integer" }
+            "portalFiles": { "type": "integer" },
+            "premiseFiles": { "type": "integer" }
           }
         }
       }

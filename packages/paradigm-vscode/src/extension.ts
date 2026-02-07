@@ -222,8 +222,8 @@ function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('paradigm.showSymbol', async () => {
       const input = await vscode.window.showInputBox({
-        prompt: 'Enter symbol (e.g., @checkout, #Button)',
-        placeHolder: '@feature-name',
+        prompt: 'Enter symbol (e.g., #checkout, #Button)',
+        placeHolder: '#component-name',
       });
 
       if (!input) return;

@@ -91,7 +91,7 @@ paradigm doctor
 
 ## 🔗 External Resources
 
-- [Paradigm GitHub Repository](https://github.com/a-company/paradigm)
+- [Paradigm GitHub Repository](https://github.com/ascend42/a-paradigm)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Contributing Guide](../CONTRIBUTING.md)
 - [Changelog](../CHANGELOG.md)
@@ -102,4 +102,4 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on improving documentat
 
 ---
 
-**Need help?** Open an issue on [GitHub](https://github.com/a-company/paradigm/issues) or check the troubleshooting section in each command guide.
+**Need help?** Open an issue on [GitHub](https://github.com/ascend42/a-paradigm/issues) or check the troubleshooting section in each command guide.

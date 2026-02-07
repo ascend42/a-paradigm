@@ -46,9 +46,6 @@ Thank you for your interest in contributing to Paradigm! This guide will help yo
 ### Development Workflow
 
 ```bash
-# Start Prism in dev mode
-npm run dev:prism
-
 # Watch CLI for changes
 cd packages/paradigm && npm run dev
 
@@ -62,6 +59,9 @@ npm run typecheck
 a-paradigm/
 ├── packages/
 │   ├── paradigm/         # Main CLI (@a-company/paradigm)
+│   ├── logger/           # Symbol-typed structured logging
+│   ├── paradigm-mcp/     # MCP server for AI agents
+│   ├── paradigm-vscode/  # VS Code extension
 │   ├── purpose/core/     # Purpose file parser (@a-company/purpose-core)
 │   ├── portal/
 │   │   ├── core/         # Portal config parser (@a-company/portal-core)
@@ -69,9 +69,7 @@ a-paradigm/
 │   │   └── manager/      # Portal testing (@a-company/portal-manager)
 │   ├── premise/core/     # Symbol aggregation (@a-company/premise-core)
 │   ├── probe/core/       # Visual discovery (@a-company/probe-core)
-│   └── prism/            # Prism UI (@a-company/prism)
-├── examples/
-│   └── shopflow/         # Example project
+│   └── sentinel/         # Incident tracking and pattern matching
 └── package.json          # Workspace root
 ```
 
@@ -86,14 +84,19 @@ a-paradigm/
 
 ### Commit Messages
 
-We use conventional commits:
+We use conventional commits with Paradigm symbol references:
 
 ```
-feat: add new symbol type
-fix: resolve visualizer loading issue
-docs: update README with examples
-chore: update dependencies
+feat(#payment-form): add Apple Pay support
+
+- Add #apple-pay-button component
+- Update $checkout-flow with new payment step
+- Emit !payment-method-added signal
+
+Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
+
+The `Symbols:` trailer is parsed by the post-commit hook for automatic history capture. Include all affected symbols.
 
 ### Creating a Changeset
 
@@ -133,15 +136,6 @@ cd packages/paradigm && npm link
 cd /path/to/your/project
 paradigm init
 paradigm visualize
-```
-
-### Testing the Visualizer
-
-```bash
-# Dev mode with hot reload
-npm run dev:prism
-
-# Then open http://localhost:5173
 ```
 
 ## Package Dependencies

@@ -41,7 +41,7 @@ Create `jsr.json` in each publishable package:
 ```json
 {
   "name": "@paradigm/cli",
-  "version": "0.7.0",
+  "version": "2.0.0",
   "exports": "./dist/index.js"
 }
 ```
@@ -137,11 +137,11 @@ paradigm-website/
 
 ```bash
 # Tag a release
-git tag v0.7.0
-git push origin v0.7.0
+git tag v2.0.0
+git push origin v2.0.0
 
 # Users can pin version
-npm install -g github:ascend42/a-paradigm#v0.7.0
+npm install -g github:ascend42/a-paradigm#v2.0.0
 ```
 
 ### GitHub Releases
@@ -153,7 +153,7 @@ Create releases for:
 
 ```bash
 # Create release via CLI
-gh release create v0.7.0 --notes "See CHANGELOG.md for details"
+gh release create v2.0.0 --notes "See CHANGELOG.md for details"
 ```
 
 ---
@@ -177,14 +177,14 @@ gh release create v0.7.0 --notes "See CHANGELOG.md for details"
 ### Post-Launch
 - [ ] Gather feedback
 - [ ] Address issues quickly
-- [ ] Plan v0.8.0 based on feedback
+- [ ] Plan v2.1.0 based on feedback
 
 ---
 
 ## Immediate Next Steps
 
 1. **Push current changes** (README update)
-2. **Tag v0.7.0** for stable reference
+2. **Tag v2.0.0** for stable reference
 3. **Create GitHub Release** with changelog
 4. **Test installation** from GitHub
 5. **Create paradigm-website repo** (when ready)

@@ -613,15 +613,12 @@ paradigm aspect check ~audit-required
 
 ---
 
-## Open Questions
+## Deferred Design Decisions
 
-1. **Should flows (`$`) require anchors?** Currently optional, but could enforce entry/exit anchors.
+1. **Flow anchors** — Deferred. Flows remain anchor-optional. May revisit if adoption shows need for enforcement.
 
-2. **Tag inheritance?** If `#PaymentService` has `[critical]`, do its signals get `[critical]`?
+2. **Tag inheritance** — Deferred. Tags do not propagate from parent to child symbols. Apply tags explicitly where needed.
 
-3. **Aspect violation handling?** When violations found:
-   - Just report (current)
-   - Block commits (strict mode)
-   - Auto-create issues
+3. **Aspect violation handling** — Current: report-only via `paradigm doctor`. Strict mode (commit blocking) deferred to a future release.
 
-4. **Tag namespacing?** For monorepos: `[payments:stripe]` or just `[stripe]`?
+4. **Tag namespacing** — Deferred. Use flat tags (`[stripe]`, not `[payments:stripe]`). Revisit if monorepo adoption demands it.

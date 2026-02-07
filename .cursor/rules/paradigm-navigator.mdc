@@ -25,7 +25,7 @@ Before exploring this codebase:
 
 ```
 # Find a specific symbol
-paradigm_navigate({ intent: "find", target: "@checkout" })
+paradigm_navigate({ intent: "find", target: "#checkout" })
 
 # Explore an area
 paradigm_navigate({ intent: "explore", target: "authentication" })

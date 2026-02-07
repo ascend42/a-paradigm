@@ -13,25 +13,31 @@ Purpose files (`.purpose`) define the context for directories.
 # Directory context
 description: What this directory contains and why
 
-# Features (@ symbol)
-features:
-  feature-name:
-    description: What this feature does
-    gates: [^gate1, ^gate2]       # Required portals
-    signals: [!signal1]           # Events emitted
-    components: [#Component1]     # Components used
-
-# Components (# symbol)  
+# Components (# symbol — all code units)
 components:
-  ComponentName:
+  component-name:
     description: What this component does
-    used-by: [@feature1, @feature2]
+    tags: [feature]                   # Classification via tag bank
+    gates: [^gate1, ^gate2]          # Required gates
+    signals: [!signal1]              # Events emitted
+    components: [#Component1]        # Components used
+    flows: [$flow1]                  # Flows involved in
+
+# Flows ($ symbol)
+flows:
+  flow-name:
+    description: Multi-step process
+    steps:
+      - component: #step1
+        action: Validate input
+      - component: #step2
+        action: Process payment
 ```
 
 ## Symbol References
 
-- Reference features: `@feature-name`
-- Reference components: `#ComponentName`
-- Reference portals: `^portal-name`
+- Reference components: `#component-name`
+- Reference gates: `^gate-name`
 - Reference signals: `!signal-name`
 - Reference flows: `$flow-name`
+- Reference aspects: `~aspect-name`

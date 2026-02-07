@@ -9,7 +9,7 @@ Shows what would be affected if you modify a symbol, what it depends on, and whi
 ## What It Does
 
 **Analyzes a symbol to show:**
-- **Upstream dependencies** - What this symbol requires (portals, states, flows)
+- **Upstream dependencies** - What this symbol requires (gates, flows)
 - **Downstream impact** - What would break if you change this (features, components, signals)
 - **Flow membership** - Which flows include this symbol (step X of Y)
 - **Direct relationships** - What it references and what references it
@@ -84,8 +84,7 @@ Symbol Info
 
 ⬆️  Upstream (What this requires)
 ──────────────────────────────────────────────────
-  Portals:  ^authenticated, ^payment-ready
-  States:   %cart
+  Gates:    ^authenticated, ^payment-ready
   Flows:    $checkout-flow
 
 ⬇️  Downstream (What would be affected)
@@ -117,8 +116,7 @@ Basic information about the analyzed symbol:
 
 ### Upstream Dependencies
 What this symbol needs to function:
-- **Portals** (^) - Authorization requirements
-- **States** (%) - Data dependencies
+- **Gates** (^) - Authorization requirements
 - **Flows** ($) - Process dependencies
 
 ### Downstream Impact
@@ -227,7 +225,7 @@ done | sort -t: -k2 -nr
   "path": "src/features/checkout/index.tsx",
   "description": "Purchase completion",
   
-  "requires": ["^authenticated", "^payment-ready", "%cart"],
+  "requires": ["^authenticated", "^payment-ready"],
   "requiredBy": ["#admin-dashboard", "$checkout-flow"],
   
   "downstream": {
@@ -237,8 +235,7 @@ done | sort -t: -k2 -nr
   },
   
   "upstream": {
-    "portals": ["^authenticated", "^payment-ready"],
-    "states": ["%cart"],
+    "gates": ["^authenticated", "^payment-ready"],
     "flows": ["$checkout-flow"]
   },
   
@@ -269,7 +266,7 @@ paradigm ripple #experimental-feature
 # Action: Safe to delete
 ```
 
-**Example 3: Refactoring portal**
+**Example 3: Refactoring gate**
 ```bash
 paradigm ripple ^authenticated
 
