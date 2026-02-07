@@ -15,10 +15,9 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../utils/logger.js';
 import { getDefaultPurposeContent } from '@a-company/purpose-core';
-import { getDefaultGateConfig } from '@a-company/portal-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
-import { indexCommand, scanIndexExists } from './scan/index.js';
+import { indexCommand } from './scan/index.js';
 
 // ============================================
 // Types

@@ -5,11 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
-import * as yaml from 'js-yaml';
-import { log } from '../../utils/logger.js';
 import {
-  AgentsManifest,
   Handoff,
   TeamState,
   ModelConfig,
@@ -20,7 +16,6 @@ import {
   loadTeamState,
   saveTeamState,
   saveHandoff,
-  loadHandoff,
   getPendingHandoffs,
   listHandoffs,
   generateDefaultManifest,
@@ -29,14 +24,12 @@ import {
   setCurrentAgent,
   clearCurrentAgent,
   addActivity,
-  getAgent,
   getParadigmDir,
 } from './loader.js';
 import { BackgroundOrchestrator } from '../../core/background-orchestrator.js';
 import {
   shouldPromptForModels,
   promptForAgentModels,
-  teamModelsCommand,
 } from './configure-models.js';
 
 // Re-export the models command

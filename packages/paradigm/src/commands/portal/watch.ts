@@ -8,7 +8,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
 import open from 'open';
 
 interface WatchOptions {
@@ -38,6 +37,7 @@ export async function portalWatchCommand(targetPath?: string, options: WatchOpti
     // Dynamically import the viewer server
     let ViewerServer: any;
     try {
+      // @ts-expect-error - optional dependency, handled with try/catch
       const viewerModule = await import('@a-company/portal-viewer');
       ViewerServer = viewerModule.ViewerServer;
     } catch (err) {
@@ -114,6 +114,7 @@ export async function portalReportCommand(sessionPath?: string, options: { forma
     // Import reporter
     let reporter: any;
     try {
+      // @ts-expect-error - optional dependency, handled with try/catch
       reporter = await import('@a-company/portal-viewer/session');
     } catch {
       spinner.fail('Portal Viewer package not found');

@@ -8,8 +8,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IDEAdapter, ParadigmFiles, GeneratedFile, McpConfig } from './types.js';
 import {
-  generateOverview,
-  generateSymbolSystem,
   generateLoggingRules,
   generateConventions,
   generateUpdateRules,

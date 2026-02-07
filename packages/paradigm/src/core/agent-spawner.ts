@@ -17,11 +17,9 @@ import {
   FacetConfig,
   CheckpointConfig,
   calculateCost,
-  TokenUsage,
 } from './agent-provider.js';
 import { getProvider, initializeProviders } from './provider-registry.js';
-import { buildAgentContext, loadFullContext } from './context-builder.js';
-import { AgentDefinition } from '../commands/team/types.js';
+import { buildAgentContext } from './context-builder.js';
 import { loadAgentsManifest } from '../commands/team/loader.js';
 import { BudgetTracker } from './budget-tracker.js';
 import { AuditLogger, AgentLog } from './audit-logger.js';

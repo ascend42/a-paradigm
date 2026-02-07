@@ -5,32 +5,23 @@
  * Supports both "faceted" (multi-agent) and "solo" (single agent) modes.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { minimatch } from 'minimatch';
 import {
   AgentModel,
   AgentMessage,
-  AgentRelay,
   calculateCost,
-  formatCost,
-  formatTokens,
   TokenUsage,
 } from './agent-provider.js';
 import { AgentSpawner, SpawnResult, SpawnerOptions } from './agent-spawner.js';
-import { loadFullContext, buildAgentContext, extractSymbols } from './context-builder.js';
-import { BudgetTracker } from './budget-tracker.js';
+import { extractSymbols } from './context-builder.js';
 import { AuditLogger, OrchestrationLog } from './audit-logger.js';
 import { loadAgentsManifest } from '../commands/team/loader.js';
 import {
-  parseRelayWithFilePlan,
   FilePlanGroup,
   FileAssignment,
 } from './agent-prompts.js';
 import {
   classifyTask,
-  TaskClassification,
   getRecommendedModel,
 } from './task-classifier.js';
 
@@ -226,14 +217,12 @@ function isRefactoringTask(task: string): boolean {
 
 export class Orchestrator {
   private spawner: AgentSpawner;
-  private budgetTracker: BudgetTracker;
   private auditLogger: AuditLogger;
   private rootDir: string;
 
   constructor(rootDir: string) {
     this.rootDir = rootDir;
     this.spawner = new AgentSpawner(rootDir);
-    this.budgetTracker = new BudgetTracker(rootDir);
     this.auditLogger = new AuditLogger(rootDir);
   }
 
@@ -384,9 +373,6 @@ export class Orchestrator {
     // Use architect as the solo agent, or fallback to first available
     const agentName = manifest?.team.default_agent || 'architect';
     const model = options.orchestratorModel || 'opus';
-
-    // Load full context for solo mode
-    const context = await loadFullContext(this.rootDir);
 
     const spawnerOptions: SpawnerOptions = {
       model,
@@ -1170,7 +1156,7 @@ export class Orchestrator {
       const stageResults = await Promise.all(spawnPromises);
 
       // Process results
-      for (const { builder, result } of stageResults) {
+      for (const { result } of stageResults) {
         results.push(result);
 
         if (result.relay) {

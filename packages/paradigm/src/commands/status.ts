@@ -66,13 +66,11 @@ export async function statusCommand() {
       console.log(chalk.gray('─'.repeat(40)));
 
       const symbolLines = [
-        { prefix: '@', name: 'Features', count: counts.feature, color: chalk.blue },
         { prefix: '#', name: 'Components', count: counts.component, color: chalk.green },
         { prefix: '$', name: 'Flows', count: counts.flow, color: chalk.yellow },
-        { prefix: '%', name: 'States', count: counts.state, color: chalk.magenta },
         { prefix: '^', name: 'Gates', count: counts.gate, color: chalk.red },
-        { prefix: '!', name: 'Signals', count: counts.signal, color: chalk.yellow },
-        { prefix: '?', name: 'Ideas', count: counts.idea, color: chalk.white },
+        { prefix: '!', name: 'Signals', count: counts.signal, color: chalk.cyan },
+        { prefix: '~', name: 'Aspects', count: counts.aspect, color: chalk.magenta },
       ];
 
       for (const { prefix, name, count, color } of symbolLines) {

@@ -5,7 +5,6 @@
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
 import { getAllPurposeFiles, validatePurposeFile, formatValidationResult } from '@a-company/purpose-core';
 
 export async function purposeValidateCommand(targetPath: string) {

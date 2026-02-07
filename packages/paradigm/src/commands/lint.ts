@@ -148,7 +148,7 @@ function autoQuoteSpecialChars(content: string): string {
   // This regex finds array items starting with special chars that aren't quoted
   return content.replace(
     /\[\s*([^\]]+)\s*\]/g,
-    (match, arrayContent) => {
+    (_match, arrayContent) => {
       const items = arrayContent.split(',').map((item: string) => {
         const trimmed = item.trim();
         // If starts with special char and not already quoted

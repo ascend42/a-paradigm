@@ -5,8 +5,7 @@
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
-import { aggregateForPath, getAllPurposeFiles, aggregatePurposes } from '@a-company/purpose-core';
+import { getAllPurposeFiles, aggregatePurposes } from '@a-company/purpose-core';
 
 export async function purposeRememberCommand(targetPath: string) {
   const cwd = process.cwd();

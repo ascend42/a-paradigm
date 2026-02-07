@@ -6,7 +6,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
 import { aggregateFromDirectory } from '@a-company/premise-core';
 import { 
   generateScanIndex, 
@@ -90,12 +89,11 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   // Show breakdown
   if (!options.quiet) {
     const breakdown = {
-      features: aggregation.symbols.filter(s => s.type === 'feature').length,
       components: aggregation.symbols.filter(s => s.type === 'component').length,
       flows: aggregation.symbols.filter(s => s.type === 'flow').length,
       gates: aggregation.symbols.filter(s => s.type === 'gate').length,
       signals: aggregation.symbols.filter(s => s.type === 'signal').length,
-      state: aggregation.symbols.filter(s => s.type === 'state').length,
+      aspects: aggregation.symbols.filter(s => s.type === 'aspect').length,
     };
     
     console.log(chalk.gray('  Breakdown:'));

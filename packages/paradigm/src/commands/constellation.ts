@@ -16,28 +16,23 @@ import {
   getSymbolsByType,
   getAllSymbols,
   getSymbolCounts,
-  type SymbolEntry,
   type SymbolIndex,
-  type SymbolType,
 } from '@a-company/premise-core';
 
 /**
  * Constellation star - a symbol with its relationships
  */
 interface ConstellationStar {
-  type: SymbolType;
+  type: string;
   path: string;
   description?: string;
   tags?: string[];
   // Relationships categorized by type
-  portals?: string[];      // ^gates this requires
+  gates?: string[];        // ^gates this requires
   signals?: string[];      // !signals this emits/consumes
   components?: string[];   // #components this uses
-  features?: string[];     // @features this relates to
   flows?: string[];        // $flows this is part of
-  states?: string[];       // %states this depends on
   aspects?: string[];      // ~aspects of this
-  ideas?: string[];        // ?ideas related to this
   // Bidirectional references
   references: string[];    // What this symbol references
   referencedBy: string[];  // What references this symbol
@@ -59,14 +54,11 @@ interface Constellation {
   generated: string;
   project: string;
   stats: {
-    features: number;
     components: number;
-    portals: number;
-    signals: number;
     flows: number;
-    states: number;
+    gates: number;
+    signals: number;
     aspects: number;
-    ideas: number;
     total: number;
   };
   stars: Record<string, ConstellationStar>;
@@ -78,29 +70,23 @@ interface Constellation {
  */
 function categorizeReferences(refs: string[]): Record<string, string[]> {
   const categories: Record<string, string[]> = {
-    portals: [],
+    gates: [],
     signals: [],
     components: [],
-    features: [],
     flows: [],
-    states: [],
     aspects: [],
-    ideas: [],
   };
 
   for (const ref of refs) {
     if (!ref || ref.length < 2) continue;
-    
+
     const prefix = ref[0];
     switch (prefix) {
-      case '^': categories.portals.push(ref); break;
+      case '^': categories.gates.push(ref); break;
       case '!': categories.signals.push(ref); break;
       case '#': categories.components.push(ref); break;
-      case '@': categories.features.push(ref); break;
       case '$': categories.flows.push(ref); break;
-      case '%': categories.states.push(ref); break;
       case '~': categories.aspects.push(ref); break;
-      case '?': categories.ideas.push(ref); break;
     }
   }
 
@@ -133,14 +119,11 @@ function buildConstellation(index: SymbolIndex, projectName: string): Constellat
     if (entry.tags && entry.tags.length > 0) star.tags = entry.tags;
     
     // Add categorized references only if they have values
-    if (categories.portals.length > 0) star.portals = categories.portals;
+    if (categories.gates.length > 0) star.gates = categories.gates;
     if (categories.signals.length > 0) star.signals = categories.signals;
     if (categories.components.length > 0) star.components = categories.components;
-    if (categories.features.length > 0) star.features = categories.features;
     if (categories.flows.length > 0) star.flows = categories.flows;
-    if (categories.states.length > 0) star.states = categories.states;
     if (categories.aspects.length > 0) star.aspects = categories.aspects;
-    if (categories.ideas.length > 0) star.ideas = categories.ideas;
 
     stars[entry.symbol] = star;
   }
@@ -164,14 +147,11 @@ function buildConstellation(index: SymbolIndex, projectName: string): Constellat
     generated: new Date().toISOString(),
     project: projectName,
     stats: {
-      features: counts.feature,
       components: counts.component,
-      portals: counts.gate,
-      signals: counts.signal,
       flows: counts.flow,
-      states: counts.state,
+      gates: counts.gate,
+      signals: counts.signal,
       aspects: counts.aspect,
-      ideas: counts.idea,
       total: Object.values(counts).reduce((a, b) => a + b, 0),
     },
     stars,
@@ -239,14 +219,11 @@ export async function constellationCommand(targetPath?: string, options: Constel
       
       const stats = constellation.stats;
       const statLines = [
-        { symbol: '@', name: 'Features', count: stats.features, color: chalk.blue },
         { symbol: '#', name: 'Components', count: stats.components, color: chalk.green },
-        { symbol: '^', name: 'Portals', count: stats.portals, color: chalk.red },
-        { symbol: '!', name: 'Signals', count: stats.signals, color: chalk.yellow },
-        { symbol: '$', name: 'Flows', count: stats.flows, color: chalk.cyan },
-        { symbol: '%', name: 'States', count: stats.states, color: chalk.magenta },
-        { symbol: '~', name: 'Deprecated', count: stats.aspects, color: chalk.gray },
-        { symbol: '?', name: 'Ideas', count: stats.ideas, color: chalk.white },
+        { symbol: '$', name: 'Flows', count: stats.flows, color: chalk.yellow },
+        { symbol: '^', name: 'Gates', count: stats.gates, color: chalk.red },
+        { symbol: '!', name: 'Signals', count: stats.signals, color: chalk.cyan },
+        { symbol: '~', name: 'Aspects', count: stats.aspects, color: chalk.magenta },
       ];
 
       for (const { symbol, name, count, color } of statLines) {
@@ -271,7 +248,7 @@ export async function constellationCommand(targetPath?: string, options: Constel
         console.log(chalk.gray('─'.repeat(40)));
         console.log(chalk.cyan(`  ${sampleStar[0]}`));
         const star = sampleStar[1];
-        if (star.portals?.length) console.log(chalk.gray(`    portals: ${star.portals.join(', ')}`));
+        if (star.gates?.length) console.log(chalk.gray(`    gates: ${star.gates.join(', ')}`));
         if (star.components?.length) console.log(chalk.gray(`    components: ${star.components.join(', ')}`));
         if (star.signals?.length) console.log(chalk.gray(`    signals: ${star.signals.join(', ')}`));
         if (star.referencedBy.length) console.log(chalk.gray(`    referencedBy: ${star.referencedBy.join(', ')}`));

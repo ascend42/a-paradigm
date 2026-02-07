@@ -9,7 +9,6 @@ import prompts from 'prompts';
 import chalk from 'chalk';
 import { ModelDiscovery } from '../../core/model-discovery.js';
 import {
-  ModelInfo,
   ModelConfig,
   AGENT_MODEL_RECOMMENDATIONS,
 } from './types.js';

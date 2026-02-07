@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2026-02-06
+
+### Fixed
+
+- **Clean TypeScript build — 171 errors → 0**: Full v1 debt elimination in `packages/paradigm/`. `tsc --noEmit` now exits 0.
+
+- **Deleted dead `src/commands/dream/` directory**: Identical copy of `premise/`, leftover from v1 rename. Fixed `src/index.ts` imports to use `premiseAggregateCommand`/`premiseSnapshotCommand`.
+
+- **Replaced all v1 symbol type references**: 8 command files (`status`, `constellation`, `aggregate`, `summary`, `beacon`, `probe/index`, `scan/index`, `ripple`) updated from 7-type system (`@feature`, `%state`, `?idea`) to v2 5-type (`#component`, `$flow`, `^gate`, `!signal`, `~aspect`). Display, interfaces, categorization, and JSON output all updated.
+
+- **Fixed config owner types**: `paradigm-config.ts` and `legacy-config.ts` — replaced invalid `owner: 'gate'` → `'portal'`, removed dead `?` symbol entry, updated `SymbolSystem` interface to v2 5-symbol set with index signature for migration compat.
+
+- **Fixed missing module/type errors**: `log.gate()` → `log.command()` in portal check, moved `createGate` import to correct package (`portal-sdk`), suppressed optional `portal-viewer` dynamic imports, fixed `chalk.Chalk` type → `typeof chalk.red`, `ora.Ora` → `ReturnType<typeof ora>`, `tracker.failure()` → `tracker.error()`.
+
+- **Fixed remaining type mismatches**: Added `*-manifest` variants to `ModelDiscoveryResult.source` union, passed `model` arg to orchestrator callbacks, typed `adapters` Map explicitly, added `config.states` guard in setup wizard.
+
+- **Cleaned ~95 unused variable warnings across ~40 files**: Removed dead imports, deleted unused functions (`groupByDirectory`, `isFeatureDirectory`, `formatBytes`, `GATE_REFERENCE_PATTERNS`), removed unused class properties (`rootDir` in 3 classes, `budgetTracker`), prefixed intentionally unused params with `_`.
+
 ## [2.0.6] - 2026-02-06
 
 ### Changed

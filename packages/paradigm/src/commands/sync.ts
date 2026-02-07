@@ -5,7 +5,7 @@
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log, format } from '../utils/logger.js';
+import { log } from '../utils/logger.js';
 import {
   detectIDE,
   getAdapter,

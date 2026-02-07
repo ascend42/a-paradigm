@@ -5,7 +5,6 @@
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
 import { parseGateConfig, validateGateConfig, formatValidationResult } from '@a-company/portal-core';
 
 export async function gateValidateCommand(configPath: string) {

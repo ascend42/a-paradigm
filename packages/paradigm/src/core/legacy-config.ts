@@ -52,14 +52,12 @@ export interface AgentGuidelines {
 }
 
 export interface SymbolSystem {
-  '@': SymbolDefinition; // Features
   '#': SymbolDefinition; // Components
   '$': SymbolDefinition; // Flows
-  '%': SymbolDefinition; // States
-  '~': SymbolDefinition; // Aspects
   '^': SymbolDefinition; // Gates
   '!': SymbolDefinition; // Signals
-  '?': SymbolDefinition; // Ideas
+  '~': SymbolDefinition; // Aspects
+  [key: string]: SymbolDefinition; // Allow legacy keys during migration
 }
 
 export interface SymbolDefinition {
@@ -93,15 +91,9 @@ export interface StateDefinition {
  * Default symbol system definitions
  */
 export const DEFAULT_SYMBOL_SYSTEM: SymbolSystem = {
-  '@': {
-    name: 'Feature',
-    description: 'User-facing capabilities and functionality',
-    owner: 'purpose',
-    examples: ['@checkout', '@user-login', '@search']
-  },
   '#': {
     name: 'Component',
-    description: 'Reusable code units, UI components, or modules',
+    description: 'Any documented code unit',
     owner: 'purpose',
     examples: ['#Button', '#api-client', '#AuthProvider']
   },
@@ -109,38 +101,26 @@ export const DEFAULT_SYMBOL_SYSTEM: SymbolSystem = {
     name: 'Flow',
     description: 'Multi-step processes or user journeys',
     owner: 'shared',
-    examples: ['$checkout-to-confirmation', '$auth-flow']
-  },
-  '%': {
-    name: 'State',
-    description: 'Global or user state conditions',
-    owner: 'purpose',
-    examples: ['%user.authenticated', '%cart.items']
-  },
-  '~': {
-    name: 'Aspect',
-    description: 'Cross-cutting concerns or nested properties',
-    owner: 'purpose',
-    examples: ['@login~validation', '#Button~disabled']
+    examples: ['$checkout-flow', '$auth-flow']
   },
   '^': {
     name: 'Gate',
-    description: 'Access control points and authorization rules',
-    owner: 'gate',
-    examples: ['^auth-required', '^admin-panel', '^premium-checkout']
+    description: 'Authorization checkpoints',
+    owner: 'portal',
+    examples: ['^authenticated', '^admin-only', '^resource-owner']
   },
   '!': {
     name: 'Signal',
-    description: 'Events, errors, and side effects',
-    owner: 'gate',
-    examples: ['!payment-failed', '!login-success', '!rate-limited']
+    description: 'Events for side effects',
+    owner: 'portal',
+    examples: ['!payment-completed', '!login-failed', '!rate-limited']
   },
-  '?': {
-    name: 'Idea',
-    description: 'Free-form exploration and future possibilities',
-    owner: 'dream',
-    examples: ['?subscription-model', '?ai-recommendations']
-  }
+  '~': {
+    name: 'Aspect',
+    description: 'Rules with required code anchors',
+    owner: 'purpose',
+    examples: ['~audit-required', '~rate-limited', '~cache-invalidation']
+  },
 };
 
 /**

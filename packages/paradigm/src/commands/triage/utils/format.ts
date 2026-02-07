@@ -58,7 +58,7 @@ export function formatIncident(
 
   // Symbolic context
   lines.push(chalk.gray('│ ') + chalk.cyan('Symbolic Context:') + ' '.repeat(47) + chalk.gray('│'));
-  const symbols = formatSymbols(incident.symbols);
+  const symbols = formatSymbols(incident.symbols as Record<string, string | undefined>);
   for (const sym of symbols) {
     lines.push(chalk.gray('│   ') + sym.padEnd(61) + chalk.gray(' │'));
   }
@@ -249,19 +249,9 @@ export function formatStats(stats: SentinelStats): string {
 
 function formatSymbols(symbols: Record<string, string | undefined>): string[] {
   const result: string[] = [];
-  const prefixes: Record<string, string> = {
-    feature: '@',
-    component: '#',
-    flow: '$',
-    gate: '^',
-    signal: '!',
-    state: '%',
-    integration: '&',
-  };
 
   for (const [key, value] of Object.entries(symbols)) {
     if (value) {
-      const prefix = prefixes[key] || '';
       const color = getSymbolColor(key);
       result.push(`${color(value.padEnd(20))} ${chalk.dim(key)}`);
     }
@@ -270,7 +260,7 @@ function formatSymbols(symbols: Record<string, string | undefined>): string[] {
   return result;
 }
 
-function getStatusColor(status: string): chalk.Chalk {
+function getStatusColor(status: string): typeof chalk.red {
   switch (status) {
     case 'open':
       return chalk.red;
@@ -285,7 +275,7 @@ function getStatusColor(status: string): chalk.Chalk {
   }
 }
 
-function getSymbolColor(type: string): chalk.Chalk {
+function getSymbolColor(type: string): typeof chalk.red {
   switch (type) {
     case 'feature':
       return chalk.magenta;
@@ -306,7 +296,7 @@ function getSymbolColor(type: string): chalk.Chalk {
   }
 }
 
-function getPriorityColor(priority: string): chalk.Chalk {
+function getPriorityColor(priority: string): typeof chalk.red {
   switch (priority) {
     case 'critical':
       return chalk.red.bold;
@@ -321,7 +311,7 @@ function getPriorityColor(priority: string): chalk.Chalk {
   }
 }
 
-function getConfidenceColor(score: number): chalk.Chalk {
+function getConfidenceColor(score: number): typeof chalk.red {
   if (score >= 80) return chalk.green;
   if (score >= 60) return chalk.yellow;
   if (score >= 40) return chalk.red;

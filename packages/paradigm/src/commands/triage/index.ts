@@ -6,7 +6,6 @@
 
 import chalk from 'chalk';
 import ora from 'ora';
-import { log } from '../../utils/logger.js';
 import {
   SentinelStorage,
   PatternMatcher,
@@ -17,7 +16,6 @@ import {
   loadAllSeedPatterns,
 } from '@a-company/sentinel';
 import type {
-  SymbolicIncidentRecord,
   IncidentStatus,
   CreatePatternInput,
   PatternSource,
@@ -29,7 +27,6 @@ import {
   formatIncidentCompact,
   formatPattern,
   formatPatternCompact,
-  formatStats,
 } from './utils/format.js';
 
 let storage: SentinelStorage | null = null;

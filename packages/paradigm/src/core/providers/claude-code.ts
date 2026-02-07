@@ -16,7 +16,6 @@ import {
   AgentModel,
   AgentMessage,
   SpawnOptions,
-  TokenUsage,
   MODEL_PRICING,
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';
@@ -77,8 +76,6 @@ export class ClaudeCodeTaskProvider implements AgentProvider {
   ): AsyncIterable<AgentMessage> {
     const taskId = this.generateTaskId(agent.name);
     const taskFile = path.join(this.tasksDir, `${taskId}.yaml`);
-    const outputFile = path.join(this.tasksDir, `${taskId}.output.md`);
-
     // Ensure tasks directory exists
     if (!fs.existsSync(this.tasksDir)) {
       fs.mkdirSync(this.tasksDir, { recursive: true });

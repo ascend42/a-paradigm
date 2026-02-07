@@ -24,7 +24,7 @@ export interface PortalCheckOptions {
 
 export async function portalCheckCommand(options: PortalCheckOptions = {}): Promise<boolean> {
   const cwd = process.cwd();
-  const tracker = log.gate('^portal-check').start('Checking portal compliance');
+  const tracker = log.command('portal-check').start('Checking portal compliance');
 
   try {
     // Check for portal.yaml first

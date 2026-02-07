@@ -70,13 +70,11 @@ export class BudgetTracker extends EventEmitter {
   private config: BudgetConfig;
   private usage: BudgetUsage;
   private records: UsageRecord[] = [];
-  private rootDir: string;
   private configPath: string;
 
-  constructor(rootDir: string) {
+  constructor(_rootDir: string) {
     super();
-    this.rootDir = rootDir;
-    this.configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    this.configPath = path.join(_rootDir, '.paradigm', 'config.yaml');
     this.config = this.loadConfig();
     this.usage = this.initializeUsage();
   }

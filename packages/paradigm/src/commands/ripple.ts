@@ -5,7 +5,6 @@
  * helping AI agents understand the blast radius of changes.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
@@ -17,7 +16,6 @@ import {
   getReferencesTo,
   getReferencesFrom,
   getSymbolsByType,
-  getAllSymbols,
   parseSymbol,
   type SymbolEntry,
   type SymbolIndex,
@@ -41,14 +39,13 @@ interface RippleResult {
   
   // Categorized impact
   downstream: {
-    features: string[];
     components: string[];
     signals: string[];
+    aspects: string[];
   };
-  
+
   upstream: {
-    portals: string[];
-    states: string[];
+    gates: string[];
     flows: string[];
   };
   
@@ -93,21 +90,11 @@ function findFlowMembership(
 function suggestTestPath(symbolPath: string): { testPath?: string; testCommand?: string } {
   // Common patterns
   const dir = path.dirname(symbolPath);
-  const basename = path.basename(symbolPath, path.extname(symbolPath));
-  
-  // Check common test locations
-  const testPatterns = [
-    `${dir}/${basename}.test.ts`,
-    `${dir}/${basename}.test.tsx`,
-    `${dir}/__tests__/${basename}.test.ts`,
-    `tests/${dir}/${basename}.test.ts`,
-    `__tests__/${dir}/${basename}.test.ts`,
-  ];
-  
+
   // Return the test path pattern
   const testPath = `${dir}/**/*.test.{ts,tsx}`;
   const testCommand = `npm test -- --testPathPattern="${dir}"`;
-  
+
   return { testPath, testCommand };
 }
 
@@ -115,20 +102,18 @@ function suggestTestPath(symbolPath: string): { testPath?: string; testCommand?:
  * Categorize symbols by type
  */
 function categorize(symbols: SymbolEntry[]): {
-  features: string[];
   components: string[];
-  portals: string[];
+  gates: string[];
   signals: string[];
   flows: string[];
-  states: string[];
+  aspects: string[];
 } {
   return {
-    features: symbols.filter(s => s.type === 'feature').map(s => s.symbol),
     components: symbols.filter(s => s.type === 'component').map(s => s.symbol),
-    portals: symbols.filter(s => s.type === 'gate').map(s => s.symbol),
+    gates: symbols.filter(s => s.type === 'gate').map(s => s.symbol),
     signals: symbols.filter(s => s.type === 'signal').map(s => s.symbol),
     flows: symbols.filter(s => s.type === 'flow').map(s => s.symbol),
-    states: symbols.filter(s => s.type === 'state').map(s => s.symbol),
+    aspects: symbols.filter(s => s.type === 'aspect').map(s => s.symbol),
   };
 }
 
@@ -162,14 +147,13 @@ function analyzeRipple(symbol: string, index: SymbolIndex): RippleResult | null 
     requiredBy: entry.referencedBy,
     
     downstream: {
-      features: toCategorized.features,
       components: toCategorized.components,
       signals: toCategorized.signals,
+      aspects: toCategorized.aspects,
     },
-    
+
     upstream: {
-      portals: fromCategorized.portals,
-      states: fromCategorized.states,
+      gates: fromCategorized.gates,
       flows: fromCategorized.flows,
     },
     
@@ -250,19 +234,15 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
     if (ripple.requires.length > 0) {
       console.log(chalk.white('⬆️  Upstream (What this requires)'));
       console.log(chalk.gray('─'.repeat(50)));
-      if (ripple.upstream.portals.length > 0) {
-        console.log(`  Portals:  ${ripple.upstream.portals.map(p => chalk.red(p)).join(', ')}`);
-      }
-      if (ripple.upstream.states.length > 0) {
-        console.log(`  States:   ${ripple.upstream.states.map(s => chalk.magenta(s)).join(', ')}`);
+      if (ripple.upstream.gates.length > 0) {
+        console.log(`  Gates:    ${ripple.upstream.gates.map(p => chalk.red(p)).join(', ')}`);
       }
       if (ripple.upstream.flows.length > 0) {
         console.log(`  Flows:    ${ripple.upstream.flows.map(f => chalk.cyan(f)).join(', ')}`);
       }
       // Show other references
       const otherRefs = ripple.requires.filter(
-        r => !ripple.upstream.portals.includes(r) && 
-             !ripple.upstream.states.includes(r) && 
+        r => !ripple.upstream.gates.includes(r) &&
              !ripple.upstream.flows.includes(r)
       );
       if (otherRefs.length > 0) {
@@ -275,20 +255,20 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
     if (ripple.requiredBy.length > 0) {
       console.log(chalk.white('⬇️  Downstream (What would be affected)'));
       console.log(chalk.gray('─'.repeat(50)));
-      if (ripple.downstream.features.length > 0) {
-        console.log(`  Features:    ${ripple.downstream.features.map(f => chalk.blue(f)).join(', ')}`);
-      }
       if (ripple.downstream.components.length > 0) {
         console.log(`  Components:  ${ripple.downstream.components.map(c => chalk.green(c)).join(', ')}`);
       }
       if (ripple.downstream.signals.length > 0) {
         console.log(`  Signals:     ${ripple.downstream.signals.map(s => chalk.yellow(s)).join(', ')}`);
       }
+      if (ripple.downstream.aspects.length > 0) {
+        console.log(`  Aspects:     ${ripple.downstream.aspects.map(a => chalk.magenta(a)).join(', ')}`);
+      }
       // Show other references
       const otherRefs = ripple.requiredBy.filter(
-        r => !ripple.downstream.features.includes(r) && 
-             !ripple.downstream.components.includes(r) && 
-             !ripple.downstream.signals.includes(r)
+        r => !ripple.downstream.components.includes(r) &&
+             !ripple.downstream.signals.includes(r) &&
+             !ripple.downstream.aspects.includes(r)
       );
       if (otherRefs.length > 0) {
         console.log(`  Other:       ${otherRefs.map(r => chalk.gray(r)).join(', ')}`);

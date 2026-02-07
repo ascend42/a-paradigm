@@ -161,7 +161,7 @@ function extractSymbols(text: string): string[] {
  * Build a human-readable reason for the suggestion
  */
 function buildReason(
-  name: string,
+  _name: string,
   agent: AgentDefinition,
   matched: string[]
 ): string {

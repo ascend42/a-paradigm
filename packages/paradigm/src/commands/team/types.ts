@@ -41,7 +41,7 @@ export interface ModelConfig {
  */
 export interface ModelDiscoveryResult {
   /** Source of the discovered models */
-  source: 'cursor' | 'claude-code' | 'anthropic-api' | 'openai' | 'google' | 'xai' | 'openrouter' | 'multi-provider' | 'vscode' | 'fallback';
+  source: 'cursor' | 'cursor-manifest' | 'claude-code' | 'anthropic-api' | 'anthropic-manifest' | 'openai' | 'openai-manifest' | 'google' | 'google-manifest' | 'xai' | 'xai-manifest' | 'openrouter' | 'multi-provider' | 'vscode' | 'vscode-manifest' | 'fallback';
   /** List of available models */
   models: ModelInfo[];
   /** Whether the result was loaded from cache */

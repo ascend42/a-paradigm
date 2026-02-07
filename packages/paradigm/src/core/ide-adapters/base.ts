@@ -5,7 +5,6 @@
 
 import * as os from 'os';
 import type { ParadigmConfig } from '../paradigm-config.js';
-import type { ParadigmFiles, SpecFiles } from './types.js';
 
 /**
  * Generate the header section
@@ -227,7 +226,7 @@ export function generateCommandsReference(): string {
 /**
  * Generate navigation section for AI exploration
  */
-export function generateNavigationSection(config: ParadigmConfig): string {
+export function generateNavigationSection(_config: ParadigmConfig): string {
   const lines: string[] = [];
 
   lines.push('## Paradigm Navigation');

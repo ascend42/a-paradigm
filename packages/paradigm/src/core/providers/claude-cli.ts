@@ -272,7 +272,7 @@ export class ClaudeCliProvider implements AgentProvider {
       });
     });
 
-    messageEmitter.on('progress', (text: string) => {
+    messageEmitter.on('progress', (_text: string) => {
       // Show progress dots or spinner text
       pushMessage({
         type: 'text',

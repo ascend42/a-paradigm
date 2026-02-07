@@ -88,9 +88,6 @@ export async function teamDiffCommand(
   const deleted: string[] = [];
 
   for (const artifact of orch.artifacts) {
-    const fullPath = path.join(rootDir, artifact.path);
-    const exists = fs.existsSync(fullPath);
-
     if (artifact.action === 'created') {
       created.push(artifact.path);
     } else if (artifact.action === 'modified') {

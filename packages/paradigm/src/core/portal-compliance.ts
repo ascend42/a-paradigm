@@ -54,23 +54,6 @@ export interface ComplianceReport {
 // ============================================================================
 
 /**
- * Patterns to search for gate references (language-agnostic)
- */
-const GATE_REFERENCE_PATTERNS = [
-  // Paradigm symbol: ^gateName
-  '\\^[a-zA-Z][a-zA-Z0-9_-]*',
-  // Common function patterns
-  'checkGate\\s*\\(\\s*[\'"][^"\']+[\'"]',
-  'requireGate\\s*\\(\\s*[\'"][^"\']+[\'"]',
-  'Gate\\s*\\(\\s*[\'"][^"\']+[\'"]',
-  'gate:\\s*[\'"][^"\']+[\'"]',
-  'gates:\\s*\\[',
-  '@Gate\\s*\\(',
-  '@RequireGate',
-  'useGate\\s*\\(',
-];
-
-/**
  * Directories to skip when searching
  */
 const SKIP_DIRECTORIES = [
@@ -329,9 +312,6 @@ export function formatComplianceReport(report: ComplianceReport): string {
   // Status header
   const statusIcon = report.status === 'compliant' ? '✓' :
     report.status === 'warnings' ? '⚠' : '✗';
-  const statusColor = report.status === 'compliant' ? 'green' :
-    report.status === 'warnings' ? 'yellow' : 'red';
-
   lines.push(`Portal Compliance: ${statusIcon} ${report.status.toUpperCase()}`);
   lines.push('');
 
