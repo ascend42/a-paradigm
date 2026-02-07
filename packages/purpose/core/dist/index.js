@@ -13,12 +13,23 @@ var PurposeItemSchema = z.object({
   gates: z.array(z.string()).optional(),
   signals: z.array(z.string()).optional(),
   states: z.array(z.string()).optional(),
-  components: z.array(z.string()).optional()
-});
+  components: z.array(z.string()).optional(),
+  // Extra fields preserved
+  tags: z.array(z.string()).optional(),
+  location: z.string().optional(),
+  locations: z.array(z.string()).optional(),
+  uses: z.array(z.string()).optional(),
+  "used-by": z.array(z.string()).optional(),
+  "used-for": z.array(z.string()).optional(),
+  exports: z.array(z.string()).optional(),
+  status: z.string().optional(),
+  properties: z.record(z.unknown()).optional(),
+  handles: z.array(z.string()).optional()
+}).passthrough();
 var PurposeItemArraySchema = PurposeItemSchema.extend({
   id: z.string()
 });
-var SignalDefinitionSchema = z.object({
+var SignalDefinitionObjectSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
   severity: z.enum(["info", "warn", "error"]).optional(),
@@ -26,6 +37,10 @@ var SignalDefinitionSchema = z.object({
   related: z.array(z.string()).optional(),
   data: z.record(z.unknown()).optional()
 });
+var SignalDefinitionSchema = z.union([
+  SignalDefinitionObjectSchema,
+  z.string().transform((desc) => ({ description: desc }))
+]);
 var RelationshipObjectSchema = z.object({
   from: z.string(),
   to: z.string(),
