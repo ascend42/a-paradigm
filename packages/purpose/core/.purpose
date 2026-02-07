@@ -6,8 +6,8 @@ features:
   purpose-parsing:
     description: '@purpose-parsing: Parse .purpose files into structured data'
     aspects:
-      ~yaml-config-loading: true
-      ~zod-validated: true
+      - "~yaml-config-loading"
+      - "~zod-validated"
     flows:
       - $purpose-parsing
     signals:
@@ -30,7 +30,7 @@ features:
       - '#aggregator'
       - '#symbol-extractor'
     aspects:
-      ~file-glob-discovery: true
+      - "~file-glob-discovery"
 components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from .purpose files'

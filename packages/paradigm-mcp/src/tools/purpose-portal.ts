@@ -982,16 +982,7 @@ async function handleLink(
   if (flows) item.flows = mergeArrayField(item.flows, flows.map(f => ensurePrefix(f, '$')));
   if (components) item.components = mergeArrayField(item.components, components.map(c => ensurePrefix(c, '#')));
 
-  // Aspects on PurposeItem is Record<string, unknown> — merge as keys
-  if (aspects) {
-    if (!item.aspects || typeof item.aspects !== 'object') {
-      item.aspects = {};
-    }
-    for (const a of aspects) {
-      const bareAspect = ensurePrefix(a, '~');
-      (item.aspects as Record<string, unknown>)[bareAspect] = true;
-    }
-  }
+  if (aspects) item.aspects = mergeArrayField(item.aspects, aspects.map(a => ensurePrefix(a, '~')));
 
   items[bareId] = item;
   (data as Record<string, unknown>)[targetSection] = items;

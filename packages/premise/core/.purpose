@@ -13,8 +13,8 @@ features:
     flows:
       - $symbol-aggregation
     aspects:
-      ~yaml-config-loading: true
-      ~zod-validated: true
+      - "~yaml-config-loading"
+      - "~zod-validated"
   symbol-indexing:
     description: '@symbol-indexing: Build searchable symbol index'
     states:
