@@ -530,6 +530,12 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 [MIT](./LICENSE)
 
+## Author
+
+- [a-company.org](https://a-company.org)
+- [Instagram](https://instagram.com/ascend.ig)
+- [YouTube](https://youtube.com/@ascend-yt)
+
 ---
 
 Built for developers who want their AI to actually understand their project.
