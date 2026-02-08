@@ -263,6 +263,13 @@ export function generateNavigationSection(_config: ParadigmConfig): string {
   lines.push('- `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area');
   lines.push('- `paradigm_navigate({ intent: "context", task: "add login" })` - task context');
   lines.push('');
+  lines.push('### PM Governance (Before/After Tasks)');
+  lines.push('');
+  lines.push('| When | Tool | Purpose |');
+  lines.push('|------|------|---------|');
+  lines.push('| Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |');
+  lines.push('| Finishing any task | `paradigm_pm_postflight` | Check for violations: missing .purpose, missing gates |');
+  lines.push('');
 
   return lines.join('\n');
 }
