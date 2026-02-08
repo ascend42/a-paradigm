@@ -391,6 +391,7 @@ teamCmd
   .option('--budget <budget>', 'Budget limits (e.g., "tokens=500000,cost=5")')
   .option('--checkpoint', 'Pause for approval between agents')
   .option('--live', 'Stream agent output live')
+  .option('--pm', 'Enable PM governance (compliance checks before/after)')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (task, path, options) => {
@@ -791,11 +792,43 @@ mcpCmd
     await mcpRemoveCommand(server, options);
   });
 
-// Default mcp action (show status)
+mcpCmd
+  .command('use-dev')
+  .description('Switch MCP configs to use local dev build')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, claude-code, continue, cline')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpUseDevCommand } = await import('./commands/mcp/switch.js');
+    await mcpUseDevCommand(options);
+  });
+
+mcpCmd
+  .command('use-prod')
+  .description('Switch MCP configs back to global production binary')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, claude-code, continue, cline')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpUseProdCommand } = await import('./commands/mcp/switch.js');
+    await mcpUseProdCommand(options);
+  });
+
+// Default mcp action (show enhanced status with DEV/PROD indicators)
 mcpCmd
   .action(async () => {
-    const { mcpStatusCommand } = await import('./commands/mcp/setup.js');
-    await mcpStatusCommand({});
+    const { mcpSwitchStatusCommand } = await import('./commands/mcp/switch.js');
+    await mcpSwitchStatusCommand({});
+  });
+
+// paradigm promote
+program
+  .command('promote')
+  .description('Copy local build to production (~/.paradigm-cli/)')
+  .option('-f, --force', 'Create production directory if missing')
+  .option('--skip-build', 'Skip npm run build step')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { promoteCommand } = await import('./commands/promote.js');
+    await promoteCommand(options);
   });
 
 // paradigm wisdom <command>

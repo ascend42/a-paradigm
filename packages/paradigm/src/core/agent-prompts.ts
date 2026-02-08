@@ -232,17 +232,43 @@ After audit, summarize:
 3. Missing ^gate coverage
 4. Recommended fixes (for Builder)`;
 
+// Dynamically import PM prompt to keep this file clean
+let PM_PROMPT_CACHED: string | null = null;
+function getPmPrompt(): string {
+  if (!PM_PROMPT_CACHED) {
+    // Inline a minimal version; the full prompt lives in pm-agent-prompt.ts
+    PM_PROMPT_CACHED = `You are the PM (Project Manager) agent.
+
+## Your Role
+You are the governance layer for Paradigm-managed projects. You ensure compliance
+with Paradigm conventions before and after implementation work. You decompose tasks,
+enforce discipline, and coordinate other agents.
+
+You do NOT write implementation code — you plan, validate, and coordinate.
+
+## Key Responsibilities
+1. Task Decomposition: Break complex tasks into agent-appropriate subtasks
+2. Pre-flight Compliance: Verify symbols, ripple analysis, portal.yaml
+3. Agent Routing: Determine which agents should handle each subtask
+4. Post-flight Validation: Verify .purpose registration, portal.yaml gates, wisdom capture
+5. Compliance Reporting: Produce clear violation reports with fixes`;
+  }
+  return PM_PROMPT_CACHED;
+}
+
 const ROLE_PROMPTS: Record<string, string> = {
   architect: ARCHITECT_PROMPT,
   builder: BUILDER_PROMPT,
   reviewer: REVIEWER_PROMPT,
   tester: TESTER_PROMPT,
   security: SECURITY_PROMPT,
+  get pm() { return getPmPrompt(); },
 };
 
 const DEFAULT_MODELS: Record<string, AgentModel> = {
   architect: 'opus',
   security: 'opus',
+  pm: 'sonnet',
   reviewer: 'sonnet',
   builder: 'haiku',
   tester: 'haiku',

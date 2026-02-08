@@ -13,7 +13,7 @@ import ora from 'ora';
 import { log } from '../../utils/logger.js';
 
 // Types
-interface AIClient {
+export interface AIClient {
   name: string;
   id: string;
   detected: boolean;
@@ -129,7 +129,7 @@ function detectCline(): AIClient {
   };
 }
 
-function detectAllClients(): AIClient[] {
+export function detectAllClients(): AIClient[] {
   return [
     detectCursor(),
     detectClaudeCode(),
@@ -140,7 +140,7 @@ function detectAllClients(): AIClient[] {
 }
 
 // Config generation
-function generateMCPConfig(client: AIClient, projectPath: string, projectName: string): object {
+export function generateMCPConfig(client: AIClient, projectPath: string, projectName: string): object {
   const serverName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
   
   if (client.id === 'continue') {
@@ -197,7 +197,7 @@ function mergeConfig(existing: object, newConfig: object, client: AIClient): obj
   };
 }
 
-function writeConfig(client: AIClient, config: object, force: boolean): { success: boolean; message: string } {
+export function writeConfig(client: AIClient, config: object, force: boolean): { success: boolean; message: string } {
   const configDir = path.dirname(client.configPath);
   
   // Create directory if needed
@@ -248,7 +248,7 @@ function addToGitignore(configPath: string): boolean {
 }
 
 // Get project name from .paradigm or directory
-function getProjectName(): string {
+export function getProjectName(): string {
   const paradigmPath = path.join(process.cwd(), '.paradigm', 'config.yaml');
   if (fs.existsSync(paradigmPath)) {
     const content = fs.readFileSync(paradigmPath, 'utf8');
@@ -453,7 +453,7 @@ export async function mcpStatusCommand(options: { json?: boolean }) {
 }
 
 // Types for server info
-interface ServerInfo {
+export interface ServerInfo {
   name: string;
   cwd: string;
   command: string;
@@ -466,7 +466,7 @@ interface ClientServers {
 }
 
 // Helper to get servers from a client config
-function getServersFromConfig(client: AIClient): ServerInfo[] {
+export function getServersFromConfig(client: AIClient): ServerInfo[] {
   if (!fs.existsSync(client.configPath)) {
     return [];
   }

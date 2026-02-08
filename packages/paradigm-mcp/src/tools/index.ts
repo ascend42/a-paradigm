@@ -29,6 +29,7 @@ import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
 import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestration.js';
 import { getTagsToolsList, handleTagsTool } from './tags.js';
 import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-portal.js';
+import { getPmToolsList, handlePmTool } from './pm.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -204,6 +205,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getTagsToolsList(),
           // Purpose & Portal file management tools
           ...getPurposePortalToolsList(),
+          // PM governance tools
+          ...getPmToolsList(),
         ],
       };
     }
@@ -860,6 +863,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try tags tools (v2 symbol system)
           if (name.startsWith('paradigm_tags') || name === 'paradigm_aspect_check') {
             const result = await handleTagsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try PM governance tools
+          if (name.startsWith('paradigm_pm_')) {
+            const result = await handlePmTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {
