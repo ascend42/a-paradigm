@@ -73,7 +73,7 @@ The AI never needed to read the implementation — the contracts were explicit.
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh | bash
+curl -fsSL https://a-company.org/paradigm/install.sh | bash
 ```
 
 This clones to `~/.paradigm-cli/`, builds, and installs the `paradigm` and `paradigm-mcp` CLIs globally. Re-running the same command will update to the latest version.
@@ -81,7 +81,7 @@ This clones to `~/.paradigm-cli/`, builds, and installs the `paradigm` and `para
 Or download and inspect first:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ascend42/a-paradigm/main/install.sh -o install.sh
+curl -fsSL https://a-company.org/paradigm/install.sh -o install.sh
 chmod +x install.sh
 ./install.sh
 ```
