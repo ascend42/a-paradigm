@@ -12,6 +12,8 @@ interface QuestionCardProps {
   onSelect?: (letter: string) => void;
   /** If true, show results (quiz review / PLSAT review mode) */
   showResult?: boolean;
+  /** Fires in uncontrolled (quiz) mode after user picks an answer */
+  onAnswered?: (letter: string) => void;
 }
 
 export function QuestionCard({
@@ -24,6 +26,7 @@ export function QuestionCard({
   selectedAnswer: controlledAnswer,
   onSelect,
   showResult: controlledShowResult,
+  onAnswered,
 }: QuestionCardProps) {
   // Uncontrolled mode for course quizzes
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
@@ -40,6 +43,7 @@ export function QuestionCard({
     } else {
       setLocalAnswer(letter);
       setShowExplanation(true);
+      onAnswered?.(letter);
     }
   };
 
