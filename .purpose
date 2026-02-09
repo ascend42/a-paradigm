@@ -85,6 +85,21 @@ features:
       - '#node-renderer'
       - '#connection-lines'
       - '#properties-panel'
+  university-platform:
+    description: Interactive academia-themed learning platform with courses, quizzes, PLSAT certification exam, and reference library
+    aspects:
+      - "~express-server"
+    components:
+      - '#university-ui'
+      - '#university-server'
+      - '#courses-store'
+      - '#progress-store'
+      - '#plsat-store'
+    signals:
+      - "!plsat-completed"
+      - "!quiz-completed"
+    flows:
+      - $plsat-exam-flow
   portal-authorization:
     description: Runtime authorization with visual testing
     flows:

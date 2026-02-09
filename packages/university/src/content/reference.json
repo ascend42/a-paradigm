@@ -1,0 +1,341 @@
+{
+  "sections": [
+    {
+      "id": "symbols",
+      "title": "Symbol Reference",
+      "cards": [
+        {
+          "id": "component",
+          "symbol": "#",
+          "name": "Component",
+          "description": "Any documented code unit — services, handlers, utilities, hooks, UI components, stores. The universal building block of Paradigm v2.",
+          "examples": ["#PaymentService", "#login-handler", "#user-store"],
+          "logger": "log.component('#name').level('message')",
+          "when": "Always — every code unit you document gets a # prefix. If it's a file, function, class, or module worth naming, it's a component."
+        },
+        {
+          "id": "flow",
+          "symbol": "$",
+          "name": "Flow",
+          "description": "A multi-step process with ordered steps spanning multiple components. Documents the sequence of operations that accomplish a business objective.",
+          "examples": ["$checkout-flow", "$user-onboarding", "$order-fulfillment"],
+          "logger": "log.flow('$name').level('message')",
+          "when": "When logic spans 3+ components in a defined sequence. If steps must happen in order and involve multiple parts of the system, it's a flow."
+        },
+        {
+          "id": "gate",
+          "symbol": "^",
+          "name": "Gate",
+          "description": "An authorization checkpoint that controls access to resources or operations. Defined in portal.yaml and enforced in middleware or route handlers.",
+          "examples": ["^authenticated", "^project-admin", "^comment-author"],
+          "logger": "log.gate('^name').level('message')",
+          "when": "When access must be restricted — authentication, role checks, ownership validation. One responsibility per gate. Compose gates for complex authorization."
+        },
+        {
+          "id": "signal",
+          "symbol": "!",
+          "name": "Signal",
+          "description": "An event that triggers independent side effects. Signals decouple the emitter from subscribers — the emitter doesn't know or care who listens.",
+          "examples": ["!payment-completed", "!login-failed", "!user-onboarded"],
+          "logger": "log.signal('!name').level('message')",
+          "when": "When an event should trigger side effects (emails, analytics, state updates) without the source needing to know about subscribers. Use signals for decoupled reactions."
+        },
+        {
+          "id": "aspect",
+          "symbol": "~",
+          "name": "Aspect",
+          "description": "A cross-cutting rule with REQUIRED code anchors. Aspects enforce patterns across multiple components and must point to the actual enforcement code.",
+          "examples": ["~audit-required", "~rate-limited", "~cache-invalidation"],
+          "logger": "log.aspect('~name').level('message')",
+          "when": "When a rule or pattern must be applied across multiple components (audit logging, rate limiting, caching). Anchors are mandatory — no unanchored aspects allowed."
+        }
+      ]
+    },
+    {
+      "id": "mcp-tools",
+      "title": "MCP Tool Reference",
+      "cards": [
+        {
+          "id": "paradigm-status",
+          "name": "paradigm_status",
+          "description": "Get project overview — symbol counts, project health, and available features. The orientation tool for new sessions.",
+          "when": "At the start of every session to understand the project state.",
+          "example": "paradigm_status()"
+        },
+        {
+          "id": "paradigm-search",
+          "name": "paradigm_search",
+          "description": "Search for symbols by name, description, or tags. Supports fuzzy matching for typo tolerance.",
+          "when": "When you need to find a symbol but don't know its exact name or location.",
+          "example": "paradigm_search({ query: 'payment', type: 'component' })"
+        },
+        {
+          "id": "paradigm-navigate",
+          "name": "paradigm_navigate",
+          "description": "Navigate the codebase efficiently. Three intents: 'find' locates a symbol, 'explore' browses an area, 'context' discovers files for a task.",
+          "when": "Before reading files — use navigate for discovery, then read only the files you need.",
+          "example": "paradigm_navigate({ intent: 'explore', target: 'auth' })"
+        },
+        {
+          "id": "paradigm-ripple",
+          "name": "paradigm_ripple",
+          "description": "Show what depends on a symbol directly and indirectly. Analyzes the cascading impact of modifying a symbol up to N levels deep.",
+          "when": "ALWAYS before modifying any symbol. Non-negotiable. This prevents breaking downstream dependencies.",
+          "example": "paradigm_ripple({ symbol: '#payment-service', depth: 3 })"
+        },
+        {
+          "id": "paradigm-related",
+          "name": "paradigm_related",
+          "description": "Get all symbols directly related to a given symbol — what it uses and what uses it.",
+          "when": "When you need to understand a symbol's immediate connections without the full ripple cascade.",
+          "example": "paradigm_related({ symbol: '$checkout-flow' })"
+        },
+        {
+          "id": "paradigm-wisdom-context",
+          "name": "paradigm_wisdom_context",
+          "description": "Get team wisdom — preferences, antipatterns, and architectural decisions — for specific symbols before implementing.",
+          "when": "Before making changes to any symbol, especially those with high fragility scores or complex history.",
+          "example": "paradigm_wisdom_context({ symbols: ['#payment-service', '^authenticated'] })"
+        },
+        {
+          "id": "paradigm-history-fragility",
+          "name": "paradigm_history_fragility",
+          "description": "Check stability scores and warnings for symbols. High fragility means frequent changes and rollbacks — proceed with caution.",
+          "when": "Before modifying symbols that might be unstable. Especially important for critical-path components.",
+          "example": "paradigm_history_fragility({ symbols: ['#payment-processor'] })"
+        },
+        {
+          "id": "paradigm-gates-for-route",
+          "name": "paradigm_gates_for_route",
+          "description": "Suggest which gates should be applied to a route based on existing patterns in the project.",
+          "when": "ALWAYS when adding a new API endpoint. Get gate suggestions before writing route code.",
+          "example": "paradigm_gates_for_route({ route: '/api/projects/:id', method: 'DELETE' })"
+        },
+        {
+          "id": "paradigm-orchestrate-inline",
+          "name": "paradigm_orchestrate_inline",
+          "description": "Plan and coordinate multi-agent task execution. Mode 'plan' returns suggested agents and cost estimate. Mode 'execute' returns full prompts.",
+          "when": "When a task affects 3+ files, involves security + implementation, mentions multiple features, or builds end-to-end.",
+          "example": "paradigm_orchestrate_inline({ task: 'Add JWT auth to user module', mode: 'plan' })"
+        },
+        {
+          "id": "paradigm-pm-preflight",
+          "name": "paradigm_pm_preflight",
+          "description": "Run pre-implementation governance checks — verifies that planning steps (ripple, wisdom, gates) have been completed before coding.",
+          "when": "Before starting implementation on any task to ensure all preparation steps are done.",
+          "example": "paradigm_pm_preflight({ task: 'Refactor payment module' })"
+        },
+        {
+          "id": "paradigm-pm-postflight",
+          "name": "paradigm_pm_postflight",
+          "description": "Run post-implementation governance checks — verifies that documentation, history recording, and validation are completed.",
+          "when": "After completing implementation to ensure all follow-up steps (purpose files, history, tests) are done.",
+          "example": "paradigm_pm_postflight({ task: 'Refactor payment module' })"
+        },
+        {
+          "id": "paradigm-flow-validate",
+          "name": "paradigm_flow_validate",
+          "description": "Validate flow definitions against the codebase. With checkImplementation=true, verifies gates exist, actions are implemented, and signals are emitted.",
+          "when": "After modifying flows or their constituent components. Use checkImplementation for deep verification.",
+          "example": "paradigm_flow_validate({ flowId: '$checkout-flow', checkImplementation: true })"
+        },
+        {
+          "id": "paradigm-aspect-check",
+          "name": "paradigm_aspect_check",
+          "description": "Verify an aspect has valid anchors and check coverage. Aspects REQUIRE code anchors — this tool validates they exist and point to real code.",
+          "when": "After creating or modifying aspects, or when paradigm doctor reports stale anchors.",
+          "example": "paradigm_aspect_check({ aspect: '~audit-required' })"
+        },
+        {
+          "id": "paradigm-purpose-validate",
+          "name": "paradigm_purpose_validate",
+          "description": "Validate .purpose files and portal.yaml structural integrity. Checks for missing fields, invalid references, and formatting issues.",
+          "when": "Before committing changes to .purpose files or portal.yaml. Also useful as a CI check.",
+          "example": "paradigm_purpose_validate({ includePortal: true })"
+        }
+      ]
+    },
+    {
+      "id": "cli-commands",
+      "title": "CLI Command Reference",
+      "cards": [
+        {
+          "id": "init",
+          "command": "paradigm init",
+          "description": "Initialize Paradigm in a project. Creates .paradigm/ directory, config.yaml, and optionally portal.yaml. Interactive setup for discipline and conventions.",
+          "flags": ["--discipline <type>: Set project discipline (e.g., fullstack-saas, cli-tool)", "--force: Overwrite existing Paradigm config"]
+        },
+        {
+          "id": "scan",
+          "command": "paradigm scan",
+          "description": "Scan the codebase and rebuild the symbol index. Reads all .purpose files, portal.yaml, and generates navigator.yaml for fast lookups.",
+          "flags": ["--verbose: Show detailed scan progress", "--fix: Attempt to auto-fix minor issues found during scan"]
+        },
+        {
+          "id": "doctor",
+          "command": "paradigm doctor",
+          "description": "Validate consistency between Paradigm files and the codebase. Reports errors (broken references), warnings (stale anchors), and info (pending tags).",
+          "flags": ["--fix: Auto-fix issues where possible", "--strict: Treat warnings as errors", "--json: Output results as JSON for CI integration"]
+        },
+        {
+          "id": "sync",
+          "command": "paradigm sync",
+          "description": "Synchronize Paradigm files with the current codebase state. Updates navigator.yaml, refreshes indexes, and reconciles any drift.",
+          "flags": ["--dry-run: Show what would be synced without making changes", "--force: Overwrite local changes with indexed state"]
+        },
+        {
+          "id": "sentinel",
+          "command": "paradigm sentinel",
+          "description": "View and manage production incidents, failure patterns, and system health metrics. The operational intelligence dashboard.",
+          "flags": ["--status <status>: Filter by incident status (open, investigating, resolved)", "--symbol <sym>: Filter by symbol", "--period <period>: Time period for stats (1d, 7d, 30d)"]
+        },
+        {
+          "id": "team-orchestrate",
+          "command": "paradigm team orchestrate \"<task>\"",
+          "description": "AI-coordinated multi-agent execution. Analyzes the task, selects agents, plans stages, and executes with handoffs between agents.",
+          "flags": ["--solo: Single Claude mode (no agent splitting)", "--compare: A/B test solo vs faceted approach", "--dry-run: Show plan without executing"]
+        },
+        {
+          "id": "team-spawn",
+          "command": "paradigm team spawn <agent> --task \"<task>\"",
+          "description": "Spawn a single agent with a specific role (architect, builder, tester, reviewer, security) for a focused task.",
+          "flags": ["--task \"<desc>\": The task description (required)", "--model <model>: Override the default model for this agent", "--context <file>: Additional context file to include"]
+        },
+        {
+          "id": "mcp-setup",
+          "command": "paradigm mcp setup",
+          "description": "Configure MCP (Model Context Protocol) integration. Sets up the paradigm-mcp binary for Claude Code, Cursor, or other MCP-compatible clients.",
+          "flags": ["--client <client>: Target client (claude-code, cursor, generic)", "--global: Install globally for all projects"]
+        },
+        {
+          "id": "promote",
+          "command": "paradigm promote <tag>",
+          "description": "Promote a suggested tag to the project section of tags.yaml. Part of the governance workflow where humans approve AI-suggested tags.",
+          "flags": ["--to core: Promote to core section instead of project", "--reject: Reject and remove the suggested tag"]
+        }
+      ]
+    },
+    {
+      "id": "tags",
+      "title": "Tag Reference",
+      "cards": [
+        {
+          "id": "feature",
+          "name": "[feature]",
+          "description": "Marks a component as a user-facing feature. Replaces the v1 `@feature` symbol prefix.",
+          "example": "#checkout with tags: [feature, critical]"
+        },
+        {
+          "id": "integration",
+          "name": "[integration]",
+          "description": "Marks a component as an external service integration. Replaces the v1 `&integration` symbol prefix. Often paired with the service name.",
+          "example": "#stripe-service with tags: [integration, stripe]"
+        },
+        {
+          "id": "state",
+          "name": "[state]",
+          "description": "Marks a component as a state management unit. Replaces the v1 `%state` symbol prefix.",
+          "example": "#user-store with tags: [state]"
+        },
+        {
+          "id": "critical",
+          "name": "[critical]",
+          "description": "Marks a symbol as critical-path — failure here causes significant user or business impact. Triggers extra scrutiny in reviews and orchestration.",
+          "example": "#payment-processor with tags: [feature, critical]"
+        },
+        {
+          "id": "security",
+          "name": "[security]",
+          "description": "Marks a symbol as security-relevant. Components, aspects, or gates with this tag should involve the security agent during orchestration.",
+          "example": "~input-sanitization with tags: [security, compliance]"
+        },
+        {
+          "id": "compliance",
+          "name": "[compliance]",
+          "description": "Marks a symbol as compliance-related (GDPR, SOC2, PCI, etc.). Often paired with [security] on aspects that enforce regulatory requirements.",
+          "example": "~audit-required with tags: [compliance, security]"
+        },
+        {
+          "id": "deprecated",
+          "name": "[deprecated]",
+          "description": "Marks a symbol as deprecated — still functional but scheduled for removal. AI agents should suggest alternatives when encountering deprecated symbols.",
+          "example": "#legacy-auth-handler with tags: [deprecated]"
+        },
+        {
+          "id": "idea",
+          "name": "[idea]",
+          "description": "Marks a symbol as experimental or in the ideation phase. Replaces the v1 `?idea` symbol prefix. Not yet approved for production use.",
+          "example": "#voice-checkout with tags: [idea, feature]"
+        }
+      ]
+    },
+    {
+      "id": "workflow",
+      "title": "Workflow Quick Reference",
+      "cards": [
+        {
+          "id": "adding-a-feature",
+          "name": "Adding a Feature",
+          "steps": [
+            "1. Call paradigm_orchestrate_inline({ task: '...', mode: 'plan' }) if 3+ files involved",
+            "2. Call paradigm_navigate({ intent: 'context', task: '...' }) to discover relevant files",
+            "3. Check paradigm_wisdom_context for related symbols",
+            "4. If adding API endpoints: call paradigm_gates_for_route for gate suggestions",
+            "5. Update portal.yaml with new routes and gates (if applicable)",
+            "6. Implement the feature code",
+            "7. Create/update the nearest .purpose file with #component and [feature] tag",
+            "8. Add !signals for events and $flows for multi-step processes",
+            "9. Record implementation with paradigm_history_record",
+            "10. Commit with Paradigm format: type(#symbol): description + Symbols: trailer"
+          ]
+        },
+        {
+          "id": "adding-an-endpoint",
+          "name": "Adding an API Endpoint",
+          "steps": [
+            "1. Call paradigm_gates_for_route({ route: '/api/...', method: 'POST' })",
+            "2. Add the route to portal.yaml with the suggested gates",
+            "3. Implement the endpoint with gate enforcement in middleware",
+            "4. Add #component to the nearest .purpose file",
+            "5. Test that unauthorized access returns 403",
+            "6. Commit with the route and gate symbols in the Symbols: trailer"
+          ]
+        },
+        {
+          "id": "before-modifying",
+          "name": "Before Modifying a Symbol",
+          "steps": [
+            "1. Call paradigm_ripple({ symbol: '#target', depth: 2 }) to check impact",
+            "2. Call paradigm_wisdom_context({ symbols: ['#target'] }) for team knowledge",
+            "3. Call paradigm_history_fragility({ symbols: ['#target'] }) for stability warnings",
+            "4. If fragility is HIGH: review paradigm_history_context for recent changes",
+            "5. Read the source file only after completing discovery steps",
+            "6. After changes: record with paradigm_history_record and update .purpose files"
+          ]
+        },
+        {
+          "id": "starting-a-session",
+          "name": "Starting a New Session",
+          "steps": [
+            "1. Call paradigm_session_recover to load breadcrumbs from previous sessions",
+            "2. Call paradigm_status for project overview and health",
+            "3. Read .paradigm/config.yaml for project discipline and conventions",
+            "4. Check if portal.yaml exists (for auth-gated projects)",
+            "5. Use paradigm_navigate with 'context' intent for your specific task"
+          ]
+        },
+        {
+          "id": "preparing-a-handoff",
+          "name": "Preparing a Handoff",
+          "steps": [
+            "1. Call paradigm_context_check to confirm handoff is recommended",
+            "2. Finish or checkpoint the current task",
+            "3. Call paradigm_handoff_prepare with: summary, modifiedFiles, symbolsTouched, nextSteps, openQuestions",
+            "4. Inform the user of the handoff file location",
+            "5. In the new session: call paradigm_session_recover to pick up where you left off"
+          ]
+        }
+      ]
+    }
+  ]
+}

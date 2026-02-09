@@ -1,0 +1,641 @@
+{
+  "id": "para-301",
+  "title": "PARA 301: Operations",
+  "description": "Master the operational tools and workflows that keep a Paradigm project healthy. From history tracking and fragility analysis to sentinel observability and context management, this course covers the day-to-day operations that separate well-maintained projects from chaotic ones.",
+  "lessons": [
+    {
+      "id": "history-system",
+      "title": "The History System",
+      "content": "## The History System\n\nParadigm maintains an append-only log of every implementation change in your project. This is not a replacement for git history -- it is a higher-level, symbol-aware record that tracks *what changed at the Paradigm level*, not just which lines of code were modified. Every time you implement a feature, fix a bug, or refactor a component, Paradigm can record that event against the symbols it affected.\n\nThe primary tool for recording history is `paradigm_history_record`. When you call it, you specify three required fields: the **type** of change (`implement`, `refactor`, or `rollback`), the **symbols** affected (e.g., `[\"#payment-service\", \"$checkout-flow\"]`), and a **description** of what was done. You can also specify an **intent** to further classify the change: `feature` for new capabilities, `fix` for bug repairs, `refactor` for structural improvements, `experimental` for exploratory changes, and `confirmed` for validated implementations.\n\n```\nparadigm_history_record({\n  type: \"implement\",\n  symbols: [\"#payment-service\", \"!payment-completed\"],\n  description: \"Add Stripe webhook handler for payment confirmation\",\n  intent: \"feature\",\n  commit: \"a1b2c3d\",\n  files: [\"src/services/payment.ts\", \"src/handlers/webhook.ts\"]\n})\n```\n\nTo retrieve history for symbols before making changes, use `paradigm_history_context`. Pass in an array of symbols and you get back the recent implementation events, who worked on them, and how stable they have been. This is critical context -- before modifying `#payment-service`, you want to know if it was just refactored last week, if it has been the target of multiple rollbacks, or if it has been stable for months.\n\nThe history log is append-only by design. Nothing is ever deleted or overwritten. This means you always have a complete timeline of how a symbol evolved. Rollback events do not erase the original implementation -- they add a new entry that says \"this was rolled back and why.\" This immutability is what makes the history system trustworthy for fragility analysis and team wisdom.",
+      "keyConcepts": [
+        "Append-only implementation log",
+        "paradigm_history_record",
+        "paradigm_history_context",
+        "Change types: implement, refactor, rollback",
+        "Intent classification: feature, fix, refactor, experimental, confirmed"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Which tool do you use to log an implementation change in Paradigm's history system?",
+          "choices": {
+            "A": "paradigm_history_context",
+            "B": "paradigm_history_record",
+            "C": "paradigm_wisdom_record",
+            "D": "paradigm_history_fragility",
+            "E": "paradigm_history_validate"
+          },
+          "correct": "B",
+          "explanation": "paradigm_history_record is the tool for logging implementation events. paradigm_history_context retrieves existing history, paradigm_wisdom_record captures team learnings, and paradigm_history_fragility checks stability scores."
+        },
+        {
+          "id": "q2",
+          "question": "What are the three types of changes you can record in the history system?",
+          "choices": {
+            "A": "create, update, delete",
+            "B": "implement, refactor, rollback",
+            "C": "feature, fix, refactor",
+            "D": "add, modify, remove",
+            "E": "build, test, deploy"
+          },
+          "correct": "B",
+          "explanation": "The three change types are implement (new work), refactor (structural changes), and rollback (reverting a change). The options feature, fix, and refactor are intent values, not types."
+        },
+        {
+          "id": "q3",
+          "question": "Why is the history log append-only?",
+          "choices": {
+            "A": "To save disk space by avoiding updates",
+            "B": "To make the log faster to write",
+            "C": "To maintain a complete, trustworthy timeline that supports fragility analysis",
+            "D": "Because the file format does not support editing",
+            "E": "To prevent unauthorized modifications"
+          },
+          "correct": "C",
+          "explanation": "The append-only design ensures a complete timeline of every change. Nothing is deleted or overwritten, which makes the log trustworthy for computing fragility scores and understanding how symbols evolved over time."
+        },
+        {
+          "id": "q4",
+          "question": "Before modifying #user-service, which tool should you call to understand its recent changes?",
+          "choices": {
+            "A": "paradigm_history_record",
+            "B": "paradigm_search",
+            "C": "paradigm_history_context",
+            "D": "paradigm_navigate",
+            "E": "paradigm_ripple"
+          },
+          "correct": "C",
+          "explanation": "paradigm_history_context retrieves the implementation history for specified symbols. It tells you what changed recently, who worked on it, and how stable the symbol has been -- essential context before making modifications."
+        }
+      ]
+    },
+    {
+      "id": "fragility-tracking",
+      "title": "Fragility & Stability",
+      "content": "## Fragility & Stability\n\nNot all parts of a codebase are equally stable. Some symbols have been rock-solid for months, while others seem to break every time someone touches them. Paradigm's fragility tracking system quantifies this by analyzing the history log to produce **stability scores** for each symbol.\n\nThe tool `paradigm_history_fragility` accepts an array of symbols and returns a stability assessment for each one. The score considers several factors: how frequently the symbol has been changed, how many rollbacks it has experienced, the ratio of fixes to features, and the recency of changes. A symbol that was implemented once six months ago and never touched again has high stability. A symbol that has been refactored three times in two weeks with one rollback is flagged as fragile.\n\n```\nparadigm_history_fragility({\n  symbols: [\"#checkout-form\", \"#payment-service\", \"$onboarding\"]\n})\n\n// Returns stability scores and warnings:\n// #checkout-form: stable (score: 0.92)\n// #payment-service: fragile (score: 0.34) -- 3 rollbacks in 30 days\n// $onboarding: moderate (score: 0.61) -- frequent refactors\n```\n\nFragility information changes how you approach a task. When you are about to modify a fragile symbol, you should:\n\n1. **Read the full history** with `paradigm_history_context` to understand *why* it has been unstable\n2. **Check team wisdom** with `paradigm_wisdom_context` to see if there are known antipatterns or decisions about that area\n3. **Write more comprehensive tests** before making changes\n4. **Make smaller, incremental changes** rather than large refactors\n5. **Validate thoroughly** with `paradigm_history_validate` after implementation\n\nRefactor-heavy areas deserve special attention. If a symbol has a high count of `refactor` type events, it may indicate unclear requirements, poor initial design, or a component that is trying to do too much. The fragility system surfaces these patterns so you can address the root cause rather than adding another band-aid refactor.\n\nStability scores are also useful for planning. When estimating effort for a feature that touches multiple symbols, fragile symbols should be weighted higher in your estimate. They are more likely to require debugging, testing, and potentially rolling back. The fragility check is a form of risk assessment that should happen before every non-trivial change.",
+      "keyConcepts": [
+        "paradigm_history_fragility",
+        "Stability scores",
+        "Fragile symbol indicators",
+        "Risk-based modification strategy",
+        "Refactor frequency analysis"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Which factors does Paradigm's fragility analysis consider when computing stability scores?",
+          "choices": {
+            "A": "Only the number of lines of code",
+            "B": "Change frequency, rollback count, fix-to-feature ratio, and recency of changes",
+            "C": "Only how many rollbacks have occurred",
+            "D": "The number of developers who have modified the symbol",
+            "E": "Test coverage percentage"
+          },
+          "correct": "B",
+          "explanation": "Fragility analysis considers multiple factors: how frequently the symbol changes, how many rollbacks occurred, the ratio of fixes to features (high fix ratio suggests instability), and how recently changes were made."
+        },
+        {
+          "id": "q2",
+          "question": "You are about to modify #billing-engine, which paradigm_history_fragility reports as fragile. What should you do FIRST?",
+          "choices": {
+            "A": "Skip the change entirely",
+            "B": "Refactor the symbol to improve stability",
+            "C": "Read its full history and check team wisdom to understand why it is unstable",
+            "D": "Delete the symbol and start fresh",
+            "E": "Increase the stability score manually"
+          },
+          "correct": "C",
+          "explanation": "Before modifying a fragile symbol, you should first understand why it is fragile by reading its history (paradigm_history_context) and checking team wisdom (paradigm_wisdom_context). This context helps you avoid repeating past mistakes."
+        },
+        {
+          "id": "q3",
+          "question": "A symbol has a high count of 'refactor' type events in its history. What might this indicate?",
+          "choices": {
+            "A": "The symbol is well-maintained and actively improved",
+            "B": "The symbol has excellent test coverage",
+            "C": "Unclear requirements, poor initial design, or a component doing too much",
+            "D": "The symbol is ready for production",
+            "E": "The development team is very productive"
+          },
+          "correct": "C",
+          "explanation": "Frequent refactors often indicate underlying issues -- unclear requirements that keep changing, a poor initial design that needs constant adjustment, or a component that has grown beyond its original scope. The fragility system surfaces these patterns for root cause analysis."
+        }
+      ]
+    },
+    {
+      "id": "wisdom-system",
+      "title": "Team Wisdom",
+      "content": "## Team Wisdom\n\nEvery development team accumulates knowledge over time: patterns that work, mistakes that keep recurring, architectural decisions and why they were made. Paradigm's wisdom system captures this institutional knowledge in a structured, queryable format so it is available to both human developers and AI agents.\n\nThere are three types of wisdom in Paradigm:\n\n**Preferences** define \"how we do things.\" These are team conventions, coding standards, and stylistic choices that go beyond what a linter can enforce. For example: \"We always use optimistic UI updates for payment flows\" or \"Error messages must include the operation that failed, not just the error code.\"\n\n**Antipatterns** record \"what NOT to do\" along with \"what to do instead.\" Each antipattern has an ID, a description of the bad practice, a reason explaining why it is problematic, and an alternative showing the correct approach. For example: \"Do not call the payment API directly from React components -- use the #payment-service abstraction layer instead.\"\n\n```yaml\n# Example antipattern\napi-001:\n  description: Calling external APIs directly from UI components\n  reason: Tight coupling, no error handling, no retry logic\n  alternative: Route all API calls through service components (#*-service)\n  symbols: [\"#checkout-form\", \"#payment-service\"]\n```\n\n**Decisions** capture architectural choices with full rationale. Each decision has a title, status (proposed, accepted, deprecated, superseded), the factors that influenced the decision, a conclusion, and the expected consequences (positive, negative, and mitigations). This is Paradigm's built-in Architecture Decision Record (ADR) system.\n\nTo retrieve wisdom before making changes, call `paradigm_wisdom_context` with the symbols you plan to modify. This returns all relevant preferences, antipatterns, and decisions for those symbols. To capture new wisdom, use `paradigm_wisdom_record` to add antipatterns or decisions. The expertise tracking system also identifies who on the team knows the most about specific symbols, accessible via `paradigm_wisdom_expert`.\n\n```\n// Before modifying checkout:\nparadigm_wisdom_context({ symbols: [\"#checkout-form\", \"$checkout-flow\"] })\n\n// After discovering a recurring mistake:\nparadigm_wisdom_record({\n  type: \"antipattern\",\n  id: \"checkout-003\",\n  symbols: [\"#checkout-form\"],\n  description: \"Using setTimeout for payment polling\",\n  reason: \"Unreliable, races with redirects, misses webhook events\",\n  alternative: \"Use the !payment-completed signal with a listener\"\n})\n```\n\nThe wisdom system is most valuable when it becomes a habit. After every debugging session, ask: \"Is there an antipattern here we should record?\" After every architectural discussion, ask: \"Should this be a decision record?\" The cost of capturing wisdom is minutes; the cost of not capturing it is repeating the same mistakes across sessions and team members.",
+      "keyConcepts": [
+        "Three wisdom types: preferences, antipatterns, decisions",
+        "paradigm_wisdom_context",
+        "paradigm_wisdom_record",
+        "paradigm_wisdom_expert",
+        "Antipattern structure: description, reason, alternative"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What are the three types of team wisdom in Paradigm?",
+          "choices": {
+            "A": "Patterns, templates, examples",
+            "B": "Preferences, antipatterns, decisions",
+            "C": "Rules, guidelines, standards",
+            "D": "Documentation, comments, readmes",
+            "E": "Tests, benchmarks, audits"
+          },
+          "correct": "B",
+          "explanation": "Paradigm's wisdom system has three types: preferences (how we do things), antipatterns (what not to do and what to do instead), and decisions (architectural choices with rationale)."
+        },
+        {
+          "id": "q2",
+          "question": "You just spent an hour debugging an issue caused by calling the Stripe API directly from a component. What should you do?",
+          "choices": {
+            "A": "Fix the bug and move on",
+            "B": "Record a wisdom antipattern with paradigm_wisdom_record documenting the mistake and the correct approach",
+            "C": "Add a comment in the code",
+            "D": "Send an email to the team",
+            "E": "Record a preference using paradigm_history_record"
+          },
+          "correct": "B",
+          "explanation": "When you discover a recurring mistake pattern, you should record it as an antipattern using paradigm_wisdom_record. This captures the description of what went wrong, why it is problematic, and the correct alternative -- making it available to all future sessions and team members."
+        },
+        {
+          "id": "q3",
+          "question": "Which tool tells you who on the team is the expert for a specific symbol?",
+          "choices": {
+            "A": "paradigm_wisdom_context",
+            "B": "paradigm_history_context",
+            "C": "paradigm_wisdom_expert",
+            "D": "paradigm_search",
+            "E": "paradigm_navigate"
+          },
+          "correct": "C",
+          "explanation": "paradigm_wisdom_expert finds the human experts who have the most knowledge about specific symbols or areas. It uses contribution history and ownership data to identify who to consult."
+        },
+        {
+          "id": "q4",
+          "question": "What is the correct timing for calling paradigm_wisdom_context?",
+          "choices": {
+            "A": "After deploying to production",
+            "B": "Only when you encounter a bug",
+            "C": "Before making changes to symbols, to learn existing conventions and avoid known pitfalls",
+            "D": "Only during code review",
+            "E": "Once per week during sprint planning"
+          },
+          "correct": "C",
+          "explanation": "paradigm_wisdom_context should be called before making changes to symbols. It retrieves preferences, antipatterns, and decisions relevant to the symbols you are about to modify, helping you avoid known mistakes and follow established patterns."
+        }
+      ]
+    },
+    {
+      "id": "ripple-analysis",
+      "title": "Ripple Analysis",
+      "content": "## Ripple Analysis\n\nWhen you change a symbol, the effects can ripple outward through the codebase like a stone dropped in water. A modification to `#payment-service` might affect `$checkout-flow`, which depends on it. That flow might be used by `#checkout-form`, which is consumed by `#order-page`. Ripple analysis maps these dependency chains before you make changes, so you can understand the full blast radius of your modification.\n\nThe tool `paradigm_ripple` takes a symbol and an optional depth parameter (1-5, default 2) and returns everything that depends on it, both directly and indirectly. This is not just a list of imports -- it is a semantic dependency graph built from Paradigm's symbol relationships: which components reference this symbol, which flows include it as a step, which gates protect endpoints that use it, and which signals it emits that other components listen to.\n\n```\nparadigm_ripple({\n  symbol: \"#payment-service\",\n  depth: 3\n})\n\n// Returns:\n// Direct dependents (depth 1):\n//   $checkout-flow - uses #payment-service in step 3\n//   #refund-handler - calls #payment-service.refund()\n//   !payment-completed - emitted by #payment-service\n//\n// Indirect dependents (depth 2):\n//   #checkout-form - triggers $checkout-flow\n//   #order-history - listens to !payment-completed\n//\n// Indirect dependents (depth 3):\n//   #account-dashboard - renders #order-history\n```\n\nRipple analysis is **essential before any refactor**. The most common cause of unintended breakage is not understanding the full dependency tree. A developer renames a method on `#payment-service` thinking only `$checkout-flow` uses it, not realizing that `#refund-handler` also calls that method. Ripple analysis catches this.\n\nThe depth parameter controls how far out to look. Depth 1 shows only direct dependents. Depth 2 (the default) shows dependents of dependents. For large refactors, depth 3 or higher may be warranted. Keep in mind that higher depth values return more results and cost more tokens, so start at the default and increase only if needed.\n\nA good practice is to run ripple analysis, review the affected symbols, then check the fragility of any flagged dependents before proceeding. If your modification would ripple into a fragile area, you may want to add extra safeguards or break the change into smaller increments. The combination of ripple analysis and fragility checking forms the core of Paradigm's change safety net.",
+      "keyConcepts": [
+        "paradigm_ripple",
+        "Direct and indirect dependencies",
+        "Depth parameter (1-5)",
+        "Blast radius assessment",
+        "Combining ripple with fragility checks"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the default depth for paradigm_ripple analysis?",
+          "choices": {
+            "A": "1 level",
+            "B": "2 levels",
+            "C": "3 levels",
+            "D": "5 levels",
+            "E": "Unlimited"
+          },
+          "correct": "B",
+          "explanation": "The default depth is 2, which shows direct dependents and their dependents. You can increase to 3-5 for large refactors, but higher depths return more results and cost more tokens."
+        },
+        {
+          "id": "q2",
+          "question": "You are planning to refactor #auth-middleware. What should you call FIRST?",
+          "choices": {
+            "A": "paradigm_history_record to log the planned change",
+            "B": "paradigm_ripple to see what depends on #auth-middleware",
+            "C": "paradigm_wisdom_record to capture the decision",
+            "D": "paradigm_purpose_validate to check file integrity",
+            "E": "paradigm_search to find the symbol"
+          },
+          "correct": "B",
+          "explanation": "Before modifying any symbol, the first step is paradigm_ripple to understand the full dependency tree. This tells you everything that depends on #auth-middleware, so you know the blast radius of your refactor."
+        },
+        {
+          "id": "q3",
+          "question": "Ripple analysis reveals that your change to #user-service affects a fragile symbol #notification-handler (depth 2). What is the recommended approach?",
+          "choices": {
+            "A": "Ignore the fragility since it is an indirect dependency",
+            "B": "Cancel the change entirely",
+            "C": "Add extra safeguards, consider breaking the change into smaller increments, and test thoroughly",
+            "D": "Only modify #user-service at depth 1 and skip depth 2",
+            "E": "Increase the ripple depth to 5 to find more dependencies"
+          },
+          "correct": "C",
+          "explanation": "When ripple analysis reveals that your change affects fragile symbols, the recommended approach is to add safeguards, break the change into smaller pieces, and test thoroughly. Fragile indirect dependencies deserve extra caution, not ignoring or canceling."
+        },
+        {
+          "id": "q4",
+          "question": "What types of relationships does paradigm_ripple track?",
+          "choices": {
+            "A": "Only JavaScript import statements",
+            "B": "Only component references",
+            "C": "Component references, flow steps, gate protections, and signal listeners",
+            "D": "Only file-level dependencies",
+            "E": "Only git blame information"
+          },
+          "correct": "C",
+          "explanation": "Ripple analysis tracks semantic dependencies across all symbol types: which components reference the symbol, which flows include it as a step, which gates protect endpoints that use it, and which signals it emits that other components listen to."
+        }
+      ]
+    },
+    {
+      "id": "doctor-and-validation",
+      "title": "Doctor & Validation",
+      "content": "## Doctor & Validation\n\nAs a Paradigm project evolves, its metadata can drift out of sync with the actual code. A component gets renamed but its `.purpose` file still references the old name. A gate is added to `portal.yaml` but never implemented. An aspect loses its code anchor when someone refactors the file it pointed to. Paradigm's validation tools catch these inconsistencies before they cause confusion.\n\nThe `paradigm doctor` CLI command runs a comprehensive health check across your entire project. It validates several categories of issues:\n\n- **Purpose file integrity**: Are all `.purpose` files valid YAML? Do all symbol references use correct prefixes?\n- **Portal.yaml consistency**: Do routes reference gates that are actually defined? Are there gates defined but never used?\n- **Aspect anchor verification**: Do all `~aspect` symbols have anchors? Do those anchors point to files and lines that still exist?\n- **Orphaned symbol detection**: Are there symbols defined in `.purpose` files that are never referenced anywhere else?\n- **Cross-reference validation**: When `#checkout-form` says it uses `$checkout-flow`, does that flow actually exist?\n\n```bash\n$ paradigm doctor\n\nChecking .purpose files...\n  src/features/checkout/.purpose - OK\n  src/features/auth/.purpose - WARNING: #legacy-login referenced but not defined\n  src/services/.purpose - OK\n\nChecking portal.yaml...\n  ^authenticated - OK (used in 12 routes)\n  ^project-admin - WARNING: defined but used in 0 routes\n\nChecking aspects...\n  ~audit-required - ERROR: anchor src/middleware/audit.ts:15-35 not found\n  ~rate-limited - OK\n\nResults: 2 warnings, 1 error\n```\n\nFor more targeted validation, the MCP tool `paradigm_purpose_validate` lets you check a specific `.purpose` file or validate all files. You can also include portal.yaml validation with the `includePortal` parameter. This is useful after making changes to a specific area -- run validation on just the files you touched rather than the entire project.\n\nThe `paradigm_flow_validate` tool specifically validates flow definitions. It checks that gates referenced in flow steps exist in `portal.yaml`, that actions described in steps have corresponding implementations in the codebase (when `checkImplementation` is true), and that signals emitted during the flow are properly defined.\n\nA good rhythm is to run `paradigm doctor` after major changes (adding features, refactoring, renaming symbols) and before committing. Many teams integrate it into their pre-commit hooks or CI pipelines. Think of it as a linter for your Paradigm metadata -- catching problems early is always cheaper than debugging them later.",
+      "keyConcepts": [
+        "paradigm doctor CLI command",
+        "paradigm_purpose_validate MCP tool",
+        "paradigm_flow_validate",
+        "Aspect anchor verification",
+        "Orphaned symbol detection"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Which of the following is NOT checked by paradigm doctor?",
+          "choices": {
+            "A": "Purpose file YAML validity",
+            "B": "Aspect anchor existence",
+            "C": "Portal.yaml gate usage",
+            "D": "JavaScript syntax errors in source code",
+            "E": "Orphaned symbol detection"
+          },
+          "correct": "D",
+          "explanation": "paradigm doctor validates Paradigm metadata: .purpose files, portal.yaml, aspect anchors, and cross-references. It does not check source code syntax -- that is the job of your language's compiler or linter."
+        },
+        {
+          "id": "q2",
+          "question": "An aspect ~rate-limited has an anchor pointing to src/middleware/rate-limit.ts:10-25, but that file was recently renamed. What will paradigm doctor report?",
+          "choices": {
+            "A": "Nothing -- it only checks YAML syntax",
+            "B": "A warning about unused gates",
+            "C": "An error because the anchor points to a file that no longer exists",
+            "D": "It will automatically update the anchor",
+            "E": "A suggestion to create the file"
+          },
+          "correct": "C",
+          "explanation": "Paradigm doctor verifies that aspect anchors point to files and line ranges that actually exist. If the file was renamed, the anchor is broken and doctor will report an error, prompting you to update the anchor."
+        },
+        {
+          "id": "q3",
+          "question": "When is the best time to run paradigm doctor?",
+          "choices": {
+            "A": "Only during initial project setup",
+            "B": "After major changes and before committing",
+            "C": "Only when errors occur in production",
+            "D": "Once per quarter",
+            "E": "Only when adding new .purpose files"
+          },
+          "correct": "B",
+          "explanation": "paradigm doctor should be run after major changes (adding features, refactoring, renaming symbols) and before committing. Many teams also integrate it into pre-commit hooks or CI pipelines to catch metadata drift early."
+        },
+        {
+          "id": "q4",
+          "question": "What does paradigm_flow_validate check when checkImplementation is set to true?",
+          "choices": {
+            "A": "Only YAML syntax of the flow definition",
+            "B": "That flow steps reference existing gates, actions are implemented in code, and signals are defined",
+            "C": "Only that the flow has at least three steps",
+            "D": "That the flow has been tested in production",
+            "E": "Only that gate names match portal.yaml"
+          },
+          "correct": "B",
+          "explanation": "With checkImplementation enabled, paradigm_flow_validate performs a deep check: verifying that gates exist in portal.yaml, that actions described in flow steps have corresponding implementations in the codebase, and that emitted signals are properly defined."
+        }
+      ]
+    },
+    {
+      "id": "navigation-system",
+      "title": "Codebase Navigation",
+      "content": "## Codebase Navigation\n\nLarge codebases are expensive to explore token-by-token. Reading files costs roughly 500-2000 tokens each, and broad exploration can quickly eat through an AI agent's context window. Paradigm's navigation system solves this by providing efficient, symbol-aware lookup that costs only 100-200 tokens per query.\n\nThe primary tool is `paradigm_navigate`, which supports three intents:\n\n**\"find\"** performs a direct symbol lookup. Give it a symbol like `#checkout-form` or a file path, and it returns the exact location in the codebase. This is the fastest way to go from a symbol name to its source file.\n\n```\nparadigm_navigate({ intent: \"find\", target: \"#payment-service\" })\n// Returns: src/services/payment.ts (defined in src/services/.purpose)\n```\n\n**\"explore\"** lets you browse a functional area of the codebase. Instead of looking for a specific symbol, you describe an area like \"authentication\" or \"payments\" and get back all the symbols, files, and structure in that domain.\n\n```\nparadigm_navigate({ intent: \"explore\", target: \"authentication\" })\n// Returns: gates, components, flows related to auth\n```\n\n**\"context\"** is task-based discovery. Describe what you want to accomplish, and the navigator returns the relevant files, symbols, and patterns you will need. This is the most powerful intent -- it answers \"what do I need to know to complete this task?\"\n\n```\nparadigm_navigate({ intent: \"context\", task: \"add Apple Pay to checkout\" })\n// Returns: #payment-service, $checkout-flow, #checkout-form,\n//          existing payment method patterns, relevant gates\n```\n\nBehind the scenes, navigation is powered by `navigator.yaml`, a generated structure map of your entire project. This file is created and updated by `paradigm scan` and contains the directory tree, symbol locations, and file classifications. You do not edit `navigator.yaml` directly -- it is regenerated from `.purpose` files.\n\nFor fuzzy text search across symbol names, descriptions, and tags, use `paradigm_search`. This supports typo-tolerant matching, so searching for \"paymnt\" will still find `#payment-service`. You can filter by symbol type (component, flow, gate, signal, aspect) and control result limits.\n\nThe general rule is: **MCP queries for discovery, file reads for implementation.** Use navigate and search to find what you need (~100-200 tokens), then read only the specific files required (~500-2000 tokens). Never broadly explore a codebase by reading directories when navigation tools are available.",
+      "keyConcepts": [
+        "paradigm_navigate with three intents: find, explore, context",
+        "navigator.yaml structure map",
+        "paradigm_search with fuzzy matching",
+        "Token efficiency: ~100-200 tokens vs ~2000 for file reads",
+        "MCP for discovery, file reads for implementation"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You need to understand all the components involved in the payment system. Which paradigm_navigate intent should you use?",
+          "choices": {
+            "A": "find",
+            "B": "explore",
+            "C": "context",
+            "D": "search",
+            "E": "browse"
+          },
+          "correct": "B",
+          "explanation": "The \"explore\" intent browses a functional area. Passing \"payments\" as the target returns all symbols, files, and structure in the payment domain. \"find\" is for specific symbol lookup, and \"context\" is for task-based discovery."
+        },
+        {
+          "id": "q2",
+          "question": "Approximately how many tokens does a paradigm_navigate query cost compared to reading a file?",
+          "choices": {
+            "A": "About the same -- both are ~2000 tokens",
+            "B": "Navigate costs more -- ~5000 tokens vs ~500 for file reads",
+            "C": "Navigate costs ~100-200 tokens vs ~500-2000 for file reads",
+            "D": "Navigate is free and does not count against token limits",
+            "E": "Navigate costs ~1000 tokens vs ~100 for file reads"
+          },
+          "correct": "C",
+          "explanation": "MCP navigation queries cost approximately 100-200 tokens, while reading files costs 500-2000+ tokens depending on file size. This 10x efficiency is why the rule is 'MCP for discovery, file reads for implementation.'"
+        },
+        {
+          "id": "q3",
+          "question": "How is navigator.yaml generated?",
+          "choices": {
+            "A": "You write it manually when setting up the project",
+            "B": "It is generated by paradigm scan from .purpose files",
+            "C": "It is downloaded from the Paradigm registry",
+            "D": "It is created by paradigm doctor as a health check artifact",
+            "E": "It is copied from a template during paradigm init"
+          },
+          "correct": "B",
+          "explanation": "navigator.yaml is generated by running paradigm scan, which reads all .purpose files, analyzes the directory structure, and produces a comprehensive structure map. You do not edit it manually -- it is always regenerated from the source .purpose files."
+        },
+        {
+          "id": "q4",
+          "question": "You want to add a search feature to the dashboard and need to know which files to modify. Which navigate intent is most appropriate?",
+          "choices": {
+            "A": "find -- to locate #dashboard",
+            "B": "explore -- to browse the dashboard area",
+            "C": "context -- with the task description to get all relevant files and patterns",
+            "D": "Any intent will return the same results",
+            "E": "None -- you should read files directly"
+          },
+          "correct": "C",
+          "explanation": "The \"context\" intent is designed for task-based discovery. Describing your task ('add search feature to dashboard') returns all the relevant files, symbols, and patterns you need. This is more comprehensive than find (specific symbol) or explore (area browsing)."
+        }
+      ]
+    },
+    {
+      "id": "sentinel-observability",
+      "title": "Sentinel & Observability",
+      "content": "## Sentinel & Observability\n\nParadigm Sentinel is the error tracking and observability system that maps runtime errors back to Paradigm symbols. When something breaks in production, Sentinel does not just show you a stack trace -- it tells you which `#component` failed, which `$flow` was interrupted, which `^gate` was involved, and whether there is a known failure pattern that matches.\n\nIncidents are the core unit of Sentinel. Each incident records the error message, stack trace, environment, affected symbols, and the flow position (where in a multi-step flow the failure occurred). Incidents can be created automatically by instrumented code or manually via `paradigm_sentinel_record`.\n\n```\nparadigm_sentinel_record({\n  error: {\n    message: \"Stripe API returned 429: rate limited\",\n    type: \"RateLimitError\",\n    code: \"STRIPE_429\"\n  },\n  symbols: {\n    component: \"#payment-service\",\n    flow: \"$checkout-flow\",\n    gate: \"^authenticated\"\n  },\n  environment: \"production\",\n  service: \"api-server\"\n})\n```\n\n**Pattern matching** is what makes Sentinel more than a log aggregator. You define failure patterns that describe known error signatures -- which error messages to look for, which symbols are typically involved, and what the resolution strategy is. When an incident is recorded, Sentinel matches it against known patterns and suggests resolutions.\n\n```\nparadigm_sentinel_add_pattern({\n  id: \"stripe-rate-limit\",\n  name: \"Stripe Rate Limit\",\n  pattern: {\n    errorContains: [\"429\", \"rate limit\"],\n    symbols: { component: \"#payment-service\" }\n  },\n  resolution: {\n    description: \"Implement exponential backoff retry\",\n    strategy: \"retry\",\n    priority: \"high\"\n  }\n})\n```\n\nThe triage workflow uses `paradigm_sentinel_triage` to filter and view incidents. You can filter by status (open, investigating, resolved), by symbol, by environment, or by search text in error messages. Once an incident is understood and fixed, mark it resolved with `paradigm_sentinel_resolve`, optionally linking the fix commit and matched pattern.\n\nSentinel also provides health metrics via `paradigm_sentinel_stats`. You can see incident counts over time periods (1d, 7d, 30d, 90d) and get health scores for specific symbols. A symbol with many recent incidents and low resolution rates has poor health -- another signal that pairs with fragility tracking to identify problem areas. The web UI, launched with `paradigm sentinel`, provides a visual dashboard for all of this.",
+      "keyConcepts": [
+        "Incidents map errors to symbols",
+        "Failure pattern matching",
+        "paradigm_sentinel_triage for filtering",
+        "paradigm_sentinel_resolve for closing incidents",
+        "paradigm_sentinel_stats for health metrics"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What distinguishes Paradigm Sentinel from a generic error logging system?",
+          "choices": {
+            "A": "It only logs errors from the Paradigm CLI",
+            "B": "It maps runtime errors to Paradigm symbols and matches them against known failure patterns",
+            "C": "It replaces console.error entirely",
+            "D": "It only works in development environments",
+            "E": "It sends all errors to Anthropic for analysis"
+          },
+          "correct": "B",
+          "explanation": "Sentinel's key differentiator is symbol-aware error tracking. It maps errors back to #components, $flows, ^gates, and !signals, and matches incidents against defined failure patterns to suggest resolutions."
+        },
+        {
+          "id": "q2",
+          "question": "Which resolution strategies can be assigned to a Sentinel failure pattern?",
+          "choices": {
+            "A": "Only 'fix-code' and 'ignore'",
+            "B": "retry, fallback, fix-data, fix-code, ignore, escalate",
+            "C": "low, medium, high, critical",
+            "D": "open, investigating, resolved",
+            "E": "implement, refactor, rollback"
+          },
+          "correct": "B",
+          "explanation": "Sentinel supports six resolution strategies: retry (try again), fallback (use alternative), fix-data (correct the data), fix-code (code change needed), ignore (known non-issue), and escalate (needs human attention). The other options are priority levels, incident statuses, and history change types respectively."
+        },
+        {
+          "id": "q3",
+          "question": "You want to see all open incidents affecting #payment-service in production. Which tool and parameters do you use?",
+          "choices": {
+            "A": "paradigm_sentinel_show with incidentId",
+            "B": "paradigm_sentinel_triage with symbol=#payment-service, status=open, environment=production",
+            "C": "paradigm_sentinel_stats with symbol=#payment-service",
+            "D": "paradigm_sentinel_patterns with symbol=#payment-service",
+            "E": "paradigm_search with query='payment errors'"
+          },
+          "correct": "B",
+          "explanation": "paradigm_sentinel_triage is the filtering tool for viewing incidents. You can combine symbol, status, and environment filters to get exactly the incidents you need -- in this case, open incidents for #payment-service in production."
+        }
+      ]
+    },
+    {
+      "id": "sync-and-maintenance",
+      "title": "Sync & Maintenance",
+      "content": "## Sync & Maintenance\n\nParadigm metadata needs to stay synchronized with the actual code. As developers add features, rename files, and refactor modules, the `.purpose` files, `portal.yaml`, and `navigator.yaml` can drift out of date. Paradigm provides two key maintenance commands to keep everything aligned.\n\n**`paradigm sync`** synchronizes metadata with the codebase. It detects when source files have moved, when new files appear that should be registered, and when existing registrations point to files that no longer exist. Think of it as a reconciliation between what Paradigm knows about and what actually exists on disk.\n\n**`paradigm scan`** performs a full rebuild of the index and regenerates `navigator.yaml`. This is a heavier operation that re-reads every `.purpose` file, rebuilds the symbol graph, and produces a fresh structure map. Run scan when the index feels stale, when navigator.yaml is missing, or after bulk operations like branch merges that may have changed many files at once.\n\n```bash\n# Light sync -- detect drift and reconcile\n$ paradigm sync\n\n# Full rebuild -- regenerate everything from .purpose files\n$ paradigm scan\n```\n\nBeyond these commands, the **AI Maintenance Protocol** defines when and how to update Paradigm files during development:\n\n| Change Type | Required Paradigm Update |\n|---|---|\n| Add a feature | Create or update the nearest `.purpose` file with `#component` |\n| Add a protected route | Update `portal.yaml` with the new route and its `^gates` |\n| Add an event or signal | Add `!signal` to the emitting component's `.purpose` file |\n| Add a multi-step process | Document as `$flow` with ordered steps |\n| Rename or delete a symbol | Update all `.purpose` files that reference it |\n| Discover a pattern or antipattern | Capture with `paradigm_wisdom_record` |\n| Add a cross-cutting rule | Create `~aspect` with required code anchors |\n\nThe maintenance protocol is not optional -- it is how the metadata stays valuable. Stale metadata is worse than no metadata because it actively misleads. When `.purpose` files accurately reflect the code, AI agents can navigate efficiently, ripple analysis produces correct results, and the doctor finds real issues instead of false positives.\n\nA practical rhythm for maintenance:\n1. **Before work**: `paradigm_wisdom_context` and `paradigm_ripple` on symbols you will touch\n2. **During work**: Update `.purpose` files as you go, not after\n3. **After work**: Run `paradigm doctor` to catch any drift, record wisdom if applicable\n4. **Periodically**: Run `paradigm scan` to rebuild the full index",
+      "keyConcepts": [
+        "paradigm sync for metadata reconciliation",
+        "paradigm scan for full index rebuild",
+        "AI Maintenance Protocol",
+        "Maintaining .purpose files alongside code changes",
+        "Practical maintenance rhythm"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the difference between paradigm sync and paradigm scan?",
+          "choices": {
+            "A": "They are the same command with different aliases",
+            "B": "sync is a light reconciliation; scan is a full rebuild of the index and navigator.yaml",
+            "C": "sync works on portal.yaml; scan works on .purpose files",
+            "D": "sync runs locally; scan runs in the cloud",
+            "E": "sync is for JavaScript projects; scan is for Rust projects"
+          },
+          "correct": "B",
+          "explanation": "paradigm sync is a lightweight operation that detects drift between metadata and code. paradigm scan is a heavier full rebuild that re-reads every .purpose file, rebuilds the symbol graph, and regenerates navigator.yaml."
+        },
+        {
+          "id": "q2",
+          "question": "You just added a new POST /api/invoices endpoint that requires authentication. What Paradigm files need updating?",
+          "choices": {
+            "A": "Only the .purpose file for the invoices module",
+            "B": "Only portal.yaml with the route and gates",
+            "C": "Both the .purpose file (component registration) and portal.yaml (route with ^gates)",
+            "D": "Only navigator.yaml",
+            "E": "No Paradigm files need updating for API endpoints"
+          },
+          "correct": "C",
+          "explanation": "Adding a protected endpoint requires two updates: registering the component in the nearest .purpose file, and adding the route with its required gates to portal.yaml. The AI Maintenance Protocol requires both."
+        },
+        {
+          "id": "q3",
+          "question": "Why is stale Paradigm metadata considered worse than no metadata?",
+          "choices": {
+            "A": "It takes up more disk space",
+            "B": "It causes compilation errors",
+            "C": "It actively misleads AI agents, produces incorrect ripple analysis, and generates false positives in doctor",
+            "D": "It slows down the Paradigm CLI",
+            "E": "It prevents git commits"
+          },
+          "correct": "C",
+          "explanation": "Stale metadata is actively harmful because AI agents trust it for navigation, ripple analysis uses it for dependency graphs, and doctor validates against it. If the metadata does not match reality, all of these tools produce wrong results, which is worse than having no metadata at all."
+        }
+      ]
+    },
+    {
+      "id": "context-management",
+      "title": "Context Management",
+      "content": "## Context Management\n\nAI agents operate within a finite context window. Every file read, every tool call response, and every message in the conversation consumes tokens from that budget. When the context fills up, the agent loses the ability to recall earlier information, make coherent plans, or maintain awareness of all the changes it has made. Paradigm provides tools to monitor, manage, and gracefully handle context limits.\n\n**`paradigm_context_check`** monitors current context usage. Call it periodically during long sessions (every 10-15 tool calls is a good cadence) to get a recommendation. The response tells you whether to \"continue\" (plenty of room), \"be-cautious\" (usage is climbing), or \"handoff-soon\" (>85% consumed). You can optionally pass your estimated total tokens and context window size for more accurate assessment.\n\n```\nparadigm_context_check({\n  contextWindowSize: 200000,\n  estimatedTotalTokens: 150000\n})\n// Recommendation: \"handoff-soon\" -- context at ~75%, prepare handoff\n```\n\nWhen a handoff is needed, **`paradigm_handoff_prepare`** creates a structured summary of the current session. It captures what was done, which symbols were touched, which files were modified, what still needs to happen, and any open questions. This summary becomes the starting point for the next session.\n\n```\nparadigm_handoff_prepare({\n  summary: \"Implemented Apple Pay in checkout flow\",\n  symbolsTouched: [\"#payment-service\", \"$checkout-flow\", \"#apple-pay-button\"],\n  modifiedFiles: [\"src/services/payment.ts\", \"src/components/checkout/ApplePayButton.tsx\"],\n  nextSteps: [\"Add unit tests for Apple Pay handler\", \"Update portal.yaml with new gates\"],\n  openQuestions: [\"Should we support Apple Pay in the mobile app too?\"]\n})\n```\n\nOn the receiving end, **`paradigm_session_recover`** loads breadcrumbs from the previous session. A new agent session calls this at startup to understand what was done before, pick up where the last session left off, and avoid redoing work.\n\nFor cost awareness, **`paradigm_session_stats`** shows the current session's MCP interactions, estimated token usage, and cost breakdown. This is useful for understanding which operations are expensive and optimizing your workflow.\n\nThe context management workflow forms a cycle: **monitor** usage with context_check, **prepare** handoff when limits approach, **recover** in new sessions with session_recover, and **track** costs with session_stats. Mastering this cycle means you can handle tasks that are larger than any single context window by splitting them across multiple sessions without losing progress.",
+      "keyConcepts": [
+        "paradigm_context_check for monitoring",
+        "paradigm_handoff_prepare for session transfer",
+        "paradigm_session_recover for continuity",
+        "paradigm_session_stats for cost tracking",
+        "Handoff triggers: >85% context usage"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "How often should you call paradigm_context_check during a long session?",
+          "choices": {
+            "A": "Only at the start of the session",
+            "B": "Every 10-15 tool calls",
+            "C": "Only when the AI starts forgetting things",
+            "D": "Once per hour",
+            "E": "Only before handoff"
+          },
+          "correct": "B",
+          "explanation": "The recommended cadence for context checks is every 10-15 tool calls. This proactive monitoring lets you prepare for handoff before context is exhausted, rather than discovering the limit when it is too late."
+        },
+        {
+          "id": "q2",
+          "question": "paradigm_context_check returns 'handoff-soon'. What should you do?",
+          "choices": {
+            "A": "Ignore it and keep working",
+            "B": "Immediately stop all work",
+            "C": "Finish the current task, then call paradigm_handoff_prepare with summary and next steps",
+            "D": "Delete old messages to free up context",
+            "E": "Switch to a model with a larger context window"
+          },
+          "correct": "C",
+          "explanation": "When handoff is recommended, prioritize completing the current task (if close to done), then prepare a handoff summary. paradigm_handoff_prepare captures what was done, files modified, next steps, and open questions so the next session can continue seamlessly."
+        },
+        {
+          "id": "q3",
+          "question": "What is the first thing a new AI agent session should do to continue work from a previous session?",
+          "choices": {
+            "A": "Read every file that was modified",
+            "B": "Call paradigm_session_recover to load breadcrumbs from the previous session",
+            "C": "Start the task from scratch",
+            "D": "Call paradigm_doctor to validate the project",
+            "E": "Run paradigm scan to rebuild the index"
+          },
+          "correct": "B",
+          "explanation": "paradigm_session_recover loads the breadcrumbs and handoff summary from the previous session. This tells the new agent what was done, what files were modified, what remains, and any open questions -- enabling seamless continuity."
+        },
+        {
+          "id": "q4",
+          "question": "At what context usage threshold does Paradigm recommend preparing a handoff?",
+          "choices": {
+            "A": "50%",
+            "B": "65%",
+            "C": "75%",
+            "D": "85%",
+            "E": "95%"
+          },
+          "correct": "D",
+          "explanation": "When context usage exceeds 85%, Paradigm recommends preparing a handoff. This leaves enough room to complete the current task and create a proper handoff summary without running out of context."
+        }
+      ]
+    },
+    {
+      "id": "operations-review",
+      "title": "Operational Excellence",
+      "content": "## Operational Excellence\n\nThis lesson brings together everything from PARA 301 into a cohesive daily workflow. Operational excellence in Paradigm is not about memorizing individual tools -- it is about building habits that keep your project healthy, your metadata accurate, and your development sessions productive.\n\n### The Operational Loop\n\nEvery development session follows a predictable pattern:\n\n**1. Orient** -- Start by calling `paradigm_status` to see the project overview: how many symbols are defined, recent changes, any outstanding issues. If this is a continuation session, call `paradigm_session_recover` to load context from the previous session.\n\n**2. Discover** -- Before touching code, understand the area you will work in. Call `paradigm_wisdom_context` with the symbols you plan to modify to learn team conventions and avoid known pitfalls. Use `paradigm_navigate` with the \"context\" intent to find all relevant files for your task.\n\n**3. Assess Risk** -- Run `paradigm_ripple` on every symbol you plan to modify to understand the blast radius. Check `paradigm_history_fragility` on anything flagged as a dependency. If the task is complex (3+ files, security + implementation), call `paradigm_orchestrate_inline` with mode=\"plan\" to get the right agent team.\n\n**4. Implement** -- Write code, updating `.purpose` files as you go. If you add routes, update `portal.yaml`. If you add signals, register them. Do not defer metadata updates to \"later\" -- later never comes.\n\n**5. Validate** -- Run `paradigm doctor` or `paradigm_purpose_validate` to catch any drift. Use `paradigm_flow_validate` if you modified flows. Record the implementation with `paradigm_history_record`.\n\n**6. Capture Knowledge** -- Did you discover an antipattern? Record it with `paradigm_wisdom_record`. Did you make an architectural decision? Record that too. Did the implementation reveal a fragile area? Note it for the team.\n\n**7. Monitor Context** -- Check `paradigm_context_check` periodically. If approaching limits, prepare a handoff.\n\n### Common Pitfalls\n\n- **Skipping wisdom checks**: Leads to repeating mistakes the team already knows about\n- **Skipping ripple analysis**: Leads to breaking downstream dependencies\n- **Deferring metadata updates**: Leads to stale `.purpose` files and misleading navigation\n- **Ignoring fragility warnings**: Leads to cascading failures in unstable areas\n- **Not recording history**: Loses the trail that fragility analysis depends on\n\n### The Measure of Excellence\n\nA well-operated Paradigm project has: accurate `.purpose` files that match the code, a `portal.yaml` that reflects all protected routes, wisdom entries that prevent repeated mistakes, history records that enable fragility analysis, and context handoffs that allow seamless multi-session work. When all of these are in place, every AI agent session starts with full context and every change is informed by the project's complete institutional knowledge.",
+      "keyConcepts": [
+        "The operational loop: orient, discover, assess, implement, validate, capture, monitor",
+        "Combining tools for comprehensive safety",
+        "Metadata maintenance as a continuous habit",
+        "Common operational pitfalls",
+        "Signs of a well-operated project"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the correct order for the Paradigm operational loop?",
+          "choices": {
+            "A": "Implement, validate, discover, orient",
+            "B": "Orient, discover, assess risk, implement, validate, capture knowledge, monitor context",
+            "C": "Discover, implement, commit, deploy",
+            "D": "Assess risk, implement, test, deploy",
+            "E": "Orient, implement, validate"
+          },
+          "correct": "B",
+          "explanation": "The full operational loop is: Orient (paradigm_status/session_recover), Discover (wisdom_context/navigate), Assess Risk (ripple/fragility), Implement (code + metadata), Validate (doctor/validate), Capture Knowledge (wisdom_record/history_record), Monitor Context (context_check)."
+        },
+        {
+          "id": "q2",
+          "question": "You are starting a new session to add a payment retry feature. #payment-service and $checkout-flow are involved. List the tools you should call in order BEFORE writing any code.",
+          "choices": {
+            "A": "paradigm_status, then paradigm_history_record",
+            "B": "paradigm_status, paradigm_wisdom_context for both symbols, paradigm_ripple for both symbols, paradigm_history_fragility for flagged dependents",
+            "C": "paradigm_search for 'payment', then start coding",
+            "D": "paradigm_doctor, then start coding",
+            "E": "paradigm_navigate with find intent, then start coding"
+          },
+          "correct": "B",
+          "explanation": "Before writing code, you should: (1) orient with paradigm_status, (2) check wisdom for the symbols you will modify, (3) run ripple analysis to see the blast radius, and (4) check fragility of any flagged dependents. This is the orient-discover-assess sequence of the operational loop."
+        },
+        {
+          "id": "q3",
+          "question": "Which of these is a common operational pitfall in Paradigm projects?",
+          "choices": {
+            "A": "Running paradigm doctor too frequently",
+            "B": "Recording too much history",
+            "C": "Deferring .purpose file updates to 'later', causing metadata to go stale",
+            "D": "Using paradigm_navigate instead of reading files",
+            "E": "Calling paradigm_context_check every 10 tool calls"
+          },
+          "correct": "C",
+          "explanation": "Deferring metadata updates is one of the most common pitfalls. When .purpose files go stale, navigation becomes misleading, ripple analysis produces incorrect results, and doctor generates false positives. The rule is: update metadata as you code, not after."
+        },
+        {
+          "id": "q4",
+          "question": "What are the signs of a well-operated Paradigm project?",
+          "choices": {
+            "A": "Minimal use of Paradigm tools to keep things simple",
+            "B": "Accurate .purpose files, portal.yaml reflecting all protected routes, wisdom entries, history records, and context handoffs",
+            "C": "A large number of .purpose files regardless of accuracy",
+            "D": "No wisdom entries because the team never makes mistakes",
+            "E": "Running paradigm scan before every commit"
+          },
+          "correct": "B",
+          "explanation": "A well-operated project has accurate (not just numerous) .purpose files, a portal.yaml that reflects reality, wisdom entries that prevent repeated mistakes, history records that enable fragility analysis, and context handoffs that allow seamless multi-session work."
+        },
+        {
+          "id": "q5",
+          "question": "You finished implementing a feature and discovered that directly mutating Zustand state outside of actions causes subtle bugs. What should you do before moving to your next task?",
+          "choices": {
+            "A": "Just fix the bug and move on",
+            "B": "Record an antipattern with paradigm_wisdom_record, record the implementation with paradigm_history_record, and run paradigm doctor",
+            "C": "Only run paradigm doctor",
+            "D": "Only call paradigm_history_record",
+            "E": "Add a comment in the code and move on"
+          },
+          "correct": "B",
+          "explanation": "The capture phase of the operational loop involves recording both the antipattern (so future sessions avoid the same mistake) and the implementation history (so fragility tracking stays current), followed by validation to ensure metadata is consistent."
+        }
+      ]
+    }
+  ]
+}
