@@ -1,0 +1,760 @@
+{
+  "version": "2.0",
+  "frameworkVersion": "2.0",
+  "timeLimit": 2700,
+  "passThreshold": 0.8,
+  "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
+  "description": "50 questions. 45 minutes. 80% to pass. Good luck, scholar.",
+  "questions": [
+    {
+      "id": "plsat-001",
+      "course": "para-101",
+      "scenario": "You've just joined a team that uses Paradigm v2. You open the project and see directories like `.paradigm/`, several `.purpose` files, and a `portal.yaml` at the root. A colleague asks you to document a new utility function they wrote in `src/lib/format-currency.ts`.",
+      "question": "Which symbol prefix should you use to document this utility?",
+      "choices": {
+        "A": "`$format-currency` \u2014 because it describes a process (formatting)",
+        "B": "`!format-currency` \u2014 because it signals a transformation event",
+        "C": "`#format-currency` \u2014 because it is a documented code unit",
+        "D": "`~format-currency` \u2014 because it applies a rule (formatting rules)",
+        "E": "`^format-currency` \u2014 because it gates what format is allowed"
+      },
+      "correct": "C",
+      "explanation": "In Paradigm v2, every documented code unit uses the `#` (Component) symbol. There are only 5 operational symbols, and `#` is the universal prefix for any code unit \u2014 utilities, services, handlers, components, hooks, you name it. `$` is for multi-step flows, `!` for signals/events, `~` for aspects with code anchors, and `^` for authorization gates. A simple utility function is a component."
+    },
+    {
+      "id": "plsat-002",
+      "course": "para-101",
+      "scenario": "You're reviewing a `.purpose` file and see the following entry:\n\n```yaml\ncomponents:\n  #user-store:\n    description: Client-side user state management\n    tags: [state]\n```",
+      "question": "In Paradigm v1, how would this same concept have been represented?",
+      "choices": {
+        "A": "`#user-store` with no tags \u2014 components have always been the same",
+        "B": "`%user-store` \u2014 the `%` prefix was used for state in v1",
+        "C": "`@user-store` \u2014 the `@` prefix was used for all features in v1",
+        "D": "`&user-store` \u2014 the `&` prefix was used for integrations in v1",
+        "E": "`!user-store` \u2014 state changes were modeled as signals in v1"
+      },
+      "correct": "B",
+      "explanation": "In Paradigm v1, state had its own dedicated symbol: `%`. The v2 migration consolidated this into `#component` with a `[state]` tag. Similarly, `@feature` became `#` with `[feature]` tag, and `&integration` became `#` with `[integration]` tag. v2 uses only 5 operational symbols plus a tag bank for classification."
+    },
+    {
+      "id": "plsat-003",
+      "course": "para-101",
+      "scenario": "A developer writes the following logging statement in a checkout service:\n\n```typescript\nlog.feature('#checkout-service').info('Processing payment', { amount });\n```\n\nThe CI pipeline passes, but a senior engineer flags this in code review.",
+      "question": "What is wrong with this logging statement?",
+      "choices": {
+        "A": "The `amount` variable should not be logged for security reasons",
+        "B": "`log.feature()` is a Paradigm v1 API \u2014 v2 uses `log.component()`",
+        "C": "The `#` prefix should not be inside the logger call",
+        "D": "Services should use `log.gate()` instead of `log.feature()`",
+        "E": "Nothing is wrong; the senior engineer is being pedantic"
+      },
+      "correct": "B",
+      "explanation": "In Paradigm v2, the `log.feature()` method no longer exists. Since `@feature` was replaced by `#component` with a `[feature]` tag, the corresponding logger method is `log.component()`. The correct call is `log.component('#checkout-service').info('Processing payment', { amount })`. The `#` prefix inside the call IS correct \u2014 Paradigm loggers expect the symbol prefix. Choice A is a real-world concern but not a Paradigm violation."
+    },
+    {
+      "id": "plsat-004",
+      "course": "para-101",
+      "scenario": "You're setting up a brand new project with Paradigm. You run `paradigm init` and it creates the `.paradigm/` directory structure. Your project will have a REST API with JWT authentication protecting several endpoints.",
+      "question": "Which file MUST you create at the project root?",
+      "choices": {
+        "A": "`auth.yaml` \u2014 Paradigm's dedicated authentication config",
+        "B": "`gates.yaml` \u2014 where all `^gate` definitions live",
+        "C": "`portal.yaml` \u2014 where gates and protected routes are defined",
+        "D": "`.paradigm/security.yaml` \u2014 security config goes in the paradigm directory",
+        "E": "No file needed \u2014 gates are defined inline in `.purpose` files only"
+      },
+      "correct": "C",
+      "explanation": "`portal.yaml` is REQUIRED at the project root whenever your project has protected routes. It defines gates (`^` symbols) with their check expressions, and maps routes to the gates that protect them. This is non-negotiable: if your code has JWT/session auth, role checks, or ownership checks, `portal.yaml` MUST exist. Gates can also appear in `.purpose` files for documentation, but `portal.yaml` is the authoritative source for route protection."
+    },
+    {
+      "id": "plsat-005",
+      "course": "para-101",
+      "scenario": "You find the following `.purpose` file in `src/payments/`:\n\n```yaml\nname: Payments Module\ndescription: Handles all payment processing\ncomponents:\n  #stripe-service:\n    description: Stripe API integration\n    file: stripe.ts\n    tags: [integration, stripe]\n  #payment-processor:\n    description: Core payment logic\n    file: processor.ts\n    signals: [\"!payment-completed\", \"!payment-failed\"]\n```",
+      "question": "What is the correct way to reference `#stripe-service` from another `.purpose` file in a different directory?",
+      "choices": {
+        "A": "`payments/#stripe-service` \u2014 use the directory path as a namespace",
+        "B": "`#stripe-service` \u2014 symbol IDs are globally unique across the project",
+        "C": "`&stripe-service` \u2014 integrations use the `&` prefix when cross-referenced",
+        "D": "`#payments.stripe-service` \u2014 use dot notation for cross-module references",
+        "E": "`import: #stripe-service from payments` \u2014 use import syntax"
+      },
+      "correct": "B",
+      "explanation": "Symbol IDs are globally unique across the entire Paradigm project. You reference `#stripe-service` the same way everywhere \u2014 no namespacing, no path prefixes, no import syntax. Paradigm's index (built by `paradigm scan`) tracks where each symbol is defined. If you have naming conflicts, use more specific names (e.g., `#payments-stripe-service`). The convention is kebab-case for all symbol IDs."
+    },
+    {
+      "id": "plsat-006",
+      "course": "para-101",
+      "scenario": "Your team uses the following directory structure:\n\n```\nsrc/\n  middleware/auth.ts\n  events/payment-events.ts\n  services/billing.ts\n  flows/onboarding.ts\n  aspects/rate-limiter.ts\n```\n\nA new developer asks which Paradigm logger method to use in each file.",
+      "question": "Which file-to-logger mapping is INCORRECT?",
+      "choices": {
+        "A": "`middleware/auth.ts` \u2192 `log.gate('^auth-check')`",
+        "B": "`events/payment-events.ts` \u2192 `log.signal('!payment-received')`",
+        "C": "`services/billing.ts` \u2192 `log.component('#billing-service')`",
+        "D": "`flows/onboarding.ts` \u2192 `log.signal('!onboarding-started')`",
+        "E": "`aspects/rate-limiter.ts` \u2192 `log.aspect('~rate-limited')`"
+      },
+      "correct": "D",
+      "explanation": "Files in the `flows/` directory correspond to `$` (Flow) symbols and should use `log.flow()`, not `log.signal()`. The correct call would be `log.flow('$onboarding').info(...)`. The directory-to-symbol mapping is: middleware/auth/guards \u2192 `^` (gate), events/handlers/listeners \u2192 `!` (signal), services/lib/components \u2192 `#` (component), flows/sagas/workflows \u2192 `$` (flow), aspects/rules \u2192 `~` (aspect)."
+    },
+    {
+      "id": "plsat-007",
+      "course": "para-101",
+      "scenario": "You want to mark a component as experimental \u2014 an idea you're prototyping that may or may not ship. In Paradigm v1, you would have used the `?` symbol prefix (e.g., `?experimental-widget`).",
+      "question": "How do you represent this in Paradigm v2?",
+      "choices": {
+        "A": "Use `?experimental-widget` \u2014 the `?` prefix still works in v2",
+        "B": "Add `status: experimental` to the component definition",
+        "C": "Add the `[idea]` tag to the component: `tags: [idea]`",
+        "D": "Create an aspect `~experimental` and apply it to the component",
+        "E": "Comment it out in the `.purpose` file with `# EXPERIMENTAL`"
+      },
+      "correct": "C",
+      "explanation": "In Paradigm v2, the `?` idea prefix was replaced by the `[idea]` tag. Any symbol can carry any tag from the tag bank, so you'd define the component as `#experimental-widget` with `tags: [idea]`. This is part of the broader v2 philosophy: 5 operational symbols for structure, tags for classification. Choice B (status field) is plausible but `status` is typically for lifecycle states like `active` or `deprecated`, not for ideation."
+    },
+    {
+      "id": "plsat-008",
+      "course": "para-101",
+      "scenario": "A `.paradigm/tags.yaml` file has three sections: `core`, `project`, and `suggested`. The `core` section contains tags like `[feature]`, `[integration]`, `[state]`, `[critical]`, and `[security]`.",
+      "question": "What is the `suggested` section for?",
+      "choices": {
+        "A": "Tags that Paradigm automatically generates based on code analysis",
+        "B": "Tags proposed by AI agents awaiting human approval before use",
+        "C": "Tags from the Paradigm community marketplace that can be installed",
+        "D": "Tags that are deprecated and will be removed in the next version",
+        "E": "Tags that the framework suggests but are optional to implement"
+      },
+      "correct": "B",
+      "explanation": "The `suggested` section in `tags.yaml` holds tags proposed by AI agents (via `paradigm_tags_suggest`) that haven't been approved by a human yet. This is part of Paradigm's governance model: AI can propose new classifications, but a human must promote them to `project` or `core` before they become official. This prevents tag sprawl and keeps the taxonomy intentional. The `core` tags ship with Paradigm, `project` tags are team-defined, and `suggested` are AI proposals awaiting review."
+    },
+    {
+      "id": "plsat-009",
+      "course": "para-101",
+      "scenario": "You're reading a project's `.paradigm/config.yaml` and see:\n\n```yaml\ndiscipline: fullstack-saas\nconventions:\n  naming: kebab-case\n  components: PascalCase\n```",
+      "question": "Based on these conventions, which symbol ID is correctly formatted?",
+      "choices": {
+        "A": "`#paymentService` \u2014 camelCase for services",
+        "B": "`#payment-service` \u2014 kebab-case for IDs, PascalCase for class-like references",
+        "C": "`#Payment_Service` \u2014 PascalCase with underscores",
+        "D": "`#PAYMENT_SERVICE` \u2014 SCREAMING_SNAKE for services",
+        "E": "`#payment.service` \u2014 dot notation for namespaced components"
+      },
+      "correct": "B",
+      "explanation": "Paradigm conventions specify kebab-case for all symbol IDs. The `components: PascalCase` convention means that when referring to class-like components in prose or code, you use PascalCase (e.g., `#PaymentService`), but the canonical ID in `.purpose` files is kebab-case (`#payment-service`). This dual convention is documented in the CLAUDE.md: 'Use kebab-case for all symbol IDs' and 'Use PascalCase for class-like components'."
+    },
+    {
+      "id": "plsat-010",
+      "course": "para-101",
+      "scenario": "A team member creates a new `.purpose` file for their notification system:\n\n```yaml\nname: Notifications\ncomponents:\n  #email-sender:\n    description: Sends transactional emails\n    file: email.ts\n  #push-notifier:\n    description: Sends push notifications\n    file: push.ts\nsignals:\n  !notification-sent:\n    description: Fires after any notification is delivered\n    emitters: [\"#email-sender\", \"#push-notifier\"]\n```",
+      "question": "This `.purpose` file is missing a critical top-level field. What is it?",
+      "choices": {
+        "A": "`version` \u2014 every purpose file must specify a schema version",
+        "B": "`description` \u2014 every purpose file should describe what the module does",
+        "C": "`tags` \u2014 top-level tags are required for indexing",
+        "D": "`gates` \u2014 every module must define its authorization requirements",
+        "E": "`flows` \u2014 signals require at least one flow to be meaningful"
+      },
+      "correct": "B",
+      "explanation": "Every `.purpose` file should have a `description` field explaining what the module/directory does. While `name` identifies it, `description` provides the context that AI agents and developers need to understand the module's role. The `paradigm_purpose_init` tool requires both `name` and `description` conceptually, and `paradigm doctor` will flag purpose files missing descriptions. Tags, gates, and flows are optional depending on the module's nature. Version is handled at the framework level, not per-file."
+    },
+    {
+      "id": "plsat-011",
+      "course": "para-201",
+      "scenario": "You're designing an e-commerce checkout process that involves: (1) validating the cart, (2) checking inventory, (3) processing payment via Stripe, (4) creating the order record, and (5) sending a confirmation email. This spans 5 different components across 3 directories.",
+      "question": "How should this be documented in Paradigm?",
+      "choices": {
+        "A": "As a single `#checkout` component with sub-steps in its description",
+        "B": "As a `$checkout-flow` with ordered steps referencing each component",
+        "C": "As five separate `!` signals chained together",
+        "D": "As a `~checkout-required` aspect applied to all five components",
+        "E": "As five `^` gates that must be passed sequentially"
+      },
+      "correct": "B",
+      "explanation": "A multi-step process spanning 3+ components is the textbook definition of a Flow (`$`). You'd define `$checkout-flow` with ordered steps, each referencing the responsible component and action: `#cart-validator` validates, `#inventory-checker` checks stock, `#stripe-service` processes payment, `#order-service` creates the record, `#email-sender` confirms. Flows document the sequence and make it visible to `paradigm_flows_affected` for impact analysis. Signals (`!`) may be emitted during the flow, but they don't define the sequence."
+    },
+    {
+      "id": "plsat-012",
+      "course": "para-201",
+      "scenario": "Your `portal.yaml` defines these gates:\n\n```yaml\ngates:\n  ^authenticated:\n    description: User must be logged in\n    check: req.user != null\n  ^project-admin:\n    description: User must be admin of the project\n    check: project.admins.includes(req.user.id)\n    requires: [\"^authenticated\"]\n```\n\nA new endpoint `DELETE /api/projects/:id` needs to be added. Only project admins should be able to delete projects.",
+      "question": "What is the correct route entry in `portal.yaml`?",
+      "choices": {
+        "A": "`\"DELETE /api/projects/:id\": [^authenticated, ^project-admin]`",
+        "B": "`\"DELETE /api/projects/:id\": [^project-admin]`",
+        "C": "`\"DELETE /api/projects/:id\": [^authenticated]`",
+        "D": "`\"DELETE /api/projects/:id\": [^project-admin, ^authenticated]`",
+        "E": "`\"DELETE /api/projects/:id\": [^admin]`"
+      },
+      "correct": "B",
+      "explanation": "Since `^project-admin` already has `requires: [\"^authenticated\"]`, listing `^authenticated` in the route is redundant. The gate dependency chain means `^project-admin` will automatically enforce `^authenticated` first. The route only needs to specify `[^project-admin]`. Choice A technically works (it's not wrong per se), but it's redundant and violates the DRY principle. Choice D reverses the order, which could cause confusion about evaluation sequence. Choice E references a gate that doesn't exist in the portal."
+    },
+    {
+      "id": "plsat-013",
+      "course": "para-201",
+      "scenario": "A developer defines the following aspect:\n\n```yaml\naspects:\n  ~audit-required:\n    description: All financial operations must be logged\n    tags: [compliance, security]\n    applies-to: [\"#*Service\"]\n```\n\nThey run `paradigm doctor` and get a validation error.",
+      "question": "What is missing from this aspect definition?",
+      "choices": {
+        "A": "The `enforcement` field specifying how the aspect is enforced",
+        "B": "The `anchors` field pointing to the actual enforcement code",
+        "C": "The `severity` field indicating how critical the aspect is",
+        "D": "The `gates` field linking the aspect to authorization checks",
+        "E": "The `signals` field for emitting audit events"
+      },
+      "correct": "B",
+      "explanation": "Aspects (`~`) MUST have code anchors. This is a hard rule in Paradigm v2: no unanchored aspects allowed. Anchors point to the actual lines of code where the aspect is enforced (e.g., `src/middleware/audit.ts:15-35`). Without anchors, the aspect is just documentation with no verifiable link to implementation. `paradigm doctor` and `paradigm_aspect_check` will both flag unanchored aspects. The anchor format supports single lines (`file.ts:15`), ranges (`file.ts:15-20`), and multiple lines (`file.ts:15,25,30`)."
+    },
+    {
+      "id": "plsat-014",
+      "course": "para-201",
+      "scenario": "You're implementing a webhook handler that receives events from a third-party payment provider. When a payment succeeds, your system needs to: update the order status, send a receipt email, and notify the analytics service. These are independent side effects that don't need to happen in order.",
+      "question": "What is the MOST appropriate Paradigm modeling for these independent side effects?",
+      "choices": {
+        "A": "A `$payment-webhook-flow` with three sequential steps",
+        "B": "A `!payment-succeeded` signal with three subscriber components",
+        "C": "Three separate `^` gates that the webhook must pass",
+        "D": "A `~payment-side-effects` aspect applied to the webhook handler",
+        "E": "Three `#` components with no formal connection between them"
+      },
+      "correct": "B",
+      "explanation": "When side effects are independent and don't require ordering, a Signal (`!`) is the right model. You define `!payment-succeeded` and document three subscriber components (`#order-service`, `#email-sender`, `#analytics-tracker`) that react to it. Signals are for events that trigger side effects. A Flow (`$`) would be appropriate if the steps needed to happen in a specific order or if one step depended on the output of another. Gates (`^`) are for authorization, not business logic."
+    },
+    {
+      "id": "plsat-015",
+      "course": "para-201",
+      "scenario": "Your project's discipline is `fullstack-saas`. You're adding a new feature: team invitations. The feature involves a React component for the invite form, an API endpoint, a service for generating invite tokens, and an email sender. You create a new directory `src/features/team-invites/`.",
+      "question": "What should the `.purpose` file in this directory contain at minimum?",
+      "choices": {
+        "A": "Just a `name` field \u2014 Paradigm will auto-discover the rest",
+        "B": "A `name`, `description`, and at least one `#component` entry",
+        "C": "A full `$flow` definition with all steps documented",
+        "D": "Gate definitions (`^`) for all protected endpoints in this feature",
+        "E": "Signal definitions (`!`) for all events this feature emits"
+      },
+      "correct": "B",
+      "explanation": "At minimum, a `.purpose` file needs a `name` and `description` (to orient agents and developers) and at least one `#component` documenting a code unit. Gates go in `portal.yaml` (the authoritative source for route protection), not in purpose files. Flows and signals are important but not required for every feature \u2014 they should be added when the feature has multi-step processes or emits events. Paradigm does not auto-discover components; they must be explicitly documented."
+    },
+    {
+      "id": "plsat-016",
+      "course": "para-201",
+      "scenario": "You're looking at a `portal.yaml` with this route mapping:\n\n```yaml\nroutes:\n  \"GET /api/projects\": [^authenticated]\n  \"POST /api/projects\": [^authenticated]\n  \"GET /api/projects/:id\": [^authenticated, ^project-member]\n  \"PUT /api/projects/:id\": [^authenticated, ^project-admin]\n  \"DELETE /api/projects/:id\": [^authenticated, ^project-admin]\n  \"POST /api/projects/:id/comments\": [^authenticated, ^project-member]\n```\n\nA colleague adds a new endpoint: `DELETE /api/projects/:id/comments/:commentId`. Only the comment author should be able to delete their own comment.",
+      "question": "Which gate configuration follows Paradigm best practices?",
+      "choices": {
+        "A": "Add `[^authenticated, ^project-admin]` \u2014 admins can delete anything",
+        "B": "Add `[^authenticated, ^project-member, ^comment-author]` \u2014 must be a member AND the author",
+        "C": "Add `[^comment-author]` \u2014 authorship implies authentication and membership",
+        "D": "Add `[^authenticated, ^comment-author]` \u2014 logged in and owns the comment",
+        "E": "Don't add it to portal.yaml \u2014 handle it in the route handler code only"
+      },
+      "correct": "B",
+      "explanation": "The correct approach is `[^authenticated, ^project-member, ^comment-author]`. Being the comment author doesn't automatically mean you're authenticated or a project member (the comment could be from before you were removed). Each gate has one responsibility: `^authenticated` checks login, `^project-member` checks project access, `^comment-author` checks ownership. If `^comment-author` had `requires: [^authenticated, ^project-member]`, then just `[^comment-author]` would suffice. But without explicit requires, list all gates. Choice E violates the cardinal rule: all protected routes MUST be in portal.yaml."
+    },
+    {
+      "id": "plsat-017",
+      "course": "para-201",
+      "scenario": "Your team defines the following flow:\n\n```yaml\nflows:\n  $user-onboarding:\n    description: New user setup after registration\n    steps:\n      - component: \"#email-verifier\"\n        action: send-verification-email\n      - component: \"#profile-wizard\"\n        action: collect-profile-data\n      - component: \"#team-assigner\"\n        action: assign-default-team\n      - component: \"#welcome-emailer\"\n        action: send-welcome-email\n    signals: [\"!user-onboarded\"]\n```\n\nYou need to modify `#email-verifier` to use a new email provider.",
+      "question": "Before making the code change, what should you do FIRST?",
+      "choices": {
+        "A": "Run `paradigm_search` to find all references to `#email-verifier`",
+        "B": "Read the `#email-verifier` source file to understand the current implementation",
+        "C": "Call `paradigm_ripple` on `#email-verifier` to understand the impact",
+        "D": "Call `paradigm_orchestrate_inline` to plan the migration",
+        "E": "Update the `.purpose` file first to reflect the new provider"
+      },
+      "correct": "C",
+      "explanation": "Before modifying ANY symbol, the first step is always `paradigm_ripple`. This shows you what depends on `#email-verifier` directly and indirectly \u2014 in this case, you'd discover it's part of `$user-onboarding` and any other flows or components that reference it. This prevents you from making changes that break downstream dependencies. After ripple analysis, you'd read the source (B), check wisdom/history, and then implement. Orchestration (D) is for complex multi-file tasks, not single-component changes."
+    },
+    {
+      "id": "plsat-018",
+      "course": "para-201",
+      "scenario": "You're defining a gate for a multi-tenant SaaS application. Users can belong to multiple organizations, and each organization has its own resources. You need a gate that checks whether the requesting user is a member of the organization that owns the requested resource.",
+      "question": "Which gate definition follows the Paradigm portal pattern?",
+      "choices": {
+        "A": "```yaml\n^org-member:\n  description: User is a member of the organization AND has read permission\n  check: org.members.includes(req.user.id) && req.user.permissions.read\n```",
+        "B": "```yaml\n^org-member:\n  description: User is a member of the resource's organization\n  check: org.members.includes(req.user.id)\n```",
+        "C": "```yaml\n^org-access:\n  description: User can access organization resources with full CRUD\n  check: org.members.includes(req.user.id) && req.user.role !== 'viewer'\n```",
+        "D": "```yaml\n^resource-check:\n  description: Validates resource exists and user has access\n  check: resource != null && org.members.includes(req.user.id)\n```",
+        "E": "```yaml\n^member-or-admin:\n  description: User is either a member or an admin of the organization\n  check: org.members.includes(req.user.id) || org.admins.includes(req.user.id)\n```"
+      },
+      "correct": "B",
+      "explanation": "Paradigm's gate philosophy is 'one responsibility per gate.' Choice B does exactly one thing: checks organization membership. Choice A bundles membership with permissions (two responsibilities). Choice C adds a role check. Choice D validates resource existence (that's a different concern). Choice E conflates membership and admin roles. If you need permission checks, create `^org-reader`, `^org-writer` as separate gates with `requires: [\"^org-member\"]`. Keep gates minimal and composable."
+    },
+    {
+      "id": "plsat-019",
+      "course": "para-201",
+      "scenario": "A developer has documented the following in `aspects/`:\n\n```yaml\naspects:\n  ~rate-limited:\n    description: API endpoints are rate-limited per user\n    tags: [security, performance]\n    anchors:\n      - src/middleware/rate-limiter.ts:12-45\n    applies-to: [\"#*-handler\"]\n    enforcement: middleware\n```\n\nThe `applies-to` pattern `#*-handler` uses a glob. The developer asks if the aspect will automatically apply rate limiting to all matching components.",
+      "question": "What is the correct understanding of `applies-to` in an aspect?",
+      "choices": {
+        "A": "It automatically applies the middleware to all matching components at runtime",
+        "B": "It generates rate-limiting code for each matching component during build",
+        "C": "It is a documentation hint \u2014 tells humans/AI which components SHOULD have this aspect, but doesn't enforce it",
+        "D": "It creates a compile-time check that all matching components import the rate limiter",
+        "E": "It registers the components with the rate-limiter middleware automatically on server startup"
+      },
+      "correct": "C",
+      "explanation": "Paradigm is a documentation and intelligence framework, not a runtime. `applies-to` is a declarative hint that tells humans and AI agents which components should have the `~rate-limited` aspect applied. It doesn't auto-generate code, inject middleware, or create compile-time checks. The anchors point to WHERE the rate limiting is implemented, and `applies-to` says WHERE it SHOULD be applied. `paradigm doctor` and `paradigm_aspect_check` can validate that the anchors exist, but enforcement in the actual code is the developer's responsibility."
+    },
+    {
+      "id": "plsat-020",
+      "course": "para-201",
+      "scenario": "You open `.paradigm/config.yaml` and see `discipline: fullstack-saas`. You're curious what this means and whether it affects how symbols are mapped.",
+      "question": "What does the `discipline` field control in Paradigm?",
+      "choices": {
+        "A": "It determines which programming language the project uses",
+        "B": "It configures the symbol-to-directory mapping and recommended patterns for the project type",
+        "C": "It restricts which symbols are allowed \u2014 e.g., some disciplines don't use flows",
+        "D": "It's purely cosmetic \u2014 shown in the dashboard but has no functional effect",
+        "E": "It determines the deployment pipeline configuration"
+      },
+      "correct": "B",
+      "explanation": "The `discipline` field tells Paradigm what kind of project this is, which influences symbol mappings (e.g., where components vs. gates typically live), suggested patterns, and how AI agents reason about the codebase. A `fullstack-saas` discipline suggests `middleware/` maps to gates, `services/` to components, etc. Different disciplines (e.g., `cli-tool`, `library`, `embedded`) would have different default mappings. It doesn't restrict symbols \u2014 all 5 are always available."
+    },
+    {
+      "id": "plsat-021",
+      "course": "para-201",
+      "scenario": "While reviewing a PR, you notice a developer added a new webhook endpoint:\n\n```typescript\n// src/api/webhooks/stripe.ts\napp.post('/api/webhooks/stripe', async (req, res) => {\n  const event = verifyStripeSignature(req);\n  if (event.type === 'payment_intent.succeeded') {\n    await updateOrderStatus(event.data);\n    await sendReceipt(event.data);\n  }\n  res.json({ received: true });\n});\n```\n\nThe developer did not update any Paradigm files.",
+      "question": "Which Paradigm files should be updated? Select the MOST complete answer.",
+      "choices": {
+        "A": "Only `portal.yaml` \u2014 add the webhook route with appropriate gates",
+        "B": "Only the nearest `.purpose` file \u2014 add `#stripe-webhook-handler` as a component",
+        "C": "Both `portal.yaml` and the nearest `.purpose` file",
+        "D": "The `.purpose` file, `portal.yaml`, and add a `!payment-succeeded` signal definition",
+        "E": "No updates needed \u2014 webhooks are external and don't need Paradigm documentation"
+      },
+      "correct": "D",
+      "explanation": "The most complete answer includes: (1) The `.purpose` file needs a `#stripe-webhook-handler` component with `tags: [integration, stripe]`. (2) `portal.yaml` needs the route \u2014 even webhook endpoints may need gates (e.g., signature verification as `^stripe-signature-valid`). (3) The payment success event should be documented as `!payment-succeeded` since it triggers side effects (order update, receipt). This is the Paradigm principle: if it exists in code, it should exist in the symbol graph."
+    },
+    {
+      "id": "plsat-022",
+      "course": "para-201",
+      "scenario": "A developer writes this commit message:\n\n```\nadded apple pay button and updated checkout\n```",
+      "question": "What is wrong with this commit message according to Paradigm conventions?",
+      "choices": {
+        "A": "It should use past tense ('added' is correct, actually)",
+        "B": "It's missing the conventional commit type, primary symbol in parentheses, and the `Symbols:` trailer",
+        "C": "It should be in ALL CAPS for visibility",
+        "D": "It should reference the Jira ticket number instead of symbols",
+        "E": "Nothing is wrong \u2014 commit messages are personal preference"
+      },
+      "correct": "B",
+      "explanation": "Paradigm commit messages follow a strict format: `type(#primary-symbol): description` in the subject, symbol references in the body, and a `Symbols:` trailer for machine parsing. The correct message would be:\n\n```\nfeat(#payment-form): add Apple Pay support\n\n- Add #apple-pay-button component\n- Update $checkout-flow with new payment step\n\nSymbols: #payment-form, #apple-pay-button, $checkout-flow\n```\n\nThe `Symbols:` trailer is parsed by the post-commit hook for automatic history capture."
+    },
+    {
+      "id": "plsat-023",
+      "course": "para-201",
+      "scenario": "You're building a real-time notification system. Notifications can arrive via WebSocket, and the user can mark them as read, archive them, or delete them. The system also needs to handle notification preferences (email, push, in-app) and batching for high-volume scenarios.",
+      "question": "A team member suggests modeling each notification action (read, archive, delete) as a separate `$` flow. What is the BEST response?",
+      "choices": {
+        "A": "Agree \u2014 each action is a distinct process that should have its own flow",
+        "B": "Disagree \u2014 single actions are not flows; use `#` components for each action and a `$notification-lifecycle` flow for the overall process",
+        "C": "Disagree \u2014 these should all be `!` signals since they're user-triggered events",
+        "D": "Agree, but only if each action involves 3+ components",
+        "E": "Disagree \u2014 model them as `^` gates since they require authorization"
+      },
+      "correct": "B",
+      "explanation": "Flows (`$`) are for multi-step processes spanning 3+ components. A single action like 'mark as read' is just a component method, not a flow. The correct modeling is: `#notification-reader`, `#notification-archiver`, etc. as components, with `!notification-read`, `!notification-archived` as signals for side effects. If the OVERALL lifecycle (receive \u2192 display \u2192 interact \u2192 archive/delete) is worth documenting, THAT is the flow: `$notification-lifecycle`. Choice D gets close but misses the key insight about modeling the lifecycle."
+    },
+    {
+      "id": "plsat-024",
+      "course": "para-201",
+      "scenario": "Your project has the following aspect definition:\n\n```yaml\n~audit-required:\n  description: Financial operations must produce audit logs\n  anchors:\n    - src/middleware/audit.ts:15-35\n    - src/decorators/auditable.ts:1-20\n  applies-to: [\"#*Service\"]\n  enforcement: middleware\n```\n\nA colleague refactors `audit.ts` and moves the audit logic from lines 15-35 to lines 50-70.",
+      "question": "What happens if the anchors are not updated?",
+      "choices": {
+        "A": "Nothing \u2014 anchors are just documentation hints and aren't validated",
+        "B": "`paradigm doctor` will report stale anchors, and `paradigm_aspect_check` will flag the mismatch",
+        "C": "The application will crash because the aspect can't find its enforcement code",
+        "D": "The audit middleware will stop working because Paradigm controls execution",
+        "E": "The CI pipeline will block the merge due to anchor validation"
+      },
+      "correct": "B",
+      "explanation": "Paradigm is a documentation/intelligence layer, not a runtime. Stale anchors won't crash your app or stop middleware from working. However, `paradigm doctor` (the validation command) and `paradigm_aspect_check` (the MCP tool) will detect that the anchored lines no longer match the expected code. This is important because anchors are the mechanism that keeps aspects grounded in real code rather than becoming aspirational documentation. The developer should update anchors to `src/middleware/audit.ts:50-70` as part of the refactor."
+    },
+    {
+      "id": "plsat-025",
+      "course": "para-201",
+      "scenario": "You're adding a new API endpoint `POST /api/billing/invoices` to your project. Before writing any code, you want to follow Paradigm best practices.",
+      "question": "What is the recommended sequence of steps?",
+      "choices": {
+        "A": "Write the code \u2192 Update `.purpose` file \u2192 Update `portal.yaml` \u2192 Commit",
+        "B": "Call `paradigm_gates_for_route` \u2192 Update `portal.yaml` \u2192 Write the code \u2192 Update `.purpose` file \u2192 Commit",
+        "C": "Update `portal.yaml` \u2192 Write the code \u2192 Run `paradigm doctor` \u2192 Commit",
+        "D": "Write the code \u2192 Run `paradigm scan` \u2192 Let it auto-generate the purpose file \u2192 Commit",
+        "E": "Call `paradigm_orchestrate_inline` \u2192 Spawn agents \u2192 Let agents handle everything"
+      },
+      "correct": "B",
+      "explanation": "The recommended flow for adding endpoints is: (1) Call `paradigm_gates_for_route` to get gate suggestions for `POST /api/billing/invoices`, (2) Update `portal.yaml` with the route and its gates, (3) Implement the endpoint with proper gate enforcement, (4) Update the nearest `.purpose` file with the new `#` component, signals, etc. (5) Commit with proper Paradigm commit format. This 'portal first' approach ensures security is designed before implementation. Choice D is wrong because `paradigm scan` discovers existing symbols but doesn't auto-generate purpose files from code."
+    },
+    {
+      "id": "plsat-026",
+      "course": "para-301",
+      "scenario": "You're in the middle of a long Claude Code session. You've made 47 tool calls, modified 12 files, and you're about to start a complex refactor of the payment system. You vaguely recall something about context management but can't remember the details.",
+      "question": "What should you do before starting the refactor?",
+      "choices": {
+        "A": "Just continue \u2014 context management is handled automatically",
+        "B": "Call `paradigm_context_check` to see if a handoff is recommended",
+        "C": "Start a new Claude session immediately to get fresh context",
+        "D": "Save all files and run `paradigm scan` to rebuild the index",
+        "E": "Call `paradigm_session_stats` and if over 100 tool calls, panic"
+      },
+      "correct": "B",
+      "explanation": "The protocol says to call `paradigm_context_check` periodically (every 10-15 tool calls) during long sessions. At 47 tool calls, you're well overdue for a check. This tool analyzes your context window usage and recommends whether to continue, prepare a handoff, or urgently wrap up. If usage is over 85%, you should prioritize completing your current task and prepare a handoff with `paradigm_handoff_prepare`. Don't just start a new session (C) without preparing a handoff \u2014 you'd lose all context about what was done."
+    },
+    {
+      "id": "plsat-027",
+      "course": "para-301",
+      "scenario": "You run `paradigm doctor` and get the following output:\n\n```\nWARNING: #payment-processor has been modified 7 times in 14 days\nWARNING: #payment-processor has 3 rollbacks in history\nFRAGILITY SCORE: 0.85 (HIGH)\n```",
+      "question": "What does a fragility score of 0.85 indicate, and what should you do?",
+      "choices": {
+        "A": "The component has a bug 85% of the time \u2014 rewrite it from scratch",
+        "B": "85% of the codebase depends on it \u2014 extract it into a separate service",
+        "C": "The component is highly unstable due to frequent changes and rollbacks \u2014 proceed with extra caution, review wisdom, and consider refactoring",
+        "D": "The component needs 85% more test coverage \u2014 write tests first",
+        "E": "The score is informational only \u2014 ignore it and proceed normally"
+      },
+      "correct": "C",
+      "explanation": "A fragility score of 0.85 (out of 1.0) means the component is highly unstable. It's been changed 7 times in 2 weeks with 3 rollbacks \u2014 a clear pattern of churn. Before modifying it: (1) Call `paradigm_wisdom_context` to check if there are antipatterns or decisions recorded about it, (2) Call `paradigm_history_context` to understand the recent changes, (3) Consider whether a refactor is needed before adding more changes. The score doesn't mean 'has bugs 85%' or 'needs 85% coverage' \u2014 it's a stability metric based on change frequency and rollback rate."
+    },
+    {
+      "id": "plsat-028",
+      "course": "para-301",
+      "scenario": "After a production incident where the payment system double-charged a customer, the team discovers the root cause: a developer removed a deduplication check while refactoring `#payment-processor`. The team wants to prevent this from happening again.",
+      "question": "What is the MOST appropriate Paradigm response to this incident?",
+      "choices": {
+        "A": "Add a comment in the code: `// DO NOT REMOVE THIS CHECK`",
+        "B": "Record an antipattern in wisdom: 'Never remove deduplication from #payment-processor' with the alternative approach",
+        "C": "Create a `^deduplication-enforced` gate in portal.yaml",
+        "D": "Add `#payment-processor` to a 'do not touch' list in `.paradigm/config.yaml`",
+        "E": "Record the incident in Sentinel AND record an antipattern in wisdom"
+      },
+      "correct": "E",
+      "explanation": "The most complete response uses both Sentinel and Wisdom. (1) Record the incident with `paradigm_sentinel_record` so it appears in incident tracking with symbolic context (the `#payment-processor` symbol, error details, timeline). (2) Record an antipattern with `paradigm_wisdom_record` so future AI agents and developers are warned before modifying `#payment-processor`. The antipattern would say: 'Never remove deduplication logic' with alternative: 'If refactoring payment processing, always preserve the deduplication middleware and add tests for it.' A code comment (A) is easily missed. A gate (C) is for authorization, not business logic."
+    },
+    {
+      "id": "plsat-029",
+      "course": "para-301",
+      "scenario": "You need to understand the impact of changing `^authenticated` \u2014 the main authentication gate used across your entire application. You want to know what depends on it.",
+      "question": "Which MCP tool call gives you the MOST useful dependency information?",
+      "choices": {
+        "A": "`paradigm_search({ query: '^authenticated' })` \u2014 find all references",
+        "B": "`paradigm_related({ symbol: '^authenticated' })` \u2014 show direct relations",
+        "C": "`paradigm_ripple({ symbol: '^authenticated', depth: 3 })` \u2014 show direct AND indirect dependencies up to 3 levels",
+        "D": "`paradigm_navigate({ intent: 'find', target: '^authenticated' })` \u2014 locate the gate",
+        "E": "`paradigm_flows_affected({ symbol: '^authenticated' })` \u2014 show affected flows"
+      },
+      "correct": "C",
+      "explanation": "`paradigm_ripple` with a depth parameter gives you the cascading dependency analysis. For a widely-used gate like `^authenticated`, you need to see not just what directly references it, but what depends on things that depend on it (transitive dependencies). At depth 3, you'd see: Level 1 \u2014 all gates with `requires: [^authenticated]`, all routes using it. Level 2 \u2014 all components behind those routes. Level 3 \u2014 flows involving those components. `paradigm_related` (B) only shows direct connections. `paradigm_search` (A) finds textual references but doesn't analyze the dependency graph."
+    },
+    {
+      "id": "plsat-030",
+      "course": "para-301",
+      "scenario": "It's Monday morning. You open Claude Code to continue work on a project. Last Friday, a different Claude session was making changes to the user management module. You have no idea what state things are in.",
+      "question": "What is the FIRST thing you should do?",
+      "choices": {
+        "A": "Run `git log` to see recent commits",
+        "B": "Call `paradigm_session_recover` to load breadcrumbs from the previous session",
+        "C": "Call `paradigm_status` for a general project overview",
+        "D": "Read the `.paradigm/config.yaml` to understand the project",
+        "E": "Start fresh \u2014 don't worry about what the previous session did"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_session_recover` is designed exactly for this scenario. It loads breadcrumbs from previous sessions, showing you what was done, what files were modified, what symbols were touched, and what the next steps were. This is more useful than `paradigm_status` (C) because status gives you general project info, not session-specific context. After recovering the session, THEN you'd call `paradigm_status` and check the relevant files. Starting fresh (E) risks duplicating work or missing important context."
+    },
+    {
+      "id": "plsat-031",
+      "course": "para-301",
+      "scenario": "Your application is experiencing intermittent 500 errors on the checkout flow. You suspect it's related to the Stripe integration. You want to check if there's a known pattern for this type of failure.",
+      "question": "Which sequence of Sentinel tools should you use?",
+      "choices": {
+        "A": "`paradigm_sentinel_triage` to see open incidents, then `paradigm_sentinel_patterns` to find matching failure patterns",
+        "B": "`paradigm_sentinel_stats` to see overall health, then guess at the root cause",
+        "C": "`paradigm_sentinel_record` to create a new incident immediately",
+        "D": "`paradigm_sentinel_suggest_pattern` without any incident context",
+        "E": "`paradigm_sentinel_resolve` to close any open incidents and hope it goes away"
+      },
+      "correct": "A",
+      "explanation": "The diagnostic workflow is: (1) `paradigm_sentinel_triage` with a filter like `search: '500'` or `symbol: '#stripe-service'` to see if there are existing open incidents matching your symptoms. (2) `paradigm_sentinel_patterns` to find known failure patterns (with confidence scores) that match the error. If a pattern matches, it includes resolution steps and code hints. You'd only record a NEW incident (C) if triage shows this is a novel failure. Resolving without investigating (E) is never the right answer. Stats (B) give you health metrics but not diagnostic details."
+    },
+    {
+      "id": "plsat-032",
+      "course": "para-301",
+      "scenario": "You want to find who on your team has the most expertise with the payment system before making a significant architectural change.",
+      "question": "Which Paradigm tool helps you find the right person?",
+      "choices": {
+        "A": "`paradigm_search({ query: 'payments' })` and look at file authors in git blame",
+        "B": "`paradigm_wisdom_expert({ area: 'payments' })` to find recognized experts",
+        "C": "`paradigm_history_context({ symbols: ['#payment-service'] })` and infer from commit history",
+        "D": "`paradigm_navigate({ intent: 'explore', target: 'payments' })` and read the code to figure out who wrote it",
+        "E": "Ask in Slack"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_wisdom_expert` is purpose-built for finding human experts by area or symbol. It returns people who are recognized as knowledgeable about the payment system, based on recorded wisdom and history. While `paradigm_history_context` (C) can show who recently worked on the code, that doesn't mean they're the expert \u2014 they might have just fixed a typo. `paradigm_wisdom_expert` tracks deliberate expertise attribution, not just commit frequency."
+    },
+    {
+      "id": "plsat-033",
+      "course": "para-301",
+      "scenario": "After completing a significant refactor of the authentication module, you want to record what you did for future sessions and team members.",
+      "question": "What is the correct way to record this in Paradigm's history system?",
+      "choices": {
+        "A": "Write a detailed comment in the `.purpose` file",
+        "B": "Call `paradigm_history_record` with type 'refactor', affected symbols, and description",
+        "C": "Update `.paradigm/docs/changelog.md` with the changes",
+        "D": "Just commit with a good message \u2014 git history is sufficient",
+        "E": "Call `paradigm_wisdom_record` with type 'decision' explaining the refactor rationale"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_history_record` is the right tool for recording implementation events. You'd call it with `type: 'refactor'`, `symbols: ['^authenticated', '#auth-middleware', ...]`, and a description of what was changed. This feeds into the history system that powers `paradigm_history_context` and `paradigm_history_fragility`. A good commit message (D) is important but separate \u2014 Paradigm's history provides symbolic context that git alone doesn't. If the refactor involved an architectural DECISION, you'd ALSO record wisdom (E), but that's supplementary, not a replacement."
+    },
+    {
+      "id": "plsat-034",
+      "course": "para-301",
+      "scenario": "You've run tests after implementing a new feature. 15 tests passed, 2 failed, and 1 was skipped. You previously recorded the implementation with `paradigm_history_record` and got back an implementation ID.",
+      "question": "How should you record the test results?",
+      "choices": {
+        "A": "Update the implementation record by calling `paradigm_history_record` again",
+        "B": "Call `paradigm_history_validate` with result 'partial' and the test counts",
+        "C": "Call `paradigm_history_validate` with result 'fail' because not all tests passed",
+        "D": "Don't record it \u2014 fix the failing tests first, then record a 'pass'",
+        "E": "Call `paradigm_sentinel_record` to log the test failures as incidents"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_history_validate` is the validation companion to `paradigm_history_record`. With 15 passed, 2 failed, and 1 skipped, the result is 'partial' (not full pass, not complete failure). You'd call it with `result: 'partial'` and `tests: { passed: 15, failed: 2, skipped: 1 }`. This creates a validation record linked to the implementation. Recording it as 'fail' (C) is too harsh \u2014 partial acknowledges progress. Waiting to record (D) loses valuable history about the initial state. Test failures aren't production incidents (E) unless they indicate a production problem."
+    },
+    {
+      "id": "plsat-035",
+      "course": "para-301",
+      "scenario": "A context check returns the following:\n\n```\nContext usage: ~82%\nRecommendation: prepare-handoff\nMessage: Context getting full. Complete current task and prepare handoff.\n```\n\nYou're in the middle of implementing a feature that's about 70% done.",
+      "question": "What is the correct course of action?",
+      "choices": {
+        "A": "Ignore the warning and finish the feature \u2014 82% means you still have 18% left",
+        "B": "Stop immediately and call `paradigm_handoff_prepare` with what you've done so far",
+        "C": "Finish the current task as quickly as possible, then call `paradigm_handoff_prepare` with a summary, modified files, and next steps",
+        "D": "Delete some earlier context by running `paradigm_session_recover` to free up space",
+        "E": "Switch to a different, smaller task that can be completed in the remaining context"
+      },
+      "correct": "C",
+      "explanation": "At 82% with a 'prepare-handoff' recommendation, you should complete your current task (not start new ones) and then hand off. The protocol says: when context usage is high but not critical (>85%), prioritize completing the current task, then prepare a handoff. `paradigm_handoff_prepare` takes your summary, modified files, symbols touched, and next steps \u2014 giving the next session everything it needs to pick up where you left off. Ignoring it (A) risks running out of context mid-task. Stopping immediately (B) wastes the 70% progress. You can't delete context (D)."
+    },
+    {
+      "id": "plsat-036",
+      "course": "para-301",
+      "scenario": "You want to understand the complete structure of the authentication module without reading every file. The project has 200+ files across nested directories.",
+      "question": "What is the MOST token-efficient way to explore this?",
+      "choices": {
+        "A": "Read every file in `src/auth/` one by one",
+        "B": "Call `paradigm_navigate({ intent: 'explore', target: 'auth' })` to browse the area",
+        "C": "Run `paradigm_search({ query: 'auth' })` and read every matching file",
+        "D": "Read `.paradigm/navigator.yaml` and then every file it references",
+        "E": "Call `paradigm_status` and hope it includes auth module details"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_navigate` with intent 'explore' is designed for exactly this: browsing an area of the codebase without reading individual files. At ~200 tokens per call, it's vastly more efficient than reading files (~500-2000 tokens each). It returns the structural overview of the auth area \u2014 components, gates, flows, signals \u2014 from the indexed symbols. If you need specific implementation details AFTER exploring, then you read individual files. The rule is: MCP for discovery, files for implementation."
+    },
+    {
+      "id": "plsat-037",
+      "course": "para-301",
+      "scenario": "You're debugging an issue where the `$order-fulfillment` flow is failing at the 'ship order' step. The flow has 6 steps spanning 4 components. You suspect the gate `^warehouse-authorized` is rejecting valid requests.",
+      "question": "Which combination of tools gives you the MOST diagnostic information?",
+      "choices": {
+        "A": "`paradigm_flow_validate({ flowId: '$order-fulfillment' })` + `paradigm_sentinel_triage({ symbol: '^warehouse-authorized' })`",
+        "B": "`paradigm_search({ query: 'warehouse' })` + read all matching files",
+        "C": "`paradigm_ripple({ symbol: '$order-fulfillment' })` only",
+        "D": "`paradigm_history_context({ symbols: ['$order-fulfillment'] })` only",
+        "E": "`paradigm_navigate({ intent: 'find', target: '^warehouse-authorized' })` + read the gate code"
+      },
+      "correct": "A",
+      "explanation": "The best combination is: (1) `paradigm_flow_validate` checks the flow definition against the codebase \u2014 are all steps implemented, do the gates exist, are signals emitted? This could reveal if the flow definition is out of sync with the code. (2) `paradigm_sentinel_triage` filtered by `^warehouse-authorized` shows if there are incidents or known patterns for this gate failing. Together, these give you structural validation AND operational history. Ripple (C) shows dependencies but not failures. History (D) shows changes but not current errors."
+    },
+    {
+      "id": "plsat-038",
+      "course": "para-301",
+      "scenario": "Your team has been using Paradigm for 6 months. A new developer joins and asks: 'How do I know if the Paradigm files are actually accurate? What if the code has drifted from the documentation?'",
+      "question": "What is the correct answer?",
+      "choices": {
+        "A": "Trust the Paradigm files \u2014 they're always accurate because they're machine-generated",
+        "B": "Run `paradigm doctor` to validate consistency between Paradigm files and the codebase, and check `paradigm_aspect_check` for aspect anchor drift",
+        "C": "Paradigm files are aspirational \u2014 they describe what the code SHOULD be, not what it IS",
+        "D": "Run `paradigm scan` to regenerate all Paradigm files from scratch",
+        "E": "Check the git blame on `.purpose` files to see when they were last updated"
+      },
+      "correct": "B",
+      "explanation": "`paradigm doctor` is the validation tool that checks for inconsistencies between Paradigm files and the codebase. It flags missing anchors, undefined symbols referenced in flows, gates referenced in portal.yaml that don't have implementations, and more. `paradigm_aspect_check` specifically validates that aspect anchors still point to valid code. `paradigm_purpose_validate` checks `.purpose` file structural validity. These tools are how you verify accuracy. Paradigm files are NOT auto-generated (A) or aspirational (C) \u2014 they're maintained documentation that has validation tools."
+    },
+    {
+      "id": "plsat-039",
+      "course": "para-401",
+      "scenario": "You need to build a complete user profile feature: a React component, API endpoint, database service, validation logic, and tests. This will touch at least 6 files across 3 directories.",
+      "question": "Before writing ANY code, what should you do FIRST?",
+      "choices": {
+        "A": "Start coding the React component \u2014 start with the UI and work backwards",
+        "B": "Call `paradigm_orchestrate_inline({ task: 'Build user profile feature', mode: 'plan' })` to get the right agents and plan",
+        "C": "Call `paradigm_search` for existing profile-related symbols",
+        "D": "Create the `.purpose` file first to define all the symbols",
+        "E": "Call `paradigm_ripple` on every component you plan to create"
+      },
+      "correct": "B",
+      "explanation": "When a task affects 3+ files, involves multiple features, or spans security and implementation, the FIRST step is calling `paradigm_orchestrate_inline` with mode='plan'. This returns: the right agent team (e.g., architect + security + builder + tester), estimated token cost, and an execution plan with stages. This prevents you from wasting tokens on ad-hoc implementation when a structured approach would be more efficient. After the plan, you'd call with mode='execute' to get full agent prompts. You can't ripple (E) symbols that don't exist yet."
+    },
+    {
+      "id": "plsat-040",
+      "course": "para-401",
+      "scenario": "You call `paradigm_orchestrate_inline` with mode='plan' for a task involving JWT authentication. The plan returns four agents: architect, security, builder, tester. The plan shows two stages:\n\n```\nStage 1: [architect, security] (canRunParallel: true)\nStage 2: [builder, tester] (canRunParallel: false)\n```",
+      "question": "How should you execute this plan?",
+      "choices": {
+        "A": "Run all four agents simultaneously for maximum speed",
+        "B": "Run architect and security in parallel, wait for both to complete, then run builder, then tester sequentially",
+        "C": "Run architect first, then security, then builder, then tester \u2014 always sequential",
+        "D": "Skip the architect and security agents \u2014 just run builder and tester",
+        "E": "Run builder first to get code written, then architect and security for review"
+      },
+      "correct": "B",
+      "explanation": "The orchestration plan explicitly marks `canRunParallel: true` for Stage 1 (architect + security), meaning they can run simultaneously. Stage 2 has `canRunParallel: false`, meaning builder must complete before tester starts. The correct execution is: launch architect and security in parallel (Stage 1), wait for both to finish, run builder with handoff context from Stage 1, then run tester after builder completes. Skipping agents (D) defeats the purpose of orchestration. Running builder first (E) ignores architecture and security design."
+    },
+    {
+      "id": "plsat-041",
+      "course": "para-401",
+      "scenario": "Your team is evaluating which agent provider to use for orchestration. The environment has:\n- `ANTHROPIC_API_KEY` set\n- Claude Code installed (Max subscription)\n- Cursor IDE open\n- No `.paradigm/config.yaml` provider override\n\nThe team runs `paradigm team providers`.",
+      "question": "Which provider will be used by default based on the cascade?",
+      "choices": {
+        "A": "Cursor agent CLI \u2014 because Cursor IDE is detected",
+        "B": "Claude Code Task tool \u2014 because Max subscription is available",
+        "C": "Anthropic API (claude) \u2014 because it's first in the cascade and the API key is set",
+        "D": "Manual file-based handoffs \u2014 because no provider is explicitly configured",
+        "E": "Claude Code Agent Teams \u2014 because it supports parallel execution"
+      },
+      "correct": "C",
+      "explanation": "The provider cascade tries providers in order: (1) claude (Anthropic API), (2) claude-code-teams, (3) claude-code, (4) cursor-cli, (5) claude-cli, (6) manual. Since `ANTHROPIC_API_KEY` is set, the first provider (`claude` \u2014 Anthropic API) is available and will be used. The cascade stops at the first available provider unless overridden. Even though Cursor and Claude Code are available, they're lower priority. To override, use `paradigm team providers --set cursor-cli` or set `agent-provider` in config."
+    },
+    {
+      "id": "plsat-042",
+      "course": "para-401",
+      "scenario": "You're configuring agent models for your team. The task involves:\n- An architectural review (complex reasoning needed)\n- A security audit (critical, needs thoroughness)\n- Building 3 React components (straightforward implementation)\n- Writing unit tests (repetitive, pattern-based)\n\nYour budget is limited.",
+      "question": "Which model assignment follows Paradigm's recommended configuration?",
+      "choices": {
+        "A": "All agents use opus for maximum quality",
+        "B": "Architect: opus, Security: opus, Builder: haiku, Tester: haiku",
+        "C": "All agents use haiku for cost efficiency",
+        "D": "Architect: sonnet, Security: sonnet, Builder: sonnet, Tester: sonnet",
+        "E": "Architect: opus, Security: sonnet, Builder: opus, Tester: haiku"
+      },
+      "correct": "B",
+      "explanation": "Paradigm's recommended model configuration is: architect and security agents use opus (complex reasoning, critical decisions), builder uses haiku (fast, cost-effective for straightforward implementation), and tester uses haiku (pattern-based, repetitive work). The reviewer role (not in this scenario) uses sonnet (balanced critique). This balances quality where it matters most (architecture, security) with cost efficiency where tasks are more mechanical (building, testing). All-opus (A) blows the budget. All-haiku (C) risks poor architectural decisions."
+    },
+    {
+      "id": "plsat-043",
+      "course": "para-401",
+      "scenario": "You're about to call an MCP tool. Your choices are:\n1. `paradigm_status` (~100 tokens)\n2. `paradigm_navigate` (~200 tokens)\n3. Reading a 400-line TypeScript file (~2000 tokens)\n4. `paradigm_ripple` (~300 tokens)\n\nYou need to understand what components exist in the payments area before modifying `#payment-service`.",
+      "question": "What is the MOST token-efficient approach?",
+      "choices": {
+        "A": "Read the TypeScript file directly \u2014 you need to see the actual code",
+        "B": "Call `paradigm_navigate` to explore the payments area, then `paradigm_ripple` on `#payment-service`, then read only the specific file you need to change",
+        "C": "Call `paradigm_status` first, then read all payment-related files",
+        "D": "Call all four tools to be thorough",
+        "E": "Skip all tools and just start coding \u2014 you'll figure it out"
+      },
+      "correct": "B",
+      "explanation": "The optimal approach is: (1) `paradigm_navigate` (~200 tokens) to discover what exists in the payments area without reading files. (2) `paradigm_ripple` (~300 tokens) on `#payment-service` to understand impact before modifying. (3) THEN read the specific file you need to change. Total: ~500 tokens + one targeted file read. This follows the rule: 'MCP for discovery, files for implementation.' Reading files first (A) costs ~2000 tokens before you even know what you're looking at. Calling everything (D) wastes `paradigm_status` tokens on info you don't need for this task."
+    },
+    {
+      "id": "plsat-044",
+      "course": "para-401",
+      "scenario": "Your team decides that all API responses should include a `requestId` header for tracing. This is an architectural decision that affects every API endpoint in the project.",
+      "question": "How should this decision be recorded in Paradigm?",
+      "choices": {
+        "A": "Add a comment in every API route file",
+        "B": "Call `paradigm_wisdom_record` with type 'decision', a descriptive title, rationale with factors and conclusion, and consequences",
+        "C": "Create a `~request-id-required` aspect and add it to every component",
+        "D": "Update `.paradigm/config.yaml` with a new convention",
+        "E": "Both B and C \u2014 record the decision AND create an aspect with code anchors"
+      },
+      "correct": "E",
+      "explanation": "The most complete answer is both. (1) Record the architectural decision with `paradigm_wisdom_record` (type: 'decision') including title, rationale (factors: tracing, debugging, support; conclusion: all API responses must include requestId), and consequences (positive: better debugging; negative: slight overhead; mitigations: use middleware). (2) Create `~request-id-required` aspect with anchors pointing to the middleware that adds the header. The decision documents the WHY, the aspect enforces the WHAT with verifiable code anchors. Just the decision (B) lacks enforcement. Just the aspect (C) lacks rationale."
+    },
+    {
+      "id": "plsat-045",
+      "course": "para-401",
+      "scenario": "You're writing a commit message for a change that added rate limiting to the payment API, modified the Stripe webhook handler, and added a new `!rate-limit-exceeded` signal.\n\nThe affected symbols are: `#payment-api`, `#stripe-webhook-handler`, `~rate-limited`, `!rate-limit-exceeded`.",
+      "question": "Which commit message follows Paradigm conventions?",
+      "choices": {
+        "A": "```\nfeat: add rate limiting to payments\n```",
+        "B": "```\nfeat(#payment-api): add rate limiting to payment endpoints\n\n- Apply ~rate-limited aspect to #payment-api\n- Update #stripe-webhook-handler with rate limit checks\n- Add !rate-limit-exceeded signal for monitoring\n\nSymbols: #payment-api, #stripe-webhook-handler, ~rate-limited, !rate-limit-exceeded\n```",
+        "C": "```\nfeat(payments): add rate limiting\n\nAdded rate limiting to payment API and webhook handler.\n```",
+        "D": "```\nFEAT(#payment-api): ADD RATE LIMITING\n\nSymbols: ALL PAYMENT SYMBOLS\n```",
+        "E": "```\nfeat(~rate-limited): apply rate limiting aspect\n\n- Updated payment-api\n- Updated stripe-webhook-handler\n\nSymbols: ~rate-limited\n```"
+      },
+      "correct": "B",
+      "explanation": "Choice B follows all Paradigm commit conventions: (1) Subject line: `type(#primary-symbol): description` with the primary affected component. (2) Body: references all affected symbols with their prefixes (#, ~, !). (3) `Symbols:` trailer: machine-readable list of ALL affected symbols for the post-commit hook to parse. Choice A lacks symbols entirely. Choice C uses a generic scope instead of a symbol. Choice D is SCREAMING_CASE (no). Choice E uses the aspect as the primary symbol, but the primary change is to `#payment-api`, and the Symbols trailer is incomplete."
+    },
+    {
+      "id": "plsat-046",
+      "course": "para-401",
+      "scenario": "A developer on your team proposes a new tag: `[webhook-handler]`. They've noticed 5 components across the project that handle incoming webhooks and think a dedicated tag would be useful for classification.",
+      "question": "What is the correct process for adding this tag?",
+      "choices": {
+        "A": "Add it directly to the `core` section of `tags.yaml`",
+        "B": "Add it directly to the `project` section of `tags.yaml`",
+        "C": "Call `paradigm_tags_suggest` with the tag name, description, reason, and example symbols \u2014 it goes to `suggested` for human approval",
+        "D": "Just start using `tags: [webhook-handler]` on components \u2014 tags are freeform",
+        "E": "Create a new aspect `~webhook-handler` instead \u2014 tags aren't for this"
+      },
+      "correct": "C",
+      "explanation": "The proper process is `paradigm_tags_suggest`, which adds the tag to the `suggested` section of `tags.yaml` for human review. This is Paradigm's governance model: AI can propose tags, but humans must approve them before they become official. Once approved, a human promotes it to `project` (team-specific) or `core` (if it should ship with Paradigm). Adding directly to `core` (A) is only for Paradigm framework maintainers. Freeform usage (D) leads to tag sprawl. An aspect (E) is wrong because webhook handling isn't a cross-cutting rule requiring code anchors."
+    },
+    {
+      "id": "plsat-047",
+      "course": "para-401",
+      "scenario": "Your CI/CD pipeline runs `paradigm doctor` as a check. The latest run shows:\n\n```\nERROR: Gate ^project-owner referenced in portal.yaml but not defined\nWARNING: Aspect ~cache-invalidation has stale anchors (file moved)\nERROR: Flow $signup-flow references undefined component #sms-verifier\nINFO: 3 suggested tags awaiting human review\n```",
+      "question": "Which issues MUST be fixed before merging, and which can wait?",
+      "choices": {
+        "A": "All four must be fixed \u2014 `paradigm doctor` errors should block the merge",
+        "B": "The two ERRORs must be fixed (undefined gate and undefined component). The WARNING and INFO can wait.",
+        "C": "Only the gate error must be fixed (security). Everything else is documentation.",
+        "D": "None need to block the merge \u2014 `paradigm doctor` is advisory only",
+        "E": "The errors and warning must be fixed. Only the INFO about suggested tags can wait."
+      },
+      "correct": "B",
+      "explanation": "ERRORs indicate broken references that will cause real problems: a gate referenced in `portal.yaml` that doesn't exist means route protection is undefined, and a flow referencing an undefined component means the flow documentation is actively misleading. These MUST be fixed. The WARNING about stale anchors is important but not merge-blocking \u2014 the aspect still works, the documentation just needs updating. The INFO about suggested tags is purely administrative. In practice, many teams also fix WARNINGs before merge, but the ERRORs are the must-fix items."
+    },
+    {
+      "id": "plsat-048",
+      "course": "para-401",
+      "scenario": "You're preparing a handoff because your context window is at 87%. You've been working on a migration from REST to GraphQL for the user module. You've completed the schema and resolvers but haven't written tests yet.",
+      "question": "What information should you include in `paradigm_handoff_prepare`?",
+      "choices": {
+        "A": "Just the summary \u2014 the next session can figure out the rest",
+        "B": "Summary, list of modified files, symbols touched, next steps (write tests), and the open question about whether to keep the REST endpoints during migration",
+        "C": "A complete transcript of everything you did in this session",
+        "D": "Only the list of modified files \u2014 the next session can read them",
+        "E": "Summary and next steps only \u2014 modified files are in git"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_handoff_prepare` accepts: summary (what was done), modifiedFiles (what changed), symbolsTouched (which symbols were affected), nextSteps (what to do next), and openQuestions (unresolved decisions). The MOST useful handoff includes ALL of these. The next session needs to know: (1) what was accomplished (summary), (2) which files to look at (modifiedFiles), (3) which symbols are in play (symbolsTouched), (4) exactly what to do next (write tests), and (5) any decisions that still need to be made (keep REST endpoints?). A transcript (C) is too much. Just files (D) lacks context."
+    },
+    {
+      "id": "plsat-049",
+      "course": "para-401",
+      "scenario": "You want to validate that a specific flow `$checkout-flow` is correctly implemented. The flow has 5 steps, involves 3 gates, and emits 2 signals. You want to verify that all steps have implementations, gates exist in portal.yaml, and signals are actually emitted in the code.",
+      "question": "Which MCP tool call gives you this deep implementation check?",
+      "choices": {
+        "A": "`paradigm_flow_validate({ flowId: '$checkout-flow' })` \u2014 validates flow definition only",
+        "B": "`paradigm_flow_validate({ flowId: '$checkout-flow', checkImplementation: true })` \u2014 deep check against codebase",
+        "C": "`paradigm_purpose_validate()` \u2014 validates all purpose files including flows",
+        "D": "`paradigm_ripple({ symbol: '$checkout-flow' })` \u2014 shows flow dependencies",
+        "E": "`paradigm_related({ symbol: '$checkout-flow' })` \u2014 shows what's connected to the flow"
+      },
+      "correct": "B",
+      "explanation": "`paradigm_flow_validate` with `checkImplementation: true` performs a deep validation: it checks that gates exist in portal.yaml, actions are implemented in the codebase, and signals are emitted. Without `checkImplementation`, it only validates the YAML structure (A). `paradigm_purpose_validate` (C) checks structural validity of purpose files but doesn't do the deep codebase cross-reference. `paradigm_ripple` (D) shows what depends on the flow, not whether it's correctly implemented. The `checkImplementation` flag is the key to going from structural validation to implementation verification."
+    },
+    {
+      "id": "plsat-050",
+      "course": "para-401",
+      "scenario": "It's 2 AM. Your production system is down. The error logs show:\n\n```\nERROR: Cannot read property 'id' of null\n  at PaymentProcessor.processRefund (payment-processor.ts:142)\n  at RefundHandler.handle (refund-handler.ts:67)\n```\n\nYou need to investigate and fix this as fast as possible using Paradigm tools. The on-call engineer has no context about the payment system.",
+      "question": "What is the optimal 2 AM sequence of actions using Paradigm?",
+      "choices": {
+        "A": "Read the source files, find the bug, fix it, deploy",
+        "B": "`paradigm_sentinel_record` the incident \u2192 `paradigm_sentinel_patterns` for known fixes \u2192 `paradigm_wisdom_context` for `#payment-processor` antipatterns \u2192 Fix \u2192 `paradigm_sentinel_resolve`",
+        "C": "`paradigm_orchestrate_inline` to spin up an architect and security agent",
+        "D": "`paradigm_status` \u2192 `paradigm_navigate` \u2192 Read every file in payments/ \u2192 Eventually find the bug",
+        "E": "`paradigm_ripple` on `#payment-processor` \u2192 Fix everything that depends on it"
+      },
+      "correct": "B",
+      "explanation": "At 2 AM with production down, you want the fastest path to resolution with full traceability: (1) `paradigm_sentinel_record` the incident with the error and stack trace \u2014 this starts the clock and provides symbolic context. (2) `paradigm_sentinel_patterns` to check if this is a KNOWN failure pattern with an existing resolution \u2014 this could save you hours. (3) `paradigm_wisdom_context` for `#payment-processor` to check if there are recorded antipatterns (e.g., 'null check required before accessing refund.id'). (4) Fix the issue with full context. (5) `paradigm_sentinel_resolve` to close the incident with the fix commit. Orchestration (C) is overkill for an emergency fix. Reading everything (D) burns time you don't have."
+    }
+  ]
+}

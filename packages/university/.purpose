@@ -1,0 +1,127 @@
+name: university
+description: Interactive academia-themed learning platform for the Paradigm framework — courses, quizzes, the PLSAT certification exam, and a reference library.
+
+components:
+  university-server:
+    description: Express server serving static UI and content API endpoints
+    file: src/server/index.ts
+    tags: [feature]
+    endpoints:
+      - GET /api/courses
+      - GET /api/courses/:id
+      - GET /api/courses/:id/lessons/:lessonId
+      - GET /api/plsat
+      - GET /api/plsat/:version
+      - GET /api/reference
+      - GET /api/health
+
+  courses-router:
+    description: API routes for course listing and individual course/lesson retrieval
+    file: src/server/routes/courses.ts
+
+  plsat-router:
+    description: API routes for PLSAT exam versions and question delivery (shuffled per attempt)
+    file: src/server/routes/plsat.ts
+
+  university-ui:
+    description: React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library
+    file: ui/src/App.tsx
+    tags: [feature]
+    components:
+      - "#home-view"
+      - "#course-view"
+      - "#quiz-view"
+      - "#plsat-view"
+      - "#reference-view"
+      - "#certificate-view"
+
+  home-view:
+    description: Campus landing page with course catalog, progress rings, and quick links
+    file: ui/src/views/HomeView.tsx
+
+  course-view:
+    description: Lesson reader with sidebar navigation, markdown rendering, and quiz links
+    file: ui/src/views/CourseView.tsx
+
+  quiz-view:
+    description: Per-lesson quiz with ABCDE questions and immediate feedback
+    file: ui/src/views/QuizView.tsx
+
+  plsat-view:
+    description: Timed 50-question certification exam with intro, exam, review, and results phases
+    file: ui/src/views/PLSATView.tsx
+
+  reference-view:
+    description: Quick reference cards for symbols, MCP tools, CLI commands, tags, and workflows
+    file: ui/src/views/ReferenceView.tsx
+
+  certificate-view:
+    description: Printable PLSAT certificate with university seal, score, and version tracking
+    file: ui/src/views/CertificateView.tsx
+
+  progress-store:
+    description: Zustand store with LocalStorage persistence for lesson completion and quiz scores
+    file: ui/src/store/progressStore.ts
+    tags: [state]
+
+  plsat-store:
+    description: Zustand store with LocalStorage persistence for PLSAT certificates and student name
+    file: ui/src/store/plsatStore.ts
+    tags: [state]
+
+  courses-store:
+    description: Zustand store for fetched course data from API with caching
+    file: ui/src/store/coursesStore.ts
+    tags: [state]
+
+  university-seal:
+    description: SVG university seal component — "Universitas Paradigmatica — Lux in Codice"
+    file: ui/src/components/Seal.tsx
+
+  question-card:
+    description: ABCDE question renderer with controlled (PLSAT) and uncontrolled (quiz) modes
+    file: ui/src/components/QuestionCard.tsx
+
+  plsat-timer:
+    description: Countdown timer component for PLSAT exam (45 minutes)
+    file: ui/src/components/Timer.tsx
+
+  progress-ring:
+    description: Circular SVG progress indicator for course completion percentages
+    file: ui/src/components/ProgressRing.tsx
+
+  university-header:
+    description: Navigation bar with university seal, course/PLSAT/reference links, and version badge
+    file: ui/src/components/Header.tsx
+
+  academia-theme:
+    description: CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents
+    file: ui/src/styles/academia.css
+
+signals:
+  "!plsat-completed":
+    description: Student has completed a PLSAT exam attempt
+    emitters: ["#plsat-view"]
+    category: business
+
+  "!quiz-completed":
+    description: Student has completed a per-lesson quiz
+    emitters: ["#quiz-view"]
+    category: business
+
+flows:
+  $plsat-exam-flow:
+    description: Full PLSAT exam lifecycle from intro through certification
+    steps:
+      - component: "#plsat-view"
+        action: Display intro, rules, and name input
+      - component: "#plsat-timer"
+        action: Start 45-minute countdown
+      - component: "#question-card"
+        action: Present 50 shuffled questions
+      - component: "#plsat-view"
+        action: Calculate score on submit or time-up
+      - component: "#plsat-store"
+        action: Persist certificate to LocalStorage
+      - component: "#certificate-view"
+        action: Display printable certificate if passed

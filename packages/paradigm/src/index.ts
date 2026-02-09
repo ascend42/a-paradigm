@@ -1236,5 +1236,16 @@ program
     await sentinelCommand(path, options);
   });
 
+// paradigm university - Launch the Paradigm University learning platform
+program
+  .command('university')
+  .description('Launch Paradigm University - interactive learning platform & PLSAT certification')
+  .option('-p, --port <port>', 'Port to run on', '3839')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (options) => {
+    const { universityCommand } = await import('./commands/university.js');
+    await universityCommand(undefined, options);
+  });
+
 // Parse and run
 program.parse();

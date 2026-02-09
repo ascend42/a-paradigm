@@ -1,0 +1,613 @@
+{
+  "id": "para-401",
+  "title": "PARA 401: Orchestration",
+  "description": "Advanced course on multi-agent orchestration, MCP tool mastery, and framework-level coordination. Learn to decompose complex tasks across specialized agents, configure provider cascades, enforce governance with the PM layer, and achieve full Paradigm framework mastery.",
+  "lessons": [
+    {
+      "id": "mcp-tools-overview",
+      "title": "MCP Tools Overview",
+      "content": "## MCP Tools Overview\n\nModel Context Protocol (MCP) tools are the primary interface between AI agents and the Paradigm framework. Rather than reading raw files to understand project structure, agents call MCP tools that return structured, token-efficient responses. Understanding the full tool inventory and when to use each tool is fundamental to effective Paradigm orchestration.\n\nParadigm exposes approximately 15 tool modules, organized into four categories:\n\n### Discovery Tools\nThese tools help agents understand the codebase without reading files directly.\n\n- **`paradigm_search`** (~150 tokens) -- Fuzzy search across symbol names, descriptions, and tags. Supports type filtering (component, flow, gate, signal, aspect).\n- **`paradigm_navigate`** (~200 tokens) -- Three intents: `find` (symbol lookup), `explore` (area browsing), `context` (task-based discovery).\n- **`paradigm_ripple`** (~300 tokens) -- Dependency analysis showing what depends on a symbol, 1-5 levels deep.\n- **`paradigm_related`** (~200 tokens) -- All symbols connected to a given symbol, both upstream and downstream.\n\n### Knowledge Tools\nThese tools access the project's institutional memory.\n\n- **`paradigm_wisdom_context`** -- Retrieves preferences, antipatterns, and decisions for specified symbols.\n- **`paradigm_wisdom_record`** -- Captures new antipatterns or architectural decisions.\n- **`paradigm_wisdom_expert`** -- Identifies human experts for symbols or areas.\n- **`paradigm_history_context`** -- Retrieves implementation history for symbols.\n- **`paradigm_history_record`** -- Logs implementation events.\n- **`paradigm_history_fragility`** -- Checks stability scores.\n\n### Validation Tools\nThese tools verify metadata integrity.\n\n- **`paradigm_purpose_validate`** -- Validates `.purpose` files and optionally `portal.yaml`.\n- **`paradigm_flow_validate`** -- Validates flow definitions against the codebase.\n- **`paradigm_aspect_check`** -- Verifies that aspects have valid code anchors.\n\n### Management Tools\nThese tools modify Paradigm metadata.\n\n- **`paradigm_purpose_add_component`**, **`paradigm_purpose_add_signal`**, **`paradigm_purpose_add_flow`**, etc. -- Add symbols to `.purpose` files.\n- **`paradigm_portal_add_gate`**, **`paradigm_portal_add_route`** -- Manage `portal.yaml` gates and routes.\n- **`paradigm_purpose_rename`** -- Rename symbols across all `.purpose` files.\n- **`paradigm_tags`**, **`paradigm_tags_suggest`** -- Manage the tag bank.\n\n### Token Economics\n\nEvery tool call has a token cost. The general principle is that MCP queries are 5-20x cheaper than reading files:\n\n| Operation | Approximate Cost |\n|---|---|\n| `paradigm_status` | ~100 tokens |\n| `paradigm_search` | ~150 tokens |\n| `paradigm_navigate` | ~200 tokens |\n| `paradigm_ripple` | ~300 tokens |\n| Reading a small file | ~500 tokens |\n| Reading a large file | ~2000+ tokens |\n\nThe rule of thumb: **use MCP tools for discovery and knowledge retrieval; use file reads only when you need exact source code for implementation.** An agent that reads 10 files to understand a feature (10,000+ tokens) versus one that calls `paradigm_navigate` with context intent (200 tokens) has a 50x cost difference for the same information.",
+      "keyConcepts": [
+        "Four tool categories: discovery, knowledge, validation, management",
+        "Token economics of MCP vs file reads",
+        "paradigm_search, paradigm_navigate, paradigm_ripple as core discovery tools",
+        "Management tools for .purpose and portal.yaml editing",
+        "5-20x token efficiency over file reads"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "An agent needs to understand the full dependency tree before modifying #auth-service. Which MCP tool category should it use?",
+          "choices": {
+            "A": "Management -- to update the dependencies",
+            "B": "Validation -- to check the dependencies are correct",
+            "C": "Discovery -- specifically paradigm_ripple for dependency analysis",
+            "D": "Knowledge -- to check team wisdom about dependencies",
+            "E": "All categories must be used in sequence"
+          },
+          "correct": "C",
+          "explanation": "paradigm_ripple is a Discovery tool that shows what depends on a symbol at multiple depth levels. While you may also want to check Knowledge tools (wisdom) as part of the full workflow, the specific need to understand the dependency tree is served by the Discovery category."
+        },
+        {
+          "id": "q2",
+          "question": "An agent calls paradigm_navigate with intent='context' and task='add webhooks to payment processing'. What does it receive?",
+          "choices": {
+            "A": "Only the file path of #payment-service",
+            "B": "A list of all symbols in the project",
+            "C": "Relevant files, symbols, and patterns needed to complete the described task",
+            "D": "The source code of all payment-related files",
+            "E": "A diff of recent changes to payment files"
+          },
+          "correct": "C",
+          "explanation": "The 'context' intent is task-based discovery. It analyzes the task description and returns all relevant files, symbols, and existing patterns that the agent needs. This is the most comprehensive navigate intent, designed to answer 'what do I need to know to do this?'"
+        },
+        {
+          "id": "q3",
+          "question": "Approximately how much more token-efficient is paradigm_navigate compared to reading multiple files to understand a feature?",
+          "choices": {
+            "A": "About 2x more efficient",
+            "B": "About the same cost",
+            "C": "5-50x more efficient depending on the number of files",
+            "D": "MCP tools are actually more expensive",
+            "E": "10,000x more efficient"
+          },
+          "correct": "C",
+          "explanation": "A single paradigm_navigate call costs ~200 tokens, while reading even a small file costs ~500 tokens. An agent that reads 10 files (10,000+ tokens) versus calling navigate once (200 tokens) sees a 50x difference. The typical range is 5-20x for single comparisons and up to 50x when replacing multiple file reads."
+        },
+        {
+          "id": "q4",
+          "question": "Which tool should you use to add a new ^admin-only gate to portal.yaml?",
+          "choices": {
+            "A": "paradigm_purpose_add_gate",
+            "B": "paradigm_portal_add_gate",
+            "C": "paradigm_purpose_add_component",
+            "D": "paradigm_gates_for_route",
+            "E": "paradigm_ripple"
+          },
+          "correct": "B",
+          "explanation": "paradigm_portal_add_gate adds gates to portal.yaml, the project-level authorization file. paradigm_purpose_add_gate adds gates to a specific .purpose file's gates section, which is different. paradigm_gates_for_route suggests which gates a route should have but does not create them."
+        },
+        {
+          "id": "q5",
+          "question": "You want to verify that ~audit-required still has valid code anchors after a refactor. Which tool do you use?",
+          "choices": {
+            "A": "paradigm_purpose_validate",
+            "B": "paradigm_flow_validate",
+            "C": "paradigm_aspect_check",
+            "D": "paradigm_ripple",
+            "E": "paradigm_search"
+          },
+          "correct": "C",
+          "explanation": "paradigm_aspect_check is specifically designed to verify that an aspect has valid code anchors. While paradigm_purpose_validate checks .purpose file integrity broadly, paradigm_aspect_check focuses on the anchor requirement that is unique to aspects (~)."
+        }
+      ]
+    },
+    {
+      "id": "multi-agent-coordination",
+      "title": "Multi-Agent Coordination",
+      "content": "## Multi-Agent Coordination\n\nSome tasks are too complex or too multi-faceted for a single AI agent to handle efficiently. Adding a payment system requires architectural design, security review, code implementation, and testing -- each benefiting from a different perspective and expertise level. Paradigm's orchestration system decomposes complex tasks into stages handled by specialized agents.\n\nThe entry point is `paradigm_orchestrate_inline` with `mode=\"plan\"`. Describe your task, and the orchestrator analyzes it against trigger patterns to suggest the right agent team, estimate token costs, and produce an execution plan.\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add JWT authentication with role-based access control\",\n  mode: \"plan\"\n})\n\n// Returns:\n// Suggested agents: architect, security, builder, tester\n// Estimated tokens: ~45,000\n// Stages:\n//   1. architect: Design auth architecture (cannot parallel)\n//   2. security: Review auth design for vulnerabilities (depends on 1)\n//   3. builder: Implement auth middleware and gates (depends on 1, 2)\n//   4. tester: Write auth test suite (depends on 3)\n```\n\nThe five agent roles are:\n\n- **Architect** (opus model) -- Designs system architecture, evaluates tradeoffs, makes structural decisions. Used when a task requires design thinking before implementation.\n- **Builder** (haiku model) -- Implements code changes. Fast and cost-effective for straightforward implementation once the design is clear.\n- **Tester** (haiku model) -- Writes tests and validates implementations. Focused on coverage and edge cases.\n- **Reviewer** (sonnet model) -- Critiques implementations for quality, patterns, and potential issues. Balanced between speed and depth.\n- **Security** (opus model) -- Audits authentication, authorization, and data handling. Used whenever a task involves protected resources or user data.\n\nOnce you have a plan, call `paradigm_orchestrate_inline` with `mode=\"execute\"` to get full prompts for each agent. These prompts include the task context, relevant symbols, file locations, and stage-specific instructions. You then launch each agent using the Task tool or the CLI.\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add JWT authentication with role-based access control\",\n  mode: \"execute\"\n})\n// Returns full prompts ready to pass to each agent\n```\n\nFor individual agent prompts with custom context, use `paradigm_agent_prompt`. This is useful when you want to spawn a single agent for a focused task rather than running full orchestration.\n\n```\nparadigm_agent_prompt({\n  agent: \"security\",\n  task: \"Audit the new payment webhook endpoint for CSRF and replay attacks\"\n})\n```\n\nThe key insight is that orchestration is not just about parallelism -- it is about applying the right model and perspective to each stage. An architect (opus) spending 10,000 tokens on design is more valuable than a builder (haiku) spending 50,000 tokens trying to figure out the design while implementing.",
+      "keyConcepts": [
+        "paradigm_orchestrate_inline with plan and execute modes",
+        "Five agent roles: architect, builder, tester, reviewer, security",
+        "Model assignment: opus for reasoning, sonnet for critique, haiku for implementation",
+        "paradigm_agent_prompt for single-agent tasks",
+        "Stage dependencies and parallel execution"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A task involves adding a new API endpoint that handles payment refunds with admin-only access. Which agents should be involved?",
+          "choices": {
+            "A": "Builder only -- it is just one endpoint",
+            "B": "Architect and builder",
+            "C": "Architect, security, builder, and tester",
+            "D": "Security only -- it involves access control",
+            "E": "Reviewer and tester only"
+          },
+          "correct": "C",
+          "explanation": "This task involves architectural design (refund processing flow), security (admin-only access, payment data handling), implementation (the endpoint code), and testing (refund scenarios, authorization checks). All four agent types are warranted when a task involves both security and multi-step implementation."
+        },
+        {
+          "id": "q2",
+          "question": "Why does the architect role use the opus model while the builder uses haiku?",
+          "choices": {
+            "A": "Opus is newer and therefore always better",
+            "B": "Architects need complex reasoning for design decisions; builders need speed for straightforward implementation",
+            "C": "It is arbitrary -- any model works for any role",
+            "D": "Haiku cannot understand architectural concepts",
+            "E": "Opus is required for any task involving more than one file"
+          },
+          "correct": "B",
+          "explanation": "Model assignment matches task complexity to capability. Architects need deep reasoning for tradeoff analysis and design decisions (opus). Builders implement already-designed solutions where speed and cost efficiency matter more (haiku). This optimizes both quality and cost."
+        },
+        {
+          "id": "q3",
+          "question": "You have an orchestration plan with 4 stages. Stage 3 (builder) depends on stages 1 and 2. Stage 4 (tester) depends on stage 3. Can stages 1 and 2 run in parallel?",
+          "choices": {
+            "A": "No -- all stages must run sequentially",
+            "B": "Yes, if they are independent of each other and the plan marks them as canRunParallel",
+            "C": "Only if they use the same model",
+            "D": "Parallel execution is never supported",
+            "E": "Yes, but only if you use Claude Code Teams"
+          },
+          "correct": "B",
+          "explanation": "Stages that are independent of each other can run in parallel when the orchestration plan marks them as canRunParallel: true. The dependency is what matters -- stages 1 and 2 can run simultaneously if neither depends on the other, and stage 3 waits for both to complete."
+        },
+        {
+          "id": "q4",
+          "question": "What is the first mode you should call paradigm_orchestrate_inline with, and why?",
+          "choices": {
+            "A": "mode='execute' to start building immediately",
+            "B": "mode='plan' to see the suggested agents, token estimate, and execution plan before committing",
+            "C": "mode='review' to check existing orchestrations",
+            "D": "mode='plan' is optional and can be skipped",
+            "E": "Either mode works -- the order does not matter"
+          },
+          "correct": "B",
+          "explanation": "Always call mode='plan' first. It shows you the suggested agent team, estimated token cost, and stage breakdown. This lets you review and adjust before committing resources. Jumping straight to mode='execute' means you accept the default plan without review."
+        },
+        {
+          "id": "q5",
+          "question": "You want to spawn a single security agent to audit an existing endpoint, not a full multi-agent orchestration. Which tool do you use?",
+          "choices": {
+            "A": "paradigm_orchestrate_inline with mode='execute' and agents=['security']",
+            "B": "paradigm_agent_prompt with agent='security' and the specific task",
+            "C": "paradigm_wisdom_expert to find a human security expert",
+            "D": "paradigm_sentinel_triage to find security incidents",
+            "E": "paradigm_navigate with intent='find' and target='security'"
+          },
+          "correct": "B",
+          "explanation": "paradigm_agent_prompt generates a full prompt for a single agent with the specified task. This is the right tool when you need one focused agent rather than a full orchestration pipeline. You could also use orchestrate_inline with an agents override, but agent_prompt is more direct for single-agent scenarios."
+        }
+      ]
+    },
+    {
+      "id": "agent-roles",
+      "title": "Agent Roles & Facets",
+      "content": "## Agent Roles & Facets\n\nEach agent role in Paradigm is not just a label -- it is a fully configured **facet** with its own model assignment, context scope, token budget, and communication protocol. These configurations live in `.paradigm/agents.yaml` and determine exactly how each agent behaves during orchestration.\n\n### Facet Configuration\n\nA facet defines four dimensions of an agent:\n\n**`defaultModel`** -- Which AI model to use. This matches task complexity to capability:\n- `opus` for architect and security (complex reasoning, design decisions, threat analysis)\n- `sonnet` for reviewer (balanced depth and speed for code critique)\n- `haiku` for builder and tester (fast, cost-effective for implementation and test writing)\n\n**`context.include / context.exclude`** -- Which files the agent should see. An architect might include `.purpose` files, `portal.yaml`, and architecture docs but exclude test files. A tester includes test directories and the implementation files but excludes deployment configs. This scoping keeps each agent focused and reduces token waste.\n\n```yaml\n# Example from agents.yaml\narchitect:\n  defaultModel: opus\n  context:\n    include:\n      - \"**/.purpose\"\n      - \"portal.yaml\"\n      - \".paradigm/specs/**\"\n    exclude:\n      - \"**/*.test.*\"\n      - \"node_modules/**\"\n  limits:\n    maxTokens: 30000\n  protocol:\n    relay: structured\n```\n\n**`limits.maxTokens`** -- The maximum token budget for a single agent invocation. Architects typically get higher budgets (30,000+) because design work requires more exploration. Builders and testers get tighter budgets because their work is more focused and mechanical.\n\n**`protocol.relay`** -- How the agent reports results back. Options include `structured` (returns a formatted JSON report), `markdown` (returns a narrative document), or `handoff` (writes to a handoff file for the next agent). The relay protocol is how agents communicate in a pipeline.\n\n### The Orchestrator's Role\n\nThe orchestrator is not an agent itself -- it is the coordinator that:\n1. **Decomposes** the task into stages based on trigger patterns\n2. **Assigns** each stage to the appropriate agent facet\n3. **Manages handoffs** between stages, passing context from one agent to the next\n4. **Identifies parallelism** -- stages that are independent can run simultaneously\n5. **Aggregates results** from all agents into a final output\n\nThe decomposition logic uses trigger patterns: tasks mentioning \"auth\" or \"security\" trigger the security agent. Tasks mentioning \"test\" or \"coverage\" trigger the tester. Tasks involving 3+ files or multiple symbols trigger the architect for upfront design. These patterns are configurable in the orchestration rules.\n\n### Handoff Context\n\nWhen agents run in sequence, each agent receives the output of the previous one via `handoffContext`. For example, the architect produces a design document, which is passed to the security agent for review, whose approved design is then passed to the builder for implementation. The `paradigm_agent_prompt` tool accepts `previousAgent` and `handoffContext` parameters to facilitate this chain.\n\n```\nparadigm_agent_prompt({\n  agent: \"builder\",\n  task: \"Implement the auth middleware as designed\",\n  previousAgent: \"architect\",\n  handoffContext: \"Design: JWT middleware at src/middleware/auth.ts, gates: ^authenticated, ^admin-only...\"\n})\n```\n\nThis chain of specialized agents, each scoped to its role with appropriate context and budget, produces higher quality output than a single generalist agent trying to do everything.",
+      "keyConcepts": [
+        "Four facet dimensions: model, context scope, token limits, relay protocol",
+        "agents.yaml configuration file",
+        "Orchestrator decomposition and stage assignment",
+        "Handoff context between sequential agents",
+        "Trigger patterns for agent selection"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Why does the reviewer agent use the sonnet model instead of opus or haiku?",
+          "choices": {
+            "A": "Sonnet is the cheapest model",
+            "B": "Sonnet provides a balance of analytical depth and speed, suited for code critique",
+            "C": "Sonnet is the only model that can read code",
+            "D": "The reviewer does not need any AI model",
+            "E": "It is a random assignment with no rationale"
+          },
+          "correct": "B",
+          "explanation": "Code review requires analytical depth (catching subtle issues) but not the deep reasoning needed for architectural design. Sonnet balances depth and speed, making it ideal for critique. Opus would be more expensive than necessary; haiku might miss subtle issues."
+        },
+        {
+          "id": "q2",
+          "question": "An architect agent's context.exclude contains '**/*.test.*'. Why?",
+          "choices": {
+            "A": "Test files contain sensitive data",
+            "B": "To reduce token consumption by excluding files irrelevant to architectural design",
+            "C": "The architect is not allowed to see tests for compliance reasons",
+            "D": "Test files are always broken and would confuse the agent",
+            "E": "It is a default that cannot be changed"
+          },
+          "correct": "B",
+          "explanation": "Context scoping keeps agents focused and reduces token waste. An architect designing system structure does not need to read test files -- including them would consume tokens without adding value. Each role's context is scoped to the files relevant to its task."
+        },
+        {
+          "id": "q3",
+          "question": "The orchestrator assigns a task to architect -> security -> builder -> tester. What mechanism passes context from the architect to the security agent?",
+          "choices": {
+            "A": "They share the same conversation thread",
+            "B": "The handoffContext parameter in paradigm_agent_prompt, carrying the architect's output",
+            "C": "They both read the same files",
+            "D": "The orchestrator emails the context",
+            "E": "Context is not shared between agents"
+          },
+          "correct": "B",
+          "explanation": "When agents run in sequence, each receives the previous agent's output via the handoffContext parameter. paradigm_agent_prompt accepts previousAgent and handoffContext to include this chain context in the generated prompt."
+        },
+        {
+          "id": "q4",
+          "question": "Which file contains the facet configuration for all agent roles?",
+          "choices": {
+            "A": ".paradigm/config.yaml",
+            "B": ".paradigm/agents.yaml",
+            "C": "portal.yaml",
+            "D": ".purpose files in each directory",
+            "E": "navigator.yaml"
+          },
+          "correct": "B",
+          "explanation": "Agent facet configurations -- including model assignments, context scopes, token limits, and relay protocols -- are defined in .paradigm/agents.yaml. This is separate from config.yaml (project configuration) and portal.yaml (authorization gates)."
+        },
+        {
+          "id": "q5",
+          "question": "A task description mentions 'add rate limiting to the API with security audit'. Which trigger patterns activate?",
+          "choices": {
+            "A": "Only builder -- it is an implementation task",
+            "B": "Only security -- it mentions 'security audit'",
+            "C": "Security (triggered by 'security') and builder (triggered by implementation need), plus architect if 3+ files are affected",
+            "D": "All five agents are always triggered regardless of the task",
+            "E": "Only tester -- rate limiting needs testing"
+          },
+          "correct": "C",
+          "explanation": "Trigger patterns analyze the task description: 'security audit' triggers the security agent, the implementation need triggers the builder, and if the task affects 3+ files, the architect is triggered for upfront design. The orchestrator combines these signals to compose the right team."
+        }
+      ]
+    },
+    {
+      "id": "provider-cascade",
+      "title": "Provider Cascade",
+      "content": "## Provider Cascade\n\nOrchestrated agents need somewhere to run. Paradigm supports multiple **execution providers** -- the systems that actually run the agent prompts and return results. Since not every environment has the same providers available (some teams use the Anthropic API directly, others use Claude Code, others use Cursor), Paradigm implements a **cascade** that tries providers in priority order until one works.\n\nThe default cascade order is:\n\n1. **`claude`** -- Direct Anthropic API. Requires `ANTHROPIC_API_KEY` environment variable. The most flexible option with full control over model selection and parameters.\n\n2. **`claude-code-teams`** -- Claude Code Agent Teams (experimental). Supports parallel agent execution natively. Only available with Claude Code Teams subscription.\n\n3. **`claude-code`** -- Claude Code Task tool. Uses the Task tool within a Claude Code session. Requires a Max subscription. Runs agents as sub-tasks within the current session.\n\n4. **`cursor-cli`** -- Cursor's agent CLI. Auto-detected when running inside the Cursor IDE. Spawns agents through Cursor's built-in agent system.\n\n5. **`claude-cli`** -- Spawns separate `claude` CLI processes. Each agent runs as an independent CLI invocation. Available when the Claude CLI is installed.\n\n6. **`manual`** -- File-based handoffs. Always available as a fallback. Writes agent prompts to files that a human (or another tool) can execute. This is the universal fallback that works in every environment.\n\n### Configuration\n\nYou can set the preferred provider in three ways (listed in priority order):\n\n```bash\n# Environment variable (highest priority)\nexport PARADIGM_AGENT_PROVIDER=claude-code\n\n# Config file (.paradigm/config.yaml)\nagent-provider: claude-code\n\n# CLI command\nparadigm team providers --set claude-code\n```\n\nSetting a preferred provider does not disable the cascade -- it just changes the starting point. If your preferred provider is unavailable (e.g., API key expired), the cascade continues to the next available option.\n\nTo see which providers are currently available in your environment, run:\n\n```bash\nparadigm team providers\n# Shows: claude (available), claude-code (available), cursor-cli (not detected), ...\n```\n\n### Model Discovery\n\nDifferent providers expose different models. `paradigm team models` shows the current model assignments per agent role and which provider serves them. If you add a new API key or install a new tool, run `paradigm team models --refresh` to re-discover available models.\n\nThe cascade design means Paradigm orchestration works everywhere -- from a fully-equipped development machine with API keys and IDE integrations, down to a bare terminal where only manual file-based handoffs are possible. The fallback is always there.",
+      "keyConcepts": [
+        "Six providers: claude, claude-code-teams, claude-code, cursor-cli, claude-cli, manual",
+        "Cascade tries providers in priority order",
+        "Three configuration methods: env var, config.yaml, CLI",
+        "Manual provider as universal fallback",
+        "paradigm team providers and paradigm team models commands"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You are running in a fresh terminal with only the Claude CLI installed. Which provider will the cascade select?",
+          "choices": {
+            "A": "claude -- the Anthropic API",
+            "B": "claude-code -- the Task tool",
+            "C": "claude-cli -- spawning CLI processes",
+            "D": "manual -- file-based handoffs",
+            "E": "The cascade will fail with an error"
+          },
+          "correct": "C",
+          "explanation": "The cascade tries providers in order: claude (needs API key -- not available), claude-code-teams (not available), claude-code (needs Max subscription -- not in this scenario), cursor-cli (not in Cursor -- not available), claude-cli (CLI is installed -- available). It selects claude-cli."
+        },
+        {
+          "id": "q2",
+          "question": "You set PARADIGM_AGENT_PROVIDER=cursor-cli but you are not running inside Cursor. What happens?",
+          "choices": {
+            "A": "An error is thrown and orchestration fails",
+            "B": "The cascade falls through to the next available provider",
+            "C": "Cursor is automatically launched",
+            "D": "The manual provider is always used as override",
+            "E": "The setting is ignored entirely"
+          },
+          "correct": "B",
+          "explanation": "Setting a preferred provider changes the cascade starting point but does not disable it. If cursor-cli is not available (not in Cursor), the cascade continues to claude-cli, then manual. The fallback chain always works."
+        },
+        {
+          "id": "q3",
+          "question": "Which provider is always available regardless of environment?",
+          "choices": {
+            "A": "claude (Anthropic API)",
+            "B": "claude-code (Task tool)",
+            "C": "cursor-cli",
+            "D": "manual (file-based handoffs)",
+            "E": "claude-code-teams"
+          },
+          "correct": "D",
+          "explanation": "The manual provider writes agent prompts to files for human or tool execution. It requires no API keys, subscriptions, or specific IDE -- just a filesystem. This universal fallback ensures orchestration works in every environment."
+        },
+        {
+          "id": "q4",
+          "question": "You just added a new ANTHROPIC_API_KEY to your environment. What command should you run to update Paradigm's awareness of available models?",
+          "choices": {
+            "A": "paradigm scan",
+            "B": "paradigm team providers --set claude",
+            "C": "paradigm team models --refresh",
+            "D": "paradigm doctor",
+            "E": "paradigm sync"
+          },
+          "correct": "C",
+          "explanation": "paradigm team models --refresh re-discovers available models from all providers. After adding a new API key, this command detects the newly available models and updates the model assignments."
+        }
+      ]
+    },
+    {
+      "id": "orchestration-workflow",
+      "title": "Orchestration Workflow",
+      "content": "## Orchestration Workflow\n\nThis lesson walks through the complete end-to-end orchestration workflow, from task description to final result. Understanding this workflow is essential for effectively coordinating multi-agent tasks in Paradigm.\n\n### Step 1: Describe the Task\n\nStart with a clear, specific task description. Good task descriptions include what you want to build, which areas are involved, and any constraints:\n\n- Good: \"Add Apple Pay to the checkout flow with amount validation and ^authenticated gate\"\n- Bad: \"Fix payments\"\n\nThe quality of the task description directly affects the quality of the orchestration plan.\n\n### Step 2: Plan with paradigm_orchestrate_inline\n\nCall `paradigm_orchestrate_inline` with `mode=\"plan\"` to get the orchestrator's analysis:\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add Apple Pay to the checkout flow with amount validation and ^authenticated gate\",\n  mode: \"plan\"\n})\n```\n\nThe plan returns: suggested agents, estimated token cost, and a stage breakdown with dependency information. Review this carefully. If you disagree with the agent selection, you can override it with the `agents` parameter.\n\n### Step 3: Execute to Get Prompts\n\nOnce satisfied with the plan, call with `mode=\"execute\"`:\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add Apple Pay to the checkout flow with amount validation and ^authenticated gate\",\n  mode: \"execute\"\n})\n```\n\nThis returns full prompts for each agent, complete with relevant file paths, symbol context, and stage-specific instructions.\n\n### Step 4: Launch Agents\n\nLaunch agents according to the stage plan. Stages marked `canRunParallel: true` can be launched simultaneously:\n\n```\n// Stages 1 and 2 can run in parallel:\nTask: [architect prompt from execute output]\nTask: [security prompt from execute output]\n\n// Stage 3 depends on 1 and 2, must wait:\nTask: [builder prompt with handoff context from architect and security]\n\n// Stage 4 depends on 3:\nTask: [tester prompt with handoff context from builder]\n```\n\n### Step 5: Collect and Integrate Results\n\nEach agent returns results in its configured relay format. Review each output, verify it makes sense, and integrate the changes. The orchestrator does not auto-merge -- you are the final integrator.\n\n### CLI Alternative\n\nFor command-line orchestration, the `paradigm team orchestrate` command handles the full workflow:\n\n```bash\n# Multi-agent (default)\nparadigm team orchestrate \"Add Apple Pay to checkout\"\n\n# Single agent mode -- one agent does everything\nparadigm team orchestrate \"Add Apple Pay to checkout\" --solo\n\n# A/B test -- compare solo vs multi-agent\nparadigm team orchestrate \"Add Apple Pay to checkout\" --compare\n```\n\nThe `--solo` flag is useful when a task does not genuinely need multiple agents. The `--compare` flag runs both solo and faceted modes and lets you compare the results, which is valuable for learning when orchestration adds value versus overhead.\n\n### When NOT to Orchestrate\n\nOrchestration has overhead. For simple tasks (single file change, no security implications, clear implementation), a single builder agent is faster and cheaper. Use orchestration when the task involves 3+ files, has security implications, requires design decisions, or spans multiple feature areas.",
+      "keyConcepts": [
+        "Five-step workflow: describe, plan, execute, launch, collect",
+        "paradigm_orchestrate_inline plan then execute pattern",
+        "Parallel stage launching",
+        "CLI modes: default, --solo, --compare",
+        "When NOT to orchestrate"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You call paradigm_orchestrate_inline with mode='plan' and the suggested agents include tester, but you know the project has no test infrastructure yet. What do you do?",
+          "choices": {
+            "A": "Accept the plan as-is -- the orchestrator knows best",
+            "B": "Override the agents parameter to exclude tester when calling mode='execute'",
+            "C": "Skip the plan step and go straight to mode='execute'",
+            "D": "Cancel the entire orchestration",
+            "E": "Add test infrastructure before proceeding"
+          },
+          "correct": "B",
+          "explanation": "The plan is a suggestion, not a mandate. When you disagree with the agent selection (e.g., tester is suggested but there is no test infrastructure), you override the agents parameter in the execute call. The plan step exists precisely to give you this review opportunity."
+        },
+        {
+          "id": "q2",
+          "question": "The orchestration plan shows: Stage 1 (architect, no deps), Stage 2 (security, no deps), Stage 3 (builder, depends on 1 and 2). How many total rounds of agent launches do you need?",
+          "choices": {
+            "A": "1 round -- launch all three at once",
+            "B": "2 rounds -- stages 1 and 2 in parallel, then stage 3",
+            "C": "3 rounds -- each stage runs separately",
+            "D": "It depends on the provider",
+            "E": "0 rounds -- the orchestrator launches them automatically"
+          },
+          "correct": "B",
+          "explanation": "Stages 1 and 2 have no dependencies, so they can launch in parallel (round 1). Stage 3 depends on both, so it must wait for their results (round 2). This gives 2 rounds total, which is optimal for this dependency graph."
+        },
+        {
+          "id": "q3",
+          "question": "When is the --solo flag appropriate for paradigm team orchestrate?",
+          "choices": {
+            "A": "When the task involves security review",
+            "B": "When the task affects 5+ files",
+            "C": "When the task is straightforward and does not genuinely need multiple specialized agents",
+            "D": "Always -- solo mode is always better",
+            "E": "Never -- multi-agent is always better"
+          },
+          "correct": "C",
+          "explanation": "Solo mode is appropriate for straightforward tasks where orchestration overhead exceeds its value. A simple bug fix or small feature addition often does not benefit from architect-security-builder-tester decomposition. Use --compare to learn which tasks benefit from orchestration."
+        },
+        {
+          "id": "q4",
+          "question": "What happens after all agents complete their stages?",
+          "choices": {
+            "A": "Changes are automatically merged and committed",
+            "B": "The orchestrator sends a pull request",
+            "C": "You review each agent's output, verify it, and integrate the changes as the final integrator",
+            "D": "The tester agent automatically validates everything",
+            "E": "Results are discarded and you start over"
+          },
+          "correct": "C",
+          "explanation": "The orchestrator does not auto-merge. You are the final integrator -- reviewing each agent's output, verifying it makes sense in context, and integrating the changes. This human-in-the-loop step is intentional for quality and safety."
+        },
+        {
+          "id": "q5",
+          "question": "Which task description would produce a better orchestration plan?",
+          "choices": {
+            "A": "Fix the app",
+            "B": "Make payments work better",
+            "C": "Add Stripe webhook handler for payment.intent.succeeded with idempotency, ^authenticated gate, and !payment-completed signal",
+            "D": "Do something with checkout",
+            "E": "Refactor everything"
+          },
+          "correct": "C",
+          "explanation": "Specific task descriptions with clear scope, named symbols, and explicit requirements produce better plans. The orchestrator can identify exact agents needed (security for the gate, builder for implementation) and provide accurate token estimates. Vague descriptions lead to generic, less useful plans."
+        }
+      ]
+    },
+    {
+      "id": "pm-governance",
+      "title": "PM Governance",
+      "content": "## PM Governance\n\nThe PM (Project Manager) layer is Paradigm's enforcement mechanism that ensures orchestrated tasks follow project discipline. Without governance, agents might implement features without updating `.purpose` files, add endpoints without portal.yaml gates, or ignore team wisdom. The PM layer adds automated pre-flight and post-flight checks that catch these oversights.\n\n### Pre-Flight Checks\n\nBefore any implementation begins, the PM runs pre-flight checks to set up the task correctly:\n\n1. **Symbol identification** -- What symbols will this task create or modify? The PM uses `paradigm_search` and `paradigm_navigate` to identify all affected symbols.\n2. **Ripple analysis** -- For each affected symbol, run `paradigm_ripple` to map the blast radius. Flag any fragile dependents.\n3. **Portal requirements** -- If the task adds endpoints, run `paradigm_gates_for_route` to determine required gates. Flag if portal.yaml is missing or needs updates.\n4. **Wisdom check** -- Pull relevant wisdom with `paradigm_wisdom_context` to surface antipatterns and decisions that agents should know about.\n5. **Orchestration recommendation** -- Based on task complexity, recommend whether to use single-agent or multi-agent orchestration.\n\n```\n// Pre-flight output example:\n{\n  affectedSymbols: [\"#payment-service\", \"$checkout-flow\"],\n  rippleImpact: { direct: 3, indirect: 7, fragile: [\"#notification-handler\"] },\n  portalRequired: true,\n  requiredGates: [\"^authenticated\", \"^payment-authorized\"],\n  relevantWisdom: [\"antipattern: api-001 (direct API calls from UI)\"],\n  recommendation: \"multi-agent: architect + security + builder\"\n}\n```\n\n### Post-Flight Checks\n\nAfter implementation completes, the PM verifies compliance:\n\n1. **Purpose registration** -- Are all new components registered in `.purpose` files? Did renamed symbols get updated across all references?\n2. **Portal compliance** -- Are all new endpoints listed in portal.yaml with appropriate gates? Are there unprotected routes that should be protected?\n3. **Aspect anchors** -- If aspects were modified, do their anchors still point to valid code?\n4. **Wisdom capture** -- Were any decisions made during implementation that should be recorded? Did any antipatterns surface?\n5. **History recording** -- Was the implementation logged with `paradigm_history_record`?\n\nThe PM reports issues in categories: **errors** (must fix before proceeding), **warnings** (should fix), and **suggestions** (good practice). A clean post-flight means full compliance.\n\n### Enabling PM Governance\n\nIn the CLI, add the `--pm` flag to orchestrate commands:\n\n```bash\nparadigm team orchestrate \"Add refund endpoint\" --pm\n```\n\nThis wraps the orchestration with pre-flight checks before the first agent runs and post-flight checks after the last agent completes. The PM does not modify code itself -- it reviews and reports, leaving fixes to you or the agents.\n\nPM governance is especially valuable for teams onboarding new developers or working with AI agents that do not yet have deep project familiarity. It is the safety net that ensures Paradigm metadata stays consistent with the code, regardless of who (or what) is writing that code.",
+      "keyConcepts": [
+        "Pre-flight checks: symbols, ripple, portal, wisdom, recommendation",
+        "Post-flight checks: registration, compliance, anchors, wisdom, history",
+        "Error/warning/suggestion severity levels",
+        "--pm flag on orchestrate commands",
+        "PM as enforcement layer for project discipline"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "An agent implements a new POST /api/refunds endpoint but does not add it to portal.yaml. What does the PM post-flight check report?",
+          "choices": {
+            "A": "Nothing -- portal.yaml is optional",
+            "B": "A suggestion to consider adding the endpoint",
+            "C": "An error or warning for portal non-compliance -- the endpoint is unprotected",
+            "D": "It automatically adds the endpoint to portal.yaml",
+            "E": "It deletes the endpoint from the code"
+          },
+          "correct": "C",
+          "explanation": "The PM post-flight checks portal compliance by verifying all new endpoints are listed in portal.yaml with appropriate gates. An unprotected endpoint that should require authentication is flagged as a compliance issue. The PM reports but does not auto-fix."
+        },
+        {
+          "id": "q2",
+          "question": "What is the purpose of the PM's pre-flight ripple analysis?",
+          "choices": {
+            "A": "To automatically cancel dangerous changes",
+            "B": "To map the blast radius and flag fragile dependents before agents start implementing",
+            "C": "To generate unit tests for affected symbols",
+            "D": "To choose which AI model to use",
+            "E": "To update the .purpose files automatically"
+          },
+          "correct": "B",
+          "explanation": "The pre-flight ripple analysis maps all direct and indirect dependencies before implementation begins. If fragile symbols are in the blast radius, agents are warned and can take extra precautions. This prevents breaking changes by surfacing risk upfront."
+        },
+        {
+          "id": "q3",
+          "question": "A PM post-flight check returns: 2 errors, 1 warning, 3 suggestions. What should you address before committing?",
+          "choices": {
+            "A": "Only errors -- they are mandatory",
+            "B": "Errors and warnings -- suggestions are optional",
+            "C": "All six items must be resolved",
+            "D": "None -- post-flight checks are informational only",
+            "E": "Only suggestions -- errors and warnings auto-resolve"
+          },
+          "correct": "B",
+          "explanation": "Errors must be fixed before proceeding -- they represent compliance failures. Warnings should be fixed -- they represent best practices that are being violated. Suggestions are optional improvements that represent good practice but are not required."
+        },
+        {
+          "id": "q4",
+          "question": "Which flag enables PM governance on CLI orchestration?",
+          "choices": {
+            "A": "--validate",
+            "B": "--strict",
+            "C": "--pm",
+            "D": "--governance",
+            "E": "--enforce"
+          },
+          "correct": "C",
+          "explanation": "The --pm flag on paradigm team orchestrate enables the PM governance layer, adding pre-flight checks before the first agent and post-flight checks after the last agent."
+        },
+        {
+          "id": "q5",
+          "question": "Why is PM governance especially valuable for teams working with AI agents?",
+          "choices": {
+            "A": "AI agents cannot write code without PM approval",
+            "B": "The PM layer replaces the need for human code review",
+            "C": "AI agents may not have deep project familiarity and might skip metadata updates, portal compliance, or wisdom capture",
+            "D": "PM governance makes AI agents run faster",
+            "E": "It is required by Anthropic's terms of service"
+          },
+          "correct": "C",
+          "explanation": "AI agents, especially in their first interactions with a project, may not know all the conventions, required metadata updates, or portal requirements. The PM layer acts as a safety net ensuring that Paradigm discipline is maintained regardless of the implementer's familiarity level."
+        }
+      ]
+    },
+    {
+      "id": "commit-conventions",
+      "title": "Commit Conventions",
+      "content": "## Commit Conventions\n\nParadigm extends conventional commit format with symbol references, creating a machine-readable history that powers automatic history capture. Every commit message follows a specific structure that both humans and the Paradigm toolchain can parse.\n\n### Commit Message Format\n\nThe format has three parts: subject line, body, and trailers.\n\n```\ntype(#primary-symbol): short description\n\n- Detail with #component references\n- Gate changes: ^gate-name\n- Signals emitted: !signal-name\n- Flow updates: $flow-name\n\nSymbols: #symbol-a, #symbol-b, !signal-c, $flow-d\n```\n\n**Subject line**: `type(#primary-symbol): description` -- The type follows conventional commit types (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`). The primary symbol in parentheses indicates the main component affected. The description is a concise summary under 70 characters.\n\n**Body**: References all affected symbols using their prefixes (`#`, `$`, `^`, `!`, `~`). Describe what changed, what gates were added or modified, what signals are emitted, and what flows were updated.\n\n**Symbols trailer**: A machine-readable line starting with `Symbols:` followed by a comma-separated list of every symbol affected. This trailer is **parsed by the post-commit hook** to automatically create `paradigm_history_record` entries.\n\n### Full Example\n\n```\nfeat(#payment-form): add Apple Pay support\n\n- Add #apple-pay-button component for payment method selection\n- Update $checkout-flow with new Apple Pay payment step\n- Emit !payment-method-added signal when user selects Apple Pay\n- Gate: ^authenticated required for payment submission\n- Aspect: ~pci-compliant applied to payment data handling\n\nSymbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added, ^authenticated, ~pci-compliant\n```\n\n### Why the Symbols Trailer Matters\n\nThe `Symbols:` trailer is not just documentation -- it is the bridge between git and Paradigm's history system. The post-commit hook reads this line, parses the symbols, and automatically calls `paradigm_history_record` with the commit hash, affected symbols, and the commit message as the description. This means every commit with a Symbols trailer is automatically captured in the Paradigm history log without any manual recording.\n\nWithout the trailer, the commit is just a git commit. With the trailer, it becomes a tracked event in Paradigm's history system, feeding into fragility analysis, expertise tracking, and team wisdom.\n\n### Type Mapping\n\nThe commit type maps to the history record fields:\n\n| Commit Type | History Type | History Intent |\n|---|---|---|\n| `feat` | implement | feature |\n| `fix` | implement | fix |\n| `refactor` | refactor | refactor |\n| `revert` | rollback | (automatic) |\n| `test` | implement | confirmed |\n| `docs` | (not recorded) | -- |\n| `chore` | (not recorded) | -- |\n\nBy following these conventions, your git history becomes a structured input to Paradigm's operational tools. Every `feat` commit feeds fragility scores. Every `fix` commit increases the fix-to-feature ratio. Every `revert` becomes a rollback event. The commit message is the entry point for the entire history-wisdom-fragility pipeline.",
+      "keyConcepts": [
+        "Commit format: type(#symbol): description",
+        "Symbols: trailer for machine-readable parsing",
+        "Post-commit hook automatic history capture",
+        "Type-to-history mapping",
+        "Symbol references in commit body"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the purpose of the 'Symbols:' trailer in a Paradigm commit message?",
+          "choices": {
+            "A": "It is purely decorative for human readers",
+            "B": "It is parsed by the post-commit hook to automatically create paradigm_history_record entries",
+            "C": "It triggers a deployment pipeline",
+            "D": "It notifies symbol owners via email",
+            "E": "It is required by git but has no Paradigm-specific purpose"
+          },
+          "correct": "B",
+          "explanation": "The Symbols: trailer is machine-readable. The post-commit hook parses it to automatically call paradigm_history_record with the commit hash, affected symbols, and description. This bridges git history with Paradigm's history system."
+        },
+        {
+          "id": "q2",
+          "question": "A commit has type 'fix' and a Symbols: trailer listing #payment-service. What history record is created?",
+          "choices": {
+            "A": "type: rollback, intent: fix",
+            "B": "type: implement, intent: fix",
+            "C": "type: refactor, intent: fix",
+            "D": "type: implement, intent: feature",
+            "E": "No history record -- fix commits are not tracked"
+          },
+          "correct": "B",
+          "explanation": "A 'fix' commit type maps to history type 'implement' with intent 'fix'. This is distinct from 'feat' (implement/feature) and 'refactor' (refactor/refactor). The fix intent contributes to the fix-to-feature ratio used in fragility scoring."
+        },
+        {
+          "id": "q3",
+          "question": "Which of the following is a correctly formatted Paradigm commit subject line?",
+          "choices": {
+            "A": "Added Apple Pay support to payments",
+            "B": "feat(#payment-form): add Apple Pay support",
+            "C": "FEAT: payment-form Apple Pay",
+            "D": "#payment-form feat: add Apple Pay",
+            "E": "feat(payment-form): add Apple Pay support"
+          },
+          "correct": "B",
+          "explanation": "The correct format is type(#symbol): description. Option B follows this exactly: 'feat' type, '#payment-form' symbol with the # prefix, and a concise description. Option E is missing the # prefix on the symbol."
+        },
+        {
+          "id": "q4",
+          "question": "A developer writes a commit with a body referencing ^authenticated and !order-placed but forgets the Symbols: trailer. What is the impact?",
+          "choices": {
+            "A": "The commit is rejected by git",
+            "B": "The symbols in the body are automatically parsed instead",
+            "C": "The commit succeeds as a git commit but is NOT automatically tracked in Paradigm's history system",
+            "D": "The post-commit hook will fail with an error",
+            "E": "paradigm doctor will retroactively add the trailer"
+          },
+          "correct": "C",
+          "explanation": "Without the Symbols: trailer, the post-commit hook has nothing to parse, so no automatic paradigm_history_record entry is created. The commit is valid in git but invisible to Paradigm's history, fragility, and wisdom systems. The body references are for human readers only."
+        }
+      ]
+    },
+    {
+      "id": "mastery-review",
+      "title": "Framework Mastery",
+      "content": "## Framework Mastery\n\nThis final lesson synthesizes everything from PARA 101 through PARA 401 into a complete picture of what it means to master the Paradigm framework. Mastery is not about memorizing tool names -- it is about internalizing the workflows, knowing which tool to reach for in each situation, and understanding how the pieces fit together to create a self-documenting, self-healing development system.\n\n### The Complete Paradigm Workflow\n\n**Phase 1: Project Initialization**\n\nEvery Paradigm project starts with `paradigm init`, which creates the `.paradigm/` directory, `config.yaml`, and initial structure. From there, you define symbols in `.purpose` files, set up `portal.yaml` for authentication and authorization, and configure agent facets in `agents.yaml`. The foundation must be solid -- everything else builds on accurate `.purpose` files and a complete `portal.yaml`.\n\n**Phase 2: Symbol-Driven Development**\n\nWith the foundation in place, development is symbol-driven. Every code unit has a `#component` identity. Multi-step processes are documented as `$flows`. Authorization checkpoints are `^gates`. Events are `!signals`. Cross-cutting rules are `~aspects` with code anchors. Tags from the tag bank classify symbols by function: `[feature]`, `[integration]`, `[state]`, `[critical]`.\n\nThe power of symbols is that they create a semantic layer above the code. When an AI agent calls `paradigm_navigate` with intent \"context\" and task \"add retry logic to payments,\" it does not just get file paths -- it gets the full symbolic context: which components are involved, which flows will be affected, which gates protect the endpoints, and which wisdom entries are relevant.\n\n**Phase 3: Operational Excellence**\n\nDay-to-day development follows the operational loop from PARA 301: orient, discover, assess risk, implement, validate, capture knowledge, monitor context. Each step uses specific tools:\n\n| Step | Tools |\n|---|---|\n| Orient | `paradigm_status`, `paradigm_session_recover` |\n| Discover | `paradigm_wisdom_context`, `paradigm_navigate` |\n| Assess | `paradigm_ripple`, `paradigm_history_fragility` |\n| Implement | File edits + `.purpose` updates + `portal.yaml` updates |\n| Validate | `paradigm doctor`, `paradigm_purpose_validate`, `paradigm_flow_validate` |\n| Capture | `paradigm_wisdom_record`, `paradigm_history_record` |\n| Monitor | `paradigm_context_check`, `paradigm_session_stats` |\n\n**Phase 4: Orchestrated Complexity**\n\nComplex tasks are decomposed across specialized agents using `paradigm_orchestrate_inline`. The architect designs, security audits, the builder implements, and the tester validates. The PM layer enforces discipline with pre-flight and post-flight checks. Commits follow the Paradigm convention with `Symbols:` trailers that feed the history system automatically.\n\n### What Distinguishes Mastery\n\nA **beginner** uses Paradigm tools when reminded. They forget to update `.purpose` files, skip ripple analysis, and do not capture wisdom.\n\nA **practitioner** follows the operational loop consistently. They update metadata as they code, run doctor before committing, and record wisdom after debugging sessions.\n\nA **master** has internalized the framework to the point where it is invisible. They instinctively reach for `paradigm_ripple` before any modification. They write commit messages with `Symbols:` trailers without thinking. They call `paradigm_orchestrate_inline` when a task smells complex. They capture wisdom reflexively. Their `.purpose` files are always accurate because they update them in the same motion as writing code.\n\nThe difference is not knowledge -- it is habit. Every tool in Paradigm exists to answer a specific question: \"What depends on this?\" (`paradigm_ripple`), \"What do I need to know?\" (`paradigm_wisdom_context`), \"Is this area stable?\" (`paradigm_history_fragility`), \"What should I work on?\" (`paradigm_navigate`). A master does not think about which tool to use -- the question triggers the tool automatically.\n\n### The Self-Reinforcing System\n\nParadigm is designed as a flywheel. Accurate `.purpose` files make navigation reliable. Reliable navigation makes agents more efficient. Efficient agents produce better results. Better results with Symbols trailers feed the history system. Rich history enables fragility analysis. Fragility analysis informs risk assessment. Risk assessment guides implementation. Implementations update `.purpose` files. The cycle reinforces itself.\n\nEvery time you skip a step -- neglecting a `.purpose` update, omitting a `Symbols:` trailer, not recording wisdom -- you degrade the flywheel. Every time you complete the loop, you strengthen it. Framework mastery is the commitment to keep the flywheel spinning.",
+      "keyConcepts": [
+        "Four phases: initialization, symbol-driven development, operational excellence, orchestrated complexity",
+        "Beginner -> practitioner -> master progression",
+        "The self-reinforcing flywheel",
+        "Tools mapped to questions they answer",
+        "Habit over knowledge"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A developer consistently updates .purpose files, runs doctor before committing, and records wisdom after debugging -- but does not use orchestration for complex tasks. What is their mastery level?",
+          "choices": {
+            "A": "Beginner -- they are missing orchestration",
+            "B": "Practitioner -- they follow the operational loop but have not internalized the full framework",
+            "C": "Master -- operational excellence is sufficient",
+            "D": "Expert -- they have surpassed the mastery framework",
+            "E": "Cannot be determined from this description"
+          },
+          "correct": "B",
+          "explanation": "A practitioner follows the operational loop consistently (Phase 3) but has not yet internalized Phase 4 (orchestrated complexity). They are effective but have room to grow in multi-agent coordination and automated governance."
+        },
+        {
+          "id": "q2",
+          "question": "You are starting a brand new Paradigm project. What is the correct initialization sequence?",
+          "choices": {
+            "A": "Write code first, then add .purpose files",
+            "B": "paradigm init, define symbols in .purpose files, set up portal.yaml, configure agents.yaml",
+            "C": "paradigm scan, then paradigm doctor",
+            "D": "Create portal.yaml first, then .purpose files, then paradigm init",
+            "E": "Install all MCP tools, then start coding"
+          },
+          "correct": "B",
+          "explanation": "Project initialization follows a specific sequence: paradigm init creates the .paradigm directory structure, then you define symbols in .purpose files, set up portal.yaml for auth, and configure agent facets. The foundation must exist before the operational tools have anything to work with."
+        },
+        {
+          "id": "q3",
+          "question": "The 'self-reinforcing flywheel' means that skipping steps in the Paradigm workflow causes:",
+          "choices": {
+            "A": "Immediate build failures",
+            "B": "Gradual degradation of navigation accuracy, fragility analysis, and team wisdom",
+            "C": "No impact -- each step is independent",
+            "D": "Only affects the developer who skipped the step",
+            "E": "The project must be reinitialized"
+          },
+          "correct": "B",
+          "explanation": "Paradigm's tools feed each other: .purpose files enable navigation, commit trailers feed history, history enables fragility analysis, wisdom prevents repeated mistakes. Skipping any step degrades downstream tools. The effect is gradual but cumulative -- stale metadata leads to unreliable navigation, missing history leads to inaccurate fragility scores, uncaptured wisdom leads to repeated mistakes."
+        },
+        {
+          "id": "q4",
+          "question": "You face a complex task: 'Add multi-tenant support with per-tenant billing, admin dashboard, and tenant isolation gates.' In which order should you proceed?",
+          "choices": {
+            "A": "Start coding immediately and figure it out as you go",
+            "B": "paradigm_orchestrate_inline (plan) -> review agent team -> paradigm_orchestrate_inline (execute) -> launch agents by stage -> PM post-flight",
+            "C": "paradigm_search for 'tenant' -> read all matching files -> start implementing",
+            "D": "paradigm_wisdom_record a decision -> then implement",
+            "E": "paradigm doctor -> paradigm scan -> start implementing"
+          },
+          "correct": "B",
+          "explanation": "This is a complex multi-faceted task (5+ files, security + implementation + architecture). The correct approach is: plan the orchestration to get the right agent team, review and adjust, execute to get prompts, launch agents according to the stage plan, and run PM post-flight to verify compliance. This is the full Phase 4 workflow."
+        },
+        {
+          "id": "q5",
+          "question": "What is the fundamental difference between a Paradigm master and a Paradigm practitioner?",
+          "choices": {
+            "A": "Masters know more tools",
+            "B": "Masters have used Paradigm for longer",
+            "C": "Masters have internalized the workflows as habits -- the question triggers the tool automatically",
+            "D": "Masters only use the CLI while practitioners use MCP tools",
+            "E": "Masters do not need to update .purpose files"
+          },
+          "correct": "C",
+          "explanation": "The distinction is habit, not knowledge. Both masters and practitioners know the tools. The master has internalized the framework so deeply that reaching for paradigm_ripple before a modification is reflexive, not deliberate. The question ('what depends on this?') triggers the tool automatically."
+        }
+      ]
+    }
+  ]
+}
