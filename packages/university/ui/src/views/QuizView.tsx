@@ -35,7 +35,7 @@ export function QuizView() {
   // Track answers for all questions
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  const handleAnswer = (questionId: string, letter: string, correct: string) => {
+  const handleAnswer = (questionId: string, letter: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: letter }));
 
     // Check if all answered
@@ -108,6 +108,7 @@ export function QuizView() {
           choices={q.choices}
           correct={q.correct}
           explanation={q.explanation}
+          onAnswered={(letter) => handleAnswer(q.id, letter)}
         />
       ))}
 

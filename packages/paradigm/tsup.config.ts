@@ -8,4 +8,8 @@ export default defineConfig({
   banner: {
     js: '#!/usr/bin/env node',
   },
+  external: [
+    '@a-company/university',
+    '@a-company/sentinel',
+  ],
 });
