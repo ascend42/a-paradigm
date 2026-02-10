@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Planned
+
+- **Paradigm University content review** — 27 tracked items in `packages/university/CHANGES.md`:
+  - Remove all v1 symbol references (9 items) — university teaches v2 only, no migration content
+  - Rethink logger presentation (11 items) — present as philosophy/approach, not concrete API
+  - Fix client-side routing (3 items) — lessons need URL segments, back button support, quiz→next-lesson flow
+  - Replace `paradigm init` → `paradigm shift` (10 occurrences across 5 files)
+  - Replace v1 quiz question in PARA-101 with pure v2 question
+  - Fix header nav centering and Courses link behavior (2 items)
+
 ## [2.0.13] - 2026-02-09
 
 ### Added
