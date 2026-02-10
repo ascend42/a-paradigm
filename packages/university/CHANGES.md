@@ -56,7 +56,30 @@ The logger should be presented as a philosophy/approach, not a concrete API with
 
 25. **para-101.json Q3 ~L112** — Replace v1-framed question ("In Paradigm v1, features used `@`...") with a pure v2 question about tag classification
 
+## Gates/Portal Conceptual Reframe
+
+Gates are currently taught as tightly coupled to web authentication (JWT, role-based access, protected HTTP routes, "static sites don't need it"). The concept should be broadened: gates are general-purpose **gatekeepers** that check the state of defined conditions. Auth is one use case, not the definition.
+
+Examples of non-auth gates: feature flags, environment checks, license validation, rate limits, data prerequisites, system health, build/deploy gates, subscription status.
+
+This is a pervasive framing issue across the entire university — not a few isolated fixes:
+
+28. **reference.json ~L29** — Gate symbol described as "authorization checkpoint that controls access to resources"
+29. **reference.json ~L32** — Gate "when" field: "When access must be restricted — authentication, role checks, ownership validation"
+30. **para-101.json ~L79** — Key concept: "^ Gate — authorization checkpoint"
+31. **para-101.json ~L95** — Explanation frames gates purely as auth: "verifying that a user has the right to access a resource"
+32. **para-101.json ~L430-477** — Entire "Portal.yaml" lesson: framed as auth-only ("Gate types: auth, role, ownership", "Required whenever the app has protected endpoints", quiz Q "When is portal.yaml NOT needed?" answer: "fully public static site")
+33. **para-101.json ~L442-451** — Authorization workflow: "call paradigm_gates_for_route → add to portal.yaml → implement checks → test 403 responses" — assumes web/HTTP context
+34. **para-201.json ~L75-81** — Gates lesson key concepts: "Four gate types: auth, role, ownership, state-precondition" — state-precondition is the closest to the broader vision but it's listed as one of four auth-adjacent types
+35. **para-201.json ~L220-279** — "Portal Protocol" lesson: entirely about security-before-implementation, 401/403 status codes, auth middleware
+36. **plsat/v2.0.json Q plsat-004** — Portal.yaml scenario assumes JWT authentication context
+37. **plsat/v2.0.json Q plsat-009** — Tests portal.yaml route entry syntax (auth-centric)
+38. **plsat/v2.0.json Q plsat-013** — Gate composition question (auth gates only)
+39. **plsat/v2.0.json multiple Qs** — Many questions assume gates = HTTP route protection
+
+**Note:** This is potentially a broader framework-level conceptual shift, not just a university content fix. The university should reflect whatever the framework decides gates are. See `/GATES-REFRAME.md` for broader framework implications.
+
 ## UI/Layout
 
-26. **Header nav not centered** — "Campus / Courses / PLSAT / Library / Certificates" group is visually off-center
-27. **Courses link behavior** — Clicking "Courses" in header goes to first course instead of course picker/listing view
+40. **Header nav not centered** — "Campus / Courses / PLSAT / Library / Certificates" group is visually off-center
+41. **Courses link behavior** — Clicking "Courses" in header goes to first course instead of course picker/listing view
