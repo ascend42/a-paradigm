@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCoursesStore } from '../store/coursesStore';
 import { useProgressStore } from '../store/progressStore';
 import type { Course, Lesson } from '../types';
@@ -34,7 +34,8 @@ function renderMarkdown(md: string): string {
 }
 
 export function CourseView() {
-  const { courseId } = useParams<{ courseId: string }>();
+  const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
+  const navigate = useNavigate();
   const loadCourse = useCoursesStore((s) => s.loadCourse);
   const [course, setCourse] = useState<Course | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -48,11 +49,21 @@ export function CourseView() {
     loadCourse(courseId).then((data) => {
       setCourse(data);
       if (data && data.lessons.length > 0) {
-        setActiveLesson(data.lessons[0]);
+        // Restore lesson from URL param or default to first
+        const target = lessonId
+          ? data.lessons.find((l) => l.id === lessonId)
+          : null;
+        if (target) {
+          setActiveLesson(target);
+        } else {
+          // No lessonId in URL — redirect to first lesson
+          setActiveLesson(data.lessons[0]);
+          navigate(`/course/${courseId}/${data.lessons[0].id}`, { replace: true });
+        }
       }
       setIsLoading(false);
     });
-  }, [courseId, loadCourse]);
+  }, [courseId, lessonId, loadCourse, navigate]);
 
   if (isLoading) {
     return <div className="loading">Opening the textbook...</div>;
@@ -78,17 +89,21 @@ export function CourseView() {
     }
   };
 
+  const goToLesson = (lesson: Lesson) => {
+    setActiveLesson(lesson);
+    navigate(`/course/${courseId}/${lesson.id}`);
+    window.scrollTo(0, 0);
+  };
+
   const goToNext = () => {
     if (currentIndex < course.lessons.length - 1) {
-      setActiveLesson(course.lessons[currentIndex + 1]);
-      window.scrollTo(0, 0);
+      goToLesson(course.lessons[currentIndex + 1]);
     }
   };
 
   const goToPrev = () => {
     if (currentIndex > 0) {
-      setActiveLesson(course.lessons[currentIndex - 1]);
-      window.scrollTo(0, 0);
+      goToLesson(course.lessons[currentIndex - 1]);
     }
   };
 
@@ -108,10 +123,7 @@ export function CourseView() {
               <button
                 key={lesson.id}
                 className={className}
-                onClick={() => {
-                  setActiveLesson(lesson);
-                  window.scrollTo(0, 0);
-                }}
+                onClick={() => goToLesson(lesson)}
               >
                 {lesson.title}
               </button>

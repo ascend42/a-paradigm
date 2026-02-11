@@ -9,7 +9,7 @@
     {
       "id": "plsat-001",
       "course": "para-101",
-      "scenario": "You've just joined a team that uses Paradigm v2. You open the project and see directories like `.paradigm/`, several `.purpose` files, and a `portal.yaml` at the root. A colleague asks you to document a new utility function they wrote in `src/lib/format-currency.ts`.",
+      "scenario": "You've just joined a team that uses Paradigm. You open the project and see directories like `.paradigm/`, several `.purpose` files, and a `portal.yaml` at the root. A colleague asks you to document a new utility function they wrote in `src/lib/format-currency.ts`.",
       "question": "Which symbol prefix should you use to document this utility?",
       "choices": {
         "A": "`$format-currency` \u2014 because it describes a process (formatting)",
@@ -19,42 +19,42 @@
         "E": "`^format-currency` \u2014 because it gates what format is allowed"
       },
       "correct": "C",
-      "explanation": "In Paradigm v2, every documented code unit uses the `#` (Component) symbol. There are only 5 operational symbols, and `#` is the universal prefix for any code unit \u2014 utilities, services, handlers, components, hooks, you name it. `$` is for multi-step flows, `!` for signals/events, `~` for aspects with code anchors, and `^` for authorization gates. A simple utility function is a component."
+      "explanation": "In Paradigm, every documented code unit uses the `#` (Component) symbol. There are only 5 operational symbols, and `#` is the universal prefix for any code unit \u2014 utilities, services, handlers, components, hooks, you name it. `$` is for multi-step flows, `!` for signals/events, `~` for aspects with code anchors, and `^` for condition gates. A simple utility function is a component."
     },
     {
       "id": "plsat-002",
       "course": "para-101",
-      "scenario": "You're reviewing a `.purpose` file and see the following entry:\n\n```yaml\ncomponents:\n  #user-store:\n    description: Client-side user state management\n    tags: [state]\n```",
-      "question": "In Paradigm v1, how would this same concept have been represented?",
+      "scenario": "A component manages user authentication state \u2014 tracking the current user, login status, and session tokens. You need to document it in a `.purpose` file.",
+      "question": "How should this component be documented in Paradigm?",
       "choices": {
-        "A": "`#user-store` with no tags \u2014 components have always been the same",
-        "B": "`%user-store` \u2014 the `%` prefix was used for state in v1",
-        "C": "`@user-store` \u2014 the `@` prefix was used for all features in v1",
-        "D": "`&user-store` \u2014 the `&` prefix was used for integrations in v1",
-        "E": "`!user-store` \u2014 state changes were modeled as signals in v1"
+        "A": "`#auth-state` with no tags \u2014 the component name is descriptive enough",
+        "B": "`#auth-state` with `tags: [state]` \u2014 the `[state]` tag classifies its role",
+        "C": "`!auth-state` \u2014 authentication state changes should be modeled as signals",
+        "D": "`$auth-state` \u2014 state management is a multi-step flow",
+        "E": "`~auth-state` \u2014 authentication state is a cross-cutting concern requiring an aspect"
       },
       "correct": "B",
-      "explanation": "In Paradigm v1, state had its own dedicated symbol: `%`. The v2 migration consolidated this into `#component` with a `[state]` tag. Similarly, `@feature` became `#` with `[feature]` tag, and `&integration` became `#` with `[integration]` tag. v2 uses only 5 operational symbols plus a tag bank for classification."
+      "explanation": "State management components use the `#` (Component) symbol with a `[state]` tag from the tag bank. Paradigm uses only 5 operational symbols for structure, and a tag bank for classification. The `[state]` tag tells humans and AI agents that this component's primary role is managing state, while `#` identifies it as a documented code unit. Signals (`!`) are for events, flows (`$`) are for multi-step processes, and aspects (`~`) are for enforced rules with code anchors."
     },
     {
       "id": "plsat-003",
       "course": "para-101",
-      "scenario": "A developer writes the following logging statement in a checkout service:\n\n```typescript\nlog.feature('#checkout-service').info('Processing payment', { amount });\n```\n\nThe CI pipeline passes, but a senior engineer flags this in code review.",
-      "question": "What is wrong with this logging statement?",
+      "scenario": "Your team is debating logging practices. One developer argues that using `console.log` everywhere is fine because logs are just for debugging. Another insists on using structured, symbol-aware logging with Paradigm's logger (e.g., `log.component('#checkout-service').info('Processing payment', { amount })`).",
+      "question": "What is the STRONGEST argument for using Paradigm's structured logger over raw `console.log`?",
       "choices": {
-        "A": "The `amount` variable should not be logged for security reasons",
-        "B": "`log.feature()` is a Paradigm v1 API \u2014 v2 uses `log.component()`",
-        "C": "The `#` prefix should not be inside the logger call",
-        "D": "Services should use `log.gate()` instead of `log.feature()`",
-        "E": "Nothing is wrong; the senior engineer is being pedantic"
+        "A": "Structured logging is faster at runtime than `console.log`",
+        "B": "Paradigm's logger automatically fixes bugs when it detects errors in the logs",
+        "C": "Symbol-aware logging connects runtime behavior to the documented architecture, making it possible to trace issues back to specific components, flows, and gates",
+        "D": "Using `console.log` will cause Paradigm's CI checks to fail",
+        "E": "Structured logging is required by law for production applications"
       },
-      "correct": "B",
-      "explanation": "In Paradigm v2, the `log.feature()` method no longer exists. Since `@feature` was replaced by `#component` with a `[feature]` tag, the corresponding logger method is `log.component()`. The correct call is `log.component('#checkout-service').info('Processing payment', { amount })`. The `#` prefix inside the call IS correct \u2014 Paradigm loggers expect the symbol prefix. Choice A is a real-world concern but not a Paradigm violation."
+      "correct": "C",
+      "explanation": "The core value of Paradigm's structured logger is traceability: every log line is tagged with a symbol (`#component`, `^gate`, `!signal`, etc.), which means you can correlate runtime behavior with the architectural documentation. When something goes wrong, you can trace from the log back to the component in the `.purpose` file, understand its flows, check its gates, and review its history. Raw `console.log` loses this connection. Performance (A) is not the primary benefit. Paradigm doesn't auto-fix bugs (B) or enforce logging by law (E). CI checks (D) depend on team configuration, not a universal rule."
     },
     {
       "id": "plsat-004",
       "course": "para-101",
-      "scenario": "You're setting up a brand new project with Paradigm. You run `paradigm init` and it creates the `.paradigm/` directory structure. Your project will have a REST API with JWT authentication protecting several endpoints.",
+      "scenario": "You're setting up a brand new project with Paradigm. You run `paradigm shift` and it creates the `.paradigm/` directory structure. Your project will have a REST API with several endpoints that require condition checks \u2014 such as authentication, feature flags, and rate limiting.",
       "question": "Which file MUST you create at the project root?",
       "choices": {
         "A": "`auth.yaml` \u2014 Paradigm's dedicated authentication config",
@@ -64,7 +64,7 @@
         "E": "No file needed \u2014 gates are defined inline in `.purpose` files only"
       },
       "correct": "C",
-      "explanation": "`portal.yaml` is REQUIRED at the project root whenever your project has protected routes. It defines gates (`^` symbols) with their check expressions, and maps routes to the gates that protect them. This is non-negotiable: if your code has JWT/session auth, role checks, or ownership checks, `portal.yaml` MUST exist. Gates can also appear in `.purpose` files for documentation, but `portal.yaml` is the authoritative source for route protection."
+      "explanation": "`portal.yaml` is REQUIRED at the project root whenever your project has protected routes. It defines gates (`^` symbols) with their check expressions, and maps routes to the gates that protect them. Gates can represent any condition checkpoint \u2014 authentication, authorization, feature flags, rate limits, or custom business rules. Gates can also appear in `.purpose` files for documentation, but `portal.yaml` is the authoritative source for route protection."
     },
     {
       "id": "plsat-005",
@@ -84,7 +84,7 @@
     {
       "id": "plsat-006",
       "course": "para-101",
-      "scenario": "Your team uses the following directory structure:\n\n```\nsrc/\n  middleware/auth.ts\n  events/payment-events.ts\n  services/billing.ts\n  flows/onboarding.ts\n  aspects/rate-limiter.ts\n```\n\nA new developer asks which Paradigm logger method to use in each file.",
+      "scenario": "Your team uses the following directory structure:\n\n```\nsrc/\n  middleware/auth.ts\n  events/payment-events.ts\n  services/billing.ts\n  flows/onboarding.ts\n  aspects/rate-limiter.ts\n```\n\nA new developer asks which Paradigm logger method to use in each file. Your team follows the conventional directory-to-symbol mapping as a guideline.",
       "question": "Which file-to-logger mapping is INCORRECT?",
       "choices": {
         "A": "`middleware/auth.ts` \u2192 `log.gate('^auth-check')`",
@@ -94,22 +94,22 @@
         "E": "`aspects/rate-limiter.ts` \u2192 `log.aspect('~rate-limited')`"
       },
       "correct": "D",
-      "explanation": "Files in the `flows/` directory correspond to `$` (Flow) symbols and should use `log.flow()`, not `log.signal()`. The correct call would be `log.flow('$onboarding').info(...)`. The directory-to-symbol mapping is: middleware/auth/guards \u2192 `^` (gate), events/handlers/listeners \u2192 `!` (signal), services/lib/components \u2192 `#` (component), flows/sagas/workflows \u2192 `$` (flow), aspects/rules \u2192 `~` (aspect)."
+      "explanation": "Files in the `flows/` directory conventionally correspond to `$` (Flow) symbols and should use `log.flow()`, not `log.signal()`. The correct call would be `log.flow('$onboarding').info(...)`. The conventional directory-to-symbol mapping is: middleware/auth/guards \u2192 `^` (gate), events/handlers/listeners \u2192 `!` (signal), services/lib/components \u2192 `#` (component), flows/sagas/workflows \u2192 `$` (flow), aspects/rules \u2192 `~` (aspect). While teams may adapt these conventions to their needs, this mapping provides a consistent default that helps developers and AI agents reason about the codebase."
     },
     {
       "id": "plsat-007",
       "course": "para-101",
-      "scenario": "You want to mark a component as experimental \u2014 an idea you're prototyping that may or may not ship. In Paradigm v1, you would have used the `?` symbol prefix (e.g., `?experimental-widget`).",
-      "question": "How do you represent this in Paradigm v2?",
+      "scenario": "Your team is prototyping a new feature \u2014 an experimental search widget that may or may not ship. You've built the component and want to document it in a `.purpose` file. You also want to make it clear to other developers and AI agents that this is an idea in progress, not a committed part of the product.",
+      "question": "How should you classify this component to indicate it is experimental?",
       "choices": {
-        "A": "Use `?experimental-widget` \u2014 the `?` prefix still works in v2",
+        "A": "Use a special `?experimental-widget` symbol prefix reserved for ideas",
         "B": "Add `status: experimental` to the component definition",
         "C": "Add the `[idea]` tag to the component: `tags: [idea]`",
         "D": "Create an aspect `~experimental` and apply it to the component",
         "E": "Comment it out in the `.purpose` file with `# EXPERIMENTAL`"
       },
       "correct": "C",
-      "explanation": "In Paradigm v2, the `?` idea prefix was replaced by the `[idea]` tag. Any symbol can carry any tag from the tag bank, so you'd define the component as `#experimental-widget` with `tags: [idea]`. This is part of the broader v2 philosophy: 5 operational symbols for structure, tags for classification. Choice B (status field) is plausible but `status` is typically for lifecycle states like `active` or `deprecated`, not for ideation."
+      "explanation": "Paradigm's tag bank includes the `[idea]` tag for exactly this purpose. You'd define the component as `#experimental-widget` with `tags: [idea]`. Tags are the classification layer in Paradigm: the 5 operational symbols (`#`, `$`, `^`, `!`, `~`) provide structure, while tags from the tag bank provide classification metadata like `[idea]`, `[feature]`, `[state]`, `[integration]`, `[critical]`, etc. Choice B (status field) is plausible but `status` is typically for lifecycle states like `active` or `deprecated`, not for ideation. There is no `?` symbol prefix in Paradigm (A). Commenting it out (E) removes it from the symbol graph entirely."
     },
     {
       "id": "plsat-008",
@@ -199,7 +199,7 @@
         "E": "The `signals` field for emitting audit events"
       },
       "correct": "B",
-      "explanation": "Aspects (`~`) MUST have code anchors. This is a hard rule in Paradigm v2: no unanchored aspects allowed. Anchors point to the actual lines of code where the aspect is enforced (e.g., `src/middleware/audit.ts:15-35`). Without anchors, the aspect is just documentation with no verifiable link to implementation. `paradigm doctor` and `paradigm_aspect_check` will both flag unanchored aspects. The anchor format supports single lines (`file.ts:15`), ranges (`file.ts:15-20`), and multiple lines (`file.ts:15,25,30`)."
+      "explanation": "Aspects (`~`) MUST have code anchors. This is a hard rule in Paradigm: no unanchored aspects allowed. Anchors point to the actual lines of code where the aspect is enforced (e.g., `src/middleware/audit.ts:15-35`). Without anchors, the aspect is just documentation with no verifiable link to implementation. `paradigm doctor` and `paradigm_aspect_check` will both flag unanchored aspects. The anchor format supports single lines (`file.ts:15`), ranges (`file.ts:15-20`), and multiple lines (`file.ts:15,25,30`)."
     },
     {
       "id": "plsat-014",
@@ -214,7 +214,7 @@
         "E": "Three `#` components with no formal connection between them"
       },
       "correct": "B",
-      "explanation": "When side effects are independent and don't require ordering, a Signal (`!`) is the right model. You define `!payment-succeeded` and document three subscriber components (`#order-service`, `#email-sender`, `#analytics-tracker`) that react to it. Signals are for events that trigger side effects. A Flow (`$`) would be appropriate if the steps needed to happen in a specific order or if one step depended on the output of another. Gates (`^`) are for authorization, not business logic."
+      "explanation": "When side effects are independent and don't require ordering, a Signal (`!`) is the right model. You define `!payment-succeeded` and document three subscriber components (`#order-service`, `#email-sender`, `#analytics-tracker`) that react to it. Signals are for events that trigger side effects. A Flow (`$`) would be appropriate if the steps needed to happen in a specific order or if one step depended on the output of another. Gates (`^`) are for condition checks, not business logic."
     },
     {
       "id": "plsat-015",
@@ -346,7 +346,7 @@
         "B": "Disagree \u2014 single actions are not flows; use `#` components for each action and a `$notification-lifecycle` flow for the overall process",
         "C": "Disagree \u2014 these should all be `!` signals since they're user-triggered events",
         "D": "Agree, but only if each action involves 3+ components",
-        "E": "Disagree \u2014 model them as `^` gates since they require authorization"
+        "E": "Disagree \u2014 model them as `^` gates since they require condition checks"
       },
       "correct": "B",
       "explanation": "Flows (`$`) are for multi-step processes spanning 3+ components. A single action like 'mark as read' is just a component method, not a flow. The correct modeling is: `#notification-reader`, `#notification-archiver`, etc. as components, with `!notification-read`, `!notification-archived` as signals for side effects. If the OVERALL lifecycle (receive \u2192 display \u2192 interact \u2192 archive/delete) is worth documenting, THAT is the flow: `$notification-lifecycle`. Choice D gets close but misses the key insight about modeling the lifecycle."
@@ -424,7 +424,7 @@
         "E": "Record the incident in Sentinel AND record an antipattern in wisdom"
       },
       "correct": "E",
-      "explanation": "The most complete response uses both Sentinel and Wisdom. (1) Record the incident with `paradigm_sentinel_record` so it appears in incident tracking with symbolic context (the `#payment-processor` symbol, error details, timeline). (2) Record an antipattern with `paradigm_wisdom_record` so future AI agents and developers are warned before modifying `#payment-processor`. The antipattern would say: 'Never remove deduplication logic' with alternative: 'If refactoring payment processing, always preserve the deduplication middleware and add tests for it.' A code comment (A) is easily missed. A gate (C) is for authorization, not business logic."
+      "explanation": "The most complete response uses both Sentinel and Wisdom. (1) Record the incident with `paradigm_sentinel_record` so it appears in incident tracking with symbolic context (the `#payment-processor` symbol, error details, timeline). (2) Record an antipattern with `paradigm_wisdom_record` so future AI agents and developers are warned before modifying `#payment-processor`. The antipattern would say: 'Never remove deduplication logic' with alternative: 'If refactoring payment processing, always preserve the deduplication middleware and add tests for it.' A code comment (A) is easily missed. A gate (C) is for condition checks on routes, not business logic."
     },
     {
       "id": "plsat-029",

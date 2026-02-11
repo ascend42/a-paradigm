@@ -96,6 +96,32 @@ A broader framing might need:
 - Gate triggers beyond "route hit" (before deploy, before data mutation, on schedule)
 - The `check:` field currently assumes `req.user` patterns — needs to support arbitrary expressions
 
+## Rename `prizes` Field
+
+The `prizes` field on gates triggers side effects when a gate passes. "Prizes" implies gamification/rewards — doesn't fit a general-purpose gatekeeper. Needs a more generic name.
+
+**Decision: rename `prizes` → `effects`** — neutral, describes what happens ("side effects on pass"), no gamification or auth baggage.
+
+This is a **schema-level change** — affects portal.yaml format, portal-core parser, portal-sdk, MCP tools (`paradigm_portal_add_gate` has a `prizes` param), and all documentation/examples.
+
+**Current usage in codebase:** v2 requires `prizes: []` on each gate in portal.yaml.
+
+## Discipline-Aware Gate Failure Behavior
+
+Gate pass/fail is universal, but what happens on failure is discipline-specific. Currently hardcoded to HTTP:
+
+| Discipline | Gate Failure Behavior |
+|-----------|----------------------|
+| Web/API | Return 401/403 status codes |
+| Mobile | Navigate to login, show dialog, disable UI element |
+| CLI | Exit with error code, print message |
+| Build/CI | Block pipeline, fail the step |
+| Desktop | Show permission dialog, gray out action |
+| Game | Lock content, show upgrade prompt |
+| Embedded | Reject command, enter safe mode |
+
+The disciplines spec (`.paradigm/specs/disciplines.md`) should define gate failure patterns per platform. University content should teach the concept as platform-agnostic with discipline-specific examples.
+
 ## MCP Tool Implications
 
 - `paradigm_gates_for_route` is fundamentally HTTP-centric — may need a more general `paradigm_gates_for_action` or similar

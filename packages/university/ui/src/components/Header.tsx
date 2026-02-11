@@ -27,7 +27,7 @@ export function Header({ version }: HeaderProps) {
         <Link to="/" className={isActive('/') ? 'active' : ''}>
           Campus
         </Link>
-        <Link to="/course/para-101" className={isActive('/course') ? 'active' : ''}>
+        <Link to="/courses" className={isActive('/course') || location.pathname === '/courses' ? 'active' : ''}>
           Courses
         </Link>
         <Link to="/plsat" className={isActive('/plsat') ? 'active' : ''}>
