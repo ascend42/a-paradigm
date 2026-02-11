@@ -77,9 +77,23 @@ This is a pervasive framing issue across the entire university — not a few iso
 38. **plsat/v2.0.json Q plsat-013** — Gate composition question (auth gates only)
 39. **plsat/v2.0.json multiple Qs** — Many questions assume gates = HTTP route protection
 
+42. **para-201.json "The Prizes Field" section** — rename `prizes` → `effects` (decided)
+44. **Gate failure behavior is taught as HTTP-only** — Questions like "Which HTTP status code should a failed auth gate return?" (para-201 Q3) assume web context. Gate failure responses should be discipline-aware: HTTP returns 401/403, mobile navigates to login or disables UI, CLI exits with error code, build pipeline blocks deploy, etc. The university should teach that the *concept* of pass/fail is universal but the *implementation* varies by platform.
+
 **Note:** This is potentially a broader framework-level conceptual shift, not just a university content fix. The university should reflect whatever the framework decides gates are. See `/GATES-REFRAME.md` for broader framework implications.
 
 ## UI/Layout
 
 40. **Header nav not centered** — "Campus / Courses / PLSAT / Library / Certificates" group is visually off-center
 41. **Courses link behavior** — Clicking "Courses" in header goes to first course instead of course picker/listing view
+43. **Code blocks excessive line spacing** — Dark code/file preview blocks (e.g. portal.yaml in "Prizes Field") have too much vertical space between lines; likely CSS on `<pre>`/`<code>` elements
+45. **para-201.json Aspects Q1** — "All API handlers must validate input against Zod schemas" — too implementation-specific, assumes knowledge of Zod. Rewrite to be generalized/philosophical (e.g. "a rule that all handlers must validate input" without naming a specific library). Apply this principle broadly: quiz questions should test Paradigm concepts, not specific tech stacks.
+46. **para-201.json Case Study Q1** — Team invitation token question is correct but overly HTTP/web-specific; consider generalizing or replacing
+
+## Quiz & Exam Structure
+
+47. ~~**Add passage-based question groups**~~ — **DONE (v3.0)** — Added 2 passage groups to PLSAT v3.0: Portal Review (3 questions analyzing a portal.yaml) and Purpose File Review (3 questions analyzing a .purpose file). Server flattens passages for the client; UI renders passage blocks above grouped questions in exam and review modes.
+
+49. **Remove all "v1" and "v2" version labels from PLSAT** — There is no v1 vs v2 distinction for learners, it's just Paradigm. Scenarios saying "Paradigm v2" (e.g. plsat-001 L12: "a team that uses Paradigm v2") should just say "Paradigm." Explanations referencing "In Paradigm v2..." (L22, L52, L112) should just state the fact without versioning. This is in addition to the v1-specific questions already tracked in items 7-9.
+
+48. ~~**PLSAT question variants**~~ — **DONE (v3.0)** — Added variant system to PLSAT v3.0. Server randomly selects one variant per slot per attempt. 5 questions have 2 variants each (plsat-001, 003, 006, 011, 014). v3.0 schema supports adding more variants incrementally.

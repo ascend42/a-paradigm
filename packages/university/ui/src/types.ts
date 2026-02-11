@@ -42,6 +42,7 @@ export interface PLSATQuestion {
   choices: Record<string, string>;
   correct: string;
   explanation: string;
+  passageId?: string;
 }
 
 /** PLSAT exam version summary */
@@ -62,6 +63,7 @@ export interface PLSATExam {
   title: string;
   description: string;
   questions: PLSATQuestion[];
+  passages?: Record<string, string>;
 }
 
 /** PLSAT certificate stored in LocalStorage */
