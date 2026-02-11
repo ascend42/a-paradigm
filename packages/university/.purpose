@@ -20,7 +20,7 @@ components:
     file: src/server/routes/courses.ts
 
   plsat-router:
-    description: API routes for PLSAT exam versions and question delivery (shuffled per attempt)
+    description: API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions.
     file: src/server/routes/plsat.ts
 
   university-ui:
@@ -48,7 +48,7 @@ components:
     file: ui/src/views/QuizView.tsx
 
   plsat-view:
-    description: Timed 50-question certification exam with intro, exam, review, and results phases
+    description: Timed 50-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
     file: ui/src/views/PLSATView.tsx
 
   reference-view:
@@ -118,7 +118,7 @@ flows:
       - component: "#plsat-timer"
         action: Start 45-minute countdown
       - component: "#question-card"
-        action: Present 50 shuffled questions
+        action: Present 50 shuffled questions (with passage blocks for grouped questions)
       - component: "#plsat-view"
         action: Calculate score on submit or time-up
       - component: "#plsat-store"

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { usePLSATStore } from '../store/plsatStore';
 import { QuestionCard } from '../components/QuestionCard';
@@ -7,6 +7,58 @@ import { Seal } from '../components/Seal';
 import type { PLSATExam, Certificate } from '../types';
 
 type Phase = 'intro' | 'exam' | 'review' | 'results';
+
+/** Render a passage string with simple code-block support */
+function PassageBlock({ text }: { text: string }) {
+  // Split on ```...``` fenced code blocks
+  const parts = text.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <div className="passage-block">
+      <div className="passage-content">
+        {parts.map((part, i) => {
+          if (part.startsWith('```')) {
+            // Extract language hint and code body
+            const match = part.match(/^```(\w*)\n?([\s\S]*?)```$/);
+            const code = match ? match[2] : part.slice(3, -3);
+            return (
+              <pre key={i}>
+                <code>{code}</code>
+              </pre>
+            );
+          }
+          // Render plain text paragraphs (split on double newlines)
+          return part.split(/\n\n+/).map((para, j) => (
+            <p key={`${i}-${j}`}>{para}</p>
+          ));
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * For a given question index, determine whether we need to show a passage
+ * block above it. Returns the passage text if this is the first question in
+ * its passage group for the current view, or null otherwise.
+ */
+function getPassageForIndex(
+  questions: PLSATExam['questions'],
+  passages: Record<string, string> | undefined,
+  index: number,
+): string | null {
+  if (!passages) return null;
+  const q = questions[index];
+  if (!q.passageId) return null;
+  const passageText = passages[q.passageId];
+  if (!passageText) return null;
+
+  // Show passage if this is the first question with this passageId in sequence
+  if (index === 0) return passageText;
+  const prev = questions[index - 1];
+  if (prev.passageId !== q.passageId) return passageText;
+  return null;
+}
 
 export function PLSATView() {
   const [exam, setExam] = useState<PLSATExam | null>(null);
@@ -20,7 +72,7 @@ export function PLSATView() {
   const [nameInput, setNameInput] = useState(studentName);
 
   useEffect(() => {
-    fetch('/api/plsat/2.0')
+    fetch('/api/plsat/3.0')
       .then((r) => r.json())
       .then((data) => {
         setExam(data);
@@ -68,6 +120,12 @@ export function PLSATView() {
     setPhase('exam');
   };
 
+  // Pre-compute passage display for the current question in exam mode
+  const currentPassageText = useMemo(() => {
+    if (!exam || phase !== 'exam') return null;
+    return getPassageForIndex(exam.questions, exam.passages, currentQ);
+  }, [exam, phase, currentQ]);
+
   if (isLoading) {
     return <div className="loading">The examination board is convening...</div>;
   }
@@ -99,6 +157,7 @@ export function PLSATView() {
             <li><strong>{Math.floor(exam.timeLimit / 60)} minutes</strong> to complete the examination</li>
             <li><strong>{exam.passThreshold * 100}%</strong> required to pass and receive certification</li>
             <li>All questions are multiple choice (A through E)</li>
+            <li>Some questions reference a shared passage — read it carefully</li>
             <li>You may navigate between questions freely</li>
             <li>There is no penalty for guessing — answer every question</li>
             <li>Your certificate will display the PLSAT version for posterity</li>
@@ -142,6 +201,14 @@ export function PLSATView() {
         </div>
 
         <div style={{ marginTop: 'var(--space-lg)' }}>
+          {currentPassageText && <PassageBlock text={currentPassageText} />}
+
+          {q.passageId && !currentPassageText && (
+            <div className="passage-indicator">
+              Passage question — scroll up or navigate back to see the passage
+            </div>
+          )}
+
           <QuestionCard
             number={currentQ + 1}
             question={q.question}
@@ -253,20 +320,25 @@ export function PLSATView() {
           </p>
         </div>
 
-        {exam.questions.map((q, i) => (
-          <QuestionCard
-            key={q.id}
-            number={i + 1}
-            question={q.question}
-            scenario={q.scenario}
-            choices={q.choices}
-            correct={q.correct}
-            explanation={q.explanation}
-            selectedAnswer={answers[q.id]}
-            onSelect={() => {}}
-            showResult={true}
-          />
-        ))}
+        {exam.questions.map((q, i) => {
+          const passageText = getPassageForIndex(exam.questions, exam.passages, i);
+          return (
+            <div key={q.id}>
+              {passageText && <PassageBlock text={passageText} />}
+              <QuestionCard
+                number={i + 1}
+                question={q.question}
+                scenario={q.scenario}
+                choices={q.choices}
+                correct={q.correct}
+                explanation={q.explanation}
+                selectedAnswer={answers[q.id]}
+                onSelect={() => {}}
+                showResult={true}
+              />
+            </div>
+          );
+        })}
 
         <div className="text-center mt-xl">
           <button className="btn btn-primary" onClick={() => setPhase('results')}>

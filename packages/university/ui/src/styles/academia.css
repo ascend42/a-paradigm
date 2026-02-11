@@ -149,7 +149,7 @@ pre {
   overflow-x: auto;
   margin: var(--space-lg) 0;
   font-size: 0.875rem;
-  line-height: 1.7;
+  line-height: 1.4;
 }
 
 pre code {
@@ -191,6 +191,7 @@ pre code {
   display: flex;
   align-items: center;
   gap: var(--space-lg);
+  flex: 1;
 }
 
 .header-brand {
@@ -248,7 +249,9 @@ pre code {
 .header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-md);
+  flex: 1;
 }
 
 .version-badge {
@@ -679,6 +682,69 @@ pre code {
 .explanation.wrong {
   background: var(--error-bg);
   border-color: var(--error);
+}
+
+/* --- Passage Block (PLSAT passage-based questions) --- */
+.passage-block {
+  background: var(--cream);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  margin-bottom: var(--space-lg);
+  position: relative;
+}
+
+.passage-block::before {
+  content: 'READ THE FOLLOWING PASSAGE';
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold-dark);
+  margin-bottom: var(--space-md);
+  text-transform: uppercase;
+}
+
+.passage-block .passage-content {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--ink-light);
+}
+
+.passage-block .passage-content pre {
+  background: var(--ink);
+  color: var(--parchment);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: var(--space-md) 0;
+}
+
+.passage-block .passage-content code {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+}
+
+.passage-block .passage-content pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+.passage-indicator {
+  display: inline-block;
+  font-family: var(--font-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gold-dark);
+  background: var(--gold-bg);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  margin-bottom: var(--space-sm);
 }
 
 /* --- PLSAT View --- */
