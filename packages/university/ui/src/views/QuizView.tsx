@@ -11,6 +11,7 @@ export function QuizView() {
   const { recordQuiz, completeLesson, getCourseProgress } = useProgressStore();
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [nextLessonId, setNextLessonId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
   const [score, setScore] = useState(0);
@@ -25,8 +26,11 @@ export function QuizView() {
     setIsLoading(true);
     loadCourse(courseId).then((course) => {
       if (course && lessonId) {
-        const found = course.lessons.find((l) => l.id === lessonId);
-        setLesson(found || null);
+        const idx = course.lessons.findIndex((l) => l.id === lessonId);
+        setLesson(idx >= 0 ? course.lessons[idx] : null);
+        if (idx >= 0 && idx < course.lessons.length - 1) {
+          setNextLessonId(course.lessons[idx + 1].id);
+        }
       }
       setIsLoading(false);
     });
@@ -121,9 +125,15 @@ export function QuizView() {
                 ? 'Well done, scholar. You have demonstrated understanding.'
                 : 'Review the material and try again. Persistence is the path to mastery.'}
           </p>
-          <Link to={`/course/${courseId}`} className="btn btn-primary">
-            Return to Course
-          </Link>
+          {nextLessonId ? (
+            <Link to={`/course/${courseId}/${nextLessonId}`} className="btn btn-primary">
+              Next Lesson
+            </Link>
+          ) : (
+            <Link to={`/course/${courseId}`} className="btn btn-primary">
+              Return to Course
+            </Link>
+          )}
         </div>
       )}
     </div>

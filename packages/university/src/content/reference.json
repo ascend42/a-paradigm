@@ -8,9 +8,8 @@
           "id": "component",
           "symbol": "#",
           "name": "Component",
-          "description": "Any documented code unit — services, handlers, utilities, hooks, UI components, stores. The universal building block of Paradigm v2.",
+          "description": "Any documented code unit — services, handlers, utilities, hooks, UI components, stores. The universal building block of Paradigm.",
           "examples": ["#PaymentService", "#login-handler", "#user-store"],
-          "logger": "log.component('#name').level('message')",
           "when": "Always — every code unit you document gets a # prefix. If it's a file, function, class, or module worth naming, it's a component."
         },
         {
@@ -19,17 +18,15 @@
           "name": "Flow",
           "description": "A multi-step process with ordered steps spanning multiple components. Documents the sequence of operations that accomplish a business objective.",
           "examples": ["$checkout-flow", "$user-onboarding", "$order-fulfillment"],
-          "logger": "log.flow('$name').level('message')",
           "when": "When logic spans 3+ components in a defined sequence. If steps must happen in order and involve multiple parts of the system, it's a flow."
         },
         {
           "id": "gate",
           "symbol": "^",
           "name": "Gate",
-          "description": "An authorization checkpoint that controls access to resources or operations. Defined in portal.yaml and enforced in middleware or route handlers.",
+          "description": "A condition checkpoint that controls access to resources or operations. Defined in portal.yaml and enforced in middleware or route handlers.",
           "examples": ["^authenticated", "^project-admin", "^comment-author"],
-          "logger": "log.gate('^name').level('message')",
-          "when": "When access must be restricted — authentication, role checks, ownership validation. One responsibility per gate. Compose gates for complex authorization."
+          "when": "When a condition must be verified before proceeding — authentication, role checks, ownership validation, feature flags, rate limits. One responsibility per gate. Compose gates for complex condition logic."
         },
         {
           "id": "signal",
@@ -37,7 +34,6 @@
           "name": "Signal",
           "description": "An event that triggers independent side effects. Signals decouple the emitter from subscribers — the emitter doesn't know or care who listens.",
           "examples": ["!payment-completed", "!login-failed", "!user-onboarded"],
-          "logger": "log.signal('!name').level('message')",
           "when": "When an event should trigger side effects (emails, analytics, state updates) without the source needing to know about subscribers. Use signals for decoupled reactions."
         },
         {
@@ -46,7 +42,6 @@
           "name": "Aspect",
           "description": "A cross-cutting rule with REQUIRED code anchors. Aspects enforce patterns across multiple components and must point to the actual enforcement code.",
           "examples": ["~audit-required", "~rate-limited", "~cache-invalidation"],
-          "logger": "log.aspect('~name').level('message')",
           "when": "When a rule or pattern must be applied across multiple components (audit logging, rate limiting, caching). Anchors are mandatory — no unanchored aspects allowed."
         }
       ]
@@ -161,7 +156,7 @@
       "cards": [
         {
           "id": "init",
-          "command": "paradigm init",
+          "command": "paradigm shift",
           "description": "Initialize Paradigm in a project. Creates .paradigm/ directory, config.yaml, and optionally portal.yaml. Interactive setup for discipline and conventions.",
           "flags": ["--discipline <type>: Set project discipline (e.g., fullstack-saas, cli-tool)", "--force: Overwrite existing Paradigm config"]
         },
@@ -222,19 +217,19 @@
         {
           "id": "feature",
           "name": "[feature]",
-          "description": "Marks a component as a user-facing feature. Replaces the v1 `@feature` symbol prefix.",
+          "description": "Marks a component as a user-facing feature.",
           "example": "#checkout with tags: [feature, critical]"
         },
         {
           "id": "integration",
           "name": "[integration]",
-          "description": "Marks a component as an external service integration. Replaces the v1 `&integration` symbol prefix. Often paired with the service name.",
+          "description": "Marks a component as an external service integration. Often paired with the service name.",
           "example": "#stripe-service with tags: [integration, stripe]"
         },
         {
           "id": "state",
           "name": "[state]",
-          "description": "Marks a component as a state management unit. Replaces the v1 `%state` symbol prefix.",
+          "description": "Marks a component as a state management unit.",
           "example": "#user-store with tags: [state]"
         },
         {
@@ -264,7 +259,7 @@
         {
           "id": "idea",
           "name": "[idea]",
-          "description": "Marks a symbol as experimental or in the ideation phase. Replaces the v1 `?idea` symbol prefix. Not yet approved for production use.",
+          "description": "Marks a symbol as experimental or in the ideation phase. Not yet approved for production use.",
           "example": "#voice-checkout with tags: [idea, feature]"
         }
       ]
@@ -320,7 +315,7 @@
             "1. Call paradigm_session_recover to load breadcrumbs from previous sessions",
             "2. Call paradigm_status for project overview and health",
             "3. Read .paradigm/config.yaml for project discipline and conventions",
-            "4. Check if portal.yaml exists (for auth-gated projects)",
+            "4. Check if portal.yaml exists (for gate-protected projects)",
             "5. Use paradigm_navigate with 'context' intent for your specific task"
           ]
         },
