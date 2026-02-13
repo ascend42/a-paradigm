@@ -43,6 +43,7 @@ description: |
     - "#NavigateTools"
     - "#SentinelTools"
     - "#TagsTools"
+    - "#ReindexTools"
 
 #CoreTools:
   description: Core symbol tools (search, ripple, related, status, gates_for_route)
@@ -83,6 +84,14 @@ description: |
     - src/tools/tags.ts:1-400
   signals:
     - !tag-suggested
+
+#ReindexTools:
+  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, and flow-index.json from .purpose files
+  tags: [mcp]
+  anchors:
+    - src/tools/reindex.ts:1-320
+  signals:
+    - !index-rebuilt
 
 #ContextTools:
   description: Context monitoring and handoff tools
@@ -194,6 +203,13 @@ $mcp-request-flow:
     reason: string
     exampleSymbols: string[]
 
+!index-rebuilt:
+  description: Static index files (scan-index.json, navigator.yaml, flow-index.json) were rebuilt
+  tags: [audit]
+  payload:
+    filesWritten: string[]
+    symbolCount: number
+
 # ============================================
 # Aspects (~)
 # ============================================
@@ -202,12 +218,17 @@ $mcp-request-flow:
   description: All tool responses must track token usage for context management
   tags: [compliance]
   anchors:
-    - src/tools/context.ts:20-50
+    - src/tools/context.ts:20-22
     - src/tools/index.ts:270-275
   applies-to:
     - "#CoreTools"
     - "#WisdomTools"
     - "#HistoryTools"
+    - "#NavigateTools"
+    - "#ContextTools"
+    - "#SentinelTools"
+    - "#TagsTools"
+    - "#ReindexTools"
   enforcement: |
     Every tool handler must call trackToolCall(text.length, name) before
     returning to enable context monitoring and handoff recommendations.

@@ -12,6 +12,7 @@ import {
   searchSymbols,
   getReferencesTo,
   getAllSymbols,
+  getSymbolsByType,
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
@@ -246,7 +247,7 @@ function buildPreflightRecommendations(
 // ============================================================================
 
 interface PostflightViolation {
-  type: 'missing-purpose' | 'missing-portal-gate' | 'unregistered-symbol' | 'uncaptured-wisdom';
+  type: 'missing-purpose' | 'missing-portal-gate' | 'unregistered-symbol' | 'uncaptured-wisdom' | 'stale-aspect';
   severity: 'error' | 'warning';
   message: string;
   file?: string;
@@ -339,7 +340,76 @@ function runPostflightCheck(
     }
   }
 
-  // 4. Wisdom capture hint
+  // 4. Aspect coverage check
+  // For every aspect in the index, check if touched symbols should be in applies-to
+  // and if anchor files still exist
+  const aspects = getSymbolsByType(ctx.index, 'aspect');
+  for (const aspect of aspects) {
+    const appliesTo = aspect.appliesTo || [];
+    if (appliesTo.length === 0) continue;
+
+    // Check if any touched symbol matches an applies-to pattern
+    for (const pattern of appliesTo) {
+      const isGlob = pattern.includes('*');
+      for (const symbol of symbolsTouched) {
+        let matches = false;
+        if (isGlob) {
+          const regex = new RegExp('^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
+          matches = regex.test(symbol);
+        } else {
+          matches = symbol === pattern;
+        }
+
+        if (matches) {
+          // Symbol matches an aspect's applies-to — check the aspect's anchors are valid
+          const anchors = aspect.anchors || [];
+          if (anchors.length === 0) {
+            violations.push({
+              type: 'stale-aspect',
+              severity: 'warning',
+              message: `Aspect "${aspect.symbol}" applies to "${symbol}" but has no code anchors`,
+              suggestion: `Add anchors to ${aspect.symbol} in .purpose file. Run paradigm_aspect_check for details.`,
+            });
+          } else {
+            for (const anchor of anchors) {
+              const filePath = path.isAbsolute(anchor.path)
+                ? anchor.path
+                : path.join(ctx.rootDir, anchor.path);
+              if (!fs.existsSync(filePath)) {
+                violations.push({
+                  type: 'stale-aspect',
+                  severity: 'warning',
+                  message: `Aspect "${aspect.symbol}" anchor "${anchor.raw}" points to missing file`,
+                  suggestion: `Update anchors for ${aspect.symbol} in .purpose file.`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Check if touched symbols should be in applies-to but aren't
+    for (const symbol of symbolsTouched) {
+      if (!symbol.startsWith('#')) continue; // aspects mostly apply to components
+
+      // Check if any sibling components are in applies-to but this one isn't
+      const data = (aspect.data || {}) as Record<string, unknown>;
+      const aspectRefs = (data.aspects || []) as string[];
+      // We only flag if the aspect uses glob patterns that might match
+      for (const pattern of appliesTo) {
+        if (!pattern.includes('*')) continue;
+        const regex = new RegExp('^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
+        if (regex.test(symbol)) {
+          // This symbol matches the glob but may not have the aspect applied
+          // This is an informational check — the aspect_check tool does deeper validation
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Wisdom capture hint
   if (filesModified.length >= 5 && symbolsTouched.length >= 3) {
     violations.push({
       type: 'uncaptured-wisdom',
@@ -361,8 +431,8 @@ function runPostflightCheck(
     status,
     violations,
     summary: {
-      totalChecks: 4,
-      passed: 4 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
+      totalChecks: 5,
+      passed: 5 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
       warnings,
       errors,
     },

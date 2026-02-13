@@ -219,9 +219,10 @@ features:
     components:
       - '#history-handler'
   hooks-command:
-    description: Git hooks for automatic history capture (install/uninstall/status)
+    description: Git hooks and Claude Code hooks for history capture and index enforcement (install/uninstall/status)
     components:
       - '#hooks-handler'
+      - '#claude-code-hooks-installer'
   thread-command:
     description: Session continuity management (thread.md)
     components:
@@ -350,6 +351,8 @@ components:
     description: Manages implementation log, validation, and fragility
   hooks-handler:
     description: Manages git hooks for automatic history capture
+  claude-code-hooks-installer:
+    description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex
   sentinel-launcher:
     description: Launches the Sentinel codebase intelligence UI
   university-launcher:

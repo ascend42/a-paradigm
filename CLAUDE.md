@@ -277,6 +277,7 @@ Run `paradigm team models` to view/configure. In Cursor and interactive environm
 | **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
 | **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
+| **Finishing work session** | `paradigm_reindex` to rebuild static index |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -442,6 +443,23 @@ feat(#payment-form): add Apple Pay support
 Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
 
+## Automatic Enforcement (Claude Code Hooks)
+
+This project uses Claude Code hooks for paradigm compliance. These are installed
+automatically via `paradigm shift` or `paradigm hooks install`.
+
+| Hook | Type | Behavior |
+|------|------|----------|
+| **Stop hook** | Stop | **BLOCKS** you from finishing if source files were modified without .purpose updates |
+| **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
+| **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
+
+**If the Stop hook blocks you:**
+1. Update the nearest `.purpose` file for each modified code area
+2. Update `portal.yaml` if you added routes or gates
+3. Call `paradigm_reindex` to rebuild the static index
+4. Then finish your session
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -454,7 +472,7 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 ## Maintaining Paradigm Files
 
-**After completing code changes, update Paradigm files if needed:**
+**You MUST update Paradigm files when making code changes. The Stop hook will block you if you don't:**
 
 | Change Type | Action Required |
 |-------------|-----------------|

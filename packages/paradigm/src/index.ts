@@ -984,10 +984,11 @@ const hooksCmd = program
 
 hooksCmd
   .command('install')
-  .description('Install git hooks for history capture')
+  .description('Install git hooks and Claude Code hooks for history capture and index enforcement')
   .option('-f, --force', 'Overwrite existing hooks')
   .option('--post-commit', 'Only install post-commit hook')
   .option('--pre-push', 'Only install pre-push hook')
+  .option('--claude-code', 'Only install Claude Code hooks (stop + pre-commit)')
   .action(async (options) => {
     const { hooksInstallCommand } = await import('./commands/hooks/index.js');
     await hooksInstallCommand(options);
