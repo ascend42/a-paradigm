@@ -30,6 +30,7 @@ import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestrat
 import { getTagsToolsList, handleTagsTool } from './tags.js';
 import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-portal.js';
 import { getPmToolsList, handlePmTool } from './pm.js';
+import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -207,6 +208,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPurposePortalToolsList(),
           // PM governance tools
           ...getPmToolsList(),
+          // Reindex tool
+          ...getReindexToolsList(),
         ],
       };
     }
@@ -888,6 +891,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handlePurposePortalTool(name, args as Record<string, unknown>, ctx, reload);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try reindex tool
+          if (name === 'paradigm_reindex') {
+            const reload = reloadContext || (async () => {});
+            const result = await handleReindexTool(name, args as Record<string, unknown>, ctx, reload);
+            if (result.handled) {
               return {
                 content: [{ type: 'text', text: result.text }],
               };

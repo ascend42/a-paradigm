@@ -104,6 +104,15 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints');
     sections.push('');
 
+    // Before Implementing section - enforcement language
+    sections.push('## Before Implementing (Every Task)');
+    sections.push('');
+    sections.push('1. **Is this task complex?** (3+ files, security + implementation, multiple features)');
+    sections.push('   → Call `paradigm_orchestrate_inline` with mode="plan" BEFORE writing code');
+    sections.push('2. **Does it affect existing symbols?** → Call `paradigm_ripple`');
+    sections.push('3. **Does it add API endpoints?** → Call `paradigm_gates_for_route`');
+    sections.push('');
+
     // Portal Protocol - CRITICAL for auth-aware development
     sections.push('## Portal Protocol (Authorization)');
     sections.push('');
@@ -201,6 +210,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |');
     sections.push('| **Validating changes** | `paradigm_flows_affected` for flow impact |');
     sections.push('| **Getting test data** | `paradigm_test_fixtures` for fixtures |');
+    sections.push('| **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |');
+    sections.push('| **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |');
+    sections.push('| **Finishing work session** | `paradigm_reindex` to rebuild static index |');
     sections.push('');
     sections.push('**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.');
     sections.push('');
@@ -390,6 +402,25 @@ export class ClaudeAdapter implements IDEAdapter {
     // Commit message format (shared v2 convention with Symbols: trailer)
     sections.push(generateCommitConvention());
 
+    // Automatic Enforcement section
+    sections.push('## Automatic Enforcement (Claude Code Hooks)');
+    sections.push('');
+    sections.push('This project uses Claude Code hooks for paradigm compliance. These are installed');
+    sections.push('automatically via `paradigm shift` or `paradigm hooks install`.');
+    sections.push('');
+    sections.push('| Hook | Type | Behavior |');
+    sections.push('|------|------|----------|');
+    sections.push('| **Stop hook** | Stop | **BLOCKS** you from finishing if source files were modified without .purpose updates |');
+    sections.push('| **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |');
+    sections.push('| **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |');
+    sections.push('');
+    sections.push('**If the Stop hook blocks you:**');
+    sections.push('1. Update the nearest `.purpose` file for each modified code area');
+    sections.push('2. Update `portal.yaml` if you added routes or gates');
+    sections.push('3. Call `paradigm_reindex` to rebuild the static index');
+    sections.push('4. Then finish your session');
+    sections.push('');
+
     // Troubleshooting section
     sections.push('## Troubleshooting');
     sections.push('');
@@ -407,7 +438,7 @@ export class ClaudeAdapter implements IDEAdapter {
     // Maintaining Paradigm files section
     sections.push('## Maintaining Paradigm Files');
     sections.push('');
-    sections.push('**After completing code changes, update Paradigm files if needed:**');
+    sections.push('**You MUST update Paradigm files when making code changes. The Stop hook will block you if you don\'t:**');
     sections.push('');
     sections.push('| Change Type | Action Required |');
     sections.push('|-------------|-----------------|');

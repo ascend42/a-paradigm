@@ -1,8 +1,9 @@
 /**
- * Git Hooks CLI Commands - Automatic history capture
+ * Git Hooks & Claude Code Hooks CLI Commands
  *
  * Commands:
- * - paradigm hooks install - Install git hooks for history capture
+ * - paradigm hooks install - Install git hooks + Claude Code hooks
+ * - paradigm hooks install --claude-code - Install only Claude Code hooks
  * - paradigm hooks uninstall - Remove git hooks
  * - paradigm hooks status - Check hook status
  */
@@ -107,6 +108,294 @@ if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ]; then
 fi
 `;
 
+const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
+# Paradigm Claude Code Stop Hook
+# Validates paradigm compliance before allowing the agent to finish.
+# Installed by: paradigm hooks install --claude-code
+#
+# Hook type: Stop
+# Exit 0 = allow, Exit 2 = block with message
+#
+# Checks:
+#   1. Source files modified without .purpose updates
+#   2. Modified source directories missing .purpose files entirely
+#   3. Route-like patterns added without portal.yaml updates
+#   4. Aspect anchor files that no longer exist
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Extract cwd from input (try jq first, fallback to grep)
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+if [ -z "$CWD" ]; then
+  CWD="$(pwd)"
+fi
+
+# Not a paradigm project — pass
+if [ ! -d "$CWD/.paradigm" ]; then
+  exit 0
+fi
+
+cd "$CWD" || exit 0
+
+# Get modified files (uncommitted changes)
+MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
+if [ -z "$MODIFIED" ]; then
+  exit 0
+fi
+
+VIOLATIONS=""
+VIOLATION_COUNT=0
+
+# --- Check 1: Source files modified without .purpose updates ---
+SOURCE_COUNT=0
+PARADIGM_COUNT=0
+
+for file in $MODIFIED; do
+  case "$file" in
+    .paradigm/*|*.purpose|portal.yaml)
+      PARADIGM_COUNT=$((PARADIGM_COUNT + 1))
+      ;;
+    *.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
+    *)
+      SOURCE_COUNT=$((SOURCE_COUNT + 1))
+      ;;
+  esac
+done
+
+if [ "$SOURCE_COUNT" -gt 2 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+  VIOLATIONS="$VIOLATIONS
+  - You modified $SOURCE_COUNT source files but 0 paradigm files (.purpose/portal.yaml).
+    Update the nearest .purpose file for each modified code area."
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+fi
+
+# --- Check 2: Modified source directories missing .purpose files ---
+DIRS_WITHOUT_PURPOSE=""
+
+for file in $MODIFIED; do
+  case "$file" in
+    .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+  esac
+
+  dir=$(dirname "$file")
+  # Walk up to find a .purpose file
+  found_purpose=false
+  check_dir="$dir"
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+    if [ -f "$check_dir/.purpose" ]; then
+      found_purpose=true
+      break
+    fi
+    check_dir=$(dirname "$check_dir")
+  done
+  # Also check root
+  if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
+    found_purpose=true
+  fi
+
+  if [ "$found_purpose" = false ]; then
+    # Deduplicate directory names
+    case "$DIRS_WITHOUT_PURPOSE" in
+      *"$dir"*) ;;
+      *) DIRS_WITHOUT_PURPOSE="$DIRS_WITHOUT_PURPOSE $dir" ;;
+    esac
+  fi
+done
+
+if [ -n "$DIRS_WITHOUT_PURPOSE" ]; then
+  VIOLATIONS="$VIOLATIONS
+  - These directories have modified source files but no .purpose file anywhere in their path:
+   $DIRS_WITHOUT_PURPOSE
+    Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+fi
+
+# --- Check 3: Route patterns added without portal.yaml ---
+if [ -f "portal.yaml" ] || echo "$MODIFIED" | grep -q "portal.yaml"; then
+  : # portal.yaml exists or was modified — OK
+else
+  # Check if any modified files contain route-like patterns
+  ROUTE_FILES=""
+  for file in $MODIFIED; do
+    case "$file" in
+      *.ts|*.js|*.tsx|*.jsx|*.py|*.rs|*.go)
+        if [ -f "$file" ]; then
+          if grep -qE '\\.(get|post|put|patch|delete)\\s*\\(|router\\.|app\\.(get|post|put|delete)|@(Get|Post|Put|Delete)|#\\[actix_web::(get|post)' "$file" 2>/dev/null; then
+            ROUTE_FILES="$ROUTE_FILES $file"
+          fi
+        fi
+        ;;
+    esac
+  done
+
+  if [ -n "$ROUTE_FILES" ]; then
+    VIOLATIONS="$VIOLATIONS
+  - Route/endpoint patterns found in modified files but no portal.yaml exists:
+   $ROUTE_FILES
+    Create portal.yaml with gate definitions. Use paradigm_gates_for_route for suggestions."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+fi
+
+# --- Check 4: Aspect anchor files that no longer exist ---
+# Quick check: grep anchors from .purpose files and verify files exist
+for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
+  if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
+    # Extract anchor file paths (lines after "anchors:" that start with "- ")
+    in_anchors=false
+    while IFS= read -r line; do
+      case "$line" in
+        *"anchors:"*) in_anchors=true; continue ;;
+        *"- "*)
+          if [ "$in_anchors" = true ]; then
+            # Extract file path (before :linenum)
+            anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
+            if [ -n "$anchor_path" ] && [ ! -f "$anchor_path" ]; then
+              VIOLATIONS="$VIOLATIONS
+  - Aspect anchor '$anchor_path' in $purpose_file does not exist.
+    Update the anchor or remove the stale aspect."
+              VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+            fi
+          fi
+          ;;
+        *) in_anchors=false ;;
+      esac
+    done < "$purpose_file"
+  fi
+done
+
+# --- Final verdict ---
+if [ "$VIOLATION_COUNT" -gt 0 ]; then
+  echo ""
+  echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):"
+  echo "$VIOLATIONS"
+  echo ""
+  echo "Fix these issues, then call paradigm_reindex before finishing."
+  exit 2
+fi
+
+exit 0
+`;
+
+const CLAUDE_CODE_POSTWRITE_HOOK = `#!/bin/sh
+# Paradigm Claude Code PostToolUse Hook
+# Fires after Edit/Write tool calls to remind agents about .purpose files.
+# Installed by: paradigm hooks install --claude-code
+#
+# Hook type: PostToolUse (matcher: Edit,Write)
+# Exit 0 always (never blocks — advisory only)
+# Prints reminder if the edited file's directory has no .purpose file
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Extract the file path from tool_input
+if command -v jq >/dev/null 2>&1; then
+  FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // empty' 2>/dev/null)
+else
+  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  if [ -z "$FILE_PATH" ]; then
+    FILE_PATH=$(echo "$INPUT" | grep -o '"filePath"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"filePath"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  fi
+fi
+
+if [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+# Skip non-source files
+case "$FILE_PATH" in
+  *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;
+esac
+
+# Skip .paradigm directory
+case "$FILE_PATH" in
+  */.paradigm/*|.paradigm/*) exit 0 ;;
+esac
+
+# Not a paradigm project — pass
+if [ ! -d ".paradigm" ]; then
+  exit 0
+fi
+
+# Walk up from the file's directory to find a .purpose file
+dir=$(dirname "$FILE_PATH")
+found_purpose=false
+
+while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ "$dir" != "" ]; do
+  if [ -f "$dir/.purpose" ]; then
+    found_purpose=true
+    break
+  fi
+  dir=$(dirname "$dir")
+done
+
+# Check root .purpose
+if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
+  found_purpose=true
+fi
+
+if [ "$found_purpose" = false ]; then
+  file_dir=$(dirname "$FILE_PATH")
+  echo "[paradigm] No .purpose file covers $file_dir — consider creating one with paradigm_purpose_init."
+fi
+
+exit 0
+`;
+
+const CLAUDE_CODE_PRECOMMIT_HOOK = `#!/bin/sh
+# Paradigm Claude Code Pre-Commit Hook
+# Intercepts git commit Bash calls and auto-rebuilds the index.
+# Installed by: paradigm hooks install --claude-code
+#
+# Hook type: PreToolUse (matcher: Bash)
+# Exit 0 = allow (never blocks), just ensures index is fresh
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Extract the command from tool_input
+if command -v jq >/dev/null 2>&1; then
+  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+else
+  COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+# If command doesn't contain "git commit", pass through
+case "$COMMAND" in
+  *"git commit"*) ;;
+  *) exit 0 ;;
+esac
+
+# If no .paradigm directory, not a paradigm project
+if [ ! -d ".paradigm" ]; then
+  exit 0
+fi
+
+# Run paradigm index --quiet (the existing CLI command)
+if command -v paradigm >/dev/null 2>&1; then
+  paradigm index --quiet 2>/dev/null || true
+elif command -v npx >/dev/null 2>&1; then
+  npx paradigm index --quiet 2>/dev/null || true
+fi
+
+# Stage the rebuilt files if they exist
+for f in .paradigm/scan-index.json .paradigm/navigator.yaml .paradigm/flow-index.json; do
+  if [ -f "$f" ]; then
+    git add "$f" 2>/dev/null || true
+  fi
+done
+
+# Never block — exit 0
+exit 0
+`;
+
 /**
  * paradigm hooks install
  */
@@ -114,65 +403,187 @@ export async function hooksInstallCommand(options: {
   force?: boolean;
   postCommit?: boolean;
   prePush?: boolean;
+  claudeCode?: boolean;
 } = {}): Promise<void> {
   const rootDir = process.cwd();
 
-  // Check if we're in a git repo
-  const gitDir = path.join(rootDir, '.git');
-  if (!fs.existsSync(gitDir)) {
-    console.log(chalk.red('Not a git repository.'));
-    return;
+  const onlyClaudeCode = options.claudeCode && !options.postCommit && !options.prePush;
+
+  // Install git hooks (unless --claude-code was the only flag)
+  if (!onlyClaudeCode) {
+    // Check if we're in a git repo
+    const gitDir = path.join(rootDir, '.git');
+    if (!fs.existsSync(gitDir)) {
+      console.log(chalk.red('Not a git repository.'));
+      return;
+    }
+
+    const hooksDir = path.join(gitDir, 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+
+    const installAll = !options.postCommit && !options.prePush && !options.claudeCode;
+    const installed: string[] = [];
+
+    // Install post-commit hook
+    if (installAll || options.postCommit) {
+      const hookPath = path.join(hooksDir, 'post-commit');
+      if (fs.existsSync(hookPath) && !options.force) {
+        const content = fs.readFileSync(hookPath, 'utf8');
+        if (!content.includes('paradigm')) {
+          console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
+        } else {
+          console.log(chalk.gray('post-commit hook already installed by paradigm'));
+        }
+      } else {
+        fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
+        fs.chmodSync(hookPath, '755');
+        installed.push('post-commit');
+      }
+    }
+
+    // Install pre-push hook
+    if (installAll || options.prePush) {
+      const hookPath = path.join(hooksDir, 'pre-push');
+      if (fs.existsSync(hookPath) && !options.force) {
+        const content = fs.readFileSync(hookPath, 'utf8');
+        if (!content.includes('paradigm')) {
+          console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
+        } else {
+          console.log(chalk.gray('pre-push hook already installed by paradigm'));
+        }
+      } else {
+        fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
+        fs.chmodSync(hookPath, '755');
+        installed.push('pre-push');
+      }
+    }
+
+    if (installed.length > 0) {
+      console.log(chalk.green(`Git hooks installed: ${installed.join(', ')}`));
+    }
+
+    // Initialize history if needed
+    const historyDir = path.join(rootDir, '.paradigm/history');
+    if (!fs.existsSync(historyDir)) {
+      console.log(chalk.gray('Tip: Run `paradigm history init` to initialize history tracking'));
+    }
   }
 
-  const hooksDir = path.join(gitDir, 'hooks');
-  fs.mkdirSync(hooksDir, { recursive: true });
+  // Install Claude Code hooks (when --claude-code flag or no specific flags)
+  const installAll = !options.postCommit && !options.prePush && !options.claudeCode;
+  if (installAll || options.claudeCode) {
+    await installClaudeCodeHooks(rootDir, options.force);
+  }
+}
 
-  const installAll = !options.postCommit && !options.prePush;
+/**
+ * Install Claude Code hooks (.claude/hooks/ scripts + settings.json)
+ */
+async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise<void> {
+  const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
+  fs.mkdirSync(claudeHooksDir, { recursive: true });
+
   const installed: string[] = [];
 
-  // Install post-commit hook
-  if (installAll || options.postCommit) {
-    const hookPath = path.join(hooksDir, 'post-commit');
-    if (fs.existsSync(hookPath) && !options.force) {
-      const content = fs.readFileSync(hookPath, 'utf8');
-      if (!content.includes('paradigm')) {
-        console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
-      } else {
-        console.log(chalk.gray('post-commit hook already installed by paradigm'));
-      }
-    } else {
-      fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
-      fs.chmodSync(hookPath, '755');
-      installed.push('post-commit');
+  // Hook scripts as embedded constants
+  const hookScripts = [
+    { name: 'paradigm-stop.sh', content: CLAUDE_CODE_STOP_HOOK },
+    { name: 'paradigm-precommit.sh', content: CLAUDE_CODE_PRECOMMIT_HOOK },
+    { name: 'paradigm-postwrite.sh', content: CLAUDE_CODE_POSTWRITE_HOOK },
+  ];
+
+  for (const hook of hookScripts) {
+    const destPath = path.join(claudeHooksDir, hook.name);
+
+    if (fs.existsSync(destPath) && !force) {
+      console.log(chalk.gray(`  ${hook.name}: already installed`));
+      continue;
+    }
+
+    fs.writeFileSync(destPath, hook.content, 'utf8');
+    fs.chmodSync(destPath, '755');
+    installed.push(hook.name);
+  }
+
+  // Update .claude/settings.json
+  const settingsPath = path.join(rootDir, '.claude', 'settings.json');
+  let settings: Record<string, unknown> = {};
+
+  if (fs.existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch {
+      // Start fresh if corrupt
     }
   }
 
-  // Install pre-push hook
-  if (installAll || options.prePush) {
-    const hookPath = path.join(hooksDir, 'pre-push');
-    if (fs.existsSync(hookPath) && !options.force) {
-      const content = fs.readFileSync(hookPath, 'utf8');
-      if (!content.includes('paradigm')) {
-        console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
-      } else {
-        console.log(chalk.gray('pre-push hook already installed by paradigm'));
-      }
-    } else {
-      fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
-      fs.chmodSync(hookPath, '755');
-      installed.push('pre-push');
-    }
+  // Merge hooks configuration (preserve existing hooks)
+  const hooks = (settings.hooks || {}) as Record<string, unknown[]>;
+
+  const stopHookEntry = {
+    hooks: [{
+      type: 'command',
+      command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-stop.sh"`,
+      timeout: 10,
+    }],
+  };
+
+  const preCommitHookEntry = {
+    matcher: 'Bash',
+    hooks: [{
+      type: 'command',
+      command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-precommit.sh"`,
+      timeout: 30,
+    }],
+  };
+
+  // Add Stop hook if not already present
+  const stopHooks = (hooks.Stop || []) as Array<Record<string, unknown>>;
+  const hasParadigmStop = stopHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-stop.sh'),
+  );
+  if (!hasParadigmStop) {
+    stopHooks.push(stopHookEntry);
   }
+  hooks.Stop = stopHooks;
+
+  // Add PreToolUse hook if not already present
+  const preToolUseHooks = (hooks.PreToolUse || []) as Array<Record<string, unknown>>;
+  const hasParadigmPrecommit = preToolUseHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-precommit.sh'),
+  );
+  if (!hasParadigmPrecommit) {
+    preToolUseHooks.push(preCommitHookEntry);
+  }
+  hooks.PreToolUse = preToolUseHooks;
+
+  // Add PostToolUse hook (advisory reminder after source edits)
+  const postWriteHookEntry = {
+    matcher: 'Edit,Write',
+    hooks: [{
+      type: 'command',
+      command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-postwrite.sh"`,
+      timeout: 5,
+    }],
+  };
+
+  const postToolUseHooks = (hooks.PostToolUse || []) as Array<Record<string, unknown>>;
+  const hasParadigmPostwrite = postToolUseHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-postwrite.sh'),
+  );
+  if (!hasParadigmPostwrite) {
+    postToolUseHooks.push(postWriteHookEntry);
+  }
+  hooks.PostToolUse = postToolUseHooks;
+
+  settings.hooks = hooks;
+
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 
   if (installed.length > 0) {
-    console.log(chalk.green(`Git hooks installed: ${installed.join(', ')}`));
+    console.log(chalk.green(`Claude Code hooks installed: ${installed.join(', ')}`));
   }
-
-  // Initialize history if needed
-  const historyDir = path.join(rootDir, '.paradigm/history');
-  if (!fs.existsSync(historyDir)) {
-    console.log(chalk.gray('Tip: Run `paradigm history init` to initialize history tracking'));
-  }
+  console.log(chalk.green('Claude Code settings.json updated with hook configuration'));
 }
 
 /**
@@ -215,43 +626,79 @@ export async function hooksStatusCommand(): Promise<void> {
   const rootDir = process.cwd();
   const gitDir = path.join(rootDir, '.git');
 
-  if (!fs.existsSync(gitDir)) {
-    console.log(chalk.red('Not a git repository.'));
-    return;
+  // Git hooks status
+  if (fs.existsSync(gitDir)) {
+    console.log(chalk.magenta('\n  Git Hooks Status\n'));
+
+    const hooksDir = path.join(gitDir, 'hooks');
+    const hooks = ['post-commit', 'pre-push'];
+
+    for (const hookName of hooks) {
+      const hookPath = path.join(hooksDir, hookName);
+      if (fs.existsSync(hookPath)) {
+        const content = fs.readFileSync(hookPath, 'utf8');
+        if (content.includes('paradigm')) {
+          console.log(chalk.green(`  ${hookName}: installed (paradigm)`));
+        } else {
+          console.log(chalk.yellow(`  ${hookName}: exists (other)`));
+        }
+      } else {
+        console.log(chalk.gray(`  ${hookName}: not installed`));
+      }
+    }
+
+    console.log();
+
+    // Check history directory
+    const historyDir = path.join(rootDir, '.paradigm/history');
+    if (fs.existsSync(historyDir)) {
+      const logPath = path.join(historyDir, 'log.jsonl');
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, 'utf8');
+        const count = content.split('\n').filter((l) => l.trim()).length;
+        console.log(chalk.white(`  History entries: ${count}`));
+      }
+    } else {
+      console.log(chalk.gray('  History: not initialized'));
+      console.log(chalk.gray('  Run `paradigm history init` to enable'));
+    }
+  } else {
+    console.log(chalk.gray('\n  Not a git repository (git hooks N/A)\n'));
   }
 
-  console.log(chalk.magenta('\n  Git Hooks Status\n'));
+  // Claude Code hooks status
+  console.log(chalk.magenta('  Claude Code Hooks Status\n'));
 
-  const hooksDir = path.join(gitDir, 'hooks');
-  const hooks = ['post-commit', 'pre-push'];
+  const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
+  const claudeHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
 
-  for (const hookName of hooks) {
-    const hookPath = path.join(hooksDir, hookName);
+  for (const hookName of claudeHooks) {
+    const hookPath = path.join(claudeHooksDir, hookName);
     if (fs.existsSync(hookPath)) {
-      const content = fs.readFileSync(hookPath, 'utf8');
-      if (content.includes('paradigm')) {
-        console.log(chalk.green(`  ${hookName}: installed (paradigm)`));
-      } else {
-        console.log(chalk.yellow(`  ${hookName}: exists (other)`));
-      }
+      console.log(chalk.green(`  ${hookName}: installed`));
     } else {
       console.log(chalk.gray(`  ${hookName}: not installed`));
     }
   }
 
-  console.log();
-
-  // Check history directory
-  const historyDir = path.join(rootDir, '.paradigm/history');
-  if (fs.existsSync(historyDir)) {
-    const logPath = path.join(historyDir, 'log.jsonl');
-    if (fs.existsSync(logPath)) {
-      const content = fs.readFileSync(logPath, 'utf8');
-      const count = content.split('\n').filter((l) => l.trim()).length;
-      console.log(chalk.white(`  History entries: ${count}`));
+  // Check settings.json
+  const settingsPath = path.join(rootDir, '.claude', 'settings.json');
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const hooks = settings.hooks || {};
+      const hasStop = JSON.stringify(hooks.Stop || []).includes('paradigm-stop.sh');
+      const hasPrecommit = JSON.stringify(hooks.PreToolUse || []).includes('paradigm-precommit.sh');
+      const hasPostwrite = JSON.stringify(hooks.PostToolUse || []).includes('paradigm-postwrite.sh');
+      console.log(chalk.gray(`  settings.json Stop hook: ${hasStop ? 'configured' : 'missing'}`));
+      console.log(chalk.gray(`  settings.json PreToolUse hook: ${hasPrecommit ? 'configured' : 'missing'}`));
+      console.log(chalk.gray(`  settings.json PostToolUse hook: ${hasPostwrite ? 'configured' : 'missing'}`));
+    } catch {
+      console.log(chalk.yellow('  settings.json: parse error'));
     }
   } else {
-    console.log(chalk.gray('  History: not initialized'));
-    console.log(chalk.gray('  Run `paradigm history init` to enable'));
+    console.log(chalk.gray('  settings.json: not found'));
   }
+
+  console.log();
 }

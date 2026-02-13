@@ -22,6 +22,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@a-company/premise-core": "*",
+    "@a-company/probe-core": "*",
     "@a-company/purpose-core": "*",
     "@a-company/portal-core": "*",
     "@a-company/sentinel": "*",
