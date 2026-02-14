@@ -33,7 +33,7 @@ export function createCoursesRouter(contentDir: string): Router {
 
     // Sort by course ID (para-101, para-201, etc.)
     courses.sort((a, b) => a.id.localeCompare(b.id));
-    res.json({ courses });
+    return res.json({ courses });
   });
 
   // GET /api/courses/:id - Get full course with lesson content and quizzes
@@ -44,7 +44,7 @@ export function createCoursesRouter(contentDir: string): Router {
     }
 
     const data = JSON.parse(fs.readFileSync(courseFile, 'utf-8'));
-    res.json(data);
+    return res.json(data);
   });
 
   // GET /api/courses/:id/lessons/:lessonId - Get a single lesson
@@ -60,7 +60,7 @@ export function createCoursesRouter(contentDir: string): Router {
       return res.status(404).json({ error: `Lesson '${req.params.lessonId}' not found` });
     }
 
-    res.json(lesson);
+    return res.json(lesson);
   });
 
   return router;
