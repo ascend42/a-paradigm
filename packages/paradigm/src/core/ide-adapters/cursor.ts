@@ -457,10 +457,13 @@ Always available in \`navigator.yaml\`:
    * Context monitoring rules - session management and handoff
    */
   private generateContextMdc(): string {
-    return frontmatter('Paradigm context monitoring - session management and handoff protocol', {
-      alwaysApply: true
-    }) +
+    return frontmatter('Session recovery and handoff - call paradigm_session_recover at session start, paradigm_context_check periodically during long sessions, paradigm_handoff_prepare when context is high.') +
       `# Context Monitoring Protocol
+
+## Session Start (EVERY new session)
+
+Call \`paradigm_session_recover\` to load previous session breadcrumbs.
+Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ## Periodic Checks
 
@@ -578,9 +581,7 @@ This project runs on **${platform === 'darwin' ? 'macOS' : 'Linux'}**. Use appro
 
 **IMPORTANT:** Do NOT use Windows-style commands like \`dir\`, \`del\`, or \`%VAR%\`.`;
 
-    return frontmatter('Paradigm multi-agent orchestration protocol', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Multi-agent orchestration - use when task affects 3+ files, involves security AND implementation, or spans multiple features. Call paradigm_orchestrate_inline for planning.') +
       `# Paradigm Orchestration Protocol
 
 ${terminalGuidance}
@@ -649,9 +650,7 @@ paradigm team agents suggest "Add user authentication with JWT"
    * Flow-First Development rules
    */
   private generateFlowsMdc(): string {
-    return frontmatter('Paradigm flow-first development - define flows before implementing', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Flow-first development - apply when implementing features spanning multiple steps, requiring gates, or emitting signals. Define $flows before coding.') +
       `# Flow-First Development
 
 ## What are Flows?
@@ -769,9 +768,7 @@ paradigm flow validate $task-creation
    * Commit convention rules
    */
   private generateCommitsMdc(): string {
-    return frontmatter('Paradigm commit conventions with Symbols: trailer for history tracking', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Paradigm commit conventions with Symbols: trailer - apply when creating git commits for history tracking.') +
       generateCommitConvention();
   }
 

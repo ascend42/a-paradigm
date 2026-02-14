@@ -372,6 +372,105 @@ export function generateCommitConvention(): string {
 }
 
 /**
+ * Generate MCP tool reference table (IDE-agnostic)
+ */
+export function generateMcpToolReference(): string {
+  const lines: string[] = [];
+
+  lines.push('## MCP Tools');
+  lines.push('');
+  lines.push('Paradigm provides MCP tools for token-efficient, always-fresh data. Prefer these over reading files directly.');
+  lines.push('');
+  lines.push('| Tool | Description | When to Use |');
+  lines.push('|------|-------------|-------------|');
+  lines.push('| `paradigm_status` | Project overview and symbol counts | Starting a session |');
+  lines.push('| `paradigm_search` | Find symbols by name, description, or tags | Looking for symbols |');
+  lines.push('| `paradigm_navigate` | Find code locations, explore areas, get task context | Locating code |');
+  lines.push('| `paradigm_ripple` | Dependency and impact analysis | Before modifying symbols |');
+  lines.push('| `paradigm_related` | Direct relationships for a symbol | Understanding connections |');
+  lines.push('| `paradigm_gates_for_route` | Suggest gates for an API endpoint | Adding API routes |');
+  lines.push('| `paradigm_wisdom_context` | Team preferences and antipatterns | Before implementing |');
+  lines.push('| `paradigm_history_fragility` | Stability warnings for symbols | Before modifying fragile areas |');
+  lines.push('| `paradigm_flow_validate` | Validate flow definitions | Before/after implementing flows |');
+  lines.push('| `paradigm_flows_affected` | Flows impacted by symbol changes | After modifying symbols |');
+  lines.push('| `paradigm_test_fixtures` | Get test data for validation | Writing tests |');
+  lines.push('| `paradigm_orchestrate_inline` | Multi-agent task planning | Complex tasks (3+ files) |');
+  lines.push('| `paradigm_pm_preflight` | Pre-task compliance check | Starting any task |');
+  lines.push('| `paradigm_pm_postflight` | Post-task violation detection | Finishing any task |');
+  lines.push('| `paradigm_session_recover` | Load previous session breadcrumbs | Starting a new session |');
+  lines.push('| `paradigm_context_check` | Check context window usage | Every 10-15 tool calls |');
+  lines.push('| `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |');
+  lines.push('| `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |');
+  lines.push('| `paradigm_session_stats` | Current session token usage | Checking budget |');
+  lines.push('');
+  lines.push('**Rule**: Use MCP tools for discovery and validation, file reads for implementation.');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate before/after task workflow protocol
+ */
+export function generateWorkflowProtocol(): string {
+  const lines: string[] = [];
+
+  lines.push('## Workflow Protocol');
+  lines.push('');
+  lines.push('### Before Each Task');
+  lines.push('');
+  lines.push('1. **Preflight**: Call `paradigm_pm_preflight` with your task description');
+  lines.push('   - Returns affected symbols, ripple analysis, required agents');
+  lines.push('2. **Impact check**: Call `paradigm_ripple` for any symbols you\'ll modify');
+  lines.push('3. **Gate check**: Call `paradigm_gates_for_route` before adding API endpoints');
+  lines.push('4. **Complex tasks** (3+ files, security + implementation): Call `paradigm_orchestrate_inline` with mode="plan"');
+  lines.push('');
+  lines.push('### After Each Task');
+  lines.push('');
+  lines.push('1. **Postflight**: Call `paradigm_pm_postflight` with modified files and symbols');
+  lines.push('   - Checks for missing .purpose files, unregistered routes, uncaptured wisdom');
+  lines.push('2. **Reindex**: Call `paradigm_reindex` to rebuild static index files');
+  lines.push('3. **Validate flows**: Call `paradigm_flow_validate` if you touched flow-related symbols');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate session recovery and handoff protocol
+ */
+export function generateHandoffProtocol(): string {
+  const lines: string[] = [];
+
+  lines.push('## Session Recovery & Handoff');
+  lines.push('');
+  lines.push('### Session Start (EVERY new session)');
+  lines.push('');
+  lines.push('Call `paradigm_session_recover` to load previous session breadcrumbs.');
+  lines.push('Returns: symbols modified, files explored, recent actions, and suggestions.');
+  lines.push('');
+  lines.push('### Context Monitoring');
+  lines.push('');
+  lines.push('Call `paradigm_context_check` every 10-15 tool calls to track context usage.');
+  lines.push('');
+  lines.push('| Usage | Recommendation | Action |');
+  lines.push('|-------|----------------|--------|');
+  lines.push('| <50% | continue | Keep working |');
+  lines.push('| 50-70% | consider-handoff | Plan a stopping point |');
+  lines.push('| 70-85% | handoff-recommended | Prepare handoff soon |');
+  lines.push('| >85% | handoff-urgent | Handoff after current task |');
+  lines.push('');
+  lines.push('### Handoff Process');
+  lines.push('');
+  lines.push('1. Call `paradigm_handoff_prepare` with summary, next steps, and target agent');
+  lines.push('2. User runs: `paradigm team handoff --to <agent> --summary "..."`');
+  lines.push('3. New session accepts: `paradigm team accept <handoff-id>`');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
  * Generate footer section
  */
 export function generateFooter(): string {
