@@ -1,0 +1,242 @@
+version: '1.0'
+generated: '2026-02-14T00:11:55.816Z'
+by_symbol:
+  '#plsat-router':
+    symbol: '#plsat-router'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_0
+        id: h0001
+        ts: '2026-02-11T13:17:25.980Z'
+        type: implement
+        symbols:
+          - '#plsat-router'
+          - '#plsat-view'
+          - '#academia-theme'
+        author:
+          type: agent
+          id: claude
+        intent: feature
+        description: 'PLSAT v3.0: passage-based question groups and question variants. New v3.0.json schema with items[], variants, and passage groups. Server resolves variants (random pick) and flattens passage groups before sending to client. UI renders passage blocks above grouped questions. 2 passage groups (portal.yaml review, .purpose file review), 5 questions with 2 variants each. Total stays at 50 questions.'
+        files:
+          - packages/university/ui/src/types.ts
+          - packages/university/src/server/routes/plsat.ts
+          - packages/university/ui/src/views/PLSATView.tsx
+          - packages/university/ui/src/styles/academia.css
+          - packages/university/src/content/plsat/v3.0.json
+    contributors:
+      human: []
+      agent:
+        - claude
+  '#plsat-view':
+    symbol: '#plsat-view'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_0
+    contributors:
+      human: []
+      agent:
+        - claude
+  '#academia-theme':
+    symbol: '#academia-theme'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_0
+    contributors:
+      human: []
+      agent:
+        - claude
+  '!index-rebuilt':
+    symbol: '!index-rebuilt'
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_1
+        id: h0002
+        ts: '2026-02-13T23:59:42Z'
+        type: implement
+        symbols:
+          - '!index-rebuilt'
+          - '#claude-code-hooks-installer'
+          - '#hooks-handler'
+          - '#ReindexTools'
+          - ~token-tracking
+        author:
+          type: human
+          id: ascend
+        commit: 40ab0c5e6244e001cf8551af4404fadfa48c6c3e
+        intent: feature
+        files:
+          - .claude/settings.json
+          - .paradigm/scan-index.json
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/index.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#ReindexTools, #claude-code-hooks-installer): fix index drift and enforce paradigm compliance'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#claude-code-hooks-installer':
+    symbol: '#claude-code-hooks-installer'
+    total_changes: 2
+    last_modified: '2026-02-14T00:01:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0003
+        ts: '2026-02-14T00:01:41Z'
+        type: implement
+        symbols:
+          - '#claude-code-hooks-installer'
+        author:
+          type: human
+          id: ascend
+        commit: e46211d156eda9ded427fb5f377fae06426d9574
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/commands/hooks/index.ts
+        description: 'fix(#claude-code-hooks-installer): resolve anchor paths relative to .purpose file directory'
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hooks-handler':
+    symbol: '#hooks-handler'
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ReindexTools':
+    symbol: '#ReindexTools'
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~token-tracking:
+    symbol: ~token-tracking
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ConnectionRenderer':
+    symbol: '#ConnectionRenderer'
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_2
+        id: h0004
+        ts: '2026-02-14T00:02:29Z'
+        type: implement
+        symbols:
+          - '#ConnectionRenderer'
+          - '#ResourceHandlers'
+          - ~responsive-layout
+        author:
+          type: human
+          id: ascend
+        commit: 7c7d707f77a747635db7fa0bbff8526cef3253fb
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm-mcp/.purpose
+          - packages/sentinel/ui/.purpose
+        description: 'fix(~aspects): correct 3 stale anchor paths in .purpose files'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ResourceHandlers':
+    symbol: '#ResourceHandlers'
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_2
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~responsive-layout:
+    symbol: ~responsive-layout
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_2
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-mcp':
+    symbol: '#paradigm-mcp'
+    total_changes: 1
+    last_modified: '2026-02-14T00:10:56Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0005
+        ts: '2026-02-14T00:10:56Z'
+        type: implement
+        symbols:
+          - '#paradigm-mcp'
+        author:
+          type: human
+          id: ascend
+        commit: eec4393a284a6507e7180f08e3c4b2c37a21206d
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/index.ts
+        description: 'fix(#paradigm-mcp): route paradigm_session_recover to context tool handler'
+    contributors:
+      human:
+        - ascend
+      agent: []
+co_changes: []
+fragile_symbols: []

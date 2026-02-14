@@ -187,6 +187,8 @@ Before exploring this codebase:
 
 ## Context Monitoring Protocol
 
+**At session start**, call `paradigm_session_recover` to load breadcrumbs from the previous session. This provides context on what was done before (symbols modified, files explored, recent actions).
+
 **Periodically check context usage** by calling `paradigm_context_check` (every 10-15 tool calls or when user asks).
 
 **When recommendation is NOT "continue":**
@@ -277,6 +279,7 @@ Run `paradigm team models` to view/configure. In Cursor and interactive environm
 | **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
 | **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
+| **Starting new session** | `paradigm_session_recover` for previous session breadcrumbs |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
