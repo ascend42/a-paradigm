@@ -272,11 +272,11 @@ done
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
-  echo ""
-  echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):"
-  echo "$VIOLATIONS"
-  echo ""
-  echo "Fix these issues, then call paradigm_reindex before finishing."
+  echo "" >&2
+  echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
+  echo "$VIOLATIONS" >&2
+  echo "" >&2
+  echo "Fix these issues, then call paradigm_reindex before finishing." >&2
   exit 2
 fi
 
@@ -343,7 +343,7 @@ fi
 
 if [ "$found_purpose" = false ]; then
   file_dir=$(dirname "$FILE_PATH")
-  echo "[paradigm] No .purpose file covers $file_dir — consider creating one with paradigm_purpose_init."
+  echo "[paradigm] No .purpose file covers $file_dir — consider creating one with paradigm_purpose_init." >&2
 fi
 
 exit 0
