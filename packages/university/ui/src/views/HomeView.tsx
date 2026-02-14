@@ -39,12 +39,22 @@ export function HomeView() {
           const pct = getCoursePercentage(course.id, course.lessonCount);
           return (
             <Link to={`/course/${course.id}`} className="course-card" key={course.id}>
-              <span className="course-number">{course.id.replace('para-', 'PARA ')}</span>
-              <h3>{course.title.replace(/^PARA \d+: /, '')}</h3>
+              <div className="course-card-header">
+                <div className="course-card-title">
+                  <span className="course-number">{course.id.replace('para-', 'PARA ')}</span>
+                  <h3>{course.title.replace(/^PARA \d+: /, '')}</h3>
+                </div>
+                <ProgressRing percentage={pct} />
+              </div>
               <p className="course-description">{course.description}</p>
+              <div className="course-topics">
+                {course.lessons.map((lesson) => (
+                  <span key={lesson.id} className="course-topic-tag">{lesson.title}</span>
+                ))}
+              </div>
               <div className="course-meta">
                 <span>{course.lessonCount} lessons</span>
-                <ProgressRing percentage={pct} />
+                <span className="course-meta-cta">Start course &rarr;</span>
               </div>
             </Link>
           );

@@ -98,21 +98,23 @@ export function CourseView() {
     }
   };
 
-  const goToLesson = (lesson: Lesson) => {
+  const goToLesson = (lesson: Lesson, scrollTop = false) => {
     setActiveLesson(lesson);
     navigate(`/course/${courseId}/${lesson.id}`);
-    window.scrollTo(0, 0);
+    if (scrollTop) {
+      window.scrollTo(0, 0);
+    }
   };
 
   const goToNext = () => {
     if (currentIndex < course.lessons.length - 1) {
-      goToLesson(course.lessons[currentIndex + 1]);
+      goToLesson(course.lessons[currentIndex + 1], true);
     }
   };
 
   const goToPrev = () => {
     if (currentIndex > 0) {
-      goToLesson(course.lessons[currentIndex - 1]);
+      goToLesson(course.lessons[currentIndex - 1], true);
     }
   };
 

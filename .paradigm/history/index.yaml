@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T13:56:51.395Z'
+generated: '2026-02-14T18:17:26.855Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -626,6 +626,53 @@ by_symbol:
     fragility: low
     recent:
       - *ref_7
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-ui':
+    symbol: '#university-ui'
+    total_changes: 2
+    last_modified: '2026-02-14T18:10:09Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0013
+        ts: '2026-02-14T18:10:09Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: deb982cdc1b6aa75ec1afd7de34346ca4fae76da
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/ui/src/components/Seal.tsx
+          - packages/university/ui/src/styles/academia.css
+        description: 'fix(#university-ui): make Seal SVG theme-aware with CSS custom properties'
+      - id: h0012
+        ts: '2026-02-14T17:30:39Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 99ad2eaec3166a6c762477efae6d713496c55e15
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/ui/src/components/Header.tsx
+          - packages/university/ui/src/styles/academia.css
+          - packages/university/ui/src/views/CourseView.tsx
+        description: 'feat(#university-ui): add dark/light mode toggle and fix code block spacing'
     contributors:
       human:
         - ascend
