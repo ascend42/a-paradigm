@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T11:03:55.337Z'
+generated: '2026-02-14T11:23:48.038Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -415,6 +415,112 @@ by_symbol:
     fragility: low
     recent:
       - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#doctor':
+    symbol: '#doctor'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_5
+        id: h0009
+        ts: '2026-02-14T11:22:26Z'
+        type: implement
+        symbols:
+          - '#doctor'
+          - '#hooks-installer'
+          - '#ide-adapters'
+          - '#paradigm-config'
+          - '#scan-index'
+          - '#test-suite'
+        author:
+          type: human
+          id: ascend
+        commit: 5653d4d7d4910c2e18a7496ae88b4ff9478ba3c7
+        intent: feature
+        files:
+          - .github/workflows/ci.yml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - package-lock.json
+          - package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/doctor.test.ts
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/commands/hooks/index.test.ts
+          - packages/paradigm/src/commands/scan/index.test.ts
+          - packages/paradigm/src/commands/scan/index.ts
+          - packages/paradigm/src/core/ide-adapters/adapters.test.ts
+          - packages/paradigm/src/core/ide-adapters/base.test.ts
+          - packages/paradigm/src/core/ide-adapters/index.test.ts
+          - packages/paradigm/src/core/paradigm-config.test.ts
+          - packages/paradigm/src/test-utils.ts
+          - packages/paradigm/vitest.config.ts
+        description: 'feat(#test-suite): add Vitest test infrastructure with 102 tests'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hooks-installer':
+    symbol: '#hooks-installer'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ide-adapters':
+    symbol: '#ide-adapters'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-config':
+    symbol: '#paradigm-config'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#scan-index':
+    symbol: '#scan-index'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#test-suite':
+    symbol: '#test-suite'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
     contributors:
       human:
         - ascend
