@@ -539,11 +539,11 @@ paradigm_session_stats()
     // Build agent list from manifest (handle malformed agents.yaml gracefully)
     let agentList = '(Run `paradigm team init` to configure agents)';
     if (agentsManifest) {
-      const agents = agentsManifest.agents || (agentsManifest as Record<string, unknown>).roles;
+      const agents = agentsManifest.agents || (agentsManifest as unknown as Record<string, unknown>).roles;
       if (agents && typeof agents === 'object') {
         try {
-          agentList = Object.entries(agents)
-            .map(([name, agent]: [string, Record<string, unknown>]) => {
+          agentList = Object.entries(agents as unknown as Record<string, Record<string, unknown>>)
+            .map(([name, agent]) => {
               const roleText = (agent.role || agent.description || '') as string;
               const roleFirstLine = roleText.split('\n')[0].trim() || name;
               const writes = (agent.focus as Record<string, unknown>)?.writes;
