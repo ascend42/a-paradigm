@@ -24,7 +24,7 @@ description: |
   description: MCP resource handlers for paradigm:// URIs
   tags: [feature, mcp]
   anchors:
-    - src/resources.ts:1-200
+    - src/resources/index.ts:1-200
   signals:
     - !resource-read
 
