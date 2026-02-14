@@ -36,6 +36,86 @@ export function resetSession() {
 }
 
 /**
+ * Extract breadcrumb info (summary + symbol) from a tool call's arguments.
+ */
+function extractBreadcrumbInfo(toolName: string, args: Record<string, unknown>): { summary: string; symbol?: string } {
+  switch (toolName) {
+    case 'paradigm_search':
+      return {
+        summary: `Searched for "${args.query}"${args.type ? ` (type: ${args.type})` : ''}`,
+        symbol: args.query as string | undefined,
+      };
+    case 'paradigm_ripple':
+      return {
+        summary: `Ripple analysis on ${args.symbol}${args.depth ? ` (depth: ${args.depth})` : ''}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_related':
+      return {
+        summary: `Checked relations for ${args.symbol}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_status':
+      return { summary: 'Checked project status' };
+    case 'paradigm_navigate': {
+      const intent = args.intent as string | undefined;
+      const target = args.target as string | undefined;
+      const task = args.task as string | undefined;
+      if (intent === 'context' && task) return { summary: `Navigate context: "${task}"` };
+      if (target) return { summary: `Navigate ${intent || 'find'}: ${target}`, symbol: target };
+      return { summary: `Navigate (${intent || 'unknown'})` };
+    }
+    case 'paradigm_gates_for_route':
+      return { summary: `Gate suggestions for ${args.method || 'GET'} ${args.route}` };
+    case 'paradigm_wisdom_context':
+      return {
+        summary: `Checked wisdom for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_context':
+      return {
+        summary: `Checked history for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_record':
+      return {
+        summary: `Recorded ${args.type}: ${(args.description as string || '').slice(0, 60)}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_fragility':
+      return {
+        summary: `Checked fragility for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_flows_affected':
+      return {
+        summary: `Checked flows affected by ${args.symbol}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_reindex':
+      return { summary: 'Rebuilt static index files' };
+    default: {
+      // Generic fallback: strip paradigm_ prefix, pick first meaningful arg
+      const shortName = toolName.replace(/^paradigm_/, '');
+      const firstArg = Object.values(args).find(v => typeof v === 'string' && v.length > 0) as string | undefined;
+      return {
+        summary: firstArg ? `${shortName}: ${firstArg.slice(0, 60)}` : shortName,
+        symbol: (args.symbol as string) || undefined,
+      };
+    }
+  }
+}
+
+/**
+ * Record a breadcrumb for a tool call (called from the dispatch layer).
+ */
+export function addToolBreadcrumb(toolName: string, args: Record<string, unknown>): void {
+  const tracker = getSessionTracker();
+  const { summary, symbol } = extractBreadcrumbInfo(toolName, args);
+  tracker.addBreadcrumb('tool-call', summary, { tool: toolName, symbol });
+}
+
+/**
  * Get context tools list
  */
 export function getContextToolsList() {

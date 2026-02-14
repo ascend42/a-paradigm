@@ -25,6 +25,7 @@ import { loadProjectContext, type ProjectContext } from './utils/index-loader.js
 import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
 import { rebuildStaticFiles } from './tools/reindex.js';
+import { getSessionTracker } from './utils/session-tracker.js';
 
 // Get project directory from args or use cwd
 const projectDir = process.argv[2] || process.cwd();
@@ -65,6 +66,7 @@ async function main() {
   
   try {
     context = await loadProjectContext(projectDir);
+    getSessionTracker().setRootDir(context.rootDir);
     console.error(`[paradigm-mcp] Loaded ${context.aggregation.symbols.length} symbols from ${context.projectName}`);
   } catch (error) {
     console.error(`[paradigm-mcp] Error loading project:`, error);

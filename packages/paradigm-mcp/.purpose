@@ -94,10 +94,10 @@ description: |
     - !index-rebuilt
 
 #ContextTools:
-  description: Context monitoring and handoff tools
+  description: Context monitoring, handoff, and session breadcrumb tools
   tags: [mcp]
   anchors:
-    - src/tools/context.ts:1-200
+    - src/tools/context.ts:1-430
 
 #IndexLoader:
   description: Loads project symbol index using premise-core aggregator

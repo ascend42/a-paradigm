@@ -22,7 +22,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
-import { getContextToolsList, handleContextTool, trackToolCall } from './context.js';
+import { getContextToolsList, handleContextTool, trackToolCall, addToolBreadcrumb } from './context.js';
 import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
@@ -220,6 +220,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
     CallToolRequestSchema,
     async (request) => {
       const { name, arguments: args } = request.params;
+      addToolBreadcrumb(name, (args ?? {}) as Record<string, unknown>);
       const ctx = getContext();
 
       switch (name) {
