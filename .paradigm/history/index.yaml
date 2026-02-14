@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T09:56:01.644Z'
+generated: '2026-02-14T10:37:28.417Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -125,11 +125,44 @@ by_symbol:
       agent: []
   '#hooks-handler':
     symbol: '#hooks-handler'
-    total_changes: 1
-    last_modified: '2026-02-13T23:59:42Z'
+    total_changes: 2
+    last_modified: '2026-02-14T10:35:47Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_4
+        id: h0007
+        ts: '2026-02-14T10:35:47Z'
+        type: implement
+        symbols:
+          - '#adapter-base'
+          - '#adapter-registry'
+          - '#agents-adapter'
+          - '#claude-adapter'
+          - '#cursor-adapter'
+          - '#cursor-hooks-installer'
+          - '#hooks-handler'
+        author:
+          type: human
+          id: ascend
+        commit: aedd34c092463f48905d56fc1772b99acaafdfe6
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/core/ide-adapters/.purpose
+          - packages/paradigm/src/core/ide-adapters/agents.ts
+          - packages/paradigm/src/core/ide-adapters/base.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+          - packages/paradigm/src/core/ide-adapters/index.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#cursor-hooks-installer, #agents-adapter): Cursor hooks, AGENTS.md, and cross-IDE improvements'
       - *ref_1
     contributors:
       human:
@@ -295,6 +328,78 @@ by_symbol:
     fragility: low
     recent:
       - *ref_3
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#adapter-base':
+    symbol: '#adapter-base'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#adapter-registry':
+    symbol: '#adapter-registry'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agents-adapter':
+    symbol: '#agents-adapter'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#claude-adapter':
+    symbol: '#claude-adapter'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-adapter':
+    symbol: '#cursor-adapter'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-hooks-installer':
+    symbol: '#cursor-hooks-installer'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
     contributors:
       human:
         - ascend
