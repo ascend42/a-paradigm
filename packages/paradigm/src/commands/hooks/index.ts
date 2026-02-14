@@ -245,8 +245,10 @@ fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
 # Quick check: grep anchors from .purpose files and verify files exist
+# Anchor paths are relative to the directory containing the .purpose file
 for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
   if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
+    purpose_dir=$(dirname "$purpose_file")
     # Extract anchor file paths (lines after "anchors:" that start with "- ")
     in_anchors=false
     while IFS= read -r line; do
@@ -256,11 +258,15 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
           if [ "$in_anchors" = true ]; then
             # Extract file path (before :linenum)
             anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
-            if [ -n "$anchor_path" ] && [ ! -f "$anchor_path" ]; then
-              VIOLATIONS="$VIOLATIONS
+            if [ -n "$anchor_path" ]; then
+              # Resolve relative to the .purpose file's directory
+              resolved_path="$purpose_dir/$anchor_path"
+              if [ ! -f "$resolved_path" ]; then
+                VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
-              VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+                VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+              fi
             fi
           fi
           ;;
