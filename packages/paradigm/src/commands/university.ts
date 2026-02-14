@@ -9,7 +9,7 @@ interface UniversityOptions {
   open?: boolean;
 }
 
-export async function universityCommand(path: string | undefined, options: UniversityOptions): Promise<void> {
+export async function universityCommand(_path: string | undefined, options: UniversityOptions): Promise<void> {
   const port = parseInt(options.port || '3839', 10);
   const shouldOpen = options.open !== false;
 

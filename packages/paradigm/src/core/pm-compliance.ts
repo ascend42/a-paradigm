@@ -10,16 +10,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   searchSymbols,
-  getAllSymbols,
   getReferencesTo,
-  getReferencesFrom,
-  getSymbolCounts,
   type SymbolIndex,
 } from '@a-company/premise-core';
 import {
   loadPortalConfig,
   extractDeclaredGates,
-  type PortalConfig,
 } from './portal-compliance.js';
 import { suggestAgentsForTask } from './agent-matcher.js';
 import { loadAgentsManifest } from '../commands/team/loader.js';

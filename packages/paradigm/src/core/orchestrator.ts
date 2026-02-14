@@ -280,7 +280,7 @@ export class Orchestrator {
       if (options.pmGovernance?.enabled) {
         try {
           const { aggregateFromDirectory } = await import('@a-company/premise-core');
-          const aggregation = aggregateFromDirectory(this.rootDir);
+          const aggregation = await aggregateFromDirectory(this.rootDir);
           const index = buildSymbolIndex(aggregation);
           preflightResult = runPreflight(task, this.rootDir, index);
         } catch {
@@ -311,7 +311,7 @@ export class Orchestrator {
       if (options.pmGovernance?.enabled && preflightResult) {
         try {
           const { aggregateFromDirectory } = await import('@a-company/premise-core');
-          const aggregation = aggregateFromDirectory(this.rootDir);
+          const aggregation = await aggregateFromDirectory(this.rootDir);
           const index = buildSymbolIndex(aggregation);
 
           // Collect files and symbols from agent results
@@ -319,7 +319,7 @@ export class Orchestrator {
           const symbolsTouched: string[] = [];
           for (const agentResult of result.agentResults) {
             if (agentResult.relay?.outputs?.artifacts) {
-              filesModified.push(...agentResult.relay.outputs.artifacts);
+              filesModified.push(...agentResult.relay.outputs.artifacts.map(a => a.path));
             }
           }
           // Extract symbols from preflight
