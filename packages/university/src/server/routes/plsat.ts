@@ -174,7 +174,7 @@ export function createPlsatRouter(contentDir: string): Router {
     });
 
     versions.sort((a, b) => b.version.localeCompare(a.version));
-    res.json({ versions });
+    return res.json({ versions });
   });
 
   // GET /api/plsat/:version - Get full exam for a specific version
@@ -203,7 +203,7 @@ export function createPlsatRouter(contentDir: string): Router {
 
     // Legacy v2.0 path: shuffle questions
     const shuffled = [...data.questions].sort(() => Math.random() - 0.5);
-    res.json({
+    return res.json({
       ...data,
       questions: shuffled,
     });

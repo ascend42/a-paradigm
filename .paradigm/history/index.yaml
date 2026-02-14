@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T11:23:48.038Z'
+generated: '2026-02-14T13:41:33.785Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -382,11 +382,32 @@ by_symbol:
       agent: []
   '#cursor-adapter':
     symbol: '#cursor-adapter'
-    total_changes: 2
-    last_modified: '2026-02-14T10:59:53Z'
+    total_changes: 3
+    last_modified: '2026-02-14T13:40:00Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_6
+        id: h0010
+        ts: '2026-02-14T13:40:00Z'
+        type: implement
+        symbols:
+          - '#cursor-adapter'
+          - '#orchestrator'
+          - '#pm-compliance'
+          - '#university-command'
+        author:
+          type: human
+          id: ascend
+        commit: 20cedf7960b6da3ceac2fea9d7f3d71539d56650
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/commands/university.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+          - packages/paradigm/src/core/orchestrator.ts
+          - packages/paradigm/src/core/pm-compliance.ts
+        description: 'fix(#paradigm-cli): resolve all TypeScript errors (10 errors → 0)'
       - id: h0008
         ts: '2026-02-14T10:59:53Z'
         type: implement
@@ -521,6 +542,42 @@ by_symbol:
     fragility: low
     recent:
       - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#orchestrator':
+    symbol: '#orchestrator'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#pm-compliance':
+    symbol: '#pm-compliance'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-command':
+    symbol: '#university-command'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
     contributors:
       human:
         - ascend
