@@ -127,11 +127,6 @@
   display: none;
 }
 
-/* Seal icon: brighten for dark backgrounds */
-[data-theme="dark"] .header-brand svg {
-  filter: brightness(1.8) saturate(1.2);
-}
-
 /* Theme toggle: more visible in dark mode */
 [data-theme="dark"] .theme-toggle {
   border-color: var(--ink-muted);
