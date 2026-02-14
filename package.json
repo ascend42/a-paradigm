@@ -27,7 +27,8 @@
     "format:check": "prettier --check .",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && changeset publish",
+    "test": "npm run test --workspace=@a-company/paradigm"
   },
   "keywords": [
     "developer-tools",
