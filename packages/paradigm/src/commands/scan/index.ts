@@ -319,7 +319,7 @@ async function generateFlowIndex(
 /**
  * Parse flow steps from various formats
  */
-function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
+export function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
   if (!steps || !Array.isArray(steps)) return [];
 
   const result: FlowStep[] = [];
@@ -346,7 +346,7 @@ function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
 /**
  * Index symbols used in flow steps
  */
-function indexFlowSymbols(
+export function indexFlowSymbols(
   flowId: string,
   steps: FlowStep[],
   symbolToFlows: Record<string, string[]>

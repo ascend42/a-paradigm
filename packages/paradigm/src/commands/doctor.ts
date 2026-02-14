@@ -18,10 +18,11 @@ interface CheckResult {
 
 interface DoctorOptions {
   quiet?: boolean;
+  rootDir?: string;
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
-  const cwd = process.cwd();
+  const cwd = options.rootDir || process.cwd();
   const results: CheckResult[] = [];
   const quiet = options.quiet;
 
