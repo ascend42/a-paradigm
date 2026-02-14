@@ -809,7 +809,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           }
 
           // Try context tools
-          if (name.startsWith('paradigm_context_') || name === 'paradigm_handoff_prepare' || name === 'paradigm_session_stats') {
+          if (name.startsWith('paradigm_context_') || name.startsWith('paradigm_session_') || name === 'paradigm_handoff_prepare') {
             const result = await handleContextTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               // Don't track context tools to avoid recursion
