@@ -97,6 +97,8 @@ export class ClaudeAdapter implements IDEAdapter {
     // First actions for new sessions - explicit onboarding checklist
     sections.push('## First Actions for New Sessions');
     sections.push('');
+    sections.push('**Resuming a session:** Call `paradigm_session_recover` for previous session context.');
+    sections.push('');
     sections.push('1. **Orient:** Call `paradigm_status` to see project overview and available symbols');
     sections.push('2. **Verify:** Check `.paradigm/config.yaml` for discipline and conventions');
     sections.push('3. **Locate:** Use `paradigm_navigate` with "context" intent for your task');

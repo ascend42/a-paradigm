@@ -219,10 +219,11 @@ features:
     components:
       - '#history-handler'
   hooks-command:
-    description: Git hooks and Claude Code hooks for history capture and index enforcement (install/uninstall/status)
+    description: Git hooks, Claude Code hooks, and Cursor hooks for history capture and index enforcement (install/uninstall/status)
     components:
       - '#hooks-handler'
       - '#claude-code-hooks-installer'
+      - '#cursor-hooks-installer'
   thread-command:
     description: Session continuity management (thread.md)
     components:

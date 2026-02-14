@@ -107,7 +107,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   // Always generate both CLAUDE.md and .cursor/rules/ since users often have multiple AI tools
   spinner.start('Step 4/6: Syncing IDE configurations...');
   try {
-    const ideTargets = options.ide ? [options.ide] : ['claude', 'cursor', 'copilot', 'windsurf'];
+    const ideTargets = options.ide ? [options.ide] : ['claude', 'cursor', 'copilot', 'windsurf', 'agents'];
     const syncResults: string[] = [];
 
     for (const ide of ideTargets) {
@@ -132,7 +132,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   spinner.start('Step 5/6: Installing hooks...');
   try {
     await hooksInstallCommand({ force: options.force });
-    spinner.succeed(chalk.green('Hooks installed (git + Claude Code)'));
+    spinner.succeed(chalk.green('Hooks installed (git + Claude Code + Cursor)'));
   } catch (error) {
     spinner.warn(chalk.yellow(`Hooks warning: ${(error as Error).message}`));
   }
@@ -172,8 +172,10 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: 'portal.yaml', desc: 'Authorization gates', optional: true },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
+    { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
     { path: '.cursor/rules/', desc: 'Cursor AI instructions', isDir: true },
     { path: '.claude/hooks/', desc: 'Claude Code enforcement hooks', isDir: true, optional: true },
+    { path: '.cursor/hooks/', desc: 'Cursor enforcement hooks', isDir: true, optional: true },
   ];
 
   for (const file of files) {

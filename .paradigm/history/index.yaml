@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T00:11:55.816Z'
+generated: '2026-02-14T09:56:01.644Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -234,6 +234,67 @@ by_symbol:
           - CHANGELOG.md
           - packages/paradigm-mcp/src/tools/index.ts
         description: 'fix(#paradigm-mcp): route paradigm_session_recover to context tool handler'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ContextTools':
+    symbol: '#ContextTools'
+    total_changes: 1
+    last_modified: '2026-02-14T09:55:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_3
+        id: h0006
+        ts: '2026-02-14T09:55:01Z'
+        type: implement
+        symbols:
+          - '#ContextTools'
+          - '#MCPServer'
+          - '#ToolHandlers'
+        author:
+          type: human
+          id: ascend
+        commit: 794ae355a0c3c6fa826ab8296755372780cf717d
+        intent: feature
+        files:
+          - .paradigm/docs/commands.md
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - .paradigm/specs/context-tracking.md
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/index.ts
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+        description: 'feat(#ContextTools): wire session breadcrumbs for paradigm_session_recover'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#MCPServer':
+    symbol: '#MCPServer'
+    total_changes: 1
+    last_modified: '2026-02-14T09:55:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_3
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ToolHandlers':
+    symbol: '#ToolHandlers'
+    total_changes: 1
+    last_modified: '2026-02-14T09:55:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_3
     contributors:
       human:
         - ascend
