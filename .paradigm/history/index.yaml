@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T10:39:39.944Z'
+generated: '2026-02-14T11:03:55.337Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -382,11 +382,26 @@ by_symbol:
       agent: []
   '#cursor-adapter':
     symbol: '#cursor-adapter'
-    total_changes: 1
-    last_modified: '2026-02-14T10:35:47Z'
+    total_changes: 2
+    last_modified: '2026-02-14T10:59:53Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0008
+        ts: '2026-02-14T10:59:53Z'
+        type: implement
+        symbols:
+          - '#cursor-adapter'
+        author:
+          type: human
+          id: ascend
+        commit: 80d2683f20641fbf3899dc9d502af191901f4220
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+        description: 'fix(#cursor-adapter): handle malformed agents.yaml gracefully'
       - *ref_4
     contributors:
       human:
