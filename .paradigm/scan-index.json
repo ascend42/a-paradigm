@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-14T13:56:39.084Z",
+    "generatedAt": "2026-02-14T17:30:39.383Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 13,
@@ -2599,6 +2599,40 @@
       "visualTags": [],
       "related": []
     },
+    "adapter-base": {
+      "id": "adapter-base",
+      "name": "Adapter Base",
+      "symbol": "#adapter-base",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Shared generation helpers — symbol table, logger spec, navigation, context sections",
+      "visualTags": [],
+      "related": [
+        "~ide-adapter-pattern"
+      ]
+    },
+    "agents-adapter": {
+      "id": "agents-adapter",
+      "name": "Agents Adapter",
+      "symbol": "#agents-adapter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)",
+      "visualTags": [],
+      "related": [
+        "~ide-adapter-pattern"
+      ]
+    },
+    "adapter-registry": {
+      "id": "adapter-registry",
+      "name": "Adapter Registry",
+      "symbol": "#adapter-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "IDE adapter discovery, selection, and factory",
+      "visualTags": [],
+      "related": []
+    },
     "claude-provider": {
       "id": "claude-provider",
       "name": "Claude Provider",
@@ -2670,40 +2704,6 @@
       "related": [
         "~provider-cascade"
       ]
-    },
-    "adapter-base": {
-      "id": "adapter-base",
-      "name": "Adapter Base",
-      "symbol": "#adapter-base",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Shared generation helpers — symbol table, logger spec, navigation, context sections",
-      "visualTags": [],
-      "related": [
-        "~ide-adapter-pattern"
-      ]
-    },
-    "agents-adapter": {
-      "id": "agents-adapter",
-      "name": "Agents Adapter",
-      "symbol": "#agents-adapter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)",
-      "visualTags": [],
-      "related": [
-        "~ide-adapter-pattern"
-      ]
-    },
-    "adapter-registry": {
-      "id": "adapter-registry",
-      "name": "Adapter Registry",
-      "symbol": "#adapter-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "IDE adapter discovery, selection, and factory",
-      "visualTags": [],
-      "related": []
     },
     "index": {
       "id": "index",
@@ -4669,6 +4669,18 @@
       "category": "components",
       "id": "background-orchestrator"
     },
+    "#adapter-base": {
+      "category": "components",
+      "id": "adapter-base"
+    },
+    "#agents-adapter": {
+      "category": "components",
+      "id": "agents-adapter"
+    },
+    "#adapter-registry": {
+      "category": "components",
+      "id": "adapter-registry"
+    },
     "#claude-provider": {
       "category": "components",
       "id": "claude-provider"
@@ -4692,18 +4704,6 @@
     "#manual-provider": {
       "category": "components",
       "id": "manual-provider"
-    },
-    "#adapter-base": {
-      "category": "components",
-      "id": "adapter-base"
-    },
-    "#agents-adapter": {
-      "category": "components",
-      "id": "agents-adapter"
-    },
-    "#adapter-registry": {
-      "category": "components",
-      "id": "adapter-registry"
     },
     "^gate-check": {
       "category": "gates",

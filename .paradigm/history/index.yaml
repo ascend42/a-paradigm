@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T13:41:33.785Z'
+generated: '2026-02-14T13:56:51.395Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -578,6 +578,54 @@ by_symbol:
     fragility: low
     recent:
       - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-server':
+    symbol: '#university-server'
+    total_changes: 1
+    last_modified: '2026-02-14T13:56:39Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_7
+        id: h0011
+        ts: '2026-02-14T13:56:39Z'
+        type: implement
+        symbols:
+          - '#university-server'
+          - ^local-only
+        author:
+          type: human
+          id: ascend
+        commit: 5882b0914949a408590b7ba12b7f89e6be6cf010
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - package-lock.json
+          - packages/university/package.json
+          - packages/university/src/server/routes/courses.ts
+          - packages/university/src/server/routes/plsat.ts
+          - portal.yaml
+        description: 'fix(#university-server): resolve TS errors, add portal.yaml for university routes'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^local-only:
+    symbol: ^local-only
+    total_changes: 1
+    last_modified: '2026-02-14T13:56:39Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_7
     contributors:
       human:
         - ascend

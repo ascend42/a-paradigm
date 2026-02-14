@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Seal } from './Seal';
+
+const THEME_KEY = 'paradigm-university-theme';
 
 interface HeaderProps {
   version: string;
@@ -7,6 +10,22 @@ interface HeaderProps {
 
 export function Header({ version }: HeaderProps) {
   const location = useLocation();
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    try {
+      localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+    } catch {
+      // localStorage unavailable
+    }
+  }, [dark]);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -43,6 +62,14 @@ export function Header({ version }: HeaderProps) {
 
       <div className="header-right">
         <span className="version-badge">v{version}</span>
+        <button
+          className="theme-toggle"
+          onClick={() => setDark(d => !d)}
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {dark ? '\u2600' : '\u263E'}
+        </button>
       </div>
     </header>
   );
