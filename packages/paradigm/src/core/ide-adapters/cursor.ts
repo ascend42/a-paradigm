@@ -536,17 +536,27 @@ paradigm_session_stats()
    * Orchestration protocol rules - multi-agent workflow
    */
   private generateOrchestrationMdc(agentsManifest: AgentsManifest | null): string {
-    // Build agent list from manifest
-    const agentList = agentsManifest
-      ? Object.entries(agentsManifest.agents)
-          .map(([name, agent]) => {
-            const roleFirstLine = agent.role.split('\n')[0].trim();
-            const writes = agent.focus?.writes?.join(', ') || 'any';
-            const model = agent.defaultModel || 'sonnet';
-            return `- **${name}** (${model}): ${roleFirstLine} (writes: ${writes})`;
-          })
-          .join('\n')
-      : '(Run `paradigm team init` to configure agents)';
+    // Build agent list from manifest (handle malformed agents.yaml gracefully)
+    let agentList = '(Run `paradigm team init` to configure agents)';
+    if (agentsManifest) {
+      const agents = agentsManifest.agents || (agentsManifest as Record<string, unknown>).roles;
+      if (agents && typeof agents === 'object') {
+        try {
+          agentList = Object.entries(agents)
+            .map(([name, agent]: [string, Record<string, unknown>]) => {
+              const roleText = (agent.role || agent.description || '') as string;
+              const roleFirstLine = roleText.split('\n')[0].trim() || name;
+              const writes = (agent.focus as Record<string, unknown>)?.writes;
+              const writesStr = Array.isArray(writes) ? writes.join(', ') : 'any';
+              const model = agent.defaultModel || 'sonnet';
+              return `- **${name}** (${model}): ${roleFirstLine} (writes: ${writesStr})`;
+            })
+            .join('\n');
+        } catch {
+          // Fall through to default
+        }
+      }
+    }
 
     // Detect OS for terminal guidance
     const platform = os.platform();
