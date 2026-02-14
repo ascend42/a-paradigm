@@ -75,6 +75,87 @@
   --max-content: 900px;
 }
 
+/* --- Dark Theme --- */
+[data-theme="dark"] {
+  /* Parchment palette → dark surfaces */
+  --parchment: #1a1a2e;
+  --parchment-dark: #2a2a40;
+  --cream: #16162a;
+  --cream-hover: #1e1e35;
+
+  /* Ink & Text → light text */
+  --ink: #e8e0d0;
+  --ink-light: #c8bfad;
+  --ink-muted: #8b8578;
+  --ink-faint: #5a5548;
+
+  /* Burgundy (primary) — lighten for contrast */
+  --burgundy: #d4616b;
+  --burgundy-light: #e07880;
+  --burgundy-dark: #a84850;
+  --burgundy-bg: #d4616b18;
+
+  /* Gold (accent) — warm */
+  --gold: #d4b896;
+  --gold-light: #e0c9a8;
+  --gold-dark: #c5a572;
+  --gold-bg: #d4b89618;
+
+  /* Status colors — brighten */
+  --success: #6dbf7b;
+  --success-bg: #6dbf7b18;
+  --error: #e06060;
+  --error-bg: #e0606018;
+  --warning: #d4a840;
+  --warning-bg: #d4a84018;
+
+  /* Symbols — brighter for dark bg */
+  --sym-component: #d4616b;
+  --sym-flow: #5aa0d4;
+  --sym-gate: #a988d0;
+  --sym-signal: #d4a840;
+  --sym-aspect: #6dbf7b;
+
+  /* Shadows — darker */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Remove parchment texture in dark mode */
+[data-theme="dark"] body::before {
+  display: none;
+}
+
+/* Seal icon: brighten for dark backgrounds */
+[data-theme="dark"] .header-brand svg {
+  filter: brightness(1.8) saturate(1.2);
+}
+
+/* Theme toggle: more visible in dark mode */
+[data-theme="dark"] .theme-toggle {
+  border-color: var(--ink-muted);
+  color: var(--gold);
+}
+
+/* Buttons: ensure readable text in dark mode */
+[data-theme="dark"] .btn-primary {
+  color: #fff;
+}
+
+[data-theme="dark"] .btn-gold {
+  color: #1a1a2e;
+}
+
+/* Quiz/PLSAT choice buttons: explicit text color */
+[data-theme="dark"] .choice-btn {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .choice-letter {
+  color: var(--burgundy);
+}
+
 /* --- Reset & Base --- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -261,6 +342,25 @@ pre code {
   background: var(--parchment);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
+}
+
+.theme-toggle {
+  background: var(--parchment);
+  border: 1px solid var(--parchment-dark);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  border-color: var(--gold);
+  background: var(--gold-bg);
 }
 
 /* --- Gold Divider --- */

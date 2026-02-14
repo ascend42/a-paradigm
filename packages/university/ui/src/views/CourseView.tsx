@@ -6,9 +6,15 @@ import type { Course, Lesson } from '../types';
 
 /** Minimal markdown-to-HTML renderer (handles ##, **, `, ```, -, |) */
 function renderMarkdown(md: string): string {
-  let html = md
-    // Code blocks (``` ... ```)
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+  // Extract code blocks first to protect them from paragraph processing
+  const codeBlocks: string[] = [];
+  let html = md.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, _lang, code) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code>${code}</code></pre>`);
+    return `\x00CODEBLOCK${idx}\x00`;
+  });
+
+  html = html
     // Inline code
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Headers
@@ -26,9 +32,12 @@ function renderMarkdown(md: string): string {
     // Wrap consecutive <li> in <ul>
     .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
     // Paragraphs (lines not already wrapped)
-    .replace(/^(?!<[huplbo])((?!<).+)$/gm, '<p>$1</p>')
+    .replace(/^(?!<[huplbo\x00])((?!<).+)$/gm, '<p>$1</p>')
     // Clean up extra newlines
     .replace(/\n{2,}/g, '\n');
+
+  // Restore code blocks
+  html = html.replace(/\x00CODEBLOCK(\d+)\x00/g, (_m, idx) => codeBlocks[Number(idx)]);
 
   return html;
 }
