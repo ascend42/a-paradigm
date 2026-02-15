@@ -43,21 +43,14 @@ function PassageBlock({ text }: { text: string }) {
  * its passage group for the current view, or null otherwise.
  */
 function getPassageForIndex(
-  questions: PLSATExam['questions'],
+  _questions: PLSATExam['questions'],
   passages: Record<string, string> | undefined,
   index: number,
 ): string | null {
   if (!passages) return null;
-  const q = questions[index];
+  const q = _questions[index];
   if (!q.passageId) return null;
-  const passageText = passages[q.passageId];
-  if (!passageText) return null;
-
-  // Show passage if this is the first question with this passageId in sequence
-  if (index === 0) return passageText;
-  const prev = questions[index - 1];
-  if (prev.passageId !== q.passageId) return passageText;
-  return null;
+  return passages[q.passageId] ?? null;
 }
 
 export function PLSATView() {
@@ -202,12 +195,6 @@ export function PLSATView() {
 
         <div style={{ marginTop: 'var(--space-lg)' }}>
           {currentPassageText && <PassageBlock text={currentPassageText} />}
-
-          {q.passageId && !currentPassageText && (
-            <div className="passage-indicator">
-              Passage question — scroll up or navigate back to see the passage
-            </div>
-          )}
 
           <QuestionCard
             number={currentQ + 1}

@@ -481,7 +481,7 @@
         "B": "`paradigm_wisdom_expert({ area: 'payments' })` to find recognized experts",
         "C": "`paradigm_history_context({ symbols: ['#payment-service'] })` and infer from commit history",
         "D": "`paradigm_navigate({ intent: 'explore', target: 'payments' })` and read the code to figure out who wrote it",
-        "E": "Ask in Slack"
+        "E": "Ask in Deus / Slack / Teams"
       },
       "correct": "B",
       "explanation": "`paradigm_wisdom_expert` is purpose-built for finding human experts by area or symbol. It returns people who are recognized as knowledgeable about the payment system, based on recorded wisdom and history. While `paradigm_history_context` (C) can show who recently worked on the code, that doesn't mean they're the expert \u2014 they might have just fixed a typo. `paradigm_wisdom_expert` tracks deliberate expertise attribution, not just commit frequency."
