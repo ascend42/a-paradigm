@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { renderMarkdown } from '../utils/renderMarkdown';
 
 interface QuestionCardProps {
   number: number;
@@ -54,9 +55,14 @@ export function QuestionCard({
     <div className="question-card">
       <div className="question-number">Question {number}</div>
 
-      {scenario && <div className="scenario">{scenario}</div>}
+      {scenario && (
+        <div
+          className="scenario"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(scenario) }}
+        />
+      )}
 
-      <div className="question-text">{question}</div>
+      <div className="question-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(question) }} />
 
       <div className="choices">
         {letters.map((letter) => {
@@ -73,7 +79,7 @@ export function QuestionCard({
               disabled={showResult && !isControlled}
             >
               <span className="choice-letter">{letter}.</span>
-              <span>{choices[letter]}</span>
+              <span dangerouslySetInnerHTML={{ __html: renderMarkdown(choices[letter]) }} />
             </button>
           );
         })}
@@ -83,7 +89,7 @@ export function QuestionCard({
         <div className={`explanation ${isCorrect ? '' : 'wrong'}`}>
           <strong>{isCorrect ? 'Correct!' : `Incorrect. The answer is ${correct}.`}</strong>
           <br />
-          {explanation}
+          <span dangerouslySetInnerHTML={{ __html: renderMarkdown(explanation) }} />
         </div>
       )}
     </div>
