@@ -79,8 +79,8 @@ function renderMarkdown(md: string): string {
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     // Wrap consecutive <li> in <ul>
     .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-    // Paragraphs (lines not already wrapped)
-    .replace(/^(?!<[huplbo\x00])((?!<).+)$/gm, '<p>$1</p>')
+    // Paragraphs (lines not already wrapped in block-level tags)
+    .replace(/^(?!<(?:h[1-6]|ul|ol|li|p|blockquote|pre|table|thead|tbody|tr|td|th|\x00)).+$/gm, '<p>$&</p>')
     // Clean up extra newlines
     .replace(/\n{2,}/g, '\n');
 
