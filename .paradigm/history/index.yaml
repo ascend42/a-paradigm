@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T18:17:26.855Z'
+generated: '2026-02-14T19:40:08.347Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -632,11 +632,31 @@ by_symbol:
       agent: []
   '#university-ui':
     symbol: '#university-ui'
-    total_changes: 2
-    last_modified: '2026-02-14T18:10:09Z'
+    total_changes: 3
+    last_modified: '2026-02-14T19:35:27Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0014
+        ts: '2026-02-14T19:35:27Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: a73c8983ff5e45ff6b889d94e4c0b2e1248547da
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/ui/src/styles/academia.css
+          - packages/university/ui/src/views/CourseView.tsx
+          - packages/university/ui/src/views/HomeView.tsx
+        description: 'feat(#university-ui): redesign course catalog, fix sidebar scroll, update PARA 401'
       - id: h0013
         ts: '2026-02-14T18:10:09Z'
         type: implement
