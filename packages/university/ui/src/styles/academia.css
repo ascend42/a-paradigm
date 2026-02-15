@@ -163,6 +163,11 @@
   color: var(--burgundy);
 }
 
+[data-theme="dark"] code {
+  background: #d4b89625;
+  border-color: #d4b89640;
+}
+
 /* --- Reset & Base --- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -223,10 +228,11 @@ a:hover {
 code {
   font-family: var(--font-mono);
   font-size: 0.875em;
-  background: var(--gold-bg);
+  background: #C5A57230;
   color: var(--burgundy);
   padding: 0.15em 0.4em;
   border-radius: var(--radius-sm);
+  border: 1px solid #C5A57240;
 }
 
 pre {
