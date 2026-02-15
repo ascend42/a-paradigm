@@ -177,7 +177,7 @@
           "id": "q2",
           "question": "What is the `context` field in a .purpose file used for?",
           "choices": {
-            "A": "Defining React context providers",
+            "A": "Defining application context providers",
             "B": "Specifying environment variables required by the module",
             "C": "Free-text notes aimed at AI agents — conventions, gotchas, assumptions",
             "D": "Listing the test files associated with the directory",

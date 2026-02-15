@@ -423,7 +423,7 @@
       "variants": [
         {
           "id": "plsat-015",
-          "scenario": "Your project's discipline is `fullstack-saas`. You're adding a new feature: team invitations. The feature involves a React component for the invite form, an API endpoint, a service for generating invite tokens, and an email sender. You create a new directory `src/features/team-invites/`.",
+          "scenario": "Your project's discipline is `fullstack-saas`. You're adding a new feature: team invitations. The feature involves a UI component for the invite form, an API endpoint, a service for generating invite tokens, and an email sender. You create a new directory `src/features/team-invites/`.",
           "question": "What should the `.purpose` file in this directory contain at minimum?",
           "choices": {
             "A": "Just a `name` field \u2014 Paradigm will auto-discover the rest",
@@ -885,10 +885,10 @@
       "variants": [
         {
           "id": "plsat-039",
-          "scenario": "You need to build a complete user profile feature: a React component, API endpoint, database service, validation logic, and tests. This will touch at least 6 files across 3 directories.",
+          "scenario": "You need to build a complete user profile feature: a UI component, API endpoint, database service, validation logic, and tests. This will touch at least 6 files across 3 directories.",
           "question": "Before writing ANY code, what should you do FIRST?",
           "choices": {
-            "A": "Start coding the React component \u2014 start with the UI and work backwards",
+            "A": "Start coding the UI component \u2014 start with the frontend and work backwards",
             "B": "Call `paradigm_orchestrate_inline({ task: 'Build user profile feature', mode: 'plan' })` to get the right agents and plan",
             "C": "Call `paradigm_search` for existing profile-related symbols",
             "D": "Create the `.purpose` file first to define all the symbols",
@@ -948,7 +948,7 @@
       "variants": [
         {
           "id": "plsat-042",
-          "scenario": "You're configuring agent models for your team. The task involves:\n- An architectural review (complex reasoning needed)\n- A security audit (critical, needs thoroughness)\n- Building 3 React components (straightforward implementation)\n- Writing unit tests (repetitive, pattern-based)\n\nYour budget is limited.",
+          "scenario": "You're configuring agent models for your team. The task involves:\n- An architectural review (complex reasoning needed)\n- A security audit (critical, needs thoroughness)\n- Building 3 UI components (straightforward implementation)\n- Writing unit tests (repetitive, pattern-based)\n\nYour budget is limited.",
           "question": "Which model assignment follows Paradigm's recommended configuration?",
           "choices": {
             "A": "All agents use opus for maximum quality",

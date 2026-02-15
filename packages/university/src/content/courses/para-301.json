@@ -624,7 +624,7 @@
         },
         {
           "id": "q5",
-          "question": "You finished implementing a feature and discovered that directly mutating Zustand state outside of actions causes subtle bugs. What should you do before moving to your next task?",
+          "question": "You finished implementing a feature and discovered that directly modifying shared state outside of the intended pattern causes subtle bugs. What should you do before moving to your next task?",
           "choices": {
             "A": "Just fix the bug and move on",
             "B": "Record an antipattern with paradigm_wisdom_record, record the implementation with paradigm_history_record, and run paradigm doctor",
