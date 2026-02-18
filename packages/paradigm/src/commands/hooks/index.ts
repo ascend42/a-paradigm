@@ -111,7 +111,7 @@ fi
 `;
 
 const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
-# Paradigm Claude Code Stop Hook
+# Paradigm Claude Code Stop Hook (v2)
 # Validates paradigm compliance before allowing the agent to finish.
 # Installed by: paradigm hooks install --claude-code
 #
@@ -119,10 +119,12 @@ const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 # Exit 0 = allow, Exit 2 = block with message
 #
 # Checks:
-#   1. Source files modified without .purpose updates
+#   1. Source files modified without .purpose updates (threshold: 2+)
 #   2. Modified source directories missing .purpose files entirely
 #   3. Route-like patterns added without portal.yaml updates
 #   4. Aspect anchor files that no longer exist
+#   5. Per-directory .purpose freshness (tracked via .pending-review)
+#   6. Aspect coverage advisory
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -148,6 +150,8 @@ cd "$CWD" || exit 0
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
+  # Clean up pending-review on pass
+  rm -f ".paradigm/.pending-review"
   exit 0
 fi
 
@@ -170,7 +174,7 @@ for file in $MODIFIED; do
   esac
 done
 
-if [ "$SOURCE_COUNT" -gt 2 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+if [ "$SOURCE_COUNT" -gt 1 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
   VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but 0 paradigm files (.purpose/portal.yaml).
     Update the nearest .purpose file for each modified code area."
@@ -246,22 +250,17 @@ else
 fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
-# Quick check: grep anchors from .purpose files and verify files exist
-# Anchor paths are relative to the directory containing the .purpose file
 for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
   if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
     purpose_dir=$(dirname "$purpose_file")
-    # Extract anchor file paths (lines after "anchors:" that start with "- ")
     in_anchors=false
     while IFS= read -r line; do
       case "$line" in
         *"anchors:"*) in_anchors=true; continue ;;
         *"- "*)
           if [ "$in_anchors" = true ]; then
-            # Extract file path (before :linenum)
             anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
             if [ -n "$anchor_path" ]; then
-              # Resolve relative to the .purpose file's directory
               resolved_path="$purpose_dir/$anchor_path"
               if [ ! -f "$resolved_path" ]; then
                 VIOLATIONS="$VIOLATIONS
@@ -278,27 +277,116 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
   fi
 done
 
+# --- Check 5: Per-directory .purpose freshness ---
+PENDING_FILE=".paradigm/.pending-review"
+if [ -f "$PENDING_FILE" ]; then
+  STALE_PURPOSES=""
+  while IFS= read -r tracked_file; do
+    [ -z "$tracked_file" ] && continue
+    # Find covering .purpose for this tracked file
+    check_dir=$(dirname "$tracked_file")
+    covering_purpose=""
+    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+      if [ -f "$check_dir/.purpose" ]; then
+        covering_purpose="$check_dir/.purpose"
+        break
+      fi
+      check_dir=$(dirname "$check_dir")
+    done
+    if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
+      covering_purpose=".purpose"
+    fi
+    # Check if covering .purpose was also modified
+    if [ -n "$covering_purpose" ]; then
+      if ! echo "$MODIFIED" | grep -qxF "$covering_purpose"; then
+        # Deduplicate
+        case "$STALE_PURPOSES" in
+          *"$covering_purpose"*) ;;
+          *) STALE_PURPOSES="$STALE_PURPOSES $covering_purpose" ;;
+        esac
+      fi
+    fi
+  done < "$PENDING_FILE"
+
+  if [ -n "$STALE_PURPOSES" ]; then
+    VIOLATIONS="$VIOLATIONS
+  - These .purpose files cover modified source code but were NOT updated:
+   $STALE_PURPOSES
+    Update each with: #components, ~aspects (with anchors), !signals, \\$flows, ^gates."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+fi
+
+# --- Check 6: Aspect coverage advisory ---
+ADVISORY=""
+HAS_ASPECTS=false
+for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
+  if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
+    HAS_ASPECTS=true
+    break
+  fi
+done
+
+if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
+  ASPECT_UPDATED=false
+  for file in $MODIFIED; do
+    case "$file" in
+      *.purpose)
+        if grep -qE '^\\s*~|anchors:|applies-to:' "$file" 2>/dev/null; then
+          ASPECT_UPDATED=true
+          break
+        fi
+        ;;
+    esac
+  done
+
+  if [ "$ASPECT_UPDATED" = false ]; then
+    ADVISORY="  This project defines ~aspects with code anchors. Check if existing
+  ~aspects need updated anchors or applies-to patterns."
+  fi
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
   echo "$VIOLATIONS" >&2
+  if [ -n "$ADVISORY" ]; then
+    echo "" >&2
+    echo "Advisory:" >&2
+    echo "$ADVISORY" >&2
+  fi
   echo "" >&2
-  echo "Fix these issues, then call paradigm_reindex before finishing." >&2
+  echo "Run these MCP tools to fix:" >&2
+  echo "  1. paradigm_purpose_add_component — register new code units" >&2
+  echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
+  echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
+  echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   exit 2
 fi
+
+# Print advisory even on pass (informational)
+if [ -n "$ADVISORY" ]; then
+  echo "" >&2
+  echo "[paradigm] Advisory:" >&2
+  echo "$ADVISORY" >&2
+fi
+
+# Clean up pending-review on pass
+rm -f ".paradigm/.pending-review"
 
 exit 0
 `;
 
 const CLAUDE_CODE_POSTWRITE_HOOK = `#!/bin/sh
-# Paradigm Claude Code PostToolUse Hook
-# Fires after Edit/Write tool calls to remind agents about .purpose files.
+# Paradigm Claude Code PostToolUse Hook (v2)
+# Fires after Edit/Write tool calls.
+# Tracks modified source files in .paradigm/.pending-review
+# and outputs compliance reminders.
 # Installed by: paradigm hooks install --claude-code
 #
 # Hook type: PostToolUse (matcher: Edit,Write)
 # Exit 0 always (never blocks — advisory only)
-# Prints reminder if the edited file's directory has no .purpose file
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -322,9 +410,9 @@ case "$FILE_PATH" in
   *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;
 esac
 
-# Skip .paradigm directory
+# Skip .paradigm, .claude, and .cursor directories
 case "$FILE_PATH" in
-  */.paradigm/*|.paradigm/*) exit 0 ;;
+  */.paradigm/*|.paradigm/*|*/.claude/*|.claude/*|*/.cursor/*|.cursor/*) exit 0 ;;
 esac
 
 # Not a paradigm project — pass
@@ -332,26 +420,59 @@ if [ ! -d ".paradigm" ]; then
   exit 0
 fi
 
+# Convert to relative path (strip project root prefix)
+PROJECT_ROOT="$(pwd)"
+REL_PATH="$FILE_PATH"
+case "$FILE_PATH" in
+  "$PROJECT_ROOT"/*) REL_PATH=$(echo "$FILE_PATH" | sed "s|^$PROJECT_ROOT/||") ;;
+esac
+
+# If still absolute, file is outside project — skip
+case "$REL_PATH" in
+  /*) exit 0 ;;
+esac
+
+# Track: append to .paradigm/.pending-review (deduplicated)
+PENDING_FILE=".paradigm/.pending-review"
+if [ -f "$PENDING_FILE" ]; then
+  if ! grep -qxF "$REL_PATH" "$PENDING_FILE" 2>/dev/null; then
+    echo "$REL_PATH" >> "$PENDING_FILE"
+  fi
+else
+  echo "$REL_PATH" > "$PENDING_FILE"
+fi
+
+# Count pending files
+PENDING_COUNT=$(wc -l < "$PENDING_FILE" | tr -d ' ')
+
 # Walk up from the file's directory to find a .purpose file
-dir=$(dirname "$FILE_PATH")
-found_purpose=false
+dir=$(dirname "$REL_PATH")
+found_purpose=""
 
 while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ "$dir" != "" ]; do
   if [ -f "$dir/.purpose" ]; then
-    found_purpose=true
+    found_purpose="$dir/.purpose"
     break
   fi
   dir=$(dirname "$dir")
 done
 
 # Check root .purpose
-if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
-  found_purpose=true
+if [ -z "$found_purpose" ] && [ -f ".purpose" ]; then
+  found_purpose=".purpose"
 fi
 
-if [ "$found_purpose" = false ]; then
-  file_dir=$(dirname "$FILE_PATH")
-  echo "[paradigm] No .purpose file covers $file_dir — consider creating one with paradigm_purpose_init." >&2
+if [ -z "$found_purpose" ]; then
+  file_dir=$(dirname "$REL_PATH")
+  echo "" >&2
+  echo "[paradigm] No .purpose file covers $file_dir/" >&2
+  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
+elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
+  echo "" >&2
+  echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
+  echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
+  echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
 fi
 
 exit 0
@@ -410,7 +531,7 @@ exit 0
 // ─── Cursor Hook Scripts ────────────────────────────────────────────────────
 
 const CURSOR_STOP_HOOK = `#!/bin/sh
-# Paradigm Cursor Stop Hook
+# Paradigm Cursor Stop Hook (v2)
 # Validates paradigm compliance before allowing the agent to finish.
 # Installed by: paradigm hooks install --cursor
 #
@@ -418,10 +539,12 @@ const CURSOR_STOP_HOOK = `#!/bin/sh
 # Exit 0 = allow, Exit 2 = block with message
 #
 # Checks:
-#   1. Source files modified without .purpose updates
+#   1. Source files modified without .purpose updates (threshold: 2+)
 #   2. Modified source directories missing .purpose files entirely
 #   3. Route-like patterns added without portal.yaml updates
 #   4. Aspect anchor files that no longer exist
+#   5. Per-directory .purpose freshness (tracked via .pending-review)
+#   6. Aspect coverage advisory
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -447,6 +570,8 @@ cd "$CWD" || exit 0
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
+  # Clean up pending-review on pass
+  rm -f ".paradigm/.pending-review"
   exit 0
 fi
 
@@ -469,7 +594,7 @@ for file in $MODIFIED; do
   esac
 done
 
-if [ "$SOURCE_COUNT" -gt 2 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+if [ "$SOURCE_COUNT" -gt 1 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
   VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but 0 paradigm files (.purpose/portal.yaml).
     Update the nearest .purpose file for each modified code area."
@@ -572,27 +697,116 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
   fi
 done
 
+# --- Check 5: Per-directory .purpose freshness ---
+PENDING_FILE=".paradigm/.pending-review"
+if [ -f "$PENDING_FILE" ]; then
+  STALE_PURPOSES=""
+  while IFS= read -r tracked_file; do
+    [ -z "$tracked_file" ] && continue
+    # Find covering .purpose for this tracked file
+    check_dir=$(dirname "$tracked_file")
+    covering_purpose=""
+    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+      if [ -f "$check_dir/.purpose" ]; then
+        covering_purpose="$check_dir/.purpose"
+        break
+      fi
+      check_dir=$(dirname "$check_dir")
+    done
+    if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
+      covering_purpose=".purpose"
+    fi
+    # Check if covering .purpose was also modified
+    if [ -n "$covering_purpose" ]; then
+      if ! echo "$MODIFIED" | grep -qxF "$covering_purpose"; then
+        # Deduplicate
+        case "$STALE_PURPOSES" in
+          *"$covering_purpose"*) ;;
+          *) STALE_PURPOSES="$STALE_PURPOSES $covering_purpose" ;;
+        esac
+      fi
+    fi
+  done < "$PENDING_FILE"
+
+  if [ -n "$STALE_PURPOSES" ]; then
+    VIOLATIONS="$VIOLATIONS
+  - These .purpose files cover modified source code but were NOT updated:
+   $STALE_PURPOSES
+    Update each with: #components, ~aspects (with anchors), !signals, \\$flows, ^gates."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+fi
+
+# --- Check 6: Aspect coverage advisory ---
+ADVISORY=""
+HAS_ASPECTS=false
+for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
+  if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
+    HAS_ASPECTS=true
+    break
+  fi
+done
+
+if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
+  ASPECT_UPDATED=false
+  for file in $MODIFIED; do
+    case "$file" in
+      *.purpose)
+        if grep -qE '^\\s*~|anchors:|applies-to:' "$file" 2>/dev/null; then
+          ASPECT_UPDATED=true
+          break
+        fi
+        ;;
+    esac
+  done
+
+  if [ "$ASPECT_UPDATED" = false ]; then
+    ADVISORY="  This project defines ~aspects with code anchors. Check if existing
+  ~aspects need updated anchors or applies-to patterns."
+  fi
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
   echo "$VIOLATIONS" >&2
+  if [ -n "$ADVISORY" ]; then
+    echo "" >&2
+    echo "Advisory:" >&2
+    echo "$ADVISORY" >&2
+  fi
   echo "" >&2
-  echo "Fix these issues, then call paradigm_reindex before finishing." >&2
+  echo "Run these MCP tools to fix:" >&2
+  echo "  1. paradigm_purpose_add_component — register new code units" >&2
+  echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
+  echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
+  echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   exit 2
 fi
+
+# Print advisory even on pass (informational)
+if [ -n "$ADVISORY" ]; then
+  echo "" >&2
+  echo "[paradigm] Advisory:" >&2
+  echo "$ADVISORY" >&2
+fi
+
+# Clean up pending-review on pass
+rm -f ".paradigm/.pending-review"
 
 exit 0
 `;
 
 const CURSOR_POSTWRITE_HOOK = `#!/bin/sh
-# Paradigm Cursor PostWrite Hook
-# Fires after file edits to remind agents about .purpose files.
+# Paradigm Cursor PostWrite Hook (v2)
+# Fires after file edits.
+# Tracks modified source files in .paradigm/.pending-review
+# and outputs compliance reminders.
 # Installed by: paradigm hooks install --cursor
 #
 # Hook type: afterFileEdit
 # Exit 0 always (never blocks — advisory only)
-# Prints reminder if the edited file's directory has no .purpose file
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -616,9 +830,9 @@ case "$FILE_PATH" in
   *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;
 esac
 
-# Skip .paradigm directory
+# Skip .paradigm, .claude, and .cursor directories
 case "$FILE_PATH" in
-  */.paradigm/*|.paradigm/*) exit 0 ;;
+  */.paradigm/*|.paradigm/*|*/.claude/*|.claude/*|*/.cursor/*|.cursor/*) exit 0 ;;
 esac
 
 # Not a paradigm project — pass
@@ -626,26 +840,59 @@ if [ ! -d ".paradigm" ]; then
   exit 0
 fi
 
+# Convert to relative path (strip project root prefix)
+PROJECT_ROOT="$(pwd)"
+REL_PATH="$FILE_PATH"
+case "$FILE_PATH" in
+  "$PROJECT_ROOT"/*) REL_PATH=$(echo "$FILE_PATH" | sed "s|^$PROJECT_ROOT/||") ;;
+esac
+
+# If still absolute, file is outside project — skip
+case "$REL_PATH" in
+  /*) exit 0 ;;
+esac
+
+# Track: append to .paradigm/.pending-review (deduplicated)
+PENDING_FILE=".paradigm/.pending-review"
+if [ -f "$PENDING_FILE" ]; then
+  if ! grep -qxF "$REL_PATH" "$PENDING_FILE" 2>/dev/null; then
+    echo "$REL_PATH" >> "$PENDING_FILE"
+  fi
+else
+  echo "$REL_PATH" > "$PENDING_FILE"
+fi
+
+# Count pending files
+PENDING_COUNT=$(wc -l < "$PENDING_FILE" | tr -d ' ')
+
 # Walk up from the file's directory to find a .purpose file
-dir=$(dirname "$FILE_PATH")
-found_purpose=false
+dir=$(dirname "$REL_PATH")
+found_purpose=""
 
 while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ "$dir" != "" ]; do
   if [ -f "$dir/.purpose" ]; then
-    found_purpose=true
+    found_purpose="$dir/.purpose"
     break
   fi
   dir=$(dirname "$dir")
 done
 
 # Check root .purpose
-if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
-  found_purpose=true
+if [ -z "$found_purpose" ] && [ -f ".purpose" ]; then
+  found_purpose=".purpose"
 fi
 
-if [ "$found_purpose" = false ]; then
-  file_dir=$(dirname "$FILE_PATH")
-  echo "[paradigm] No .purpose file covers $file_dir — consider creating one with paradigm_purpose_init." >&2
+if [ -z "$found_purpose" ]; then
+  file_dir=$(dirname "$REL_PATH")
+  echo "" >&2
+  echo "[paradigm] No .purpose file covers $file_dir/" >&2
+  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
+elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
+  echo "" >&2
+  echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
+  echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
+  echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
 fi
 
 exit 0
