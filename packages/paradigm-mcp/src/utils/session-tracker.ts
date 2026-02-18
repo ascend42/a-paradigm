@@ -11,6 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { getSessionDir, writeProjectMeta } from './global-store.js';
 
 /**
  * Supported Claude models with pricing per 1M tokens
@@ -186,40 +187,65 @@ class SessionTracker {
   }
 
   /**
-   * Persist breadcrumbs to file
+   * Persist breadcrumbs to file (dual-write: local + global)
    */
   private persistBreadcrumbs(): void {
     if (!this.rootDir) return;
 
+    const data: PersistedSession = {
+      sessionId: this.session.sessionId,
+      startTime: this.session.startTime,
+      lastActivity: this.session.lastActivity,
+      breadcrumbs: this.session.breadcrumbs,
+      symbolsModified: this.extractSymbolsFromBreadcrumbs(),
+      filesExplored: this.extractFilesFromBreadcrumbs(),
+    };
+
+    const jsonData = JSON.stringify(data, null, 2);
+
+    // Write to local .paradigm/session-breadcrumbs.json
     try {
       const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
       const dir = path.dirname(filePath);
-
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-
-      const data: PersistedSession = {
-        sessionId: this.session.sessionId,
-        startTime: this.session.startTime,
-        lastActivity: this.session.lastActivity,
-        breadcrumbs: this.session.breadcrumbs,
-        symbolsModified: this.extractSymbolsFromBreadcrumbs(),
-        filesExplored: this.extractFilesFromBreadcrumbs(),
-      };
-
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      fs.writeFileSync(filePath, jsonData);
     } catch {
       // Silently fail - breadcrumbs are optional
+    }
+
+    // Write to global ~/.paradigm/sessions/{hash}/breadcrumbs.json
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      fs.writeFileSync(path.join(globalSessionDir, 'breadcrumbs.json'), jsonData);
+      writeProjectMeta(this.rootDir);
+    } catch {
+      // Silently fail - global persistence is best-effort
     }
   }
 
   /**
-   * Load previous session breadcrumbs from file
+   * Load previous session breadcrumbs from file.
+   * Prefers global path (~/.paradigm/sessions/{hash}/breadcrumbs.json),
+   * falls back to local (.paradigm/session-breadcrumbs.json).
    */
   loadPreviousSession(): PersistedSession | null {
     if (!this.rootDir) return null;
 
+    // Try global path first (survives MCP restarts)
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      const globalPath = path.join(globalSessionDir, 'breadcrumbs.json');
+      if (fs.existsSync(globalPath)) {
+        const content = fs.readFileSync(globalPath, 'utf8');
+        return JSON.parse(content) as PersistedSession;
+      }
+    } catch {
+      // Fall through to local
+    }
+
+    // Fallback to local path
     try {
       const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
       if (!fs.existsSync(filePath)) return null;

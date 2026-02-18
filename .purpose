@@ -65,17 +65,25 @@ features:
       - "~symbol-typed-logging"
       - "~correlation-tracked"
   mcp-server:
-    description: Model Context Protocol server for AI assistants
+    description: Model Context Protocol server for AI assistants with global session persistence and cross-project wisdom
     aspects:
       - "~mcp-tool-handler"
+      - "~global-persistence"
     signals:
       - '!server-started'
       - '!resource-fetched'
       - '!tool-called'
+      - '!handoff-persisted'
+      - '!handoff-delivered'
+      - '!wisdom-promoted'
+    flows:
+      - $handoff-roundtrip
+      - $wisdom-promotion
     components:
       - '#mcp-resources'
       - '#mcp-tools'
       - '#index-loader'
+      - '#global-store'
   sentinel-dashboard:
     description: Unified codebase intelligence UI with symbol visualization
     aspects:
@@ -159,6 +167,8 @@ components:
     description: Read-only data exposed via MCP protocol
   mcp-tools:
     description: Actions AI can invoke via MCP protocol
+  global-store:
+    description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
   index-loader:
     description: Loads project symbol index for MCP server
   sentinel-ui:
@@ -210,6 +220,12 @@ signals:
     description: AI agent spawned successfully
   orchestration-completed:
     description: Multi-agent orchestration completed
+  handoff-persisted:
+    description: Session handoff written to global store for cross-session recovery
+  handoff-delivered:
+    description: Pending handoff recovered by a new session
+  wisdom-promoted:
+    description: Project-local wisdom promoted to global scope
 aspects:
   yaml-config-loading:
     description: All config files (.purpose, portal.yaml, premise) parsed via js-yaml with consistent error handling
@@ -328,12 +344,23 @@ aspects:
     applies-to:
       - '#paradigm-logger'
       - '#correlation-tracker'
+  global-persistence:
+    description: Session and wisdom data dual-written to local project and global ~/.paradigm/ for cross-session and cross-project continuity
+    tags:
+      - persistence
+      - resilience
+    anchors:
+      - packages/paradigm-mcp/src/utils/global-store.ts:37-74
+      - packages/paradigm-mcp/src/utils/session-tracker.ts:195-222
+    applies-to:
+      - '#global-store'
+      - '#mcp-tools'
 relationships:
   - '#cli-commands USES #commander-setup, #ora-spinners, #chalk-output'
   - '#symbol-system USES #symbol-parser, #symbol-index'
   - '#ide-sync USES #cursor-adapter, #copilot-adapter, #windsurf-adapter'
   - '#agent-efficiency USES #beacon, #constellation, #ripple, #thread, #echo'
-  - '#mcp-server USES #mcp-resources, #mcp-tools, #index-loader'
+  - '#mcp-server USES #mcp-resources, #mcp-tools, #index-loader, #global-store'
   - '#sentinel-dashboard USES #sentinel-ui, #node-renderer, #connection-lines'
   - '#portal-authorization USES #portal-core, #portal-sdk, #portal-viewer'
   - '#team-orchestration USES #agent-spawner, #orchestrator, #model-discovery'
@@ -375,6 +402,19 @@ flows:
       - Spawn agents (parallel where possible)
       - Collect results and handoff
       - Log orchestration to audit
+  handoff-roundtrip:
+    description: Session handoff persistence and recovery via global store
+    steps:
+      - Agent calls paradigm_handoff_prepare
+      - Payload written to ~/.paradigm/sessions/{hash}/pending-handoffs/
+      - New session calls paradigm_session_recover
+      - Handoffs loaded and marked delivered
+  wisdom-promotion:
+    description: Promote project-local wisdom to global ~/.paradigm/wisdom/
+    steps:
+      - Agent calls paradigm_wisdom_promote
+      - Local item validated and copied to global store
+      - Cache invalidated for merged refresh
   install-flow:
     description: Install Paradigm CLI and MCP server from source
     steps:
