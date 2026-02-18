@@ -122,6 +122,9 @@ $RECYCLE.BIN/
 .cursor/mcp.json
 .mcp.json
 
+# Private research
+/research/
+
 # Local planning and IDE settings
 /.plans/
 /.claude/settings.local.json
