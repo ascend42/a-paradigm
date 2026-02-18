@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T19:40:08.347Z'
+generated: '2026-02-18T17:27:11.455Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -632,11 +632,80 @@ by_symbol:
       agent: []
   '#university-ui':
     symbol: '#university-ui'
-    total_changes: 3
-    last_modified: '2026-02-14T19:35:27Z'
+    total_changes: 7
+    last_modified: '2026-02-15T19:07:50Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_8
+        id: h0019
+        ts: '2026-02-15T19:07:50Z'
+        type: implement
+        symbols:
+          - '#university-content'
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 5d088382ab45eda306c1467d9e8b7b07bb7b90cb
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/src/content/plsat/v2.0.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/ui/src/components/QuestionCard.tsx
+          - packages/university/ui/src/utils/renderMarkdown.ts
+          - packages/university/ui/src/views/CourseView.tsx
+          - packages/university/ui/src/views/PLSATView.tsx
+        description: 'feat(#university-ui): markdown rendering in quiz/PLSAT, always show passages'
+      - id: h0017
+        ts: '2026-02-15T17:51:37Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 61abee2b14cedf0931bf6df367c658cf6274a458
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/ui/src/styles/academia.css
+        description: 'fix(#university-ui): improve inline code contrast in both themes'
+      - id: h0016
+        ts: '2026-02-15T13:22:10Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 3a4553e87dda21b74ed9f9f617dc78ed316e2496
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/ui/src/views/CourseView.tsx
+        description: 'fix(#university-ui): paragraph regex now wraps inline tags in <p>'
+      - id: h0015
+        ts: '2026-02-15T12:59:27Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 2f2bfe24e4a4de8c806fa9c4a68fd876383b1067
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/ui/src/views/CourseView.tsx
+        description: 'feat(#university-ui): add markdown table and ordered list rendering'
       - id: h0014
         ts: '2026-02-14T19:35:27Z'
         type: implement
@@ -657,42 +726,78 @@ by_symbol:
           - packages/university/ui/src/views/CourseView.tsx
           - packages/university/ui/src/views/HomeView.tsx
         description: 'feat(#university-ui): redesign course catalog, fix sidebar scroll, update PARA 401'
-      - id: h0013
-        ts: '2026-02-14T18:10:09Z'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-content':
+    symbol: '#university-content'
+    total_changes: 2
+    last_modified: '2026-02-15T19:07:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_8
+      - id: h0018
+        ts: '2026-02-15T17:57:26Z'
         type: implement
         symbols:
-          - '#university-ui'
+          - '#university-content'
         author:
           type: human
           id: ascend
-        commit: deb982cdc1b6aa75ec1afd7de34346ca4fae76da
+        commit: 9bcb4592d5aa67b763b84df4a9bd4b7c76f50958
         intent: fix
         files:
           - .paradigm/history/log.jsonl
           - .paradigm/scan-index.json
           - CHANGELOG.md
-          - packages/university/ui/src/components/Seal.tsx
-          - packages/university/ui/src/styles/academia.css
-        description: 'fix(#university-ui): make Seal SVG theme-aware with CSS custom properties'
-      - id: h0012
-        ts: '2026-02-14T17:30:39Z'
+          - packages/university/src/content/courses/para-101.json
+          - packages/university/src/content/courses/para-201.json
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/plsat/v2.0.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'fix(#university-content): remove framework-specific references from courses and PLSAT'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-cli':
+    symbol: '#paradigm-cli'
+    total_changes: 1
+    last_modified: '2026-02-18T17:26:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_9
+        id: h0020
+        ts: '2026-02-18T17:26:14Z'
         type: implement
         symbols:
-          - '#university-ui'
+          - '#paradigm-cli'
+          - '#paradigm-hooks'
         author:
           type: human
           id: ascend
-        commit: 99ad2eaec3166a6c762477efae6d713496c55e15
+        commit: e732927d4941d2d7901dae0c95c4535d82c5ab40
         intent: feature
         files:
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
           - .paradigm/scan-index.json
           - CHANGELOG.md
-          - packages/university/ui/src/components/Header.tsx
-          - packages/university/ui/src/styles/academia.css
-          - packages/university/ui/src/views/CourseView.tsx
-        description: 'feat(#university-ui): add dark/light mode toggle and fix code block spacing'
+          - packages/paradigm/src/commands/hooks/index.ts
+        description: 'feat(#paradigm-hooks): v2 hook enforcement for paradigm compliance'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-hooks':
+    symbol: '#paradigm-hooks'
+    total_changes: 1
+    last_modified: '2026-02-18T17:26:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_9
     contributors:
       human:
         - ascend

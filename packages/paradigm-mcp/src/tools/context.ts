@@ -10,9 +10,13 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import {
   getSessionTracker,
   resetSessionTracker,
-  MODEL_PRICING,
-  type ModelId,
 } from '../utils/session-tracker.js';
+import {
+  writePendingHandoff,
+  loadPendingHandoffs,
+  markHandoffDelivered,
+  type PendingHandoff,
+} from '../utils/global-store.js';
 
 /**
  * Track a tool call (convenience wrapper for the session tracker)
@@ -254,20 +258,16 @@ export async function handleContextTool(
     const timestamp = new Date().toISOString();
 
     // Create structured handoff content
-    const handoffContent = {
+    const handoffPayload: PendingHandoff = {
       id: handoffId,
       timestamp,
       from: 'current-session',
       to: agent,
       summary,
-      workCompleted: summary, // Alias for clarity
-      inProgress: nextSteps.length > 0 ? nextSteps[0] : null,
       nextSteps,
-      context: {
-        modifiedFiles: modifiedFiles.length > 0 ? modifiedFiles : undefined,
-        symbolsTouched: symbolsTouched.length > 0 ? symbolsTouched : undefined,
-        openQuestions: openQuestions.length > 0 ? openQuestions : undefined,
-      },
+      modifiedFiles,
+      symbolsTouched,
+      openQuestions,
       sessionStats: {
         duration: tracker.getDurationMinutes(),
         mcpCalls: stats.totals.toolCallCount + stats.totals.resourceReadCount,
@@ -278,14 +278,18 @@ export async function handleContextTool(
       status: 'pending',
     };
 
-    // Generate markdown handoff summary for easy copying
+    // Persist handoff to global store (~/.paradigm/sessions/{hash}/pending-handoffs/)
+    try {
+      writePendingHandoff(_ctx.rootDir, handoffPayload);
+    } catch {
+      // Best-effort persistence
+    }
+
+    // Generate markdown handoff summary for display
     const markdownSummary = `# Handoff: ${timestamp}
 
 ## Session Summary
 ${summary}
-
-## Work Completed
-- ${summary}
 
 ## Next Steps
 ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified)'}
@@ -294,11 +298,6 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
 - Modified files: ${modifiedFiles.length > 0 ? modifiedFiles.join(', ') : '(not specified)'}
 - Symbols touched: ${symbolsTouched.length > 0 ? symbolsTouched.join(', ') : '(not specified)'}
 - Open questions: ${openQuestions.length > 0 ? openQuestions.join(', ') : '(none)'}
-
-## Recovery Command
-\`\`\`bash
-paradigm team accept ${handoffId}
-\`\`\`
 `;
 
     // Reset session stats after handoff
@@ -307,16 +306,10 @@ paradigm team accept ${handoffId}
     return {
       handled: true,
       text: JSON.stringify({
-        handoff: handoffContent,
+        handoff: handoffPayload,
         markdownSummary,
-        instructions: [
-          '1. Share the handoff summary with the user',
-          '2. Run: paradigm team handoff --to ' + agent + ' --summary "' + summary.slice(0, 50) + '..."',
-          '3. Start a new chat session',
-          '4. In new session: paradigm team accept ' + handoffId,
-        ],
-        cliCommand: `paradigm team handoff --to ${agent} --summary "${summary.replace(/"/g, '\\"')}"`,
-        recoveryCommand: `paradigm team accept ${handoffId}`,
+        persisted: true,
+        recovery: 'The next session will automatically receive this handoff via paradigm_session_recover.',
       }, null, 2),
     };
   }
@@ -376,57 +369,101 @@ paradigm team accept ${handoffId}
 
     const previousSession = tracker.loadPreviousSession();
 
-    if (!previousSession) {
+    // Load pending handoffs from global store
+    let pendingHandoffs: PendingHandoff[] = [];
+    try {
+      pendingHandoffs = loadPendingHandoffs(_ctx.rootDir);
+    } catch {
+      // Best-effort
+    }
+
+    if (!previousSession && pendingHandoffs.length === 0) {
       return {
         handled: true,
         text: JSON.stringify({
           found: false,
-          message: 'No previous session breadcrumbs found.',
-          tip: 'Session breadcrumbs are saved to .paradigm/session-breadcrumbs.json during active sessions.',
+          message: 'No previous session breadcrumbs or pending handoffs found.',
+          tip: 'Breadcrumbs persist to ~/.paradigm/sessions/ and handoffs persist via paradigm_handoff_prepare.',
         }, null, 2),
       };
     }
 
-    const ageMs = Date.now() - previousSession.lastActivity;
-    const ageMinutes = Math.round(ageMs / 60000);
-    const ageHours = Math.round(ageMs / 3600000);
+    const result: Record<string, unknown> = { found: true };
 
-    // Summarize the last few actions
-    const recentActions = previousSession.breadcrumbs.slice(-10);
-    const actionSummary = recentActions.map(bc => ({
-      time: new Date(bc.timestamp).toISOString(),
-      action: bc.action,
-      tool: bc.tool,
-      symbol: bc.symbol,
-      summary: bc.summary,
-    }));
+    // Include previous session breadcrumbs if available
+    if (previousSession) {
+      const ageMs = Date.now() - previousSession.lastActivity;
+      const ageMinutes = Math.round(ageMs / 60000);
+      const ageHours = Math.round(ageMs / 3600000);
 
-    // Suggest what to do next based on recent activity
-    let suggestion = 'Continue where the previous session left off.';
-    if (recentActions.length > 0) {
-      const lastAction = recentActions[recentActions.length - 1];
-      if (lastAction.symbol) {
-        suggestion = `Last work involved ${lastAction.symbol}. Consider checking its current state with paradigm_ripple.`;
+      const recentActions = previousSession.breadcrumbs.slice(-10);
+      const actionSummary = recentActions.map(bc => ({
+        time: new Date(bc.timestamp).toISOString(),
+        action: bc.action,
+        tool: bc.tool,
+        symbol: bc.symbol,
+        summary: bc.summary,
+      }));
+
+      result.previousSession = {
+        sessionId: previousSession.sessionId,
+        startTime: new Date(previousSession.startTime).toISOString(),
+        lastActivity: new Date(previousSession.lastActivity).toISOString(),
+        age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+      };
+      result.context = {
+        symbolsModified: previousSession.symbolsModified,
+        filesExplored: previousSession.filesExplored,
+      };
+      result.recentActions = actionSummary;
+    }
+
+    // Include pending handoffs if available
+    if (pendingHandoffs.length > 0) {
+      result.pendingHandoffs = pendingHandoffs.map(h => ({
+        id: h.id,
+        timestamp: h.timestamp,
+        from: h.from,
+        to: h.to,
+        summary: h.summary,
+        nextSteps: h.nextSteps,
+        modifiedFiles: h.modifiedFiles,
+        symbolsTouched: h.symbolsTouched,
+        openQuestions: h.openQuestions,
+      }));
+
+      // Mark each handoff as delivered
+      for (const h of pendingHandoffs) {
+        try {
+          markHandoffDelivered(_ctx.rootDir, h.id);
+        } catch {
+          // Best-effort
+        }
       }
     }
 
+    // Build suggestion based on available context
+    let suggestion = 'Continue where the previous session left off.';
+    if (pendingHandoffs.length > 0) {
+      const latest = pendingHandoffs[pendingHandoffs.length - 1];
+      suggestion = `Handoff received: "${latest.summary}". `;
+      if (latest.nextSteps.length > 0) {
+        suggestion += `Start with: ${latest.nextSteps[0]}`;
+      }
+    } else if (previousSession) {
+      const recentActions = previousSession.breadcrumbs.slice(-10);
+      if (recentActions.length > 0) {
+        const lastAction = recentActions[recentActions.length - 1];
+        if (lastAction.symbol) {
+          suggestion = `Last work involved ${lastAction.symbol}. Consider checking its current state with paradigm_ripple.`;
+        }
+      }
+    }
+    result.suggestion = suggestion;
+
     return {
       handled: true,
-      text: JSON.stringify({
-        found: true,
-        previousSession: {
-          sessionId: previousSession.sessionId,
-          startTime: new Date(previousSession.startTime).toISOString(),
-          lastActivity: new Date(previousSession.lastActivity).toISOString(),
-          age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
-        },
-        context: {
-          symbolsModified: previousSession.symbolsModified,
-          filesExplored: previousSession.filesExplored,
-        },
-        recentActions: actionSummary,
-        suggestion,
-      }, null, 2),
+      text: JSON.stringify(result, null, 2),
     };
   }
 
