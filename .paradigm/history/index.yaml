@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-18T17:31:11.777Z'
+generated: '2026-02-18T18:41:28.473Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -765,11 +765,44 @@ by_symbol:
       agent: []
   '#university-content':
     symbol: '#university-content'
-    total_changes: 2
-    last_modified: '2026-02-15T19:07:50Z'
+    total_changes: 3
+    last_modified: '2026-02-18T18:40:30Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_11
+        id: h0022
+        ts: '2026-02-18T18:40:30Z'
+        type: implement
+        symbols:
+          - '#agent-prompts'
+          - '#doctor-handler'
+          - '#OrchestrationTools'
+          - '#PurposePortalTools'
+          - '#university-content'
+        author:
+          type: human
+          id: ascend
+        commit: b9f95b303a9e1efcc2e9c2512e12961273261b7f
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/tools/purpose-portal.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/core/.purpose
+          - packages/paradigm/src/core/agent-prompts.ts
+          - packages/university/.purpose
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'feat(#agent-prompts): two-stage review protocol, fresh context principle, clarification markers'
       - *ref_8
       - id: h0018
         ts: '2026-02-15T17:57:26Z'
@@ -939,6 +972,54 @@ by_symbol:
     fragility: low
     recent:
       - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-prompts':
+    symbol: '#agent-prompts'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#doctor-handler':
+    symbol: '#doctor-handler'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#OrchestrationTools':
+    symbol: '#OrchestrationTools'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#PurposePortalTools':
+    symbol: '#PurposePortalTools'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
     contributors:
       human:
         - ascend
