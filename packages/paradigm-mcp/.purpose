@@ -45,6 +45,20 @@ description: |
     - "#TagsTools"
     - "#ReindexTools"
     - "#GlobalStore"
+    - "#PurposePortalTools"
+    - "#OrchestrationTools"
+
+#PurposePortalTools:
+  description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
+  tags: [mcp]
+  anchors:
+    - src/tools/purpose-portal.ts:1-1350
+
+#OrchestrationTools:
+  description: Inline multi-agent orchestration tools. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings.
+  tags: [mcp, team]
+  anchors:
+    - src/tools/orchestration.ts:1-1476
 
 #CoreTools:
   description: Core symbol tools (search, ripple, related, status, gates_for_route)

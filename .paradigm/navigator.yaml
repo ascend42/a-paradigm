@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-14T13:49:10.794Z'
+generated: '2026-02-18T18:39:26.128Z'
 structure: {}
 key_files:
   config:
@@ -138,6 +138,7 @@ symbols:
   '#purpose-component-echo': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-component-mcp-resources': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-component-mcp-tools': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  '#purpose-component-global-store': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-component-index-loader': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-component-sentinel-ui': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-component-node-renderer': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
@@ -289,6 +290,8 @@ symbols:
   $purpose-flow-probe-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-flow-authorization-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-flow-orchestration-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  $purpose-flow-handoff-roundtrip: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  $purpose-flow-wisdom-promotion: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-flow-install-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-flow-$plsat-exam-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose
   $purpose-flow-ide-sync-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose
@@ -305,6 +308,9 @@ symbols:
   '!purpose-signal-tool-called': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '!purpose-signal-agent-spawned': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '!purpose-signal-orchestration-completed': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
+  '!purpose-signal-handoff-persisted': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  '!purpose-signal-handoff-delivered': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  '!purpose-signal-wisdom-promoted': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '!purpose-signal-!plsat-completed': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose
   '!purpose-signal-!quiz-completed': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose
   '!purpose-signal-init-success': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
@@ -339,6 +345,7 @@ symbols:
   ~purpose-aspect-budget-enforced: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   ~purpose-aspect-file-glob-discovery: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   ~purpose-aspect-correlation-tracked: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
+  ~purpose-aspect-global-persistence: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-ref-component-ora-spinners': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-ref-component-chalk-output': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-ref-flow-plsat-exam-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose

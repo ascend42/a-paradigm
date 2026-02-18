@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-18T17:29:35.996Z",
+    "generatedAt": "2026-02-18T18:40:29.972Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 13,
@@ -264,7 +264,7 @@
       "symbol": "#doctor-command",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Health check and diagnostics for Paradigm setup",
+      "description": "Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files.",
       "visualTags": [],
       "related": [
         "#doctor-handler",
@@ -1427,7 +1427,7 @@
       "symbol": "#plsat-router",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions.",
+      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.",
       "visualTags": [],
       "related": []
     },
@@ -2562,7 +2562,7 @@
       "symbol": "#agent-prompts",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Generate agent-specific prompts with role context and handoff data",
+      "description": "Generate agent-specific prompts with role context and handoff data. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review protocol (spec compliance then code quality) with minimum 3 categorized findings.",
       "visualTags": [],
       "related": []
     },
