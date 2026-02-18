@@ -401,6 +401,7 @@ export function generateMcpToolReference(): string {
   lines.push('| `paradigm_context_check` | Check context window usage | Every 10-15 tool calls |');
   lines.push('| `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |');
   lines.push('| `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |');
+  lines.push('| `paradigm_session_checkpoint` | Save cognitive-transition checkpoint | Phase transitions |');
   lines.push('| `paradigm_session_stats` | Current session token usage | Checking budget |');
   lines.push('');
   lines.push('**Rule**: Use MCP tools for discovery and validation, file reads for implementation.');
@@ -465,6 +466,43 @@ export function generateHandoffProtocol(): string {
   lines.push('1. Call `paradigm_handoff_prepare` with summary, next steps, and target agent');
   lines.push('2. User runs: `paradigm team handoff --to <agent> --summary "..."`');
   lines.push('3. New session accepts: `paradigm team accept <handoff-id>`');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate session checkpoint protocol section
+ */
+export function generateCheckpointProtocol(): string {
+  const lines: string[] = [];
+
+  lines.push('## Session Checkpoints');
+  lines.push('');
+  lines.push('**Auto-recovery**: Recovery data is automatically surfaced on your first Paradigm tool call — no action needed to receive it.');
+  lines.push('');
+  lines.push('Save checkpoints when transitioning between workflow phases to enable crash recovery:');
+  lines.push('');
+  lines.push('| Phase | Trigger | What to Capture |');
+  lines.push('|-------|---------|-----------------|');
+  lines.push('| `planning` | After reading requirements / before coding | Plan, approach, key decisions |');
+  lines.push('| `implementing` | After starting code changes | Modified files, symbols touched, decisions made |');
+  lines.push('| `validating` | After implementation, before tests/review | All modified files, test plan |');
+  lines.push('| `complete` | Task finished | Summary, final file list |');
+  lines.push('');
+  lines.push('### Usage');
+  lines.push('');
+  lines.push('```');
+  lines.push('paradigm_session_checkpoint({');
+  lines.push('  phase: "implementing",');
+  lines.push('  context: "Adding JWT auth middleware to /api/projects routes",');
+  lines.push('  modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],');
+  lines.push('  symbolsTouched: ["^authenticated", "#project-routes"],');
+  lines.push('  decisions: ["Using RS256 for JWT signing", "Storing refresh tokens in httpOnly cookies"]');
+  lines.push('})');
+  lines.push('```');
+  lines.push('');
+  lines.push('Keep it lightweight: `phase` + `context` are required, everything else is optional.');
   lines.push('');
 
   return lines.join('\n');

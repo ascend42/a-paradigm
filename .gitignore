@@ -26,6 +26,8 @@ out/
 .paradigm/tasks/
 .paradigm/team-state.yaml
 .paradigm/handoffs/
+.paradigm/session-breadcrumbs.json
+.paradigm/session-checkpoint.json
 
 # BUT keep everything in examples/ (hydrated reference)
 !examples/**

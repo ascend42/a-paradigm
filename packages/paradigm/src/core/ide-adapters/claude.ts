@@ -14,6 +14,7 @@ import {
   generateNavigationSection,
   generateTerminalGuidance,
   generateCommitConvention,
+  generateCheckpointProtocol,
 } from './base.js';
 
 export class ClaudeAdapter implements IDEAdapter {
@@ -197,6 +198,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('2. User runs: `paradigm team handoff --to <agent> --summary "..."`');
     sections.push('3. New session accepts with: `paradigm team accept <id>`');
     sections.push('');
+
+    // Session Checkpoints protocol
+    sections.push(generateCheckpointProtocol());
 
     // MCP Workflow Protocol (agent hints for query-before-modify)
     sections.push('## MCP Workflow Protocol');

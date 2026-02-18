@@ -20,6 +20,7 @@ import {
   generateUpdateRules,
   generateCommandsReference,
   generateCommitConvention,
+  generateCheckpointProtocol,
 } from './base.js';
 import type { AgentsManifest } from '../../commands/team/types.js';
 
@@ -513,7 +514,8 @@ Get current stats anytime:
 \`\`\`
 paradigm_session_stats()
 \`\`\`
-`;
+
+${generateCheckpointProtocol()}`;
   }
 
   /**

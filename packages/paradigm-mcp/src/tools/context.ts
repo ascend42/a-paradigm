@@ -10,6 +10,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import {
   getSessionTracker,
   resetSessionTracker,
+  type SessionCheckpoint,
 } from '../utils/session-tracker.js';
 import {
   writePendingHandoff,
@@ -98,6 +99,10 @@ function extractBreadcrumbInfo(toolName: string, args: Record<string, unknown>):
       };
     case 'paradigm_reindex':
       return { summary: 'Rebuilt static index files' };
+    case 'paradigm_session_checkpoint':
+      return {
+        summary: `Checkpoint: phase=${args.phase}, ${(args.context as string || '').slice(0, 60)}`,
+      };
     default: {
       // Generic fallback: strip paradigm_ prefix, pick first meaningful arg
       const shortName = toolName.replace(/^paradigm_/, '');
@@ -193,6 +198,44 @@ export function getContextToolsList() {
       inputSchema: {
         type: 'object',
         properties: {},
+      },
+    },
+    {
+      name: 'paradigm_session_checkpoint',
+      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          phase: {
+            type: 'string',
+            enum: ['planning', 'implementing', 'validating', 'complete'],
+            description: 'Current workflow phase',
+          },
+          context: {
+            type: 'string',
+            description: 'What\'s top-of-mind right now (1-3 sentences)',
+          },
+          plan: {
+            type: 'string',
+            description: 'Optional: the current plan or approach',
+          },
+          modifiedFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: files modified so far',
+          },
+          symbolsTouched: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: symbols touched so far',
+          },
+          decisions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: key decisions made so far',
+          },
+        },
+        required: ['phase', 'context'],
       },
     },
   ];
@@ -368,6 +411,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
     tracker.setRootDir(_ctx.rootDir);
 
     const previousSession = tracker.loadPreviousSession();
+    const checkpoint = tracker.loadCheckpoint();
 
     // Load pending handoffs from global store
     let pendingHandoffs: PendingHandoff[] = [];
@@ -377,18 +421,44 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
       // Best-effort
     }
 
-    if (!previousSession && pendingHandoffs.length === 0) {
+    if (!previousSession && pendingHandoffs.length === 0 && !checkpoint) {
       return {
         handled: true,
         text: JSON.stringify({
           found: false,
-          message: 'No previous session breadcrumbs or pending handoffs found.',
-          tip: 'Breadcrumbs persist to ~/.paradigm/sessions/ and handoffs persist via paradigm_handoff_prepare.',
+          message: 'No previous session breadcrumbs, checkpoints, or pending handoffs found.',
+          tip: 'Breadcrumbs persist to ~/.paradigm/sessions/ and handoffs persist via paradigm_handoff_prepare. Checkpoints persist via paradigm_session_checkpoint.',
         }, null, 2),
       };
     }
 
     const result: Record<string, unknown> = { found: true };
+
+    // Include checkpoint if available (highest-priority recovery data)
+    if (checkpoint) {
+      const ageMs = Date.now() - checkpoint.timestamp;
+      const ageMinutes = Math.round(ageMs / 60000);
+      const ageHours = Math.round(ageMs / 3600000);
+
+      result.checkpoint = {
+        phase: checkpoint.phase,
+        context: checkpoint.context,
+        age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+        timestamp: new Date(checkpoint.timestamp).toISOString(),
+        sessionId: checkpoint.sessionId,
+        plan: checkpoint.plan,
+        modifiedFiles: checkpoint.modifiedFiles,
+        symbolsTouched: checkpoint.symbolsTouched,
+        decisions: checkpoint.decisions,
+        recentBreadcrumbs: checkpoint.recentBreadcrumbs?.map(bc => ({
+          time: new Date(bc.timestamp).toISOString(),
+          action: bc.action,
+          tool: bc.tool,
+          symbol: bc.symbol,
+          summary: bc.summary,
+        })),
+      };
+    }
 
     // Include previous session breadcrumbs if available
     if (previousSession) {
@@ -442,9 +512,14 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
       }
     }
 
-    // Build suggestion based on available context
+    // Build suggestion — prioritize checkpoint, then handoff, then breadcrumbs
     let suggestion = 'Continue where the previous session left off.';
-    if (pendingHandoffs.length > 0) {
+    if (checkpoint) {
+      suggestion = `Previous session was in "${checkpoint.phase}" phase: ${checkpoint.context}`;
+      if (checkpoint.decisions?.length) {
+        suggestion += ` Key decisions: ${checkpoint.decisions.slice(0, 2).join('; ')}`;
+      }
+    } else if (pendingHandoffs.length > 0) {
       const latest = pendingHandoffs[pendingHandoffs.length - 1];
       suggestion = `Handoff received: "${latest.summary}". `;
       if (latest.nextSteps.length > 0) {
@@ -461,11 +536,112 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
     }
     result.suggestion = suggestion;
 
+    // Mark recovery as done so auto-recovery doesn't duplicate
+    tracker.markRecovered();
+
     return {
       handled: true,
       text: JSON.stringify(result, null, 2),
     };
   }
 
+  if (name === 'paradigm_session_checkpoint') {
+    tracker.setRootDir(_ctx.rootDir);
+
+    const phase = args.phase as SessionCheckpoint['phase'];
+    const context = args.context as string;
+    const plan = args.plan as string | undefined;
+    const modifiedFiles = args.modifiedFiles as string[] | undefined;
+    const symbolsTouched = args.symbolsTouched as string[] | undefined;
+    const decisions = args.decisions as string[] | undefined;
+
+    const checkpoint = tracker.saveCheckpoint({
+      phase,
+      context,
+      plan,
+      modifiedFiles,
+      symbolsTouched,
+      decisions,
+    });
+
+    return {
+      handled: true,
+      text: JSON.stringify({
+        saved: true,
+        checkpoint: {
+          phase: checkpoint.phase,
+          context: checkpoint.context,
+          sessionId: checkpoint.sessionId,
+          timestamp: new Date(checkpoint.timestamp).toISOString(),
+          modifiedFiles: checkpoint.modifiedFiles?.length || 0,
+          symbolsTouched: checkpoint.symbolsTouched?.length || 0,
+          decisions: checkpoint.decisions?.length || 0,
+          recentBreadcrumbs: checkpoint.recentBreadcrumbs?.length || 0,
+        },
+        note: 'Checkpoint saved. Recovery data will be auto-surfaced on the first tool call of the next session.',
+      }, null, 2),
+    };
+  }
+
   return { handled: false, text: '' };
+}
+
+/**
+ * Build a recovery preamble from checkpoint + handoff data.
+ * Returns null if no recovery data is available.
+ * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
+ */
+export function buildRecoveryPreamble(rootDir: string): string | null {
+  const tracker = getSessionTracker();
+  tracker.setRootDir(rootDir);
+
+  const checkpoint = tracker.loadCheckpoint();
+
+  let pendingHandoffs: PendingHandoff[] = [];
+  try {
+    pendingHandoffs = loadPendingHandoffs(rootDir);
+  } catch {
+    // Best-effort
+  }
+
+  if (!checkpoint && pendingHandoffs.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push('--- SESSION RECOVERY ---');
+
+  if (checkpoint) {
+    const ageMs = Date.now() - checkpoint.timestamp;
+    const ageMinutes = Math.round(ageMs / 60000);
+    const ageHours = Math.round(ageMs / 3600000);
+    const ageStr = ageHours > 1 ? `${ageHours}h ago` : `${ageMinutes}m ago`;
+
+    lines.push(`Previous session was in "${checkpoint.phase}" phase (${ageStr}): ${checkpoint.context}`);
+
+    if (checkpoint.modifiedFiles?.length) {
+      lines.push(`Modified files: ${checkpoint.modifiedFiles.join(', ')}`);
+    }
+    if (checkpoint.symbolsTouched?.length) {
+      lines.push(`Symbols: ${checkpoint.symbolsTouched.join(', ')}`);
+    }
+    if (checkpoint.decisions?.length) {
+      lines.push(`Decisions: ${checkpoint.decisions.join('; ')}`);
+    }
+    if (checkpoint.plan) {
+      lines.push(`Plan: ${checkpoint.plan.slice(0, 200)}`);
+    }
+  }
+
+  if (pendingHandoffs.length > 0) {
+    const latest = pendingHandoffs[pendingHandoffs.length - 1];
+    lines.push(`Pending handoff: "${latest.summary}"`);
+    if (latest.nextSteps.length > 0) {
+      lines.push(`Next steps: ${latest.nextSteps.slice(0, 3).join(', ')}`);
+    }
+  }
+
+  lines.push('---');
+
+  return lines.join('\n');
 }

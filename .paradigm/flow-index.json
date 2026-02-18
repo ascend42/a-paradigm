@@ -1,38 +1,7 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-02-18T18:39:26.132Z",
+  "generatedAt": "2026-02-18T19:50:10.747Z",
   "flows": {
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Display intro, rules, and name input"
-        },
-        {
-          "id": "step-2",
-          "action": "Start 45-minute countdown"
-        },
-        {
-          "id": "step-3",
-          "action": "Present 50 shuffled questions (with passage blocks for grouped questions)"
-        },
-        {
-          "id": "step-4",
-          "action": "Calculate score on submit or time-up"
-        },
-        {
-          "id": "step-5",
-          "action": "Persist certificate to LocalStorage"
-        },
-        {
-          "id": "step-6",
-          "action": "Display printable certificate if passed"
-        }
-      ],
-      "definedIn": "packages/university/.purpose"
-    },
     "$ide-sync-flow": {
       "id": "$ide-sync-flow",
       "description": "Sync .paradigm/ to IDE instruction files",
@@ -82,6 +51,37 @@
         }
       ],
       "definedIn": "packages/paradigm/src/core/.purpose"
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Display intro, rules, and name input"
+        },
+        {
+          "id": "step-2",
+          "action": "Start 45-minute countdown"
+        },
+        {
+          "id": "step-3",
+          "action": "Present 50 shuffled questions (with passage blocks for grouped questions)"
+        },
+        {
+          "id": "step-4",
+          "action": "Calculate score on submit or time-up"
+        },
+        {
+          "id": "step-5",
+          "action": "Persist certificate to LocalStorage"
+        },
+        {
+          "id": "step-6",
+          "action": "Display printable certificate if passed"
+        }
+      ],
+      "definedIn": "packages/university/.purpose"
     },
     "$purpose-parsing": {
       "id": "$purpose-parsing",
