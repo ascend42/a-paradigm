@@ -251,6 +251,57 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
+  // Check for clarification markers in .purpose files
+  const clarificationMarkerRegex = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
+  let clarificationCount = 0;
+
+  function findPurposeFilesRecursive(dir: string): string[] {
+    const found: string[] = [];
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          found.push(...findPurposeFilesRecursive(fullPath));
+        } else if (entry.name === '.purpose') {
+          found.push(fullPath);
+        }
+      }
+    } catch {
+      // Skip directories we can't read
+    }
+    return found;
+  }
+
+  const purposeFiles = findPurposeFilesRecursive(cwd);
+  for (const pf of purposeFiles) {
+    try {
+      const content = fs.readFileSync(pf, 'utf8');
+      const matches = content.match(clarificationMarkerRegex);
+      if (matches) {
+        clarificationCount += matches.length;
+      }
+    } catch {
+      // Skip files we can't read
+    }
+  }
+
+  if (clarificationCount > 0) {
+    results.push({
+      name: 'Clarification markers',
+      status: 'warn',
+      message: `${clarificationCount} [NEEDS CLARIFICATION] marker${clarificationCount > 1 ? 's' : ''} found in .purpose files`,
+      fix: 'Resolve open clarification markers before shipping',
+    });
+  } else if (purposeFiles.length > 0) {
+    results.push({
+      name: 'Clarification markers',
+      status: 'ok',
+      message: 'No unresolved markers',
+    });
+  }
+
   // Display results
   let errorCount = 0;
   let warnCount = 0;

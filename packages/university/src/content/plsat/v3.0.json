@@ -875,6 +875,20 @@
           },
           "correct": "B",
           "explanation": "`paradigm doctor` is the validation tool that checks for inconsistencies between Paradigm files and the codebase. It flags missing anchors, undefined symbols referenced in flows, gates referenced in portal.yaml that don't have implementations, and more. `paradigm_aspect_check` specifically validates that aspect anchors still point to valid code. `paradigm_purpose_validate` checks `.purpose` file structural validity. These tools are how you verify accuracy. Paradigm files are NOT auto-generated (A) or aspirational (C) \u2014 they're maintained documentation that has validation tools."
+        },
+        {
+          "id": "plsat-038b",
+          "scenario": "While writing a `.purpose` file for a new feature, you aren't sure whether the notification service should send emails or push notifications. Rather than guessing, you write:\n\n```yaml\ncomponents:\n  notification-dispatcher:\n    description: \"Routes notifications to users [NEEDS CLARIFICATION: email, push, or both?]\"\n```\n\nYou then run `paradigm doctor` and `paradigm_purpose_validate`.",
+          "question": "How do these tools treat the `[NEEDS CLARIFICATION: ...]` marker?",
+          "choices": {
+            "A": "As an error \u2014 the `.purpose` file fails validation until the marker is removed",
+            "B": "As a warning \u2014 it surfaces during checks but does not block validation or break builds",
+            "C": "They ignore it \u2014 it's just text in a YAML string",
+            "D": "As a fatal parse error \u2014 the square brackets break YAML syntax",
+            "E": "As an info-level message only visible with `--verbose` flag"
+          },
+          "correct": "B",
+          "explanation": "Clarification markers (`[NEEDS CLARIFICATION: ...]`) are treated as warnings by both `paradigm doctor` and `paradigm_purpose_validate`. They scan all description fields for this exact pattern and report matches as warnings. This means the marker surfaces during health checks to remind the team of open design questions, but it does not fail validation or block builds. The intent is to make ambiguity visible and trackable rather than silent. Resolve markers before shipping by replacing them with the clarified text."
         }
       ]
     },
@@ -959,6 +973,20 @@
           },
           "correct": "B",
           "explanation": "Paradigm's recommended model configuration is: architect and security agents use opus (complex reasoning, critical decisions), builder uses haiku (fast, cost-effective for straightforward implementation), and tester uses haiku (pattern-based, repetitive work). The reviewer role (not in this scenario) uses sonnet (balanced critique). This balances quality where it matters most (architecture, security) with cost efficiency where tasks are more mechanical (building, testing). All-opus (A) blows the budget. All-haiku (C) risks poor architectural decisions."
+        },
+        {
+          "id": "plsat-042b",
+          "scenario": "The reviewer agent is reviewing a builder's implementation of a new checkout feature. During Stage 1 (Spec Compliance), the reviewer discovers that the builder created a new `#shipping-calculator` component but did not register it in any `.purpose` file. The code itself looks clean and well-tested.",
+          "question": "What should the reviewer do?",
+          "choices": {
+            "A": "Proceed to Stage 2 (Code Quality) since the code looks good, and mention the missing `.purpose` entry as a note",
+            "B": "Stop at Stage 1, report a blocking finding for the unregistered component, and hand back to the builder without running Stage 2",
+            "C": "Register the component in the `.purpose` file on behalf of the builder, then approve",
+            "D": "Skip both stages and approve since the code is well-tested",
+            "E": "Run Stage 2 first since code quality is more important than metadata"
+          },
+          "correct": "B",
+          "explanation": "The reviewer follows a strict two-stage protocol. Stage 1 (Spec Compliance) is a hard gate \u2014 if it fails, the reviewer stops immediately and hands back to the builder. A missing `.purpose` registration is a spec compliance violation (blocking finding). There is no point reviewing code quality of spec-noncompliant code. The reviewer never writes code or modifies files (C is wrong). Stage 2 cannot run before Stage 1 passes."
         }
       ]
     },

@@ -20,7 +20,7 @@ components:
     file: src/server/routes/courses.ts
 
   plsat-router:
-    description: API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions.
+    description: API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.
     file: src/server/routes/plsat.ts
 
   university-ui:

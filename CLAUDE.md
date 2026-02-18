@@ -405,6 +405,27 @@ See `.paradigm/specs/logger.md` for full specification.
 - Aspects (`~`) MUST have code anchors - no unanchored aspects allowed
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
 
+## Clarification Markers
+
+When a requirement is ambiguous or incomplete in a `.purpose` file, use the `[NEEDS CLARIFICATION: ...]` marker format instead of guessing:
+
+```yaml
+components:
+  payment-processor:
+    description: "Processes payments via Stripe [NEEDS CLARIFICATION: should this support PayPal fallback?]"
+```
+
+### Rules
+- **Format**: `[NEEDS CLARIFICATION: <question or ambiguity>]` — exact prefix required
+- **Placement**: Inside any `description` field in `.purpose` files (top-level, components, features, gates, signals, aspects, flows)
+- **Severity**: Treated as **warnings**, not errors — they do not block validation but surface during checks
+- **Resolution**: Replace the marker with the clarified text once resolved
+
+### Validation
+- `paradigm_purpose_validate` reports markers as warnings with the field path
+- `paradigm doctor` counts total markers across all `.purpose` files and reports as a warning
+- Resolve all markers before shipping — they indicate unresolved design questions
+
 ## When to Update Paradigm Files
 
 - When adding a feature, create/update the nearest .purpose file with `#component` and `[feature]` tag
