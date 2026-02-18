@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-18T17:27:11.455Z'
+generated: '2026-02-18T17:31:11.777Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -273,11 +273,44 @@ by_symbol:
       agent: []
   '#ContextTools':
     symbol: '#ContextTools'
-    total_changes: 1
-    last_modified: '2026-02-14T09:55:01Z'
+    total_changes: 2
+    last_modified: '2026-02-18T17:29:36Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_10
+        id: h0021
+        ts: '2026-02-18T17:29:36Z'
+        type: implement
+        symbols:
+          - '!handoff-delivered'
+          - '!handoff-persisted'
+          - '!wisdom-promoted'
+          - '#ContextTools'
+          - '#global-store'
+          - '#mcp-tools'
+          - '#WisdomTools'
+          - ~global-persistence
+          - $handoff-roundtrip
+          - $wisdom-promotion
+        author:
+          type: human
+          id: ascend
+        commit: 002fbc940f0ce0c72f273f8d276b25a410a1c84f
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - .purpose
+          - CHANGELOG.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/wisdom.ts
+          - packages/paradigm-mcp/src/utils/global-store.ts
+          - packages/paradigm-mcp/src/utils/session-tracker.ts
+          - packages/paradigm-mcp/src/utils/wisdom-loader.ts
+        description: 'feat(#global-store): global brain for cross-session and cross-project persistence'
       - &ref_3
         id: h0006
         ts: '2026-02-14T09:55:01Z'
@@ -798,6 +831,114 @@ by_symbol:
     fragility: low
     recent:
       - *ref_9
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!handoff-delivered':
+    symbol: '!handoff-delivered'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!handoff-persisted':
+    symbol: '!handoff-persisted'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!wisdom-promoted':
+    symbol: '!wisdom-promoted'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#global-store':
+    symbol: '#global-store'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mcp-tools':
+    symbol: '#mcp-tools'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#WisdomTools':
+    symbol: '#WisdomTools'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~global-persistence:
+    symbol: ~global-persistence
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $handoff-roundtrip:
+    symbol: $handoff-roundtrip
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $wisdom-promotion:
+    symbol: $wisdom-promotion
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
     contributors:
       human:
         - ascend
