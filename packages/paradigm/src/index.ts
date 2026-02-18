@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '1.3.0';
+const VERSION = '2.0.13';
 
 const program = new Command();
 
