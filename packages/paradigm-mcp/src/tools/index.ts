@@ -22,7 +22,8 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
-import { getContextToolsList, handleContextTool, trackToolCall, addToolBreadcrumb } from './context.js';
+import { getContextToolsList, handleContextTool, trackToolCall, addToolBreadcrumb, buildRecoveryPreamble } from './context.js';
+import { getSessionTracker } from '../utils/session-tracker.js';
 import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
@@ -222,6 +223,18 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       const { name, arguments: args } = request.params;
       addToolBreadcrumb(name, (args ?? {}) as Record<string, unknown>);
       const ctx = getContext();
+
+      // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
+      const tracker = getSessionTracker();
+      tracker.setRootDir(ctx.rootDir);
+      let recoveryPreamble: string | null = null;
+      if (!tracker.hasRecoveredThisSession()) {
+        recoveryPreamble = buildRecoveryPreamble(ctx.rootDir);
+        tracker.markRecovered();
+      }
+
+      // Dispatch to tool handler; we'll prepend recovery preamble afterward
+      const toolResult = await (async () => {
 
       switch (name) {
         case 'paradigm_search': {
@@ -912,6 +925,18 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           throw new Error(`Unknown tool: ${name}`);
         }
       }
+
+      })(); // end IIFE for tool dispatch
+
+      // Prepend recovery preamble to the first tool response of a new session
+      if (recoveryPreamble) {
+        const first = toolResult.content?.[0];
+        if (first && typeof first === 'object' && 'text' in first && typeof first.text === 'string') {
+          first.text = recoveryPreamble + '\n\n' + first.text;
+        }
+      }
+
+      return toolResult;
     }
   );
 }

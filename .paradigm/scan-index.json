@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-18T18:40:29.972Z",
+    "generatedAt": "2026-02-18T19:54:14.464Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 13,
@@ -1009,6 +1009,39 @@
         "#command-generator"
       ]
     },
+    "portal-parsing": {
+      "id": "portal-parsing",
+      "name": "Portal Parsing",
+      "symbol": "#portal-parsing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-parsing: Parse portal.yaml into structured data",
+      "visualTags": [],
+      "related": [
+        "~yaml-config-loading",
+        "$portal-validation-flow",
+        "!parse-success",
+        "!parse-error",
+        "#yaml-parser",
+        "#gate-schemas"
+      ]
+    },
+    "portal-validation": {
+      "id": "portal-validation",
+      "name": "Portal Validation",
+      "symbol": "#portal-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-validation: Validate portal.yaml configuration",
+      "visualTags": [],
+      "related": [
+        "~file-glob-discovery",
+        "!validation-passed",
+        "!validation-failed",
+        "#validator",
+        "#topology-checker"
+      ]
+    },
     "gate-checking": {
       "id": "gate-checking",
       "name": "Gate Checking",
@@ -1049,39 +1082,6 @@
       "related": [
         "#portal-client",
         "#gate-client"
-      ]
-    },
-    "portal-parsing": {
-      "id": "portal-parsing",
-      "name": "Portal Parsing",
-      "symbol": "#portal-parsing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-parsing: Parse portal.yaml into structured data",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "$portal-validation-flow",
-        "!parse-success",
-        "!parse-error",
-        "#yaml-parser",
-        "#gate-schemas"
-      ]
-    },
-    "portal-validation": {
-      "id": "portal-validation",
-      "name": "Portal Validation",
-      "symbol": "#portal-validation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-validation: Validate portal.yaml configuration",
-      "visualTags": [],
-      "related": [
-        "~file-glob-discovery",
-        "!validation-passed",
-        "!validation-failed",
-        "#validator",
-        "#topology-checker"
       ]
     },
     "commander-setup": {
@@ -2466,6 +2466,26 @@
       "visualTags": [],
       "related": []
     },
+    "gate-schemas": {
+      "id": "gate-schemas",
+      "name": "Gate Schemas",
+      "symbol": "#gate-schemas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
+      "visualTags": [],
+      "related": []
+    },
+    "topology-checker": {
+      "id": "topology-checker",
+      "name": "Topology Checker",
+      "symbol": "#topology-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#topology-checker: Checks for circular dependencies in gates",
+      "visualTags": [],
+      "related": []
+    },
     "evaluator": {
       "id": "evaluator",
       "name": "Evaluator",
@@ -2523,26 +2543,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "#gate-client: Low-level gate checking client",
-      "visualTags": [],
-      "related": []
-    },
-    "gate-schemas": {
-      "id": "gate-schemas",
-      "name": "Gate Schemas",
-      "symbol": "#gate-schemas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
-      "visualTags": [],
-      "related": []
-    },
-    "topology-checker": {
-      "id": "topology-checker",
-      "name": "Topology Checker",
-      "symbol": "#topology-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#topology-checker: Checks for circular dependencies in gates",
       "visualTags": [],
       "related": []
     },
@@ -4158,6 +4158,14 @@
       "category": "components",
       "id": "command-palette"
     },
+    "#portal-parsing": {
+      "category": "components",
+      "id": "portal-parsing"
+    },
+    "#portal-validation": {
+      "category": "components",
+      "id": "portal-validation"
+    },
     "#gate-checking": {
       "category": "components",
       "id": "gate-checking"
@@ -4169,14 +4177,6 @@
     "#client-api": {
       "category": "components",
       "id": "client-api"
-    },
-    "#portal-parsing": {
-      "category": "components",
-      "id": "portal-parsing"
-    },
-    "#portal-validation": {
-      "category": "components",
-      "id": "portal-validation"
     },
     "#commander-setup": {
       "category": "components",
@@ -4710,6 +4710,14 @@
       "category": "components",
       "id": "command-generator"
     },
+    "#gate-schemas": {
+      "category": "components",
+      "id": "gate-schemas"
+    },
+    "#topology-checker": {
+      "category": "components",
+      "id": "topology-checker"
+    },
     "#evaluator": {
       "category": "components",
       "id": "evaluator"
@@ -4733,14 +4741,6 @@
     "#gate-client": {
       "category": "components",
       "id": "gate-client"
-    },
-    "#gate-schemas": {
-      "category": "components",
-      "id": "gate-schemas"
-    },
-    "#topology-checker": {
-      "category": "components",
-      "id": "topology-checker"
     },
     "#agent-matcher": {
       "category": "components",
