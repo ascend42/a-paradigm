@@ -62,7 +62,7 @@ description: |
   description: Renders reference arrows between connected nodes
   tags: [ui]
   anchors:
-    - src/components/Nodes/ConnectionRenderer.tsx:1-80
+    - src/components/Nodes/NodeRenderer.tsx:1-80
 
 #GridCard:
   description: Card component for grid view symbol display
@@ -186,7 +186,7 @@ $filter-symbols:
   description: UI adapts to viewport size for all layout modes
   tags: [ux]
   anchors:
-    - src/styles/main.css:1-50
+    - src/styles/index.css:1-50
     - src/App.tsx:50-80
   applies-to:
     - "#App"

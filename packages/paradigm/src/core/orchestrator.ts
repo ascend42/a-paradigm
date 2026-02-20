@@ -24,6 +24,13 @@ import {
   classifyTask,
   getRecommendedModel,
 } from './task-classifier.js';
+import {
+  runPreflight,
+  runPostflight,
+  type PreflightResult,
+  type PostflightResult,
+} from './pm-compliance.js';
+import { buildSymbolIndex } from '@a-company/premise-core';
 
 // ============================================================================
 // Types
@@ -65,6 +72,11 @@ export interface OrchestrationOptions {
   onAgentStart?: (agentName: string, task: string, model: AgentModel) => void;
   /** Agent completed callback */
   onAgentComplete?: (agentName: string, result: SpawnResult, model: AgentModel) => void;
+  /** PM governance configuration */
+  pmGovernance?: {
+    enabled: boolean;
+    blockOnViolations?: boolean;
+  };
 }
 
 export interface OrchestrationResult {
@@ -85,6 +97,11 @@ export interface OrchestrationResult {
     totalSubPhases: number;
     totalParallelBuilders: number;
     filesCreated: number;
+  };
+  /** PM compliance report (when PM governance is enabled) */
+  complianceReport?: {
+    preflight: PreflightResult;
+    postflight?: PostflightResult;
   };
 }
 
@@ -258,6 +275,19 @@ export class Orchestrator {
     };
 
     try {
+      // PM Governance: Pre-flight
+      let preflightResult: PreflightResult | undefined;
+      if (options.pmGovernance?.enabled) {
+        try {
+          const { aggregateFromDirectory } = await import('@a-company/premise-core');
+          const aggregation = await aggregateFromDirectory(this.rootDir);
+          const index = buildSymbolIndex(aggregation);
+          preflightResult = runPreflight(task, this.rootDir, index);
+        } catch {
+          // Pre-flight is best-effort — don't block orchestration
+        }
+      }
+
       if (mode === 'solo') {
         const soloResult = await this.runSoloMode(task, options);
         result.agentsSpawned = 1;
@@ -275,6 +305,43 @@ export class Orchestrator {
         result.totalCost = facetedResult.totalCost;
         result.success = facetedResult.success;
         result.parallelBuilderStats = facetedResult.parallelBuilderStats;
+      }
+
+      // PM Governance: Post-flight
+      if (options.pmGovernance?.enabled && preflightResult) {
+        try {
+          const { aggregateFromDirectory } = await import('@a-company/premise-core');
+          const aggregation = await aggregateFromDirectory(this.rootDir);
+          const index = buildSymbolIndex(aggregation);
+
+          // Collect files and symbols from agent results
+          const filesModified: string[] = [];
+          const symbolsTouched: string[] = [];
+          for (const agentResult of result.agentResults) {
+            if (agentResult.relay?.outputs?.artifacts) {
+              filesModified.push(...agentResult.relay.outputs.artifacts.map(a => a.path));
+            }
+          }
+          // Extract symbols from preflight
+          for (const sym of preflightResult.affectedSymbols) {
+            symbolsTouched.push(sym.symbol);
+          }
+
+          const postflightResult = runPostflight(filesModified, symbolsTouched, this.rootDir, index);
+
+          result.complianceReport = {
+            preflight: preflightResult,
+            postflight: postflightResult,
+          };
+
+          // Block on violations if configured
+          if (options.pmGovernance.blockOnViolations && postflightResult.blocksCompletion) {
+            result.success = false;
+          }
+        } catch {
+          // Post-flight is best-effort
+          result.complianceReport = { preflight: preflightResult };
+        }
       }
 
       result.duration_ms = Date.now() - startTime;

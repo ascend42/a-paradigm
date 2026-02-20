@@ -1,0 +1,50 @@
+version: '1.0'
+generated: '2026-02-18T19:50:10.744Z'
+structure: {}
+key_files:
+  config:
+    - .paradigm/config.yaml
+    - package.json
+  entry: []
+  types: []
+skip_patterns:
+  always:
+    - node_modules/
+    - dist/
+    - build/
+    - .git/
+    - .next/
+    - .nuxt/
+    - .cache/
+    - '*.lock'
+    - '*.log'
+    - .yarn/build-state.yml
+    - .pnp.*
+    - out/
+    - '*.tsbuildinfo'
+    - .paradigm/orchestrations/
+    - .paradigm/tasks/
+    - .paradigm/handoffs/
+    - '!examples/**'
+    - logs/
+    - npm-debug.log*
+    - yarn-debug.log*
+    - yarn-error.log*
+    - lerna-debug.log*
+    - pnpm-debug.log*
+    - pids/
+    - '*.pid'
+  unless_testing:
+    - '**/*.test.ts'
+    - '**/*.test.tsx'
+    - '**/*.spec.ts'
+    - '**/*.spec.tsx'
+    - __tests__/
+    - test/
+    - tests/
+  unless_docs:
+    - docs/
+    - '*.md'
+    - README*
+    - CHANGELOG*
+symbols: {}

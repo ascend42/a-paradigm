@@ -5,6 +5,136 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **npm publish ready** — `npm i -g @a-company/paradigm` installs both `paradigm` CLI and `paradigm-mcp` server. All `@a-company/*` workspace deps bundled via tsup `noExternal`. MCP server built as second entry point (`dist/mcp.js`). `@a-company/paradigm-mcp` marked private. Optional commands (`sentinel`, `university`) gracefully handle missing packages. CI fixed from stale `@horizon/cli` reference. Stale `@horizon/*` changeset deleted.
+
+### Added
+
+- **Discipline System** — Auto-detection and per-discipline configuration. `detectDiscipline()` examines project files to infer project type from 14 disciplines (`web`, `backend`, `fullstack`, `api`, `cli`, `ml`, `mobile`, `game`, `embedded`, `devops`, `data`, `library`, `monorepo`, `custom`). Each discipline gets tailored symbol mappings, purpose-required patterns, and scan patterns. Wired into `paradigm init` (auto-populates config), `paradigm shift` (detects for existing projects), and `paradigm scan` (discipline-aware patterns). Template `disciplines.md` rewritten for v2. `context-builder.ts` cleaned of v1 symbol remnants.
+
+- **University: Discipline System lesson updates** — PARA 201 disciplines lesson rewritten with auto-detection section, 14-discipline table, domain-specific disciplines (ML, Data, Game, Embedded). PLSAT v2.0/v3.0 discipline references updated (`fullstack-saas` → `fullstack`, `cli-tool` → `cli`). Reference.json CLI flags updated.
+
+- **Session Checkpoints + Auto-Recovery** — Cognitive-transition checkpoints for crash recovery. New `paradigm_session_checkpoint` MCP tool saves lightweight snapshots (phase, context, modified files, symbols, decisions, last 10 breadcrumbs) at workflow transitions (planning → implementing → validating → complete). Dual-writes to both local (`.paradigm/session-checkpoint.json`) and global (`~/.paradigm/sessions/{hash}/checkpoint.json`). Checkpoints older than 7 days are automatically discarded. Auto-recovery on first tool call: the MCP server detects new sessions and prepends a `--- SESSION RECOVERY ---` preamble to the very first tool response with checkpoint data (phase, context, files, symbols, decisions) and pending handoffs — agents receive recovery context with zero protocol overhead, even after "clear context" or crash. Recovery fires once per session via `hasRecoveredThisSession()` gating. `paradigm_session_recover` enhanced to include checkpoint data (prioritized in suggestions over raw breadcrumbs). New `buildRecoveryPreamble()` shared helper. New `generateCheckpointProtocol()` in IDE adapter base — integrated into Claude adapter (CLAUDE.md) and Cursor adapter (paradigm-context.mdc). `paradigm_session_checkpoint` added to MCP tool reference table. `.gitignore` updated for `session-checkpoint.json` and `session-breadcrumbs.json`. All 16 paradigm projects updated via `paradigm shift` for parity.
+
+- **Two-Stage Review Protocol** — Reviewer agent prompt restructured with a hard two-stage gate: Stage 1 (Spec Compliance) verifies `.purpose` registrations, `^gate` implementation, `$flow` step sequences, `!signal` emissions, and `~aspect` enforcement. If Stage 1 fails, the reviewer stops immediately and hands back to the builder — no code quality review of spec-noncompliant code. Stage 2 (Code Quality) covers OWASP security, conventions, test coverage, and error handling. Applied to both `packages/paradigm/src/core/agent-prompts.ts` and `packages/paradigm-mcp/src/tools/orchestration.ts`.
+
+- **Adversarial Review (Minimum 3 Findings)** — Every reviewer output must produce at least 3 categorized findings: `blocking` (must fix), `improvement` (should fix), or `note` (informational). Only blocking findings prevent approval. Eliminates rubber-stamp "looks good" reviews with zero findings.
+
+- **Fresh Context Principle** — Builder agent prompt now includes explicit isolation guidance: each builder task runs in a separate, clean context. Builders must re-read specs and handoff context for every invocation, never carrying assumptions from prior tasks. "Implement multiple unrelated tasks in the same context" added to builder DON'T list. Applied to both prompt locations.
+
+- **Clarification Markers (`[NEEDS CLARIFICATION: ...]`)** — Convention for marking ambiguous requirements in `.purpose` file descriptions instead of guessing. `paradigm_purpose_validate` scans all description fields (components, features, gates, signals, aspects, flows) for the marker regex and reports matches as warnings. `paradigm doctor` counts total markers across all `.purpose` files and reports as a warning check. Documented in `CLAUDE.md` with format, placement rules, and resolution guidance.
+
+- **University: Two-Stage Review Protocol lesson content** — PARA 401 Agent Roles lesson gains "Reviewer Protocol" subsection covering the two-stage review and minimum 3 findings rule, plus quiz question Q6 testing Stage 1 failure behavior.
+
+- **University: Fresh Context Principle lesson content** — PARA 401 Multi-Agent Coordination lesson gains "Fresh Context Principle" subsection explaining builder isolation and added to keyConcepts.
+
+- **University: Clarification Markers lesson content** — PARA 301 Doctor & Validation lesson gains "Clarification Markers" subsection explaining the format and how doctor/validate surface them, plus quiz question Q5 testing marker severity (warnings not errors).
+
+- **PLSAT v3.0 new variants** — `plsat-042b` (two-stage review: Stage 1 spec compliance failure stops review, doesn't proceed to Stage 2) and `plsat-038b` (clarification markers are warnings, not errors).
+
+- **Global Brain (`~/.paradigm/`)** — Cross-session and cross-project persistence layer for the MCP server. New `#GlobalStore` utility (`packages/paradigm-mcp/src/utils/global-store.ts`) manages `~/.paradigm/sessions/{hash}/` for session breadcrumbs and pending handoffs, and `~/.paradigm/wisdom/` for global antipatterns/decisions/preferences. `paradigm_handoff_prepare` now persists handoffs to global store — next session's `paradigm_session_recover` automatically loads and delivers them (no more manual `paradigm team accept`). `paradigm_wisdom_record` gains a `scope` parameter (`project` | `global`). New `paradigm_wisdom_promote` tool promotes project-local wisdom to global scope. `paradigm_wisdom_context` merges global + local wisdom transparently. Session tracker dual-writes breadcrumbs to both `.paradigm/session-breadcrumbs.json` (project) and `~/.paradigm/sessions/` (global). New `~global-persistence` aspect with anchors. New signals: `!handoff-persisted`, `!handoff-delivered`, `!wisdom-promoted`. New flows: `$handoff-roundtrip`, `$wisdom-promotion`.
+
+- **Hook enforcement v2** — PostWrite and Stop hooks rewritten for stronger paradigm compliance. PostWrite hook now tracks every modified source file in `.paradigm/.pending-review` (deduplicated), outputs periodic compliance reminders (every 3rd edit) referencing all 5 symbol types (`#components`, `~aspects`, `!signals`, `$flows`, `^gates`), warns that the stop hook WILL BLOCK, and names the specific `.purpose` file to update. Stop hook lowers the blocking threshold from 3 to 2 source files, adds Check 5 (per-directory `.purpose` freshness — reads `.pending-review` and verifies each covering `.purpose` was also modified), adds Check 6 (aspect coverage advisory — detects `~aspect` definitions and warns about stale anchors/applies-to patterns), and outputs specific MCP tool remediation commands. Cleans up `.pending-review` on pass. All 4 hook variants updated (Claude Code + Cursor, postwrite + stop). Propagates to all projects via `paradigm hooks install --force`.
+
+- **Test suite for Paradigm CLI** — 102 tests across 7 test files using Vitest. Covers config parser, IDE adapter generators, adapter registry/detection, adapter contract tests (parameterized across all 5 adapters), scan utilities, doctor command, and hooks system (Claude Code, Cursor, Git). Includes shared `createTempProject()` test helper for temp directory scaffolding. CI pipeline runs tests on Node 18/20/22 matrix.
+
+- **Cursor hooks** (`.cursor/hooks.json`): Compliance enforcement hooks for Cursor IDE — stop hook (blocks on missing .purpose), post-write hook (advisory .purpose reminder), pre-commit hook (auto-rebuilds index). Install with `paradigm hooks install --cursor`. Automatically included in `paradigm shift`.
+
+- **AGENTS.md generation**: Universal AI agent instruction file (cross-IDE standard). New `agents` adapter generates `AGENTS.md` at repo root with project overview, symbol system, MCP tool reference, workflow protocol, session recovery, commit conventions, and more. Run `paradigm sync agents` or let `paradigm shift` generate it automatically.
+
+- **Cursor rule mode optimization**: 4 Cursor rules (`paradigm-orchestration`, `paradigm-context`, `paradigm-commits`, `paradigm-flows`) switched from `alwaysApply: true` to intelligent application via improved descriptions. Reduces context overhead — rules only load when relevant.
+
+- **Session recovery in all adapters**: `paradigm_session_recover` is now surfaced in Cursor context rules and the Claude adapter template, ensuring all IDEs prompt agents to load previous session breadcrumbs.
+
+- **Shared IDE generators**: New `generateMcpToolReference()`, `generateWorkflowProtocol()`, and `generateHandoffProtocol()` in `base.ts` — reusable across AGENTS.md and future adapters.
+
+- **Session breadcrumb wiring**: `paradigm_session_recover` now returns real data. Every MCP tool call automatically records a breadcrumb (tool name, summary, symbol) via `addToolBreadcrumb()` in the dispatch layer. `setRootDir()` is called at server startup so breadcrumbs persist to `.paradigm/session-breadcrumbs.json`. New sessions can call `paradigm_session_recover` to see what the previous session was working on.
+
+- **Dark/light mode toggle for University** — Theme toggle button in the header (right of version badge), persists preference in localStorage. Full dark theme with inverted parchment palette, brightened symbols/accents, readable button text, and visible quiz choice options. University Seal SVG uses CSS custom properties (`var(--burgundy)`, `var(--gold)`, `var(--sym-*)`) for all colors — natively theme-aware with no filter hacks.
+
+- **University UX improvements** — Course catalog redesigned as single-column list with lesson topic tags, progress ring, and "Start course" CTA. Sidebar navigation no longer resets scroll position. Dark mode: improved active sidebar item contrast (gold bg), provider cascade section grouped by ecosystem (Anthropic/Claude, Cursor, Universal). PARA 401 multi-agent lesson updated with model configuration commands (`paradigm shift`, `paradigm team models`, `--refresh`) and new quiz question. Markdown renderer paragraph regex fixed to only skip block-level tags — inline tags (`<strong>`, `<code>`, `<em>`) now correctly get `<p>` wrappers, fixing bold-numbered lists (e.g. "The Operational Loop") rendering as a single blob. Inline `code` elements restyled with stronger gold background and subtle border for better contrast in both light and dark modes.
+
+- **Markdown rendering in quiz/PLSAT questions** — Extracted `renderMarkdown` to shared utility (`utils/renderMarkdown.ts`). Scenarios, question text, choices, and explanations now render code blocks, inline code, bold, and other markdown. YAML gate definitions in PLSAT choices display as proper code blocks. Passage questions always show their full passage inline — removed "scroll up" backtracking message.
+
+- **Framework-agnostic course content** — Replaced all React/Express/Zustand-specific references in courses (PARA 101, 201, 301) and PLSAT exams (v2.0, v3.0) with generic terms (UI component, frontend hook, server stack). Paradigm is framework-agnostic and the educational content now reflects that.
+
+- **Portal.yaml for university routes** — All 5 university API routes (`/api/courses`, `/api/courses/:id`, `/api/courses/:id/lessons/:lessonId`, `/api/plsat`, `/api/plsat/:version`) documented with `^local-only` gate (localhost-only learning platform, no auth required).
+
+### Security
+
+- **npm audit: 0 vulnerabilities** — Fixed all 5 reported vulnerabilities (2 moderate, 3 high). Upgraded `vite` ^5 → ^6.4 in sentinel (fixes esbuild dev server exploit, CVE in esbuild ≤0.24.2). Upgraded `glob` ^10 → ^13 in paradigm, portal-core, and purpose-core (fixes minimatch ReDoS via glob transitive dep). Removed `@vscode/vsce` from paradigm-vscode devDependencies entirely — it was only used as a CLI for `vsce package`/`vsce publish`, replaced with `npx @vscode/vsce`. vsce v2 and v3 both carry a vulnerable `minimatch ^3.0.3` direct dependency with no upstream fix; since it's a CLI-only tool with no user-controlled glob input, the ReDoS has zero actual attack surface. Bumped root engine requirement from Node >=18 to >=20 (Node 18 EOL'd April 2025).
+
+### Fixed
+
+- **Markdown renderer: table and ordered list support** — `renderMarkdown()` now handles markdown tables (`| col | col |` with separator rows) and ordered lists (`1. item`). Tables render as proper `<table>` HTML with inline markdown in cells. Ordered lists render as `<ol><li>` instead of collapsing into a single paragraph.
+
+- **Code block line spacing in University lessons** — `renderMarkdown()` paragraph regex was wrapping lines inside `<pre>` blocks with `<p>` tags, causing double line spacing. Fixed with placeholder extraction approach.
+
+- **University TypeScript errors** — Fixed 5 TS7030 errors in route handlers (`courses.ts`, `plsat.ts`) where early-return paths caused "not all code paths return a value". Added missing `chalk` dependency to `packages/university/package.json`.
+
+- **MCP tool routing**: `paradigm_session_recover` was registered and handled but never dispatched — the routing guard in `tools/index.ts` didn't match its name. Broadened condition to `paradigm_session_*` prefix matching.
+
+### Planned
+
+- **Paradigm University content review** — 27 tracked items in `packages/university/CHANGES.md`:
+  - Remove all v1 symbol references (9 items) — university teaches v2 only, no migration content
+  - Rethink logger presentation (11 items) — present as philosophy/approach, not concrete API
+  - Fix client-side routing (3 items) — lessons need URL segments, back button support, quiz→next-lesson flow
+  - Replace `paradigm init` → `paradigm shift` (10 occurrences across 5 files)
+  - Replace v1 quiz question in PARA-101 with pure v2 question
+  - Fix header nav centering and Courses link behavior (2 items)
+
+## [2.0.13] - 2026-02-09
+
+### Added
+
+- **Paradigm University**: New `packages/university/` — interactive academia-themed learning platform for the Paradigm framework. Express server + Vite React SPA (mirroring the Sentinel dual-build pattern). Launched via `paradigm university` CLI command on port 3839.
+
+- **4 courses (PARA 101–401)**: 36 lessons covering foundations (symbols, purpose files, tags, logger), architecture (flows, gates, aspects, portal protocol), operations (history, fragility, wisdom, ripple, sentinel), and orchestration (MCP tools, multi-agent coordination, PM governance). Each lesson has markdown content and 3–5 ABCDE quiz questions (153 total).
+
+- **PLSAT v2.0 certification exam**: 50-question, 45-minute timed assessment. Distribution: 101=20%, 201=30%, 301=26%, 401=24%. Includes scenario-based questions, code identification, ordering, and tricky distractors. 80% pass threshold generates a versioned certificate persisted to LocalStorage.
+
+- **Reference library**: 41 quick-reference cards across 5 sections — symbols (5), MCP tools (14), CLI commands (9), tags (8), and workflow checklists (5).
+
+- **Academia theme**: Crimson Pro serif + Inter sans-serif fonts, parchment (#F5F1E8) background, burgundy (#6B1C23) primary, gold (#C5A572) accents. SVG university seal with "Universitas Paradigmatica — Lux in Codice" motto, laurel wreath, and colored symbol dots.
+
+- **Progress tracking**: Three Zustand stores with LocalStorage persistence — lesson completion, quiz scores, and PLSAT certificates with student name, score, version, and date.
+
+- **Printable certificates**: CertificateView renders formal certificate with seal, name, score, PLSAT version, framework version, and date. Print-optimized CSS.
+
+### Changed
+
+- Root `.purpose`: Added `university-platform` feature with component refs, signals (`!plsat-completed`, `!quiz-completed`), and flow (`$plsat-exam-flow`).
+- `packages/paradigm/.purpose`: Added `university-command` and `#university-launcher`.
+- `packages/paradigm/src/index.ts`: Registered `paradigm university` CLI command.
+
+## [2.0.12] - 2026-02-07
+
+### Added
+
+- **PM Governance Layer**: Automated compliance enforcement for AI-assisted development. Two new MCP tools (`paradigm_pm_preflight`, `paradigm_pm_postflight`) provide pre-task compliance planning and post-task violation detection — checking symbol registration, portal.yaml gate coverage, ripple analysis, and wisdom capture.
+
+- **PM agent role for CLI orchestration**: New `pm` role (Sonnet-tier) in `paradigm team orchestrate --pm` decomposes tasks, injects compliance context into agent prompts, and validates results. Preflight runs before agent planning; postflight checks all modified files and symbols after execution.
+
+- **Core compliance engine** (`pm-compliance.ts`): Shared module used by both MCP tools and CLI orchestrator. `runPreflight()` extracts symbols from task text, runs ripple analysis, checks portal.yaml, suggests agents. `runPostflight()` scans for route patterns (Express/Fastify/SvelteKit), cross-references against portal.yaml, checks .purpose coverage, flags unregistered symbols.
+
+- **`paradigm mcp use-dev`**: Switches all detected AI client MCP configs to point at the local working directory's built `packages/paradigm-mcp/dist/index.js` for safe development and testing.
+
+- **`paradigm mcp use-prod`**: Reverts MCP configs to use the global `paradigm-mcp` binary. Supports `--client` flag to target a specific client.
+
+- **Enhanced `paradigm mcp status`**: Now shows `[DEV]` or `[PROD]` mode per client with server details and paths.
+
+- **`paradigm promote`**: Copies local build to production (`~/.paradigm-cli/`). Builds packages, copies 6 dist/ directories (paradigm, paradigm-mcp, premise-core, portal-core, purpose-core, sentinel), switches MCP configs back to prod, and verifies with version check. Supports `--skip-build`, `--force`, `--json`.
+
+- **IDE adapter PM governance table**: Generated CLAUDE.md files now include PM Governance section instructing agents to call `paradigm_pm_preflight` before tasks and `paradigm_pm_postflight` after.
+
+### Changed
+
+- **`mcp/setup.ts` exports**: `detectAllClients()`, `getServersFromConfig()`, `writeConfig()`, `getProjectName()`, `generateMCPConfig()`, `AIClient`, `ServerInfo` are now exported for reuse by `switch.ts`.
+
 ## [2.0.11] - 2026-02-07
 
 ### Added

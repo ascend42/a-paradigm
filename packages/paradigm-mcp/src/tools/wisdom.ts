@@ -7,6 +7,7 @@
  * - paradigm_wisdom_expert: Find human experts for symbol/area
  */
 
+import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { ensureWisdom } from '../utils/index-loader.js';
 import {
@@ -14,8 +15,17 @@ import {
   findExperts,
   recordAntipattern,
   recordDecision,
+  type ScopedAntipattern,
+  type ScopedDecision,
 } from '../utils/wisdom-loader.js';
 import type { WisdomAntipattern, WisdomDecision } from '../types/wisdom.js';
+import {
+  recordGlobalAntipattern,
+  recordGlobalDecision,
+  loadGlobalAntipatterns,
+  loadGlobalDecisions,
+} from '../utils/global-store.js';
+import { invalidateWisdomCache } from '../utils/wisdom-loader.js';
 
 /**
  * Get list of wisdom tools
@@ -115,8 +125,32 @@ export function getWisdomToolsList() {
             },
             description: 'Expected consequences (for decisions)',
           },
+          scope: {
+            type: 'string',
+            enum: ['project', 'global'],
+            description: 'Where to store: "project" (default) writes to .paradigm/wisdom/, "global" writes to ~/.paradigm/wisdom/',
+          },
         },
         required: ['type', 'id', 'symbols'],
+      },
+    },
+    {
+      name: 'paradigm_wisdom_promote',
+      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['antipattern', 'decision'],
+            description: 'Type of wisdom to promote',
+          },
+          id: {
+            type: 'string',
+            description: 'ID of the antipattern or decision to promote',
+          },
+        },
+        required: ['type', 'id'],
       },
     },
     {
@@ -167,12 +201,14 @@ export async function handleWisdomTool(
             description: a.description,
             reason: a.reason,
             alternative: a.alternative,
+            scope: (a as ScopedAntipattern).scope || 'project',
           })),
           decisions: sw.decisions.map((d) => ({
             id: d.id,
             title: d.title,
             status: d.status,
             decision: d.decision,
+            scope: (d as ScopedDecision).scope || 'project',
           })),
           experts: sw.experts.map((e) => e.name),
         })),
@@ -222,6 +258,7 @@ export async function handleWisdomTool(
         status,
         rationale,
         consequences,
+        scope: recordScope = 'project',
       } = args as {
         type: 'antipattern' | 'decision';
         id: string;
@@ -233,6 +270,7 @@ export async function handleWisdomTool(
         status?: 'proposed' | 'accepted' | 'deprecated' | 'superseded';
         rationale?: { factors: string[]; conclusion: string };
         consequences?: { positive: string[]; negative: string[]; mitigations?: string[] };
+        scope?: 'project' | 'global';
       };
 
       if (type === 'antipattern') {
@@ -253,7 +291,14 @@ export async function handleWisdomTool(
           alternative,
         };
 
-        await recordAntipattern(ctx.rootDir, antipattern);
+        if (recordScope === 'global') {
+          recordGlobalAntipattern(antipattern);
+        } else {
+          await recordAntipattern(ctx.rootDir, antipattern);
+        }
+
+        // Invalidate cache so merged wisdom is refreshed
+        invalidateWisdomCache(ctx.rootDir);
 
         return {
           handled: true,
@@ -261,7 +306,8 @@ export async function handleWisdomTool(
             success: true,
             type: 'antipattern',
             id,
-            message: 'Antipattern recorded successfully',
+            scope: recordScope,
+            message: `Antipattern recorded to ${recordScope} scope`,
           }),
         };
       }
@@ -289,7 +335,14 @@ export async function handleWisdomTool(
           consequences,
         };
 
-        await recordDecision(ctx.rootDir, decision);
+        if (recordScope === 'global') {
+          recordGlobalDecision(decision);
+        } else {
+          await recordDecision(ctx.rootDir, decision);
+        }
+
+        // Invalidate cache so merged wisdom is refreshed
+        invalidateWisdomCache(ctx.rootDir);
 
         return {
           handled: true,
@@ -297,7 +350,89 @@ export async function handleWisdomTool(
             success: true,
             type: 'decision',
             id,
-            message: 'Decision recorded successfully',
+            scope: recordScope,
+            message: `Decision recorded to ${recordScope} scope`,
+          }),
+        };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({ error: `Unknown type: ${type}` }),
+      };
+    }
+
+    case 'paradigm_wisdom_promote': {
+      const { type, id } = args as { type: 'antipattern' | 'decision'; id: string };
+      const wisdom = await ensureWisdom(ctx);
+      const projectName = path.basename(ctx.rootDir);
+
+      if (type === 'antipattern') {
+        const ap = wisdom.antipatterns.find(a => a.id === id);
+        if (!ap) {
+          return {
+            handled: true,
+            text: JSON.stringify({ error: `Antipattern "${id}" not found in project` }),
+          };
+        }
+
+        // Check if already exists globally
+        const globalAps = loadGlobalAntipatterns();
+        if (globalAps.some(g => g.id === id)) {
+          return {
+            handled: true,
+            text: JSON.stringify({ error: `Antipattern "${id}" already exists in global scope` }),
+          };
+        }
+
+        recordGlobalAntipattern({
+          ...ap,
+          learned_from: `promoted from ${projectName}`,
+        });
+
+        invalidateWisdomCache(ctx.rootDir);
+
+        return {
+          handled: true,
+          text: JSON.stringify({
+            success: true,
+            type: 'antipattern',
+            id,
+            promoted_from: projectName,
+            message: `Antipattern "${id}" promoted to global scope`,
+          }),
+        };
+      }
+
+      if (type === 'decision') {
+        const dec = wisdom.decisions.find(d => d.id === id);
+        if (!dec) {
+          return {
+            handled: true,
+            text: JSON.stringify({ error: `Decision "${id}" not found in project` }),
+          };
+        }
+
+        // Check if already exists globally
+        const globalDecs = loadGlobalDecisions();
+        if (globalDecs.some(g => g.id === id)) {
+          return {
+            handled: true,
+            text: JSON.stringify({ error: `Decision "${id}" already exists in global scope` }),
+          };
+        }
+
+        recordGlobalDecision(dec);
+        invalidateWisdomCache(ctx.rootDir);
+
+        return {
+          handled: true,
+          text: JSON.stringify({
+            success: true,
+            type: 'decision',
+            id,
+            promoted_from: projectName,
+            message: `Decision "${id}" promoted to global scope`,
           }),
         };
       }

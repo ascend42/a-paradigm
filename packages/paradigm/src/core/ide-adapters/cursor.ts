@@ -20,6 +20,7 @@ import {
   generateUpdateRules,
   generateCommandsReference,
   generateCommitConvention,
+  generateCheckpointProtocol,
 } from './base.js';
 import type { AgentsManifest } from '../../commands/team/types.js';
 
@@ -457,10 +458,13 @@ Always available in \`navigator.yaml\`:
    * Context monitoring rules - session management and handoff
    */
   private generateContextMdc(): string {
-    return frontmatter('Paradigm context monitoring - session management and handoff protocol', {
-      alwaysApply: true
-    }) +
+    return frontmatter('Session recovery and handoff - call paradigm_session_recover at session start, paradigm_context_check periodically during long sessions, paradigm_handoff_prepare when context is high.') +
       `# Context Monitoring Protocol
+
+## Session Start (EVERY new session)
+
+Call \`paradigm_session_recover\` to load previous session breadcrumbs.
+Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ## Periodic Checks
 
@@ -510,7 +514,8 @@ Get current stats anytime:
 \`\`\`
 paradigm_session_stats()
 \`\`\`
-`;
+
+${generateCheckpointProtocol()}`;
   }
 
   /**
@@ -533,17 +538,27 @@ paradigm_session_stats()
    * Orchestration protocol rules - multi-agent workflow
    */
   private generateOrchestrationMdc(agentsManifest: AgentsManifest | null): string {
-    // Build agent list from manifest
-    const agentList = agentsManifest
-      ? Object.entries(agentsManifest.agents)
-          .map(([name, agent]) => {
-            const roleFirstLine = agent.role.split('\n')[0].trim();
-            const writes = agent.focus?.writes?.join(', ') || 'any';
-            const model = agent.defaultModel || 'sonnet';
-            return `- **${name}** (${model}): ${roleFirstLine} (writes: ${writes})`;
-          })
-          .join('\n')
-      : '(Run `paradigm team init` to configure agents)';
+    // Build agent list from manifest (handle malformed agents.yaml gracefully)
+    let agentList = '(Run `paradigm team init` to configure agents)';
+    if (agentsManifest) {
+      const agents = agentsManifest.agents || (agentsManifest as unknown as Record<string, unknown>).roles;
+      if (agents && typeof agents === 'object') {
+        try {
+          agentList = Object.entries(agents as unknown as Record<string, Record<string, unknown>>)
+            .map(([name, agent]) => {
+              const roleText = (agent.role || agent.description || '') as string;
+              const roleFirstLine = roleText.split('\n')[0].trim() || name;
+              const writes = (agent.focus as Record<string, unknown>)?.writes;
+              const writesStr = Array.isArray(writes) ? writes.join(', ') : 'any';
+              const model = agent.defaultModel || 'sonnet';
+              return `- **${name}** (${model}): ${roleFirstLine} (writes: ${writesStr})`;
+            })
+            .join('\n');
+        } catch {
+          // Fall through to default
+        }
+      }
+    }
 
     // Detect OS for terminal guidance
     const platform = os.platform();
@@ -578,9 +593,7 @@ This project runs on **${platform === 'darwin' ? 'macOS' : 'Linux'}**. Use appro
 
 **IMPORTANT:** Do NOT use Windows-style commands like \`dir\`, \`del\`, or \`%VAR%\`.`;
 
-    return frontmatter('Paradigm multi-agent orchestration protocol', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Multi-agent orchestration - use when task affects 3+ files, involves security AND implementation, or spans multiple features. Call paradigm_orchestrate_inline for planning.') +
       `# Paradigm Orchestration Protocol
 
 ${terminalGuidance}
@@ -649,9 +662,7 @@ paradigm team agents suggest "Add user authentication with JWT"
    * Flow-First Development rules
    */
   private generateFlowsMdc(): string {
-    return frontmatter('Paradigm flow-first development - define flows before implementing', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Flow-first development - apply when implementing features spanning multiple steps, requiring gates, or emitting signals. Define $flows before coding.') +
       `# Flow-First Development
 
 ## What are Flows?
@@ -769,9 +780,7 @@ paradigm flow validate $task-creation
    * Commit convention rules
    */
   private generateCommitsMdc(): string {
-    return frontmatter('Paradigm commit conventions with Symbols: trailer for history tracking', {
-      alwaysApply: true,
-    }) +
+    return frontmatter('Paradigm commit conventions with Symbols: trailer - apply when creating git commits for history tracking.') +
       generateCommitConvention();
   }
 
