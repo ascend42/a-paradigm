@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import * as yaml from 'js-yaml';
 import { log } from '../utils/logger.js';
 import { initCommand } from './init.js';
 import { indexCommand } from './scan/index.js';
@@ -20,6 +21,8 @@ import { syncCommand } from './sync.js';
 import { doctorCommand } from './doctor.js';
 import { teamInitCommand } from './team/index.js';
 import { agentsConfigured } from './team/loader.js';
+import { hooksInstallCommand } from './hooks/index.js';
+import { detectDiscipline } from '../core/discipline.js';
 
 export interface ShiftOptions {
   force?: boolean;
@@ -51,7 +54,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   const spinner = ora();
 
   if (!isInitialized || options.force) {
-    spinner.start('Step 1/5: Initializing Paradigm...');
+    spinner.start('Step 1/6: Initializing Paradigm...');
     try {
       await initCommand({
         force: options.force,
@@ -65,14 +68,49 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       return;
     }
   } else {
-    spinner.succeed(chalk.gray('Step 1/5: Already initialized (use --force to reinit)'));
+    spinner.succeed(chalk.gray('Step 1/6: Already initialized (use --force to reinit)'));
+
+    // If already initialized, check if discipline is still 'auto' and offer to set it
+    const configPath = path.join(paradigmDir, 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      try {
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = yaml.load(configContent) as Record<string, unknown>;
+        if (!config.discipline || config.discipline === 'auto') {
+          const detected = detectDiscipline(cwd);
+          if (detected !== 'backend') {
+            // Update config.yaml with detected discipline
+            const updated = configContent.replace(
+              /^discipline:\s*auto\b.*$/m,
+              `discipline: ${detected}`
+            );
+            if (updated !== configContent) {
+              fs.writeFileSync(configPath, updated, 'utf8');
+              console.log(chalk.green(`  ✓ Detected discipline: ${chalk.cyan(detected)} (updated config.yaml)`));
+            }
+          } else if (!config.discipline) {
+            // No discipline field at all — add it after the project line
+            const withDiscipline = configContent.replace(
+              /^(project:\s*.+)$/m,
+              `$1\ndiscipline: ${detected}`
+            );
+            if (withDiscipline !== configContent) {
+              fs.writeFileSync(configPath, withDiscipline, 'utf8');
+              console.log(chalk.green(`  ✓ Added discipline: ${chalk.cyan(detected)} to config.yaml`));
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — continue shift
+      }
+    }
   }
 
   // Step 2: Team init (if needed)
   // Always run interactive model configuration — it's a fun step in the setup process
   const teamConfigured = agentsConfigured(cwd);
   if (!teamConfigured || options.force) {
-    console.log(chalk.cyan('  Step 2/5: Initializing team configuration...'));
+    console.log(chalk.cyan('  Step 2/6: Initializing team configuration...'));
     try {
       await teamInitCommand(cwd, {
         force: options.force,
@@ -85,12 +123,12 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       console.log(chalk.yellow(`  ⚠ Team init warning: ${(error as Error).message}\n`));
     }
   } else {
-    spinner.succeed(chalk.gray('Step 2/5: Team already configured (use --force to reinit)'));
+    spinner.succeed(chalk.gray('Step 2/6: Team already configured (use --force to reinit)'));
   }
 
   // Step 3: Scan/Index
   if (!options.quick) {
-    spinner.start('Step 3/5: Scanning and indexing symbols...');
+    spinner.start('Step 3/6: Scanning and indexing symbols...');
     try {
       await indexCommand(cwd, { quiet: true });
       spinner.succeed(chalk.green('Symbols indexed'));
@@ -99,14 +137,14 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       // Don't fail - scan is optional
     }
   } else {
-    spinner.succeed(chalk.gray('Step 3/5: Skipped scan (--quick mode)'));
+    spinner.succeed(chalk.gray('Step 3/6: Skipped scan (--quick mode)'));
   }
 
   // Step 4: Sync all IDEs
   // Always generate both CLAUDE.md and .cursor/rules/ since users often have multiple AI tools
-  spinner.start('Step 4/5: Syncing IDE configurations...');
+  spinner.start('Step 4/6: Syncing IDE configurations...');
   try {
-    const ideTargets = options.ide ? [options.ide] : ['claude', 'cursor', 'copilot', 'windsurf'];
+    const ideTargets = options.ide ? [options.ide] : ['claude', 'cursor', 'copilot', 'windsurf', 'agents'];
     const syncResults: string[] = [];
 
     for (const ide of ideTargets) {
@@ -127,9 +165,18 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     spinner.warn(chalk.yellow(`Sync warning: ${(error as Error).message}`));
   }
 
-  // Step 5: Doctor (verify)
+  // Step 5: Install hooks (git + Claude Code)
+  spinner.start('Step 5/6: Installing hooks...');
+  try {
+    await hooksInstallCommand({ force: options.force });
+    spinner.succeed(chalk.green('Hooks installed (git + Claude Code + Cursor)'));
+  } catch (error) {
+    spinner.warn(chalk.yellow(`Hooks warning: ${(error as Error).message}`));
+  }
+
+  // Step 6: Doctor (verify)
   if (options.verify) {
-    spinner.start('Step 5/5: Running health checks...');
+    spinner.start('Step 6/6: Running health checks...');
     try {
       const healthy = await doctorCommand({ quiet: true });
       if (healthy) {
@@ -141,7 +188,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       spinner.warn(chalk.yellow(`Doctor warning: ${(error as Error).message}`));
     }
   } else {
-    spinner.succeed(chalk.gray('Step 5/5: Skipped verify (use --verify to check health)'));
+    spinner.succeed(chalk.gray('Step 6/6: Skipped verify (use --verify to check health)'));
   }
 
   // Summary
@@ -162,7 +209,10 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: 'portal.yaml', desc: 'Authorization gates', optional: true },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
+    { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
     { path: '.cursor/rules/', desc: 'Cursor AI instructions', isDir: true },
+    { path: '.claude/hooks/', desc: 'Claude Code enforcement hooks', isDir: true, optional: true },
+    { path: '.cursor/hooks/', desc: 'Cursor enforcement hooks', isDir: true, optional: true },
   ];
 
   for (const file of files) {

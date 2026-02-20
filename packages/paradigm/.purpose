@@ -32,7 +32,7 @@ features:
     components:
       - '#upgrade-handler'
   doctor-command:
-    description: Health check and diagnostics for Paradigm setup
+    description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files.
     components:
       - '#doctor-handler'
       - '#health-checker'
@@ -219,9 +219,11 @@ features:
     components:
       - '#history-handler'
   hooks-command:
-    description: Git hooks for automatic history capture (install/uninstall/status)
+    description: Git hooks, Claude Code hooks, and Cursor hooks for history capture and index enforcement (install/uninstall/status)
     components:
       - '#hooks-handler'
+      - '#claude-code-hooks-installer'
+      - '#cursor-hooks-installer'
   thread-command:
     description: Session continuity management (thread.md)
     components:
@@ -231,6 +233,10 @@ features:
     description: Launch the unified codebase intelligence UI
     components:
       - '#sentinel-launcher'
+  university-command:
+    description: Launch the Paradigm University interactive learning platform & PLSAT certification
+    components:
+      - '#university-launcher'
   triage-command:
     description: Sentinel CLI for incident triage, pattern management, and statistics
     components:
@@ -346,8 +352,13 @@ components:
     description: Manages implementation log, validation, and fragility
   hooks-handler:
     description: Manages git hooks for automatic history capture
+  claude-code-hooks-installer:
+    description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex
   sentinel-launcher:
     description: Launches the Sentinel codebase intelligence UI
+  university-launcher:
+    description: Launches the Paradigm University learning platform
+    file: src/commands/university.ts
   triage-handler:
     description: Handles Sentinel CLI triage commands
   purpose-validator:

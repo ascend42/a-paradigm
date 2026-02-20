@@ -47,6 +47,8 @@ export interface OrchestrateCommandOptions {
   background?: boolean;
   /** Notification methods for background mode */
   notify?: string;
+  /** Enable PM governance */
+  pm?: boolean;
 }
 
 // ============================================================================
@@ -201,6 +203,10 @@ export async function teamOrchestrateCommand(
     checkpoints: options.checkpoint ? {
       beforeAgentSpawn: true,
     } : undefined,
+    pmGovernance: options.pm ? {
+      enabled: true,
+      blockOnViolations: true,
+    } : undefined,
     onMessage: (source, message) => {
       if (options.json || options.quiet) return;
 
@@ -297,6 +303,31 @@ function displayResult(result: OrchestrationResult): void {
       const tokens = agentResult.relay ? formatTokens(agentResult.relay.metrics.tokens_used.total) : '0';
       const duration = agentResult.relay ? `${(agentResult.relay.metrics.duration_ms / 1000).toFixed(1)}s` : '0s';
       console.log(chalk.gray(`    ${status} ${agentResult.relay?.agent || 'unknown'}: ${tokens} (${duration})`));
+    }
+    console.log();
+  }
+
+  // PM Compliance Report
+  if (result.complianceReport) {
+    console.log(chalk.cyan('  PM Compliance:'));
+    const postflight = result.complianceReport.postflight;
+    if (postflight) {
+      const statusIcon = postflight.status === 'pass' ? chalk.green('✓') :
+        postflight.status === 'warnings' ? chalk.yellow('⚠') : chalk.red('✗');
+      console.log(chalk.gray(`    Status: ${statusIcon} ${postflight.status}`));
+      console.log(chalk.gray(`    Checks: ${postflight.summary.passed}/${postflight.summary.totalChecks} passed`));
+      if (postflight.summary.errors > 0) {
+        console.log(chalk.red(`    Errors: ${postflight.summary.errors}`));
+      }
+      if (postflight.summary.warnings > 0) {
+        console.log(chalk.yellow(`    Warnings: ${postflight.summary.warnings}`));
+      }
+      if (postflight.violations.length > 0) {
+        for (const v of postflight.violations.slice(0, 5)) {
+          const icon = v.severity === 'error' ? chalk.red('✗') : chalk.yellow('⚠');
+          console.log(chalk.gray(`    ${icon} ${v.message}`));
+        }
+      }
     }
     console.log();
   }

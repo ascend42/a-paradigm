@@ -11,6 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { getSessionDir, writeProjectMeta } from './global-store.js';
 
 /**
  * Supported Claude models with pricing per 1M tokens
@@ -68,6 +69,21 @@ export interface PersistedSession {
 }
 
 /**
+ * Session checkpoint - cognitive-transition snapshot for crash recovery
+ */
+export interface SessionCheckpoint {
+  phase: 'planning' | 'implementing' | 'validating' | 'complete';
+  context: string;  // 1-3 sentences of what's top-of-mind
+  timestamp: number;
+  sessionId: string;
+  plan?: string;
+  modifiedFiles?: string[];
+  symbolsTouched?: string[];
+  decisions?: string[];
+  recentBreadcrumbs?: SessionBreadcrumb[];  // last 10 for richer recovery
+}
+
+/**
  * Session statistics
  */
 export interface SessionStats {
@@ -120,12 +136,19 @@ const MAX_BREADCRUMBS = 50;
 /** Path to breadcrumbs file (relative to project root) */
 const BREADCRUMBS_FILE = '.paradigm/session-breadcrumbs.json';
 
+/** Path to checkpoint file (relative to project root) */
+const CHECKPOINT_FILE = '.paradigm/session-checkpoint.json';
+
+/** Maximum age for checkpoints in milliseconds (7 days) */
+const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Session tracker singleton
  */
 class SessionTracker {
   private session: SessionStats;
   private rootDir: string | null = null;
+  private _recovered: boolean = false;
 
   constructor() {
     this.session = this.createNewSession();
@@ -186,40 +209,65 @@ class SessionTracker {
   }
 
   /**
-   * Persist breadcrumbs to file
+   * Persist breadcrumbs to file (dual-write: local + global)
    */
   private persistBreadcrumbs(): void {
     if (!this.rootDir) return;
 
+    const data: PersistedSession = {
+      sessionId: this.session.sessionId,
+      startTime: this.session.startTime,
+      lastActivity: this.session.lastActivity,
+      breadcrumbs: this.session.breadcrumbs,
+      symbolsModified: this.extractSymbolsFromBreadcrumbs(),
+      filesExplored: this.extractFilesFromBreadcrumbs(),
+    };
+
+    const jsonData = JSON.stringify(data, null, 2);
+
+    // Write to local .paradigm/session-breadcrumbs.json
     try {
       const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
       const dir = path.dirname(filePath);
-
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-
-      const data: PersistedSession = {
-        sessionId: this.session.sessionId,
-        startTime: this.session.startTime,
-        lastActivity: this.session.lastActivity,
-        breadcrumbs: this.session.breadcrumbs,
-        symbolsModified: this.extractSymbolsFromBreadcrumbs(),
-        filesExplored: this.extractFilesFromBreadcrumbs(),
-      };
-
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      fs.writeFileSync(filePath, jsonData);
     } catch {
       // Silently fail - breadcrumbs are optional
+    }
+
+    // Write to global ~/.paradigm/sessions/{hash}/breadcrumbs.json
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      fs.writeFileSync(path.join(globalSessionDir, 'breadcrumbs.json'), jsonData);
+      writeProjectMeta(this.rootDir);
+    } catch {
+      // Silently fail - global persistence is best-effort
     }
   }
 
   /**
-   * Load previous session breadcrumbs from file
+   * Load previous session breadcrumbs from file.
+   * Prefers global path (~/.paradigm/sessions/{hash}/breadcrumbs.json),
+   * falls back to local (.paradigm/session-breadcrumbs.json).
    */
   loadPreviousSession(): PersistedSession | null {
     if (!this.rootDir) return null;
 
+    // Try global path first (survives MCP restarts)
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      const globalPath = path.join(globalSessionDir, 'breadcrumbs.json');
+      if (fs.existsSync(globalPath)) {
+        const content = fs.readFileSync(globalPath, 'utf8');
+        return JSON.parse(content) as PersistedSession;
+      }
+    } catch {
+      // Fall through to local
+    }
+
+    // Fallback to local path
     try {
       const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
       if (!fs.existsSync(filePath)) return null;
@@ -229,6 +277,120 @@ class SessionTracker {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Save a cognitive-transition checkpoint for crash recovery.
+   * Fills in timestamp, sessionId, and snapshots recent breadcrumbs.
+   */
+  saveCheckpoint(data: {
+    phase: SessionCheckpoint['phase'];
+    context: string;
+    plan?: string;
+    modifiedFiles?: string[];
+    symbolsTouched?: string[];
+    decisions?: string[];
+  }): SessionCheckpoint {
+    const checkpoint: SessionCheckpoint = {
+      phase: data.phase,
+      context: data.context,
+      timestamp: Date.now(),
+      sessionId: this.session.sessionId,
+      plan: data.plan,
+      modifiedFiles: data.modifiedFiles,
+      symbolsTouched: data.symbolsTouched,
+      decisions: data.decisions,
+      recentBreadcrumbs: this.session.breadcrumbs.slice(-10),
+    };
+    this.persistCheckpoint(checkpoint);
+    return checkpoint;
+  }
+
+  /**
+   * Load the most recent checkpoint.
+   * Prefers global path, falls back to local.
+   * Returns null for checkpoints older than 7 days.
+   */
+  loadCheckpoint(): SessionCheckpoint | null {
+    if (!this.rootDir) return null;
+
+    let checkpoint: SessionCheckpoint | null = null;
+
+    // Try global path first
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      const globalPath = path.join(globalSessionDir, 'checkpoint.json');
+      if (fs.existsSync(globalPath)) {
+        const content = fs.readFileSync(globalPath, 'utf8');
+        checkpoint = JSON.parse(content) as SessionCheckpoint;
+      }
+    } catch {
+      // Fall through to local
+    }
+
+    // Fallback to local path
+    if (!checkpoint) {
+      try {
+        const localPath = path.join(this.rootDir, CHECKPOINT_FILE);
+        if (fs.existsSync(localPath)) {
+          const content = fs.readFileSync(localPath, 'utf8');
+          checkpoint = JSON.parse(content) as SessionCheckpoint;
+        }
+      } catch {
+        // No checkpoint available
+      }
+    }
+
+    // Discard checkpoints older than 7 days
+    if (checkpoint && (Date.now() - checkpoint.timestamp) > CHECKPOINT_MAX_AGE_MS) {
+      return null;
+    }
+
+    return checkpoint;
+  }
+
+  /**
+   * Persist checkpoint to both local and global paths.
+   */
+  private persistCheckpoint(checkpoint: SessionCheckpoint): void {
+    if (!this.rootDir) return;
+
+    const jsonData = JSON.stringify(checkpoint, null, 2);
+
+    // Write to local .paradigm/session-checkpoint.json
+    try {
+      const filePath = path.join(this.rootDir, CHECKPOINT_FILE);
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, jsonData);
+    } catch {
+      // Silently fail - checkpoints are best-effort
+    }
+
+    // Write to global ~/.paradigm/sessions/{hash}/checkpoint.json
+    try {
+      const globalSessionDir = getSessionDir(this.rootDir);
+      fs.writeFileSync(path.join(globalSessionDir, 'checkpoint.json'), jsonData);
+      writeProjectMeta(this.rootDir);
+    } catch {
+      // Silently fail - global persistence is best-effort
+    }
+  }
+
+  /**
+   * Check whether auto-recovery has already fired this session.
+   */
+  hasRecoveredThisSession(): boolean {
+    return this._recovered;
+  }
+
+  /**
+   * Mark that auto-recovery has fired (so it only fires once per session).
+   */
+  markRecovered(): void {
+    this._recovered = true;
   }
 
   /**
@@ -487,6 +649,7 @@ class SessionTracker {
    */
   reset(): void {
     this.session = this.createNewSession();
+    this._recovered = false;
   }
 }
 

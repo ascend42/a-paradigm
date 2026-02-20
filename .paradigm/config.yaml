@@ -4,10 +4,10 @@
 version: "2.0"
 project: "a-paradigm"
 
-# Discipline (optional) - helps AI understand your domain
-# Options: web, backend, ml, mobile, game, embedded, devops, custom
+# Discipline - determines symbol mappings, scan patterns, and purpose-required paths
+# Options: web, backend, fullstack, api, cli, ml, mobile, game, embedded, devops, data, library, monorepo, custom
 # See specs/disciplines.md for symbol interpretations per discipline
-discipline: auto  # auto-detect from project structure
+discipline: monorepo
 
 # Agent Provider - which backend to use for multi-agent orchestration
 # Options: auto, claude, claude-code, cursor-cli, claude-cli, manual
@@ -201,7 +201,7 @@ conventions:
 # AI agent context management
 ai-agent:
   # Model being used
-  model: claude-opus-4.5
+  model: claude-opus-4.6
   # Context window size in tokens
   context-window: 200000
   # Use `paradigm team handoff` for context continuity

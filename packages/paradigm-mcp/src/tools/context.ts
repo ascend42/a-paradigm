@@ -10,9 +10,14 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import {
   getSessionTracker,
   resetSessionTracker,
-  MODEL_PRICING,
-  type ModelId,
+  type SessionCheckpoint,
 } from '../utils/session-tracker.js';
+import {
+  writePendingHandoff,
+  loadPendingHandoffs,
+  markHandoffDelivered,
+  type PendingHandoff,
+} from '../utils/global-store.js';
 
 /**
  * Track a tool call (convenience wrapper for the session tracker)
@@ -33,6 +38,90 @@ export function trackResourceRead(responseSize: number, uri: string = 'paradigm:
  */
 export function resetSession() {
   resetSessionTracker();
+}
+
+/**
+ * Extract breadcrumb info (summary + symbol) from a tool call's arguments.
+ */
+function extractBreadcrumbInfo(toolName: string, args: Record<string, unknown>): { summary: string; symbol?: string } {
+  switch (toolName) {
+    case 'paradigm_search':
+      return {
+        summary: `Searched for "${args.query}"${args.type ? ` (type: ${args.type})` : ''}`,
+        symbol: args.query as string | undefined,
+      };
+    case 'paradigm_ripple':
+      return {
+        summary: `Ripple analysis on ${args.symbol}${args.depth ? ` (depth: ${args.depth})` : ''}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_related':
+      return {
+        summary: `Checked relations for ${args.symbol}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_status':
+      return { summary: 'Checked project status' };
+    case 'paradigm_navigate': {
+      const intent = args.intent as string | undefined;
+      const target = args.target as string | undefined;
+      const task = args.task as string | undefined;
+      if (intent === 'context' && task) return { summary: `Navigate context: "${task}"` };
+      if (target) return { summary: `Navigate ${intent || 'find'}: ${target}`, symbol: target };
+      return { summary: `Navigate (${intent || 'unknown'})` };
+    }
+    case 'paradigm_gates_for_route':
+      return { summary: `Gate suggestions for ${args.method || 'GET'} ${args.route}` };
+    case 'paradigm_wisdom_context':
+      return {
+        summary: `Checked wisdom for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_context':
+      return {
+        summary: `Checked history for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_record':
+      return {
+        summary: `Recorded ${args.type}: ${(args.description as string || '').slice(0, 60)}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_history_fragility':
+      return {
+        summary: `Checked fragility for ${Array.isArray(args.symbols) ? (args.symbols as string[]).join(', ') : 'symbols'}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_flows_affected':
+      return {
+        summary: `Checked flows affected by ${args.symbol}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_reindex':
+      return { summary: 'Rebuilt static index files' };
+    case 'paradigm_session_checkpoint':
+      return {
+        summary: `Checkpoint: phase=${args.phase}, ${(args.context as string || '').slice(0, 60)}`,
+      };
+    default: {
+      // Generic fallback: strip paradigm_ prefix, pick first meaningful arg
+      const shortName = toolName.replace(/^paradigm_/, '');
+      const firstArg = Object.values(args).find(v => typeof v === 'string' && v.length > 0) as string | undefined;
+      return {
+        summary: firstArg ? `${shortName}: ${firstArg.slice(0, 60)}` : shortName,
+        symbol: (args.symbol as string) || undefined,
+      };
+    }
+  }
+}
+
+/**
+ * Record a breadcrumb for a tool call (called from the dispatch layer).
+ */
+export function addToolBreadcrumb(toolName: string, args: Record<string, unknown>): void {
+  const tracker = getSessionTracker();
+  const { summary, symbol } = extractBreadcrumbInfo(toolName, args);
+  tracker.addBreadcrumb('tool-call', summary, { tool: toolName, symbol });
 }
 
 /**
@@ -111,6 +200,44 @@ export function getContextToolsList() {
         properties: {},
       },
     },
+    {
+      name: 'paradigm_session_checkpoint',
+      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          phase: {
+            type: 'string',
+            enum: ['planning', 'implementing', 'validating', 'complete'],
+            description: 'Current workflow phase',
+          },
+          context: {
+            type: 'string',
+            description: 'What\'s top-of-mind right now (1-3 sentences)',
+          },
+          plan: {
+            type: 'string',
+            description: 'Optional: the current plan or approach',
+          },
+          modifiedFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: files modified so far',
+          },
+          symbolsTouched: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: symbols touched so far',
+          },
+          decisions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: key decisions made so far',
+          },
+        },
+        required: ['phase', 'context'],
+      },
+    },
   ];
 }
 
@@ -174,20 +301,16 @@ export async function handleContextTool(
     const timestamp = new Date().toISOString();
 
     // Create structured handoff content
-    const handoffContent = {
+    const handoffPayload: PendingHandoff = {
       id: handoffId,
       timestamp,
       from: 'current-session',
       to: agent,
       summary,
-      workCompleted: summary, // Alias for clarity
-      inProgress: nextSteps.length > 0 ? nextSteps[0] : null,
       nextSteps,
-      context: {
-        modifiedFiles: modifiedFiles.length > 0 ? modifiedFiles : undefined,
-        symbolsTouched: symbolsTouched.length > 0 ? symbolsTouched : undefined,
-        openQuestions: openQuestions.length > 0 ? openQuestions : undefined,
-      },
+      modifiedFiles,
+      symbolsTouched,
+      openQuestions,
       sessionStats: {
         duration: tracker.getDurationMinutes(),
         mcpCalls: stats.totals.toolCallCount + stats.totals.resourceReadCount,
@@ -198,14 +321,18 @@ export async function handleContextTool(
       status: 'pending',
     };
 
-    // Generate markdown handoff summary for easy copying
+    // Persist handoff to global store (~/.paradigm/sessions/{hash}/pending-handoffs/)
+    try {
+      writePendingHandoff(_ctx.rootDir, handoffPayload);
+    } catch {
+      // Best-effort persistence
+    }
+
+    // Generate markdown handoff summary for display
     const markdownSummary = `# Handoff: ${timestamp}
 
 ## Session Summary
 ${summary}
-
-## Work Completed
-- ${summary}
 
 ## Next Steps
 ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified)'}
@@ -214,11 +341,6 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
 - Modified files: ${modifiedFiles.length > 0 ? modifiedFiles.join(', ') : '(not specified)'}
 - Symbols touched: ${symbolsTouched.length > 0 ? symbolsTouched.join(', ') : '(not specified)'}
 - Open questions: ${openQuestions.length > 0 ? openQuestions.join(', ') : '(none)'}
-
-## Recovery Command
-\`\`\`bash
-paradigm team accept ${handoffId}
-\`\`\`
 `;
 
     // Reset session stats after handoff
@@ -227,16 +349,10 @@ paradigm team accept ${handoffId}
     return {
       handled: true,
       text: JSON.stringify({
-        handoff: handoffContent,
+        handoff: handoffPayload,
         markdownSummary,
-        instructions: [
-          '1. Share the handoff summary with the user',
-          '2. Run: paradigm team handoff --to ' + agent + ' --summary "' + summary.slice(0, 50) + '..."',
-          '3. Start a new chat session',
-          '4. In new session: paradigm team accept ' + handoffId,
-        ],
-        cliCommand: `paradigm team handoff --to ${agent} --summary "${summary.replace(/"/g, '\\"')}"`,
-        recoveryCommand: `paradigm team accept ${handoffId}`,
+        persisted: true,
+        recovery: 'The next session will automatically receive this handoff via paradigm_session_recover.',
       }, null, 2),
     };
   }
@@ -295,60 +411,237 @@ paradigm team accept ${handoffId}
     tracker.setRootDir(_ctx.rootDir);
 
     const previousSession = tracker.loadPreviousSession();
+    const checkpoint = tracker.loadCheckpoint();
 
-    if (!previousSession) {
+    // Load pending handoffs from global store
+    let pendingHandoffs: PendingHandoff[] = [];
+    try {
+      pendingHandoffs = loadPendingHandoffs(_ctx.rootDir);
+    } catch {
+      // Best-effort
+    }
+
+    if (!previousSession && pendingHandoffs.length === 0 && !checkpoint) {
       return {
         handled: true,
         text: JSON.stringify({
           found: false,
-          message: 'No previous session breadcrumbs found.',
-          tip: 'Session breadcrumbs are saved to .paradigm/session-breadcrumbs.json during active sessions.',
+          message: 'No previous session breadcrumbs, checkpoints, or pending handoffs found.',
+          tip: 'Breadcrumbs persist to ~/.paradigm/sessions/ and handoffs persist via paradigm_handoff_prepare. Checkpoints persist via paradigm_session_checkpoint.',
         }, null, 2),
       };
     }
 
-    const ageMs = Date.now() - previousSession.lastActivity;
-    const ageMinutes = Math.round(ageMs / 60000);
-    const ageHours = Math.round(ageMs / 3600000);
+    const result: Record<string, unknown> = { found: true };
 
-    // Summarize the last few actions
-    const recentActions = previousSession.breadcrumbs.slice(-10);
-    const actionSummary = recentActions.map(bc => ({
-      time: new Date(bc.timestamp).toISOString(),
-      action: bc.action,
-      tool: bc.tool,
-      symbol: bc.symbol,
-      summary: bc.summary,
-    }));
+    // Include checkpoint if available (highest-priority recovery data)
+    if (checkpoint) {
+      const ageMs = Date.now() - checkpoint.timestamp;
+      const ageMinutes = Math.round(ageMs / 60000);
+      const ageHours = Math.round(ageMs / 3600000);
 
-    // Suggest what to do next based on recent activity
-    let suggestion = 'Continue where the previous session left off.';
-    if (recentActions.length > 0) {
-      const lastAction = recentActions[recentActions.length - 1];
-      if (lastAction.symbol) {
-        suggestion = `Last work involved ${lastAction.symbol}. Consider checking its current state with paradigm_ripple.`;
+      result.checkpoint = {
+        phase: checkpoint.phase,
+        context: checkpoint.context,
+        age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+        timestamp: new Date(checkpoint.timestamp).toISOString(),
+        sessionId: checkpoint.sessionId,
+        plan: checkpoint.plan,
+        modifiedFiles: checkpoint.modifiedFiles,
+        symbolsTouched: checkpoint.symbolsTouched,
+        decisions: checkpoint.decisions,
+        recentBreadcrumbs: checkpoint.recentBreadcrumbs?.map(bc => ({
+          time: new Date(bc.timestamp).toISOString(),
+          action: bc.action,
+          tool: bc.tool,
+          symbol: bc.symbol,
+          summary: bc.summary,
+        })),
+      };
+    }
+
+    // Include previous session breadcrumbs if available
+    if (previousSession) {
+      const ageMs = Date.now() - previousSession.lastActivity;
+      const ageMinutes = Math.round(ageMs / 60000);
+      const ageHours = Math.round(ageMs / 3600000);
+
+      const recentActions = previousSession.breadcrumbs.slice(-10);
+      const actionSummary = recentActions.map(bc => ({
+        time: new Date(bc.timestamp).toISOString(),
+        action: bc.action,
+        tool: bc.tool,
+        symbol: bc.symbol,
+        summary: bc.summary,
+      }));
+
+      result.previousSession = {
+        sessionId: previousSession.sessionId,
+        startTime: new Date(previousSession.startTime).toISOString(),
+        lastActivity: new Date(previousSession.lastActivity).toISOString(),
+        age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+      };
+      result.context = {
+        symbolsModified: previousSession.symbolsModified,
+        filesExplored: previousSession.filesExplored,
+      };
+      result.recentActions = actionSummary;
+    }
+
+    // Include pending handoffs if available
+    if (pendingHandoffs.length > 0) {
+      result.pendingHandoffs = pendingHandoffs.map(h => ({
+        id: h.id,
+        timestamp: h.timestamp,
+        from: h.from,
+        to: h.to,
+        summary: h.summary,
+        nextSteps: h.nextSteps,
+        modifiedFiles: h.modifiedFiles,
+        symbolsTouched: h.symbolsTouched,
+        openQuestions: h.openQuestions,
+      }));
+
+      // Mark each handoff as delivered
+      for (const h of pendingHandoffs) {
+        try {
+          markHandoffDelivered(_ctx.rootDir, h.id);
+        } catch {
+          // Best-effort
+        }
       }
     }
+
+    // Build suggestion — prioritize checkpoint, then handoff, then breadcrumbs
+    let suggestion = 'Continue where the previous session left off.';
+    if (checkpoint) {
+      suggestion = `Previous session was in "${checkpoint.phase}" phase: ${checkpoint.context}`;
+      if (checkpoint.decisions?.length) {
+        suggestion += ` Key decisions: ${checkpoint.decisions.slice(0, 2).join('; ')}`;
+      }
+    } else if (pendingHandoffs.length > 0) {
+      const latest = pendingHandoffs[pendingHandoffs.length - 1];
+      suggestion = `Handoff received: "${latest.summary}". `;
+      if (latest.nextSteps.length > 0) {
+        suggestion += `Start with: ${latest.nextSteps[0]}`;
+      }
+    } else if (previousSession) {
+      const recentActions = previousSession.breadcrumbs.slice(-10);
+      if (recentActions.length > 0) {
+        const lastAction = recentActions[recentActions.length - 1];
+        if (lastAction.symbol) {
+          suggestion = `Last work involved ${lastAction.symbol}. Consider checking its current state with paradigm_ripple.`;
+        }
+      }
+    }
+    result.suggestion = suggestion;
+
+    // Mark recovery as done so auto-recovery doesn't duplicate
+    tracker.markRecovered();
+
+    return {
+      handled: true,
+      text: JSON.stringify(result, null, 2),
+    };
+  }
+
+  if (name === 'paradigm_session_checkpoint') {
+    tracker.setRootDir(_ctx.rootDir);
+
+    const phase = args.phase as SessionCheckpoint['phase'];
+    const context = args.context as string;
+    const plan = args.plan as string | undefined;
+    const modifiedFiles = args.modifiedFiles as string[] | undefined;
+    const symbolsTouched = args.symbolsTouched as string[] | undefined;
+    const decisions = args.decisions as string[] | undefined;
+
+    const checkpoint = tracker.saveCheckpoint({
+      phase,
+      context,
+      plan,
+      modifiedFiles,
+      symbolsTouched,
+      decisions,
+    });
 
     return {
       handled: true,
       text: JSON.stringify({
-        found: true,
-        previousSession: {
-          sessionId: previousSession.sessionId,
-          startTime: new Date(previousSession.startTime).toISOString(),
-          lastActivity: new Date(previousSession.lastActivity).toISOString(),
-          age: ageHours > 1 ? `${ageHours} hours ago` : `${ageMinutes} minutes ago`,
+        saved: true,
+        checkpoint: {
+          phase: checkpoint.phase,
+          context: checkpoint.context,
+          sessionId: checkpoint.sessionId,
+          timestamp: new Date(checkpoint.timestamp).toISOString(),
+          modifiedFiles: checkpoint.modifiedFiles?.length || 0,
+          symbolsTouched: checkpoint.symbolsTouched?.length || 0,
+          decisions: checkpoint.decisions?.length || 0,
+          recentBreadcrumbs: checkpoint.recentBreadcrumbs?.length || 0,
         },
-        context: {
-          symbolsModified: previousSession.symbolsModified,
-          filesExplored: previousSession.filesExplored,
-        },
-        recentActions: actionSummary,
-        suggestion,
+        note: 'Checkpoint saved. Recovery data will be auto-surfaced on the first tool call of the next session.',
       }, null, 2),
     };
   }
 
   return { handled: false, text: '' };
+}
+
+/**
+ * Build a recovery preamble from checkpoint + handoff data.
+ * Returns null if no recovery data is available.
+ * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
+ */
+export function buildRecoveryPreamble(rootDir: string): string | null {
+  const tracker = getSessionTracker();
+  tracker.setRootDir(rootDir);
+
+  const checkpoint = tracker.loadCheckpoint();
+
+  let pendingHandoffs: PendingHandoff[] = [];
+  try {
+    pendingHandoffs = loadPendingHandoffs(rootDir);
+  } catch {
+    // Best-effort
+  }
+
+  if (!checkpoint && pendingHandoffs.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push('--- SESSION RECOVERY ---');
+
+  if (checkpoint) {
+    const ageMs = Date.now() - checkpoint.timestamp;
+    const ageMinutes = Math.round(ageMs / 60000);
+    const ageHours = Math.round(ageMs / 3600000);
+    const ageStr = ageHours > 1 ? `${ageHours}h ago` : `${ageMinutes}m ago`;
+
+    lines.push(`Previous session was in "${checkpoint.phase}" phase (${ageStr}): ${checkpoint.context}`);
+
+    if (checkpoint.modifiedFiles?.length) {
+      lines.push(`Modified files: ${checkpoint.modifiedFiles.join(', ')}`);
+    }
+    if (checkpoint.symbolsTouched?.length) {
+      lines.push(`Symbols: ${checkpoint.symbolsTouched.join(', ')}`);
+    }
+    if (checkpoint.decisions?.length) {
+      lines.push(`Decisions: ${checkpoint.decisions.join('; ')}`);
+    }
+    if (checkpoint.plan) {
+      lines.push(`Plan: ${checkpoint.plan.slice(0, 200)}`);
+    }
+  }
+
+  if (pendingHandoffs.length > 0) {
+    const latest = pendingHandoffs[pendingHandoffs.length - 1];
+    lines.push(`Pending handoff: "${latest.summary}"`);
+    if (latest.nextSteps.length > 0) {
+      lines.push(`Next steps: ${latest.nextSteps.slice(0, 3).join(', ')}`);
+    }
+  }
+
+  lines.push('---');
+
+  return lines.join('\n');
 }

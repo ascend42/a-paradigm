@@ -24,7 +24,7 @@ description: |
   description: MCP resource handlers for paradigm:// URIs
   tags: [feature, mcp]
   anchors:
-    - src/resources.ts:1-200
+    - src/resources/index.ts:1-200
   signals:
     - !resource-read
 
@@ -43,6 +43,22 @@ description: |
     - "#NavigateTools"
     - "#SentinelTools"
     - "#TagsTools"
+    - "#ReindexTools"
+    - "#GlobalStore"
+    - "#PurposePortalTools"
+    - "#OrchestrationTools"
+
+#PurposePortalTools:
+  description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
+  tags: [mcp]
+  anchors:
+    - src/tools/purpose-portal.ts:1-1350
+
+#OrchestrationTools:
+  description: Inline multi-agent orchestration tools. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings.
+  tags: [mcp, team]
+  anchors:
+    - src/tools/orchestration.ts:1-1476
 
 #CoreTools:
   description: Core symbol tools (search, ripple, related, status, gates_for_route)
@@ -53,10 +69,14 @@ description: |
     - !tool-invoked
 
 #WisdomTools:
-  description: Team wisdom tools (context, record, expert)
+  description: Team wisdom tools (context, record, expert, promote) with global+local merge
   tags: [mcp]
   anchors:
-    - src/tools/wisdom.ts:1-350
+    - src/tools/wisdom.ts:1-500
+  signals:
+    - "!wisdom-promoted"
+  components:
+    - "#GlobalStore"
 
 #HistoryTools:
   description: Implementation history tools (context, record, validate, fragility)
@@ -84,11 +104,54 @@ description: |
   signals:
     - !tag-suggested
 
-#ContextTools:
-  description: Context monitoring and handoff tools
+#ReindexTools:
+  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, and flow-index.json from .purpose files
   tags: [mcp]
   anchors:
-    - src/tools/context.ts:1-200
+    - src/tools/reindex.ts:1-320
+  signals:
+    - !index-rebuilt
+
+#ContextTools:
+  description: Context monitoring, session persistence, and handoff tools with global store integration
+  tags: [mcp]
+  aspects: ["~global-persistence"]
+  anchors:
+    - src/tools/context.ts:1-500
+  signals:
+    - "!handoff-persisted"
+    - "!handoff-delivered"
+  flows:
+    - $handoff-roundtrip
+  components:
+    - "#GlobalStore"
+
+#GlobalStore:
+  description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
+  tags: [feature, persistence]
+  aspects: ["~global-persistence"]
+  anchors:
+    - src/utils/global-store.ts:1-260
+  signals:
+    - "!handoff-persisted"
+    - "!wisdom-promoted"
+
+#SessionTracker:
+  description: Session tracking with dual-write breadcrumbs (local + global)
+  tags: [persistence]
+  aspects: ["~global-persistence"]
+  anchors:
+    - src/utils/session-tracker.ts:1-520
+  components:
+    - "#GlobalStore"
+
+#WisdomLoader:
+  description: Wisdom loader with global+local merge and scope tagging
+  tags: [persistence]
+  anchors:
+    - src/utils/wisdom-loader.ts:1-360
+  components:
+    - "#GlobalStore"
 
 #IndexLoader:
   description: Loads project symbol index using premise-core aggregator
@@ -152,6 +215,28 @@ $mcp-request-flow:
     - "!tool-invoked"
     - "!resource-read"
 
+$handoff-roundtrip:
+  description: Session handoff persistence and recovery cycle
+  steps:
+    - "Agent calls paradigm_handoff_prepare"
+    - "#ContextTools"          # Build handoff payload
+    - "#GlobalStore"           # Write to ~/.paradigm/sessions/{hash}/pending-handoffs/
+    - "!handoff-persisted"
+    - "New session starts"
+    - "Agent calls paradigm_session_recover"
+    - "#GlobalStore"           # Read pending handoffs
+    - "!handoff-delivered"     # Mark handoffs as delivered
+    - "Return full handoff context to agent"
+
+$wisdom-promotion:
+  description: Promote project-local wisdom to global scope
+  steps:
+    - "Agent calls paradigm_wisdom_promote"
+    - "#WisdomTools"           # Validate and find local item
+    - "#GlobalStore"           # Write to ~/.paradigm/wisdom/
+    - "!wisdom-promoted"
+    - "#WisdomLoader"          # Invalidate cache for merged refresh
+
 # ============================================
 # Signals (!)
 # ============================================
@@ -194,6 +279,36 @@ $mcp-request-flow:
     reason: string
     exampleSymbols: string[]
 
+!index-rebuilt:
+  description: Static index files (scan-index.json, navigator.yaml, flow-index.json) were rebuilt
+  tags: [audit]
+  payload:
+    filesWritten: string[]
+    symbolCount: number
+
+!handoff-persisted:
+  description: Handoff payload written to global store for next session recovery
+  tags: [audit, persistence]
+  payload:
+    handoffId: string
+    projectHash: string
+    summary: string
+
+!handoff-delivered:
+  description: Pending handoff recovered by a new session and marked as delivered
+  tags: [audit, persistence]
+  payload:
+    handoffId: string
+    recoveredBy: string
+
+!wisdom-promoted:
+  description: Project-local antipattern or decision promoted to global scope
+  tags: [audit, persistence]
+  payload:
+    type: string
+    id: string
+    promotedFrom: string
+
 # ============================================
 # Aspects (~)
 # ============================================
@@ -202,12 +317,17 @@ $mcp-request-flow:
   description: All tool responses must track token usage for context management
   tags: [compliance]
   anchors:
-    - src/tools/context.ts:20-50
+    - src/tools/context.ts:20-22
     - src/tools/index.ts:270-275
   applies-to:
     - "#CoreTools"
     - "#WisdomTools"
     - "#HistoryTools"
+    - "#NavigateTools"
+    - "#ContextTools"
+    - "#SentinelTools"
+    - "#TagsTools"
+    - "#ReindexTools"
   enforcement: |
     Every tool handler must call trackToolCall(text.length, name) before
     returning to enable context monitoring and handoff recommendations.
@@ -222,3 +342,21 @@ $mcp-request-flow:
   enforcement: |
     paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
     paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects
+
+~global-persistence:
+  description: Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories
+  tags: [persistence, resilience]
+  anchors:
+    - src/utils/session-tracker.ts:195-222
+    - src/utils/global-store.ts:37-74
+    - src/tools/context.ts:275-280
+  applies-to:
+    - "#GlobalStore"
+    - "#SessionTracker"
+    - "#ContextTools"
+    - "#WisdomLoader"
+  enforcement: |
+    Breadcrumbs must be written to both .paradigm/session-breadcrumbs.json (local)
+    and ~/.paradigm/sessions/{hash}/breadcrumbs.json (global). Handoffs persist to
+    ~/.paradigm/sessions/{hash}/pending-handoffs/. Recovery prefers global path,
+    falls back to local. All global writes are best-effort (silent failure).

@@ -904,6 +904,16 @@ Get current session statistics:
 paradigm_session_stats({})
 ```
 
+### MCP Tool: paradigm_session_recover
+
+Load previous session breadcrumbs at the start of a new session:
+
+```bash
+paradigm_session_recover({})
+```
+
+Returns recent tool call breadcrumbs, symbols modified, and files explored from the previous session. Useful for picking up where you left off.
+
 ### Recommendation Thresholds
 
 | Usage | Recommendation |
