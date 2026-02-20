@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
+import * as yaml from 'js-yaml';
 import { log } from '../utils/logger.js';
 import { initCommand } from './init.js';
 import { indexCommand } from './scan/index.js';
@@ -21,6 +22,7 @@ import { doctorCommand } from './doctor.js';
 import { teamInitCommand } from './team/index.js';
 import { agentsConfigured } from './team/loader.js';
 import { hooksInstallCommand } from './hooks/index.js';
+import { detectDiscipline } from '../core/discipline.js';
 
 export interface ShiftOptions {
   force?: boolean;
@@ -67,6 +69,41 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   } else {
     spinner.succeed(chalk.gray('Step 1/6: Already initialized (use --force to reinit)'));
+
+    // If already initialized, check if discipline is still 'auto' and offer to set it
+    const configPath = path.join(paradigmDir, 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      try {
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = yaml.load(configContent) as Record<string, unknown>;
+        if (!config.discipline || config.discipline === 'auto') {
+          const detected = detectDiscipline(cwd);
+          if (detected !== 'backend') {
+            // Update config.yaml with detected discipline
+            const updated = configContent.replace(
+              /^discipline:\s*auto\b.*$/m,
+              `discipline: ${detected}`
+            );
+            if (updated !== configContent) {
+              fs.writeFileSync(configPath, updated, 'utf8');
+              console.log(chalk.green(`  ✓ Detected discipline: ${chalk.cyan(detected)} (updated config.yaml)`));
+            }
+          } else if (!config.discipline) {
+            // No discipline field at all — add it after the project line
+            const withDiscipline = configContent.replace(
+              /^(project:\s*.+)$/m,
+              `$1\ndiscipline: ${detected}`
+            );
+            if (withDiscipline !== configContent) {
+              fs.writeFileSync(configPath, withDiscipline, 'utf8');
+              console.log(chalk.green(`  ✓ Added discipline: ${chalk.cyan(detected)} to config.yaml`));
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — continue shift
+      }
+    }
   }
 
   // Step 2: Team init (if needed)

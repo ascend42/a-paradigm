@@ -157,8 +157,8 @@
         {
           "id": "init",
           "command": "paradigm shift",
-          "description": "Initialize Paradigm in a project. Creates .paradigm/ directory, config.yaml, and optionally portal.yaml. Interactive setup for discipline and conventions.",
-          "flags": ["--discipline <type>: Set project discipline (e.g., fullstack-saas, cli-tool)", "--force: Overwrite existing Paradigm config"]
+          "description": "Initialize Paradigm in a project. Creates .paradigm/ directory, config.yaml, and optionally portal.yaml. Auto-detects discipline from project structure.",
+          "flags": ["--force: Overwrite existing Paradigm config", "--quick: Skip slow operations like scan indexing"]
         },
         {
           "id": "scan",

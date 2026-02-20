@@ -129,7 +129,7 @@
     {
       "id": "plsat-009",
       "course": "para-101",
-      "scenario": "You're reading a project's `.paradigm/config.yaml` and see:\n\n```yaml\ndiscipline: fullstack-saas\nconventions:\n  naming: kebab-case\n  components: PascalCase\n```",
+      "scenario": "You're reading a project's `.paradigm/config.yaml` and see:\n\n```yaml\ndiscipline: fullstack\nconventions:\n  naming: kebab-case\n  components: PascalCase\n```",
       "question": "Based on these conventions, which symbol ID is correctly formatted?",
       "choices": {
         "A": "`#paymentService` \u2014 camelCase for services",
@@ -219,7 +219,7 @@
     {
       "id": "plsat-015",
       "course": "para-201",
-      "scenario": "Your project's discipline is `fullstack-saas`. You're adding a new feature: team invitations. The feature involves a UI component for the invite form, an API endpoint, a service for generating invite tokens, and an email sender. You create a new directory `src/features/team-invites/`.",
+      "scenario": "Your project's discipline is `fullstack`. You're adding a new feature: team invitations. The feature involves a UI component for the invite form, an API endpoint, a service for generating invite tokens, and an email sender. You create a new directory `src/features/team-invites/`.",
       "question": "What should the `.purpose` file in this directory contain at minimum?",
       "choices": {
         "A": "Just a `name` field \u2014 Paradigm will auto-discover the rest",
@@ -294,7 +294,7 @@
     {
       "id": "plsat-020",
       "course": "para-201",
-      "scenario": "You open `.paradigm/config.yaml` and see `discipline: fullstack-saas`. You're curious what this means and whether it affects how symbols are mapped.",
+      "scenario": "You open `.paradigm/config.yaml` and see `discipline: fullstack`. You're curious what this means and whether it affects how symbols are mapped.",
       "question": "What does the `discipline` field control in Paradigm?",
       "choices": {
         "A": "It determines which programming language the project uses",
@@ -304,7 +304,7 @@
         "E": "It determines the deployment pipeline configuration"
       },
       "correct": "B",
-      "explanation": "The `discipline` field tells Paradigm what kind of project this is, which influences symbol mappings (e.g., where components vs. gates typically live), suggested patterns, and how AI agents reason about the codebase. A `fullstack-saas` discipline suggests `middleware/` maps to gates, `services/` to components, etc. Different disciplines (e.g., `cli-tool`, `library`, `embedded`) would have different default mappings. It doesn't restrict symbols \u2014 all 5 are always available."
+      "explanation": "The `discipline` field tells Paradigm what kind of project this is, which influences symbol mappings (e.g., where components vs. gates typically live), suggested patterns, and how AI agents reason about the codebase. A `fullstack` discipline suggests `middleware/` maps to gates, `services/` to components, etc. Different disciplines (e.g., `cli`, `library`, `embedded`) would have different default mappings. Since v2, Paradigm auto-detects the discipline from project structure at init time. It doesn't restrict symbols \u2014 all 5 are always available."
     },
     {
       "id": "plsat-021",
