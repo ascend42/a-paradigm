@@ -4,6 +4,17 @@ All notable changes to Paradigm will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **npm publish ready** — Single `npm i -g @a-company/paradigm` installs both `paradigm` CLI and `paradigm-mcp` server as global commands
+  - All internal `@a-company/*` workspace dependencies bundled via `noExternal` in tsup — zero runtime dependency on unpublished packages
+  - MCP server built as second entry point (`dist/mcp.js`) alongside CLI (`dist/index.js`)
+  - Added `@modelcontextprotocol/sdk` and `zod` as runtime deps (MCP server externals)
+  - `@a-company/paradigm-mcp` marked private (now bundled, not published separately)
+  - Optional commands (`sentinel`, `university`) gracefully detect missing packages with install instructions
+  - CI workflow fixed: `@horizon/cli` → `@a-company/paradigm`
+  - Deleted stale changeset referencing old `@horizon/*` package names
+
 ### Added
 
 - **Discipline System** — Auto-detection and per-discipline configuration

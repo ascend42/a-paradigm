@@ -62,5 +62,5 @@ jobs:
         run: npm run build
 
       - name: Dry run publish
-        run: npm publish --dry-run --workspace=@horizon/cli
+        run: npm publish --dry-run --workspace=@a-company/paradigm
         continue-on-error: true
