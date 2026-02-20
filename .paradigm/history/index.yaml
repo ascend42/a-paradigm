@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-18T19:28:15.552Z'
+generated: '2026-02-18T19:58:36.765Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -278,7 +278,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_10
+      - &ref_11
         id: h0021
         ts: '2026-02-18T17:29:36Z'
         type: implement
@@ -403,11 +403,49 @@ by_symbol:
       agent: []
   '#claude-adapter':
     symbol: '#claude-adapter'
-    total_changes: 1
-    last_modified: '2026-02-14T10:35:47Z'
+    total_changes: 2
+    last_modified: '2026-02-18T19:54:14Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_5
+        id: h0023
+        ts: '2026-02-18T19:54:14Z'
+        type: implement
+        symbols:
+          - '#claude-adapter'
+          - '#context-tools'
+          - '#cursor-adapter'
+          - '#session-checkpoint'
+          - '#session-tracker'
+        author:
+          type: human
+          id: ascend
+        commit: 01a5b0d948114d1e6e6c63a24db1603daab2874a
+        intent: feature
+        files:
+          - .cursor/rules/paradigm-agent-hints.mdc
+          - .cursor/rules/paradigm-context.mdc
+          - .cursor/rules/paradigm-conventions.mdc
+          - .cursor/rules/paradigm-core.mdc
+          - .cursor/rules/paradigm-logging.mdc
+          - .cursor/rules/paradigm-orchestration.mdc
+          - .cursor/rules/paradigm-purpose.mdc
+          - .cursor/rules/paradigm-symbols.mdc
+          - .gitignore
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/utils/session-tracker.ts
+          - packages/paradigm/src/core/ide-adapters/base.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+        description: 'feat(#session-checkpoint): cognitive-transition checkpoints + auto-recovery'
       - *ref_4
     contributors:
       human:
@@ -415,12 +453,13 @@ by_symbol:
       agent: []
   '#cursor-adapter':
     symbol: '#cursor-adapter'
-    total_changes: 3
-    last_modified: '2026-02-14T13:40:00Z'
+    total_changes: 4
+    last_modified: '2026-02-18T19:54:14Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_6
+      - *ref_5
+      - &ref_7
         id: h0010
         ts: '2026-02-14T13:40:00Z'
         type: implement
@@ -480,7 +519,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_5
+      - &ref_6
         id: h0009
         ts: '2026-02-14T11:22:26Z'
         type: implement
@@ -526,7 +565,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_5
+      - *ref_6
     contributors:
       human:
         - ascend
@@ -538,7 +577,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_5
+      - *ref_6
     contributors:
       human:
         - ascend
@@ -550,7 +589,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_5
+      - *ref_6
     contributors:
       human:
         - ascend
@@ -562,7 +601,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_5
+      - *ref_6
     contributors:
       human:
         - ascend
@@ -574,7 +613,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_5
+      - *ref_6
     contributors:
       human:
         - ascend
@@ -586,7 +625,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_6
+      - *ref_7
     contributors:
       human:
         - ascend
@@ -598,7 +637,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_6
+      - *ref_7
     contributors:
       human:
         - ascend
@@ -610,7 +649,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_6
+      - *ref_7
     contributors:
       human:
         - ascend
@@ -622,7 +661,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_7
+      - &ref_8
         id: h0011
         ts: '2026-02-14T13:56:39Z'
         type: implement
@@ -658,7 +697,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_7
+      - *ref_8
     contributors:
       human:
         - ascend
@@ -670,7 +709,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_8
+      - &ref_9
         id: h0019
         ts: '2026-02-15T19:07:50Z'
         type: implement
@@ -770,7 +809,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_11
+      - &ref_12
         id: h0022
         ts: '2026-02-18T18:40:30Z'
         type: implement
@@ -803,7 +842,7 @@ by_symbol:
           - packages/university/src/content/courses/para-401.json
           - packages/university/src/content/plsat/v3.0.json
         description: 'feat(#agent-prompts): two-stage review protocol, fresh context principle, clarification markers'
-      - *ref_8
+      - *ref_9
       - id: h0018
         ts: '2026-02-15T17:57:26Z'
         type: implement
@@ -835,7 +874,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_9
+      - &ref_10
         id: h0020
         ts: '2026-02-18T17:26:14Z'
         type: implement
@@ -863,7 +902,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_9
+      - *ref_10
     contributors:
       human:
         - ascend
@@ -875,7 +914,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -887,7 +926,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -899,7 +938,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -911,7 +950,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -923,7 +962,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -935,7 +974,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -947,7 +986,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -959,7 +998,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -971,7 +1010,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
+      - *ref_11
     contributors:
       human:
         - ascend
@@ -983,7 +1022,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -995,7 +1034,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1007,7 +1046,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1019,7 +1058,43 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#context-tools':
+    symbol: '#context-tools'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-checkpoint':
+    symbol: '#session-checkpoint'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-tracker':
+    symbol: '#session-tracker'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
     contributors:
       human:
         - ascend
