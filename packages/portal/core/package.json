@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
-    "glob": "^10.3.10"
+    "glob": "^13.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
