@@ -5,9 +5,31 @@
 
 import * as yaml from 'js-yaml';
 
+/**
+ * Project discipline — determines symbol mappings, scan patterns, and purpose-required paths.
+ * Use 'auto' for auto-detection, 'custom' for user-defined mappings.
+ */
+export type Discipline =
+  | 'web'
+  | 'backend'
+  | 'fullstack'
+  | 'api'
+  | 'cli'
+  | 'ml'
+  | 'mobile'
+  | 'game'
+  | 'embedded'
+  | 'devops'
+  | 'data'
+  | 'library'
+  | 'monorepo'
+  | 'custom'
+  | 'auto';
+
 export interface ParadigmConfig {
   version: string;
   project?: string;
+  discipline?: Discipline;
   'agent-guidelines': AgentGuidelines;
   'symbol-system': SymbolSystem;
   states?: StateDefinitions;

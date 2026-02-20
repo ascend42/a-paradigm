@@ -6,6 +6,20 @@ All notable changes to Paradigm will be documented in this file.
 
 ### Added
 
+- **Discipline System** — Auto-detection and per-discipline configuration
+  - New `detectDiscipline()` function examines project files (package.json, Cargo.toml, go.mod, pyproject.toml, etc.) to infer project type
+  - 14 disciplines: `web`, `backend`, `fullstack`, `api`, `cli`, `ml`, `mobile`, `game`, `embedded`, `devops`, `data`, `library`, `monorepo`, `custom` (plus `auto`)
+  - Per-discipline symbol mappings — each discipline gets tailored `logging.symbol-mapping` and `purpose-required` patterns (e.g., ML projects map `models/**`, `experiments/**`, `notebooks/**`; game projects map `entities/**`, `systems/**`, `gameplay/**`)
+  - `paradigm init` auto-detects discipline and populates config.yaml with discipline-specific settings
+  - `paradigm shift` detects discipline for existing projects with `discipline: auto` and updates config in place
+  - `paradigm scan` loads discipline from config and merges discipline-specific scan patterns
+  - `Discipline` type added to canonical `ParadigmConfig` interface
+  - Template `disciplines.md` rewritten for v2 with all 14 disciplines documented
+
+### Changed
+
+- **context-builder.ts cleanup** — removed local `ParadigmConfig` interface (imports canonical type), removed v1 symbol prefixes (`@`, `%`, `&`, `?`) from `SYMBOL_PATTERN` regex, fixed `~` mapping from 'deprecated' to 'aspect'
+
 - **Claude Code Agent Teams Provider** (`claude-code-teams`)
   - New provider for Claude Code's experimental Agent Teams feature
   - Native parallel teammate spawning via shared task lists

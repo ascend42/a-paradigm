@@ -11,27 +11,11 @@ import * as yaml from 'js-yaml';
 import { glob } from 'glob';
 import { AgentDefinition } from '../commands/team/types.js';
 import { AgentContext, FacetConfig } from './agent-provider.js';
+import type { ParadigmConfig } from './paradigm-config.js';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-interface ParadigmConfig {
-  version: string;
-  project: string;
-  discipline?: string;
-  'agent-guidelines'?: {
-    overview?: string;
-    'how-to-use'?: string[];
-    'update-rules'?: string[];
-  };
-  'symbol-system'?: Record<string, {
-    name: string;
-    description: string;
-    examples?: string[];
-  }>;
-  conventions?: string[];
-}
 
 interface ContextConfig {
   include?: string[];
@@ -42,10 +26,10 @@ interface ContextConfig {
 // Symbol Extraction
 // ============================================================================
 
-const SYMBOL_PATTERN = /[@#$%^!?&~][a-zA-Z0-9_-]+/g;
+const SYMBOL_PATTERN = /[#$^!~][a-zA-Z0-9_-]+/g;
 
 /**
- * Extract Paradigm symbols from text
+ * Extract Paradigm v2 symbols from text
  */
 export function extractSymbols(text: string): string[] {
   const matches = text.match(SYMBOL_PATTERN) || [];
@@ -53,20 +37,16 @@ export function extractSymbols(text: string): string[] {
 }
 
 /**
- * Get symbol type from prefix
+ * Get symbol type from prefix (v2 symbols only)
  */
 export function getSymbolType(symbol: string): string {
   const prefix = symbol.charAt(0);
   const types: Record<string, string> = {
-    '@': 'feature',
     '#': 'component',
     '$': 'flow',
-    '%': 'state',
     '^': 'gate',
     '!': 'signal',
-    '?': 'idea',
-    '&': 'integration',
-    '~': 'deprecated',
+    '~': 'aspect',
   };
   return types[prefix] || 'unknown';
 }
