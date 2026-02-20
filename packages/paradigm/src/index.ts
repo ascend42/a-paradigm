@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import { initCommand } from './commands/init.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '1.3.0';
+const VERSION = '2.0.13';
 
 const program = new Command();
 
@@ -391,6 +391,7 @@ teamCmd
   .option('--budget <budget>', 'Budget limits (e.g., "tokens=500000,cost=5")')
   .option('--checkpoint', 'Pause for approval between agents')
   .option('--live', 'Stream agent output live')
+  .option('--pm', 'Enable PM governance (compliance checks before/after)')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (task, path, options) => {
@@ -791,11 +792,43 @@ mcpCmd
     await mcpRemoveCommand(server, options);
   });
 
-// Default mcp action (show status)
+mcpCmd
+  .command('use-dev')
+  .description('Switch MCP configs to use local dev build')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, claude-code, continue, cline')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpUseDevCommand } = await import('./commands/mcp/switch.js');
+    await mcpUseDevCommand(options);
+  });
+
+mcpCmd
+  .command('use-prod')
+  .description('Switch MCP configs back to global production binary')
+  .option('-c, --client <client>', 'Target client: cursor, claude-desktop, claude-code, continue, cline')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mcpUseProdCommand } = await import('./commands/mcp/switch.js');
+    await mcpUseProdCommand(options);
+  });
+
+// Default mcp action (show enhanced status with DEV/PROD indicators)
 mcpCmd
   .action(async () => {
-    const { mcpStatusCommand } = await import('./commands/mcp/setup.js');
-    await mcpStatusCommand({});
+    const { mcpSwitchStatusCommand } = await import('./commands/mcp/switch.js');
+    await mcpSwitchStatusCommand({});
+  });
+
+// paradigm promote
+program
+  .command('promote')
+  .description('Copy local build to production (~/.paradigm-cli/)')
+  .option('-f, --force', 'Create production directory if missing')
+  .option('--skip-build', 'Skip npm run build step')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { promoteCommand } = await import('./commands/promote.js');
+    await promoteCommand(options);
   });
 
 // paradigm wisdom <command>
@@ -951,10 +984,12 @@ const hooksCmd = program
 
 hooksCmd
   .command('install')
-  .description('Install git hooks for history capture')
+  .description('Install git hooks, Claude Code hooks, and Cursor hooks')
   .option('-f, --force', 'Overwrite existing hooks')
   .option('--post-commit', 'Only install post-commit hook')
   .option('--pre-push', 'Only install pre-push hook')
+  .option('--claude-code', 'Only install Claude Code hooks (stop + pre-commit)')
+  .option('--cursor', 'Only install Cursor hooks (.cursor/hooks.json)')
   .action(async (options) => {
     const { hooksInstallCommand } = await import('./commands/hooks/index.js');
     await hooksInstallCommand(options);
@@ -962,10 +997,11 @@ hooksCmd
 
 hooksCmd
   .command('uninstall')
-  .description('Remove paradigm git hooks')
-  .action(async () => {
+  .description('Remove paradigm hooks (git hooks, or --cursor for Cursor hooks)')
+  .option('--cursor', 'Remove Cursor hooks instead of git hooks')
+  .action(async (options) => {
     const { hooksUninstallCommand } = await import('./commands/hooks/index.js');
-    await hooksUninstallCommand();
+    await hooksUninstallCommand(options);
   });
 
 hooksCmd
@@ -1201,6 +1237,17 @@ program
   .action(async (path, options) => {
     const { sentinelCommand } = await import('./commands/sentinel.js');
     await sentinelCommand(path, options);
+  });
+
+// paradigm university - Launch the Paradigm University learning platform
+program
+  .command('university')
+  .description('Launch Paradigm University - interactive learning platform & PLSAT certification')
+  .option('-p, --port <port>', 'Port to run on', '3839')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (options) => {
+    const { universityCommand } = await import('./commands/university.js');
+    await universityCommand(undefined, options);
   });
 
 // Parse and run

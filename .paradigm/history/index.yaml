@@ -1,0 +1,1103 @@
+version: '1.0'
+generated: '2026-02-20T06:20:54.021Z'
+by_symbol:
+  '#plsat-router':
+    symbol: '#plsat-router'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_0
+        id: h0001
+        ts: '2026-02-11T13:17:25.980Z'
+        type: implement
+        symbols:
+          - '#plsat-router'
+          - '#plsat-view'
+          - '#academia-theme'
+        author:
+          type: agent
+          id: claude
+        intent: feature
+        description: 'PLSAT v3.0: passage-based question groups and question variants. New v3.0.json schema with items[], variants, and passage groups. Server resolves variants (random pick) and flattens passage groups before sending to client. UI renders passage blocks above grouped questions. 2 passage groups (portal.yaml review, .purpose file review), 5 questions with 2 variants each. Total stays at 50 questions.'
+        files:
+          - packages/university/ui/src/types.ts
+          - packages/university/src/server/routes/plsat.ts
+          - packages/university/ui/src/views/PLSATView.tsx
+          - packages/university/ui/src/styles/academia.css
+          - packages/university/src/content/plsat/v3.0.json
+    contributors:
+      human: []
+      agent:
+        - claude
+  '#plsat-view':
+    symbol: '#plsat-view'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_0
+    contributors:
+      human: []
+      agent:
+        - claude
+  '#academia-theme':
+    symbol: '#academia-theme'
+    total_changes: 1
+    last_modified: '2026-02-11T13:17:25.980Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_0
+    contributors:
+      human: []
+      agent:
+        - claude
+  '!index-rebuilt':
+    symbol: '!index-rebuilt'
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_1
+        id: h0002
+        ts: '2026-02-13T23:59:42Z'
+        type: implement
+        symbols:
+          - '!index-rebuilt'
+          - '#claude-code-hooks-installer'
+          - '#hooks-handler'
+          - '#ReindexTools'
+          - ~token-tracking
+        author:
+          type: human
+          id: ascend
+        commit: 40ab0c5e6244e001cf8551af4404fadfa48c6c3e
+        intent: feature
+        files:
+          - .claude/settings.json
+          - .paradigm/scan-index.json
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/index.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#ReindexTools, #claude-code-hooks-installer): fix index drift and enforce paradigm compliance'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#claude-code-hooks-installer':
+    symbol: '#claude-code-hooks-installer'
+    total_changes: 2
+    last_modified: '2026-02-14T00:01:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0003
+        ts: '2026-02-14T00:01:41Z'
+        type: implement
+        symbols:
+          - '#claude-code-hooks-installer'
+        author:
+          type: human
+          id: ascend
+        commit: e46211d156eda9ded427fb5f377fae06426d9574
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/commands/hooks/index.ts
+        description: 'fix(#claude-code-hooks-installer): resolve anchor paths relative to .purpose file directory'
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hooks-handler':
+    symbol: '#hooks-handler'
+    total_changes: 2
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_4
+        id: h0007
+        ts: '2026-02-14T10:35:47Z'
+        type: implement
+        symbols:
+          - '#adapter-base'
+          - '#adapter-registry'
+          - '#agents-adapter'
+          - '#claude-adapter'
+          - '#cursor-adapter'
+          - '#cursor-hooks-installer'
+          - '#hooks-handler'
+        author:
+          type: human
+          id: ascend
+        commit: aedd34c092463f48905d56fc1772b99acaafdfe6
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/core/ide-adapters/.purpose
+          - packages/paradigm/src/core/ide-adapters/agents.ts
+          - packages/paradigm/src/core/ide-adapters/base.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+          - packages/paradigm/src/core/ide-adapters/index.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#cursor-hooks-installer, #agents-adapter): Cursor hooks, AGENTS.md, and cross-IDE improvements'
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ReindexTools':
+    symbol: '#ReindexTools'
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~token-tracking:
+    symbol: ~token-tracking
+    total_changes: 1
+    last_modified: '2026-02-13T23:59:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_1
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ConnectionRenderer':
+    symbol: '#ConnectionRenderer'
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_2
+        id: h0004
+        ts: '2026-02-14T00:02:29Z'
+        type: implement
+        symbols:
+          - '#ConnectionRenderer'
+          - '#ResourceHandlers'
+          - ~responsive-layout
+        author:
+          type: human
+          id: ascend
+        commit: 7c7d707f77a747635db7fa0bbff8526cef3253fb
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm-mcp/.purpose
+          - packages/sentinel/ui/.purpose
+        description: 'fix(~aspects): correct 3 stale anchor paths in .purpose files'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ResourceHandlers':
+    symbol: '#ResourceHandlers'
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_2
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~responsive-layout:
+    symbol: ~responsive-layout
+    total_changes: 1
+    last_modified: '2026-02-14T00:02:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_2
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-mcp':
+    symbol: '#paradigm-mcp'
+    total_changes: 1
+    last_modified: '2026-02-14T00:10:56Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0005
+        ts: '2026-02-14T00:10:56Z'
+        type: implement
+        symbols:
+          - '#paradigm-mcp'
+        author:
+          type: human
+          id: ascend
+        commit: eec4393a284a6507e7180f08e3c4b2c37a21206d
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/index.ts
+        description: 'fix(#paradigm-mcp): route paradigm_session_recover to context tool handler'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ContextTools':
+    symbol: '#ContextTools'
+    total_changes: 2
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_11
+        id: h0021
+        ts: '2026-02-18T17:29:36Z'
+        type: implement
+        symbols:
+          - '!handoff-delivered'
+          - '!handoff-persisted'
+          - '!wisdom-promoted'
+          - '#ContextTools'
+          - '#global-store'
+          - '#mcp-tools'
+          - '#WisdomTools'
+          - ~global-persistence
+          - $handoff-roundtrip
+          - $wisdom-promotion
+        author:
+          type: human
+          id: ascend
+        commit: 002fbc940f0ce0c72f273f8d276b25a410a1c84f
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - .purpose
+          - CHANGELOG.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/wisdom.ts
+          - packages/paradigm-mcp/src/utils/global-store.ts
+          - packages/paradigm-mcp/src/utils/session-tracker.ts
+          - packages/paradigm-mcp/src/utils/wisdom-loader.ts
+        description: 'feat(#global-store): global brain for cross-session and cross-project persistence'
+      - &ref_3
+        id: h0006
+        ts: '2026-02-14T09:55:01Z'
+        type: implement
+        symbols:
+          - '#ContextTools'
+          - '#MCPServer'
+          - '#ToolHandlers'
+        author:
+          type: human
+          id: ascend
+        commit: 794ae355a0c3c6fa826ab8296755372780cf717d
+        intent: feature
+        files:
+          - .paradigm/docs/commands.md
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - .paradigm/specs/context-tracking.md
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/index.ts
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+        description: 'feat(#ContextTools): wire session breadcrumbs for paradigm_session_recover'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#MCPServer':
+    symbol: '#MCPServer'
+    total_changes: 1
+    last_modified: '2026-02-14T09:55:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_3
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ToolHandlers':
+    symbol: '#ToolHandlers'
+    total_changes: 1
+    last_modified: '2026-02-14T09:55:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_3
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#adapter-base':
+    symbol: '#adapter-base'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#adapter-registry':
+    symbol: '#adapter-registry'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agents-adapter':
+    symbol: '#agents-adapter'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#claude-adapter':
+    symbol: '#claude-adapter'
+    total_changes: 2
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_5
+        id: h0023
+        ts: '2026-02-18T19:54:14Z'
+        type: implement
+        symbols:
+          - '#claude-adapter'
+          - '#context-tools'
+          - '#cursor-adapter'
+          - '#session-checkpoint'
+          - '#session-tracker'
+        author:
+          type: human
+          id: ascend
+        commit: 01a5b0d948114d1e6e6c63a24db1603daab2874a
+        intent: feature
+        files:
+          - .cursor/rules/paradigm-agent-hints.mdc
+          - .cursor/rules/paradigm-context.mdc
+          - .cursor/rules/paradigm-conventions.mdc
+          - .cursor/rules/paradigm-core.mdc
+          - .cursor/rules/paradigm-logging.mdc
+          - .cursor/rules/paradigm-orchestration.mdc
+          - .cursor/rules/paradigm-purpose.mdc
+          - .cursor/rules/paradigm-symbols.mdc
+          - .gitignore
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/utils/session-tracker.ts
+          - packages/paradigm/src/core/ide-adapters/base.ts
+          - packages/paradigm/src/core/ide-adapters/claude.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+        description: 'feat(#session-checkpoint): cognitive-transition checkpoints + auto-recovery'
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-adapter':
+    symbol: '#cursor-adapter'
+    total_changes: 4
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+      - &ref_7
+        id: h0010
+        ts: '2026-02-14T13:40:00Z'
+        type: implement
+        symbols:
+          - '#cursor-adapter'
+          - '#orchestrator'
+          - '#pm-compliance'
+          - '#university-command'
+        author:
+          type: human
+          id: ascend
+        commit: 20cedf7960b6da3ceac2fea9d7f3d71539d56650
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/commands/university.ts
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+          - packages/paradigm/src/core/orchestrator.ts
+          - packages/paradigm/src/core/pm-compliance.ts
+        description: 'fix(#paradigm-cli): resolve all TypeScript errors (10 errors → 0)'
+      - id: h0008
+        ts: '2026-02-14T10:59:53Z'
+        type: implement
+        symbols:
+          - '#cursor-adapter'
+        author:
+          type: human
+          id: ascend
+        commit: 80d2683f20641fbf3899dc9d502af191901f4220
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+        description: 'fix(#cursor-adapter): handle malformed agents.yaml gracefully'
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-hooks-installer':
+    symbol: '#cursor-hooks-installer'
+    total_changes: 1
+    last_modified: '2026-02-14T10:35:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_4
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#doctor':
+    symbol: '#doctor'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_6
+        id: h0009
+        ts: '2026-02-14T11:22:26Z'
+        type: implement
+        symbols:
+          - '#doctor'
+          - '#hooks-installer'
+          - '#ide-adapters'
+          - '#paradigm-config'
+          - '#scan-index'
+          - '#test-suite'
+        author:
+          type: human
+          id: ascend
+        commit: 5653d4d7d4910c2e18a7496ae88b4ff9478ba3c7
+        intent: feature
+        files:
+          - .github/workflows/ci.yml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - package-lock.json
+          - package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/doctor.test.ts
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/commands/hooks/index.test.ts
+          - packages/paradigm/src/commands/scan/index.test.ts
+          - packages/paradigm/src/commands/scan/index.ts
+          - packages/paradigm/src/core/ide-adapters/adapters.test.ts
+          - packages/paradigm/src/core/ide-adapters/base.test.ts
+          - packages/paradigm/src/core/ide-adapters/index.test.ts
+          - packages/paradigm/src/core/paradigm-config.test.ts
+          - packages/paradigm/src/test-utils.ts
+          - packages/paradigm/vitest.config.ts
+        description: 'feat(#test-suite): add Vitest test infrastructure with 102 tests'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hooks-installer':
+    symbol: '#hooks-installer'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ide-adapters':
+    symbol: '#ide-adapters'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-config':
+    symbol: '#paradigm-config'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#scan-index':
+    symbol: '#scan-index'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#test-suite':
+    symbol: '#test-suite'
+    total_changes: 1
+    last_modified: '2026-02-14T11:22:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_6
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#orchestrator':
+    symbol: '#orchestrator'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_7
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#pm-compliance':
+    symbol: '#pm-compliance'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_7
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-command':
+    symbol: '#university-command'
+    total_changes: 1
+    last_modified: '2026-02-14T13:40:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_7
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-server':
+    symbol: '#university-server'
+    total_changes: 1
+    last_modified: '2026-02-14T13:56:39Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_8
+        id: h0011
+        ts: '2026-02-14T13:56:39Z'
+        type: implement
+        symbols:
+          - '#university-server'
+          - ^local-only
+        author:
+          type: human
+          id: ascend
+        commit: 5882b0914949a408590b7ba12b7f89e6be6cf010
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - package-lock.json
+          - packages/university/package.json
+          - packages/university/src/server/routes/courses.ts
+          - packages/university/src/server/routes/plsat.ts
+          - portal.yaml
+        description: 'fix(#university-server): resolve TS errors, add portal.yaml for university routes'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^local-only:
+    symbol: ^local-only
+    total_changes: 1
+    last_modified: '2026-02-14T13:56:39Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_8
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-ui':
+    symbol: '#university-ui'
+    total_changes: 7
+    last_modified: '2026-02-15T19:07:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_9
+        id: h0019
+        ts: '2026-02-15T19:07:50Z'
+        type: implement
+        symbols:
+          - '#university-content'
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 5d088382ab45eda306c1467d9e8b7b07bb7b90cb
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/src/content/plsat/v2.0.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/ui/src/components/QuestionCard.tsx
+          - packages/university/ui/src/utils/renderMarkdown.ts
+          - packages/university/ui/src/views/CourseView.tsx
+          - packages/university/ui/src/views/PLSATView.tsx
+        description: 'feat(#university-ui): markdown rendering in quiz/PLSAT, always show passages'
+      - id: h0017
+        ts: '2026-02-15T17:51:37Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 61abee2b14cedf0931bf6df367c658cf6274a458
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/ui/src/styles/academia.css
+        description: 'fix(#university-ui): improve inline code contrast in both themes'
+      - id: h0016
+        ts: '2026-02-15T13:22:10Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 3a4553e87dda21b74ed9f9f617dc78ed316e2496
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/ui/src/views/CourseView.tsx
+        description: 'fix(#university-ui): paragraph regex now wraps inline tags in <p>'
+      - id: h0015
+        ts: '2026-02-15T12:59:27Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 2f2bfe24e4a4de8c806fa9c4a68fd876383b1067
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/ui/src/views/CourseView.tsx
+        description: 'feat(#university-ui): add markdown table and ordered list rendering'
+      - id: h0014
+        ts: '2026-02-14T19:35:27Z'
+        type: implement
+        symbols:
+          - '#university-ui'
+        author:
+          type: human
+          id: ascend
+        commit: a73c8983ff5e45ff6b889d94e4c0b2e1248547da
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/ui/src/styles/academia.css
+          - packages/university/ui/src/views/CourseView.tsx
+          - packages/university/ui/src/views/HomeView.tsx
+        description: 'feat(#university-ui): redesign course catalog, fix sidebar scroll, update PARA 401'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-content':
+    symbol: '#university-content'
+    total_changes: 3
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_12
+        id: h0022
+        ts: '2026-02-18T18:40:30Z'
+        type: implement
+        symbols:
+          - '#agent-prompts'
+          - '#doctor-handler'
+          - '#OrchestrationTools'
+          - '#PurposePortalTools'
+          - '#university-content'
+        author:
+          type: human
+          id: ascend
+        commit: b9f95b303a9e1efcc2e9c2512e12961273261b7f
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/tools/purpose-portal.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/core/.purpose
+          - packages/paradigm/src/core/agent-prompts.ts
+          - packages/university/.purpose
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'feat(#agent-prompts): two-stage review protocol, fresh context principle, clarification markers'
+      - *ref_9
+      - id: h0018
+        ts: '2026-02-15T17:57:26Z'
+        type: implement
+        symbols:
+          - '#university-content'
+        author:
+          type: human
+          id: ascend
+        commit: 9bcb4592d5aa67b763b84df4a9bd4b7c76f50958
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/university/src/content/courses/para-101.json
+          - packages/university/src/content/courses/para-201.json
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/plsat/v2.0.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'fix(#university-content): remove framework-specific references from courses and PLSAT'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-cli':
+    symbol: '#paradigm-cli'
+    total_changes: 1
+    last_modified: '2026-02-18T17:26:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_10
+        id: h0020
+        ts: '2026-02-18T17:26:14Z'
+        type: implement
+        symbols:
+          - '#paradigm-cli'
+          - '#paradigm-hooks'
+        author:
+          type: human
+          id: ascend
+        commit: e732927d4941d2d7901dae0c95c4535d82c5ab40
+        intent: feature
+        files:
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/src/commands/hooks/index.ts
+        description: 'feat(#paradigm-hooks): v2 hook enforcement for paradigm compliance'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-hooks':
+    symbol: '#paradigm-hooks'
+    total_changes: 1
+    last_modified: '2026-02-18T17:26:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!handoff-delivered':
+    symbol: '!handoff-delivered'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!handoff-persisted':
+    symbol: '!handoff-persisted'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!wisdom-promoted':
+    symbol: '!wisdom-promoted'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#global-store':
+    symbol: '#global-store'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mcp-tools':
+    symbol: '#mcp-tools'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#WisdomTools':
+    symbol: '#WisdomTools'
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~global-persistence:
+    symbol: ~global-persistence
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $handoff-roundtrip:
+    symbol: $handoff-roundtrip
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $wisdom-promotion:
+    symbol: $wisdom-promotion
+    total_changes: 1
+    last_modified: '2026-02-18T17:29:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-prompts':
+    symbol: '#agent-prompts'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_12
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#doctor-handler':
+    symbol: '#doctor-handler'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_12
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#OrchestrationTools':
+    symbol: '#OrchestrationTools'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_12
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#PurposePortalTools':
+    symbol: '#PurposePortalTools'
+    total_changes: 1
+    last_modified: '2026-02-18T18:40:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_12
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#context-tools':
+    symbol: '#context-tools'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-checkpoint':
+    symbol: '#session-checkpoint'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-tracker':
+    symbol: '#session-tracker'
+    total_changes: 1
+    last_modified: '2026-02-18T19:54:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+co_changes: []
+fragile_symbols: []

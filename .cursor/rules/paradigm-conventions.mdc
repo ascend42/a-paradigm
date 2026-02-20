@@ -5,13 +5,13 @@ alwaysApply: false
 ---
 ## Conventions
 
-- Use kebab-case for all symbol IDs (feature-name, not featureName)
+- Use kebab-case for symbol IDs (#feature-name, not #featureName)
 - Use PascalCase for class-like components (#PaymentService, #UserProfile)
 - Document flows when logic spans 3+ components
 - Reference related items using symbol prefixes (# $ ^ ! ~) and tags
 - Add descriptions to all components and gates
-- Update .purpose files when changing feature behavior
+- Update .purpose files when changing behavior
 - Keep gates minimal - one responsibility per gate
-- Use signals for side effects, not direct state mutations
-- Aspects (`~`) MUST have code anchors - no unanchored aspects
+- Use signals for side effects, not direct mutations
+- Aspects (~) MUST have code anchors - no unanchored aspects
 - ALWAYS use Paradigm logger, NEVER raw console.log/print

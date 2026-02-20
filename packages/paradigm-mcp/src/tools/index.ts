@@ -22,13 +22,16 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
-import { getContextToolsList, handleContextTool, trackToolCall } from './context.js';
+import { getContextToolsList, handleContextTool, trackToolCall, addToolBreadcrumb, buildRecoveryPreamble } from './context.js';
+import { getSessionTracker } from '../utils/session-tracker.js';
 import { getSentinelToolsList, handleSentinelTool } from './sentinel.js';
 import { getFlowsToolsList, handleFlowTool } from './flows.js';
 import { getFixturesToolsList, handleFixturesTool } from './fixtures.js';
 import { getOrchestrationToolsList, handleOrchestrationTool } from './orchestration.js';
 import { getTagsToolsList, handleTagsTool } from './tags.js';
 import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-portal.js';
+import { getPmToolsList, handlePmTool } from './pm.js';
+import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -204,6 +207,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getTagsToolsList(),
           // Purpose & Portal file management tools
           ...getPurposePortalToolsList(),
+          // PM governance tools
+          ...getPmToolsList(),
+          // Reindex tool
+          ...getReindexToolsList(),
         ],
       };
     }
@@ -214,7 +221,20 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
     CallToolRequestSchema,
     async (request) => {
       const { name, arguments: args } = request.params;
+      addToolBreadcrumb(name, (args ?? {}) as Record<string, unknown>);
       const ctx = getContext();
+
+      // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
+      const tracker = getSessionTracker();
+      tracker.setRootDir(ctx.rootDir);
+      let recoveryPreamble: string | null = null;
+      if (!tracker.hasRecoveredThisSession()) {
+        recoveryPreamble = buildRecoveryPreamble(ctx.rootDir);
+        tracker.markRecovered();
+      }
+
+      // Dispatch to tool handler; we'll prepend recovery preamble afterward
+      const toolResult = await (async () => {
 
       switch (name) {
         case 'paradigm_search': {
@@ -803,7 +823,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           }
 
           // Try context tools
-          if (name.startsWith('paradigm_context_') || name === 'paradigm_handoff_prepare' || name === 'paradigm_session_stats') {
+          if (name.startsWith('paradigm_context_') || name.startsWith('paradigm_session_') || name === 'paradigm_handoff_prepare') {
             const result = await handleContextTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               // Don't track context tools to avoid recursion
@@ -868,6 +888,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
+          // Try PM governance tools
+          if (name.startsWith('paradigm_pm_')) {
+            const result = await handlePmTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
           // Try purpose & portal file management tools
           if (name.startsWith('paradigm_purpose_') || name.startsWith('paradigm_portal_')) {
             const reload = reloadContext || (async () => {});
@@ -880,9 +911,32 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
+          // Try reindex tool
+          if (name === 'paradigm_reindex') {
+            const reload = reloadContext || (async () => {});
+            const result = await handleReindexTool(name, args as Record<string, unknown>, ctx, reload);
+            if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
           throw new Error(`Unknown tool: ${name}`);
         }
       }
+
+      })(); // end IIFE for tool dispatch
+
+      // Prepend recovery preamble to the first tool response of a new session
+      if (recoveryPreamble) {
+        const first = toolResult.content?.[0];
+        if (first && typeof first === 'object' && 'text' in first && typeof first.text === 'string') {
+          first.text = recoveryPreamble + '\n\n' + first.text;
+        }
+      }
+
+      return toolResult;
     }
   );
 }

@@ -1,0 +1,19 @@
+version: 1.0.0
+gates:
+  local-only:
+    description: Server binds to localhost only — no external access
+    type: network
+    location: express-bind
+    check: req.hostname === 'localhost'
+    prizes: []
+routes:
+  GET /api/courses:
+    - ^local-only
+  GET /api/courses/:id:
+    - ^local-only
+  GET /api/courses/:id/lessons/:lessonId:
+    - ^local-only
+  GET /api/plsat:
+    - ^local-only
+  GET /api/plsat/:version:
+    - ^local-only

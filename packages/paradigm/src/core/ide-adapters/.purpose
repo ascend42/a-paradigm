@@ -30,6 +30,11 @@ components:
     path: windsurf.ts
     aspects: ["~ide-adapter-pattern"]
 
+  agents-adapter:
+    description: Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)
+    path: agents.ts
+    aspects: ["~ide-adapter-pattern"]
+
   adapter-registry:
     description: IDE adapter discovery, selection, and factory
     path: index.ts

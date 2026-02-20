@@ -24,6 +24,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { loadProjectContext, type ProjectContext } from './utils/index-loader.js';
 import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
+import { rebuildStaticFiles } from './tools/reindex.js';
+import { getSessionTracker } from './utils/session-tracker.js';
 
 // Get project directory from args or use cwd
 const projectDir = process.argv[2] || process.cwd();
@@ -44,9 +46,15 @@ function getContext(): ProjectContext {
 /**
  * Reload project context after writes to .purpose or portal.yaml.
  * Called by purpose-portal tools after every successful mutation.
+ * Also rebuilds static index files (scan-index.json, navigator.yaml, flow-index.json)
+ * in the background so they stay in sync.
  */
 async function reloadContext(): Promise<void> {
   context = await loadProjectContext(projectDir);
+  // Rebuild static files in background (non-blocking)
+  rebuildStaticFiles(projectDir, context).catch((err) => {
+    console.error('[paradigm-mcp] Background reindex:', (err as Error).message);
+  });
 }
 
 /**
@@ -58,6 +66,7 @@ async function main() {
   
   try {
     context = await loadProjectContext(projectDir);
+    getSessionTracker().setRootDir(context.rootDir);
     console.error(`[paradigm-mcp] Loaded ${context.aggregation.symbols.length} symbols from ${context.projectName}`);
   } catch (error) {
     console.error(`[paradigm-mcp] Error loading project:`, error);

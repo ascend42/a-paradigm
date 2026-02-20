@@ -14,6 +14,8 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import * as yaml from 'js-yaml';
+import { getDisciplineScanPatterns } from '../../core/discipline.js';
+import type { Discipline } from '../../core/paradigm-config.js';
 
 interface AutoScanOptions {
   dryRun?: boolean;
@@ -533,7 +535,27 @@ export async function autoScanCommand(targetPath: string | undefined, options: A
     console.log(chalk.blue('\n🔍 Paradigm Auto-Scan\n'));
     console.log(chalk.gray('Analyzing codebase for symbols...\n'));
   }
-  
+
+  // Load discipline from config.yaml and add discipline-specific scan patterns
+  const discipline = loadDisciplineFromConfig(rootDir);
+  if (discipline && discipline !== 'auto' && discipline !== 'custom') {
+    const extraPatterns = getDisciplineScanPatterns(discipline);
+    // Add discipline-specific patterns to the scan lists
+    for (const p of extraPatterns.components) {
+      if (!SCAN_PATTERNS.components.includes(p)) SCAN_PATTERNS.components.push(p);
+    }
+    for (const p of extraPatterns.routes) {
+      if (!SCAN_PATTERNS.routes.includes(p)) SCAN_PATTERNS.routes.push(p);
+    }
+    for (const p of extraPatterns.auth) {
+      if (!SCAN_PATTERNS.auth.includes(p)) SCAN_PATTERNS.auth.push(p);
+    }
+
+    if (!options.json) {
+      console.log(chalk.gray(`  Discipline: ${discipline} (using discipline-specific scan patterns)\n`));
+    }
+  }
+
   // Detect symbols
   spinner.start('Detecting components...');
   const components = detectComponents(rootDir);
@@ -654,4 +676,18 @@ export async function autoScanCommand(targetPath: string | undefined, options: A
   console.log(chalk.gray('  1. Review generated files and adjust descriptions'));
   console.log(chalk.gray('  2. Run `paradigm lint` to validate'));
   console.log(chalk.gray('  3. Run `paradigm index` to build scan index\n'));
+}
+
+/**
+ * Load the discipline setting from .paradigm/config.yaml
+ */
+function loadDisciplineFromConfig(rootDir: string): Discipline | null {
+  const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+  try {
+    const content = fs.readFileSync(configPath, 'utf8');
+    const config = yaml.load(content) as Record<string, unknown>;
+    return (config?.discipline as Discipline) || null;
+  } catch {
+    return null;
+  }
 }

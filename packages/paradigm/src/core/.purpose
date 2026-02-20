@@ -21,7 +21,7 @@ components:
     path: agent-matcher.ts
 
   agent-prompts:
-    description: Generate agent-specific prompts with role context and handoff data
+    description: Generate agent-specific prompts with role context and handoff data. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review protocol (spec compliance then code quality) with minimum 3 categorized findings.
     path: agent-prompts.ts
 
   model-discovery:
