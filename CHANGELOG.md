@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Portal.yaml for university routes** — All 5 university API routes (`/api/courses`, `/api/courses/:id`, `/api/courses/:id/lessons/:lessonId`, `/api/plsat`, `/api/plsat/:version`) documented with `^local-only` gate (localhost-only learning platform, no auth required).
 
+### Security
+
+- **npm audit: 0 vulnerabilities** — Fixed all 5 reported vulnerabilities (2 moderate, 3 high). Upgraded `vite` ^5 → ^6.4 in sentinel (fixes esbuild dev server exploit, CVE in esbuild ≤0.24.2). Upgraded `glob` ^10 → ^13 in paradigm, portal-core, and purpose-core (fixes minimatch ReDoS via glob transitive dep). Removed `@vscode/vsce` from paradigm-vscode devDependencies entirely — it was only used as a CLI for `vsce package`/`vsce publish`, replaced with `npx @vscode/vsce`. vsce v2 and v3 both carry a vulnerable `minimatch ^3.0.3` direct dependency with no upstream fix; since it's a CLI-only tool with no user-controlled glob input, the ReDoS has zero actual attack surface. Bumped root engine requirement from Node >=18 to >=20 (Node 18 EOL'd April 2025).
+
 ### Fixed
 
 - **Markdown renderer: table and ordered list support** — `renderMarkdown()` now handles markdown tables (`| col | col |` with separator rows) and ordered lists (`1. item`). Tables render as proper `<table>` HTML with inline markdown in cells. Ordered lists render as `<ol><li>` instead of collapsing into a single paragraph.
