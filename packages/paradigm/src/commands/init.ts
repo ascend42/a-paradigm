@@ -18,6 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand } from './scan/index.js';
+import { detectDiscipline, getDisciplineConfig } from '../core/discipline.js';
 
 // ============================================
 // Types
@@ -50,6 +51,7 @@ interface DetectionResult {
   hasExisting: boolean;
   totalLines: number;
   projectType?: string;
+  discipline?: string;
 }
 
 // ============================================
@@ -208,11 +210,14 @@ function detectExistingIDEFiles(rootDir: string): DetectionResult {
     totalLines += lines;
   }
 
+  const discipline = detectDiscipline(rootDir);
+
   return {
     ides,
     hasExisting: ides.length > 0,
     totalLines,
     projectType: detectProjectType(rootDir),
+    discipline: discipline !== 'backend' ? discipline : undefined, // Only show if non-fallback
   };
 }
 
@@ -452,8 +457,11 @@ function displayDetectionResults(detection: DetectionResult, projectName: string
   console.log(chalk.blue('└─────────────────────────────────────────────────┘\n'));
   
   // Project info
-  console.log(chalk.white('  📁 Project: ') + chalk.cyan(projectName) + 
+  console.log(chalk.white('  📁 Project: ') + chalk.cyan(projectName) +
     (detection.projectType ? chalk.gray(` (${detection.projectType} detected)`) : ''));
+  if (detection.discipline) {
+    console.log(chalk.white('  🎯 Discipline: ') + chalk.cyan(detection.discipline));
+  }
   console.log('');
   
   // Detection results
@@ -625,6 +633,10 @@ export async function initCommand(options: InitOptions) {
       if (!fs.existsSync(path.join(paradigmDir, 'fixtures.yaml'))) {
         createFixturesTemplate(paradigmDir);
       }
+
+      // Apply detected discipline to config.yaml
+      applyDisciplineToConfig(paradigmDir, cwd);
+
       spinner.succeed(chalk.green('.paradigm/ created'));
     } else {
       spinner.warn(chalk.yellow('Templates not found, creating minimal structure'));
@@ -699,6 +711,52 @@ export async function initCommand(options: InitOptions) {
   // Display summary
   displaySummary(targetIDE, detection);
   tracker.success('Paradigm initialized', { project: projectName, ide: targetIDE });
+}
+
+/**
+ * Detect the project discipline and update config.yaml with discipline-specific settings.
+ * Replaces `discipline: auto` with the detected value and populates the symbol-mapping
+ * and purpose-required sections from the discipline's defaults.
+ */
+function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
+  const configPath = path.join(paradigmDir, 'config.yaml');
+  if (!fs.existsSync(configPath)) return;
+
+  const discipline = detectDiscipline(rootDir);
+  if (discipline === 'auto') return; // detection returned auto, nothing to do
+
+  let content = fs.readFileSync(configPath, 'utf8');
+
+  // Replace discipline: auto with the detected discipline
+  content = content.replace(
+    /^discipline:\s*auto\b.*$/m,
+    `discipline: ${discipline}`
+  );
+
+  // Get discipline-specific config
+  const config = getDisciplineConfig(discipline);
+
+  // Replace the symbol-mapping section with discipline-specific mappings
+  const mappingLines = Object.entries(config.symbolMapping)
+    .map(([pattern, symbol]) => `    "${pattern}": "${symbol}"`)
+    .join('\n');
+
+  content = content.replace(
+    /  symbol-mapping:\n(?:    .*\n)*/,
+    `  symbol-mapping:\n${mappingLines}\n`
+  );
+
+  // Replace the purpose-required section with discipline-specific paths
+  const purposeLines = config.purposeRequired
+    .map((pr) => `  - pattern: "${pr.pattern}"\n    depth: ${pr.depth}`)
+    .join('\n');
+
+  content = content.replace(
+    /purpose-required:\n(?:  - pattern:.*\n    depth:.*\n)*/,
+    `purpose-required:\n${purposeLines}\n`
+  );
+
+  fs.writeFileSync(configPath, content, 'utf8');
 }
 
 /**

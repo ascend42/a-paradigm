@@ -1,0 +1,561 @@
+{
+  "id": "para-101",
+  "title": "PARA 101: Foundations",
+  "description": "Master the fundamentals of Paradigm — the meta-framework that gives AI agents structured context to navigate and understand your codebase. Learn the five symbols, purpose files, tags, logging, project structure, and gates.",
+  "lessons": [
+    {
+      "id": "welcome",
+      "title": "Welcome to Paradigm",
+      "content": "## What Is Paradigm?\n\nParadigm is a **meta-framework for structured AI-assisted development**. It is not a code framework like React or Express — it does not ship components, generate boilerplate, or impose a runtime. Instead, Paradigm organizes *how AI agents understand your code*. It provides a shared vocabulary of symbols, a directory-level documentation format, and a set of specifications that let any AI assistant — whether Claude, Cursor, or another tool — navigate even large codebases with precision and minimal token waste.\n\nThe core insight behind Paradigm is simple: AI agents are powerful, but they struggle when dropped into an undocumented codebase. They spend thousands of tokens exploring directories, guessing at relationships, and re-reading files they have already seen. Paradigm solves this by giving the codebase *structured context* — lightweight metadata files that describe what lives where, how pieces relate, and what rules apply.\n\n## The Three Pillars\n\nParadigm rests on three pillars:\n\n1. **Symbols** — A set of five prefixed identifiers (`#`, `$`, `^`, `!`, `~`) that classify every meaningful unit in your project. A payment service is `#PaymentService`. An authorization check is `^authenticated`. A business event is `!order-placed`. Symbols are the vocabulary AI agents use to talk about your code.\n\n2. **Purpose Files** — YAML files named `.purpose` that live in directories alongside your source code. They declare which components, flows, gates, signals, and aspects exist in that directory. They are the map AI agents read before they touch any code.\n\n3. **Specifications** — Files in the `.paradigm/` directory that define project-wide configuration, tag taxonomies, agent roles, navigation maps, and team wisdom. They are the rulebook that keeps every agent aligned with your team's conventions.\n\n## Why It Matters\n\nWithout structured context, an AI agent working on a checkout feature might:\n- Spend 2,000+ tokens reading irrelevant files looking for the payment service\n- Miss an authorization gate that protects the endpoint\n- Accidentally duplicate a signal that another component already emits\n- Use `console.log` instead of the team's structured logger\n\nWith Paradigm, that same agent calls `paradigm_navigate` to find `#PaymentService` in ~100 tokens, checks `paradigm_ripple` to see what depends on it, reads the `.purpose` file to understand the directory, and follows the team's logging convention. The result is faster, safer, and more consistent code changes.\n\n## What You Will Learn\n\nIn this course you will learn the five symbols and when to use each one, how to write and read `.purpose` files, how to classify symbols with tags, how to use the Paradigm logger, how the `.paradigm/` directory is organized, how `portal.yaml` secures your routes, and how to set up a new project from scratch.",
+      "keyConcepts": [
+        "Meta-framework for AI-assisted development",
+        "Structured context over raw code exploration",
+        "Five operational symbols",
+        "Purpose files as directory-level documentation",
+        "Token-efficient AI navigation"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is Paradigm best described as?",
+          "choices": {
+            "A": "A JavaScript component library for building UIs",
+            "B": "A code generation tool that scaffolds project boilerplate",
+            "C": "A meta-framework that organizes how AI agents understand your codebase",
+            "D": "A testing framework with built-in assertion helpers",
+            "E": "A deployment pipeline tool for CI/CD"
+          },
+          "correct": "C",
+          "explanation": "Paradigm is a meta-framework — it does not ship runtime code or components. Its purpose is to give AI agents structured context (symbols, purpose files, specifications) so they can navigate and modify codebases efficiently."
+        },
+        {
+          "id": "q2",
+          "question": "Which of the following is NOT one of Paradigm's three pillars?",
+          "choices": {
+            "A": "Symbols",
+            "B": "Purpose Files",
+            "C": "Specifications",
+            "D": "Runtime Middleware",
+            "E": "All of the above are pillars"
+          },
+          "correct": "D",
+          "explanation": "Paradigm's three pillars are Symbols (the vocabulary), Purpose Files (the directory maps), and Specifications (the project rulebook). Runtime Middleware is not a Paradigm concept — Paradigm is metadata, not runtime code."
+        },
+        {
+          "id": "q3",
+          "question": "What problem does Paradigm primarily solve for AI agents?",
+          "choices": {
+            "A": "Slow compilation times in large TypeScript projects",
+            "B": "Excessive token usage and missed context when navigating undocumented codebases",
+            "C": "Lack of type safety in JavaScript applications",
+            "D": "Difficulty deploying applications to cloud providers",
+            "E": "Missing test coverage in legacy codebases"
+          },
+          "correct": "B",
+          "explanation": "AI agents waste tokens exploring directories, guessing relationships, and re-reading files when a codebase has no structured context. Paradigm provides that structure so agents can find what they need in ~100 tokens instead of 2,000+."
+        },
+        {
+          "id": "q4",
+          "question": "How many operational symbols does Paradigm define?",
+          "choices": {
+            "A": "3",
+            "B": "4",
+            "C": "5",
+            "D": "7",
+            "E": "10"
+          },
+          "correct": "C",
+          "explanation": "Paradigm defines exactly five operational symbols: # (Component), $ (Flow), ^ (Gate), ! (Signal), and ~ (Aspect). Classification beyond these five is handled by the tag system."
+        }
+      ]
+    },
+    {
+      "id": "five-symbols",
+      "title": "The Five Symbols",
+      "content": "## The Heart of Paradigm\n\nEverything in Paradigm revolves around five symbols. Each symbol is a single-character prefix that classifies a code unit by its *role* in the system. When you see `#PaymentService`, you immediately know it is a component. When you see `^authenticated`, you know it is a security gate. The symbols are not decorative — they are a shared vocabulary that lets humans, AI agents, and tooling speak the same language about your codebase.\n\n## `#` Component — The Universal Building Block\n\nThe `#` symbol marks **any documented code unit**. Services, handlers, React components, utility modules, database models, configuration loaders — if it is a meaningful piece of code that you want AI to know about, it is a `#component`.\n\n```yaml\n# In a .purpose file\ncomponents:\n  #PaymentService:\n    description: Handles payment processing via Stripe\n    file: payment-service.ts\n    tags: [integration, stripe, critical]\n\n  #login-handler:\n    description: POST /auth/login endpoint handler\n    file: login.ts\n    gates: [^authenticated]\n```\n\nComponent is intentionally broad. You never have to debate whether something is a \"feature\" or a \"service\" — it is a component. Finer distinctions are handled by the tag system: `#checkout` with `tags: [feature]`, `#stripe-service` with `tags: [integration, stripe]`.\n\n## `$` Flow — Multi-Step Processes\n\nThe `$` symbol marks **ordered sequences of steps that span multiple components**. Use a flow when logic touches three or more components in a specific order.\n\n```yaml\nflows:\n  $checkout-flow:\n    description: Complete purchase from cart to confirmation\n    steps:\n      - component: \"#cart-service\"\n        action: validate-cart\n      - component: \"#payment-service\"\n        action: charge-card\n      - component: \"#order-service\"\n        action: create-order\n      - component: \"#notification-service\"\n        action: send-confirmation\n    signals: [\"!order-placed\", \"!payment-completed\"]\n```\n\nFlows are documentation, not orchestration code. They tell AI agents *the sequence of operations* so the agent can understand what happens end-to-end without reading every file.\n\n## `^` Gate — Condition Checkpoints\n\nThe `^` symbol marks **conditions that must be satisfied before an action can proceed**. Gates are the gatekeepers of Paradigm — they check a defined state and either allow or block.\n\n```yaml\ngates:\n  ^authenticated:\n    description: User must be logged in\n    check: req.user != null\n  ^project-admin:\n    description: User must be an admin of the project\n    check: project.admins.includes(req.user.id)\n    requires: [^authenticated]\n```\n\nGates can chain — `^project-admin` requires `^authenticated` first. They map to routes in `portal.yaml`, which we will cover later.\n\n## `!` Signal — Events for Side Effects\n\nThe `!` symbol marks **events that trigger decoupled side effects**. When a payment completes, the payment service does not directly call the notification service — it emits `!payment-completed`, and any listener can react.\n\n```yaml\nsignals:\n  !payment-completed:\n    description: Fired after successful payment processing\n    emitters: [\"#payment-service\"]\n    category: business\n  !login-failed:\n    description: Fired on failed authentication attempt\n    emitters: [\"#auth-handler\"]\n    category: security\n```\n\nSignals promote loose coupling. The emitter does not need to know who listens.\n\n## `~` Aspect — Cross-Cutting Rules\n\nThe `~` symbol marks **rules that apply across multiple components and MUST point to enforcement code**. This is the only symbol that *requires* code anchors.\n\n```yaml\naspects:\n  ~audit-required:\n    description: All financial operations must be logged to audit trail\n    anchors:\n      - src/middleware/audit.ts:15-35\n      - src/decorators/auditable.ts:1-20\n    applies-to: [\"#*Service\"]\n    tags: [compliance, security]\n```\n\nThe `anchors` field is mandatory. An aspect without anchors is invalid — it would be a rule with no enforcement. The anchor format is `file:line`, `file:start-end`, or `file:line1,line2,line3`.\n\n## Choosing the Right Symbol\n\nAsk yourself:\n- Is it a piece of code I want documented? → `#` Component\n- Does it describe a multi-step sequence? → `$` Flow\n- Does it guard access to a resource? → `^` Gate\n- Does it represent an event with side effects? → `!` Signal\n- Does it enforce a rule across many components? → `~` Aspect",
+      "keyConcepts": [
+        "# Component — any documented code unit",
+        "$ Flow — multi-step process with ordered steps",
+        "^ Gate — condition checkpoint that allows or blocks",
+        "! Signal — event for decoupled side effects",
+        "~ Aspect — cross-cutting rule with required code anchors"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A middleware function that checks whether the current user has admin privileges should be classified as which symbol?",
+          "choices": {
+            "A": "# Component",
+            "B": "$ Flow",
+            "C": "^ Gate",
+            "D": "! Signal",
+            "E": "~ Aspect"
+          },
+          "correct": "C",
+          "explanation": "A middleware function that checks a condition and either allows or blocks access is a gate (^). Gates verify that a required condition is met before proceeding — in this case, admin privileges."
+        },
+        {
+          "id": "q2",
+          "question": "Which symbol REQUIRES code anchors in its definition?",
+          "choices": {
+            "A": "# Component",
+            "B": "$ Flow",
+            "C": "^ Gate",
+            "D": "! Signal",
+            "E": "~ Aspect"
+          },
+          "correct": "E",
+          "explanation": "Aspects (~) are the only symbol that requires code anchors. An aspect represents a cross-cutting rule, and without anchors pointing to the enforcement code, the rule is just a wish — not a verified constraint."
+        },
+        {
+          "id": "q3",
+          "question": "A payment processing module contains a Stripe API wrapper, a billing calculator, and an in-memory cart. How should these be classified?",
+          "choices": {
+            "A": "Each gets a different symbol type: $ for Stripe, # for calculator, ! for cart",
+            "B": "They are all # components, differentiated by tags like [integration, stripe], [feature], and [state]",
+            "C": "They should all be a single # component since they are in the same module",
+            "D": "The Stripe wrapper is a ~ aspect since it is a cross-cutting concern",
+            "E": "They should be modeled as steps in a $ flow"
+          },
+          "correct": "B",
+          "explanation": "All three are documented code units, so they are all # components. The differences are captured by tags: #stripe-service with tags: [integration, stripe], #billing-calculator with tags: [feature], #cart-store with tags: [state]. Tags add nuance without requiring different symbol types."
+        },
+        {
+          "id": "q4",
+          "question": "When should you create a $flow?",
+          "choices": {
+            "A": "For every function that takes more than 10 lines of code",
+            "B": "Only for authentication sequences",
+            "C": "When logic spans three or more components in a specific order",
+            "D": "Whenever you emit a signal",
+            "E": "For all API endpoints regardless of complexity"
+          },
+          "correct": "C",
+          "explanation": "Flows document multi-step processes that involve three or more components in a defined sequence. A single-component operation or a two-component call does not warrant a flow — it adds documentation overhead without providing navigational value."
+        },
+        {
+          "id": "q5",
+          "question": "A system emits `!payment-completed` after a successful charge. Which statement is true about signals?",
+          "choices": {
+            "A": "The signal must directly invoke the notification service",
+            "B": "Signals can only be emitted by gate components",
+            "C": "The emitter does not need to know who listens to the signal",
+            "D": "Signals replace flows — you use one or the other, never both",
+            "E": "Signals must be defined in portal.yaml"
+          },
+          "correct": "C",
+          "explanation": "Signals promote loose coupling. The emitting component fires the event, and any number of listeners can react independently. The emitter has no knowledge of — and no dependency on — the listeners."
+        }
+      ]
+    },
+    {
+      "id": "purpose-files",
+      "title": "Purpose Files",
+      "content": "## The Map AI Agents Read First\n\nA `.purpose` file is a YAML document that lives in a directory alongside your source code. It declares what that directory contains — its components, flows, gates, signals, and aspects. When an AI agent enters a directory, the first thing it should do is read the `.purpose` file. This single file gives the agent enough context to understand the directory without scanning every source file.\n\nThink of `.purpose` files as the table of contents for a chapter in a book. You would not read every page to find out what topics are covered — you check the table of contents. Similarly, AI agents should not `grep` through every `.ts` or `.py` file to figure out what a directory does.\n\n## Structure of a Purpose File\n\nA `.purpose` file has a top-level metadata section and then named sections for each symbol type:\n\n```yaml\nname: Payment Module\ndescription: Handles all payment processing and billing logic\nversion: \"1.0.0\"\ncontext:\n  - Uses Stripe as the payment provider\n  - All amounts are in cents (integer)\n  - Webhooks are verified with Stripe signatures\n\ncomponents:\n  #payment-service:\n    description: Core payment processing logic\n    file: payment-service.ts\n    tags: [integration, stripe, critical]\n    signals: [\"!payment-completed\", \"!payment-failed\"]\n    gates: [\"^authenticated\"]\n\n  #billing-calculator:\n    description: Computes totals, taxes, and discounts\n    file: billing.ts\n    tags: [feature]\n\nflows:\n  $checkout-flow:\n    description: End-to-end purchase sequence\n    steps:\n      - component: \"#cart-service\"\n        action: validate-items\n      - component: \"#billing-calculator\"\n        action: compute-total\n      - component: \"#payment-service\"\n        action: charge\n\nsignals:\n  !payment-completed:\n    description: Emitted after successful charge\n    emitters: [\"#payment-service\"]\n    category: business\n\ngates:\n  ^payment-authorized:\n    description: User has a valid payment method on file\n    check: user.paymentMethods.length > 0\n```\n\n## Key Rules for Purpose Files\n\n**One per directory.** Each directory that contains meaningful code should have at most one `.purpose` file. Not every directory needs one — only directories that contain components worth documenting.\n\n**Symbols must use the correct prefix.** Components use `#`, flows use `$`, gates use `^`, signals use `!`, aspects use `~`. The prefix is part of the identifier.\n\n**Descriptions are required.** Every component, flow, gate, signal, and aspect must have a `description` field. Without it, the symbol is opaque to AI agents.\n\n**References link symbols together.** A component can reference the gates it requires (`gates: [\"^authenticated\"]`), the signals it emits (`signals: [\"!payment-completed\"]`), and the flows it participates in (`flows: [\"$checkout-flow\"]`). These cross-references let tools like `paradigm_ripple` calculate impact.\n\n**The `context` field is for AI.** The top-level `context` array contains free-text notes aimed at AI agents: conventions, gotchas, assumptions. This is where you write \"all amounts are in cents\" or \"this module is deprecated, use v2 instead.\"\n\n## Where Purpose Files Live\n\nPurpose files are placed in source directories — wherever your code lives:\n\n```\nsrc/\n  payments/\n    .purpose          ← describes the payments module\n    payment-service.ts\n    billing.ts\n  auth/\n    .purpose          ← describes the auth module\n    login.ts\n    middleware.ts\n```\n\nThey are NOT placed in the `.paradigm/` directory. The `.paradigm/` directory holds project-wide configuration; `.purpose` files hold directory-level documentation.\n\n## Creating Purpose Files with MCP Tools\n\nYou can create and update purpose files using the Paradigm MCP tools:\n\n```\nparadigm_purpose_init     → Create/update file-level metadata\nparadigm_purpose_add_component → Add a #component\nparadigm_purpose_add_flow     → Add a $flow\nparadigm_purpose_add_gate     → Add a ^gate\nparadigm_purpose_add_signal   → Add a !signal\nparadigm_purpose_add_aspect   → Add a ~aspect (with required anchors)\n```\n\nThese tools handle YAML formatting and symbol quoting automatically. For example, YAML treats `!` as a tag indicator, so signal IDs need special quoting — the tools handle this for you.",
+      "keyConcepts": [
+        ".purpose files are directory-level YAML documentation",
+        "They declare components, flows, gates, signals, and aspects",
+        "AI agents read .purpose files first when entering a directory",
+        "The context field contains free-text notes for AI agents",
+        "Purpose files live alongside source code, not in .paradigm/"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Where should a .purpose file be placed?",
+          "choices": {
+            "A": "In the .paradigm/ directory at the project root",
+            "B": "In the source directory it describes, alongside the code files",
+            "C": "In a dedicated /docs directory",
+            "D": "In the project root, one file for the entire project",
+            "E": "In the node_modules directory for package documentation"
+          },
+          "correct": "B",
+          "explanation": "Purpose files live in the source directory they describe — right next to the code. The .paradigm/ directory holds project-wide configuration, not directory-level documentation."
+        },
+        {
+          "id": "q2",
+          "question": "What is the `context` field in a .purpose file used for?",
+          "choices": {
+            "A": "Defining application context providers",
+            "B": "Specifying environment variables required by the module",
+            "C": "Free-text notes aimed at AI agents — conventions, gotchas, assumptions",
+            "D": "Listing the test files associated with the directory",
+            "E": "Declaring the programming language used in the directory"
+          },
+          "correct": "C",
+          "explanation": "The context field is an array of free-text strings written specifically for AI agents. It conveys things like 'all amounts are in cents', 'this module is deprecated', or 'uses Stripe signatures for webhook verification'."
+        },
+        {
+          "id": "q3",
+          "question": "How many .purpose files should a single directory contain?",
+          "choices": {
+            "A": "Exactly one for every file in the directory",
+            "B": "At most one per directory",
+            "C": "One per component defined in the directory",
+            "D": "At least three — one for components, one for flows, one for gates",
+            "E": "None — purpose files are generated automatically"
+          },
+          "correct": "B",
+          "explanation": "Each directory should have at most one .purpose file. All symbols in that directory (components, flows, gates, signals, aspects) are defined within that single file."
+        },
+        {
+          "id": "q4",
+          "question": "Which field is REQUIRED on every symbol defined in a .purpose file?",
+          "choices": {
+            "A": "file",
+            "B": "tags",
+            "C": "description",
+            "D": "version",
+            "E": "anchors"
+          },
+          "correct": "C",
+          "explanation": "Every symbol must have a description. Without it, AI agents cannot understand what the symbol represents. The file, tags, and version fields are useful but optional. Anchors are required only for aspects (~)."
+        }
+      ]
+    },
+    {
+      "id": "tags-and-classification",
+      "title": "Tags & Classification",
+      "content": "## Beyond Symbols: The Tag Bank\n\nParadigm's five symbols classify code by *role* — component, flow, gate, signal, aspect. But within each role, you often need finer distinctions. Is this component a user-facing feature or a third-party integration? Is it critical infrastructure or an experimental idea? Paradigm handles this with a unified **tag system**.\n\nTags are plain strings in brackets that you attach to any symbol. They live in the `tags` array on a symbol definition:\n\n```yaml\ncomponents:\n  #checkout:\n    description: Shopping cart checkout experience\n    tags: [feature, critical, payments]\n\n  #stripe-service:\n    description: Stripe API client wrapper\n    tags: [integration, stripe, payments]\n\n  #cart-store:\n    description: In-memory shopping cart state\n    tags: [state, ephemeral]\n```\n\n## The Tag Bank File\n\nTags are not arbitrary strings — they are defined in `.paradigm/tags.yaml`, which serves as the project's tag bank. The tag bank has three sections:\n\n```yaml\ncore:          # Universal tags, defined by Paradigm itself\n  feature:     { description: \"User-facing functionality\" }\n  integration: { description: \"Third-party service connection\" }\n  state:       { description: \"Data store or state container\" }\n  critical:    { description: \"Failure causes major user impact\" }\n  deprecated:  { description: \"Scheduled for removal\" }\n  idea:        { description: \"Experimental, not yet approved\" }\n\nproject:       # Team-defined tags specific to this project\n  payments:    { description: \"Related to payment processing\" }\n  onboarding:  { description: \"Part of the new-user experience\" }\n\nsuggested:     # AI-proposed tags awaiting human approval\n  webhook-handler: { description: \"Processes incoming webhooks\" }\n```\n\nThe **core** section contains tags that apply to any project. The **project** section contains tags your team has defined for this specific codebase. The **suggested** section is where AI agents can propose new tags using the `paradigm_tags_suggest` tool — a human reviews and promotes them to the project section.\n\n## How Tags Work in Practice\n\nHere is how tags differentiate components that serve different roles:\n\n| Role | How to Tag |\n|-----------|---------------|\n| User-facing feature | `#checkout` with `tags: [feature]` |\n| Third-party service | `#stripe-service` with `tags: [integration, stripe]` |\n| Data store | `#cart-store` with `tags: [state]` |\n| Experimental prototype | `#new-widget` with `tags: [idea]` |\n| Scheduled for removal | `#legacy-handler` with `tags: [deprecated]` |\n\nThis means fewer concepts to remember and no ambiguity. A Stripe payment service is `#stripe-service` with `tags: [integration, stripe]` — clear, searchable, and consistent.\n\n## Using Tags Effectively\n\nTags are most powerful when they are **consistent and searchable**. Follow these guidelines:\n\n- **Use existing tags before inventing new ones.** Check `paradigm_tags({ action: \"list\" })` to see what is available.\n- **Keep tags lowercase and kebab-case.** `webhook-handler`, not `WebhookHandler` or `WEBHOOK_HANDLER`.\n- **Use 2-4 tags per symbol.** One tag is too vague; ten tags is noise.\n- **Tag for discoverability.** Ask: \"What would I search for to find this component?\" Those search terms are your tags.\n- **Let AI propose tags.** If you notice a pattern (e.g., five components all handle webhooks), use `paradigm_tags_suggest` to propose a `webhook-handler` tag.\n\n## Querying by Tags\n\nThe Paradigm MCP tools support tag-based discovery. When you call `paradigm_search` with a tag name, it returns all symbols bearing that tag. This makes it easy to ask questions like \"show me everything tagged `critical`\" or \"find all `integration` components.\"",
+      "keyConcepts": [
+        "Tags classify components by role: feature, integration, state, idea, deprecated, etc.",
+        "Tags are defined in .paradigm/tags.yaml",
+        "Three sections: core (universal), project (team-specific), suggested (AI-proposed)",
+        "Any symbol can have tags — they are not limited to components",
+        "AI agents can propose new tags via paradigm_tags_suggest"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "How should a Stripe API wrapper be documented in Paradigm?",
+          "choices": {
+            "A": "$stripe-service as a flow with Stripe steps",
+            "B": "#stripe-service with tags: [integration, stripe]",
+            "C": "^stripe-service as a gate that checks Stripe credentials",
+            "D": "!stripe-service as a signal emitted on payment",
+            "E": "~stripe-service as an aspect that applies Stripe logic across components"
+          },
+          "correct": "B",
+          "explanation": "A Stripe API wrapper is a documented code unit, so it is a # component. The integration role is captured by tags: #stripe-service with tags: [integration, stripe]. Tags provide searchable classification without requiring different symbol types."
+        },
+        {
+          "id": "q2",
+          "question": "Where are project-specific tags defined?",
+          "choices": {
+            "A": "In each .purpose file's tags section",
+            "B": "In portal.yaml alongside gate definitions",
+            "C": "In .paradigm/tags.yaml under the 'project' section",
+            "D": "In package.json under the 'paradigm' key",
+            "E": "They are not defined anywhere — any string can be a tag"
+          },
+          "correct": "C",
+          "explanation": "Tags are defined in .paradigm/tags.yaml. The file has three sections: core (universal), project (team-specific), and suggested (AI-proposed). Project-specific tags go in the 'project' section."
+        },
+        {
+          "id": "q3",
+          "question": "An AI agent notices that seven components in the codebase handle webhook processing. What should it do?",
+          "choices": {
+            "A": "Create a new ~webhook aspect with anchors",
+            "B": "Rename all seven components to start with 'webhook-'",
+            "C": "Use paradigm_tags_suggest to propose a 'webhook-handler' tag for human review",
+            "D": "Add a $webhook-flow connecting all seven components",
+            "E": "Ignore the pattern — tags should only be created by humans"
+          },
+          "correct": "C",
+          "explanation": "AI agents can propose new tags using paradigm_tags_suggest. The proposed tag goes into the 'suggested' section of tags.yaml, where a human reviews it and decides whether to promote it to the 'project' section."
+        },
+        {
+          "id": "q4",
+          "question": "How many tags should a typical symbol have?",
+          "choices": {
+            "A": "Exactly one",
+            "B": "Two to four",
+            "C": "At least five for maximum discoverability",
+            "D": "None — tags are optional and rarely used",
+            "E": "As many as possible to cover all search terms"
+          },
+          "correct": "B",
+          "explanation": "The guideline is 2-4 tags per symbol. One tag is often too vague to be useful, while five or more creates noise and dilutes searchability. Tags should be chosen for discoverability — the terms you would search for to find the component."
+        }
+      ]
+    },
+    {
+      "id": "paradigm-logger",
+      "title": "The Paradigm Logger",
+      "content": "## Structured Logging with Symbols\n\nRaw `console.log` calls are the bane of production debugging. They have no structure, no categorization, and no connection to the system architecture. Paradigm replaces them with a **structured logger** that ties every log line to a symbol. When you see a log entry from `#payment-service`, you know exactly which component produced it. When you see a warning from `^authenticated`, you know a gate check failed.\n\nThe Paradigm logger uses a two-step chaining API: first you specify the symbol type and name, then you call a log level method.\n\n## The Logger API\n\nThere are five logger methods, one for each symbol type:\n\n```typescript\n// Components — any code unit\nlog.component('#payment-service').info('Payment processed', { amount: 4999 });\nlog.component('#user-store').debug('Cache hit', { userId: 'u_123' });\n\n// Gates — authorization checks\nlog.gate('^authenticated').warn('Access denied — no session', { path: '/api/admin' });\nlog.gate('^project-admin').info('Gate passed', { userId: 'u_456' });\n\n// Signals — events\nlog.signal('!payment-completed').info('Payment signal emitted', { orderId: 'ord_789' });\nlog.signal('!login-failed').warn('Failed login attempt', { email: 'user@example.com' });\n\n// Flows — multi-step processes\nlog.flow('$checkout-flow').debug('Step 2/4: billing calculated', { total: 5999 });\nlog.flow('$onboarding').info('Flow completed', { userId: 'u_123' });\n\n// Aspects — cross-cutting concerns\nlog.aspect('~audit-required').debug('Audit entry recorded', { operation: 'delete-user' });\nlog.aspect('~rate-limited').warn('Rate limit approaching', { remaining: 5 });\n```\n\n## Log Levels\n\nEach symbol method returns an object with four log level methods:\n\n| Level | Use When |\n|-------|----------|\n| `debug` | Development-only details, verbose tracing |\n| `info` | Normal operations — a process completed, a step succeeded |\n| `warn` | Something unexpected but recoverable — a gate denial, a rate limit approaching |\n| `error` | Something failed — a payment declined, a database connection lost |\n\nChoose the level based on operational severity, not on how important the code is. A critical payment service logging a successful charge uses `.info()`, not `.error()`.\n\n## Symbol-to-Directory Mapping\n\nParadigm defines a convention for which logger method to use based on which directory the code lives in:\n\n| Directory Pattern | Logger Method |\n|-------------------|---------------|\n| `features/`, `routes/`, `api/`, `services/`, `lib/`, `components/` | `log.component()` |\n| `middleware/`, `auth/`, `guards/`, `policies/` | `log.gate()` |\n| `events/`, `handlers/`, `listeners/`, `hooks/` | `log.signal()` |\n| `flows/`, `sagas/`, `workflows/`, `pipelines/` | `log.flow()` |\n| `aspects/`, `rules/` | `log.aspect()` |\n\nThis is a convention, not enforcement. If a service in `lib/` emits a signal, it can call `log.signal()`. But when in doubt, follow the directory mapping.\n\n## Why Not console.log?\n\nStructured logging with symbols gives you:\n\n1. **Filterability** — In production, you can filter logs by symbol type (`gate`), symbol name (`^authenticated`), or log level (`warn`). Raw console.log gives you none of this.\n2. **Traceability** — Every log line connects back to the Paradigm symbol map. You can trace a log entry to its `.purpose` definition, see what flows involve it, and check what gates protect it.\n3. **Consistency** — AI agents generating code will use the correct logger if the convention exists. Without it, each agent invents its own logging pattern.\n4. **Incident correlation** — Paradigm Sentinel (the incident tracking system) matches log patterns to symbols, enabling automatic triage based on which components are failing.",
+      "keyConcepts": [
+        "Structured logging ties every log entry to a Paradigm symbol",
+        "Log entries should identify what symbol produced them and at what severity",
+        "Four log levels: debug, info, warn, error — choose by operational severity",
+        "Directory conventions suggest which symbol type a file's logs relate to",
+        "Structured logs enable filtering, tracing, and incident correlation"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the correct way to log a successful payment in `#payment-service`?",
+          "choices": {
+            "A": "console.log('Payment processed', { amount: 4999 })",
+            "B": "log.info('#payment-service', 'Payment processed')",
+            "C": "log.component('#payment-service').info('Payment processed', { amount: 4999 })",
+            "D": "log.signal('!payment-completed').info('Payment processed')",
+            "E": "log.gate('#payment-service').info('Payment processed')"
+          },
+          "correct": "C",
+          "explanation": "Paradigm's logging philosophy is that every log entry should be tagged with the symbol it relates to. For a component like #payment-service, the log should identify it as a component-level entry at the info level."
+        },
+        {
+          "id": "q2",
+          "question": "Code in the `middleware/` directory should typically use which logger method?",
+          "choices": {
+            "A": "log.component()",
+            "B": "log.flow()",
+            "C": "log.signal()",
+            "D": "log.gate()",
+            "E": "log.aspect()"
+          },
+          "correct": "D",
+          "explanation": "By Paradigm's directory-to-symbol convention, middleware/ maps to gates (^). Code in middleware directories typically performs condition checks, which are gate operations — so logs from these files should be tagged as gate-related."
+        },
+        {
+          "id": "q3",
+          "question": "An authentication gate denies access to an unauthenticated user. What log level should be used?",
+          "choices": {
+            "A": "debug — it is a routine check",
+            "B": "info — the gate worked correctly",
+            "C": "warn — access was denied, which is unexpected but not a failure",
+            "D": "error — someone tried to access a protected resource",
+            "E": "No logging — gate denials should be silent"
+          },
+          "correct": "C",
+          "explanation": "A gate denial is unexpected from the user's perspective (they tried to access something they should not) but it is recoverable and the system handled it correctly. This makes it a warn — not an error (the system did not fail) and not info (something unusual happened)."
+        },
+        {
+          "id": "q4",
+          "question": "Which of these is a valid reason to use the Paradigm logger instead of console.log?",
+          "choices": {
+            "A": "console.log is slower in production environments",
+            "B": "The Paradigm logger automatically fixes bugs in the logged code",
+            "C": "Structured symbol-tagged logs enable filtering, tracing, and incident correlation",
+            "D": "console.log does not work in TypeScript projects",
+            "E": "The Paradigm logger compresses log output to save disk space"
+          },
+          "correct": "C",
+          "explanation": "The primary advantage of the Paradigm logger is structure. Every log line is tagged with a symbol type and name, enabling you to filter by component, trace entries back to .purpose definitions, and correlate incidents with specific symbols."
+        }
+      ]
+    },
+    {
+      "id": "project-structure",
+      "title": "Project Structure",
+      "content": "## The .paradigm/ Directory\n\nEvery Paradigm project has a `.paradigm/` directory at its root. This is the central nervous system of the framework — it holds project-wide configuration, specifications, documentation, and metadata that apply across the entire codebase. While `.purpose` files describe individual directories, the `.paradigm/` directory describes the project as a whole.\n\n## Core Files\n\n### config.yaml — Project Configuration\n\nThe most important file. It defines the project's discipline (web, backend, fullstack, etc.), naming conventions, and agent preferences:\n\n```yaml\nname: my-project\ndiscipline: fullstack\nversion: \"2.0\"\n\nconventions:\n  naming: kebab-case\n  components: PascalCase\n  files: kebab-case\n\nagent-provider: claude-code\n```\n\nThe `discipline` field tells Paradigm how to map directory patterns to symbol types. A `web` discipline treats `routes/` as components; a `backend` discipline treats `services/` as components. This affects the navigator, logger suggestions, and gate recommendations.\n\n### tags.yaml — Tag Bank\n\nDefines all valid tags in three sections: `core` (universal), `project` (team-specific), and `suggested` (AI-proposed). Covered in detail in the Tags lesson.\n\n### agents.yaml — Agent Roles\n\nConfigures the AI agents that work on your project — their roles, model assignments, context includes/excludes, and token budgets:\n\n```yaml\nagents:\n  architect:\n    defaultModel: opus\n    context:\n      include: [\".paradigm/**\", \"portal.yaml\", \"**/.purpose\"]\n  builder:\n    defaultModel: haiku\n    context:\n      include: [\"src/**\", \"**/.purpose\"]\n      exclude: [\"**/*.test.*\"]\n  security:\n    defaultModel: opus\n    context:\n      include: [\"portal.yaml\", \"**/auth/**\", \"**/middleware/**\"]\n```\n\n### navigator.yaml — Generated Codebase Map\n\nA machine-generated file that maps symbols to file paths, directories to categories, and provides a structural overview of the codebase. AI agents read this to quickly locate code without directory traversal. Generated by `paradigm scan`.\n\n## Subdirectories\n\n### specs/ — Detailed Specifications\n\nLong-form documents that describe system behaviors, protocols, and standards. These are too detailed for `.purpose` files but essential for AI agents implementing features:\n\n```\n.paradigm/specs/\n  logger.md          ← Full logger specification\n  disciplines.md     ← Symbol mapping by domain\n  portal-protocol.md ← Authorization workflow\n```\n\n### docs/ — Commands and Patterns\n\nQuick-reference documentation for CLI commands, coding patterns, and troubleshooting:\n\n```\n.paradigm/docs/\n  commands.md                ← CLI command reference\n  patterns.md                ← Coding patterns and conventions\n  ai-maintenance-protocol.md ← When/how to update Paradigm files\n```\n\n### wisdom/ — Team Knowledge\n\nCaptures the team's learned preferences, architectural decisions, and antipatterns:\n\n```\n.paradigm/wisdom/\n  preferences.yaml    ← Coding style preferences\n  decisions.yaml      ← Architectural Decision Records (ADRs)\n  antipatterns.yaml   ← What NOT to do, and why\n```\n\nAI agents check wisdom before implementing changes by calling `paradigm_wisdom_context`.\n\n### history/ — Implementation Timeline\n\nTracks what was implemented, when, and by whom. Used for fragility analysis and rollback tracking.\n\n## The Big Picture\n\nHere is the complete project layout showing both `.paradigm/` and `.purpose` files:\n\n```\nmy-project/\n  .paradigm/\n    config.yaml       ← Project-wide settings\n    tags.yaml         ← Tag definitions\n    agents.yaml       ← Agent configurations\n    navigator.yaml    ← Generated codebase map\n    specs/            ← Detailed specifications\n    docs/             ← Commands and patterns\n    wisdom/           ← Team knowledge\n    history/          ← Implementation timeline\n  portal.yaml         ← Security gates and routes (project root)\n  src/\n    payments/\n      .purpose        ← Directory-level documentation\n      payment-service.ts\n    auth/\n      .purpose\n      middleware.ts\n```\n\nNotice that `portal.yaml` lives at the project root, not inside `.paradigm/`. This is intentional — it is a security-critical file that should be visible and easy to audit.",
+      "keyConcepts": [
+        ".paradigm/ holds project-wide configuration and metadata",
+        "config.yaml defines discipline, conventions, and agent preferences",
+        "navigator.yaml is generated by 'paradigm scan' for fast symbol lookup",
+        "wisdom/ captures team decisions, preferences, and antipatterns",
+        "portal.yaml lives at the project root, not inside .paradigm/"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Where does portal.yaml live in a Paradigm project?",
+          "choices": {
+            "A": "Inside .paradigm/specs/",
+            "B": "Inside .paradigm/ at the top level",
+            "C": "At the project root, alongside .paradigm/",
+            "D": "Inside each source directory that has protected routes",
+            "E": "It does not exist as a file — it is generated at runtime"
+          },
+          "correct": "C",
+          "explanation": "portal.yaml lives at the project root, not inside .paradigm/. This is intentional — as a security-critical file defining gates and protected routes, it should be visible and easy to audit."
+        },
+        {
+          "id": "q2",
+          "question": "What is navigator.yaml and how is it created?",
+          "choices": {
+            "A": "A manually written guide to project conventions",
+            "B": "A machine-generated codebase map created by 'paradigm scan'",
+            "C": "A configuration file for IDE navigation shortcuts",
+            "D": "A list of all npm dependencies and their versions",
+            "E": "An auto-generated test coverage report"
+          },
+          "correct": "B",
+          "explanation": "navigator.yaml is generated by running 'paradigm scan'. It maps symbols to file paths and directories to categories, giving AI agents a fast way to locate code without traversing the file system."
+        },
+        {
+          "id": "q3",
+          "question": "An AI agent wants to check if there are known antipatterns before modifying the payment module. Where should it look?",
+          "choices": {
+            "A": "src/payments/.purpose",
+            "B": ".paradigm/wisdom/ (via paradigm_wisdom_context)",
+            "C": ".paradigm/specs/payments.md",
+            "D": "portal.yaml",
+            "E": "package.json"
+          },
+          "correct": "B",
+          "explanation": "Team knowledge — including antipatterns, decisions, and preferences — lives in .paradigm/wisdom/. AI agents access it by calling paradigm_wisdom_context with the symbols they plan to modify."
+        },
+        {
+          "id": "q4",
+          "question": "What does the 'discipline' field in config.yaml control?",
+          "choices": {
+            "A": "Which programming language the project uses",
+            "B": "How directory patterns map to symbol types (web vs backend vs fullstack)",
+            "C": "The maximum number of components allowed per directory",
+            "D": "Whether the project uses TypeScript or JavaScript",
+            "E": "The deployment target (cloud, on-premise, serverless)"
+          },
+          "correct": "B",
+          "explanation": "The discipline field tells Paradigm how to interpret directory patterns. A 'web' discipline maps routes/ to components, while a 'backend' discipline maps services/ to components. This affects the navigator, logger suggestions, and gate recommendations."
+        },
+        {
+          "id": "q5",
+          "question": "Which of these files should be written by hand, NOT generated by a tool?",
+          "choices": {
+            "A": "navigator.yaml",
+            "B": "config.yaml",
+            "C": "history/ entries",
+            "D": "All of the above are generated",
+            "E": "None of the above — all are written by hand"
+          },
+          "correct": "B",
+          "explanation": "config.yaml is a project configuration file written by the team (or initialized by 'paradigm shift' and then customized). navigator.yaml is generated by 'paradigm scan', and history entries are recorded by tools and post-commit hooks."
+        }
+      ]
+    },
+    {
+      "id": "portal-yaml",
+      "title": "Portal.yaml",
+      "content": "## The Gate Registry\n\n`portal.yaml` is Paradigm's gate specification. It defines the gates (`^`) for your project — conditions that must be checked before actions proceed. Gates can check anything: authentication, feature flags, data prerequisites, system health, rate limits, or any other condition your project needs to verify.\n\nThis file lives at the **project root** — not inside `.paradigm/`. It is intentionally prominent because gate definitions should be easy to find, easy to audit, and impossible to overlook.\n\n## Structure\n\nA `portal.yaml` has two main sections: `gates` and `routes`.\n\n```yaml\nversion: \"1.0\"\n\ngates:\n  ^authenticated:\n    description: User must be logged in\n    check: req.user != null\n    type: auth\n    effects: []\n\n  ^project-member:\n    description: User must be a member of the project\n    check: project.members.includes(req.user.id)\n    type: role\n    requires: [^authenticated]\n    effects: []\n\n  ^project-admin:\n    description: User must be an admin of the project\n    check: project.admins.includes(req.user.id)\n    type: role\n    requires: [^authenticated]\n    effects: []\n\n  ^comment-author:\n    description: User must be the author of the comment\n    check: comment.authorId === req.user.id\n    type: ownership\n    requires: [^authenticated]\n    effects: []\n\nroutes:\n  \"GET /api/projects\": [^authenticated]\n  \"GET /api/projects/:id\": [^authenticated, ^project-member]\n  \"PUT /api/projects/:id\": [^authenticated, ^project-admin]\n  \"DELETE /api/projects/:id\": [^authenticated, ^project-admin]\n  \"POST /api/projects/:id/comments\": [^authenticated, ^project-member]\n  \"DELETE /api/comments/:id\": [^authenticated, ^comment-author]\n```\n\n## Gate Anatomy\n\nEach gate definition includes:\n\n- **description** — What the gate checks, in plain English.\n- **check** — A pseudo-code expression describing the authorization logic. This is documentation, not executable code — but it should be precise enough that a developer or AI agent can implement it.\n- **type** — The category of check: `auth`, `role`, `ownership`, `feature-flag`, `data-readiness`, `environment`, or any custom type that fits your domain.\n- **requires** — Other gates that must pass first. `^project-admin` requires `^authenticated`, meaning you must be logged in before the admin check runs.\n- **effects** — Side effects triggered when the gate passes. For example, passing `^first-login` might award an onboarding badge. Use `[]` if there are no effects.\n\n## Gate Chains\n\nGates can chain via the `requires` field. The route `\"PUT /api/projects/:id\": [^authenticated, ^project-admin]` ensures that:\n1. First, `^authenticated` verifies the user is logged in.\n2. Then, `^project-admin` checks that the user is an admin of the specific project.\n\nIf any gate in the chain fails, the action is blocked. How the failure manifests depends on your discipline: an API returns `403 Forbidden`, a mobile app might disable a button, a CLI exits with an error code.\n\n## When portal.yaml Is Required\n\nCreate `portal.yaml` whenever your project has conditions that must be checked before actions proceed:\n- Authentication or session validation\n- Role or permission checks\n- Feature flags or environment checks\n- Data prerequisites (cart not empty, profile complete)\n- Rate limits or system health checks\n- Any precondition that should be documented and auditable\n\nIf your project has no gates — no conditions that need to be verified before any action — then `portal.yaml` is not needed.\n\n## The Gate-First Workflow\n\nWhen adding functionality that requires preconditions, follow this workflow:\n\n1. **Ask Paradigm** — Call `paradigm_gates_for_route` with the route and method (for web APIs), or identify the conditions that must be checked.\n2. **Add to portal.yaml** — Define the gates and map them to the actions they protect.\n3. **Implement** — Write the code that enforces each gate check.\n4. **Test** — Verify that failing a gate blocks the action appropriately for your discipline.\n\nThis workflow ensures that conditions are defined *before* implementation, not bolted on after.",
+      "keyConcepts": [
+        "portal.yaml defines gates and maps them to conditions that must be checked",
+        "Lives at project root for visibility and auditability",
+        "Gates check any condition: auth, roles, data readiness, feature flags, system state",
+        "Gates chain via the 'requires' field",
+        "Effects field defines side effects triggered when a gate passes"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You are adding a new action that requires preconditions — only authenticated team admins should be able to invite users. What is the correct gate workflow?",
+          "choices": {
+            "A": "Write the handler code first, then add authorization if there is time",
+            "B": "Identify the required gates, add them to portal.yaml, implement the checks, test that failing a gate blocks the action",
+            "C": "Add a console.log that prints the user's role for manual verification",
+            "D": "Create a new .purpose file with a ^gate definition — portal.yaml is optional",
+            "E": "Add the route to navigator.yaml so AI agents know about it"
+          },
+          "correct": "B",
+          "explanation": "The Paradigm gate-first workflow is: (1) identify the required gates (paradigm_gates_for_route can suggest them for web routes), (2) define the gates in portal.yaml, (3) implement the gate checks in code, (4) test that failing a gate blocks the action. Conditions are defined before implementation."
+        },
+        {
+          "id": "q2",
+          "question": "What does the `requires` field on a gate definition do?",
+          "choices": {
+            "A": "Lists npm packages the gate depends on",
+            "B": "Specifies other gates that must pass before this gate is checked",
+            "C": "Defines the HTTP status code returned on failure",
+            "D": "Lists the source files that implement the gate",
+            "E": "Specifies environment variables needed for the check"
+          },
+          "correct": "B",
+          "explanation": "The requires field creates a gate chain. For example, ^project-admin requires [^authenticated] — the authentication check must pass before the admin role check is evaluated."
+        },
+        {
+          "id": "q3",
+          "question": "When is portal.yaml NOT needed?",
+          "choices": {
+            "A": "When the project has condition checks that must pass before actions proceed",
+            "B": "When the project has role-based access control",
+            "C": "When the application has no gates — no conditions need to be checked before any action",
+            "D": "When the project only has GET endpoints",
+            "E": "When the project uses a third-party auth service"
+          },
+          "correct": "C",
+          "explanation": "portal.yaml is needed whenever your application has gates — conditions that must be checked before actions proceed. If no action in the system requires a precondition check (authentication, feature flags, data readiness, etc.), then portal.yaml is not needed."
+        },
+        {
+          "id": "q4",
+          "question": "What is the `effects` field on a gate definition?",
+          "choices": {
+            "A": "The HTTP response body returned when the gate passes",
+            "B": "Side effects triggered when the gate is successfully passed",
+            "C": "The list of routes protected by this gate",
+            "D": "The reward given to the developer who implemented the gate",
+            "E": "A list of test cases for the gate"
+          },
+          "correct": "B",
+          "explanation": "Effects are side effects that trigger when a gate passes. For example, passing ^first-login might award an onboarding badge. If there are no side effects, use an empty array: effects: []."
+        }
+      ]
+    },
+    {
+      "id": "first-steps",
+      "title": "Your First Steps",
+      "content": "## Getting Started with Paradigm\n\nYou have learned the concepts — now it is time to put them into practice. This lesson walks through the concrete steps to initialize Paradigm in a new project and set up the foundational files.\n\n## Step 1: Initialize the Project\n\nRun `paradigm shift` in your project root. This creates the `.paradigm/` directory with a starter `config.yaml`:\n\n```bash\nparadigm shift\n```\n\nThe init command will prompt you for:\n- **Project name** — Used in config.yaml and as a display name\n- **Discipline** — `web`, `backend`, `fullstack`, `mobile`, `cli`, etc.\n- **Agent provider** — Which AI tool you use (`claude-code`, `cursor-cli`, etc.)\n\nAfter init, you will have:\n```\n.paradigm/\n  config.yaml\n  tags.yaml\n  agents.yaml\n```\n\n## Step 2: Create Your First Purpose File\n\nPick a source directory that contains meaningful code — perhaps your main feature module or your API routes. Create a `.purpose` file:\n\n```yaml\nname: User Authentication\ndescription: Handles user login, registration, and session management\ncontext:\n  - Uses bcrypt for password hashing\n  - Sessions stored in Redis with 24h TTL\n  - Rate limited to 5 login attempts per minute\n\ncomponents:\n  #auth-handler:\n    description: POST /auth/login and POST /auth/register endpoints\n    file: auth.ts\n    tags: [feature, auth]\n    signals: [\"!login-success\", \"!login-failed\"]\n    gates: [\"^authenticated\"]\n\n  #session-manager:\n    description: Creates and validates user sessions in Redis\n    file: session.ts\n    tags: [state, auth]\n```\n\nStart small. You do not need to document every file on day one. Begin with the most important module and expand over time.\n\n## Step 3: Set Up portal.yaml (If Needed)\n\nIf your application has any protected endpoints, create `portal.yaml` at the project root:\n\n```yaml\nversion: \"1.0\"\n\ngates:\n  ^authenticated:\n    description: User must have a valid session\n    check: req.session.userId != null\n    type: auth\n    effects: []\n\nroutes:\n  \"POST /auth/login\": []\n  \"POST /auth/register\": []\n  \"GET /api/profile\": [^authenticated]\n  \"PUT /api/profile\": [^authenticated]\n```\n\nNote that public routes like login and register have empty gate arrays `[]` — they are listed to document that they are intentionally unprotected.\n\n## Step 4: Run Your First Scan\n\nGenerate the navigator map so AI agents can find symbols quickly:\n\n```bash\nparadigm scan\n```\n\nThis reads all `.purpose` files and `portal.yaml`, builds a symbol index, and writes `navigator.yaml`.\n\n## Step 5: The Orientation Protocol\n\nWhen starting a new AI session (or when an AI agent first encounters your project), the agent should follow this protocol:\n\n1. **Call `paradigm_status`** — Gets a project overview: symbol counts, health, available features.\n2. **Read `config.yaml`** — Understands the discipline, conventions, and preferences.\n3. **Check `portal.yaml`** — Knows about security gates if they exist.\n4. **Use `paradigm_navigate`** — Finds the relevant code area for the current task.\n\nThis four-step orientation takes ~500 tokens total and gives the agent everything it needs to work effectively.\n\n## Step 6: Iterate\n\nParadigm grows with your project. As you add features:\n- Create `.purpose` files for new directories\n- Add gates to `portal.yaml` for new protected routes\n- Record team decisions in `.paradigm/wisdom/decisions.yaml`\n- Log antipatterns in `.paradigm/wisdom/antipatterns.yaml`\n- Run `paradigm scan` periodically to rebuild the navigator\n\n## Common Pitfalls\n\n- **Do not document everything on day one.** Start with the most critical module and expand.\n- **Do not skip portal.yaml.** If you have any gates or preconditions, you need it.\n- **Do not forget to re-scan.** After adding new `.purpose` files, run `paradigm scan` to update the navigator.\n- **Do not put .purpose files in .paradigm/.** They live alongside source code.\n- **Do not use raw console.log.** Use the Paradigm logger from the start to build good habits.",
+      "keyConcepts": [
+        "paradigm shift creates the .paradigm/ directory",
+        "Start with one .purpose file in your most important module",
+        "Create portal.yaml if your project has gates (conditions to check)",
+        "paradigm scan generates navigator.yaml",
+        "The orientation protocol: status, config, portal, navigate"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the correct order for the AI agent orientation protocol?",
+          "choices": {
+            "A": "Read source code, write tests, check coverage, deploy",
+            "B": "Call paradigm_status, read config.yaml, check portal.yaml, use paradigm_navigate",
+            "C": "Run paradigm scan, edit navigator.yaml, read .purpose files, commit changes",
+            "D": "Read package.json, install dependencies, run build, check logs",
+            "E": "Create .purpose files, define gates, emit signals, validate flows"
+          },
+          "correct": "B",
+          "explanation": "The orientation protocol is: (1) paradigm_status for project overview, (2) read config.yaml for conventions, (3) check portal.yaml for security gates, (4) paradigm_navigate to find the relevant code area. This takes ~500 tokens and gives the agent full context."
+        },
+        {
+          "id": "q2",
+          "question": "After creating new .purpose files, what command should you run?",
+          "choices": {
+            "A": "paradigm shift",
+            "B": "paradigm validate",
+            "C": "paradigm scan",
+            "D": "paradigm deploy",
+            "E": "paradigm build"
+          },
+          "correct": "C",
+          "explanation": "paradigm scan reads all .purpose files and portal.yaml, builds the symbol index, and regenerates navigator.yaml. Without rescanning, AI agents will not find the newly defined symbols through navigation tools."
+        },
+        {
+          "id": "q3",
+          "question": "In portal.yaml, what does an empty gate array on a route mean?",
+          "choices": {
+            "A": "The route is disabled and will return 404",
+            "B": "The route requires all gates to pass",
+            "C": "The route is intentionally unprotected — documented as public",
+            "D": "The route has not been configured yet and will return 500",
+            "E": "The route inherits gates from its parent path"
+          },
+          "correct": "C",
+          "explanation": "An empty gate array [] means the route is intentionally public. Listing it in portal.yaml with no gates documents the decision that this route should be accessible without authentication — it is not an oversight."
+        },
+        {
+          "id": "q4",
+          "question": "Which of these is a common pitfall when starting with Paradigm?",
+          "choices": {
+            "A": "Creating too many .purpose files on day one instead of starting small",
+            "B": "Using the Paradigm logger instead of console.log",
+            "C": "Running paradigm scan after adding new purpose files",
+            "D": "Putting portal.yaml at the project root",
+            "E": "Using tags to classify components"
+          },
+          "correct": "A",
+          "explanation": "A common pitfall is trying to document everything on day one. The recommended approach is to start with the most critical module, create one .purpose file, and expand incrementally as the project grows."
+        }
+      ]
+    }
+  ]
+}

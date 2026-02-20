@@ -1140,6 +1140,70 @@ async function handlePortalAddRoute(
   });
 }
 
+// --- Clarification Marker Scanner ---
+
+const CLARIFICATION_REGEX = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
+
+/**
+ * Scan a parsed .purpose file for [NEEDS CLARIFICATION: ...] markers in description fields.
+ * Returns an array of warning issues for each marker found.
+ */
+function scanClarificationMarkers(
+  data: PurposeFile,
+  filePath: string,
+): Array<{ type: string; message: string; path?: string }> {
+  const issues: Array<{ type: string; message: string; path?: string }> = [];
+
+  function checkField(value: unknown, fieldPath: string) {
+    if (typeof value === 'string') {
+      const matches = value.match(CLARIFICATION_REGEX);
+      if (matches) {
+        for (const match of matches) {
+          issues.push({
+            type: 'warning',
+            message: `Clarification needed: ${match}`,
+            path: fieldPath,
+          });
+        }
+      }
+    }
+  }
+
+  // Top-level description
+  checkField(data.description, 'description');
+
+  // Scan all sections that contain description fields
+  const sections: Array<{ key: string; items?: Record<string, { description?: string }> | unknown }> = [
+    { key: 'components', items: data.components },
+    { key: 'features', items: data.features },
+    { key: 'gates', items: data.gates },
+    { key: 'signals', items: data.signals },
+    { key: 'aspects', items: data.aspects },
+  ];
+
+  for (const section of sections) {
+    if (section.items && typeof section.items === 'object') {
+      for (const [id, item] of Object.entries(section.items as Record<string, Record<string, unknown>>)) {
+        if (item && typeof item.description === 'string') {
+          checkField(item.description, `${section.key}.${id}.description`);
+        }
+      }
+    }
+  }
+
+  // Scan flows (may be record or array format)
+  if (data.flows && typeof data.flows === 'object') {
+    const flowEntries = Array.isArray(data.flows) ? [] : Object.entries(data.flows);
+    for (const [id, flow] of flowEntries) {
+      if (flow && typeof (flow as Record<string, unknown>).description === 'string') {
+        checkField((flow as Record<string, unknown>).description, `flows.${id}.description`);
+      }
+    }
+  }
+
+  return issues;
+}
+
 // --- 13. paradigm_purpose_validate ---
 
 async function handleValidate(
@@ -1186,6 +1250,10 @@ async function handleValidate(
         }
       }
 
+      // Check for clarification markers
+      const clarificationIssues = scanClarificationMarkers(parseResult.data, filePath);
+      validation.issues.push(...clarificationIssues);
+
       results.push({
         file: filePath,
         valid: validation.valid,
@@ -1222,6 +1290,10 @@ async function handleValidate(
           }
         }
       }
+
+      // Check for clarification markers
+      const clarificationIssues = scanClarificationMarkers(parseResult.data, filePath);
+      validation.issues.push(...clarificationIssues);
 
       results.push({
         file: filePath,

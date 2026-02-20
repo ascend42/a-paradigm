@@ -26,6 +26,8 @@ out/
 .paradigm/tasks/
 .paradigm/team-state.yaml
 .paradigm/handoffs/
+.paradigm/session-breadcrumbs.json
+.paradigm/session-checkpoint.json
 
 # BUT keep everything in examples/ (hydrated reference)
 !examples/**
@@ -121,6 +123,9 @@ $RECYCLE.BIN/
 # MCP config (contains local paths)
 .cursor/mcp.json
 .mcp.json
+
+# Private research
+/research/
 
 # Local planning and IDE settings
 /.plans/

@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-02-18T19:50:10.747Z",
+  "flows": {
+    "$ide-sync-flow": {
+      "id": "$ide-sync-flow",
+      "description": "Sync .paradigm/ to IDE instruction files",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Detect target IDE from project files"
+        },
+        {
+          "id": "step-2",
+          "action": "Load config, specs, and docs"
+        },
+        {
+          "id": "step-3",
+          "action": "Generate IDE-specific output files"
+        },
+        {
+          "id": "step-4",
+          "action": "Write files to appropriate locations"
+        }
+      ],
+      "definedIn": "packages/paradigm/src/core/ide-adapters/.purpose"
+    },
+    "$agent-orchestration-flow": {
+      "id": "$agent-orchestration-flow",
+      "description": "Orchestrate a multi-agent task from classification through execution",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Classify task complexity and match agent team"
+        },
+        {
+          "id": "step-2",
+          "action": "Check token/cost budget availability"
+        },
+        {
+          "id": "step-3",
+          "action": "Spawn agents in parallel where possible"
+        },
+        {
+          "id": "step-4",
+          "action": "Collect results and handle handoffs"
+        },
+        {
+          "id": "step-5",
+          "action": "Log execution and costs"
+        }
+      ],
+      "definedIn": "packages/paradigm/src/core/.purpose"
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Display intro, rules, and name input"
+        },
+        {
+          "id": "step-2",
+          "action": "Start 45-minute countdown"
+        },
+        {
+          "id": "step-3",
+          "action": "Present 50 shuffled questions (with passage blocks for grouped questions)"
+        },
+        {
+          "id": "step-4",
+          "action": "Calculate score on submit or time-up"
+        },
+        {
+          "id": "step-5",
+          "action": "Persist certificate to LocalStorage"
+        },
+        {
+          "id": "step-6",
+          "action": "Display printable certificate if passed"
+        }
+      ],
+      "definedIn": "packages/university/.purpose"
+    },
+    "$purpose-parsing": {
+      "id": "$purpose-parsing",
+      "description": "Parse a .purpose file from raw YAML into validated structured data",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Read YAML file and parse with js-yaml"
+        },
+        {
+          "id": "step-2",
+          "action": "Validate parsed data against PurposeFileSchema"
+        },
+        {
+          "id": "step-3",
+          "action": "Extract components, gates, signals, flows, aspects from validated data"
+        },
+        {
+          "id": "step-4",
+          "action": "Return structured PurposeFile or validation errors"
+        }
+      ],
+      "definedIn": "packages/purpose/core/.purpose"
+    },
+    "$symbol-aggregation": {
+      "id": "$symbol-aggregation",
+      "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Find all .purpose files via glob"
+        },
+        {
+          "id": "step-2",
+          "action": "Parse each file with yaml + Zod validation"
+        },
+        {
+          "id": "step-3",
+          "action": "Extract components, gates, signals, flows, aspects"
+        },
+        {
+          "id": "step-4",
+          "action": "Build searchable in-memory index"
+        },
+        {
+          "id": "step-5",
+          "action": "Resolve cross-file symbol references"
+        },
+        {
+          "id": "step-6",
+          "action": "Build relationship graph"
+        }
+      ],
+      "definedIn": "packages/premise/core/.purpose"
+    },
+    "$portal-validation-flow": {
+      "id": "$portal-validation-flow",
+      "description": "Validate portal.yaml gate configuration and route compliance",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Find and parse portal.yaml via glob"
+        },
+        {
+          "id": "step-2",
+          "action": "Validate gate definitions against Zod schemas"
+        },
+        {
+          "id": "step-3",
+          "action": "Check for circular dependencies in gate requires"
+        },
+        {
+          "id": "step-4",
+          "action": "Validate routes reference declared gates"
+        },
+        {
+          "id": "step-5",
+          "action": "Report issues and compliance status"
+        }
+      ],
+      "definedIn": "packages/portal/core/.purpose"
+    }
+  },
+  "symbolToFlows": {}
+}

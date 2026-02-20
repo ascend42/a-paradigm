@@ -115,6 +115,53 @@ Get current session statistics.
 }
 ```
 
+### paradigm_session_recover
+
+Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before.
+
+**Parameters:** None
+
+**Returns (when breadcrumbs exist):**
+```json
+{
+  "found": true,
+  "previousSession": {
+    "sessionId": "s1a2b3c",
+    "startTime": "2026-02-14T10:00:00Z",
+    "lastActivity": "2026-02-14T11:30:00Z",
+    "age": "2 hours ago"
+  },
+  "context": {
+    "symbolsModified": ["#auth-handler", "^authenticated"],
+    "filesExplored": ["src/middleware/auth.ts"]
+  },
+  "recentActions": [
+    {
+      "time": "2026-02-14T11:28:00Z",
+      "action": "tool-call",
+      "tool": "paradigm_ripple",
+      "symbol": "#auth-handler",
+      "summary": "Ripple analysis on #auth-handler"
+    }
+  ],
+  "suggestion": "Last work involved #auth-handler. Consider checking its current state with paradigm_ripple."
+}
+```
+
+**Returns (when no breadcrumbs):**
+```json
+{
+  "found": false,
+  "message": "No previous session breadcrumbs found.",
+  "tip": "Session breadcrumbs are saved to .paradigm/session-breadcrumbs.json during active sessions."
+}
+```
+
+**Notes:**
+- Breadcrumbs are automatically recorded for every MCP tool call during a session
+- The breadcrumb file (`.paradigm/session-breadcrumbs.json`) persists between sessions
+- Up to 50 breadcrumbs are retained (oldest trimmed automatically)
+
 ---
 
 ## MCP Resources
@@ -130,6 +177,20 @@ Markdown guide for when and how to perform handoffs.
 ---
 
 ## AI Agent Protocol
+
+### Session Recovery
+
+At the start of a new session, call `paradigm_session_recover` to load previous session breadcrumbs:
+
+```
+1. Call paradigm_session_recover
+2. If found: true:
+   - Review recentActions for context
+   - Note symbolsModified and filesExplored
+   - Follow the suggestion for next steps
+3. If found: false:
+   - No previous session — start fresh with paradigm_status
+```
 
 ### Periodic Checks
 

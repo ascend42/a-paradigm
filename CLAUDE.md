@@ -4,8 +4,10 @@
 
 ## Project Overview
 
-This project uses Paradigm for structured AI-assisted development.
+This project uses Paradigm v2 for structured AI-assisted development.
 All context, symbols, and specifications live in the .paradigm/ directory.
+
+v2 uses 5 operational symbols (#, $, ^, !, ~) plus a tag bank for classification.
 
 
 ## Quick Orientation
@@ -17,6 +19,21 @@ All context, symbols, and specifications live in the .paradigm/ directory.
 .cursorrules           → IDE instructions (if using Cursor)
 portal.yaml            → Security/auth definitions
 ```
+
+## Terminal Syntax
+
+This project runs on **macOS**. Use appropriate syntax:
+
+| Operation | Unix Syntax |
+|-----------|-------------|
+| Chain commands | `cmd1 && cmd2` (stop on error) or `cmd1 ; cmd2` (always continue) |
+| Path separator | `/` (forward slash) |
+| Environment vars | `$VAR` or `${VAR}` |
+| Null device | `/dev/null` |
+| List files | `ls` |
+| Remove files | `rm` |
+
+**IMPORTANT:** Do NOT use Windows-style commands like `dir`, `del`, or `%VAR%`.
 
 ## Agent Onboarding
 
@@ -30,51 +47,21 @@ portal.yaml            → Security/auth definitions
 2. `paradigm_ripple` to check impact
 3. `paradigm_history_fragility` for stability warnings
 
-## Symbol System v2
+## Symbol System
 
-Paradigm v2 uses **5 operational symbols** for code structure + a **tag bank** for classification.
+Use these prefixes in documentation and commits:
 
-### Operational Symbols
-
-| Symbol | Name | Purpose | Example |
-|--------|------|---------|---------|
-| `#` | Component | Any documented code unit | `#PaymentService`, `#login-handler` |
-| `$` | Flow | Multi-step process with sequence | `$checkout-flow`, `$onboarding` |
-| `^` | Gate | Authorization checkpoint | `^authenticated`, `^admin-only` |
-| `!` | Signal | Event for side effects | `!payment-completed`, `!login-failed` |
-| `~` | Aspect | Rule with required code anchor | `~audit-required`, `~rate-limited` |
-
-### Tag Bank (Classification)
-
-Instead of symbol prefixes for classification, use tags in brackets:
-
-| Old Symbol | New Approach | Example |
-|------------|--------------|---------|
-| `@feature` | `[feature]` tag on `#` | `#checkout` with `tags: [feature, critical]` |
-| `&integration` | `[integration]` tag on `#` | `#stripe-service` with `tags: [integration, stripe]` |
-| `%state` | `[state]` tag on `#` | `#user-store` with `tags: [state]` |
-| `?idea` | `[idea]` tag on any symbol | Any symbol with `tags: [idea]` |
-| `~deprecated` | `[deprecated]` tag | Any symbol with `tags: [deprecated]` |
-
-Tags are defined in `.paradigm/tags.yaml` with core, project, and suggested sections.
-
-### Anchors (Required for Aspects)
-
-Aspects (`~`) must have code anchors pointing to enforcement code:
-
-```yaml
-~audit-required:
-  description: All financial operations must log
-  tags: [compliance, security]
-  anchors:  # REQUIRED for aspects
-    - src/middleware/audit.ts:15-35
-    - src/decorators/auditable.ts:1-20
-  applies-to: ["#*Service"]
-```
-
-Anchor format: `file.ts:15` (single line), `file.ts:15-20` (range), `file.ts:15,25,30` (multiple)
+| Symbol | Meaning | Example |
+|--------|---------|---------|
+| `#` | Component | `#PaymentService` |
+| `$` | Flow | `$checkout-flow` |
+| `^` | Gate | `^authenticated` |
+| `!` | Signal | `!login-success` |
+| `~` | Aspect | `~audit-required` |
 
 ## First Actions for New Sessions
+
+**Resuming a session:** Call `paradigm_session_recover` for previous session context.
 
 1. **Orient:** Call `paradigm_status` to see project overview and available symbols
 2. **Verify:** Check `.paradigm/config.yaml` for discipline and conventions
@@ -182,8 +169,13 @@ Before exploring this codebase:
 - `paradigm_navigate({ intent: "find", target: "#checkout" })` - locate symbol
 - `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area
 - `paradigm_navigate({ intent: "context", task: "add login" })` - task context
-- `paradigm_tags({ action: "list" })` - view available tags
-- `paradigm_aspect_check({ aspect: "~audit-required" })` - verify aspect anchors
+
+### PM Governance (Before/After Tasks)
+
+| When | Tool | Purpose |
+|------|------|---------|
+| Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |
+| Finishing any task | `paradigm_pm_postflight` | Check for violations: missing .purpose, missing gates |
 
 ## Context Monitoring Protocol
 
@@ -199,70 +191,32 @@ Before exploring this codebase:
 2. User runs: `paradigm team handoff --to <agent> --summary "..."`
 3. New session accepts with: `paradigm team accept <id>`
 
-## Multi-Agent Orchestration
+## Session Checkpoints
 
-For complex tasks, use orchestration to get the right agents and avoid wasted tokens.
+**Auto-recovery**: Recovery data is automatically surfaced on your first Paradigm tool call — no action needed to receive it.
 
-### When to Orchestrate
+Save checkpoints when transitioning between workflow phases to enable crash recovery:
 
-**Call `paradigm_orchestrate_inline` with mode="plan" BEFORE implementing when:**
-- Task affects 3+ files
-- Task involves security/auth AND implementation
-- Task mentions multiple features or symbols
-- Building a new feature end-to-end
+| Phase | Trigger | What to Capture |
+|-------|---------|-----------------|
+| `planning` | After reading requirements / before coding | Plan, approach, key decisions |
+| `implementing` | After starting code changes | Modified files, symbols touched, decisions made |
+| `validating` | After implementation, before tests/review | All modified files, test plan |
+| `complete` | Task finished | Summary, final file list |
+
+### Usage
 
 ```
-paradigm_orchestrate_inline({ task: "Add user authentication with JWT", mode: "plan" })
+paradigm_session_checkpoint({
+  phase: "implementing",
+  context: "Adding JWT auth middleware to /api/projects routes",
+  modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],
+  symbolsTouched: ["^authenticated", "#project-routes"],
+  decisions: ["Using RS256 for JWT signing", "Storing refresh tokens in httpOnly cookies"]
+})
 ```
 
-This returns the right agent team, cost estimate, and execution plan. Then call with mode="execute" to get full prompts.
-
-### CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `paradigm team spawn <agent> --task "..."` | Spawn a single agent |
-| `paradigm team orchestrate "task"` | AI orchestrator coordinates agents |
-| `paradigm team orchestrate "task" --solo` | Single Claude mode (no splitting) |
-| `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
-| `paradigm team agents suggest "task"` | Suggest agents based on task triggers |
-| `paradigm team providers` | Show available providers |
-| `paradigm team providers --set X` | Set preferred provider |
-| `paradigm team models` | View/configure agent model assignments |
-| `paradigm team models --refresh` | Re-discover models from environment |
-
-### Provider Cascade
-
-Providers are tried in order until one is available:
-1. `claude` - Anthropic API (requires ANTHROPIC_API_KEY)
-2. `claude-code-teams` - Claude Code Agent Teams (experimental, parallel)
-3. `claude-code` - Claude Code Task tool (Max subscription)
-4. `cursor-cli` - Cursor agent CLI (auto-detected in Cursor IDE)
-5. `claude-cli` - Spawn claude CLI processes
-6. `manual` - File-based handoffs (always available)
-
-Configure via:
-- Environment: `PARADIGM_AGENT_PROVIDER=claude-code`
-- Config: `agent-provider: claude-code` in `.paradigm/config.yaml`
-- CLI: `paradigm team providers --set claude-code`
-
-### Facets (Agent Roles)
-
-Each agent has role-specific configuration in `.paradigm/agents.yaml`:
-- `defaultModel`: opus, sonnet, or haiku
-- `context.include/exclude`: Files to load for that role
-- `limits.maxTokens`: Budget per agent
-- `protocol.relay`: How agent reports results
-
-### Model Selection
-
-Models are configured per agent based on task complexity:
-- **architect/security**: `opus` (complex reasoning)
-- **reviewer**: `sonnet` (balanced critique)
-- **builder/tester**: `haiku` (fast, cost-effective)
-
-Run `paradigm team models` to view/configure. In Cursor and interactive environments,
-`paradigm team init` prompts for model selection from all available providers.
+Keep it lightweight: `phase` + `context` are required, everything else is optional.
 
 ## MCP Workflow Protocol
 
@@ -275,8 +229,11 @@ Run `paradigm team models` to view/configure. In Cursor and interactive environm
 | Checking dependencies | `paradigm_related` for connections |
 | Getting oriented | `paradigm_status` for project overview |
 | **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
+| **Validating changes** | `paradigm_flows_affected` for flow impact |
+| **Getting test data** | `paradigm_test_fixtures` for fixtures |
 | **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
+| **Finishing work session** | `paradigm_reindex` to rebuild static index |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -335,20 +292,19 @@ Reference content is served via MCP resources instead of being stored locally:
 - `lib/*`
 - `packages/*`
 
-## Paradigm Logging (v2)
+## Paradigm Logging
 
 **IMPORTANT:** Use the Paradigm logger instead of raw console.log/print.
 
 ```
-// Use this pattern (v2 - all code units use #component):
+// Use this pattern:
 log.component('#login-handler').info('Starting login', { email });
 log.component('#database').debug('Query executed', { duration });
 log.gate('^authenticated').warn('Access denied', { userId });
 log.signal('!login-success').info('User authenticated');
-log.aspect('~audit-required').debug('Audit logged', { operation });
 ```
 
-### Symbol Mapping by Directory (v2)
+### Symbol Mapping by Directory
 
 | Directory | Symbol | Logger Method |
 |-----------|--------|---------------|
@@ -357,6 +313,7 @@ log.aspect('~audit-required').debug('Audit logged', { operation });
 | `api/**` | `#` | `log.component()` |
 | `endpoints/**` | `#` | `log.component()` |
 | `commands/**` | `#` | `log.component()` |
+| `models/**` | `#` | `log.component()` |
 | `components/**` | `#` | `log.component()` |
 | `lib/**` | `#` | `log.component()` |
 | `utils/**` | `#` | `log.component()` |
@@ -385,29 +342,123 @@ log.aspect('~audit-required').debug('Audit logged', { operation });
 | `pipelines/**` | `$` | `log.flow()` |
 | `aspects/**` | `~` | `log.aspect()` |
 | `rules/**` | `~` | `log.aspect()` |
+| `constraints/**` | `~` | `log.aspect()` |
 
 See `.paradigm/specs/logger.md` for full specification.
 
 ## Conventions
 
-- Use kebab-case for all symbol IDs (feature-name, not featureName)
+- Use kebab-case for symbol IDs (#feature-name, not #featureName)
 - Use PascalCase for class-like components (#PaymentService, #UserProfile)
 - Document flows when logic spans 3+ components
-- Reference related items using symbol prefixes (# $ ^ ! ~) and tags ([feature], [integration])
+- Reference related items using symbol prefixes (# $ ^ ! ~) and tags
 - Add descriptions to all components and gates
-- Update .purpose files when changing feature behavior
+- Update .purpose files when changing behavior
 - Keep gates minimal - one responsibility per gate
-- Use signals for side effects, not direct state mutations
-- Aspects (`~`) MUST have code anchors - no unanchored aspects allowed
+- Use signals for side effects, not direct mutations
+- Aspects (~) MUST have code anchors - no unanchored aspects
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
 
 ## When to Update Paradigm Files
 
-- When adding a feature, create/update the nearest .purpose file with `#component` and `[feature]` tag
-- When adding authorization, update portal.yaml with `^gate`
-- When exploring ideas, add `[idea]` tag to the symbol
-- When adding cross-cutting rules, create `~aspect` with required code anchors
+- When adding a feature, create/update .purpose with #name and tags: [feature]
+- When adding authorization, update portal.yaml with ^gate
+- When adding cross-cutting rules, create ~aspect with required anchors
+- When exploring ideas, add [idea] tag to the symbol
 - Always update references when renaming symbols
+
+## Multi-Agent Orchestration
+
+Paradigm supports multi-agent orchestration via `paradigm team` commands:
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `paradigm team spawn <agent> --task "..."` | Spawn a single agent |
+| `paradigm team orchestrate "task"` | AI orchestrator coordinates agents |
+| `paradigm team orchestrate "task" --solo` | Single Claude mode (no splitting) |
+| `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
+| `paradigm team agents suggest "task"` | Suggest agents based on task triggers |
+| `paradigm team providers` | Show available providers |
+| `paradigm team providers --set X` | Set preferred provider |
+| `paradigm team models` | View/configure agent model assignments |
+| `paradigm team models --refresh` | Re-discover models from environment |
+
+### Agent Suggestions
+
+Before orchestrating, you can preview which agents will be involved:
+
+```bash
+paradigm team agents suggest "Add user authentication with JWT"
+```
+
+Or via MCP (returns `suggestedAgents` in plan mode):
+```
+paradigm_orchestrate_inline({ task: "...", mode: "plan" })
+```
+
+## Flow-First Development
+
+**Define flows BEFORE implementing features that span multiple steps.**
+
+### When to Define Flows
+
+Create a flow ($symbol) when your feature:
+- Has multiple authorization gates
+- Spans multiple components or services
+- Emits events that trigger other actions
+- Needs clear documentation of the "happy path"
+
+### Flow Definition
+
+Define flows in `.paradigm/flows.yaml`:
+
+```yaml
+version: "1.0"
+flows:
+  $task-creation:
+    name: Task Creation Flow
+    trigger: "POST /api/tasks"
+    steps:
+      - type: gate
+        symbol: ^authenticated
+      - type: gate
+        symbol: ^project-member
+      - type: action
+        symbol: "#create-task"
+      - type: signal
+        symbol: "!task-created"
+    successSignal: "!task-created"
+```
+
+### Flow-First Protocol
+
+1. **Define the flow first** - What gates, actions, and signals?
+2. **Validate** - Call `paradigm_flow_validate` to check completeness
+3. **Implement** - Each step becomes a clear implementation target
+
+## Flow Validation
+
+**Validate flows before and after implementing:**
+
+```
+# Validate specific flow
+paradigm_flow_validate({ flowId: "$task-creation" })
+
+# Validate all flows
+paradigm_flow_validate({})
+
+# Deep check (verify implementation exists)
+paradigm_flow_validate({ checkImplementation: true })
+```
+
+**After modifying symbols, check affected flows:**
+
+```
+# Check what flows are affected by #tasks
+paradigm_flows_affected({ symbol: "#tasks" })
+```
 
 ## Commit Messages
 
@@ -442,6 +493,23 @@ feat(#payment-form): add Apple Pay support
 Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
 
+## Automatic Enforcement (Claude Code Hooks)
+
+This project uses Claude Code hooks for paradigm compliance. These are installed
+automatically via `paradigm shift` or `paradigm hooks install`.
+
+| Hook | Type | Behavior |
+|------|------|----------|
+| **Stop hook** | Stop | **BLOCKS** you from finishing if source files were modified without .purpose updates |
+| **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
+| **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
+
+**If the Stop hook blocks you:**
+1. Update the nearest `.purpose` file for each modified code area
+2. Update `portal.yaml` if you added routes or gates
+3. Call `paradigm_reindex` to rebuild the static index
+4. Then finish your session
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -451,24 +519,23 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 | Empty search results | Check that .purpose files define symbols |
 | High context usage | Call `paradigm_handoff_prepare` |
 | Gate suggestions missing | Check that portal.yaml exists and defines gates |
+| "Flow index not found" | Run `paradigm scan` and add flows to .purpose files |
+| "Fixtures not found" | Create `.paradigm/fixtures.yaml` with test data |
 
 ## Maintaining Paradigm Files
 
-**After completing code changes, update Paradigm files if needed:**
+**You MUST update Paradigm files when making code changes. The Stop hook will block you if you don't:**
 
 | Change Type | Action Required |
 |-------------|-----------------|
-| Add feature | Create `.purpose` with `#name` and `tags: [feature]` |
-| Add integration | Create `.purpose` with `#name` and `tags: [integration, service-name]` |
-| Add ANY protected route | Create/update `portal.yaml` with `^gates` |
+| Add feature | Create `.purpose` in feature directory |
+| Add ANY protected route | Create/update `portal.yaml` with gates |
 | Add ownership check | Add `^{resource}-owner` gate to `portal.yaml` |
 | Add role-based access | Add `^{role}` gate to `portal.yaml` |
-| Add signal/event | Add `!signal` to emitting component's `.purpose` |
+| Add signal/event | Add to emitting feature's `.purpose` |
 | Add multi-step flow | Document as `$flow` in `.purpose` |
-| Add cross-cutting rule | Create `~aspect` with required anchors |
 | Rename/delete symbol | Update all `.purpose` references |
 | Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |
-| Propose new tag | Add to `suggested` in `.paradigm/tags.yaml` |
 
 **CRITICAL: Authorization requires portal.yaml**
 

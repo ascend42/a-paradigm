@@ -15,6 +15,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import {
+  loadGlobalAntipatterns,
+  loadGlobalDecisions,
+  loadGlobalPreferences,
+} from './global-store.js';
 
 /** TTL for wisdom cache (30 seconds) */
 const WISDOM_CACHE_TTL_MS = 30 * 1000;
@@ -66,33 +71,104 @@ export async function loadWisdomContext(rootDir: string): Promise<WisdomContext>
 }
 
 /**
- * Load wisdom context without caching (internal)
+ * Load wisdom context without caching (internal).
+ * Merges global wisdom (~/.paradigm/wisdom/) with local project wisdom.
+ * Deduplicates by ID — local wins on conflict.
  */
 async function loadWisdomContextFresh(rootDir: string): Promise<WisdomContext> {
   const wisdomPath = path.join(rootDir, WISDOM_DIR);
+  const localExists = fs.existsSync(wisdomPath);
 
-  if (!fs.existsSync(wisdomPath)) {
-    return {
-      preferences: null,
-      antipatterns: [],
-      decisions: [],
-      expertise: null,
+  // Load local wisdom
+  const [localPrefs, localAntipatterns, expertise, localDecisions] = localExists
+    ? await Promise.all([
+        loadPreferences(wisdomPath),
+        loadAntipatterns(wisdomPath),
+        loadExpertise(wisdomPath),
+        loadDecisions(wisdomPath),
+      ])
+    : [null, [] as WisdomAntipattern[], null, [] as WisdomDecision[]];
+
+  // Load global wisdom (best-effort)
+  let globalAntipatterns: WisdomAntipattern[] = [];
+  let globalDecisions: WisdomDecision[] = [];
+  let globalPrefs: WisdomPreferences | null = null;
+  try {
+    globalAntipatterns = loadGlobalAntipatterns();
+    globalDecisions = loadGlobalDecisions();
+    globalPrefs = loadGlobalPreferences();
+  } catch {
+    // Global wisdom is optional
+  }
+
+  // Merge antipatterns: local wins on duplicate ID, add scope tag
+  const localApIds = new Set(localAntipatterns.map(a => a.id));
+  const mergedAntipatterns: ScopedAntipattern[] = localAntipatterns.map(a => ({
+    ...a,
+    scope: 'project' as const,
+  }));
+  for (const ga of globalAntipatterns) {
+    if (!localApIds.has(ga.id)) {
+      mergedAntipatterns.push({ ...ga, scope: 'global' as const });
+    }
+  }
+
+  // Merge decisions: local wins on duplicate ID, add scope tag
+  const localDecIds = new Set(localDecisions.map(d => d.id));
+  const mergedDecisions: ScopedDecision[] = localDecisions.map(d => ({
+    ...d,
+    scope: 'project' as const,
+  }));
+  for (const gd of globalDecisions) {
+    if (!localDecIds.has(gd.id)) {
+      mergedDecisions.push({ ...gd, scope: 'global' as const });
+    }
+  }
+
+  // Merge preferences: global as base, local overrides per-symbol
+  let mergedPrefs = localPrefs;
+  if (globalPrefs && !localPrefs) {
+    mergedPrefs = globalPrefs;
+  } else if (globalPrefs && localPrefs) {
+    // Local preferences take priority; merge global by_symbol entries that don't exist locally
+    const mergedBySymbol = { ...localPrefs.by_symbol };
+    if (globalPrefs.by_symbol) {
+      for (const [sym, pref] of Object.entries(globalPrefs.by_symbol)) {
+        if (!mergedBySymbol[sym]) {
+          mergedBySymbol[sym] = pref;
+        }
+      }
+    }
+    mergedPrefs = {
+      ...localPrefs,
+      by_symbol: mergedBySymbol,
+      global: {
+        ...globalPrefs.global,
+        ...localPrefs.global,
+      },
     };
   }
 
-  const [preferences, antipatterns, expertise, decisions] = await Promise.all([
-    loadPreferences(wisdomPath),
-    loadAntipatterns(wisdomPath),
-    loadExpertise(wisdomPath),
-    loadDecisions(wisdomPath),
-  ]);
-
   return {
-    preferences,
-    antipatterns,
-    decisions,
+    preferences: mergedPrefs,
+    antipatterns: mergedAntipatterns,
+    decisions: mergedDecisions,
     expertise,
   };
+}
+
+/**
+ * Antipattern with scope provenance
+ */
+export interface ScopedAntipattern extends WisdomAntipattern {
+  scope: 'project' | 'global';
+}
+
+/**
+ * Decision with scope provenance
+ */
+export interface ScopedDecision extends WisdomDecision {
+  scope: 'project' | 'global';
 }
 
 /**

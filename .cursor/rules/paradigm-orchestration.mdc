@@ -1,8 +1,22 @@
 ---
-description: Paradigm multi-agent orchestration protocol
-alwaysApply: true
+description: Multi-agent orchestration - use when task affects 3+ files, involves security AND implementation, or spans multiple features. Call paradigm_orchestrate_inline for planning.
 ---
 # Paradigm Orchestration Protocol
+
+## Terminal Syntax (macOS)
+
+This project runs on **macOS**. Use appropriate syntax:
+
+| Operation | Unix Syntax |
+|-----------|-------------|
+| Chain commands | `cmd1 && cmd2` (stop on error) or `cmd1 ; cmd2` (always continue) |
+| Path separator | `/` (forward slash) |
+| Environment vars | `$VAR` or `${VAR}` |
+| Null device | `/dev/null` |
+| List files | `ls` |
+| Remove files | `rm` |
+
+**IMPORTANT:** Do NOT use Windows-style commands like `dir`, `del`, or `%VAR%`.
 
 ## CRITICAL: When to Use Orchestration
 
@@ -20,22 +34,28 @@ alwaysApply: true
    - Check if parallel execution is possible
 
 2. **Execute:** `paradigm_orchestrate_inline({ task: "...", mode: "execute" })`
-   - Get full prompts for each agent stage
+   - Get full prompts and execution strategy
    - Note which stages can run in parallel
 
-3. **Spawn subagents:** Use Task tool for each agent prompt
-   - Parallel stages: Launch multiple Task calls in one message
-   - Sequential stages: Wait for completion before next stage
+3. **Follow the plan sequentially:**
+   - For each stage/agent, adopt that role's prompt and focus areas
+   - Stage 0 (architect): Design and spec only — do NOT write implementation code
+   - Stage 1 (builder): Implement following the architect's design
+   - Stage 2 (tester/reviewer): Verify and test the implementation
+   - Pass context between phases as if handing off to a teammate
 
-4. **Record history:** `paradigm_history_record({ type: "implement", symbols: [...], description: "..." })`
+4. **For true parallel execution**, suggest user runs:
+   `paradigm team orchestrate "task description"`
+
+5. **Record history:** `paradigm_history_record({ type: "implement", symbols: [...], description: "..." })`
 
 ## Available Agents
 
-- **architect**: You design system architecture, write specifications, and plan features. (writes: specs/*.md, .purpose)
-- **builder**: You implement code based on specifications from the Architect. (writes: src/**, tests/**)
-- **reviewer**: You review code for correctness, security, and adherence to specs. (writes: reviews/*.md)
-- **tester**: You verify implementations work correctly. (writes: tests/**, health.yaml)
-- **security**: You audit for security issues, especially around ^gates. (writes: security/*.md)
+- **architect** (opus): You design system architecture, write specifications, and plan features. (writes: specs/*.md, .purpose)
+- **builder** (haiku): You implement code based on specifications from the Architect. (writes: src/**, tests/**)
+- **reviewer** (sonnet): You review code for correctness, security, and adherence to specs. (writes: reviews/*.md)
+- **tester** (haiku): You verify implementations work correctly. (writes: tests/**, health.yaml)
+- **security** (opus): You audit for security issues, especially around ^gates. (writes: security/*.md)
 
 ## Red Flags - STOP and Orchestrate
 
