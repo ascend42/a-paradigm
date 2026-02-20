@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-20T06:15:52.070Z",
+    "generatedAt": "2026-02-20T23:23:33.132Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 13,
@@ -1009,39 +1009,6 @@
         "#command-generator"
       ]
     },
-    "portal-parsing": {
-      "id": "portal-parsing",
-      "name": "Portal Parsing",
-      "symbol": "#portal-parsing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-parsing: Parse portal.yaml into structured data",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "$portal-validation-flow",
-        "!parse-success",
-        "!parse-error",
-        "#yaml-parser",
-        "#gate-schemas"
-      ]
-    },
-    "portal-validation": {
-      "id": "portal-validation",
-      "name": "Portal Validation",
-      "symbol": "#portal-validation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-validation: Validate portal.yaml configuration",
-      "visualTags": [],
-      "related": [
-        "~file-glob-discovery",
-        "!validation-passed",
-        "!validation-failed",
-        "#validator",
-        "#topology-checker"
-      ]
-    },
     "gate-checking": {
       "id": "gate-checking",
       "name": "Gate Checking",
@@ -1082,6 +1049,39 @@
       "related": [
         "#portal-client",
         "#gate-client"
+      ]
+    },
+    "portal-parsing": {
+      "id": "portal-parsing",
+      "name": "Portal Parsing",
+      "symbol": "#portal-parsing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-parsing: Parse portal.yaml into structured data",
+      "visualTags": [],
+      "related": [
+        "~yaml-config-loading",
+        "$portal-validation-flow",
+        "!parse-success",
+        "!parse-error",
+        "#yaml-parser",
+        "#gate-schemas"
+      ]
+    },
+    "portal-validation": {
+      "id": "portal-validation",
+      "name": "Portal Validation",
+      "symbol": "#portal-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-validation: Validate portal.yaml configuration",
+      "visualTags": [],
+      "related": [
+        "~file-glob-discovery",
+        "!validation-passed",
+        "!validation-failed",
+        "#validator",
+        "#topology-checker"
       ]
     },
     "commander-setup": {
@@ -1599,76 +1599,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
       "description": "CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents",
-      "visualTags": [],
-      "related": []
-    },
-    "paradigm-logger": {
-      "id": "paradigm-logger",
-      "name": "Paradigm Logger",
-      "symbol": "#paradigm-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "symbol-logger": {
-      "id": "symbol-logger",
-      "name": "Symbol Logger",
-      "symbol": "#symbol-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "formatter-pretty": {
-      "id": "formatter-pretty",
-      "name": "Formatter Pretty",
-      "symbol": "#formatter-pretty",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Human-readable colored output with symbol prefixes and timestamps",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "formatter-json": {
-      "id": "formatter-json",
-      "name": "Formatter Json",
-      "symbol": "#formatter-json",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Machine-readable JSON output for log aggregation pipelines",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "correlation-tracker": {
-      "id": "correlation-tracker",
-      "name": "Correlation Tracker",
-      "symbol": "#correlation-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
-      "visualTags": [],
-      "related": [
-        "~correlation-tracked"
-      ]
-    },
-    "duration-tracker": {
-      "id": "duration-tracker",
-      "name": "Duration Tracker",
-      "symbol": "#duration-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Operation timing utility for measuring and logging execution duration",
       "visualTags": [],
       "related": []
     },
@@ -2232,6 +2162,76 @@
       "visualTags": [],
       "related": []
     },
+    "paradigm-logger": {
+      "id": "paradigm-logger",
+      "name": "Paradigm Logger",
+      "symbol": "#paradigm-logger",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
+      "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "symbol-logger": {
+      "id": "symbol-logger",
+      "name": "Symbol Logger",
+      "symbol": "#symbol-logger",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
+      "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "formatter-pretty": {
+      "id": "formatter-pretty",
+      "name": "Formatter Pretty",
+      "symbol": "#formatter-pretty",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Human-readable colored output with symbol prefixes and timestamps",
+      "visualTags": [
+        "form"
+      ],
+      "related": []
+    },
+    "formatter-json": {
+      "id": "formatter-json",
+      "name": "Formatter Json",
+      "symbol": "#formatter-json",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Machine-readable JSON output for log aggregation pipelines",
+      "visualTags": [
+        "form"
+      ],
+      "related": []
+    },
+    "correlation-tracker": {
+      "id": "correlation-tracker",
+      "name": "Correlation Tracker",
+      "symbol": "#correlation-tracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
+      "visualTags": [],
+      "related": [
+        "~correlation-tracked"
+      ]
+    },
+    "duration-tracker": {
+      "id": "duration-tracker",
+      "name": "Duration Tracker",
+      "symbol": "#duration-tracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Operation timing utility for measuring and logging execution duration",
+      "visualTags": [],
+      "related": []
+    },
     "yaml-parser": {
       "id": "yaml-parser",
       "name": "Yaml Parser",
@@ -2466,26 +2466,6 @@
       "visualTags": [],
       "related": []
     },
-    "gate-schemas": {
-      "id": "gate-schemas",
-      "name": "Gate Schemas",
-      "symbol": "#gate-schemas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
-      "visualTags": [],
-      "related": []
-    },
-    "topology-checker": {
-      "id": "topology-checker",
-      "name": "Topology Checker",
-      "symbol": "#topology-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#topology-checker: Checks for circular dependencies in gates",
-      "visualTags": [],
-      "related": []
-    },
     "evaluator": {
       "id": "evaluator",
       "name": "Evaluator",
@@ -2543,6 +2523,26 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "#gate-client: Low-level gate checking client",
+      "visualTags": [],
+      "related": []
+    },
+    "gate-schemas": {
+      "id": "gate-schemas",
+      "name": "Gate Schemas",
+      "symbol": "#gate-schemas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
+      "visualTags": [],
+      "related": []
+    },
+    "topology-checker": {
+      "id": "topology-checker",
+      "name": "Topology Checker",
+      "symbol": "#topology-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#topology-checker: Checks for circular dependencies in gates",
       "visualTags": [],
       "related": []
     },
@@ -3651,15 +3651,6 @@
         "#quiz-view"
       ]
     },
-    "log-emitted": {
-      "id": "log-emitted",
-      "name": "Log Emitted",
-      "symbol": "!log-emitted",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "A structured log entry was written",
-      "related": []
-    },
     "init-success": {
       "id": "init-success",
       "name": "Init Success",
@@ -3730,6 +3721,15 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
       "description": "Multi-agent orchestration has begun",
+      "related": []
+    },
+    "log-emitted": {
+      "id": "log-emitted",
+      "name": "Log Emitted",
+      "symbol": "!log-emitted",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "A structured log entry was written",
       "related": []
     },
     "parse-success": {
@@ -4158,14 +4158,6 @@
       "category": "components",
       "id": "command-palette"
     },
-    "#portal-parsing": {
-      "category": "components",
-      "id": "portal-parsing"
-    },
-    "#portal-validation": {
-      "category": "components",
-      "id": "portal-validation"
-    },
     "#gate-checking": {
       "category": "components",
       "id": "gate-checking"
@@ -4177,6 +4169,14 @@
     "#client-api": {
       "category": "components",
       "id": "client-api"
+    },
+    "#portal-parsing": {
+      "category": "components",
+      "id": "portal-parsing"
+    },
+    "#portal-validation": {
+      "category": "components",
+      "id": "portal-validation"
     },
     "#commander-setup": {
       "category": "components",
@@ -4373,30 +4373,6 @@
     "#academia-theme": {
       "category": "components",
       "id": "academia-theme"
-    },
-    "#paradigm-logger": {
-      "category": "components",
-      "id": "paradigm-logger"
-    },
-    "#symbol-logger": {
-      "category": "components",
-      "id": "symbol-logger"
-    },
-    "#formatter-pretty": {
-      "category": "components",
-      "id": "formatter-pretty"
-    },
-    "#formatter-json": {
-      "category": "components",
-      "id": "formatter-json"
-    },
-    "#correlation-tracker": {
-      "category": "components",
-      "id": "correlation-tracker"
-    },
-    "#duration-tracker": {
-      "category": "components",
-      "id": "duration-tracker"
     },
     "#init-handler": {
       "category": "components",
@@ -4618,6 +4594,30 @@
       "category": "components",
       "id": "portal-tester"
     },
+    "#paradigm-logger": {
+      "category": "components",
+      "id": "paradigm-logger"
+    },
+    "#symbol-logger": {
+      "category": "components",
+      "id": "symbol-logger"
+    },
+    "#formatter-pretty": {
+      "category": "components",
+      "id": "formatter-pretty"
+    },
+    "#formatter-json": {
+      "category": "components",
+      "id": "formatter-json"
+    },
+    "#correlation-tracker": {
+      "category": "components",
+      "id": "correlation-tracker"
+    },
+    "#duration-tracker": {
+      "category": "components",
+      "id": "duration-tracker"
+    },
     "#yaml-parser": {
       "category": "components",
       "id": "yaml-parser"
@@ -4710,14 +4710,6 @@
       "category": "components",
       "id": "command-generator"
     },
-    "#gate-schemas": {
-      "category": "components",
-      "id": "gate-schemas"
-    },
-    "#topology-checker": {
-      "category": "components",
-      "id": "topology-checker"
-    },
     "#evaluator": {
       "category": "components",
       "id": "evaluator"
@@ -4741,6 +4733,14 @@
     "#gate-client": {
       "category": "components",
       "id": "gate-client"
+    },
+    "#gate-schemas": {
+      "category": "components",
+      "id": "gate-schemas"
+    },
+    "#topology-checker": {
+      "category": "components",
+      "id": "topology-checker"
     },
     "#agent-matcher": {
       "category": "components",
@@ -4930,10 +4930,6 @@
       "category": "signals",
       "id": "!quiz-completed"
     },
-    "!log-emitted": {
-      "category": "signals",
-      "id": "log-emitted"
-    },
     "!init-success": {
       "category": "signals",
       "id": "init-success"
@@ -4965,6 +4961,10 @@
     "!orchestration-started": {
       "category": "signals",
       "id": "orchestration-started"
+    },
+    "!log-emitted": {
+      "category": "signals",
+      "id": "log-emitted"
     },
     "!parse-success": {
       "category": "signals",

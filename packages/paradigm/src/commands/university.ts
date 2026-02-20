@@ -32,7 +32,11 @@ export async function universityCommand(_path: string | undefined, options: Univ
     // Keep the process running
     await new Promise(() => {});
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    if ((error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND' ||
+        (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
+      console.error(chalk.red('\n@a-company/university is not installed.'));
+      console.log(chalk.gray('Install it with: npm install @a-company/university\n'));
+    } else if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
       console.error(chalk.red(`\nError: Port ${port} is already in use.`));
       console.log(chalk.gray(`Try a different port with: paradigm university --port ${port + 1}\n`));
     } else {

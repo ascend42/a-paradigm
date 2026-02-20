@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **npm publish ready** — `npm i -g @a-company/paradigm` installs both `paradigm` CLI and `paradigm-mcp` server. All `@a-company/*` workspace deps bundled via tsup `noExternal`. MCP server built as second entry point (`dist/mcp.js`). `@a-company/paradigm-mcp` marked private. Optional commands (`sentinel`, `university`) gracefully handle missing packages. CI fixed from stale `@horizon/cli` reference. Stale `@horizon/*` changeset deleted.
+
 ### Added
 
 - **Discipline System** — Auto-detection and per-discipline configuration. `detectDiscipline()` examines project files to infer project type from 14 disciplines (`web`, `backend`, `fullstack`, `api`, `cli`, `ml`, `mobile`, `game`, `embedded`, `devops`, `data`, `library`, `monorepo`, `custom`). Each discipline gets tailored symbol mappings, purpose-required patterns, and scan patterns. Wired into `paradigm init` (auto-populates config), `paradigm shift` (detects for existing projects), and `paradigm scan` (discipline-aware patterns). Template `disciplines.md` rewritten for v2. `context-builder.ts` cleaned of v1 symbol remnants.
