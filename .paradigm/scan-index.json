@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-21T15:29:54.126Z",
+    "generatedAt": "2026-02-21T17:05:31.393Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 13,
@@ -1009,6 +1009,39 @@
         "#command-generator"
       ]
     },
+    "portal-parsing": {
+      "id": "portal-parsing",
+      "name": "Portal Parsing",
+      "symbol": "#portal-parsing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-parsing: Parse portal.yaml into structured data",
+      "visualTags": [],
+      "related": [
+        "~yaml-config-loading",
+        "$portal-validation-flow",
+        "!parse-success",
+        "!parse-error",
+        "#yaml-parser",
+        "#gate-schemas"
+      ]
+    },
+    "portal-validation": {
+      "id": "portal-validation",
+      "name": "Portal Validation",
+      "symbol": "#portal-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-validation: Validate portal.yaml configuration",
+      "visualTags": [],
+      "related": [
+        "~file-glob-discovery",
+        "!validation-passed",
+        "!validation-failed",
+        "#validator",
+        "#topology-checker"
+      ]
+    },
     "gate-checking": {
       "id": "gate-checking",
       "name": "Gate Checking",
@@ -1049,39 +1082,6 @@
       "related": [
         "#portal-client",
         "#gate-client"
-      ]
-    },
-    "portal-parsing": {
-      "id": "portal-parsing",
-      "name": "Portal Parsing",
-      "symbol": "#portal-parsing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-parsing: Parse portal.yaml into structured data",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "$portal-validation-flow",
-        "!parse-success",
-        "!parse-error",
-        "#yaml-parser",
-        "#gate-schemas"
-      ]
-    },
-    "portal-validation": {
-      "id": "portal-validation",
-      "name": "Portal Validation",
-      "symbol": "#portal-validation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-validation: Validate portal.yaml configuration",
-      "visualTags": [],
-      "related": [
-        "~file-glob-discovery",
-        "!validation-passed",
-        "!validation-failed",
-        "#validator",
-        "#topology-checker"
       ]
     },
     "commander-setup": {
@@ -1398,207 +1398,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Interactive prompts for configuring agent model assignments",
-      "visualTags": [],
-      "related": []
-    },
-    "university-server": {
-      "id": "university-server",
-      "name": "University Server",
-      "symbol": "#university-server",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Express server serving static UI and content API endpoints",
-      "visualTags": [],
-      "related": []
-    },
-    "courses-router": {
-      "id": "courses-router",
-      "name": "Courses Router",
-      "symbol": "#courses-router",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "API routes for course listing and individual course/lesson retrieval",
-      "visualTags": [],
-      "related": []
-    },
-    "plsat-router": {
-      "id": "plsat-router",
-      "name": "Plsat Router",
-      "symbol": "#plsat-router",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.",
-      "visualTags": [],
-      "related": []
-    },
-    "university-ui": {
-      "id": "university-ui",
-      "name": "University Ui",
-      "symbol": "#university-ui",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library",
-      "visualTags": [],
-      "related": [
-        "#home-view",
-        "#course-view",
-        "#quiz-view",
-        "#plsat-view",
-        "#reference-view",
-        "#certificate-view"
-      ]
-    },
-    "home-view": {
-      "id": "home-view",
-      "name": "Home View",
-      "symbol": "#home-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Campus landing page with course catalog, progress rings, and quick links",
-      "visualTags": [],
-      "related": []
-    },
-    "course-view": {
-      "id": "course-view",
-      "name": "Course View",
-      "symbol": "#course-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Lesson reader with sidebar navigation, markdown rendering, and quiz links",
-      "visualTags": [],
-      "related": []
-    },
-    "quiz-view": {
-      "id": "quiz-view",
-      "name": "Quiz View",
-      "symbol": "#quiz-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Per-lesson quiz with ABCDE questions and immediate feedback",
-      "visualTags": [],
-      "related": []
-    },
-    "plsat-view": {
-      "id": "plsat-view",
-      "name": "Plsat View",
-      "symbol": "#plsat-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Timed 50-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.",
-      "visualTags": [],
-      "related": []
-    },
-    "reference-view": {
-      "id": "reference-view",
-      "name": "Reference View",
-      "symbol": "#reference-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Quick reference cards for symbols, MCP tools, CLI commands, tags, and workflows",
-      "visualTags": [],
-      "related": []
-    },
-    "certificate-view": {
-      "id": "certificate-view",
-      "name": "Certificate View",
-      "symbol": "#certificate-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Printable PLSAT certificate with university seal, score, and version tracking",
-      "visualTags": [],
-      "related": []
-    },
-    "progress-store": {
-      "id": "progress-store",
-      "name": "Progress Store",
-      "symbol": "#progress-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store with LocalStorage persistence for lesson completion and quiz scores",
-      "visualTags": [],
-      "related": []
-    },
-    "plsat-store": {
-      "id": "plsat-store",
-      "name": "Plsat Store",
-      "symbol": "#plsat-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store with LocalStorage persistence for PLSAT certificates and student name",
-      "visualTags": [],
-      "related": []
-    },
-    "courses-store": {
-      "id": "courses-store",
-      "name": "Courses Store",
-      "symbol": "#courses-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store for fetched course data from API with caching",
-      "visualTags": [],
-      "related": []
-    },
-    "university-seal": {
-      "id": "university-seal",
-      "name": "University Seal",
-      "symbol": "#university-seal",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "SVG university seal component — \"Universitas Paradigmatica — Lux in Codice\"",
-      "visualTags": [],
-      "related": []
-    },
-    "question-card": {
-      "id": "question-card",
-      "name": "Question Card",
-      "symbol": "#question-card",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "ABCDE question renderer with controlled (PLSAT) and uncontrolled (quiz) modes",
-      "visualTags": [
-        "card"
-      ],
-      "related": []
-    },
-    "plsat-timer": {
-      "id": "plsat-timer",
-      "name": "Plsat Timer",
-      "symbol": "#plsat-timer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Countdown timer component for PLSAT exam (45 minutes)",
-      "visualTags": [],
-      "related": []
-    },
-    "progress-ring": {
-      "id": "progress-ring",
-      "name": "Progress Ring",
-      "symbol": "#progress-ring",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Circular SVG progress indicator for course completion percentages",
-      "visualTags": [],
-      "related": []
-    },
-    "university-header": {
-      "id": "university-header",
-      "name": "University Header",
-      "symbol": "#university-header",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Navigation bar with university seal, course/PLSAT/reference links, and version badge",
-      "visualTags": [
-        "header"
-      ],
-      "related": []
-    },
-    "academia-theme": {
-      "id": "academia-theme",
-      "name": "Academia Theme",
-      "symbol": "#academia-theme",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents",
       "visualTags": [],
       "related": []
     },
@@ -2162,6 +1961,207 @@
       "visualTags": [],
       "related": []
     },
+    "university-server": {
+      "id": "university-server",
+      "name": "University Server",
+      "symbol": "#university-server",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Express server serving static UI and content API endpoints",
+      "visualTags": [],
+      "related": []
+    },
+    "courses-router": {
+      "id": "courses-router",
+      "name": "Courses Router",
+      "symbol": "#courses-router",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "API routes for course listing and individual course/lesson retrieval",
+      "visualTags": [],
+      "related": []
+    },
+    "plsat-router": {
+      "id": "plsat-router",
+      "name": "Plsat Router",
+      "symbol": "#plsat-router",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.",
+      "visualTags": [],
+      "related": []
+    },
+    "university-ui": {
+      "id": "university-ui",
+      "name": "University Ui",
+      "symbol": "#university-ui",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library",
+      "visualTags": [],
+      "related": [
+        "#home-view",
+        "#course-view",
+        "#quiz-view",
+        "#plsat-view",
+        "#reference-view",
+        "#certificate-view"
+      ]
+    },
+    "home-view": {
+      "id": "home-view",
+      "name": "Home View",
+      "symbol": "#home-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Campus landing page with course catalog, progress rings, and quick links",
+      "visualTags": [],
+      "related": []
+    },
+    "course-view": {
+      "id": "course-view",
+      "name": "Course View",
+      "symbol": "#course-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Lesson reader with sidebar navigation, markdown rendering, and quiz links",
+      "visualTags": [],
+      "related": []
+    },
+    "quiz-view": {
+      "id": "quiz-view",
+      "name": "Quiz View",
+      "symbol": "#quiz-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Per-lesson quiz with ABCDE questions and immediate feedback",
+      "visualTags": [],
+      "related": []
+    },
+    "plsat-view": {
+      "id": "plsat-view",
+      "name": "Plsat View",
+      "symbol": "#plsat-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Timed 50-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.",
+      "visualTags": [],
+      "related": []
+    },
+    "reference-view": {
+      "id": "reference-view",
+      "name": "Reference View",
+      "symbol": "#reference-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Quick reference cards for symbols, MCP tools, CLI commands, tags, and workflows",
+      "visualTags": [],
+      "related": []
+    },
+    "certificate-view": {
+      "id": "certificate-view",
+      "name": "Certificate View",
+      "symbol": "#certificate-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Printable PLSAT certificate with university seal, score, and version tracking",
+      "visualTags": [],
+      "related": []
+    },
+    "progress-store": {
+      "id": "progress-store",
+      "name": "Progress Store",
+      "symbol": "#progress-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store with LocalStorage persistence for lesson completion and quiz scores",
+      "visualTags": [],
+      "related": []
+    },
+    "plsat-store": {
+      "id": "plsat-store",
+      "name": "Plsat Store",
+      "symbol": "#plsat-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store with LocalStorage persistence for PLSAT certificates and student name",
+      "visualTags": [],
+      "related": []
+    },
+    "courses-store": {
+      "id": "courses-store",
+      "name": "Courses Store",
+      "symbol": "#courses-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store for fetched course data from API with caching",
+      "visualTags": [],
+      "related": []
+    },
+    "university-seal": {
+      "id": "university-seal",
+      "name": "University Seal",
+      "symbol": "#university-seal",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "SVG university seal component — \"Universitas Paradigmatica — Lux in Codice\"",
+      "visualTags": [],
+      "related": []
+    },
+    "question-card": {
+      "id": "question-card",
+      "name": "Question Card",
+      "symbol": "#question-card",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "ABCDE question renderer with controlled (PLSAT) and uncontrolled (quiz) modes",
+      "visualTags": [
+        "card"
+      ],
+      "related": []
+    },
+    "plsat-timer": {
+      "id": "plsat-timer",
+      "name": "Plsat Timer",
+      "symbol": "#plsat-timer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Countdown timer component for PLSAT exam (45 minutes)",
+      "visualTags": [],
+      "related": []
+    },
+    "progress-ring": {
+      "id": "progress-ring",
+      "name": "Progress Ring",
+      "symbol": "#progress-ring",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Circular SVG progress indicator for course completion percentages",
+      "visualTags": [],
+      "related": []
+    },
+    "university-header": {
+      "id": "university-header",
+      "name": "University Header",
+      "symbol": "#university-header",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Navigation bar with university seal, course/PLSAT/reference links, and version badge",
+      "visualTags": [
+        "header"
+      ],
+      "related": []
+    },
+    "academia-theme": {
+      "id": "academia-theme",
+      "name": "Academia Theme",
+      "symbol": "#academia-theme",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents",
+      "visualTags": [],
+      "related": []
+    },
     "paradigm-logger": {
       "id": "paradigm-logger",
       "name": "Paradigm Logger",
@@ -2466,6 +2466,26 @@
       "visualTags": [],
       "related": []
     },
+    "gate-schemas": {
+      "id": "gate-schemas",
+      "name": "Gate Schemas",
+      "symbol": "#gate-schemas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
+      "visualTags": [],
+      "related": []
+    },
+    "topology-checker": {
+      "id": "topology-checker",
+      "name": "Topology Checker",
+      "symbol": "#topology-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#topology-checker: Checks for circular dependencies in gates",
+      "visualTags": [],
+      "related": []
+    },
     "evaluator": {
       "id": "evaluator",
       "name": "Evaluator",
@@ -2523,26 +2543,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "#gate-client: Low-level gate checking client",
-      "visualTags": [],
-      "related": []
-    },
-    "gate-schemas": {
-      "id": "gate-schemas",
-      "name": "Gate Schemas",
-      "symbol": "#gate-schemas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
-      "visualTags": [],
-      "related": []
-    },
-    "topology-checker": {
-      "id": "topology-checker",
-      "name": "Topology Checker",
-      "symbol": "#topology-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#topology-checker: Checks for circular dependencies in gates",
       "visualTags": [],
       "related": []
     },
@@ -2613,6 +2613,40 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
       "description": "Run orchestration in background with progress reporting",
+      "visualTags": [],
+      "related": []
+    },
+    "adapter-base": {
+      "id": "adapter-base",
+      "name": "Adapter Base",
+      "symbol": "#adapter-base",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Shared generation helpers — symbol table, logger spec, navigation, context sections",
+      "visualTags": [],
+      "related": [
+        "~ide-adapter-pattern"
+      ]
+    },
+    "agents-adapter": {
+      "id": "agents-adapter",
+      "name": "Agents Adapter",
+      "symbol": "#agents-adapter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)",
+      "visualTags": [],
+      "related": [
+        "~ide-adapter-pattern"
+      ]
+    },
+    "adapter-registry": {
+      "id": "adapter-registry",
+      "name": "Adapter Registry",
+      "symbol": "#adapter-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "IDE adapter discovery, selection, and factory",
       "visualTags": [],
       "related": []
     },
@@ -2687,40 +2721,6 @@
       "related": [
         "~provider-cascade"
       ]
-    },
-    "adapter-base": {
-      "id": "adapter-base",
-      "name": "Adapter Base",
-      "symbol": "#adapter-base",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Shared generation helpers — symbol table, logger spec, navigation, context sections",
-      "visualTags": [],
-      "related": [
-        "~ide-adapter-pattern"
-      ]
-    },
-    "agents-adapter": {
-      "id": "agents-adapter",
-      "name": "Agents Adapter",
-      "symbol": "#agents-adapter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)",
-      "visualTags": [],
-      "related": [
-        "~ide-adapter-pattern"
-      ]
-    },
-    "adapter-registry": {
-      "id": "adapter-registry",
-      "name": "Adapter Registry",
-      "symbol": "#adapter-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "IDE adapter discovery, selection, and factory",
-      "visualTags": [],
-      "related": []
     },
     "index": {
       "id": "index",
@@ -3208,51 +3208,6 @@
         }
       ]
     },
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "name": "$plsat Exam Flow",
-      "symbol": "$$plsat-exam-flow",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "$plsat-exam-flow-step-0",
-          "name": "Display intro, rules, and name input",
-          "target": "#plsat-view",
-          "order": 0
-        },
-        {
-          "id": "$plsat-exam-flow-step-1",
-          "name": "Start 45-minute countdown",
-          "target": "#plsat-timer",
-          "order": 1
-        },
-        {
-          "id": "$plsat-exam-flow-step-2",
-          "name": "Present 50 shuffled questions (with passage blocks for grouped questions)",
-          "target": "#question-card",
-          "order": 2
-        },
-        {
-          "id": "$plsat-exam-flow-step-3",
-          "name": "Calculate score on submit or time-up",
-          "target": "#plsat-view",
-          "order": 3
-        },
-        {
-          "id": "$plsat-exam-flow-step-4",
-          "name": "Persist certificate to LocalStorage",
-          "target": "#plsat-store",
-          "order": 4
-        },
-        {
-          "id": "$plsat-exam-flow-step-5",
-          "name": "Display printable certificate if passed",
-          "target": "#certificate-view",
-          "order": 5
-        }
-      ]
-    },
     "ide-sync-flow": {
       "id": "ide-sync-flow",
       "name": "Ide Sync Flow",
@@ -3322,6 +3277,51 @@
           "name": "Log execution and costs",
           "target": "#audit-logger",
           "order": 4
+        }
+      ]
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "name": "$plsat Exam Flow",
+      "symbol": "$$plsat-exam-flow",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "$plsat-exam-flow-step-0",
+          "name": "Display intro, rules, and name input",
+          "target": "#plsat-view",
+          "order": 0
+        },
+        {
+          "id": "$plsat-exam-flow-step-1",
+          "name": "Start 45-minute countdown",
+          "target": "#plsat-timer",
+          "order": 1
+        },
+        {
+          "id": "$plsat-exam-flow-step-2",
+          "name": "Present 50 shuffled questions (with passage blocks for grouped questions)",
+          "target": "#question-card",
+          "order": 2
+        },
+        {
+          "id": "$plsat-exam-flow-step-3",
+          "name": "Calculate score on submit or time-up",
+          "target": "#plsat-view",
+          "order": 3
+        },
+        {
+          "id": "$plsat-exam-flow-step-4",
+          "name": "Persist certificate to LocalStorage",
+          "target": "#plsat-store",
+          "order": 4
+        },
+        {
+          "id": "$plsat-exam-flow-step-5",
+          "name": "Display printable certificate if passed",
+          "target": "#certificate-view",
+          "order": 5
         }
       ]
     },
@@ -3629,28 +3629,6 @@
       "description": "Project-local wisdom promoted to global scope",
       "related": []
     },
-    "!plsat-completed": {
-      "id": "!plsat-completed",
-      "name": "!plsat Completed",
-      "symbol": "!!plsat-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Student has completed a PLSAT exam attempt",
-      "related": [
-        "#plsat-view"
-      ]
-    },
-    "!quiz-completed": {
-      "id": "!quiz-completed",
-      "name": "!quiz Completed",
-      "symbol": "!!quiz-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Student has completed a per-lesson quiz",
-      "related": [
-        "#quiz-view"
-      ]
-    },
     "init-success": {
       "id": "init-success",
       "name": "Init Success",
@@ -3722,6 +3700,28 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
       "description": "Multi-agent orchestration has begun",
       "related": []
+    },
+    "!plsat-completed": {
+      "id": "!plsat-completed",
+      "name": "!plsat Completed",
+      "symbol": "!!plsat-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Student has completed a PLSAT exam attempt",
+      "related": [
+        "#plsat-view"
+      ]
+    },
+    "!quiz-completed": {
+      "id": "!quiz-completed",
+      "name": "!quiz Completed",
+      "symbol": "!!quiz-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Student has completed a per-lesson quiz",
+      "related": [
+        "#quiz-view"
+      ]
     },
     "log-emitted": {
       "id": "log-emitted",
@@ -4158,6 +4158,14 @@
       "category": "components",
       "id": "command-palette"
     },
+    "#portal-parsing": {
+      "category": "components",
+      "id": "portal-parsing"
+    },
+    "#portal-validation": {
+      "category": "components",
+      "id": "portal-validation"
+    },
     "#gate-checking": {
       "category": "components",
       "id": "gate-checking"
@@ -4169,14 +4177,6 @@
     "#client-api": {
       "category": "components",
       "id": "client-api"
-    },
-    "#portal-parsing": {
-      "category": "components",
-      "id": "portal-parsing"
-    },
-    "#portal-validation": {
-      "category": "components",
-      "id": "portal-validation"
     },
     "#commander-setup": {
       "category": "components",
@@ -4297,82 +4297,6 @@
     "#model-configurator": {
       "category": "components",
       "id": "model-configurator"
-    },
-    "#university-server": {
-      "category": "components",
-      "id": "university-server"
-    },
-    "#courses-router": {
-      "category": "components",
-      "id": "courses-router"
-    },
-    "#plsat-router": {
-      "category": "components",
-      "id": "plsat-router"
-    },
-    "#university-ui": {
-      "category": "components",
-      "id": "university-ui"
-    },
-    "#home-view": {
-      "category": "components",
-      "id": "home-view"
-    },
-    "#course-view": {
-      "category": "components",
-      "id": "course-view"
-    },
-    "#quiz-view": {
-      "category": "components",
-      "id": "quiz-view"
-    },
-    "#plsat-view": {
-      "category": "components",
-      "id": "plsat-view"
-    },
-    "#reference-view": {
-      "category": "components",
-      "id": "reference-view"
-    },
-    "#certificate-view": {
-      "category": "components",
-      "id": "certificate-view"
-    },
-    "#progress-store": {
-      "category": "components",
-      "id": "progress-store"
-    },
-    "#plsat-store": {
-      "category": "components",
-      "id": "plsat-store"
-    },
-    "#courses-store": {
-      "category": "components",
-      "id": "courses-store"
-    },
-    "#university-seal": {
-      "category": "components",
-      "id": "university-seal"
-    },
-    "#question-card": {
-      "category": "components",
-      "id": "question-card"
-    },
-    "#plsat-timer": {
-      "category": "components",
-      "id": "plsat-timer"
-    },
-    "#progress-ring": {
-      "category": "components",
-      "id": "progress-ring"
-    },
-    "#university-header": {
-      "category": "components",
-      "id": "university-header"
-    },
-    "#academia-theme": {
-      "category": "components",
-      "id": "academia-theme"
     },
     "#init-handler": {
       "category": "components",
@@ -4594,6 +4518,82 @@
       "category": "components",
       "id": "portal-tester"
     },
+    "#university-server": {
+      "category": "components",
+      "id": "university-server"
+    },
+    "#courses-router": {
+      "category": "components",
+      "id": "courses-router"
+    },
+    "#plsat-router": {
+      "category": "components",
+      "id": "plsat-router"
+    },
+    "#university-ui": {
+      "category": "components",
+      "id": "university-ui"
+    },
+    "#home-view": {
+      "category": "components",
+      "id": "home-view"
+    },
+    "#course-view": {
+      "category": "components",
+      "id": "course-view"
+    },
+    "#quiz-view": {
+      "category": "components",
+      "id": "quiz-view"
+    },
+    "#plsat-view": {
+      "category": "components",
+      "id": "plsat-view"
+    },
+    "#reference-view": {
+      "category": "components",
+      "id": "reference-view"
+    },
+    "#certificate-view": {
+      "category": "components",
+      "id": "certificate-view"
+    },
+    "#progress-store": {
+      "category": "components",
+      "id": "progress-store"
+    },
+    "#plsat-store": {
+      "category": "components",
+      "id": "plsat-store"
+    },
+    "#courses-store": {
+      "category": "components",
+      "id": "courses-store"
+    },
+    "#university-seal": {
+      "category": "components",
+      "id": "university-seal"
+    },
+    "#question-card": {
+      "category": "components",
+      "id": "question-card"
+    },
+    "#plsat-timer": {
+      "category": "components",
+      "id": "plsat-timer"
+    },
+    "#progress-ring": {
+      "category": "components",
+      "id": "progress-ring"
+    },
+    "#university-header": {
+      "category": "components",
+      "id": "university-header"
+    },
+    "#academia-theme": {
+      "category": "components",
+      "id": "academia-theme"
+    },
     "#paradigm-logger": {
       "category": "components",
       "id": "paradigm-logger"
@@ -4710,6 +4710,14 @@
       "category": "components",
       "id": "command-generator"
     },
+    "#gate-schemas": {
+      "category": "components",
+      "id": "gate-schemas"
+    },
+    "#topology-checker": {
+      "category": "components",
+      "id": "topology-checker"
+    },
     "#evaluator": {
       "category": "components",
       "id": "evaluator"
@@ -4733,14 +4741,6 @@
     "#gate-client": {
       "category": "components",
       "id": "gate-client"
-    },
-    "#gate-schemas": {
-      "category": "components",
-      "id": "gate-schemas"
-    },
-    "#topology-checker": {
-      "category": "components",
-      "id": "topology-checker"
     },
     "#agent-matcher": {
       "category": "components",
@@ -4770,6 +4770,18 @@
       "category": "components",
       "id": "background-orchestrator"
     },
+    "#adapter-base": {
+      "category": "components",
+      "id": "adapter-base"
+    },
+    "#agents-adapter": {
+      "category": "components",
+      "id": "agents-adapter"
+    },
+    "#adapter-registry": {
+      "category": "components",
+      "id": "adapter-registry"
+    },
     "#claude-provider": {
       "category": "components",
       "id": "claude-provider"
@@ -4793,18 +4805,6 @@
     "#manual-provider": {
       "category": "components",
       "id": "manual-provider"
-    },
-    "#adapter-base": {
-      "category": "components",
-      "id": "adapter-base"
-    },
-    "#agents-adapter": {
-      "category": "components",
-      "id": "agents-adapter"
-    },
-    "#adapter-registry": {
-      "category": "components",
-      "id": "adapter-registry"
     },
     "^gate-check": {
       "category": "gates",
@@ -4850,10 +4850,6 @@
       "category": "flows",
       "id": "install-flow"
     },
-    "$$plsat-exam-flow": {
-      "category": "flows",
-      "id": "$plsat-exam-flow"
-    },
     "$ide-sync-flow": {
       "category": "flows",
       "id": "ide-sync-flow"
@@ -4861,6 +4857,10 @@
     "$agent-orchestration-flow": {
       "category": "flows",
       "id": "agent-orchestration-flow"
+    },
+    "$$plsat-exam-flow": {
+      "category": "flows",
+      "id": "$plsat-exam-flow"
     },
     "$purpose-parsing": {
       "category": "flows",
@@ -4922,14 +4922,6 @@
       "category": "signals",
       "id": "wisdom-promoted"
     },
-    "!!plsat-completed": {
-      "category": "signals",
-      "id": "!plsat-completed"
-    },
-    "!!quiz-completed": {
-      "category": "signals",
-      "id": "!quiz-completed"
-    },
     "!init-success": {
       "category": "signals",
       "id": "init-success"
@@ -4961,6 +4953,14 @@
     "!orchestration-started": {
       "category": "signals",
       "id": "orchestration-started"
+    },
+    "!!plsat-completed": {
+      "category": "signals",
+      "id": "!plsat-completed"
+    },
+    "!!quiz-completed": {
+      "category": "signals",
+      "id": "!quiz-completed"
     },
     "!log-emitted": {
       "category": "signals",

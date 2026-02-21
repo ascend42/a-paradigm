@@ -145,6 +145,10 @@ export function getContextToolsList() {
           },
         },
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_handoff_prepare',
@@ -183,6 +187,10 @@ export function getContextToolsList() {
         },
         required: ['summary'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_session_stats',
@@ -191,6 +199,10 @@ export function getContextToolsList() {
         type: 'object',
         properties: {},
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_session_recover',
@@ -198,6 +210,10 @@ export function getContextToolsList() {
       inputSchema: {
         type: 'object',
         properties: {},
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
     {
@@ -236,6 +252,10 @@ export function getContextToolsList() {
           },
         },
         required: ['phase', 'context'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
       },
     },
   ];

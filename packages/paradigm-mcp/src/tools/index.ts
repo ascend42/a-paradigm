@@ -32,6 +32,7 @@ import { getTagsToolsList, handleTagsTool } from './tags.js';
 import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-portal.js';
 import { getPmToolsList, handlePmTool } from './pm.js';
 import { getReindexToolsList, handleReindexTool } from './reindex.js';
+import { getLoreToolsList, handleLoreTool } from './lore.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -127,6 +128,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               },
               required: ['query'],
             },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+            },
           },
           {
             name: 'paradigm_ripple',
@@ -145,6 +150,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               },
               required: ['symbol'],
             },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+            },
           },
           {
             name: 'paradigm_related',
@@ -159,6 +168,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               },
               required: ['symbol'],
             },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+            },
           },
           {
             name: 'paradigm_status',
@@ -166,6 +179,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             inputSchema: {
               type: 'object',
               properties: {},
+            },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
             },
           },
           {
@@ -185,6 +202,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 },
               },
               required: ['route'],
+            },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
             },
           },
           // Wisdom tools
@@ -211,6 +232,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPmToolsList(),
           // Reindex tool
           ...getReindexToolsList(),
+          // Lore tools
+          ...getLoreToolsList(),
         ],
       };
     }
@@ -903,6 +926,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           if (name.startsWith('paradigm_purpose_') || name.startsWith('paradigm_portal_')) {
             const reload = reloadContext || (async () => {});
             const result = await handlePurposePortalTool(name, args as Record<string, unknown>, ctx, reload);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try lore tools
+          if (name.startsWith('paradigm_lore_')) {
+            const result = await handleLoreTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

@@ -56,6 +56,10 @@ export function getPmToolsList() {
         },
         required: ['task'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_pm_postflight',
@@ -76,6 +80,10 @@ export function getPmToolsList() {
           },
         },
         required: ['filesModified', 'symbolsTouched'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];
