@@ -140,6 +140,12 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     spinner.succeed(chalk.gray('Step 3/6: Skipped scan (--quick mode)'));
   }
 
+  // Ensure .paradigm/lore/ directory exists
+  const lorePath = path.join(cwd, '.paradigm', 'lore');
+  if (!fs.existsSync(lorePath)) {
+    fs.mkdirSync(lorePath, { recursive: true });
+  }
+
   // Step 4: Sync all IDEs
   // Always generate both CLAUDE.md and .cursor/rules/ since users often have multiple AI tools
   spinner.start('Step 4/6: Syncing IDE configurations...');
@@ -207,6 +213,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.paradigm/navigator.yaml', desc: 'Symbol navigation map' },
     { path: '.paradigm/agents.yaml', desc: 'Team agent configuration' },
     { path: '.purpose', desc: 'Root feature definitions' },
+    { path: '.paradigm/lore/', desc: 'Project lore timeline', isDir: true },
     { path: 'portal.yaml', desc: 'Authorization gates', optional: true },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
     { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
@@ -231,6 +238,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   console.log(chalk.cyan('  • ') + chalk.white('Check .purpose files before modifying features'));
   console.log(chalk.cyan('  • ') + chalk.white('Update Paradigm files when making structural changes'));
   console.log(chalk.cyan('  • ') + chalk.white('Follow antipatterns and team preferences'));
+  console.log(chalk.cyan('  • ') + chalk.white('Record lore entries to capture work history'));
   console.log('');
 
   console.log(chalk.white('  Next steps:'));
