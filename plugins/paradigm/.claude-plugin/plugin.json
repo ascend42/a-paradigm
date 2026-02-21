@@ -1,0 +1,23 @@
+{
+  "name": "paradigm",
+  "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
+  "version": "1.5.0",
+  "author": {
+    "name": "ascend42",
+    "email": "ascend42@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm",
+  "repository": "https://github.com/ascend42/a-paradigm",
+  "license": "MIT",
+  "keywords": [
+    "paradigm",
+    "architecture",
+    "mcp",
+    "ai-context",
+    "developer-tools",
+    "multi-agent",
+    "enforcement",
+    "sentinel",
+    "lore"
+  ]
+}

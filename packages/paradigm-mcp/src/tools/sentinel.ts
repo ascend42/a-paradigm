@@ -92,6 +92,10 @@ export function getSentinelToolsList() {
           },
         },
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_sentinel_show',
@@ -114,6 +118,10 @@ export function getSentinelToolsList() {
           },
         },
         required: ['incidentId'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
     {
@@ -138,6 +146,10 @@ export function getSentinelToolsList() {
         },
         required: ['incidentId'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_sentinel_patterns',
@@ -159,6 +171,10 @@ export function getSentinelToolsList() {
             description: 'Filter by source',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
     {
@@ -217,6 +233,10 @@ export function getSentinelToolsList() {
         },
         required: ['id', 'name', 'pattern', 'resolution'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_sentinel_record',
@@ -262,6 +282,10 @@ export function getSentinelToolsList() {
         },
         required: ['error', 'symbols', 'environment'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_sentinel_stats',
@@ -279,6 +303,10 @@ export function getSentinelToolsList() {
           },
         },
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_sentinel_suggest_pattern',
@@ -295,6 +323,10 @@ export function getSentinelToolsList() {
             description: 'Min similar incidents for suggestion',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

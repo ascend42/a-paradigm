@@ -1,0 +1,35 @@
+{
+  "name": "a-paradigm",
+  "owner": {
+    "name": "ascend42",
+    "email": "ascend42@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "Paradigm developer tools for AI-native project architecture",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "paradigm",
+      "source": "./plugins/paradigm",
+      "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
+      "version": "1.5.0",
+      "category": "development",
+      "tags": [
+        "architecture",
+        "mcp",
+        "ai-context",
+        "enforcement",
+        "multi-agent",
+        "sentinel",
+        "lore"
+      ],
+      "author": {
+        "name": "ascend42"
+      },
+      "homepage": "https://github.com/ascend42/a-paradigm",
+      "repository": "https://github.com/ascend42/a-paradigm",
+      "license": "MIT"
+    }
+  ]
+}
