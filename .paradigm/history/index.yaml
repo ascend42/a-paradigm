@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-21T00:37:53.488Z'
+generated: '2026-02-21T19:39:59.488Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -902,11 +902,54 @@ by_symbol:
       agent: []
   '#paradigm-cli':
     symbol: '#paradigm-cli'
-    total_changes: 1
-    last_modified: '2026-02-18T17:26:14Z'
+    total_changes: 3
+    last_modified: '2026-02-21T19:39:08Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_14
+        id: h0026
+        ts: '2026-02-21T19:39:08Z'
+        type: implement
+        symbols:
+          - '#lore-system'
+          - '#paradigm-cli'
+        author:
+          type: human
+          id: ascend
+        commit: af3ba068b2b6bbb15b8987042121bde33b8f27f4
+        intent: fix
+        files:
+          - .changeset/lore-server-express-fix.md
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/src/lore-server/index.ts
+          - packages/paradigm/tsup.config.ts
+        description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
+      - &ref_15
+        id: h0025
+        ts: '2026-02-21T19:35:58Z'
+        type: implement
+        symbols:
+          - '#lore-system'
+          - '#paradigm-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 2edbc59a4a1369860832b7f66b71c5a9844b980a
+        intent: fix
+        files:
+          - .changeset/lore-server-express-fix.md
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/tsup.config.ts
+        description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
       - &ref_10
         id: h0020
         ts: '2026-02-18T17:26:14Z'
@@ -1188,6 +1231,19 @@ by_symbol:
     fragility: low
     recent:
       - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-system':
+    symbol: '#lore-system'
+    total_changes: 2
+    last_modified: '2026-02-21T19:39:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_14
+      - *ref_15
     contributors:
       human:
         - ascend
