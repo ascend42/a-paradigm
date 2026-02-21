@@ -7,7 +7,7 @@ description: >
   issues for Builder to fix.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash, NotebookEdit
-permissionMode: default
+permissionMode: plan
 maxTurns: 20
 ---
 
