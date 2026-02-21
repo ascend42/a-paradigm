@@ -1,0 +1,87 @@
+/* Thread View Layout */
+.thread-view {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* Timeline Spine */
+.timeline-spine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: var(--spine-width);
+  background: var(--spine-color);
+  transform: translateX(-50%);
+}
+
+/* Date Separator */
+.date-separator {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin: 24px 0 16px;
+}
+
+.date-separator span {
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 16px;
+  letter-spacing: 0.05em;
+}
+
+/* Lore Card */
+.lore-card-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.lore-card-row.human {
+  justify-content: flex-start;
+  padding-right: 52%;
+}
+
+.lore-card-row.agent {
+  justify-content: flex-end;
+  padding-left: 52%;
+}
+
+/* Connector dot */
+.lore-card-row::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--spine-color);
+  border: 2px solid var(--bg-primary);
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.lore-card-row.human::after,
+.lore-card-row.agent::after {
+  content: '';
+  position: absolute;
+  top: 19px;
+  height: 1px;
+  background: var(--spine-color);
+}
+
+.lore-card-row.human::after {
+  left: calc(100% - 52% + 8px);
+  right: 50%;
+}
+
+.lore-card-row.agent::after {
+  left: 50%;
+  right: calc(100% - 52% + 8px);
+}

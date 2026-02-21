@@ -1,10 +1,14 @@
 {
   "name": "@a-company/sentinel",
-  "version": "0.1.1",
-  "description": "Unified codebase intelligence: symbol visualization and semantic observability for Paradigm",
+  "version": "0.2.0",
+  "description": "Semantic error monitoring — errors that speak your language",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "sentinel": "./dist/cli.js",
+    "sentinel-mcp": "./dist/mcp.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -13,6 +17,18 @@
     "./server": {
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
+    },
+    "./express": {
+      "types": "./dist/adapters/express.d.ts",
+      "import": "./dist/adapters/express.js"
+    },
+    "./fastify": {
+      "types": "./dist/adapters/fastify.d.ts",
+      "import": "./dist/adapters/fastify.js"
+    },
+    "./hono": {
+      "types": "./dist/adapters/hono.d.ts",
+      "import": "./dist/adapters/hono.js"
     }
   },
   "files": [
@@ -22,19 +38,22 @@
   ],
   "scripts": {
     "build": "npm run build:core && npm run build:ui",
-    "build:core": "tsup src/index.ts src/server/index.ts --format esm --dts --clean",
+    "build:core": "tsup",
     "build:ui": "cd ui && npm run build",
-    "dev": "tsup src/index.ts src/server/index.ts --format esm --dts --watch",
-    "dev:ui": "cd ui && npm run dev",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
     "express": "^4.18.2",
     "open": "^10.0.0",
     "simple-git": "^3.22.0",
     "sql.js": "^1.10.3",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -65,13 +84,13 @@
   },
   "homepage": "https://github.com/ascend42/a-paradigm#readme",
   "keywords": [
-    "paradigm",
     "sentinel",
-    "visualizer",
+    "error-monitoring",
     "observability",
     "error-tracking",
     "patterns",
-    "codebase-intelligence"
+    "semantic",
+    "paradigm"
   ],
   "engines": {
     "node": ">=18.0.0"

@@ -107,6 +107,10 @@ export function getTagsToolsList() {
         },
         required: ['action'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_tags_suggest',
@@ -140,6 +144,10 @@ export function getTagsToolsList() {
         },
         required: ['tag', 'description', 'reason'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_aspect_check',
@@ -154,6 +162,10 @@ export function getTagsToolsList() {
           },
         },
         required: ['aspect'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

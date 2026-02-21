@@ -58,6 +58,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('.paradigm/docs/        → Commands, patterns, troubleshooting');
     sections.push('.cursorrules           → IDE instructions (if using Cursor)');
     sections.push('portal.yaml            → Security/auth definitions');
+    sections.push('.paradigm/lore/        → Project timeline and history');
     sections.push('```');
     sections.push('');
 
@@ -180,6 +181,37 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('4. Check `.paradigm/docs/patterns.md` for coding patterns');
     sections.push('');
 
+    // Lore (Project Timeline)
+    sections.push('## Lore (Project Timeline)');
+    sections.push('');
+    sections.push('Lore records what happened, why, and what was learned — forming a queryable project history.');
+    sections.push('');
+    sections.push('### MCP Tools');
+    sections.push('');
+    sections.push('| Tool | Purpose |');
+    sections.push('|------|---------|');
+    sections.push('| `paradigm_lore_search` | Search and filter lore entries by author, symbol, date, type |');
+    sections.push('| `paradigm_lore_record` | Record a new lore entry (session, decision, milestone, etc.) |');
+    sections.push('| `paradigm_lore_timeline` | Get project timeline summary with entry count and authors |');
+    sections.push('');
+    sections.push('### CLI Commands');
+    sections.push('');
+    sections.push('| Command | Description |');
+    sections.push('|---------|-------------|');
+    sections.push('| `paradigm lore` | List recent lore entries |');
+    sections.push('| `paradigm lore record` | Interactively record a new entry |');
+    sections.push('| `paradigm lore show <id>` | Show full details of an entry |');
+    sections.push('| `paradigm lore review <id>` | Add human review to an entry |');
+    sections.push('| `paradigm lore timeline` | Show project timeline summary |');
+    sections.push('');
+    sections.push('### When to Record Lore');
+    sections.push('');
+    sections.push('- After completing a feature or significant session');
+    sections.push('- When making architectural decisions');
+    sections.push('- After resolving incidents or bugs');
+    sections.push('- At project milestones');
+    sections.push('');
+
     // Navigation section for AI exploration
     sections.push(generateNavigationSection(config));
 
@@ -218,6 +250,8 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| **Getting test data** | `paradigm_test_fixtures` for fixtures |');
     sections.push('| **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |');
     sections.push('| **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |');
+    sections.push('| **Recording work done** | `paradigm_lore_record` to capture session history |');
+    sections.push('| **Checking project history** | `paradigm_lore_timeline` for timeline overview |');
     sections.push('| **Finishing work session** | `paradigm_reindex` to rebuild static index |');
     sections.push('');
     sections.push('**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.');
@@ -456,6 +490,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Add multi-step flow | Document as `$flow` in `.purpose` |');
     sections.push('| Rename/delete symbol | Update all `.purpose` references |');
     sections.push('| Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |');
+    sections.push('| Complete feature/session | Record lore entry via `paradigm_lore_record` |');
     sections.push('');
     sections.push('**CRITICAL: Authorization requires portal.yaml**');
     sections.push('');

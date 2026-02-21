@@ -47,6 +47,10 @@ export function getFlowsToolsList() {
         },
         required: ['symbol'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_flow_validate',
@@ -64,6 +68,10 @@ export function getFlowsToolsList() {
             description: 'Deep check: verify actions and signals exist in codebase (default: false)',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

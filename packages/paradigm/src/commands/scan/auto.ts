@@ -21,6 +21,7 @@ interface AutoScanOptions {
   dryRun?: boolean;
   force?: boolean;
   json?: boolean;
+  init?: boolean;
 }
 
 interface DetectedSymbol {
@@ -672,6 +673,52 @@ export async function autoScanCommand(targetPath: string | undefined, options: A
   
   spinner.succeed(chalk.green(`Generated ${generated.length} .purpose file(s)`));
   
+  // --init mode: also generate portal.yaml from detected gates and routes
+  if (options.init) {
+    const portalPath = path.join(rootDir, 'portal.yaml');
+    const portalExists = fs.existsSync(portalPath);
+
+    if (portalExists && !options.force) {
+      console.log(chalk.gray('\nportal.yaml already exists. Use --force to overwrite.'));
+    } else {
+      const portalGates: Record<string, { description: string; check: string; prizes: never[] }> = {};
+      const portalRoutes: Record<string, string[]> = {};
+
+      // Build gates from detected auth patterns
+      for (const gate of gates) {
+        portalGates[`^${gate.id}`] = {
+          description: gate.description,
+          check: `// TODO: implement ${gate.id} check`,
+          prizes: [],
+        };
+      }
+
+      // Build routes from detected route patterns
+      for (const route of routes) {
+        if (route.description.startsWith('GET ') || route.description.startsWith('POST ') ||
+            route.description.startsWith('PUT ') || route.description.startsWith('PATCH ') ||
+            route.description.startsWith('DELETE ')) {
+          const routeKey = route.description; // e.g. "GET /api/users"
+          // Apply all detected gates to API routes
+          const gateRefs = gates.length > 0 ? gates.map(g => `^${g.id}`) : ['# TODO: add gates'];
+          portalRoutes[routeKey] = gateRefs;
+        }
+      }
+
+      if (Object.keys(portalGates).length > 0 || Object.keys(portalRoutes).length > 0) {
+        const portalData: Record<string, unknown> = { version: '1.0' };
+        if (Object.keys(portalGates).length > 0) portalData.gates = portalGates;
+        if (Object.keys(portalRoutes).length > 0) portalData.routes = portalRoutes;
+
+        const portalContent = yaml.dump(portalData, { lineWidth: -1, noRefs: true });
+        fs.writeFileSync(portalPath, portalContent);
+        spinner.succeed(chalk.green(`Generated portal.yaml with ${Object.keys(portalGates).length} gates and ${Object.keys(portalRoutes).length} routes`));
+      } else {
+        console.log(chalk.gray('\nNo gates or routes detected for portal.yaml.'));
+      }
+    }
+  }
+
   console.log(chalk.gray('\nNext steps:'));
   console.log(chalk.gray('  1. Review generated files and adjust descriptions'));
   console.log(chalk.gray('  2. Run `paradigm lint` to validate'));

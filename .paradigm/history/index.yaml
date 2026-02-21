@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-20T06:20:54.021Z'
+generated: '2026-02-21T19:39:59.488Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -584,11 +584,44 @@ by_symbol:
       agent: []
   '#paradigm-config':
     symbol: '#paradigm-config'
-    total_changes: 1
-    last_modified: '2026-02-14T11:22:26Z'
+    total_changes: 2
+    last_modified: '2026-02-20T22:51:01Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_13
+        id: h0024
+        ts: '2026-02-20T22:51:01Z'
+        type: implement
+        symbols:
+          - '#auto-scan'
+          - '#context-builder'
+          - '#discipline-system'
+          - '#init-command'
+          - '#paradigm-config'
+          - '#shift-command'
+        author:
+          type: human
+          id: ascend
+        commit: 98f1ee043a14e95bfbd8c8c7e39b392742adb5fe
+        intent: feature
+        files:
+          - .paradigm/config.yaml
+          - CHANGELOG.md
+          - packages/paradigm/CHANGELOG.md
+          - packages/paradigm/src/commands/init.ts
+          - packages/paradigm/src/commands/scan/auto.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/core/context-builder.ts
+          - packages/paradigm/src/core/discipline.ts
+          - packages/paradigm/src/core/paradigm-config.ts
+          - packages/paradigm/templates/paradigm/config.yaml
+          - packages/paradigm/templates/paradigm/specs/disciplines.md
+          - packages/university/src/content/courses/para-201.json
+          - packages/university/src/content/plsat/v2.0.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/src/content/reference.json
+        description: 'feat(#discipline-system): auto-detect project discipline and apply per-discipline config'
       - *ref_6
     contributors:
       human:
@@ -869,11 +902,54 @@ by_symbol:
       agent: []
   '#paradigm-cli':
     symbol: '#paradigm-cli'
-    total_changes: 1
-    last_modified: '2026-02-18T17:26:14Z'
+    total_changes: 3
+    last_modified: '2026-02-21T19:39:08Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_14
+        id: h0026
+        ts: '2026-02-21T19:39:08Z'
+        type: implement
+        symbols:
+          - '#lore-system'
+          - '#paradigm-cli'
+        author:
+          type: human
+          id: ascend
+        commit: af3ba068b2b6bbb15b8987042121bde33b8f27f4
+        intent: fix
+        files:
+          - .changeset/lore-server-express-fix.md
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/src/lore-server/index.ts
+          - packages/paradigm/tsup.config.ts
+        description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
+      - &ref_15
+        id: h0025
+        ts: '2026-02-21T19:35:58Z'
+        type: implement
+        symbols:
+          - '#lore-system'
+          - '#paradigm-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 2edbc59a4a1369860832b7f66b71c5a9844b980a
+        intent: fix
+        files:
+          - .changeset/lore-server-express-fix.md
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/tsup.config.ts
+        description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
       - &ref_10
         id: h0020
         ts: '2026-02-18T17:26:14Z'
@@ -1095,6 +1171,79 @@ by_symbol:
     fragility: low
     recent:
       - *ref_5
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#auto-scan':
+    symbol: '#auto-scan'
+    total_changes: 1
+    last_modified: '2026-02-20T22:51:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#context-builder':
+    symbol: '#context-builder'
+    total_changes: 1
+    last_modified: '2026-02-20T22:51:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#discipline-system':
+    symbol: '#discipline-system'
+    total_changes: 1
+    last_modified: '2026-02-20T22:51:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#init-command':
+    symbol: '#init-command'
+    total_changes: 1
+    last_modified: '2026-02-20T22:51:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#shift-command':
+    symbol: '#shift-command'
+    total_changes: 1
+    last_modified: '2026-02-20T22:51:01Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_13
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-system':
+    symbol: '#lore-system'
+    total_changes: 2
+    last_modified: '2026-02-21T19:39:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_14
+      - *ref_15
     contributors:
       human:
         - ascend

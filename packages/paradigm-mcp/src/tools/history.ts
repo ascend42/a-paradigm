@@ -38,6 +38,10 @@ export function getHistoryToolsList() {
         },
         required: ['symbols'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_history_record',
@@ -81,6 +85,10 @@ export function getHistoryToolsList() {
         },
         required: ['type', 'symbols', 'description'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_history_validate',
@@ -110,6 +118,10 @@ export function getHistoryToolsList() {
         },
         required: ['result'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_history_fragility',
@@ -125,6 +137,10 @@ export function getHistoryToolsList() {
           },
         },
         required: ['symbols'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];
