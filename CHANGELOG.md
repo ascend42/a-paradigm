@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sentinel Phase 1: Standalone Local Tool** — `@a-company/sentinel` v0.2.0 is now a standalone package with SDK, CLI, framework adapters, and MCP server. New `Sentinel` class (`src/sdk.ts`) wraps the core engine with a developer-friendly API: `sentinel.capture()`, `sentinel.component()`, `sentinel.gate()`, `sentinel.flow()`. `FlowTracker` class tracks multi-step flows with `expect()`, `step()`, `gate()`, `signal()`, `fail()`. Framework adapters for Express (`@a-company/sentinel/express`), Fastify (`@a-company/sentinel/fastify`), and Hono (`@a-company/sentinel/hono`) auto-capture errors with route-derived symbolic context. `.sentinel.yaml` config loader/writer (`src/config.ts`) with simple YAML parser. Auto-symbol detector (`src/detector.ts`) infers `#components`, `^gates`, `!signals`, `$flows` from codebase directory structure and `.purpose` files. Standalone CLI (`sentinel` binary) with `init`, `dashboard`, and `triage` commands (list, show, resolve, stats) — formatting ported from paradigm triage. Standalone MCP server (`sentinel-mcp` binary) with 8 tools (`sentinel_triage`, `sentinel_show`, `sentinel_resolve`, `sentinel_patterns`, `sentinel_add_pattern`, `sentinel_record`, `sentinel_stats`, `sentinel_suggest_pattern`). Multi-config tsup build (lib+DTS, CLI+shebang, MCP+shebang). `SentinelStorage` now supports `SENTINEL_DATA_DIR` env var for standalone users. New SDK types: `SentinelConfig`, `ComponentContext`. Package exports updated for adapter subpaths.
+
 ### Changed
 
 - **npm publish ready** — `npm i -g @a-company/paradigm` installs both `paradigm` CLI and `paradigm-mcp` server. All `@a-company/*` workspace deps bundled via tsup `noExternal`. MCP server built as second entry point (`dist/mcp.js`). `@a-company/paradigm-mcp` marked private. Optional commands (`sentinel`, `university`) gracefully handle missing packages. CI fixed from stale `@horizon/cli` reference. Stale `@horizon/*` changeset deleted.

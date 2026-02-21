@@ -1,12 +1,23 @@
 /**
- * Paradigm Sentinel
+ * Sentinel
  *
- * Semantic observability and failure pattern matching for Paradigm.
+ * Semantic error monitoring — errors that speak your language.
  * Maps runtime errors back to symbolic intent for faster triage.
+ *
+ * @packageDocumentation
  */
+
+// SDK
+export { Sentinel, FlowTracker } from './sdk.js';
 
 // Types
 export * from './types.js';
+
+// Config
+export { loadConfig, writeConfig, type SentinelYamlConfig } from './config.js';
+
+// Detection
+export { detectSymbols, generateConfig } from './detector.js';
 
 // Storage
 export { SentinelStorage } from './storage.js';
