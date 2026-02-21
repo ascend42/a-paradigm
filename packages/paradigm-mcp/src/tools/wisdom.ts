@@ -166,6 +166,25 @@ export function getWisdomToolsList() {
       },
     },
     {
+      name: 'paradigm_wisdom_promote',
+      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['antipattern', 'decision'],
+            description: 'Type of wisdom to promote',
+          },
+          id: {
+            type: 'string',
+            description: 'ID of the antipattern or decision to promote',
+          },
+        },
+        required: ['type', 'id'],
+      },
+    },
+    {
       name: 'paradigm_wisdom_expert',
       description: 'Find human experts who know about specific symbols or areas',
       inputSchema: {
