@@ -11,6 +11,7 @@ const shared = {
     '@a-company/university',
     '@a-company/sentinel',
     'minimatch',
+    'express',
   ],
 };
 
