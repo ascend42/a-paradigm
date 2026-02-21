@@ -74,12 +74,17 @@ export function createLoreApp(options: LoreServerOptions): Express {
   });
 
   // Serve static UI files
-  const uiDistPath = path.join(__dirname, '..', '..', 'lore-ui', 'dist');
+  // After bundling, __dirname is dist/. In source, it's src/lore-server/.
+  // Try bundled path first (dist/ → ../lore-ui/dist), then source path.
+  let uiDistPath = path.join(__dirname, '..', 'lore-ui', 'dist');
+  if (!fs.existsSync(uiDistPath)) {
+    uiDistPath = path.join(__dirname, '..', '..', 'lore-ui', 'dist');
+  }
   if (fs.existsSync(uiDistPath)) {
     app.use(express.static(uiDistPath));
 
-    // SPA fallback
-    app.get('*', (req: Request, res: Response) => {
+    // SPA fallback (Express 5 requires named wildcard param)
+    app.get('{*path}', (req: Request, res: Response) => {
       if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(uiDistPath, 'index.html'));
       }
