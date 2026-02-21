@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-21T19:35:58.422Z",
+    "generatedAt": "2026-02-21T23:02:25.606Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 14,
@@ -826,73 +826,6 @@
         "#tutorial-handler"
       ]
     },
-    "scan-index-generation": {
-      "id": "scan-index-generation",
-      "name": "Scan Index Generation",
-      "symbol": "#scan-index-generation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
-      "visualTags": [],
-      "related": [
-        "!index-generated",
-        "#generator",
-        "#component-scanner"
-      ]
-    },
-    "probe-protocol": {
-      "id": "probe-protocol",
-      "name": "Probe Protocol",
-      "symbol": "#probe-protocol",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
-      "description": "Protocol for visual-to-code mapping",
-      "visualTags": [],
-      "related": []
-    },
-    "symbol-aggregation": {
-      "id": "symbol-aggregation",
-      "name": "Symbol Aggregation",
-      "symbol": "#symbol-aggregation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@symbol-aggregation: Aggregate symbols from all sources",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "~zod-validated",
-        "$symbol-aggregation",
-        "!aggregation-complete",
-        "#aggregator",
-        "#source-loader"
-      ]
-    },
-    "symbol-indexing": {
-      "id": "symbol-indexing",
-      "name": "Symbol Indexing",
-      "symbol": "#symbol-indexing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@symbol-indexing: Build searchable symbol index",
-      "visualTags": [],
-      "related": [
-        "#symbol-index",
-        "#search-engine"
-      ]
-    },
-    "reference-tracking": {
-      "id": "reference-tracking",
-      "name": "Reference Tracking",
-      "symbol": "#reference-tracking",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@reference-tracking: Track symbol relationships",
-      "visualTags": [],
-      "related": [
-        "#reference-tracker",
-        "#graph-builder"
-      ]
-    },
     "purpose-parsing": {
       "id": "purpose-parsing",
       "name": "Purpose Parsing",
@@ -940,46 +873,47 @@
         "#symbol-extractor"
       ]
     },
-    "gate-checking": {
-      "id": "gate-checking",
-      "name": "Gate Checking",
-      "symbol": "#gate-checking",
+    "symbol-aggregation": {
+      "id": "symbol-aggregation",
+      "name": "Symbol Aggregation",
+      "symbol": "#symbol-aggregation",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@gate-checking: Runtime evaluation of gate conditions",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@symbol-aggregation: Aggregate symbols from all sources",
       "visualTags": [],
       "related": [
-        "^gate-check",
-        "!gate-passed",
-        "!gate-denied",
-        "#evaluator",
-        "#context-resolver"
+        "~yaml-config-loading",
+        "~zod-validated",
+        "$symbol-aggregation",
+        "!aggregation-complete",
+        "#aggregator",
+        "#source-loader"
       ]
     },
-    "decorator-api": {
-      "id": "decorator-api",
-      "name": "Decorator Api",
-      "symbol": "#decorator-api",
+    "symbol-indexing": {
+      "id": "symbol-indexing",
+      "name": "Symbol Indexing",
+      "symbol": "#symbol-indexing",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@decorator-api: TypeScript decorators for gate protection",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@symbol-indexing: Build searchable symbol index",
       "visualTags": [],
       "related": [
-        "#gate-decorator",
-        "#require-decorator"
+        "#symbol-index",
+        "#search-engine"
       ]
     },
-    "client-api": {
-      "id": "client-api",
-      "name": "Client Api",
-      "symbol": "#client-api",
+    "reference-tracking": {
+      "id": "reference-tracking",
+      "name": "Reference Tracking",
+      "symbol": "#reference-tracking",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@client-api: Programmatic API for gate checks",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@reference-tracking: Track symbol relationships",
       "visualTags": [],
       "related": [
-        "#portal-client",
-        "#gate-client"
+        "#reference-tracker",
+        "#graph-builder"
       ]
     },
     "realtime-visualization": {
@@ -1051,6 +985,48 @@
         "#command-generator"
       ]
     },
+    "gate-checking": {
+      "id": "gate-checking",
+      "name": "Gate Checking",
+      "symbol": "#gate-checking",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@gate-checking: Runtime evaluation of gate conditions",
+      "visualTags": [],
+      "related": [
+        "^gate-check",
+        "!gate-passed",
+        "!gate-denied",
+        "#evaluator",
+        "#context-resolver"
+      ]
+    },
+    "decorator-api": {
+      "id": "decorator-api",
+      "name": "Decorator Api",
+      "symbol": "#decorator-api",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@decorator-api: TypeScript decorators for gate protection",
+      "visualTags": [],
+      "related": [
+        "#gate-decorator",
+        "#require-decorator"
+      ]
+    },
+    "client-api": {
+      "id": "client-api",
+      "name": "Client Api",
+      "symbol": "#client-api",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@client-api: Programmatic API for gate checks",
+      "visualTags": [],
+      "related": [
+        "#portal-client",
+        "#gate-client"
+      ]
+    },
     "portal-parsing": {
       "id": "portal-parsing",
       "name": "Portal Parsing",
@@ -1083,6 +1059,30 @@
         "#validator",
         "#topology-checker"
       ]
+    },
+    "scan-index-generation": {
+      "id": "scan-index-generation",
+      "name": "Scan Index Generation",
+      "symbol": "#scan-index-generation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
+      "visualTags": [],
+      "related": [
+        "!index-generated",
+        "#generator",
+        "#component-scanner"
+      ]
+    },
+    "probe-protocol": {
+      "id": "probe-protocol",
+      "name": "Probe Protocol",
+      "symbol": "#probe-protocol",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Protocol for visual-to-code mapping",
+      "visualTags": [],
+      "related": []
     },
     "commander-setup": {
       "id": "commander-setup",
@@ -2232,88 +2232,6 @@
       "visualTags": [],
       "related": []
     },
-    "generator": {
-      "id": "generator",
-      "name": "Generator",
-      "symbol": "#generator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#generator: Generates scan-index.json",
-      "visualTags": [],
-      "related": []
-    },
-    "component-scanner": {
-      "id": "component-scanner",
-      "name": "Component Scanner",
-      "symbol": "#component-scanner",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#component-scanner: Scans for UI components",
-      "visualTags": [],
-      "related": []
-    },
-    "protocol-handler": {
-      "id": "protocol-handler",
-      "name": "Protocol Handler",
-      "symbol": "#protocol-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#protocol-handler: Handles probe protocol requests",
-      "visualTags": [],
-      "related": []
-    },
-    "matcher": {
-      "id": "matcher",
-      "name": "Matcher",
-      "symbol": "#matcher",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#matcher: Matches images to components",
-      "visualTags": [],
-      "related": []
-    },
-    "aggregator": {
-      "id": "aggregator",
-      "name": "Aggregator",
-      "symbol": "#aggregator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "#aggregator: Combines multiple .purpose files",
-      "visualTags": [],
-      "related": []
-    },
-    "source-loader": {
-      "id": "source-loader",
-      "name": "Source Loader",
-      "symbol": "#source-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#source-loader: Loads symbols from .purpose and portal.yaml",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": []
-    },
-    "search-engine": {
-      "id": "search-engine",
-      "name": "Search Engine",
-      "symbol": "#search-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#search-engine: Symbol search functionality",
-      "visualTags": [],
-      "related": []
-    },
-    "reference-tracker": {
-      "id": "reference-tracker",
-      "name": "Reference Tracker",
-      "symbol": "#reference-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#reference-tracker: Tracks references between symbols",
-      "visualTags": [],
-      "related": []
-    },
     "yaml-parser": {
       "id": "yaml-parser",
       "name": "Yaml Parser",
@@ -2354,6 +2272,16 @@
       "visualTags": [],
       "related": []
     },
+    "aggregator": {
+      "id": "aggregator",
+      "name": "Aggregator",
+      "symbol": "#aggregator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#aggregator: Main aggregation logic",
+      "visualTags": [],
+      "related": []
+    },
     "symbol-extractor": {
       "id": "symbol-extractor",
       "name": "Symbol Extractor",
@@ -2364,63 +2292,35 @@
       "visualTags": [],
       "related": []
     },
-    "evaluator": {
-      "id": "evaluator",
-      "name": "Evaluator",
-      "symbol": "#evaluator",
+    "source-loader": {
+      "id": "source-loader",
+      "name": "Source Loader",
+      "symbol": "#source-loader",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#evaluator: Evaluates gate keys against context",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#source-loader: Loads symbols from .purpose and portal.yaml",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": []
+    },
+    "search-engine": {
+      "id": "search-engine",
+      "name": "Search Engine",
+      "symbol": "#search-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#search-engine: Symbol search functionality",
       "visualTags": [],
       "related": []
     },
-    "context-resolver": {
-      "id": "context-resolver",
-      "name": "Context Resolver",
-      "symbol": "#context-resolver",
+    "reference-tracker": {
+      "id": "reference-tracker",
+      "name": "Reference Tracker",
+      "symbol": "#reference-tracker",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#context-resolver: Resolves user context for evaluation",
-      "visualTags": [],
-      "related": []
-    },
-    "gate-decorator": {
-      "id": "gate-decorator",
-      "name": "Gate Decorator",
-      "symbol": "#gate-decorator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#gate-decorator: @Gate() decorator for methods",
-      "visualTags": [],
-      "related": []
-    },
-    "require-decorator": {
-      "id": "require-decorator",
-      "name": "Require Decorator",
-      "symbol": "#require-decorator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#require-decorator: @Require() decorator for properties",
-      "visualTags": [],
-      "related": []
-    },
-    "portal-client": {
-      "id": "portal-client",
-      "name": "Portal Client",
-      "symbol": "#portal-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#portal-client: High-level client for portal operations",
-      "visualTags": [],
-      "related": []
-    },
-    "gate-client": {
-      "id": "gate-client",
-      "name": "Gate Client",
-      "symbol": "#gate-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#gate-client: Low-level gate checking client",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#reference-tracker: Tracks references between symbols",
       "visualTags": [],
       "related": []
     },
@@ -2526,6 +2426,66 @@
       "visualTags": [],
       "related": []
     },
+    "evaluator": {
+      "id": "evaluator",
+      "name": "Evaluator",
+      "symbol": "#evaluator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#evaluator: Evaluates gate keys against context",
+      "visualTags": [],
+      "related": []
+    },
+    "context-resolver": {
+      "id": "context-resolver",
+      "name": "Context Resolver",
+      "symbol": "#context-resolver",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#context-resolver: Resolves user context for evaluation",
+      "visualTags": [],
+      "related": []
+    },
+    "gate-decorator": {
+      "id": "gate-decorator",
+      "name": "Gate Decorator",
+      "symbol": "#gate-decorator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#gate-decorator: @Gate() decorator for methods",
+      "visualTags": [],
+      "related": []
+    },
+    "require-decorator": {
+      "id": "require-decorator",
+      "name": "Require Decorator",
+      "symbol": "#require-decorator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#require-decorator: @Require() decorator for properties",
+      "visualTags": [],
+      "related": []
+    },
+    "portal-client": {
+      "id": "portal-client",
+      "name": "Portal Client",
+      "symbol": "#portal-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#portal-client: High-level client for portal operations",
+      "visualTags": [],
+      "related": []
+    },
+    "gate-client": {
+      "id": "gate-client",
+      "name": "Gate Client",
+      "symbol": "#gate-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#gate-client: Low-level gate checking client",
+      "visualTags": [],
+      "related": []
+    },
     "gate-schemas": {
       "id": "gate-schemas",
       "name": "Gate Schemas",
@@ -2543,6 +2503,46 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
       "description": "#topology-checker: Checks for circular dependencies in gates",
+      "visualTags": [],
+      "related": []
+    },
+    "generator": {
+      "id": "generator",
+      "name": "Generator",
+      "symbol": "#generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#generator: Generates scan-index.json",
+      "visualTags": [],
+      "related": []
+    },
+    "component-scanner": {
+      "id": "component-scanner",
+      "name": "Component Scanner",
+      "symbol": "#component-scanner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#component-scanner: Scans for UI components",
+      "visualTags": [],
+      "related": []
+    },
+    "protocol-handler": {
+      "id": "protocol-handler",
+      "name": "Protocol Handler",
+      "symbol": "#protocol-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#protocol-handler: Handles probe protocol requests",
+      "visualTags": [],
+      "related": []
+    },
+    "matcher": {
+      "id": "matcher",
+      "name": "Matcher",
+      "symbol": "#matcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#matcher: Matches images to components",
       "visualTags": [],
       "related": []
     },
@@ -2615,19 +2615,6 @@
       "description": "Run orchestration in background with progress reporting",
       "visualTags": [],
       "related": []
-    },
-    "paradigm-hooks": {
-      "id": "paradigm-hooks",
-      "name": "Paradigm Hooks",
-      "symbol": "#paradigm-hooks",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
-      "description": "CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 7 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording.",
-      "visualTags": [],
-      "related": [
-        "!compliance-violation",
-        "!hook-installed"
-      ]
     },
     "claude-provider": {
       "id": "claude-provider",
@@ -2734,6 +2721,19 @@
       "description": "IDE adapter discovery, selection, and factory",
       "visualTags": [],
       "related": []
+    },
+    "paradigm-hooks": {
+      "id": "paradigm-hooks",
+      "name": "Paradigm Hooks",
+      "symbol": "#paradigm-hooks",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 7 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording.",
+      "visualTags": [],
+      "related": [
+        "!compliance-violation",
+        "!hook-installed"
+      ]
     },
     "index": {
       "id": "index",
@@ -3338,6 +3338,39 @@
         }
       ]
     },
+    "purpose-parsing": {
+      "id": "purpose-parsing",
+      "name": "Purpose Parsing",
+      "symbol": "$purpose-parsing",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "Parse a .purpose file from raw YAML into validated structured data",
+      "steps": [
+        {
+          "id": "purpose-parsing-step-0",
+          "name": "Read YAML file and parse with js-yaml",
+          "target": "#yaml-parser",
+          "order": 0
+        },
+        {
+          "id": "purpose-parsing-step-1",
+          "name": "Validate parsed data against PurposeFileSchema",
+          "target": "#zod-schemas",
+          "order": 1
+        },
+        {
+          "id": "purpose-parsing-step-2",
+          "name": "Extract components, gates, signals, flows, aspects from validated data",
+          "target": "#symbol-extractor",
+          "order": 2
+        },
+        {
+          "id": "purpose-parsing-step-3",
+          "name": "Return structured PurposeFile or validation errors",
+          "target": "#validator",
+          "order": 3
+        }
+      ]
+    },
     "symbol-aggregation": {
       "id": "symbol-aggregation",
       "name": "Symbol Aggregation",
@@ -3380,39 +3413,6 @@
           "name": "Build relationship graph",
           "target": "#graph-builder",
           "order": 5
-        }
-      ]
-    },
-    "purpose-parsing": {
-      "id": "purpose-parsing",
-      "name": "Purpose Parsing",
-      "symbol": "$purpose-parsing",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "Parse a .purpose file from raw YAML into validated structured data",
-      "steps": [
-        {
-          "id": "purpose-parsing-step-0",
-          "name": "Read YAML file and parse with js-yaml",
-          "target": "#yaml-parser",
-          "order": 0
-        },
-        {
-          "id": "purpose-parsing-step-1",
-          "name": "Validate parsed data against PurposeFileSchema",
-          "target": "#zod-schemas",
-          "order": 1
-        },
-        {
-          "id": "purpose-parsing-step-2",
-          "name": "Extract components, gates, signals, flows, aspects from validated data",
-          "target": "#symbol-extractor",
-          "order": 2
-        },
-        {
-          "id": "purpose-parsing-step-3",
-          "name": "Return structured PurposeFile or validation errors",
-          "target": "#validator",
-          "order": 3
         }
       ]
     },
@@ -3745,24 +3745,6 @@
       "description": "A structured log entry was written",
       "related": []
     },
-    "index-generated": {
-      "id": "index-generated",
-      "name": "Index Generated",
-      "symbol": "!index-generated",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "!index-generated: Scan index was generated",
-      "related": []
-    },
-    "aggregation-complete": {
-      "id": "aggregation-complete",
-      "name": "Aggregation Complete",
-      "symbol": "!aggregation-complete",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "!aggregation-complete: Symbol aggregation finished",
-      "related": []
-    },
     "parse-success": {
       "id": "parse-success",
       "name": "Parse Success",
@@ -3799,22 +3781,13 @@
       "description": "!validation-failed: Portal validation found issues",
       "related": []
     },
-    "gate-passed": {
-      "id": "gate-passed",
-      "name": "Gate Passed",
-      "symbol": "!gate-passed",
+    "aggregation-complete": {
+      "id": "aggregation-complete",
+      "name": "Aggregation Complete",
+      "symbol": "!aggregation-complete",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "!gate-passed: Gate check passed, access granted",
-      "related": []
-    },
-    "gate-denied": {
-      "id": "gate-denied",
-      "name": "Gate Denied",
-      "symbol": "!gate-denied",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "!gate-denied: Gate check failed, access denied",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "!aggregation-complete: Symbol aggregation finished",
       "related": []
     },
     "decision-received": {
@@ -3833,6 +3806,33 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
       "description": "!session-started: New session tracking started",
+      "related": []
+    },
+    "gate-passed": {
+      "id": "gate-passed",
+      "name": "Gate Passed",
+      "symbol": "!gate-passed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "!gate-passed: Gate check passed, access granted",
+      "related": []
+    },
+    "gate-denied": {
+      "id": "gate-denied",
+      "name": "Gate Denied",
+      "symbol": "!gate-denied",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "!gate-denied: Gate check failed, access denied",
+      "related": []
+    },
+    "index-generated": {
+      "id": "index-generated",
+      "name": "Index Generated",
+      "symbol": "!index-generated",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "!index-generated: Scan index was generated",
       "related": []
     },
     "budget-exceeded": {
@@ -4141,26 +4141,6 @@
       "category": "components",
       "id": "tutorial-command"
     },
-    "#scan-index-generation": {
-      "category": "components",
-      "id": "scan-index-generation"
-    },
-    "#probe-protocol": {
-      "category": "components",
-      "id": "probe-protocol"
-    },
-    "#symbol-aggregation": {
-      "category": "components",
-      "id": "symbol-aggregation"
-    },
-    "#symbol-indexing": {
-      "category": "components",
-      "id": "symbol-indexing"
-    },
-    "#reference-tracking": {
-      "category": "components",
-      "id": "reference-tracking"
-    },
     "#purpose-parsing": {
       "category": "components",
       "id": "purpose-parsing"
@@ -4173,17 +4153,17 @@
       "category": "components",
       "id": "purpose-aggregation"
     },
-    "#gate-checking": {
+    "#symbol-aggregation": {
       "category": "components",
-      "id": "gate-checking"
+      "id": "symbol-aggregation"
     },
-    "#decorator-api": {
+    "#symbol-indexing": {
       "category": "components",
-      "id": "decorator-api"
+      "id": "symbol-indexing"
     },
-    "#client-api": {
+    "#reference-tracking": {
       "category": "components",
-      "id": "client-api"
+      "id": "reference-tracking"
     },
     "#realtime-visualization": {
       "category": "components",
@@ -4205,6 +4185,18 @@
       "category": "components",
       "id": "command-palette"
     },
+    "#gate-checking": {
+      "category": "components",
+      "id": "gate-checking"
+    },
+    "#decorator-api": {
+      "category": "components",
+      "id": "decorator-api"
+    },
+    "#client-api": {
+      "category": "components",
+      "id": "client-api"
+    },
     "#portal-parsing": {
       "category": "components",
       "id": "portal-parsing"
@@ -4212,6 +4204,14 @@
     "#portal-validation": {
       "category": "components",
       "id": "portal-validation"
+    },
+    "#scan-index-generation": {
+      "category": "components",
+      "id": "scan-index-generation"
+    },
+    "#probe-protocol": {
+      "category": "components",
+      "id": "probe-protocol"
     },
     "#commander-setup": {
       "category": "components",
@@ -4653,38 +4653,6 @@
       "category": "components",
       "id": "duration-tracker"
     },
-    "#generator": {
-      "category": "components",
-      "id": "generator"
-    },
-    "#component-scanner": {
-      "category": "components",
-      "id": "component-scanner"
-    },
-    "#protocol-handler": {
-      "category": "components",
-      "id": "protocol-handler"
-    },
-    "#matcher": {
-      "category": "components",
-      "id": "matcher"
-    },
-    "#aggregator": {
-      "category": "components",
-      "id": "aggregator"
-    },
-    "#source-loader": {
-      "category": "components",
-      "id": "source-loader"
-    },
-    "#search-engine": {
-      "category": "components",
-      "id": "search-engine"
-    },
-    "#reference-tracker": {
-      "category": "components",
-      "id": "reference-tracker"
-    },
     "#yaml-parser": {
       "category": "components",
       "id": "yaml-parser"
@@ -4701,33 +4669,25 @@
       "category": "components",
       "id": "schema-rules"
     },
+    "#aggregator": {
+      "category": "components",
+      "id": "aggregator"
+    },
     "#symbol-extractor": {
       "category": "components",
       "id": "symbol-extractor"
     },
-    "#evaluator": {
+    "#source-loader": {
       "category": "components",
-      "id": "evaluator"
+      "id": "source-loader"
     },
-    "#context-resolver": {
+    "#search-engine": {
       "category": "components",
-      "id": "context-resolver"
+      "id": "search-engine"
     },
-    "#gate-decorator": {
+    "#reference-tracker": {
       "category": "components",
-      "id": "gate-decorator"
-    },
-    "#require-decorator": {
-      "category": "components",
-      "id": "require-decorator"
-    },
-    "#portal-client": {
-      "category": "components",
-      "id": "portal-client"
-    },
-    "#gate-client": {
-      "category": "components",
-      "id": "gate-client"
+      "id": "reference-tracker"
     },
     "#websocket-server": {
       "category": "components",
@@ -4769,6 +4729,30 @@
       "category": "components",
       "id": "command-generator"
     },
+    "#evaluator": {
+      "category": "components",
+      "id": "evaluator"
+    },
+    "#context-resolver": {
+      "category": "components",
+      "id": "context-resolver"
+    },
+    "#gate-decorator": {
+      "category": "components",
+      "id": "gate-decorator"
+    },
+    "#require-decorator": {
+      "category": "components",
+      "id": "require-decorator"
+    },
+    "#portal-client": {
+      "category": "components",
+      "id": "portal-client"
+    },
+    "#gate-client": {
+      "category": "components",
+      "id": "gate-client"
+    },
     "#gate-schemas": {
       "category": "components",
       "id": "gate-schemas"
@@ -4776,6 +4760,22 @@
     "#topology-checker": {
       "category": "components",
       "id": "topology-checker"
+    },
+    "#generator": {
+      "category": "components",
+      "id": "generator"
+    },
+    "#component-scanner": {
+      "category": "components",
+      "id": "component-scanner"
+    },
+    "#protocol-handler": {
+      "category": "components",
+      "id": "protocol-handler"
+    },
+    "#matcher": {
+      "category": "components",
+      "id": "matcher"
     },
     "#agent-matcher": {
       "category": "components",
@@ -4804,10 +4804,6 @@
     "#background-orchestrator": {
       "category": "components",
       "id": "background-orchestrator"
-    },
-    "#paradigm-hooks": {
-      "category": "components",
-      "id": "paradigm-hooks"
     },
     "#claude-provider": {
       "category": "components",
@@ -4844,6 +4840,10 @@
     "#adapter-registry": {
       "category": "components",
       "id": "adapter-registry"
+    },
+    "#paradigm-hooks": {
+      "category": "components",
+      "id": "paradigm-hooks"
     },
     "^gate-check": {
       "category": "gates",
@@ -4901,13 +4901,13 @@
       "category": "flows",
       "id": "agent-orchestration-flow"
     },
-    "$symbol-aggregation": {
-      "category": "flows",
-      "id": "symbol-aggregation"
-    },
     "$purpose-parsing": {
       "category": "flows",
       "id": "purpose-parsing"
+    },
+    "$symbol-aggregation": {
+      "category": "flows",
+      "id": "symbol-aggregation"
     },
     "$portal-validation-flow": {
       "category": "flows",
@@ -5005,14 +5005,6 @@
       "category": "signals",
       "id": "log-emitted"
     },
-    "!index-generated": {
-      "category": "signals",
-      "id": "index-generated"
-    },
-    "!aggregation-complete": {
-      "category": "signals",
-      "id": "aggregation-complete"
-    },
     "!parse-success": {
       "category": "signals",
       "id": "parse-success"
@@ -5029,13 +5021,9 @@
       "category": "signals",
       "id": "validation-failed"
     },
-    "!gate-passed": {
+    "!aggregation-complete": {
       "category": "signals",
-      "id": "gate-passed"
-    },
-    "!gate-denied": {
-      "category": "signals",
-      "id": "gate-denied"
+      "id": "aggregation-complete"
     },
     "!decision-received": {
       "category": "signals",
@@ -5044,6 +5032,18 @@
     "!session-started": {
       "category": "signals",
       "id": "session-started"
+    },
+    "!gate-passed": {
+      "category": "signals",
+      "id": "gate-passed"
+    },
+    "!gate-denied": {
+      "category": "signals",
+      "id": "gate-denied"
+    },
+    "!index-generated": {
+      "category": "signals",
+      "id": "index-generated"
     },
     "!budget-exceeded": {
       "category": "signals",
