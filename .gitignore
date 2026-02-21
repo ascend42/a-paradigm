@@ -29,6 +29,10 @@ out/
 .paradigm/session-breadcrumbs.json
 .paradigm/session-checkpoint.json
 
+# Sentinel runtime data
+.paradigm/sentinel/
+.sentinel/
+
 # BUT keep everything in examples/ (hydrated reference)
 !examples/**
 

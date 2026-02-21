@@ -382,6 +382,10 @@ Examples:
         },
         required: ['task'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_agent_prompt',
@@ -408,6 +412,10 @@ Examples:
           },
         },
         required: ['agent', 'task'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

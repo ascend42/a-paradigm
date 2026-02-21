@@ -197,6 +197,35 @@ describe('hooksUninstallCommand - Cursor', () => {
   });
 });
 
+describe('Check 7 — Lore enforcement', () => {
+  it('Claude Code stop hook contains lore check', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ claudeCode: true });
+
+    const hookPath = path.join(rootDir, '.claude', 'hooks', 'paradigm-stop.sh');
+    expect(fs.existsSync(hookPath)).toBe(true);
+
+    const content = fs.readFileSync(hookPath, 'utf8');
+    expect(content).toContain('Check 7');
+    expect(content).toContain('LORE_RECORDED');
+    expect(content).toContain('paradigm_lore_record');
+  });
+
+  it('Cursor stop hook contains lore check', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    fs.mkdirSync(path.join(rootDir, '.cursor'), { recursive: true });
+    await hooksInstallCommand({ cursor: true });
+
+    const hookPath = path.join(rootDir, '.cursor', 'hooks', 'paradigm-stop.sh');
+    expect(fs.existsSync(hookPath)).toBe(true);
+
+    const content = fs.readFileSync(hookPath, 'utf8');
+    expect(content).toContain('Check 7');
+    expect(content).toContain('LORE_RECORDED');
+    expect(content).toContain('paradigm_lore_record');
+  });
+});
+
 describe('hooksStatusCommand', () => {
   it('reports installed hooks correctly', async () => {
     const { hooksInstallCommand, hooksStatusCommand } = await importHooks();

@@ -69,6 +69,10 @@ const purposeInitTool: Tool = {
     },
     required: ['purposeFile', 'name'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeAddComponentTool: Tool = {
@@ -140,6 +144,10 @@ const purposeAddComponentTool: Tool = {
     },
     required: ['purposeFile', 'id', 'description'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeAddAspectTool: Tool = {
@@ -181,6 +189,10 @@ const purposeAddAspectTool: Tool = {
       },
     },
     required: ['purposeFile', 'id', 'description', 'anchors'],
+  },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
   },
 };
 
@@ -227,6 +239,10 @@ const purposeAddSignalTool: Tool = {
       },
     },
     required: ['purposeFile', 'id', 'description'],
+  },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
   },
 };
 
@@ -279,6 +295,10 @@ const purposeAddFlowTool: Tool = {
     },
     required: ['purposeFile', 'id', 'description'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeAddGateTool: Tool = {
@@ -317,6 +337,10 @@ const purposeAddGateTool: Tool = {
     },
     required: ['purposeFile', 'id', 'description'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeAddStateTool: Tool = {
@@ -350,6 +374,10 @@ const purposeAddStateTool: Tool = {
       },
     },
     required: ['purposeFile', 'id', 'description'],
+  },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
   },
 };
 
@@ -400,6 +428,10 @@ const purposeLinkTool: Tool = {
     },
     required: ['purposeFile', 'componentId'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeRemoveTool: Tool = {
@@ -424,6 +456,10 @@ const purposeRemoveTool: Tool = {
     },
     required: ['purposeFile', 'section', 'id'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+  },
 };
 
 const purposeRenameTool: Tool = {
@@ -447,6 +483,10 @@ const purposeRenameTool: Tool = {
       },
     },
     required: ['oldId', 'newId', 'symbolType'],
+  },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
   },
 };
 
@@ -506,6 +546,10 @@ const portalAddGateTool: Tool = {
     },
     required: ['id', 'description'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const portalAddRouteTool: Tool = {
@@ -531,6 +575,10 @@ const portalAddRouteTool: Tool = {
     },
     required: ['route', 'method', 'gates'],
   },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
 };
 
 const purposeValidateTool: Tool = {
@@ -548,6 +596,10 @@ const purposeValidateTool: Tool = {
         description: 'Also validate portal.yaml (default: true)',
       },
     },
+  },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
   },
 };
 

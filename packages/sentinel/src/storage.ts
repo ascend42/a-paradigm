@@ -52,11 +52,12 @@ export class SentinelStorage {
   }
 
   private getDefaultDbPath(): string {
-    // Store in .paradigm directory
-    const paradigmDir =
+    // Store in .paradigm directory (or standalone .sentinel directory)
+    const dataDir =
+      process.env.SENTINEL_DATA_DIR ||
       process.env.PARADIGM_DATA_DIR ||
       path.join(process.cwd(), '.paradigm', 'sentinel');
-    return path.join(paradigmDir, 'sentinel.db');
+    return path.join(dataDir, 'sentinel.db');
   }
 
   private createSchema(): void {

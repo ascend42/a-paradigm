@@ -67,6 +67,10 @@ export function getReindexToolsList() {
         type: 'object',
         properties: {},
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+      },
     },
   ];
 }
