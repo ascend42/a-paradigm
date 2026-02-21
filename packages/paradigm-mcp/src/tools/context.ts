@@ -258,6 +258,44 @@ export function getContextToolsList() {
         destructiveHint: false,
       },
     },
+    {
+      name: 'paradigm_session_checkpoint',
+      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          phase: {
+            type: 'string',
+            enum: ['planning', 'implementing', 'validating', 'complete'],
+            description: 'Current workflow phase',
+          },
+          context: {
+            type: 'string',
+            description: 'What\'s top-of-mind right now (1-3 sentences)',
+          },
+          plan: {
+            type: 'string',
+            description: 'Optional: the current plan or approach',
+          },
+          modifiedFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: files modified so far',
+          },
+          symbolsTouched: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: symbols touched so far',
+          },
+          decisions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: key decisions made so far',
+          },
+        },
+        required: ['phase', 'context'],
+      },
+    },
   ];
 }
 
