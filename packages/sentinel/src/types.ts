@@ -458,3 +458,31 @@ export interface PatternTestResult {
   matchCount: number;
   avgScore: number;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// SDK TYPES
+// ═══════════════════════════════════════════════════════════════════
+
+export interface SentinelConfig {
+  /** Project name */
+  project: string;
+  /** Default environment for captured incidents */
+  environment?: Environment;
+  /** Service/app name */
+  service?: string;
+  /** App version */
+  version?: string;
+  /** Custom SQLite database path */
+  dbPath?: string;
+  /** Hook called after each incident capture */
+  onCapture?: (incident: SymbolicIncidentRecord) => void;
+}
+
+export interface ComponentContext {
+  /** Component symbol ID (e.g. '#checkout') */
+  id: string;
+  /** Capture an error in this component's context */
+  capture(error: Error, extra?: Record<string, unknown>): string;
+  /** Wrap a function to auto-capture errors in this component's context */
+  wrap<T extends (...args: any[]) => any>(fn: T): T;
+}
