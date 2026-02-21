@@ -4,6 +4,33 @@ All notable changes to Paradigm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Lore System** — Unified project timeline with queryable history
+  - YAML storage with date-partitioned entries (`.paradigm/lore/entries/YYYY-MM-DD/`)
+  - 3 MCP tools: `paradigm_lore_search`, `paradigm_lore_record`, `paradigm_lore_timeline`
+  - 5 CLI commands: `lore`, `lore record`, `lore show`, `lore review`, `lore timeline`
+  - Timeline UI (lore-ui) — single-page Preact app served via `paradigm lore --ui`
+  - Auto-scaffolding: `paradigm shift` creates `.paradigm/lore/` directory
+  - MCP safety annotations (`readOnlyHint`, `destructiveHint`) across 100+ tools
+  - 39 new tests (storage: 19, filter: 20)
+  - CLAUDE.md template updated with Lore section, MCP tool references, and recording guidance
+
+- **Sentinel Phase 1** — Standalone incident tracking SDK
+  - SDK, CLI, MCP server, and framework adapters (Express, Fastify, Hono)
+  - Pattern-based failure detection with confidence scores
+  - Incident recording, triage, and resolution workflows
+
+### Changed
+
+- **Distribution pipeline** — lore-ui/dist now included in `paradigm promote`
+- **`paradigm shift`** — creates `.paradigm/lore/` directory, lists it in summary output
+- **CLAUDE.md template** — added Lore section with MCP tools, CLI commands, and recording guidance; added lore rows to MCP Workflow Protocol and Maintaining Paradigm Files tables; added `.paradigm/lore/` to Quick Orientation
+
+### Fixed
+
+- **`minimatch` runtime resolution** — installed at root level to fix `ERR_MODULE_NOT_FOUND` when running promoted `paradigm` CLI (was externalized but not available outside pnpm workspace)
+
 ### Changed
 
 - **npm publish ready** — Single `npm i -g @a-company/paradigm` installs both `paradigm` CLI and `paradigm-mcp` server as global commands

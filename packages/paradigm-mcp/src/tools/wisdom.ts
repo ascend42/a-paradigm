@@ -51,6 +51,10 @@ export function getWisdomToolsList() {
         },
         required: ['symbols'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_wisdom_record',
@@ -133,6 +137,33 @@ export function getWisdomToolsList() {
         },
         required: ['type', 'id', 'symbols'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_wisdom_promote',
+      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['antipattern', 'decision'],
+            description: 'Type of wisdom to promote',
+          },
+          id: {
+            type: 'string',
+            description: 'ID of the antipattern or decision to promote',
+          },
+        },
+        required: ['type', 'id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_wisdom_promote',
@@ -168,6 +199,10 @@ export function getWisdomToolsList() {
             description: 'General area to find experts for (e.g., "payments", "auth")',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

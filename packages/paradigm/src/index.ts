@@ -264,6 +264,7 @@ scanCmd
   .option('-n, --dry-run', 'Show what would be generated without writing')
   .option('-f, --force', 'Overwrite existing .purpose files')
   .option('--json', 'Output as JSON')
+  .option('--init', 'Full project initialization: generate .purpose files + portal.yaml')
   .action(async (path, options) => {
     const { autoScanCommand } = await import('./commands/scan/auto.js');
     await autoScanCommand(path, options);
@@ -1226,6 +1227,70 @@ triageCmd
   .action(async (options) => {
     const { triageListCommand } = await import('./commands/triage/index.js');
     await triageListCommand(options);
+  });
+
+// paradigm lore <command>
+const loreCmd = program
+  .command('lore')
+  .description('Project lore - timeline of everything that happened to this project');
+
+loreCmd
+  .command('list')
+  .alias('ls')
+  .description('List recent lore entries')
+  .option('--author <author>', 'Filter by author')
+  .option('--type <type>', 'Filter by type: agent-session, human-note, decision, review, incident, milestone')
+  .option('--symbol <symbol>', 'Filter by symbol')
+  .option('--tags <tags>', 'Filter by tags (comma-separated)')
+  .option('-l, --limit <number>', 'Number of entries', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { loreListCommand } = await import('./commands/lore/list.js');
+    await loreListCommand(options);
+  });
+
+loreCmd
+  .command('show <id>')
+  .description('Show full detail for a lore entry')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { loreShowCommand } = await import('./commands/lore/show.js');
+    await loreShowCommand(id, options);
+  });
+
+loreCmd
+  .command('record')
+  .description('Record a new lore entry (human note, milestone, etc.)')
+  .option('--type <type>', 'Entry type: human-note, decision, milestone', 'human-note')
+  .option('--author <author>', 'Author name')
+  .option('--title <title>', 'Entry title')
+  .option('--summary <summary>', 'Entry summary')
+  .option('--symbols <symbols>', 'Comma-separated symbols')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (options) => {
+    const { loreRecordCommand } = await import('./commands/lore/record.js');
+    await loreRecordCommand(options);
+  });
+
+loreCmd
+  .command('review <id>')
+  .description('Add a review to a lore entry')
+  .option('--reviewer <name>', 'Reviewer name')
+  .option('--completeness <n>', 'Completeness score (1-5)', '3')
+  .option('--quality <n>', 'Quality score (1-5)', '3')
+  .option('--notes <text>', 'Review notes')
+  .action(async (id, options) => {
+    const { loreReviewCommand } = await import('./commands/lore/review.js');
+    await loreReviewCommand(id, options);
+  });
+
+// Default lore action: launch timeline UI
+loreCmd
+  .option('-p, --port <port>', 'Port to run on', '3840')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (options) => {
+    const { loreServeCommand } = await import('./commands/lore/serve.js');
+    await loreServeCommand(undefined, options);
   });
 
 // paradigm sentinel - Launch the unified codebase intelligence UI

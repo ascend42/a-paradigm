@@ -125,6 +125,7 @@ const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 #   4. Aspect anchor files that no longer exist
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
+#   7. Lore entry expected for significant sessions (3+ source files)
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -346,6 +347,27 @@ if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
   fi
 fi
 
+# --- Check 7: Lore entry expected for significant sessions ---
+if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
+  LORE_RECORDED=false
+  for file in $MODIFIED; do
+    case "$file" in
+      .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml)
+        LORE_RECORDED=true
+        break
+        ;;
+    esac
+  done
+
+  if [ "$LORE_RECORDED" = false ]; then
+    VIOLATIONS="$VIOLATIONS
+  - You modified $SOURCE_COUNT source files but recorded no lore entry.
+    Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
+    Include: type, title, summary, and symbols_touched."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -362,6 +384,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
   echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
+  echo "  5. paradigm_lore_record — record session lore entry" >&2
   exit 2
 fi
 
@@ -545,6 +568,7 @@ const CURSOR_STOP_HOOK = `#!/bin/sh
 #   4. Aspect anchor files that no longer exist
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
+#   7. Lore entry expected for significant sessions (3+ source files)
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -766,6 +790,27 @@ if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
   fi
 fi
 
+# --- Check 7: Lore entry expected for significant sessions ---
+if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
+  LORE_RECORDED=false
+  for file in $MODIFIED; do
+    case "$file" in
+      .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml)
+        LORE_RECORDED=true
+        break
+        ;;
+    esac
+  done
+
+  if [ "$LORE_RECORDED" = false ]; then
+    VIOLATIONS="$VIOLATIONS
+  - You modified $SOURCE_COUNT source files but recorded no lore entry.
+    Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
+    Include: type, title, summary, and symbols_touched."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -782,6 +827,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
   echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
+  echo "  5. paradigm_lore_record — record session lore entry" >&2
   exit 2
 fi
 

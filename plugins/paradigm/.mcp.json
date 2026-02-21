@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "paradigm": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@a-company/paradigm", "mcp"]
+    }
+  }
+}

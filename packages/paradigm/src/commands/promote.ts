@@ -38,6 +38,7 @@ const PARADIGM_CLI_DIR = path.join(os.homedir(), '.paradigm-cli');
 /** Package directories to copy */
 const PACKAGES_TO_COPY = [
   'packages/paradigm/dist',
+  'packages/paradigm/lore-ui/dist',
   'packages/paradigm-mcp/dist',
   'packages/premise/core/dist',
   'packages/portal/core/dist',

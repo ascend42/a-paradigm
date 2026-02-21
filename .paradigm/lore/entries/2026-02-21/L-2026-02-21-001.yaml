@@ -1,0 +1,11 @@
+id: L-2026-02-21-001
+type: feature
+timestamp: '2026-02-21T18:23:41.673Z'
+author:
+  type: human
+  id: unknown
+title: Stop hook Check 7 — lore enforcement
+summary: Added Check 7 to both Claude Code and Cursor stop hooks. Blocks agent sessions that modify 3+ source files without recording a lore entry. Skips gracefully when .paradigm/lore doesn't exist. Verified across 7 projects.
+symbols_touched:
+  - '#paradigm-hooks'
+  - '#lore-system'
