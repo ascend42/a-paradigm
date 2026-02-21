@@ -51,6 +51,10 @@ export function getWisdomToolsList() {
         },
         required: ['symbols'],
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_wisdom_record',
@@ -133,6 +137,10 @@ export function getWisdomToolsList() {
         },
         required: ['type', 'id', 'symbols'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_wisdom_promote',
@@ -152,6 +160,10 @@ export function getWisdomToolsList() {
         },
         required: ['type', 'id'],
       },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
     },
     {
       name: 'paradigm_wisdom_expert',
@@ -168,6 +180,10 @@ export function getWisdomToolsList() {
             description: 'General area to find experts for (e.g., "payments", "auth")',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
       },
     },
   ];

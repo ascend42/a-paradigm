@@ -11,10 +11,12 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "lore-ui/dist"
   ],
   "scripts": {
     "build": "tsup",
+    "build:lore-ui": "cd lore-ui && npx vite build",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",

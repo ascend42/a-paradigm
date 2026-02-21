@@ -44,6 +44,10 @@ export const navigateTool: Tool = {
     },
     required: ['intent'],
   },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+  },
 };
 
 /**

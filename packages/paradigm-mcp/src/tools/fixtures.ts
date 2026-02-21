@@ -46,6 +46,10 @@ export function getFixturesToolsList() {
           },
         },
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
     },
   ];
 }
