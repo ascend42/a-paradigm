@@ -1157,6 +1157,239 @@
           "explanation": "At 2 AM with production down, you want the fastest path to resolution with full traceability: (1) `paradigm_sentinel_record` the incident with the error and stack trace \u2014 this starts the clock and provides symbolic context. (2) `paradigm_sentinel_patterns` to check if this is a KNOWN failure pattern with an existing resolution \u2014 this could save you hours. (3) `paradigm_wisdom_context` for `#payment-processor` to check if there are recorded antipatterns (e.g., 'null check required before accessing refund.id'). (4) Fix the issue with full context. (5) `paradigm_sentinel_resolve` to close the incident with the fix commit. Orchestration (C) is overkill for an emergency fix. Reading everything (D) burns time you don't have."
         }
       ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-051",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-051",
+          "scenario": "Your team just held a meeting where the lead architect decided to switch from PostgreSQL to CockroachDB for the user service. No code was written yet — this is purely a strategic decision with rationale documented in meeting notes.",
+          "question": "Which lore entry type should be used to record this?",
+          "choices": {
+            "A": "`agent-session` — because the meeting was a work session",
+            "B": "`milestone` — because switching databases is a major event",
+            "C": "`decision` — because this is an architectural decision with rationale and no implementation",
+            "D": "`human-note` — because a human made the decision",
+            "E": "`review` — because the team reviewed database options"
+          },
+          "correct": "C",
+          "explanation": "The `decision` entry type is specifically for architectural or design decisions with rationale. No code was written (ruling out `agent-session`), it is not yet a completed achievement (ruling out `milestone`), and while a human made the decision, the entry type describes the *content* not the *author* — the author field separately tracks who recorded it. A standalone decision with rationale is exactly what the `decision` type exists for."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-052",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-052",
+          "scenario": "An agent just finished a quick session where it fixed a typo in a README and updated one comment in a source file. Total files modified: 2 (README.md and src/utils/format.ts).",
+          "question": "Should the agent record a lore entry before ending the session?",
+          "choices": {
+            "A": "Yes — every session should be recorded regardless of scope",
+            "B": "No — 2 files is below the 3-file significance threshold, and the stop hook will not require it",
+            "C": "Yes — the source file modification triggers the recording requirement",
+            "D": "No — but only because README.md is not a source file",
+            "E": "It depends on whether the typo fix was in a critical component"
+          },
+          "correct": "B",
+          "explanation": "The lore recording trigger is 3+ modified source files. With only 2 files modified (and one being a README which is typically excluded from the source file count), this session is below the threshold. The stop hook will not block for a missing lore entry. Agents can still choose to record, but it is not enforced."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-053",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-053",
+          "scenario": "Sentinel has recorded 5 incidents over the past week. Three involve `#payment-processor` with TypeError, one involves `#payment-processor` with NetworkError, and one involves `#auth-service` with TypeError. Sentinel groups incidents using a 0.6 similarity threshold.",
+          "question": "How many incident groups will Sentinel likely create?",
+          "choices": {
+            "A": "1 group — all 5 incidents involve errors in the same general area",
+            "B": "2 groups — one for the 3 TypeError incidents in #payment-processor, and the auth TypeError stays separate because different component",
+            "C": "3 groups — one per unique (component, error type) combination",
+            "D": "5 groups — each incident is unique",
+            "E": "2 groups — one for all #payment-processor incidents (4), one for #auth-service (1)"
+          },
+          "correct": "C",
+          "explanation": "Sentinel groups by symbolic similarity with a 0.6 threshold. The three `#payment-processor` + TypeError incidents share both component and error type — high similarity, one group. The `#payment-processor` + NetworkError shares the component but differs in error type — enough divergence for a separate group. The `#auth-service` + TypeError shares error type with group 1 but differs in component — separate group. Three distinct (component, error type) clusters yield 3 groups."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-054",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-054",
+          "scenario": "A production error just occurred. You want to record it, check for known fixes, resolve it, and then create a new pattern so future occurrences are handled faster.",
+          "question": "What is the correct Sentinel tool sequence?",
+          "choices": {
+            "A": "`sentinel_add_pattern` → `sentinel_record` → `sentinel_resolve`",
+            "B": "`sentinel_triage` → `sentinel_record` → `sentinel_resolve` → `sentinel_add_pattern`",
+            "C": "`sentinel_record` → `sentinel_triage` → fix → `sentinel_resolve` → `sentinel_add_pattern`",
+            "D": "`sentinel_record` → `sentinel_add_pattern` → `sentinel_resolve`",
+            "E": "`sentinel_patterns` → `sentinel_record` → `sentinel_add_pattern` → `sentinel_resolve`"
+          },
+          "correct": "C",
+          "explanation": "The correct lifecycle is: (1) `sentinel_record` — create the incident with error details and symbolic context. (2) `sentinel_triage` — view the incident with matched patterns and suggested resolutions. (3) Fix the issue using the context from triage. (4) `sentinel_resolve` — close the incident with the fix commit. (5) `sentinel_add_pattern` — capture the fix as a reusable pattern. You must record before you can triage, fix before you can resolve, and resolve before creating a pattern from the resolution."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-055",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-055",
+          "scenario": "You are configuring habits for your project. You want to ensure that agents always call `paradigm_ripple` before modifying symbols, and you want this enforced at the start of every task. The seed habit `ripple-before-modify` exists with `trigger: preflight` and `severity: advisory`.",
+          "question": "Which trigger ensures the habit is evaluated before implementation begins?",
+          "choices": {
+            "A": "`on-stop` — checks compliance at the end of the session",
+            "B": "`on-commit` — checks before changes are committed",
+            "C": "`preflight` — evaluated before starting implementation",
+            "D": "`postflight` — evaluated after completing implementation",
+            "E": "`pre-write` — evaluated before each file edit"
+          },
+          "correct": "C",
+          "explanation": "The `preflight` trigger evaluates habits before implementation begins — this is when discovery checks like `paradigm_ripple` should run. `postflight` is too late (implementation already happened), `on-stop` is the end of the session, and `on-commit` is at commit time. There is no `pre-write` trigger — the four triggers are preflight, postflight, on-commit, and on-stop."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-056",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-056",
+          "scenario": "A project overrides the seed habit `verify-before-done` (originally `severity: warn`) to `severity: block` in `.paradigm/habits.yaml`. An agent finishes implementing a feature but does not call `paradigm_pm_postflight`. The stop hook runs.",
+          "question": "What happens?",
+          "choices": {
+            "A": "A warning is logged but the session completes — `warn` is the seed severity",
+            "B": "The session is blocked — the project override to `block` means the stop hook treats this as a blocking violation",
+            "C": "Nothing — habit severity only affects habit check output, not the stop hook",
+            "D": "The override is ignored because seed habits cannot be overridden",
+            "E": "The session completes but the next session receives a mandatory reminder"
+          },
+          "correct": "B",
+          "explanation": "Project overrides in `.paradigm/habits.yaml` take precedence over seed defaults. The three-layer merge (seed → global → project) means the project's `severity: block` override replaces the seed's `severity: warn`. When the stop hook evaluates on-stop habits, it finds a blocking violation because `verify-before-done` was not followed and its severity is now `block`. The session cannot complete until the agent runs `paradigm_pm_postflight`."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-057",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-057",
+          "scenario": "An agent has finished reading requirements and has a clear plan for implementing a new feature. It has not written any code yet. It wants to save a checkpoint in case the session crashes.",
+          "question": "Which checkpoint phase should it use?",
+          "choices": {
+            "A": "`implementing` — the agent is about to start implementing",
+            "B": "`planning` — the agent has a plan but has not started coding",
+            "C": "`validating` — the agent needs to validate its plan first",
+            "D": "`complete` — the planning phase is complete",
+            "E": "`ready` — the agent is ready to implement"
+          },
+          "correct": "B",
+          "explanation": "The `planning` phase captures the state after requirements are understood and a plan exists but before any code is written. If the session crashes, recovery knows: the plan is set, coding has not started, here are the key decisions. `implementing` should only be used after code changes begin. `complete` is for when the entire task is finished. There is no `ready` phase — the four phases are planning, implementing, validating, and complete."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-058",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-058",
+          "scenario": "The stop hook has blocked your session with two violations:\n1. \"Modified source directories missing .purpose coverage: src/services/refund/\"\n2. \"Lore entry expected: 4 source files modified, no lore recorded\"\n\nYou need to unblock and complete your session.",
+          "question": "What is the correct remediation sequence?",
+          "choices": {
+            "A": "Run `paradigm_reindex` to fix both violations automatically",
+            "B": "Create a .purpose file in `src/services/refund/`, record a lore entry with `paradigm_lore_record`, then run `paradigm_reindex`",
+            "C": "Delete the `.paradigm/.pending-review` file to clear the tracking",
+            "D": "Add `src/services/refund/` to the `.paradigm/config.yaml` skip list",
+            "E": "Call `paradigm_pm_postflight` which handles all violations"
+          },
+          "correct": "B",
+          "explanation": "Each violation requires a specific fix: (1) Create or update a .purpose file in or above `src/services/refund/` to provide coverage for the new directory. (2) Call `paradigm_lore_record` with a summary of the session since 4 files exceeds the 3-file threshold. (3) Run `paradigm_reindex` to rebuild the index with the new .purpose file. Deleting `.pending-review` (C) just hides the tracking — the stop hook would still detect uncovered directories. `paradigm_pm_postflight` (E) reports violations but doesn't fix them."
+        }
+      ]
+    },
+    {
+      "type": "passage",
+      "slot": "passage-habits-review",
+      "course": "para-501",
+      "passage": "Your team's `.paradigm/habits.yaml` for an e-commerce project:\n\n```yaml\noverrides:\n  ripple-before-modify:\n    severity: block\n  explore-before-implement:\n    severity: warn\n  test-new-components:\n    enabled: false\n  record-lore-for-significant:\n    severity: block\n\ncustom:\n  - id: check-price-validation\n    name: Validate Price Calculations\n    description: Ensure price calculation tests exist for any payment-related changes\n    category: testing\n    trigger: postflight\n    severity: warn\n    check:\n      type: tests-exist\n      params:\n        patterns: [\"**/price*.test.*\", \"**/payment*.test.*\"]\n    enabled: true\n```\n\nThe seed habits that are NOT shown in overrides retain their default values. The project has 10 seed habits plus 1 custom habit.",
+      "questions": [
+        {
+          "slot": "pg-habits-q1",
+          "variants": [
+            {
+              "id": "plsat-pg3-q1a",
+              "scenario": "",
+              "question": "An agent skips calling `paradigm_ripple` before modifying `#checkout-service` and then tries to end the session. What happens?",
+              "choices": {
+                "A": "Advisory note is logged — ripple-before-modify defaults to advisory severity",
+                "B": "Warning is shown — the override upgrades it to warn",
+                "C": "Session is blocked — the override sets ripple-before-modify to severity: block",
+                "D": "Nothing — ripple-before-modify only checks during preflight, not on-stop",
+                "E": "The habit is disabled because test-new-components is disabled"
+              },
+              "correct": "C",
+              "explanation": "The overrides section sets `ripple-before-modify` to `severity: block`. The seed habit's trigger is `preflight`, but when severity is `block`, violations detected during preflight evaluation carry through to the stop hook as blocking violations. The agent cannot complete the session until it calls `paradigm_ripple` for the modified symbols."
+            }
+          ]
+        },
+        {
+          "slot": "pg-habits-q2",
+          "variants": [
+            {
+              "id": "plsat-pg3-q2a",
+              "scenario": "",
+              "question": "The team disabled `test-new-components` but added a custom `check-price-validation` habit. What testing discipline does this configuration express?",
+              "choices": {
+                "A": "No testing discipline — disabling the seed habit removes all test requirements",
+                "B": "Targeted testing — the team doesn't require tests for ALL components, but does require them for price/payment code specifically",
+                "C": "The custom habit replaces the seed habit entirely",
+                "D": "This is a configuration error — you cannot disable a seed habit and add a custom one in the same category",
+                "E": "Full testing — the custom habit covers everything the seed habit did"
+              },
+              "correct": "B",
+              "explanation": "Disabling `test-new-components` (which checks for test files globally with `**/*.test.*`) removes the blanket test requirement. The custom `check-price-validation` habit adds a targeted requirement: test files must exist specifically for price and payment code (`**/price*.test.*`, `**/payment*.test.*`). This is a deliberate choice: the team decided that testing everything is too strict, but payment/price logic is critical enough to enforce test coverage."
+            }
+          ]
+        },
+        {
+          "slot": "pg-habits-q3",
+          "variants": [
+            {
+              "id": "plsat-pg3-q3a",
+              "scenario": "",
+              "question": "An agent modifies 5 source files including payment logic but does not record a lore entry. What combination of violations will the stop hook report?",
+              "choices": {
+                "A": "One violation: missing lore entry (block severity)",
+                "B": "Two violations: missing lore entry (block) and missing price validation tests (warn)",
+                "C": "One violation: missing price validation tests only — lore is advisory by default",
+                "D": "Three violations: missing lore, missing tests, and .purpose coverage",
+                "E": "The lore violation alone blocks the session — other checks are not evaluated after a block"
+              },
+              "correct": "B",
+              "explanation": "The stop hook evaluates ALL checks independently. `record-lore-for-significant` is overridden to `severity: block` and 5 files exceeds the 3-file threshold — this blocks. `check-price-validation` has `trigger: postflight` and `severity: warn`, and if payment files were modified without matching test files, it warns. Both violations are reported. The stop hook blocks because at least one violation has `severity: block`, but it reports all violations so the agent can fix everything in one pass."
+            }
+          ]
+        }
+      ]
     }
   ]
 }

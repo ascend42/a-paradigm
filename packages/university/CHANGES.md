@@ -1,3 +1,34 @@
+# Paradigm University - Changes
+
+## v3.1.0 (2026-02-22)
+
+### New Course: PARA-501 — Advanced Systems
+
+6 lessons covering the v3 systems missing from the curriculum:
+
+- **The Lore System** — Entry types, date-partitioned YAML storage, timeline index, MCP tools, review scores, recording triggers
+- **Sentinel Deep Dive** — Symbolic incidents, flow position tracking, incident grouping, failure patterns, triage lifecycle, stats
+- **Habits & Practice** — 6 categories, 4 triggers, 3 severity levels, 10 seed habits, practice profiles, incident correlations
+- **Session Intelligence** — Checkpoint phases, breadcrumb tracking, auto-recovery, Global Brain (`~/.paradigm/`), wisdom promotion
+- **Hook Enforcement & Automation** — Stop hook (7 checks), post-write hook (.pending-review), pre-commit hook (auto-reindex)
+- **The Complete Workflow** — End-to-end walkthrough tying all systems together
+
+### PLSAT v3.0 Expansion
+
+- 8 new standalone question slots (slot-051 through slot-058)
+- 1 new passage (passage-habits-review) with habits.yaml config analysis (3 grouped questions)
+
+### Reference Updates
+
+- 7 new MCP tool cards: `paradigm_lore_record`, `paradigm_lore_search`, `paradigm_lore_timeline`, `paradigm_habits_check`, `paradigm_habits_status`, `paradigm_practice_context`, `paradigm_session_checkpoint`
+- 2 new CLI command cards: `paradigm habits`, `paradigm lore`
+
+### Version
+
+- Package version synced to `3.1.0` to match the paradigm publish version
+
+---
+
 # Paradigm University - Planned Changes
 
 > Compiled during review session 2026-02-10. Do not implement until approved.

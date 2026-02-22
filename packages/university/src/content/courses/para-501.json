@@ -1,0 +1,486 @@
+{
+  "id": "para-501",
+  "title": "PARA 501: Advanced Systems",
+  "description": "Master Paradigm's advanced operational systems — Lore for project memory, Sentinel for incident intelligence, Habits for behavioral discipline, Session Intelligence for crash recovery, and Hook Enforcement for automated compliance. Ties everything together into the complete Paradigm workflow.",
+  "lessons": [
+    {
+      "id": "lore-system",
+      "title": "The Lore System",
+      "content": "## Why Projects Forget\n\nEvery software project accumulates institutional knowledge — why a migration was attempted then rolled back, which approach was chosen for caching and why, what the team learned when the billing system went down at 2 AM. Without a system for capturing this knowledge, it lives only in the heads of the people who were there. When they leave, context-switch, or simply forget, the project loses its memory.\n\nParadigm's Lore system is a structured project timeline. It records sessions, decisions, milestones, incidents, and reviews as date-partitioned YAML entries that both humans and AI agents can search, filter, and learn from.\n\n## Anatomy of a Lore Entry\n\nEvery lore entry follows a consistent structure:\n\n```yaml\nid: L-2026-02-21-001\ntype: agent-session\ntimestamp: \"2026-02-21T14:30:00Z\"\nduration_minutes: 45\nauthor:\n  type: agent\n  id: claude-opus-4\n  model: claude-opus-4-6\ntitle: \"Add JWT authentication to user routes\"\nsummary: \"Implemented RS256 JWT auth middleware, added ^authenticated and ^project-admin gates to portal.yaml, created refresh token rotation.\"\nsymbols_touched: [\"#auth-middleware\", \"^authenticated\", \"^project-admin\"]\nsymbols_created: [\"#refresh-token-handler\"]\nfiles_modified: [\"src/middleware/auth.ts\", \"portal.yaml\"]\nfiles_created: [\"src/handlers/refresh-token.ts\"]\nlines_added: 247\nlines_removed: 12\ncommit: \"a1b2c3d\"\ndecisions:\n  - id: jwt-signing\n    decision: \"Use RS256 over HS256\"\n    rationale: \"Allows public key verification without sharing the signing secret\"\nlearnings:\n  - \"Express v5 requires explicit async error wrapping for middleware\"\nverification:\n  status: pass\n  details: { \"unit-tests\": pass, \"integration\": pass }\ntags: [security, auth]\n```\n\nThe `id` field is auto-generated: `L-{date}-{sequence}`, where the sequence resets daily. This creates a natural chronological index.\n\n## Entry Types\n\nLore recognizes six entry types, each capturing a different kind of project event:\n\n| Type | When to Use |\n|---|---|\n| `agent-session` | An AI agent completed a work session (most common) |\n| `human-note` | A human records context, rationale, or tribal knowledge |\n| `decision` | An architectural or design decision with rationale |\n| `review` | A code review, PR review, or post-mortem |\n| `incident` | A production incident or significant failure |\n| `milestone` | A release, launch, migration completion, or major achievement |\n\nThe type drives how the entry appears in timeline views and which filters surface it.\n\n## Storage: Date-Partitioned YAML\n\nLore entries live in `.paradigm/lore/entries/` organized by date:\n\n```\n.paradigm/lore/\n  timeline.yaml          # Index metadata\n  entries/\n    2026-02-19/\n      L-2026-02-19-001.yaml\n      L-2026-02-19-002.yaml\n    2026-02-20/\n      L-2026-02-20-001.yaml\n    2026-02-21/\n      L-2026-02-21-001.yaml\n```\n\nThe `timeline.yaml` index tracks total entry count, last updated timestamp, and known authors. Date partitioning keeps directories small and makes time-range queries efficient — to find entries from last week, you only read 7 directories.\n\n## MCP Tools\n\nThree MCP tools power the Lore system:\n\n**`paradigm_lore_record`** — Create a new entry. Requires `type`, `title`, `summary`, and `symbols_touched`. Optional fields include files, decisions, learnings, and verification status. The entry is written to the correct date directory with an auto-incremented ID.\n\n**`paradigm_lore_search`** — Query entries with filters: by symbol, author, type, date range, tags, review status, and minimum completeness score. Returns matching entries sorted by recency.\n\n**`paradigm_lore_timeline`** — Get a high-level view: recent entries, active authors, hot symbols (most-referenced in recent entries), and timeline metadata. Use this for orientation — it tells you what has been happening in the project.\n\n## Lore Reviews\n\nEntries can be reviewed by humans after the fact. A review adds a `completeness` score (1-5), a `quality` score (1-5), and optional notes. This creates a feedback loop: agents learn which sessions produced high-quality entries and can adjust their recording behavior. You can filter entries by `hasReview` and `minCompleteness` to surface only verified project history.\n\n## When to Record\n\nThe general rule: **record lore when a session modifies 3 or more source files**. This threshold captures significant work sessions while ignoring trivial edits. The stop hook enforces this — if you modified 3+ files without recording a lore entry, it will block your session from completing.\n\nBeyond the threshold, always record lore for: architectural decisions (even if only 1 file changed), production incidents, milestone completions, and any session where you learned something the next developer should know.",
+      "keyConcepts": [
+        "Lore entries record sessions, decisions, milestones, incidents, and reviews",
+        "Six entry types: agent-session, human-note, decision, review, incident, milestone",
+        "Date-partitioned YAML storage in .paradigm/lore/entries/{YYYY-MM-DD}/",
+        "Auto-generated IDs: L-{date}-{sequence}",
+        "Three MCP tools: paradigm_lore_record, paradigm_lore_search, paradigm_lore_timeline",
+        "Review scores (completeness 1-5, quality 1-5) enable feedback loops",
+        "Recording trigger: 3+ modified source files = significant session",
+        "timeline.yaml index tracks entry counts, authors, and last-updated"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You just finished a 40-minute session where you added caching to the API, modifying 5 files and creating 2 new ones. You also decided to use Redis over in-memory caching. Which lore entry type is most appropriate?",
+          "choices": {
+            "A": "`decision` — because you made an architectural choice about Redis",
+            "B": "`agent-session` — because this captures the full work session including the decision",
+            "C": "`milestone` — because adding caching is a significant achievement",
+            "D": "`review` — because you reviewed caching options before choosing",
+            "E": "`human-note` — because you want to record the Redis rationale"
+          },
+          "correct": "B",
+          "explanation": "An `agent-session` entry captures the full work session — files modified, symbols touched, decisions made, and learnings. The Redis decision belongs in the entry's `decisions` array. Use `decision` type only when you're recording a standalone architectural decision without associated implementation work."
+        },
+        {
+          "id": "q2",
+          "question": "Where does a lore entry created on February 21, 2026 (the third entry that day) get stored?",
+          "choices": {
+            "A": "`.paradigm/lore/L-2026-02-21-003.yaml`",
+            "B": "`.paradigm/lore/entries/2026-02-21/L-2026-02-21-003.yaml`",
+            "C": "`.paradigm/lore/entries/L-2026-02-21-003.yaml`",
+            "D": "`.paradigm/lore/2026/02/21/003.yaml`",
+            "E": "`.paradigm/history/lore/2026-02-21-003.yaml`"
+          },
+          "correct": "B",
+          "explanation": "Lore uses date-partitioned storage: `.paradigm/lore/entries/{YYYY-MM-DD}/L-{date}-{NNN}.yaml`. The date directory groups entries by day, and the sequence number (003) auto-increments within each day."
+        },
+        {
+          "id": "q3",
+          "question": "You want to find all lore entries related to the payment system from the last month. Which MCP tool and approach is correct?",
+          "choices": {
+            "A": "`paradigm_lore_timeline` with a symbol filter",
+            "B": "`paradigm_lore_search` with `symbol: '#payment-service'` and `dateFrom` set to 30 days ago",
+            "C": "`paradigm_search` with `query: 'payment'` and `type: 'lore'`",
+            "D": "Read all files in `.paradigm/lore/entries/` and grep for 'payment'",
+            "E": "`paradigm_lore_record` with a search query parameter"
+          },
+          "correct": "B",
+          "explanation": "`paradigm_lore_search` accepts filters including `symbol` (to match entries that touched a specific symbol) and `dateFrom`/`dateTo` for time ranges. `paradigm_lore_timeline` gives a high-level overview but doesn't support detailed filtering. `paradigm_search` searches the symbol index, not lore entries."
+        },
+        {
+          "id": "q4",
+          "question": "An agent modified 2 source files and did not record a lore entry. What happens at session end?",
+          "choices": {
+            "A": "The stop hook blocks the session — all modifications require lore entries",
+            "B": "Nothing — the 2-file threshold is below the recording trigger",
+            "C": "A warning is issued but the session completes normally",
+            "D": "The system auto-generates a lore entry from the git diff",
+            "E": "The post-write hook retroactively creates a minimal entry"
+          },
+          "correct": "B",
+          "explanation": "The lore recording threshold is 3+ modified source files. With only 2 files modified, the session is not considered significant enough to require a lore entry. The stop hook only enforces lore recording when 3 or more source files were modified."
+        },
+        {
+          "id": "q5",
+          "question": "A team lead reviews a lore entry and gives it completeness: 3, quality: 5. What does this tell you?",
+          "choices": {
+            "A": "The entry is high quality but missing some information about what was done",
+            "B": "The entry is poorly written but covers everything",
+            "C": "The review scores are contradictory and invalid",
+            "D": "The entry should be deleted and re-recorded",
+            "E": "Both scores must be the same for a valid review"
+          },
+          "correct": "A",
+          "explanation": "Completeness and quality are independent scores. A completeness of 3 means the entry is missing some details (perhaps decisions weren't documented or files weren't fully listed). A quality of 5 means what IS there is excellent — well-written, accurate, and useful. The review suggests the entry should be enriched with more detail while preserving its good writing."
+        }
+      ]
+    },
+    {
+      "id": "sentinel-deep-dive",
+      "title": "Sentinel Deep Dive",
+      "content": "## Beyond Stack Traces\n\nTraditional error tracking gives you a stack trace and a count. Paradigm Sentinel gives you *symbolic context* — which component failed, where in a flow it failed, what gate was being evaluated, and which known pattern matches the failure. This transforms incident response from \"read the stack trace and hope\" to \"match against institutional knowledge and follow a resolution strategy.\"\n\n## Symbolic Incident Records\n\nWhen Sentinel records an incident, it captures both technical and symbolic context:\n\n```yaml\nid: INC-042\ntimestamp: \"2026-02-21T02:15:00Z\"\nstatus: open\nerror:\n  message: \"Cannot read property 'id' of null\"\n  stack: \"at PaymentProcessor.processRefund (payment-processor.ts:142)\"\n  type: TypeError\nsymbols:\n  component: \"#payment-processor\"\n  flow: \"$refund-flow\"\n  gate: \"^authenticated\"\nflowPosition:\n  flowId: \"$refund-flow\"\n  expected: [\"^authenticated\", \"^refund-eligible\", \"#process-refund\", \"!refund-completed\"]\n  actual: [\"^authenticated\", \"^refund-eligible\", \"#process-refund\"]\n  missing: [\"!refund-completed\"]\n  failedAt: \"#process-refund\"\nenvironment: production\n```\n\nThe `flowPosition` field is critical — it tells you exactly where in the defined flow the failure occurred. The refund flow expected 4 steps; only 3 completed. The failure happened at `#process-refund`, and the `!refund-completed` signal never fired. This immediately narrows the investigation to the refund processing logic.\n\n## Incident Grouping\n\nSentinel automatically groups related incidents using symbolic similarity. When two incidents share the same component, flow, and error pattern, they form a group. The grouping algorithm uses a similarity threshold of 0.6 — incidents must share at least 60% of their symbolic context to cluster.\n\nAn `IncidentGroup` tracks the common symbols, error patterns, occurrence count, first/last seen timestamps, and which environments are affected. If a group matches a known failure pattern, Sentinel attaches it as a `suggestedPattern`.\n\n## Failure Patterns\n\nPatterns are the institutional knowledge of your error handling. Each pattern defines matching criteria and a resolution strategy:\n\n```yaml\nid: payment-null-ref-001\nname: \"Null reference in payment processing\"\npattern:\n  symbols:\n    component: \"#payment-processor\"\n  errorType: [TypeError]\n  errorContains: [\"Cannot read property\", \"null\"]\nresolution:\n  description: \"Add null check before accessing refund object properties\"\n  strategy: fix-code\n  priority: high\n  symbolsToModify: [\"#payment-processor\"]\n  filesLikelyInvolved: [\"src/services/payment-processor.ts\"]\nconfidence:\n  score: 85\n  timesMatched: 12\n  timesResolved: 10\n  timesRecurred: 2\n```\n\nSix resolution strategies exist: `retry` (transient failure), `fallback` (use alternative path), `fix-data` (data issue), `fix-code` (bug), `ignore` (known harmless), and `escalate` (needs human decision). Pattern priority ranges from `low` through `medium` and `high` to `critical`.\n\nPatterns come from four sources: `manual` (team-created), `suggested` (Sentinel auto-generated from groups), `imported` (from another project), and `community` (shared patterns). Paradigm ships 26 seed patterns covering common failures like incomplete flows, gate bypasses, state race conditions, and unhandled signals.\n\n## The Triage Workflow\n\nSentinel follows a defined lifecycle for incidents:\n\n1. **Record** — `paradigm_sentinel_record` creates the incident with error details, symbolic context, and optional flow position. The incident starts as `open`.\n\n2. **Triage** — `paradigm_sentinel_triage` lists incidents filtered by status, symbol, environment, or error text. The matcher automatically suggests patterns that fit each incident.\n\n3. **Investigate** — `paradigm_sentinel_show` with `includeTimeline: true` shows the full flow timeline — every gate passed, signal emitted, and state change leading up to the failure. With `includeSimilar: true`, it surfaces related incidents that may share a root cause.\n\n4. **Resolve** — `paradigm_sentinel_resolve` closes the incident with a resolution: which pattern applied (if any), the fix commit hash, PR URL, and notes. Resolved incidents feed back into pattern confidence scores.\n\n5. **Pattern** — `paradigm_sentinel_add_pattern` creates new patterns from resolved incidents. When you fix a novel failure, capture the fix as a pattern so the next occurrence resolves faster.\n\nThe sequence is: **record → triage → show → resolve → add pattern**. This cycle builds institutional knowledge with every incident.\n\n## Stats and Health Metrics\n\n`paradigm_sentinel_stats` provides operational intelligence for a given time period: total incidents, open vs resolved counts, incidents by environment and day, pattern effectiveness (which patterns resolve most incidents vs which recur), symbol hotspots (components with the highest incident rates), and resolution metrics (average time to resolve, pattern vs manual resolution rates).\n\nThe `symbolHealth` view shows per-symbol incident history — use it to identify which components need hardening or refactoring.",
+      "keyConcepts": [
+        "Symbolic incident records capture component, flow, gate, and signal context",
+        "Flow position tracking shows exactly where in a flow a failure occurred",
+        "Automatic incident grouping with 0.6 similarity threshold",
+        "Failure patterns define matching criteria and resolution strategies",
+        "Six resolution strategies: retry, fallback, fix-data, fix-code, ignore, escalate",
+        "Triage lifecycle: record → triage → show → resolve → add pattern",
+        "26 seed patterns ship with Paradigm covering common failure modes",
+        "Stats surface symbol hotspots, pattern effectiveness, and resolution rates"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "An incident record shows `flowPosition.actual` has 3 entries and `flowPosition.expected` has 5. The `failedAt` field points to the third step. What does this tell you?",
+          "choices": {
+            "A": "Three out of five flow steps completed successfully before the failure",
+            "B": "The flow is missing 2 step definitions and needs to be updated",
+            "C": "The third step failed, preventing the last 2 steps (including their signals) from executing",
+            "D": "Only the last 2 steps need to be investigated",
+            "E": "The flow validation is broken and should be re-run"
+          },
+          "correct": "C",
+          "explanation": "The `actual` array shows what actually executed, `expected` shows what should have. Three steps executed, meaning the first two succeeded and the third (`failedAt`) is where the failure occurred. The remaining 2 expected steps (in `missing`) never ran because execution stopped at the failure point."
+        },
+        {
+          "id": "q2",
+          "question": "A failure pattern has confidence scores: timesMatched=20, timesResolved=15, timesRecurred=5. What does a recurrence rate of 25% suggest?",
+          "choices": {
+            "A": "The pattern is highly effective and should be trusted",
+            "B": "The resolution strategy may not fully address the root cause — the fix works sometimes but the issue returns",
+            "C": "The pattern's matching criteria are too broad and catching unrelated incidents",
+            "D": "25% is normal and healthy for any pattern",
+            "E": "The pattern should be deleted and replaced"
+          },
+          "correct": "B",
+          "explanation": "timesRecurred (5) out of timesResolved (15) gives a 33% recurrence rate after resolution. This suggests the resolution strategy addresses symptoms but not the root cause. The pattern still has value (it resolves 67% permanently), but the resolution description should be updated with a more thorough fix, or a second pattern created for the recurring variant."
+        },
+        {
+          "id": "q3",
+          "question": "You receive a 2 AM production alert. What is the correct Sentinel-powered response sequence?",
+          "choices": {
+            "A": "`paradigm_sentinel_triage` → `paradigm_sentinel_record` → fix → `paradigm_sentinel_resolve`",
+            "B": "`paradigm_sentinel_record` → `paradigm_sentinel_patterns` → `paradigm_wisdom_context` → fix → `paradigm_sentinel_resolve`",
+            "C": "`paradigm_status` → read all files → find bug → `paradigm_sentinel_record`",
+            "D": "`paradigm_sentinel_stats` → identify hotspot → fix → `paradigm_sentinel_resolve`",
+            "E": "`paradigm_sentinel_record` → `paradigm_orchestrate_inline` → deploy agents → wait"
+          },
+          "correct": "B",
+          "explanation": "First, record the incident with `paradigm_sentinel_record` to start the clock and capture the error. Then check `paradigm_sentinel_patterns` for known fixes — this could save hours if the failure matches an existing pattern. Then check `paradigm_wisdom_context` for antipatterns on the failing component. Fix with full context, then resolve. Recording first is critical — you can't triage what you haven't recorded."
+        },
+        {
+          "id": "q4",
+          "question": "Sentinel ships with 26 seed patterns. Which pattern source would a team-created pattern from a post-mortem use?",
+          "choices": {
+            "A": "`community`",
+            "B": "`imported`",
+            "C": "`manual`",
+            "D": "`suggested`",
+            "E": "`seed`"
+          },
+          "correct": "C",
+          "explanation": "Patterns have four sources: `manual` (team-created), `suggested` (auto-generated by Sentinel from incident groups), `imported` (from another project), and `community` (shared open-source patterns). A pattern created by the team during a post-mortem is `manual`. The seed patterns that ship with Paradigm use `manual` source as well."
+        },
+        {
+          "id": "q5",
+          "question": "Two incidents share the same component (#auth-service) and error type (TypeError) but different flows. Sentinel's similarity threshold is 0.6. Will they be grouped?",
+          "choices": {
+            "A": "Yes — sharing a component and error type exceeds the 0.6 threshold",
+            "B": "No — different flows always prevent grouping",
+            "C": "It depends on what other symbolic context they share — 0.6 means 60% overlap required",
+            "D": "Only if they occurred within the same hour",
+            "E": "Only if a human manually groups them"
+          },
+          "correct": "C",
+          "explanation": "The 0.6 similarity threshold means 60% of symbolic context must overlap. Sharing a component and error type provides some overlap, but different flows reduce it. Whether they cross 0.6 depends on other shared context — same gate, same environment, similar error message. Grouping is automatic but similarity-driven, not based on any single field."
+        }
+      ]
+    },
+    {
+      "id": "habits-practice",
+      "title": "Habits & Practice",
+      "content": "## Instinct vs Habit\n\nWhen you first learn to drive, you consciously think about every action — check mirrors, signal, check blind spot, change lanes. After thousands of miles, these become habits: automatic behaviors you execute without conscious effort. The Habits system brings this concept to AI-assisted development.\n\nWithout habits, an agent must be told every time: \"check ripple before modifying,\" \"validate flows after changing gates,\" \"record lore for significant sessions.\" With habits, these checks become automatic behavioral triggers — the system evaluates them at defined points and reports compliance. Over time, agents internalize the patterns, and the habit checks become confirmation rather than correction.\n\n## Habit Definitions\n\nEach habit is a structured rule with six fields:\n\n```yaml\nid: ripple-before-modify\nname: Check Ripple Before Modifying\ndescription: Always call paradigm_ripple before modifying any symbol\ncategory: discovery\ntrigger: preflight\nseverity: advisory\ncheck:\n  type: tool-called\n  params:\n    tools: [paradigm_ripple]\nenabled: true\n```\n\n**Categories** classify what kind of discipline the habit enforces. There are six:\n- `discovery` — Exploring before acting (ripple, navigate, search)\n- `verification` — Validating after implementing (postflight, reindex)\n- `testing` — Ensuring test coverage for new code\n- `documentation` — Keeping .purpose files and lore entries current\n- `collaboration` — Checking team wisdom and expert knowledge\n- `security` — Validating gates and portal.yaml compliance\n\n**Triggers** define when the habit is evaluated. There are four:\n- `preflight` — Before starting implementation\n- `postflight` — After completing implementation\n- `on-commit` — Before committing changes\n- `on-stop` — Before the session ends (stop hook)\n\n**Severity** determines what happens when a habit is violated:\n- `advisory` — Log a note, don't block anything\n- `warn` — Show a warning to the agent/user\n- `block` — Prevent session completion until resolved (enforced by stop hook)\n\n## Check Types\n\nHabits verify compliance through six check types:\n\n| Check Type | What It Verifies |\n|---|---|\n| `tool-called` | Specified MCP tools were invoked during the session |\n| `file-exists` | Files matching glob patterns exist (e.g., test files) |\n| `lore-recorded` | A lore entry was created (for 3+ file sessions) |\n| `symbols-registered` | New code is registered in .purpose files |\n| `gates-declared` | Routes have corresponding gates in portal.yaml |\n| `tests-exist` | Test files exist for modified components |\n\n## The 10 Seed Habits\n\nParadigm ships with 10 built-in habits that establish baseline discipline:\n\n1. **explore-before-implement** (preflight/advisory/discovery) — Called paradigm_ripple, paradigm_navigate, paradigm_search, or paradigm_related before coding\n2. **ripple-before-modify** (preflight/advisory/discovery) — Called paradigm_ripple specifically before modifying symbols\n3. **check-fragility** (preflight/advisory/discovery) — Called paradigm_history_fragility before touching symbols\n4. **wisdom-before-implement** (preflight/advisory/collaboration) — Checked paradigm_wisdom_context or paradigm_wisdom_expert\n5. **verify-before-done** (on-stop/warn/verification) — Called paradigm_pm_postflight before finishing\n6. **postflight-compliance** (on-stop/advisory/verification) — Ran postflight and reindex\n7. **test-new-components** (postflight/advisory/testing) — Test files exist for new components\n8. **purpose-coverage** (postflight/warn/documentation) — .purpose files cover modified directories\n9. **record-lore-for-significant** (on-stop/warn/documentation) — Lore recorded for 3+ file sessions\n10. **gates-for-routes** (postflight/warn/security) — Routes have portal.yaml gate coverage\n\n## Habit Loading and Overrides\n\nHabits load from three sources, merged in order (later wins):\n\n1. **Seed habits** — The 10 built-in habits (always present)\n2. **Global habits** — `~/.paradigm/habits.yaml` (optional, applies to all projects)\n3. **Project habits** — `.paradigm/habits.yaml` (optional, project-specific)\n\nOverrides let you adjust severity or disable habits without redefining them:\n\n```yaml\n# .paradigm/habits.yaml\noverrides:\n  ripple-before-modify:\n    severity: block    # Upgrade from advisory to blocking\n  test-new-components:\n    enabled: false     # Disable for this project\ncustom:\n  - id: check-migrations\n    name: Verify DB Migrations\n    category: verification\n    trigger: on-commit\n    severity: warn\n    check:\n      type: file-exists\n      params:\n        patterns: [\"migrations/*.sql\"]\n```\n\n## Practice Profiles\n\nEvery habit evaluation is recorded as a practice event with a result: `followed`, `skipped`, or `partial`. These events accumulate into practice profiles that show compliance rates over time.\n\n`paradigm_habits_status` returns a practice profile with: overall compliance rate, strongest and weakest categories, per-category breakdowns, trend analysis (improving/declining/stable), and incident correlations — habits whose skipped evaluations correlate with higher incident rates.\n\nThe incident correlation is powerful: if skipping `ripple-before-modify` correlates with a 3x higher incident rate for the modified symbols, that is concrete evidence for upgrading the habit's severity.\n\n## MCP Tools\n\n**`paradigm_habits_check`** — Evaluate habits for a trigger point. Pass the trigger (`preflight`, `postflight`, `on-stop`), optionally with `filesModified` and `symbolsTouched` for context. Returns evaluations with follow/skip/partial results and whether any blocking violations exist.\n\n**`paradigm_habits_status`** — Get the practice profile for an engineer over a time period (7d, 30d, 90d, or all). Shows compliance rates, category breakdowns, trends, and incident correlations.\n\n**`paradigm_practice_context`** — Before modifying symbols, get habit-aware warnings. Pass the symbols you are about to touch, and it returns relevant habits, recent compliance rates, and suggestions based on your weak areas.",
+      "keyConcepts": [
+        "Six categories: discovery, verification, testing, documentation, collaboration, security",
+        "Four triggers: preflight, postflight, on-commit, on-stop",
+        "Three severity levels: advisory (note), warn (visible), block (prevents completion)",
+        "10 seed habits establish baseline discipline across all categories",
+        "Three-layer loading: seed → global (~/.paradigm/) → project (.paradigm/)",
+        "Practice profiles track compliance rates and trend direction",
+        "Incident correlations link skipped habits to higher incident rates",
+        "Six check types: tool-called, file-exists, lore-recorded, symbols-registered, gates-declared, tests-exist"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A project wants the `ripple-before-modify` habit to block session completion instead of just advising. How should they configure this?",
+          "choices": {
+            "A": "Delete the seed habit and create a new one with `severity: block`",
+            "B": "Add an override in `.paradigm/habits.yaml` setting `severity: block` for `ripple-before-modify`",
+            "C": "Edit the seed-habits.json file directly in node_modules",
+            "D": "Create a global override in `~/.paradigm/habits.yaml` — project-level overrides cannot change severity",
+            "E": "Set `PARADIGM_HABIT_SEVERITY=block` environment variable"
+          },
+          "correct": "B",
+          "explanation": "Project-level overrides in `.paradigm/habits.yaml` can change any field of a seed habit, including severity. The three-layer merge means project settings override global settings, which override seed defaults. You never edit seed habits directly."
+        },
+        {
+          "id": "q2",
+          "question": "An agent's practice profile shows: discovery compliance 95%, verification 40%, testing 30%. The agent frequently skips `verify-before-done` and `test-new-components`. What does this pattern reveal?",
+          "choices": {
+            "A": "The agent is good at exploring but poor at following through — it rushes to finish without validating",
+            "B": "The discovery habits are too easy and should be made harder",
+            "C": "The agent needs more seed habits in the testing category",
+            "D": "This is a healthy pattern — discovery is the most important category",
+            "E": "The verification and testing habits should be disabled since the agent skips them"
+          },
+          "correct": "A",
+          "explanation": "High discovery compliance with low verification and testing shows an agent that does good pre-work but doesn't follow through with validation. This is the 'explore well, ship hastily' antipattern. The fix is to upgrade verification and testing habits to `warn` or `block` severity, not to disable them."
+        },
+        {
+          "id": "q3",
+          "question": "The `record-lore-for-significant` habit fires on which trigger and at what threshold?",
+          "choices": {
+            "A": "`preflight` — checks if lore was recorded in the previous session",
+            "B": "`on-stop` — checks if lore was recorded when 3+ source files were modified",
+            "C": "`postflight` — always checks for lore regardless of file count",
+            "D": "`on-commit` — requires lore for every commit",
+            "E": "`on-stop` — checks if lore was recorded when any files were modified"
+          },
+          "correct": "B",
+          "explanation": "The `record-lore-for-significant` habit triggers `on-stop` (before session end) and uses the `lore-recorded` check type, which fires when 3 or more source files were modified. This threshold captures significant sessions while ignoring trivial edits."
+        },
+        {
+          "id": "q4",
+          "question": "Practice profiles show that skipping `wisdom-before-implement` correlates with a 3x incident rate. What action should the team take?",
+          "choices": {
+            "A": "Disable the habit since it is not preventing incidents anyway",
+            "B": "Upgrade its severity from `advisory` to `warn` or `block` based on the evidence",
+            "C": "Add more discovery habits to compensate",
+            "D": "The correlation is coincidental — ignore it",
+            "E": "Move the habit from `preflight` to `on-stop` trigger"
+          },
+          "correct": "B",
+          "explanation": "Incident correlations provide concrete evidence for severity decisions. A 3x incident rate when skipping wisdom checks is strong evidence that the check prevents real problems. Upgrading to `warn` makes it visible; upgrading to `block` enforces it. This is the feedback loop in action — practice data drives policy changes."
+        }
+      ]
+    },
+    {
+      "id": "session-intelligence",
+      "title": "Session Intelligence",
+      "content": "## The Session Problem\n\nAI agent sessions are ephemeral. When a session ends — whether by completion, crash, context exhaustion, or human interruption — everything the agent knew vanishes. The next session starts blank, with no memory of what was explored, decided, or partially implemented. Session Intelligence solves this with checkpoints, breadcrumbs, and a global brain that persists knowledge across sessions and even across projects.\n\n## Session Checkpoints\n\nCheckpoints are deliberate snapshots saved at phase transitions. There are four phases:\n\n| Phase | When to Checkpoint | What to Capture |\n|---|---|---|\n| `planning` | After reading requirements, before coding | Plan, approach, key decisions |\n| `implementing` | After starting code changes | Modified files, symbols touched, decisions made |\n| `validating` | After implementation, before tests | All modified files, test plan |\n| `complete` | Task finished | Summary, final file list |\n\nCreate a checkpoint with `paradigm_session_checkpoint`:\n\n```\nparadigm_session_checkpoint({\n  phase: \"implementing\",\n  context: \"Adding JWT auth middleware — RS256 signing, httpOnly refresh tokens\",\n  modifiedFiles: [\"src/middleware/auth.ts\", \"src/handlers/refresh.ts\"],\n  symbolsTouched: [\"#auth-middleware\", \"^authenticated\"],\n  decisions: [\"RS256 over HS256 for public key verification\"]\n})\n```\n\nOnly `phase` and `context` are required — everything else is optional. The context field should be a concise 1-3 sentence summary of your current state of mind. Think of it as answering \"if I were teleported into this session right now, what would I need to know?\"\n\nCheckpoints are stored in `.paradigm/session-checkpoint.json` and auto-expire after 7 days.\n\n## Breadcrumb Tracking\n\nWhile checkpoints are deliberate, breadcrumbs are automatic. Every MCP tool call generates a breadcrumb recording the timestamp, tool name, symbol being modified (if applicable), and a human-readable summary. Breadcrumbs are stored in `.paradigm/session-breadcrumbs.json` with a maximum of 50 entries (auto-rotating — oldest dropped when full).\n\nBreadcrumbs capture the narrative of a session: \"searched for payment symbols → checked ripple on #payment-service → read auth middleware → modified #auth-handler → created ^refund-eligible gate.\" This trail lets the next session understand not just what was done but the reasoning path.\n\n## Session Recovery\n\nRecovery is the payoff. Call `paradigm_session_recover` (or let it happen automatically — recovery data is surfaced on your first Paradigm tool call in a new session) to get:\n\n- **breadcrumbs** — The last session's tool call trail\n- **lastCheckpoint** — The most recent checkpoint with phase, context, and details\n- **symbolsModified** — All symbols that were changed\n- **recentActivity** — A human-readable summary of what happened\n\nThis is crash recovery for AI agents. If a session dies at 87% context with half-finished auth middleware, the next session immediately knows: phase was `implementing`, auth middleware was being added, RS256 was chosen, these files were modified, and tests still need to be written.\n\n## The Global Brain\n\nSession Intelligence extends beyond individual projects through the Global Brain at `~/.paradigm/`. This user-level directory stores:\n\n- **Global wisdom** — Antipatterns and decisions that apply everywhere (e.g., \"never use HS256 for JWT signing in production\")\n- **Global habits** — Behavioral overrides that apply to all projects\n- **Cross-project practice events** — Compliance data aggregated across projects\n\nThe distinction between project scope and global scope is important:\n\n| Scope | Location | Applies To | Example |\n|---|---|---|---|\n| Project | `.paradigm/` | This project only | \"Use Redis for caching in this app\" |\n| Global | `~/.paradigm/` | All projects | \"Always check fragility before modifying critical symbols\" |\n\n## Wisdom Promotion\n\nWhen a project-local wisdom entry proves universally valuable, promote it to global scope with `paradigm_wisdom_promote`. This copies the entry from `.paradigm/wisdom/` to `~/.paradigm/wisdom/`, making it available in every project.\n\nFor example, if a team discovers that \"always wrap Express v5 async middleware in try-catch\" prevents errors across multiple projects, promoting this wisdom means every future project session gets this advice automatically when touching Express middleware.\n\n## Handoff Persistence\n\nWhen context usage exceeds 80-85%, `paradigm_context_check` recommends a handoff. `paradigm_handoff_prepare` creates a structured handoff document with: summary of work done, modified files, symbols touched, next steps, and open questions. This document is stored alongside session data so the receiving session can `paradigm_session_recover` and pick up exactly where the previous session left off.\n\nThe handoff is not just a note — it is a contract between sessions. The outgoing session declares what was done and what remains. The incoming session validates against the actual file state and continues.\n\n## Best Practices\n\n- Checkpoint at every phase transition — the cost is ~100 tokens, the value is crash recovery\n- Write `context` as if briefing a stranger with no prior knowledge\n- Promote wisdom that survives 3+ projects to global scope\n- Use handoffs proactively at 80% context, not reactively at 95%\n- Let breadcrumbs accumulate naturally — don't try to manage them manually",
+      "keyConcepts": [
+        "Four checkpoint phases: planning, implementing, validating, complete",
+        "Breadcrumbs auto-track every MCP tool call (max 50, auto-rotating)",
+        "paradigm_session_recover restores last checkpoint and breadcrumb trail",
+        "Auto-recovery surfaces data on first tool call of a new session",
+        "Global Brain at ~/.paradigm/ stores cross-project wisdom and habits",
+        "paradigm_wisdom_promote moves project wisdom to global scope",
+        "Checkpoints stored in .paradigm/session-checkpoint.json, expire after 7 days",
+        "Handoff at 80% context creates structured continuation contract"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You have finished implementing a feature and are about to write tests. Which checkpoint phase should you save?",
+          "choices": {
+            "A": "`implementing` — you just finished implementing",
+            "B": "`validating` — you are transitioning from implementation to validation",
+            "C": "`complete` — the feature code is done",
+            "D": "`testing` — you are about to test",
+            "E": "`planning` — you need to plan the tests first"
+          },
+          "correct": "B",
+          "explanation": "Checkpoint at the phase you are entering, not the one you are leaving. The `validating` phase captures the state after implementation is complete but before tests/review. If the session crashes now, recovery knows implementation is done and testing is the next step. `complete` is only for when everything (including tests) is finished."
+        },
+        {
+          "id": "q2",
+          "question": "What is the maximum number of breadcrumbs stored, and what happens when the limit is reached?",
+          "choices": {
+            "A": "100 breadcrumbs, then the file is archived and a new one starts",
+            "B": "50 breadcrumbs, then the oldest are dropped as new ones are added",
+            "C": "Unlimited — breadcrumbs grow until the session ends",
+            "D": "50 breadcrumbs, then tracking stops until the next session",
+            "E": "25 breadcrumbs per phase, resetting at each checkpoint"
+          },
+          "correct": "B",
+          "explanation": "Breadcrumbs have a hard cap of 50 entries with auto-rotation — when the 51st breadcrumb is recorded, the oldest one is dropped. This keeps the file small and focused on recent activity while still providing enough trail for meaningful recovery."
+        },
+        {
+          "id": "q3",
+          "question": "A team discovers that 'always validate JWT expiry before refresh' prevents bugs across 4 different projects. What should they do?",
+          "choices": {
+            "A": "Add the wisdom to each project's `.paradigm/wisdom/` individually",
+            "B": "Use `paradigm_wisdom_promote` to move it to `~/.paradigm/wisdom/` for global scope",
+            "C": "Create a new seed habit for JWT validation",
+            "D": "Add it to the CLAUDE.md file in each project",
+            "E": "Record it as a lore entry in the most recent project"
+          },
+          "correct": "B",
+          "explanation": "When wisdom proves valuable across multiple projects, `paradigm_wisdom_promote` copies it from project scope (`.paradigm/wisdom/`) to global scope (`~/.paradigm/wisdom/`). This makes it available automatically in every future session across all projects. Adding it individually (A) or to CLAUDE.md (D) works but doesn't leverage the Global Brain."
+        },
+        {
+          "id": "q4",
+          "question": "Your session is at 82% context usage. What should you do?",
+          "choices": {
+            "A": "Continue working — 82% is still plenty of room",
+            "B": "Immediately stop and call `paradigm_handoff_prepare` with summary and next steps",
+            "C": "Call `paradigm_context_check` to confirm, then proactively prepare a handoff while finishing current work",
+            "D": "Delete old messages to free up context space",
+            "E": "Save a checkpoint and keep working until 95%"
+          },
+          "correct": "C",
+          "explanation": "At 80-85%, the recommendation is proactive handoff preparation. Call `paradigm_context_check` to confirm the recommendation, then prepare the handoff with `paradigm_handoff_prepare` while completing your current task. Waiting until 95% (E) risks running out of context mid-task. The sweet spot is preparing the handoff while you still have room to finish current work cleanly."
+        },
+        {
+          "id": "q5",
+          "question": "A new session starts and the agent calls `paradigm_status`. What happens with session recovery?",
+          "choices": {
+            "A": "The agent must explicitly call `paradigm_session_recover` — recovery is never automatic",
+            "B": "Recovery data is automatically surfaced on the first Paradigm tool call",
+            "C": "Recovery only works if the previous session saved a checkpoint",
+            "D": "The agent must read `.paradigm/session-checkpoint.json` manually",
+            "E": "Recovery data is shown only if the previous session crashed"
+          },
+          "correct": "B",
+          "explanation": "Auto-recovery is triggered on the first Paradigm MCP tool call in a new session — whether that is `paradigm_status`, `paradigm_navigate`, or any other tool. The system surfaces the last checkpoint and recent breadcrumbs without the agent needing to explicitly request recovery. This ensures continuity even if the agent doesn't know to ask."
+        }
+      ]
+    },
+    {
+      "id": "hook-enforcement",
+      "title": "Hook Enforcement & Automation",
+      "content": "## The Compliance Gap\n\nParadigm's value depends on discipline. Purpose files must be updated when code changes. Portal.yaml must reflect route additions. Lore must be recorded for significant sessions. Aspect anchors must point to real code. Without enforcement, these requirements become suggestions that erode over time.\n\nHooks close this gap. They are automated checks that run at specific points in the development workflow, catching violations before they become technical debt. Paradigm uses three hooks, each with a distinct role and severity.\n\n## The Stop Hook\n\nThe stop hook is the primary enforcer. It runs before an agent session completes and can **block** the session from finishing if compliance checks fail.\n\n**Trigger**: Before agent session end (Claude Code: Stop hook, Cursor: pre-finish)\n\n**Seven checks, in order:**\n\n1. **Source files modified without .purpose updates** — If 2+ source files were modified but zero paradigm metadata files (.purpose, portal.yaml, etc.) were updated, the hook blocks. This catches the \"implement and forget\" pattern.\n\n2. **Modified directories missing .purpose coverage** — The hook walks up the directory tree from each modified source file looking for a covering .purpose file. If no .purpose exists anywhere in the ancestor chain (including the project root), it blocks.\n\n3. **Route patterns without portal.yaml** — The hook scans modified files for route declaration patterns (Express `.get()`, `.post()`, decorators like `@Get()`, Rust macros like `#[actix_web::get]`). If routes are detected and portal.yaml was neither present nor modified, it blocks.\n\n4. **Stale aspect anchors** — The hook parses .purpose files for `anchors:` sections and validates that each referenced file still exists. If an anchor points to a deleted file, it blocks.\n\n5. **Pending .purpose freshness** — The post-write hook tracks files edited without .purpose updates in `.paradigm/.pending-review`. The stop hook checks this list: if source files are pending and their covering .purpose was not also modified during the session, it blocks.\n\n6. **Aspect coverage advisory** — If the project uses `~aspects`, the hook advises (non-blocking) to verify that anchor line numbers are still accurate after code changes.\n\n7. **Lore entry for significant sessions** — If 3+ source files were modified and no lore entry was recorded in `.paradigm/lore/entries/`, the hook blocks.\n\n**When blocked**, the hook outputs a clear list of violations with remediation steps. Fix the violations, then complete the session.\n\n## The Post-Write Hook\n\nThe post-write hook runs after every file edit (Edit or Write tool calls). It is **advisory only** — it never blocks.\n\n**Trigger**: After Edit or Write tool completes\n\n**Actions:**\n1. Extracts the edited file path\n2. Skips non-source files (.purpose, portal.yaml, .md, .lock, .json, .yaml, .gitignore, .env files) and paradigm directories (.paradigm/, .claude/, .cursor/)\n3. Appends source file paths to `.paradigm/.pending-review` (deduplicated)\n4. Checks if a .purpose file covers the edited directory\n5. If no .purpose exists: reminds \"No .purpose file covers {dir}/ — Create one\"\n6. Every 3 source files edited: general reminder to update .purpose files\n\nThe `.pending-review` file is the bridge between the post-write hook and the stop hook. Post-write accumulates the list; stop hook validates against it.\n\n## The Pre-Commit Hook\n\nThe pre-commit hook runs before `git commit` and handles index maintenance. It **never blocks**.\n\n**Trigger**: Before Bash commands containing `git commit`\n\n**Actions:**\n1. Runs `paradigm index --quiet` to rebuild scan-index.json, navigator.yaml, and flow-index.json\n2. Stages the rebuilt files so they are included in the commit\n3. Exits 0 (always succeeds)\n\nThis ensures that every commit has a fresh symbol index. Without this hook, the index would drift from the actual codebase between manual `paradigm scan` runs.\n\n## Hook Installation\n\nHooks are installed automatically by `paradigm shift` (full setup) or manually with `paradigm hooks install`. The installer detects the IDE (Claude Code or Cursor) and writes the appropriate hook format.\n\nFor Claude Code, hooks are configured in `.claude/settings.json` using the hooks API — stop hooks, PreToolUse matchers (for Bash commands matching `git commit`), and PostToolUse matchers (for Edit/Write tool calls).\n\n## Remediation Workflow\n\nWhen the stop hook blocks you:\n\n1. **Read the violation list** — Each violation names the specific check that failed\n2. **Update .purpose files** — For modified directories without coverage, create or update the nearest .purpose file\n3. **Update portal.yaml** — If routes were added, add the route and gate definitions\n4. **Fix stale anchors** — If aspect anchors point to deleted/moved files, update the anchor paths\n5. **Record lore** — If 3+ files were modified, call `paradigm_lore_record` with the session summary\n6. **Run `paradigm_reindex`** — Rebuild the index to reflect your updates\n7. **Complete the session** — The stop hook runs again and should pass\n\nThe key insight is that the stop hook is not punitive — it is protective. Every check it enforces prevents a real problem: stale documentation, unprotected routes, orphaned anchors, or lost institutional knowledge.",
+      "keyConcepts": [
+        "Stop hook blocks session completion on compliance failures (7 checks)",
+        "Post-write hook tracks edited files in .paradigm/.pending-review (advisory only)",
+        "Pre-commit hook auto-rebuilds index before git commit (never blocks)",
+        ".pending-review bridges post-write tracking to stop hook validation",
+        "2+ source files + 0 paradigm updates = stop hook violation",
+        "3+ source files without lore entry = stop hook violation",
+        "Routes detected without portal.yaml = stop hook violation",
+        "paradigm hooks install or paradigm shift for automatic installation"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You modified 4 source files and updated one .purpose file but did not record a lore entry. The stop hook runs. What happens?",
+          "choices": {
+            "A": "It passes — the .purpose update satisfies all requirements",
+            "B": "It blocks on two violations: .purpose freshness for the other 3 files, and missing lore entry for a 4-file session",
+            "C": "It blocks only on the missing lore entry — 4 files exceeds the 3-file threshold",
+            "D": "It passes — .purpose coverage is sufficient, lore is optional",
+            "E": "It blocks only on .purpose freshness — the other 3 files need coverage"
+          },
+          "correct": "C",
+          "explanation": "The stop hook checks multiple conditions independently. The '.purpose freshness' check passes because you did update a .purpose file (the '2+ source files with 0 paradigm updates' check fails only when zero paradigm files were touched). However, 4 modified source files exceeds the 3-file lore recording threshold, so the missing lore entry causes a block. Whether the other files need .purpose coverage depends on whether they have covering .purpose files in ancestor directories."
+        },
+        {
+          "id": "q2",
+          "question": "The post-write hook just fired after you edited `src/services/payment.ts`. Which of these files would it skip tracking?",
+          "choices": {
+            "A": "`src/services/payment.ts` — it tracks this file",
+            "B": "`.paradigm/config.yaml` — it skips paradigm directory files",
+            "C": "`src/middleware/auth.ts` — it would track this too",
+            "D": "`package.json` — it skips .json files",
+            "E": "Both B and D are skipped"
+          },
+          "correct": "E",
+          "explanation": "The post-write hook skips non-source files (.json, .yaml, .md, .lock, .env, .gitignore) and paradigm directories (.paradigm/, .claude/, .cursor/). Both `.paradigm/config.yaml` (paradigm directory) and `package.json` (.json extension) are skipped. Only actual source code files like .ts, .js, .rs, .py are tracked in .pending-review."
+        },
+        {
+          "id": "q3",
+          "question": "What does the pre-commit hook do, and can it block a commit?",
+          "choices": {
+            "A": "Runs all habit checks and blocks if any severity=block habits are violated",
+            "B": "Validates portal.yaml and blocks if gates are undefined",
+            "C": "Rebuilds the symbol index and stages the updated files — never blocks",
+            "D": "Checks .purpose freshness and blocks if files are stale",
+            "E": "Records a lore entry for the commit — never blocks"
+          },
+          "correct": "C",
+          "explanation": "The pre-commit hook has a single job: rebuild the symbol index (`paradigm index --quiet`) and stage the rebuilt files (scan-index.json, navigator.yaml, flow-index.json) so they are included in the commit. It always exits 0 — it never blocks. This ensures every commit has a fresh index without manual intervention."
+        },
+        {
+          "id": "q4",
+          "question": "The stop hook detects that `src/routes/api.ts` contains Express `.post()` calls but `portal.yaml` does not exist. What happens?",
+          "choices": {
+            "A": "Advisory warning — portal.yaml is recommended but not required",
+            "B": "The hook blocks — route patterns detected without portal.yaml is a violation",
+            "C": "The hook skips this check — portal.yaml is only required for projects that already have one",
+            "D": "The hook creates a minimal portal.yaml automatically",
+            "E": "The hook blocks only if the route handles user data"
+          },
+          "correct": "B",
+          "explanation": "The stop hook scans modified files for route declaration patterns (`.get()`, `.post()`, etc.). If route patterns are found and portal.yaml was neither present in the project nor modified during the session, the hook blocks. This enforces the rule that all protected routes must be declared in portal.yaml."
+        },
+        {
+          "id": "q5",
+          "question": "You are blocked by the stop hook. The violations list shows: 'stale aspect anchor: src/old/audit.ts no longer exists'. How do you fix this?",
+          "choices": {
+            "A": "Delete the aspect from the .purpose file — aspects with stale anchors are invalid",
+            "B": "Create an empty file at `src/old/audit.ts` to satisfy the anchor check",
+            "C": "Update the anchor path in the .purpose file to point to the new location of the audit code",
+            "D": "Run `paradigm_aspect_check` — it auto-fixes stale anchors",
+            "E": "Ignore it — stale anchors are advisory only"
+          },
+          "correct": "C",
+          "explanation": "Aspects require valid code anchors. If the file was moved or renamed, update the anchor path in the .purpose file to point to the new location. If the code was deleted entirely, you may need to remove the aspect or create new enforcement code. Creating an empty file (B) is a hack that defeats the purpose. `paradigm_aspect_check` validates but doesn't auto-fix."
+        }
+      ]
+    },
+    {
+      "id": "advanced-workflows",
+      "title": "The Complete Workflow",
+      "content": "## Putting It All Together\n\nYou have learned the five advanced systems individually. Now let's see how they work together in a complete development workflow. Every system has a role, and the handoffs between them create a feedback loop that gets smarter with every session.\n\n## The Full Cycle\n\nHere is the complete Paradigm workflow for a non-trivial task:\n\n### Phase 1: Preflight\n\n```\n1. paradigm_session_recover       → Load previous session context\n2. paradigm_pm_preflight           → Get compliance plan for the task\n3. paradigm_habits_check(preflight) → Verify discovery habits are followed\n4. paradigm_ripple                 → Check impact of planned changes\n5. paradigm_wisdom_context         → Get team knowledge for affected symbols\n6. paradigm_practice_context       → Get habit-aware warnings for symbols\n7. paradigm_session_checkpoint(planning) → Save plan before coding\n```\n\nNotice the layering: session recovery provides continuity, preflight ensures preparation, habits check enforces discovery discipline, ripple and wisdom provide context, practice context adds behavioral awareness, and the checkpoint enables crash recovery.\n\n### Phase 2: Implementation\n\n```\n8. Write code                      → Implement the feature\n   → Post-write hook fires         → Tracks edited files in .pending-review\n   → Post-write advisory           → Reminds about .purpose coverage\n9. Update .purpose files           → Document new/changed symbols\n10. Update portal.yaml             → Add routes and gates (if applicable)\n11. paradigm_session_checkpoint(implementing) → Save progress\n```\n\nThe post-write hook acts as a running tally. Every source file edit is tracked, and periodic reminders keep documentation top of mind. Updating .purpose and portal.yaml during implementation (not after) prevents the stop hook from blocking at the end.\n\n### Phase 3: Validation\n\n```\n12. paradigm_flow_validate          → Verify flows are complete\n13. paradigm_aspect_check           → Verify aspect anchors are valid\n14. paradigm_pm_postflight          → Run post-implementation governance\n15. paradigm_habits_check(postflight) → Verify documentation/testing habits\n16. paradigm_session_checkpoint(validating) → Save pre-test state\n```\n\nValidation catches issues before they become stop hook violations. Flow validation ensures multi-step processes are complete. Aspect checks confirm anchors point to real code. Postflight governance catches missing .purpose files and undefined gates.\n\n### Phase 4: Recording\n\n```\n17. paradigm_lore_record            → Record the session's work\n18. paradigm_history_record         → Log implementation to symbol history\n19. paradigm_reindex                → Rebuild the symbol index\n20. paradigm_session_checkpoint(complete) → Mark task complete\n```\n\nRecording preserves institutional knowledge. The lore entry captures what was done and why. History record logs implementation details to individual symbol timelines. Reindexing ensures the symbol index reflects all changes.\n\n### Phase 5: Commit\n\n```\n21. git commit                      → Commit changes\n    → Pre-commit hook fires         → Auto-rebuilds index, stages updated files\n    → Stop hook fires               → Validates all compliance checks\n22. If stop hook blocks             → Fix violations, re-attempt\n23. If stop hook passes             → Session complete\n```\n\nThe commit phase is where enforcement happens. The pre-commit hook ensures the index is fresh. The stop hook validates everything: .purpose coverage, portal.yaml compliance, aspect anchors, lore recording, and pending review freshness.\n\n## How Systems Reinforce Each Other\n\nThe power of the complete workflow is in the feedback loops:\n\n**Sentinel catches what Habits miss.** If an agent skips the `ripple-before-modify` habit and introduces a breaking change, Sentinel records the incident. The practice profile then shows that skipping ripple correlates with incidents — evidence to upgrade the habit severity.\n\n**Lore preserves what Sessions forget.** Session breadcrumbs and checkpoints are ephemeral — they expire after 7 days. Lore entries are permanent. The checkpoint gets you through a crash; the lore entry gets the team through the next 6 months.\n\n**Wisdom surfaces what Lore accumulates.** Lore entries record individual sessions. Wisdom distills patterns across sessions: \"every time we modify #payment-service, check for null references on the refund object.\" Wisdom is lore, refined.\n\n**Hooks enforce what Habits recommend.** Habits at `advisory` severity are suggestions. The stop hook at `block` severity is enforcement. The workflow starts with advice (habits check) and ends with enforcement (stop hook). This graduated approach teaches good behavior before punishing bad behavior.\n\n## Capstone Scenario\n\nImagine you are adding a refund endpoint to a payment system. Here is how the complete workflow plays out:\n\n1. **Session recover** reveals the previous session added the payment processor but did not add refunds\n2. **Preflight** shows you need to check `#payment-service`, `$checkout-flow`, and `^authenticated`\n3. **Habits check** confirms you called ripple and wisdom — discovery habits followed\n4. **Ripple** shows `#payment-service` has 4 downstream dependents\n5. **Wisdom** warns: \"always null-check refund objects — see incident INC-042\"\n6. You implement the refund endpoint with proper null checks\n7. **Post-write hook** tracks 5 edited files in `.pending-review`\n8. You update .purpose with `#refund-handler` and portal.yaml with `^refund-eligible` gate\n9. **Postflight** confirms all gates are declared and flows are valid\n10. **Lore record** captures the session with the decision to require `^refund-eligible`\n11. **Commit** triggers pre-commit (index rebuild) and stop hook (all checks pass)\n12. Three weeks later, a similar null reference hits — **Sentinel** matches pattern `payment-null-ref-001` and resolves it in 5 minutes using the recorded fix\n\nThis is Paradigm at full power: every system contributing, every session building on the last, every incident making the next resolution faster.",
+      "keyConcepts": [
+        "Five-phase workflow: preflight → implement → validate → record → commit",
+        "Session recovery provides continuity between sessions",
+        "Post-write hook tracks files during implementation for stop hook validation",
+        "Recording phase preserves lore, history, and fresh index before commit",
+        "Stop hook is the final enforcement gate before session completion",
+        "Sentinel catches what Habits miss — incidents drive severity upgrades",
+        "Lore preserves what Sessions forget — permanent vs ephemeral knowledge",
+        "Graduated enforcement: habits advise, hooks enforce"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "In the complete workflow, why does `paradigm_habits_check(preflight)` run BEFORE `paradigm_ripple` and `paradigm_wisdom_context`?",
+          "choices": {
+            "A": "To block the session if discovery habits were violated in the previous session",
+            "B": "To verify that the agent intends to call discovery tools — the habit check reminds and tracks, while the actual tools provide the context",
+            "C": "Because habits must always run first regardless of workflow position",
+            "D": "To generate the list of symbols that ripple and wisdom should check",
+            "E": "The order does not matter — they can run in any sequence"
+          },
+          "correct": "B",
+          "explanation": "The preflight habits check evaluates whether discovery habits (ripple, navigate, wisdom) are being followed. It runs early to remind and track compliance. The actual MCP tools (ripple, wisdom_context) run after to provide the substantive context. The habit check is about behavioral discipline; the tools are about information gathering."
+        },
+        {
+          "id": "q2",
+          "question": "An agent implements a feature, updates .purpose files, but forgets to record lore before committing. The session modified 5 source files. What sequence of events occurs?",
+          "choices": {
+            "A": "Pre-commit hook blocks the commit until lore is recorded",
+            "B": "Stop hook blocks, citing missing lore entry → agent records lore → re-attempts commit → stop hook passes",
+            "C": "Commit succeeds but the next session receives a warning about missing lore",
+            "D": "The post-write hook retroactively creates a lore entry from tracked files",
+            "E": "The commit succeeds — lore is enforced by habits, not hooks"
+          },
+          "correct": "B",
+          "explanation": "The stop hook checks for lore entries when 3+ source files were modified. With 5 files and no lore entry, it blocks. The agent must then call `paradigm_lore_record` with the session summary, and re-attempt the commit. The pre-commit hook only rebuilds the index — it doesn't check compliance. Lore enforcement lives in the stop hook."
+        },
+        {
+          "id": "q3",
+          "question": "How does Sentinel benefit from the Habits system?",
+          "choices": {
+            "A": "Sentinel directly calls habit checks during incident recording",
+            "B": "Practice profiles show correlations between skipped habits and incident rates, providing evidence for severity upgrades",
+            "C": "Habits automatically resolve Sentinel incidents when compliance is high",
+            "D": "Sentinel and Habits are independent systems with no interaction",
+            "E": "Habits disable Sentinel checks when compliance is above 90%"
+          },
+          "correct": "B",
+          "explanation": "The feedback loop between Habits and Sentinel works through practice profiles. When an agent frequently skips `ripple-before-modify` and the symbols it touches have higher incident rates, the practice profile surfaces this correlation. This provides data-driven evidence to upgrade the habit's severity from advisory to warn or block — closing the loop between behavior and outcomes."
+        },
+        {
+          "id": "q4",
+          "question": "What is the relationship between Lore entries and Session checkpoints?",
+          "choices": {
+            "A": "They are the same thing — checkpoints are stored as lore entries",
+            "B": "Checkpoints are ephemeral (7-day expiry) for crash recovery; lore entries are permanent for institutional memory",
+            "C": "Lore entries are auto-generated from checkpoints at session end",
+            "D": "Checkpoints replace lore entries in Paradigm v2",
+            "E": "Lore entries expire after 30 days; checkpoints are permanent"
+          },
+          "correct": "B",
+          "explanation": "Checkpoints and lore serve different purposes with different lifespans. Checkpoints are ephemeral snapshots for crash recovery — they expire after 7 days because their value is immediate continuity. Lore entries are permanent project history — they capture decisions, learnings, and context that remain valuable months or years later. You need both: checkpoints for resilience, lore for memory."
+        },
+        {
+          "id": "q5",
+          "question": "A team's practice profile shows high compliance across all categories, yet incidents keep occurring in `#payment-service`. What system should they investigate?",
+          "choices": {
+            "A": "Habits — add more habits targeting the payment service",
+            "B": "Hooks — the stop hook might not be running for payment-related changes",
+            "C": "Sentinel — check `paradigm_sentinel_patterns` and `paradigm_sentinel_stats` for the symbol to identify recurring failure patterns and resolution gaps",
+            "D": "Lore — the payment service lore entries might be inaccurate",
+            "E": "Session Intelligence — breadcrumbs might be losing payment context"
+          },
+          "correct": "C",
+          "explanation": "High habit compliance means the behavioral discipline is fine — agents are doing the right things. If incidents persist despite good practices, the issue is likely in the code or architecture, not the process. Sentinel's pattern analysis (`paradigm_sentinel_patterns`) can reveal if the same failure keeps recurring despite resolutions, and `paradigm_sentinel_stats` can show the symbol's incident rate and resolution effectiveness. The answer lives in the incident data, not the compliance data."
+        }
+      ]
+    }
+  ]
+}
