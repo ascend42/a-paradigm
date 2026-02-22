@@ -4,10 +4,12 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { createRequire } from 'node:module';
 import { initCommand } from './commands/init.js';
 import { statusCommand } from './commands/status.js';
 
-const VERSION = '2.0.13';
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../package.json');
 
 const program = new Command();
 

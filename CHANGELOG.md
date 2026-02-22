@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] — 2026-02-22
+
+### Fixed
+
+- **CLI version banner hardcoded at 2.0.13** — The `VERSION` constant in `src/index.ts` was never updated across releases. Replaced with dynamic `require('../package.json').version` so it always matches the published version.
+- **Plugin MCP server fails to connect** — The plugin `.mcp.json` ran `npx @a-company/paradigm mcp`, which is a configuration status helper, not the stdio MCP server. Changed to `npx --package=@a-company/paradigm -y paradigm-mcp .` to invoke the correct binary. Fixes `MCP error -32000: Connection closed` on plugin startup.
+- **Plugin version bumped to 3.0.2** — `plugin.json` was stuck at 3.0.0.
+
 ## [3.0.1] — 2026-02-21
 
 ### Fixed
