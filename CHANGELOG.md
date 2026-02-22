@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] — 2026-02-22
+
+### Fixed
+
+- **University/Sentinel blank page on `npm i -g` install** — `@a-company/university` and `@a-company/sentinel` were marked as `external` in tsup config, leaving them as runtime `import()` calls. Neither package is published to npm, so the imports failed for anyone outside the monorepo. Removed both from the `external` list so they are bundled into the paradigm CLI dist. Express v5 (paradigm's dependency) is now used consistently.
+
 ## [3.0.2] — 2026-02-22
 
 ### Fixed
