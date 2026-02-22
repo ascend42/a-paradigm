@@ -66,6 +66,13 @@ export interface LoreEntry {
     notes?: string;
     reviewed_at: string;
   };
+  habit_compliance?: {
+    rate: number;
+    followed: number;
+    skipped: number;
+    partial: number;
+    weakAreas?: string[];
+  };
   tags?: string[];
 }
 

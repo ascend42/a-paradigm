@@ -1,0 +1,150 @@
+[
+  {
+    "id": "explore-before-implement",
+    "name": "Explore Before Implementing",
+    "description": "Call ripple/navigate/search before modifying existing symbols to understand impact",
+    "category": "discovery",
+    "trigger": "preflight",
+    "severity": "advisory",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_ripple", "paradigm_navigate", "paradigm_search", "paradigm_related"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "ripple-before-modify",
+    "name": "Ripple Before Modifying",
+    "description": "Run ripple analysis before modifying symbols with dependents",
+    "category": "discovery",
+    "trigger": "preflight",
+    "severity": "advisory",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_ripple"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "check-fragility",
+    "name": "Check Fragility",
+    "description": "Check history fragility for symbols before modifying frequently-broken code",
+    "category": "discovery",
+    "trigger": "preflight",
+    "severity": "advisory",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_history_fragility"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "wisdom-before-implement",
+    "name": "Check Team Wisdom",
+    "description": "Check team wisdom (preferences, antipatterns, decisions) before implementing",
+    "category": "collaboration",
+    "trigger": "preflight",
+    "severity": "advisory",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_wisdom_context", "paradigm_wisdom_expert"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "verify-before-done",
+    "name": "Verify Before Done",
+    "description": "Run postflight compliance checks before finishing a session",
+    "category": "verification",
+    "trigger": "on-stop",
+    "severity": "warn",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_pm_postflight"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "postflight-compliance",
+    "name": "Postflight Compliance",
+    "description": "Ensure postflight checks pass without errors before finishing",
+    "category": "verification",
+    "trigger": "on-stop",
+    "severity": "advisory",
+    "check": {
+      "type": "tool-called",
+      "params": {
+        "tools": ["paradigm_pm_postflight", "paradigm_reindex"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "test-new-components",
+    "name": "Test New Components",
+    "description": "New components should have associated tests or test plan documented",
+    "category": "testing",
+    "trigger": "postflight",
+    "severity": "advisory",
+    "check": {
+      "type": "tests-exist",
+      "params": {
+        "patterns": ["**/*.test.*", "**/*.spec.*", "**/tests/**"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "purpose-coverage",
+    "name": "Purpose File Coverage",
+    "description": "All modified source directories should have .purpose file coverage",
+    "category": "documentation",
+    "trigger": "postflight",
+    "severity": "warn",
+    "check": {
+      "type": "file-exists",
+      "params": {
+        "patterns": ["**/.purpose"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "record-lore-for-significant",
+    "name": "Record Lore for Significant Changes",
+    "description": "Sessions modifying 3+ files should record a lore entry",
+    "category": "documentation",
+    "trigger": "on-stop",
+    "severity": "warn",
+    "check": {
+      "type": "lore-recorded",
+      "params": {}
+    },
+    "enabled": true
+  },
+  {
+    "id": "gates-for-routes",
+    "name": "Gates for Routes",
+    "description": "API routes should have corresponding gate declarations in portal.yaml",
+    "category": "security",
+    "trigger": "postflight",
+    "severity": "warn",
+    "check": {
+      "type": "gates-declared",
+      "params": {
+        "requireRoutes": true
+      }
+    },
+    "enabled": true
+  }
+]

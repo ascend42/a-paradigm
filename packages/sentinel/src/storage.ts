@@ -27,9 +27,12 @@ import type {
   PatternQueryOptions,
   ResolutionQueryOptions,
   IncidentStatus,
+  PracticeEvent,
+  PracticeEventInput,
+  PracticeEventQuery,
 } from './types.js';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // Default confidence for new patterns
 const DEFAULT_CONFIDENCE: PatternConfidence = {
@@ -144,11 +147,32 @@ export class SentinelStorage {
         recurred INTEGER DEFAULT 0
       );
 
+      -- Practice events (habits system)
+      CREATE TABLE IF NOT EXISTS practice_events (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        habit_id TEXT NOT NULL,
+        habit_category TEXT NOT NULL,
+        result TEXT NOT NULL CHECK (result IN ('followed', 'skipped', 'partial')),
+        engineer TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        lore_entry_id TEXT,
+        task_description TEXT,
+        symbols_touched TEXT DEFAULT '[]',
+        files_modified TEXT DEFAULT '[]',
+        related_incident_id TEXT,
+        notes TEXT
+      );
+
       -- Indexes
       CREATE INDEX IF NOT EXISTS idx_incidents_timestamp ON incidents(timestamp);
       CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
       CREATE INDEX IF NOT EXISTS idx_incidents_environment ON incidents(environment);
       CREATE INDEX IF NOT EXISTS idx_patterns_source ON patterns(source);
+      CREATE INDEX IF NOT EXISTS idx_practice_events_timestamp ON practice_events(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_practice_events_habit_id ON practice_events(habit_id);
+      CREATE INDEX IF NOT EXISTS idx_practice_events_engineer ON practice_events(engineer);
+      CREATE INDEX IF NOT EXISTS idx_practice_events_session_id ON practice_events(session_id);
     `);
 
     // Set schema version
@@ -247,8 +271,64 @@ export class SentinelStorage {
         this.incidentCounter = 0;
       }
 
+      // Run migrations
+      this.migrateSchema();
+
       this.initialized = true;
       this.save();
+    }
+  }
+
+  /**
+   * Run schema migrations from older versions
+   */
+  private migrateSchema(): void {
+    if (!this.db) return;
+
+    let currentVersion = 1;
+    try {
+      const result = this.db.exec(
+        "SELECT value FROM metadata WHERE key = 'schema_version'"
+      );
+      if (result.length > 0 && result[0].values.length > 0) {
+        currentVersion = parseInt(result[0].values[0][0] as string, 10) || 1;
+      }
+    } catch {
+      // No metadata table = version 1
+    }
+
+    if (currentVersion < 2) {
+      // v1 → v2: Add practice_events table
+      try {
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS practice_events (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            habit_id TEXT NOT NULL,
+            habit_category TEXT NOT NULL,
+            result TEXT NOT NULL CHECK (result IN ('followed', 'skipped', 'partial')),
+            engineer TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            lore_entry_id TEXT,
+            task_description TEXT,
+            symbols_touched TEXT DEFAULT '[]',
+            files_modified TEXT DEFAULT '[]',
+            related_incident_id TEXT,
+            notes TEXT
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_practice_events_timestamp ON practice_events(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_practice_events_habit_id ON practice_events(habit_id);
+          CREATE INDEX IF NOT EXISTS idx_practice_events_engineer ON practice_events(engineer);
+          CREATE INDEX IF NOT EXISTS idx_practice_events_session_id ON practice_events(session_id);
+        `);
+      } catch {
+        // Table might already exist
+      }
+
+      this.db.run(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '2')"
+      );
     }
   }
 
@@ -1276,6 +1356,234 @@ export class SentinelStorage {
       suggestedPattern: obj.suggested_pattern_id
         ? this.getPattern(obj.suggested_pattern_id as string) || undefined
         : undefined,
+    };
+  }
+
+  // ─── Practice Events ─────────────────────────────────────────────
+
+  recordPracticeEvent(input: PracticeEventInput): string {
+    this.initializeSync();
+    const id = `PE-${uuidv4().substring(0, 8)}`;
+    const now = new Date().toISOString();
+
+    this.db!.run(
+      `INSERT INTO practice_events (
+        id, timestamp, habit_id, habit_category, result,
+        engineer, session_id, lore_entry_id, task_description,
+        symbols_touched, files_modified, related_incident_id, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        now,
+        input.habitId,
+        input.habitCategory,
+        input.result,
+        input.engineer,
+        input.sessionId,
+        input.loreEntryId || null,
+        input.taskDescription || null,
+        JSON.stringify(input.symbolsTouched || []),
+        JSON.stringify(input.filesModified || []),
+        input.relatedIncidentId || null,
+        input.notes || null,
+      ]
+    );
+
+    this.save();
+    return id;
+  }
+
+  getPracticeEvents(options: PracticeEventQuery = {}): PracticeEvent[] {
+    this.initializeSync();
+    const { limit = 100, offset = 0 } = options;
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.habitId) {
+      conditions.push('habit_id = ?');
+      params.push(options.habitId);
+    }
+
+    if (options.habitCategory) {
+      conditions.push('habit_category = ?');
+      params.push(options.habitCategory);
+    }
+
+    if (options.result) {
+      conditions.push('result = ?');
+      params.push(options.result);
+    }
+
+    if (options.engineer) {
+      conditions.push('engineer = ?');
+      params.push(options.engineer);
+    }
+
+    if (options.sessionId) {
+      conditions.push('session_id = ?');
+      params.push(options.sessionId);
+    }
+
+    if (options.dateFrom) {
+      conditions.push('timestamp >= ?');
+      params.push(options.dateFrom);
+    }
+
+    if (options.dateTo) {
+      conditions.push('timestamp <= ?');
+      params.push(options.dateTo);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT * FROM practice_events ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToPracticeEvent(result[0].columns, row)
+    );
+  }
+
+  getPracticeEventCount(options: PracticeEventQuery = {}): number {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.habitId) {
+      conditions.push('habit_id = ?');
+      params.push(options.habitId);
+    }
+
+    if (options.habitCategory) {
+      conditions.push('habit_category = ?');
+      params.push(options.habitCategory);
+    }
+
+    if (options.result) {
+      conditions.push('result = ?');
+      params.push(options.result);
+    }
+
+    if (options.engineer) {
+      conditions.push('engineer = ?');
+      params.push(options.engineer);
+    }
+
+    if (options.dateFrom) {
+      conditions.push('timestamp >= ?');
+      params.push(options.dateFrom);
+    }
+
+    if (options.dateTo) {
+      conditions.push('timestamp <= ?');
+      params.push(options.dateTo);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT COUNT(*) as count FROM practice_events ${whereClause}`,
+      params
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) return 0;
+    return result[0].values[0][0] as number;
+  }
+
+  getComplianceRate(options: PracticeEventQuery = {}): {
+    total: number;
+    followed: number;
+    skipped: number;
+    partial: number;
+    rate: number;
+  } {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.habitId) {
+      conditions.push('habit_id = ?');
+      params.push(options.habitId);
+    }
+
+    if (options.habitCategory) {
+      conditions.push('habit_category = ?');
+      params.push(options.habitCategory);
+    }
+
+    if (options.engineer) {
+      conditions.push('engineer = ?');
+      params.push(options.engineer);
+    }
+
+    if (options.dateFrom) {
+      conditions.push('timestamp >= ?');
+      params.push(options.dateFrom);
+    }
+
+    if (options.dateTo) {
+      conditions.push('timestamp <= ?');
+      params.push(options.dateTo);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT result, COUNT(*) as count
+       FROM practice_events ${whereClause}
+       GROUP BY result`,
+      params
+    );
+
+    let followed = 0;
+    let skipped = 0;
+    let partial = 0;
+
+    if (result.length > 0) {
+      for (const row of result[0].values) {
+        const r = row[0] as string;
+        const count = row[1] as number;
+        if (r === 'followed') followed = count;
+        else if (r === 'skipped') skipped = count;
+        else if (r === 'partial') partial = count;
+      }
+    }
+
+    const total = followed + skipped + partial;
+    const rate = total > 0 ? ((followed + partial * 0.5) / total) * 100 : 100;
+
+    return { total, followed, skipped, partial, rate: Math.round(rate) };
+  }
+
+  private rowToPracticeEvent(
+    columns: string[],
+    row: SqlValue[]
+  ): PracticeEvent {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      id: obj.id as string,
+      timestamp: obj.timestamp as string,
+      habitId: obj.habit_id as string,
+      habitCategory: obj.habit_category as PracticeEvent['habitCategory'],
+      result: obj.result as PracticeEvent['result'],
+      engineer: obj.engineer as string,
+      sessionId: obj.session_id as string,
+      loreEntryId: (obj.lore_entry_id as string) || undefined,
+      taskDescription: (obj.task_description as string) || undefined,
+      symbolsTouched: JSON.parse((obj.symbols_touched as string) || '[]'),
+      filesModified: JSON.parse((obj.files_modified as string) || '[]'),
+      relatedIncidentId: (obj.related_incident_id as string) || undefined,
+      notes: (obj.notes as string) || undefined,
     };
   }
 

@@ -16,6 +16,11 @@ import {
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
+import {
+  loadHabits,
+  getHabitsByTrigger,
+} from '../utils/habits-loader.js';
+import { getComplianceRate } from '../utils/practice-store.js';
 
 // ============================================================================
 // Constants
@@ -101,7 +106,7 @@ export async function handlePmTool(
   switch (name) {
     case 'paradigm_pm_preflight': {
       const { task } = args as { task: string };
-      const result = runPreflightCheck(task, ctx);
+      const result = await runPreflightCheck(task, ctx);
       const text = JSON.stringify(result, null, 2);
       trackToolCall(text.length, name);
       return { text, handled: true };
@@ -127,7 +132,7 @@ export async function handlePmTool(
 // Preflight Implementation
 // ============================================================================
 
-function runPreflightCheck(task: string, ctx: ProjectContext) {
+async function runPreflightCheck(task: string, ctx: ProjectContext) {
   const taskLower = task.toLowerCase();
 
   // 1. Extract symbols from task
@@ -207,6 +212,25 @@ function runPreflightCheck(task: string, ctx: ProjectContext) {
   }
   requiredChecks.push('purpose-coverage');
 
+  // 6. Active habits for this trigger
+  let activeHabits: Array<{ id: string; name: string; category: string; severity: string }> = [];
+  let recentCompliance: { rate: number; total: number } | null = null;
+  try {
+    const habits = loadHabits(ctx.rootDir);
+    const preflightHabits = getHabitsByTrigger(habits, 'preflight');
+    activeHabits = preflightHabits.map(h => ({
+      id: h.id,
+      name: h.name,
+      category: h.category,
+      severity: h.severity,
+    }));
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    recentCompliance = await getComplianceRate(ctx.rootDir, { dateFrom: thirtyDaysAgo });
+  } catch {
+    // Habits are optional
+  }
+
   return {
     task: task.slice(0, 100) + (task.length > 100 ? '...' : ''),
     affectedSymbols,
@@ -215,6 +239,16 @@ function runPreflightCheck(task: string, ctx: ProjectContext) {
     taskAddsRoutes,
     requiredChecks,
     recommendations: buildPreflightRecommendations(affectedSymbols, rippleAnalysis, portalStatus, taskAddsRoutes),
+    habits: {
+      active: activeHabits,
+      recentCompliance: recentCompliance ? {
+        rate: recentCompliance.rate,
+        totalEvents: recentCompliance.total,
+      } : null,
+      note: activeHabits.length > 0
+        ? `${activeHabits.length} preflight habit(s) active. Call paradigm_habits_check with trigger="preflight" to evaluate.`
+        : 'No habits configured. Run paradigm habits init to set up.',
+    },
   };
 }
 
@@ -435,15 +469,30 @@ function runPostflightCheck(
   if (errors > 0) status = 'violations';
   else if (warnings > 0) status = 'warnings';
 
+  // 6. Habit compliance reminder
+  let habitReminder: string | null = null;
+  try {
+    const habits = loadHabits(ctx.rootDir);
+    const postflightHabits = getHabitsByTrigger(habits, 'postflight');
+    const stopHabits = getHabitsByTrigger(habits, 'on-stop');
+    const totalActive = postflightHabits.length + stopHabits.length;
+    if (totalActive > 0) {
+      habitReminder = `${totalActive} habit(s) should be checked. Call paradigm_habits_check with trigger="postflight" to evaluate and record practice events.`;
+    }
+  } catch {
+    // Habits are optional
+  }
+
   return {
     status,
     violations,
     summary: {
-      totalChecks: 5,
-      passed: 5 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
+      totalChecks: 6,
+      passed: 6 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
       warnings,
       errors,
     },
     blocksCompletion: errors > 0,
+    habitReminder,
   };
 }
