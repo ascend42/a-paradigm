@@ -8,8 +8,6 @@ const shared = {
   },
   noExternal: [/^@a-company\//],
   external: [
-    '@a-company/university',
-    '@a-company/sentinel',
     'minimatch',
     'express',
   ],
