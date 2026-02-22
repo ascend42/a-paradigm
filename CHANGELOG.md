@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] — 2026-02-22
+
+### Added
+
+- **Habits System — Behavioral Feedback Loop** — Agent discipline through observation, measurement, and feedback. Core engine with types, YAML loader (project + global + seed merge with overrides), and evaluator (6 check types: tool-called, file-exists, lore-recorded, symbols-registered, gates-declared, tests-exist). 10 seed habits across 6 categories (discovery, verification, testing, documentation, collaboration, security) and 4 trigger points (preflight, postflight, on-commit, on-stop). Three severity levels: advisory, warn, block. Sentinel extended with `practice_events` table for tracking compliance. Three MCP tools: `paradigm_habits_check`, `paradigm_habits_status`, `paradigm_practice_context`. CLI commands: `paradigm habits list|status|init|add`. PM integration: preflight surfaces habits + warnings, postflight evaluates compliance. Stop hook Check 8: blocking habits can prevent session completion. Lore integration: `habit_compliance` auto-attached to lore entries.
+
+- **University: PARA-501 Advanced Systems** — New 6-lesson course covering v3 systems: The Lore System, Sentinel Deep Dive, Habits & Practice, Session Intelligence, Hook Enforcement & Automation, and The Complete Workflow (capstone). 29 quiz questions across the 6 lessons.
+
+- **PLSAT v3.0 Expansion** — 8 new standalone question slots (slot-051 through slot-058) and 1 passage-based question group (passage-habits-review with 3 analytical questions) covering lore, sentinel, habits, sessions, and hooks.
+
+- **University Reference Updates** — 7 new MCP tool reference cards (`paradigm_lore_record`, `paradigm_lore_search`, `paradigm_lore_timeline`, `paradigm_habits_check`, `paradigm_habits_status`, `paradigm_practice_context`, `paradigm_session_checkpoint`) and 2 CLI command cards (`paradigm habits`, `paradigm lore`).
+
+### Fixed
+
+- **Lore: auto-migrate legacy entries** — Legacy lore entries stored at the root of `.paradigm/lore/entries/` are now auto-migrated into date-partitioned subdirectories on load. Fixes timeline undercounting for projects created before date-partitioning was introduced.
+
+### Changed
+
+- **Version sync** — `@a-company/paradigm` 3.0.3 → 3.1.0, `@a-company/paradigm-mcp` 1.4.0 → 3.1.0, `@a-company/university` 0.1.0 → 3.1.0. University version now tracks the paradigm publish version.
+
 ## [3.0.3] — 2026-02-22
 
 ### Fixed
