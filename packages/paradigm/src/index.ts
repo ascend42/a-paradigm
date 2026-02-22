@@ -1295,6 +1295,64 @@ loreCmd
     await loreServeCommand(undefined, options);
   });
 
+// paradigm habits <command>
+const habitsCmd = program
+  .command('habits')
+  .description('Behavioral habits - practice tracking and compliance');
+
+habitsCmd
+  .command('list')
+  .alias('ls')
+  .description('List all configured habits')
+  .option('--trigger <trigger>', 'Filter by trigger: preflight, postflight, on-stop, on-commit')
+  .option('--category <category>', 'Filter by category: discovery, verification, testing, documentation, collaboration, security')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { habitsListCommand } = await import('./commands/habits/index.js');
+    await habitsListCommand(options);
+  });
+
+habitsCmd
+  .command('status')
+  .description('Show practice profile with compliance rates')
+  .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { habitsStatusCommand } = await import('./commands/habits/index.js');
+    await habitsStatusCommand(options);
+  });
+
+habitsCmd
+  .command('init')
+  .description('Initialize habits.yaml with seed habits')
+  .option('-f, --force', 'Overwrite existing file')
+  .action(async (options) => {
+    const { habitsInitCommand } = await import('./commands/habits/index.js');
+    await habitsInitCommand(options);
+  });
+
+habitsCmd
+  .command('add')
+  .description('Add a custom habit')
+  .requiredOption('--id <id>', 'Habit ID (kebab-case)')
+  .requiredOption('--name <name>', 'Human-readable name')
+  .requiredOption('--description <desc>', 'What this habit enforces')
+  .requiredOption('--category <category>', 'Category: discovery, verification, testing, documentation, collaboration, security')
+  .requiredOption('--trigger <trigger>', 'Trigger: preflight, postflight, on-stop, on-commit')
+  .option('--severity <severity>', 'Severity: advisory, warn, block', 'advisory')
+  .option('--tools <tools>', 'Comma-separated tools to check (for tool-called check type)')
+  .action(async (options) => {
+    const { habitsAddCommand } = await import('./commands/habits/index.js');
+    await habitsAddCommand(options);
+  });
+
+// Default habits action (list)
+habitsCmd
+  .action(async () => {
+    const { habitsListCommand } = await import('./commands/habits/index.js');
+    await habitsListCommand({});
+  });
+
 // paradigm sentinel - Launch the unified codebase intelligence UI
 program
   .command('sentinel [path]')

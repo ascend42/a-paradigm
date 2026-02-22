@@ -33,6 +33,7 @@ import { getPurposePortalToolsList, handlePurposePortalTool } from './purpose-po
 import { getPmToolsList, handlePmTool } from './pm.js';
 import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { getLoreToolsList, handleLoreTool } from './lore.js';
+import { getHabitsToolsList, handleHabitsTool } from './habits.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -234,6 +235,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getReindexToolsList(),
           // Lore tools
           ...getLoreToolsList(),
+          // Habits tools
+          ...getHabitsToolsList(),
         ],
       };
     }
@@ -937,6 +940,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try lore tools
           if (name.startsWith('paradigm_lore_')) {
             const result = await handleLoreTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try habits tools
+          if (name.startsWith('paradigm_habits_') || name === 'paradigm_practice_context') {
+            const result = await handleHabitsTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

@@ -15,6 +15,7 @@ import {
   type LoreEntry,
   type LoreFilter,
 } from '../utils/lore-loader.js';
+import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
 
 /**
  * Get list of lore tools with safety annotations
@@ -250,6 +251,26 @@ export async function handleLoreTool(
         symbols_touched: string[];
       };
 
+      // Auto-attach habit compliance data
+      let habit_compliance: LoreEntry['habit_compliance'];
+      try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const compliance = await getComplianceRate(ctx.rootDir, { dateFrom: thirtyDaysAgo });
+        if (compliance.total > 0) {
+          const byCategory = await getComplianceByCategory(ctx.rootDir, { dateFrom: thirtyDaysAgo });
+          const weakAreas = byCategory.filter(c => c.rate < 60).map(c => c.category);
+          habit_compliance = {
+            rate: compliance.rate,
+            followed: compliance.followed,
+            skipped: compliance.skipped,
+            partial: compliance.partial,
+            weakAreas: weakAreas.length > 0 ? weakAreas : undefined,
+          };
+        }
+      } catch {
+        // Habit compliance is optional
+      }
+
       const entry: LoreEntry = {
         id: '', // Will be generated
         type,
@@ -270,6 +291,7 @@ export async function handleLoreTool(
         learnings,
         verification,
         tags,
+        habit_compliance,
       };
 
       const id = await recordLoreEntry(ctx.rootDir, entry);

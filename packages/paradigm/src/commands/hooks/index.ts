@@ -126,6 +126,7 @@ const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
 #   7. Lore entry expected for significant sessions (3+ source files)
+#   8. Blocking habits not satisfied (from paradigm_habits_check)
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -368,6 +369,16 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   fi
 fi
 
+# --- Check 8: Blocking habits ---
+if [ -f ".paradigm/.habits-blocking" ]; then
+  HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
+  VIOLATIONS="$VIOLATIONS
+  - Blocking habit(s) not satisfied:
+    $HABITS_BLOCKING
+    Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -385,6 +396,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
+  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
   exit 2
 fi
 
@@ -397,6 +409,7 @@ fi
 
 # Clean up pending-review on pass
 rm -f ".paradigm/.pending-review"
+rm -f ".paradigm/.habits-blocking"
 
 exit 0
 `;
@@ -568,6 +581,7 @@ const CURSOR_STOP_HOOK = `#!/bin/sh
 #   4. Aspect anchor files that no longer exist
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
+#   8. Blocking habits not satisfied (from paradigm_habits_check)
 #   7. Lore entry expected for significant sessions (3+ source files)
 
 # Read JSON from stdin (hook input)
@@ -811,6 +825,16 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   fi
 fi
 
+# --- Check 8: Blocking habits ---
+if [ -f ".paradigm/.habits-blocking" ]; then
+  HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
+  VIOLATIONS="$VIOLATIONS
+  - Blocking habit(s) not satisfied:
+    $HABITS_BLOCKING
+    Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -828,6 +852,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
+  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
   exit 2
 fi
 
@@ -840,6 +865,7 @@ fi
 
 # Clean up pending-review on pass
 rm -f ".paradigm/.pending-review"
+rm -f ".paradigm/.habits-blocking"
 
 exit 0
 `;

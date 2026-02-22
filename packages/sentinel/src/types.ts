@@ -486,3 +486,59 @@ export interface ComponentContext {
   /** Wrap a function to auto-capture errors in this component's context */
   wrap<T extends (...args: any[]) => any>(fn: T): T;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PRACTICE EVENT TYPES (Habits System)
+// ═══════════════════════════════════════════════════════════════════
+
+export type PracticeResult = 'followed' | 'skipped' | 'partial';
+
+export type PracticeCategory =
+  | 'discovery'
+  | 'verification'
+  | 'testing'
+  | 'documentation'
+  | 'collaboration'
+  | 'security';
+
+export interface PracticeEvent {
+  id: string;
+  timestamp: string;
+  habitId: string;
+  habitCategory: PracticeCategory;
+  result: PracticeResult;
+  engineer: string;
+  sessionId: string;
+  loreEntryId?: string;
+  taskDescription?: string;
+  symbolsTouched: string[];
+  filesModified: string[];
+  relatedIncidentId?: string;
+  notes?: string;
+}
+
+export interface PracticeEventInput {
+  habitId: string;
+  habitCategory: PracticeCategory;
+  result: PracticeResult;
+  engineer: string;
+  sessionId: string;
+  loreEntryId?: string;
+  taskDescription?: string;
+  symbolsTouched?: string[];
+  filesModified?: string[];
+  relatedIncidentId?: string;
+  notes?: string;
+}
+
+export interface PracticeEventQuery {
+  habitId?: string;
+  habitCategory?: PracticeCategory;
+  result?: PracticeResult;
+  engineer?: string;
+  sessionId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  offset?: number;
+}
