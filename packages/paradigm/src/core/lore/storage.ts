@@ -56,6 +56,9 @@ export async function loadLoreEntries(rootDir: string, filter?: LoreFilter): Pro
     return [];
   }
 
+  // Auto-migrate any legacy root-level entries first
+  migrateLegacyEntries(rootDir);
+
   const entries: LoreEntry[] = [];
 
   // Read all date directories
@@ -116,6 +119,9 @@ export async function rebuildTimeline(rootDir: string): Promise<void> {
   if (!fs.existsSync(entriesPath)) {
     return;
   }
+
+  // Auto-migrate any legacy root-level entries first
+  migrateLegacyEntries(rootDir);
 
   const authors = new Set<string>();
   let entryCount = 0;
@@ -226,6 +232,84 @@ export async function loadLoreEntry(rootDir: string, entryId: string): Promise<L
   // Fallback: scan all entries
   const entries = await loadLoreEntries(rootDir);
   return entries.find(e => e.id === entryId) || null;
+}
+
+/**
+ * Migrate old-format lore entries (root-level YAML without date partitioning)
+ * to v2 schema in dated directories. Runs automatically on rebuild/load.
+ */
+function migrateLegacyEntries(rootDir: string): number {
+  const entriesPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR);
+  if (!fs.existsSync(entriesPath)) return 0;
+
+  const rootFiles = fs.readdirSync(entriesPath)
+    .filter(f => f.endsWith('.yaml') && !f.startsWith('.'));
+
+  let migrated = 0;
+  for (const file of rootFiles) {
+    const filePath = path.join(entriesPath, file);
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) continue;
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const raw = yaml.load(content) as Record<string, unknown>;
+
+      // Skip if already v2 format (has author block)
+      if (raw.author && typeof raw.author === 'object') continue;
+
+      // Extract date — old format uses `date: "2026-02-21"`
+      const dateStr = typeof raw.date === 'string'
+        ? raw.date.slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+
+      const datePath = path.join(entriesPath, dateStr);
+      if (!fs.existsSync(datePath)) {
+        fs.mkdirSync(datePath, { recursive: true });
+      }
+
+      const id = generateLoreId(rootDir, dateStr);
+
+      // Map old type to v2 type
+      const oldType = String(raw.type || 'agent-session');
+      const v2Type = ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'].includes(oldType)
+        ? oldType
+        : 'agent-session';
+
+      // Convert test_results to verification
+      let verification: LoreEntry['verification'] | undefined;
+      if (raw.test_results && typeof raw.test_results === 'object') {
+        const tr = raw.test_results as Record<string, number>;
+        verification = {
+          status: tr.total === tr.passed ? 'pass' : 'partial',
+          details: { tests: tr.total === tr.passed ? 'pass' : 'fail' },
+        };
+      }
+
+      const v2Entry: LoreEntry = {
+        id,
+        type: v2Type as LoreEntry['type'],
+        timestamp: `${dateStr}T00:00:00.000Z`,
+        author: { type: 'agent', id: 'unknown' },
+        title: String(raw.title || file.replace('.yaml', '')),
+        summary: String(raw.summary || ''),
+        symbols_touched: Array.isArray(raw.symbols_touched) ? raw.symbols_touched : [],
+        files_modified: Array.isArray(raw.files_modified) ? raw.files_modified : undefined,
+        ...(verification ? { verification } : {}),
+        tags: ['migrated', oldType],
+      };
+
+      fs.writeFileSync(
+        path.join(datePath, `${id}.yaml`),
+        yaml.dump(v2Entry, { lineWidth: -1, noRefs: true })
+      );
+      fs.unlinkSync(filePath);
+      migrated++;
+    } catch {
+      // Skip files that can't be parsed
+    }
+  }
+  return migrated;
 }
 
 /**

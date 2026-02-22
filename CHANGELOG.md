@@ -133,6 +133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MCP tool routing**: `paradigm_session_recover` was registered and handled but never dispatched — the routing guard in `tools/index.ts` didn't match its name. Broadened condition to `paradigm_session_*` prefix matching.
 
+- **Lore timeline undercounting legacy entries** — `rebuildTimeline()` and `loadLoreEntries()` only scanned date-partitioned directories (`entries/YYYY-MM-DD/`), silently skipping old-format YAML files placed directly in `entries/`. Added `migrateLegacyEntries()` that auto-converts old-format entries (no `id`, no `author` block, `date` string, `test_results`) to v2 schema and moves them into proper date directories on first access. Applied to both `packages/paradigm/src/core/lore/storage.ts` and `packages/paradigm-mcp/src/utils/lore-loader.ts`.
+
 ### Planned
 
 - **Paradigm University content review** — 27 tracked items in `packages/university/CHANGES.md`:
