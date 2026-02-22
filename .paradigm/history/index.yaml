@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-21T19:39:59.488Z'
+generated: '2026-02-22T22:45:42.352Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -247,11 +247,27 @@ by_symbol:
       agent: []
   '#paradigm-mcp':
     symbol: '#paradigm-mcp'
-    total_changes: 1
-    last_modified: '2026-02-14T00:10:56Z'
+    total_changes: 2
+    last_modified: '2026-02-22T22:37:17Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_22
+        id: h0033
+        ts: '2026-02-22T22:37:17Z'
+        type: implement
+        symbols:
+          - '#paradigm'
+          - '#paradigm-mcp'
+        author:
+          type: human
+          id: ascend
+        commit: b76007d18599dc6d770de17839262929fc46997e
+        intent: feature
+        files:
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+        description: 'chore(#paradigm): bump paradigm to 3.1.0, paradigm-mcp to 3.1.0'
       - id: h0005
         ts: '2026-02-14T00:10:56Z'
         type: implement
@@ -278,7 +294,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_11
+      - &ref_12
         id: h0021
         ts: '2026-02-18T17:29:36Z'
         type: implement
@@ -589,7 +605,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_13
+      - &ref_14
         id: h0024
         ts: '2026-02-20T22:51:01Z'
         type: implement
@@ -689,11 +705,50 @@ by_symbol:
       agent: []
   '#university-server':
     symbol: '#university-server'
-    total_changes: 1
-    last_modified: '2026-02-14T13:56:39Z'
+    total_changes: 3
+    last_modified: '2026-02-22T03:49:11Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_10
+        id: h0029
+        ts: '2026-02-22T03:49:11Z'
+        type: implement
+        symbols:
+          - '#paradigm-cli'
+          - '#sentinel-server'
+          - '#university-server'
+        author:
+          type: human
+          id: ascend
+        commit: b3c18e0024245786cd01725f279e5716b02ae548
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - package-lock.json
+          - packages/paradigm/package.json
+          - packages/paradigm/tsup.config.ts
+        description: 'fix(#paradigm-cli): bundle university and sentinel instead of externalizing'
+      - &ref_11
+        id: h0027
+        ts: '2026-02-22T02:37:45Z'
+        type: implement
+        symbols:
+          - '#paradigm-cli'
+          - '#sentinel-server'
+          - '#university-server'
+        author:
+          type: human
+          id: ascend
+        commit: 053f19cb97320fafa7979b6366cd3c034a619c37
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/university.ts
+          - packages/sentinel/src/server/index.ts
+          - packages/university/src/server/index.ts
+        description: 'fix(#university-server): resolve static file paths for bundled CLI, fix Express v5 wildcards'
       - &ref_8
         id: h0011
         ts: '2026-02-14T13:56:39Z'
@@ -842,7 +897,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_12
+      - &ref_13
         id: h0022
         ts: '2026-02-18T18:40:30Z'
         type: implement
@@ -902,12 +957,34 @@ by_symbol:
       agent: []
   '#paradigm-cli':
     symbol: '#paradigm-cli'
-    total_changes: 3
-    last_modified: '2026-02-21T19:39:08Z'
+    total_changes: 6
+    last_modified: '2026-02-22T03:49:11Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_14
+      - *ref_10
+      - &ref_17
+        id: h0028
+        ts: '2026-02-22T03:26:23Z'
+        type: implement
+        symbols:
+          - '#paradigm-cli'
+          - '#paradigm-plugin'
+        author:
+          type: human
+          id: ascend
+        commit: 9867a245b85b17df6934557e10e22adc4cdf5866
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - package-lock.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/index.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/.mcp.json
+        description: 'fix(#paradigm-cli): dynamic version from package.json, fix plugin MCP entry point'
+      - *ref_11
+      - &ref_15
         id: h0026
         ts: '2026-02-21T19:39:08Z'
         type: implement
@@ -929,7 +1006,7 @@ by_symbol:
           - packages/paradigm/src/lore-server/index.ts
           - packages/paradigm/tsup.config.ts
         description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
-      - &ref_15
+      - &ref_16
         id: h0025
         ts: '2026-02-21T19:35:58Z'
         type: implement
@@ -950,8 +1027,18 @@ by_symbol:
           - packages/paradigm/src/commands/hooks/.purpose
           - packages/paradigm/tsup.config.ts
         description: 'fix(#lore-system): externalize Express to fix lore server ESM crash'
-      - &ref_10
-        id: h0020
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-hooks':
+    symbol: '#paradigm-hooks'
+    total_changes: 1
+    last_modified: '2026-02-18T17:26:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0020
         ts: '2026-02-18T17:26:14Z'
         type: implement
         symbols:
@@ -971,18 +1058,6 @@ by_symbol:
       human:
         - ascend
       agent: []
-  '#paradigm-hooks':
-    symbol: '#paradigm-hooks'
-    total_changes: 1
-    last_modified: '2026-02-18T17:26:14Z'
-    stability_score: 1
-    fragility: low
-    recent:
-      - *ref_10
-    contributors:
-      human:
-        - ascend
-      agent: []
   '!handoff-delivered':
     symbol: '!handoff-delivered'
     total_changes: 1
@@ -990,7 +1065,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1002,7 +1077,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1014,7 +1089,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1026,7 +1101,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1038,7 +1113,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1050,7 +1125,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1062,7 +1137,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1074,7 +1149,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1086,7 +1161,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_11
+      - *ref_12
     contributors:
       human:
         - ascend
@@ -1098,7 +1173,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_12
+      - *ref_13
     contributors:
       human:
         - ascend
@@ -1110,7 +1185,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_12
+      - *ref_13
     contributors:
       human:
         - ascend
@@ -1122,7 +1197,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_12
+      - *ref_13
     contributors:
       human:
         - ascend
@@ -1134,7 +1209,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_12
+      - *ref_13
     contributors:
       human:
         - ascend
@@ -1182,7 +1257,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_13
+      - *ref_14
     contributors:
       human:
         - ascend
@@ -1194,7 +1269,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_13
+      - *ref_14
     contributors:
       human:
         - ascend
@@ -1206,7 +1281,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_13
+      - *ref_14
     contributors:
       human:
         - ascend
@@ -1218,7 +1293,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_13
+      - *ref_14
     contributors:
       human:
         - ascend
@@ -1230,7 +1305,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_13
+      - *ref_14
     contributors:
       human:
         - ascend
@@ -1242,8 +1317,251 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_14
       - *ref_15
+      - *ref_16
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-server':
+    symbol: '#sentinel-server'
+    total_changes: 2
+    last_modified: '2026-02-22T03:49:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_10
+      - *ref_11
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-plugin':
+    symbol: '#paradigm-plugin'
+    total_changes: 1
+    last_modified: '2026-02-22T03:26:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_17
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#evaluator':
+    symbol: '#evaluator'
+    total_changes: 1
+    last_modified: '2026-02-22T18:01:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_18
+        id: h0030
+        ts: '2026-02-22T18:01:21Z'
+        type: implement
+        symbols:
+          - '#evaluator'
+          - '#habits'
+          - '#habits-loader'
+          - '#practice-store'
+        author:
+          type: human
+          id: ascend
+        commit: 468d453981a25b602a3a0272cff3de3267e430e4
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/habits.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/lore.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/utils/habits-loader.ts
+          - packages/paradigm-mcp/src/utils/lore-loader.ts
+          - packages/paradigm-mcp/src/utils/practice-store.ts
+          - packages/paradigm/src/commands/habits/index.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/core/habits/evaluator.ts
+          - packages/paradigm/src/core/habits/index.ts
+          - packages/paradigm/src/core/habits/loader.ts
+          - packages/paradigm/src/core/habits/seed-habits.json
+          - packages/paradigm/src/core/habits/types.ts
+          - packages/paradigm/src/index.ts
+          - packages/sentinel/src/index.ts
+          - packages/sentinel/src/storage.ts
+          - packages/sentinel/src/types.ts
+        description: 'feat(#habits): add behavioral feedback loop for agent discipline'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#habits':
+    symbol: '#habits'
+    total_changes: 1
+    last_modified: '2026-02-22T18:01:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#habits-loader':
+    symbol: '#habits-loader'
+    total_changes: 1
+    last_modified: '2026-02-22T18:01:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#practice-store':
+    symbol: '#practice-store'
+    total_changes: 1
+    last_modified: '2026-02-22T18:01:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore':
+    symbol: '#lore'
+    total_changes: 1
+    last_modified: '2026-02-22T18:20:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_19
+        id: h0031
+        ts: '2026-02-22T18:20:51Z'
+        type: implement
+        symbols:
+          - '#lore'
+          - '#lore-loader'
+          - '#lore-storage'
+        author:
+          type: human
+          id: ascend
+        commit: 1e43d2150b65802a9952ad0d081b88e0b76f5df4
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/utils/lore-loader.ts
+          - packages/paradigm/src/core/lore/storage.ts
+        description: 'fix(#lore): auto-migrate legacy entries, fix timeline undercounting'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-loader':
+    symbol: '#lore-loader'
+    total_changes: 1
+    last_modified: '2026-02-22T18:20:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_19
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-storage':
+    symbol: '#lore-storage'
+    total_changes: 1
+    last_modified: '2026-02-22T18:20:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_19
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#para-501':
+    symbol: '#para-501'
+    total_changes: 1
+    last_modified: '2026-02-22T22:28:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_20
+        id: h0032
+        ts: '2026-02-22T22:28:41Z'
+        type: implement
+        symbols:
+          - '#para-501'
+          - '#plsat-v3'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: 43015ca1b7d58cf6fb3e1bff0d5c3ceeed21216e
+        intent: feature
+        files:
+          - packages/university/CHANGES.md
+          - packages/university/package.json
+          - packages/university/src/content/courses/para-501.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/src/content/reference.json
+        description: 'feat(#university): add PARA-501 Advanced Systems course and PLSAT expansion'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#plsat-v3':
+    symbol: '#plsat-v3'
+    total_changes: 1
+    last_modified: '2026-02-22T22:28:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_20
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university':
+    symbol: '#university'
+    total_changes: 2
+    last_modified: '2026-02-22T22:39:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_21
+        id: h0034
+        ts: '2026-02-22T22:39:23Z'
+        type: implement
+        symbols:
+          - '#paradigm'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: 0055f2983f841c79bd800abbc2193185bbac13c0
+        intent: feature
+        files:
+          - CHANGELOG.md
+        description: 'docs(#paradigm): add 3.1.0 changelog entries'
+      - *ref_20
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm':
+    symbol: '#paradigm'
+    total_changes: 2
+    last_modified: '2026-02-22T22:39:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_21
+      - *ref_22
     contributors:
       human:
         - ascend
