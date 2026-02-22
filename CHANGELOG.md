@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] — 2026-02-21
+
+### Added
+
+- **Claude Code Plugin** — Full plugin at `plugins/paradigm/` with 8 skills (`/paradigm:init`, `scan`, `doctor`, `lore`, `shift`, `preflight`, `postflight`, `sentinel`), 5 specialized agents (architect, builder, tester, reviewer, security), 3 enforcement hooks (stop, precommit, postwrite), and MCP server auto-start. Validated with `claude plugin validate`. Marketplace manifest at `.claude-plugin/marketplace.json` enables `plugin marketplace add ascend42/a-paradigm` → `plugin install paradigm@a-paradigm`.
+
+- **Plugin Migration Script** — `plugins/paradigm/scripts/migrate-to-plugin.sh` removes per-project Claude Code hooks and paradigm-mcp from `.mcp.json` while preserving CLAUDE.md, .paradigm/, portal.yaml, Cursor hooks, and git hooks. Run on all 7 existing projects.
+
+- **Portable Cursor MCP Config** — All projects now use `npx --package=@a-company/paradigm -y paradigm-mcp .` in `.cursor/mcp.json` — no machine-specific paths, works for any developer with npm.
+
+- **Author & Repo Attribution** — CLAUDE.md and Cursor rules now include author (Matt Canoy), repo link, npm link, and plugin reference at the top. IDE adapters updated so `paradigm shift` generates these for new projects.
+
+### Changed
+
+- **Version 3.0.0** — Major version bump for Sentinel SDK, Lore system, plugin system, and University platform.
+- **Read-only agents use `permissionMode: plan`** — Reviewer and security agents now enforce read-only constraint via `permissionMode: plan`, matching architect agent.
+
 ## [Unreleased]
 
 ### Added

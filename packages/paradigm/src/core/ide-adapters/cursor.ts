@@ -177,6 +177,7 @@ export class CursorAdapter implements IDEAdapter {
     
     return frontmatter('Paradigm core rules - project overview and fundamentals', { alwaysApply: true }) +
       `# Paradigm - ${projectName}\n\n` +
+      '> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm)\n\n' +
       overview + '\n\n' +
       generateUpdateRules(config);
   }
