@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-21T23:58:31.808Z",
+    "generatedAt": "2026-02-22T00:01:01.562Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 14,
@@ -826,30 +826,6 @@
         "#tutorial-handler"
       ]
     },
-    "scan-index-generation": {
-      "id": "scan-index-generation",
-      "name": "Scan Index Generation",
-      "symbol": "#scan-index-generation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
-      "visualTags": [],
-      "related": [
-        "!index-generated",
-        "#generator",
-        "#component-scanner"
-      ]
-    },
-    "probe-protocol": {
-      "id": "probe-protocol",
-      "name": "Probe Protocol",
-      "symbol": "#probe-protocol",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
-      "description": "Protocol for visual-to-code mapping",
-      "visualTags": [],
-      "related": []
-    },
     "purpose-parsing": {
       "id": "purpose-parsing",
       "name": "Purpose Parsing",
@@ -896,6 +872,30 @@
         "#aggregator",
         "#symbol-extractor"
       ]
+    },
+    "scan-index-generation": {
+      "id": "scan-index-generation",
+      "name": "Scan Index Generation",
+      "symbol": "#scan-index-generation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
+      "visualTags": [],
+      "related": [
+        "!index-generated",
+        "#generator",
+        "#component-scanner"
+      ]
+    },
+    "probe-protocol": {
+      "id": "probe-protocol",
+      "name": "Probe Protocol",
+      "symbol": "#probe-protocol",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Protocol for visual-to-code mapping",
+      "visualTags": [],
+      "related": []
     },
     "symbol-aggregation": {
       "id": "symbol-aggregation",
@@ -1602,76 +1602,6 @@
       "visualTags": [],
       "related": []
     },
-    "paradigm-logger": {
-      "id": "paradigm-logger",
-      "name": "Paradigm Logger",
-      "symbol": "#paradigm-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "symbol-logger": {
-      "id": "symbol-logger",
-      "name": "Symbol Logger",
-      "symbol": "#symbol-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "formatter-pretty": {
-      "id": "formatter-pretty",
-      "name": "Formatter Pretty",
-      "symbol": "#formatter-pretty",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Human-readable colored output with symbol prefixes and timestamps",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "formatter-json": {
-      "id": "formatter-json",
-      "name": "Formatter Json",
-      "symbol": "#formatter-json",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Machine-readable JSON output for log aggregation pipelines",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "correlation-tracker": {
-      "id": "correlation-tracker",
-      "name": "Correlation Tracker",
-      "symbol": "#correlation-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
-      "visualTags": [],
-      "related": [
-        "~correlation-tracked"
-      ]
-    },
-    "duration-tracker": {
-      "id": "duration-tracker",
-      "name": "Duration Tracker",
-      "symbol": "#duration-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Operation timing utility for measuring and logging execution duration",
-      "visualTags": [],
-      "related": []
-    },
     "init-handler": {
       "id": "init-handler",
       "name": "Init Handler",
@@ -2232,43 +2162,73 @@
       "visualTags": [],
       "related": []
     },
-    "generator": {
-      "id": "generator",
-      "name": "Generator",
-      "symbol": "#generator",
+    "paradigm-logger": {
+      "id": "paradigm-logger",
+      "name": "Paradigm Logger",
+      "symbol": "#paradigm-logger",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#generator: Generates scan-index.json",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
       "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "symbol-logger": {
+      "id": "symbol-logger",
+      "name": "Symbol Logger",
+      "symbol": "#symbol-logger",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
+      "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "formatter-pretty": {
+      "id": "formatter-pretty",
+      "name": "Formatter Pretty",
+      "symbol": "#formatter-pretty",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Human-readable colored output with symbol prefixes and timestamps",
+      "visualTags": [
+        "form"
+      ],
       "related": []
     },
-    "component-scanner": {
-      "id": "component-scanner",
-      "name": "Component Scanner",
-      "symbol": "#component-scanner",
+    "formatter-json": {
+      "id": "formatter-json",
+      "name": "Formatter Json",
+      "symbol": "#formatter-json",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#component-scanner: Scans for UI components",
-      "visualTags": [],
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Machine-readable JSON output for log aggregation pipelines",
+      "visualTags": [
+        "form"
+      ],
       "related": []
     },
-    "protocol-handler": {
-      "id": "protocol-handler",
-      "name": "Protocol Handler",
-      "symbol": "#protocol-handler",
+    "correlation-tracker": {
+      "id": "correlation-tracker",
+      "name": "Correlation Tracker",
+      "symbol": "#correlation-tracker",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#protocol-handler: Handles probe protocol requests",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
       "visualTags": [],
-      "related": []
+      "related": [
+        "~correlation-tracked"
+      ]
     },
-    "matcher": {
-      "id": "matcher",
-      "name": "Matcher",
-      "symbol": "#matcher",
+    "duration-tracker": {
+      "id": "duration-tracker",
+      "name": "Duration Tracker",
+      "symbol": "#duration-tracker",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#matcher: Matches images to components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Operation timing utility for measuring and logging execution duration",
       "visualTags": [],
       "related": []
     },
@@ -2329,6 +2289,46 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
       "description": "#symbol-extractor: Extracts symbols from purpose data",
+      "visualTags": [],
+      "related": []
+    },
+    "generator": {
+      "id": "generator",
+      "name": "Generator",
+      "symbol": "#generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#generator: Generates scan-index.json",
+      "visualTags": [],
+      "related": []
+    },
+    "component-scanner": {
+      "id": "component-scanner",
+      "name": "Component Scanner",
+      "symbol": "#component-scanner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#component-scanner: Scans for UI components",
+      "visualTags": [],
+      "related": []
+    },
+    "protocol-handler": {
+      "id": "protocol-handler",
+      "name": "Protocol Handler",
+      "symbol": "#protocol-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#protocol-handler: Handles probe protocol requests",
+      "visualTags": [],
+      "related": []
+    },
+    "matcher": {
+      "id": "matcher",
+      "name": "Matcher",
+      "symbol": "#matcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#matcher: Matches images to components",
       "visualTags": [],
       "related": []
     },
@@ -3664,15 +3664,6 @@
         "#quiz-view"
       ]
     },
-    "log-emitted": {
-      "id": "log-emitted",
-      "name": "Log Emitted",
-      "symbol": "!log-emitted",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "A structured log entry was written",
-      "related": []
-    },
     "init-success": {
       "id": "init-success",
       "name": "Init Success",
@@ -3745,13 +3736,13 @@
       "description": "Multi-agent orchestration has begun",
       "related": []
     },
-    "index-generated": {
-      "id": "index-generated",
-      "name": "Index Generated",
-      "symbol": "!index-generated",
+    "log-emitted": {
+      "id": "log-emitted",
+      "name": "Log Emitted",
+      "symbol": "!log-emitted",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "!index-generated: Scan index was generated",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "A structured log entry was written",
       "related": []
     },
     "parse-success": {
@@ -3788,6 +3779,15 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
       "description": "!validation-failed: Portal validation found issues",
+      "related": []
+    },
+    "index-generated": {
+      "id": "index-generated",
+      "name": "Index Generated",
+      "symbol": "!index-generated",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "!index-generated: Scan index was generated",
       "related": []
     },
     "aggregation-complete": {
@@ -4141,14 +4141,6 @@
       "category": "components",
       "id": "tutorial-command"
     },
-    "#scan-index-generation": {
-      "category": "components",
-      "id": "scan-index-generation"
-    },
-    "#probe-protocol": {
-      "category": "components",
-      "id": "probe-protocol"
-    },
     "#purpose-parsing": {
       "category": "components",
       "id": "purpose-parsing"
@@ -4160,6 +4152,14 @@
     "#purpose-aggregation": {
       "category": "components",
       "id": "purpose-aggregation"
+    },
+    "#scan-index-generation": {
+      "category": "components",
+      "id": "scan-index-generation"
+    },
+    "#probe-protocol": {
+      "category": "components",
+      "id": "probe-protocol"
     },
     "#symbol-aggregation": {
       "category": "components",
@@ -4409,30 +4409,6 @@
       "category": "components",
       "id": "academia-theme"
     },
-    "#paradigm-logger": {
-      "category": "components",
-      "id": "paradigm-logger"
-    },
-    "#symbol-logger": {
-      "category": "components",
-      "id": "symbol-logger"
-    },
-    "#formatter-pretty": {
-      "category": "components",
-      "id": "formatter-pretty"
-    },
-    "#formatter-json": {
-      "category": "components",
-      "id": "formatter-json"
-    },
-    "#correlation-tracker": {
-      "category": "components",
-      "id": "correlation-tracker"
-    },
-    "#duration-tracker": {
-      "category": "components",
-      "id": "duration-tracker"
-    },
     "#init-handler": {
       "category": "components",
       "id": "init-handler"
@@ -4653,21 +4629,29 @@
       "category": "components",
       "id": "portal-tester"
     },
-    "#generator": {
+    "#paradigm-logger": {
       "category": "components",
-      "id": "generator"
+      "id": "paradigm-logger"
     },
-    "#component-scanner": {
+    "#symbol-logger": {
       "category": "components",
-      "id": "component-scanner"
+      "id": "symbol-logger"
     },
-    "#protocol-handler": {
+    "#formatter-pretty": {
       "category": "components",
-      "id": "protocol-handler"
+      "id": "formatter-pretty"
     },
-    "#matcher": {
+    "#formatter-json": {
       "category": "components",
-      "id": "matcher"
+      "id": "formatter-json"
+    },
+    "#correlation-tracker": {
+      "category": "components",
+      "id": "correlation-tracker"
+    },
+    "#duration-tracker": {
+      "category": "components",
+      "id": "duration-tracker"
     },
     "#yaml-parser": {
       "category": "components",
@@ -4692,6 +4676,22 @@
     "#symbol-extractor": {
       "category": "components",
       "id": "symbol-extractor"
+    },
+    "#generator": {
+      "category": "components",
+      "id": "generator"
+    },
+    "#component-scanner": {
+      "category": "components",
+      "id": "component-scanner"
+    },
+    "#protocol-handler": {
+      "category": "components",
+      "id": "protocol-handler"
+    },
+    "#matcher": {
+      "category": "components",
+      "id": "matcher"
     },
     "#source-loader": {
       "category": "components",
@@ -4969,10 +4969,6 @@
       "category": "signals",
       "id": "!quiz-completed"
     },
-    "!log-emitted": {
-      "category": "signals",
-      "id": "log-emitted"
-    },
     "!init-success": {
       "category": "signals",
       "id": "init-success"
@@ -5005,9 +5001,9 @@
       "category": "signals",
       "id": "orchestration-started"
     },
-    "!index-generated": {
+    "!log-emitted": {
       "category": "signals",
-      "id": "index-generated"
+      "id": "log-emitted"
     },
     "!parse-success": {
       "category": "signals",
@@ -5024,6 +5020,10 @@
     "!validation-failed": {
       "category": "signals",
       "id": "validation-failed"
+    },
+    "!index-generated": {
+      "category": "signals",
+      "id": "index-generated"
     },
     "!aggregation-complete": {
       "category": "signals",

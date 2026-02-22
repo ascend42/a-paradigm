@@ -4,6 +4,8 @@ alwaysApply: true
 ---
 # Paradigm - a-paradigm
 
+> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm)
+
 ## Overview
 
 This project uses Paradigm v2 for structured AI-assisted development.
