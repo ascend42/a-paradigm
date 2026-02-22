@@ -147,6 +147,55 @@
           "description": "Validate .purpose files and portal.yaml structural integrity. Checks for missing fields, invalid references, and formatting issues.",
           "when": "Before committing changes to .purpose files or portal.yaml. Also useful as a CI check.",
           "example": "paradigm_purpose_validate({ includePortal: true })"
+        },
+        {
+          "id": "paradigm-lore-record",
+          "name": "paradigm_lore_record",
+          "description": "Record a lore entry — a session, decision, milestone, incident, or review. Creates a date-partitioned YAML file in .paradigm/lore/entries/ with an auto-incremented ID.",
+          "when": "After significant sessions (3+ files modified), architectural decisions, milestones, or incidents. The stop hook enforces this for 3+ file sessions.",
+          "example": "paradigm_lore_record({ type: 'agent-session', title: 'Add JWT auth', summary: 'Implemented RS256 JWT middleware...', symbols_touched: ['#auth-middleware', '^authenticated'] })"
+        },
+        {
+          "id": "paradigm-lore-search",
+          "name": "paradigm_lore_search",
+          "description": "Search lore entries with filters — by symbol, author, type, date range, tags, review status, and minimum completeness score.",
+          "when": "When investigating a symbol's history, looking for past decisions, or reviewing recent project activity.",
+          "example": "paradigm_lore_search({ symbol: '#payment-service', dateFrom: '2026-01-01', type: 'decision' })"
+        },
+        {
+          "id": "paradigm-lore-timeline",
+          "name": "paradigm_lore_timeline",
+          "description": "Get a high-level project timeline — recent entries, active authors, hot symbols (most-referenced), and timeline metadata.",
+          "when": "At session start for orientation, or when you need a quick overview of recent project activity.",
+          "example": "paradigm_lore_timeline({ limit: 10 })"
+        },
+        {
+          "id": "paradigm-habits-check",
+          "name": "paradigm_habits_check",
+          "description": "Evaluate habits for a trigger point (preflight, postflight, on-stop). Returns per-habit evaluations with follow/skip/partial results and whether any blocking violations exist.",
+          "when": "At preflight (before coding), postflight (after implementing), or on-stop (before session end) to verify behavioral compliance.",
+          "example": "paradigm_habits_check({ trigger: 'preflight', symbolsTouched: ['#payment-service'], filesModified: ['src/services/payment.ts'] })"
+        },
+        {
+          "id": "paradigm-habits-status",
+          "name": "paradigm_habits_status",
+          "description": "Get the practice profile for an engineer — overall compliance rate, per-category breakdowns, trend direction, and incident correlations.",
+          "when": "To review behavioral patterns, identify weak areas, or find evidence for adjusting habit severity levels.",
+          "example": "paradigm_habits_status({ period: '30d' })"
+        },
+        {
+          "id": "paradigm-practice-context",
+          "name": "paradigm_practice_context",
+          "description": "Get habit-aware warnings before modifying symbols. Returns relevant habits, recent compliance rates, and suggestions based on weak areas.",
+          "when": "Before modifying symbols to get behavioral context — which habits apply and what your compliance history looks like for them.",
+          "example": "paradigm_practice_context({ symbols: ['#payment-service', '^authenticated'], task: 'Add refund endpoint' })"
+        },
+        {
+          "id": "paradigm-session-checkpoint",
+          "name": "paradigm_session_checkpoint",
+          "description": "Save a session checkpoint for crash recovery. Captures phase, context, modified files, symbols, and decisions. Stored in .paradigm/session-checkpoint.json with 7-day expiry.",
+          "when": "At every phase transition — after planning, during implementation, before validation, and on completion.",
+          "example": "paradigm_session_checkpoint({ phase: 'implementing', context: 'Adding JWT auth middleware', modifiedFiles: ['src/middleware/auth.ts'], symbolsTouched: ['#auth-middleware'] })"
         }
       ]
     },
@@ -207,6 +256,18 @@
           "command": "paradigm promote <tag>",
           "description": "Promote a suggested tag to the project section of tags.yaml. Part of the governance workflow where humans approve AI-suggested tags.",
           "flags": ["--to core: Promote to core section instead of project", "--reject: Reject and remove the suggested tag"]
+        },
+        {
+          "id": "habits",
+          "command": "paradigm habits <subcommand>",
+          "description": "Manage behavioral habits. Subcommands: list (show all habits with source and severity), status (show practice profile and compliance rates), init (create .paradigm/habits.yaml with overrides template), add (add a custom habit definition).",
+          "flags": ["list: Show all active habits with source (seed/global/project)", "status [--period 30d]: Show practice profile and compliance rates", "init: Create habits.yaml template", "add <id>: Add a custom habit interactively"]
+        },
+        {
+          "id": "lore",
+          "command": "paradigm lore <subcommand>",
+          "description": "Manage project lore — the timeline of sessions, decisions, milestones, and incidents. Subcommands: list (show recent entries), show (display a specific entry), record (create a new entry interactively), review (add review scores to an entry).",
+          "flags": ["list [--limit 10] [--type agent-session]: List recent entries", "show <id>: Display a specific lore entry", "record [--type agent-session]: Record a new entry", "review <id>: Add completeness and quality scores to an entry"]
         }
       ]
     },
