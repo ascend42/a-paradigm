@@ -83,7 +83,8 @@ export function createApp(options: ServerOptions): Express {
     app.use(express.static(uiDistPath));
 
     // SPA fallback - serve index.html for non-API routes
-    app.get('*', (req: Request, res: Response) => {
+    // Express v5 requires named wildcard params
+    app.get('{*path}', (req: Request, res: Response) => {
       if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(uiDistPath, 'index.html'));
       }

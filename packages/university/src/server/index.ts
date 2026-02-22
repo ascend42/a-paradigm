@@ -56,12 +56,44 @@ const log = {
 export interface ServerOptions {
   port: number;
   open?: boolean;
+  contentDir?: string;
+  uiDistPath?: string;
+}
+
+/**
+ * Resolve content and UI paths using multiple strategies:
+ * 1. Explicit paths (passed from bundled CLI context)
+ * 2. Adjacent to this file (bundled into paradigm dist)
+ * 3. Package root (standalone university package)
+ */
+function resolveAssetPaths(options?: { contentDir?: string; uiDistPath?: string }) {
+  // Strategy 1: Explicit paths provided by caller
+  if (options?.contentDir && options?.uiDistPath) {
+    return { contentDir: options.contentDir, uiDistPath: options.uiDistPath };
+  }
+
+  // Strategy 2: Adjacent to this file (works when bundled into paradigm dist)
+  const bundledContent = path.join(__dirname, 'university-content');
+  const bundledUi = path.join(__dirname, 'university-ui');
+  if (fs.existsSync(bundledContent) && fs.existsSync(bundledUi)) {
+    return {
+      contentDir: options?.contentDir || bundledContent,
+      uiDistPath: options?.uiDistPath || bundledUi,
+    };
+  }
+
+  // Strategy 3: University package root (standalone install)
+  const packageRoot = findPackageRoot(__dirname);
+  return {
+    contentDir: options?.contentDir || path.join(packageRoot, 'src', 'content'),
+    uiDistPath: options?.uiDistPath || path.join(packageRoot, 'ui', 'dist'),
+  };
 }
 
 /**
  * Create the Express application with all routes configured
  */
-export function createApp(): Express {
+export function createApp(options?: { contentDir?: string; uiDistPath?: string }): Express {
   const app = express();
 
   app.use(express.json());
@@ -74,9 +106,7 @@ export function createApp(): Express {
     next();
   });
 
-  // Content directory for JSON files — resolve relative to package root
-  const packageRoot = findPackageRoot(__dirname);
-  const contentDir = path.join(packageRoot, 'src', 'content');
+  const { contentDir, uiDistPath } = resolveAssetPaths(options);
 
   // API routes
   app.use('/api/courses', createCoursesRouter(contentDir));
@@ -99,12 +129,12 @@ export function createApp(): Express {
   });
 
   // Serve static UI files in production
-  const uiDistPath = path.join(packageRoot, 'ui', 'dist');
   if (fs.existsSync(uiDistPath)) {
     app.use(express.static(uiDistPath));
 
     // SPA fallback - serve index.html for non-API routes
-    app.get('*', (req: Request, res: Response) => {
+    // Express v5 requires named wildcard params
+    app.get('{*path}', (req: Request, res: Response) => {
       if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(uiDistPath, 'index.html'));
       }
@@ -118,7 +148,10 @@ export function createApp(): Express {
  * Start the University server
  */
 export async function startServer(options: ServerOptions): Promise<void> {
-  const app = createApp();
+  const app = createApp({
+    contentDir: options.contentDir,
+    uiDistPath: options.uiDistPath,
+  });
 
   log.component('university-server').info('Starting server', { port: options.port });
 

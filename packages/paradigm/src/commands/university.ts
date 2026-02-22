@@ -3,6 +3,11 @@
  */
 
 import chalk from 'chalk';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface UniversityOptions {
   port?: string;
@@ -18,12 +23,18 @@ export async function universityCommand(_path: string | undefined, options: Univ
   try {
     const { startServer } = await import('@a-company/university/server');
 
+    // Resolve asset paths relative to this file (works when bundled)
+    const contentDir = path.resolve(__dirname, 'university-content');
+    const uiDistPath = path.resolve(__dirname, 'university-ui');
+
     console.log(chalk.gray(`Port: ${port}`));
     console.log();
 
     await startServer({
       port,
       open: shouldOpen,
+      contentDir,
+      uiDistPath,
     });
 
     console.log(chalk.green(`\nParadigm University is running at http://localhost:${port}`));
