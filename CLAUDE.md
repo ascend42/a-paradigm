@@ -1,6 +1,8 @@
 # a-paradigm - Claude Context
 
 > **Paradigm v2.0** | For Claude Code, Claude API, and Claude-native interfaces
+>
+> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm) | **Plugin:** `paradigm` via Claude Code marketplace
 
 ## Project Overview
 
