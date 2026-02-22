@@ -13,7 +13,7 @@
       "name": "paradigm",
       "source": "./plugins/paradigm",
       "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
-      "version": "1.5.0",
+      "version": "3.0.0",
       "category": "development",
       "tags": [
         "architecture",
