@@ -3,7 +3,7 @@
     "paradigm": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@a-company/paradigm", "mcp"]
+      "args": ["--package=@a-company/paradigm", "-y", "paradigm-mcp", "."]
     }
   }
 }
