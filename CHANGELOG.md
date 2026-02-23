@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] — 2026-02-23
+
+### Added
+
+- **Lore UI: Session Browser** — New "Sessions" tab derives sessions by grouping lore entries within 4-hour windows by author. Sidebar lists sessions by date; detail view shows metadata, symbol tags, lore entries, and session breadcrumbs from `.paradigm/session-breadcrumbs.json` or `~/.paradigm/sessions/`. New `/api/sessions` endpoint.
+
+- **Lore UI: Enhanced Timeline** — Column labels ("HUMAN" left, "AGENT" right) above the spine, color-coded spine dots (green for human, purple for agent), and on-spine date markers with per-side entry counts.
+
+- **Lore UI: Enhanced Filtering** — Author type toggle pills (All / Human / Agent), symbol autocomplete dropdown with match counts, and explicit date range inputs (from/to) in the filter bar.
+
+### Fixed
+
+- **Lore API: route ordering bug** — `GET /api/lore/symbols`, `/timeline`, `/authors` were shadowed by `/:id` catch-all due to Express route registration order. Named routes now register before parameterized routes.
+
 ## [3.1.0] — 2026-02-22
 
 ### Added

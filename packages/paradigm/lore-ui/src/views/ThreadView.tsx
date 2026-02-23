@@ -28,14 +28,23 @@ export function ThreadView() {
   return (
     <div className="thread-view">
       <div className="timeline-spine" />
-      {Array.from(grouped.entries()).map(([date, dayEntries]) => (
-        <React.Fragment key={date}>
-          <DateSeparator date={date} />
-          {dayEntries.map(entry => (
-            <LoreCard key={entry.id} entry={entry} />
-          ))}
-        </React.Fragment>
-      ))}
+      <div className="timeline-column-labels">
+        <span className="column-label human">HUMAN</span>
+        <span className="column-label agent">AGENT</span>
+      </div>
+      {Array.from(grouped.entries()).map(([date, dayEntries]) => {
+        const humanCount = dayEntries.filter(e => e.author.type === 'human').length;
+        const agentCount = dayEntries.filter(e => e.author.type === 'agent').length;
+
+        return (
+          <React.Fragment key={date}>
+            <DateSeparator date={date} humanCount={humanCount} agentCount={agentCount} />
+            {dayEntries.map(entry => (
+              <LoreCard key={entry.id} entry={entry} />
+            ))}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }

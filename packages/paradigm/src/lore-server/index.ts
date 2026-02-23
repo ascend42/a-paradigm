@@ -10,6 +10,7 @@ import chalk from 'chalk';
 
 import { createLoreRouter } from './routes/lore.js';
 import { createInfoRouter } from './routes/info.js';
+import { createSessionsRouter } from './routes/sessions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,7 @@ export function createLoreApp(options: LoreServerOptions): Express {
   // API routes
   app.use('/api/lore', createLoreRouter(options.projectDir));
   app.use('/api/info', createInfoRouter(options.projectDir));
+  app.use('/api/sessions', createSessionsRouter(options.projectDir));
 
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {

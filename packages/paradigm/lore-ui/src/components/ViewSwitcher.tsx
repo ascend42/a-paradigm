@@ -2,7 +2,8 @@ import React from 'react';
 import { useLoreStore, type ViewMode } from '../store/loreStore';
 
 const VIEWS: { mode: ViewMode; label: string }[] = [
-  { mode: 'thread', label: 'Thread' },
+  { mode: 'timeline', label: 'Timeline' },
+  { mode: 'session', label: 'Sessions' },
   { mode: 'symbol', label: 'Symbol' },
   { mode: 'author', label: 'Author' },
 ];

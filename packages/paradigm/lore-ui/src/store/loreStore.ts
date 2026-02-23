@@ -35,7 +35,7 @@ export interface LoreFilter {
   search?: string;
 }
 
-export type ViewMode = 'thread' | 'symbol' | 'author';
+export type ViewMode = 'timeline' | 'session' | 'symbol' | 'author';
 
 interface SymbolInfo {
   symbol: string;
@@ -49,6 +49,26 @@ interface AuthorInfo {
   lastActive: string;
 }
 
+export interface Session {
+  id: string;
+  date: string;
+  author: { type: string; id: string };
+  startTime: string;
+  endTime: string;
+  entryCount: number;
+  symbolsTouched: string[];
+  entryIds: string[];
+  breadcrumbs?: Array<{
+    phase?: string;
+    context?: string;
+    timestamp?: string;
+    modifiedFiles?: string[];
+    symbolsTouched?: string[];
+    decisions?: string[];
+  }>;
+  entries?: LoreEntry[];
+}
+
 interface LoreState {
   entries: LoreEntry[];
   filter: LoreFilter;
@@ -58,6 +78,8 @@ interface LoreState {
   authors: AuthorInfo[];
   selectedSymbol: string | null;
   selectedAuthor: string | null;
+  sessions: Session[];
+  selectedSessionId: string | null;
   loading: boolean;
   projectName: string;
 
@@ -67,21 +89,25 @@ interface LoreState {
   selectEntry: (id: string | null) => void;
   selectSymbol: (symbol: string | null) => void;
   selectAuthor: (author: string | null) => void;
+  selectSession: (id: string | null) => void;
   fetchEntries: () => Promise<void>;
   fetchSymbols: () => Promise<void>;
   fetchAuthors: () => Promise<void>;
+  fetchSessions: () => Promise<void>;
   fetchAll: () => Promise<void>;
 }
 
 export const useLoreStore = create<LoreState>((set, get) => ({
   entries: [],
   filter: {},
-  view: 'thread',
+  view: 'timeline',
   selectedEntryId: null,
   symbols: [],
   authors: [],
   selectedSymbol: null,
   selectedAuthor: null,
+  sessions: [],
+  selectedSessionId: null,
   loading: false,
   projectName: '',
 
@@ -100,6 +126,24 @@ export const useLoreStore = create<LoreState>((set, get) => ({
   selectEntry: (id) => set({ selectedEntryId: id }),
   selectSymbol: (symbol) => set({ selectedSymbol: symbol }),
   selectAuthor: (author) => set({ selectedAuthor: author }),
+
+  selectSession: async (id) => {
+    set({ selectedSessionId: id });
+    if (id) {
+      try {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`);
+        const data = await res.json();
+        // Update the session in the list with full entries
+        set((s) => ({
+          sessions: s.sessions.map(sess =>
+            sess.id === id ? { ...sess, entries: data.entries } : sess
+          ),
+        }));
+      } catch {
+        // ignore
+      }
+    }
+  },
 
   fetchEntries: async () => {
     set({ loading: true });
@@ -157,6 +201,16 @@ export const useLoreStore = create<LoreState>((set, get) => ({
     }
   },
 
+  fetchSessions: async () => {
+    try {
+      const res = await fetch('/api/sessions');
+      const data = await res.json();
+      set({ sessions: data.sessions || [] });
+    } catch {
+      // ignore
+    }
+  },
+
   fetchAll: async () => {
     try {
       const infoRes = await fetch('/api/info');
@@ -169,6 +223,7 @@ export const useLoreStore = create<LoreState>((set, get) => ({
       get().fetchEntries(),
       get().fetchSymbols(),
       get().fetchAuthors(),
+      get().fetchSessions(),
     ]);
   },
 }));
