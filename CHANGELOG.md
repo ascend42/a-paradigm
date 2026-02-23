@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.3] — 2026-02-23
+
+### Changed
+
+- **Hook scripts: single source of truth** — Extracted 6 inline hook constants (~900 lines) from `index.ts` into standalone `.sh` files in `src/commands/hooks/scripts/`. New `generate-hooks.mjs` codegen script reads canonical `.sh` files, generates `generated-hooks.ts` for the TypeScript build, and copies Claude Code scripts to `plugins/paradigm/scripts/`. Eliminates drift between CLI-installed hooks and plugin-shipped hooks. Also fixes over-escaped regex in Check 3 (route detection) that was present in the TS template literals but not the plugin copies.
+
+### Fixed
+
+- **Stop hook: anchor path resolution (for real this time)** — Check 4 (stale aspect anchors) resolved anchor paths from the project root instead of relative to the `.purpose` file's directory, causing 59 false-positive violations in monorepo packages. Now resolves `$purpose_dir/$anchor_path` correctly.
+
 ## [3.1.2] — 2026-02-23
 
 ### Fixed

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-23T18:26:03.605Z'
+generated: '2026-02-23T18:48:51.467Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -247,12 +247,41 @@ by_symbol:
       agent: []
   '#paradigm-mcp':
     symbol: '#paradigm-mcp'
-    total_changes: 2
-    last_modified: '2026-02-22T22:37:17Z'
+    total_changes: 3
+    last_modified: '2026-02-23T18:47:21Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_24
+      - &ref_23
+        id: h0038
+        ts: '2026-02-23T18:47:21Z'
+        type: implement
+        symbols:
+          - '#paradigm'
+          - '#paradigm-mcp'
+          - '#stop-hook'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: c3c0e97009c1663c9446c94b4474abc5af6b9fc7
+        intent: fix
+        files:
+          - .changeset/lore-enforcement-hook.md
+          - .changeset/lore-server-express-fix.md
+          - .changeset/lore-system.md
+          - .changeset/sentinel-standalone.md
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - package.json
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/university/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'fix(#stop-hook): anchor path resolution + version bump to 3.1.2'
+      - &ref_25
         id: h0033
         ts: '2026-02-22T22:37:17Z'
         type: implement
@@ -1597,13 +1626,14 @@ by_symbol:
       agent: []
   '#university':
     symbol: '#university'
-    total_changes: 3
-    last_modified: '2026-02-23T18:06:31Z'
+    total_changes: 4
+    last_modified: '2026-02-23T18:47:21Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_23
       - *ref_20
-      - &ref_23
+      - &ref_24
         id: h0034
         ts: '2026-02-22T22:39:23Z'
         type: implement
@@ -1625,13 +1655,14 @@ by_symbol:
       agent: []
   '#paradigm':
     symbol: '#paradigm'
-    total_changes: 2
-    last_modified: '2026-02-22T22:39:23Z'
+    total_changes: 3
+    last_modified: '2026-02-23T18:47:21Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_23
       - *ref_24
+      - *ref_25
     contributors:
       human:
         - ascend
@@ -1643,7 +1674,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_25
+      - &ref_26
         id: h0035
         ts: '2026-02-23T16:33:27Z'
         type: implement
@@ -1685,7 +1716,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_25
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -1697,7 +1728,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_25
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -1709,7 +1740,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_25
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -1721,7 +1752,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_25
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -1776,11 +1807,12 @@ by_symbol:
       agent: []
   '#stop-hook':
     symbol: '#stop-hook'
-    total_changes: 1
-    last_modified: '2026-02-23T18:19:22Z'
+    total_changes: 2
+    last_modified: '2026-02-23T18:47:21Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_23
       - *ref_19
     contributors:
       human:

@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,8 @@
     "lore-ui/dist"
   ],
   "scripts": {
-    "build": "tsup && npm run build:university-assets",
+    "build": "node scripts/generate-hooks.mjs && tsup && npm run build:university-assets",
+    "check:hooks": "node scripts/generate-hooks.mjs --check",
     "build:lore-ui": "cd lore-ui && npx vite build",
     "build:university-assets": "rm -rf dist/university-ui dist/university-content && cp -r ../university/ui/dist dist/university-ui && cp -r ../university/src/content dist/university-content",
     "dev": "tsup src/index.ts --format esm --dts --watch",

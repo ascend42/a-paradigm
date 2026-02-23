@@ -1,17 +1,17 @@
 #!/bin/sh
-# Paradigm Claude Code Pre-Commit Hook
-# Intercepts git commit Bash calls and auto-rebuilds the index.
-# Installed by: paradigm hooks install --claude-code
+# Paradigm Cursor Pre-Commit Hook
+# Intercepts git commit shell executions and auto-rebuilds the index.
+# Installed by: paradigm hooks install --cursor
 #
-# Hook type: PreToolUse (matcher: Bash)
+# Hook type: beforeShellExecution (matcher: "git commit")
 # Exit 0 = allow (never blocks), just ensures index is fresh
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
-# Extract the command from tool_input
+# Extract the command from Cursor's beforeShellExecution input
 if command -v jq >/dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  COMMAND=$(echo "$INPUT" | jq -r '.command // .shellCommand // empty' 2>/dev/null)
 else
   COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
 fi
