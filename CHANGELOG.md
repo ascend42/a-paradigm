@@ -5,15 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.1.3] — 2026-02-23
+## [3.1.4] — 2026-02-23
 
 ### Changed
 
-- **Hook scripts: single source of truth** — Extracted 6 inline hook constants (~900 lines) from `index.ts` into standalone `.sh` files in `src/commands/hooks/scripts/`. New `generate-hooks.mjs` codegen script reads canonical `.sh` files, generates `generated-hooks.ts` for the TypeScript build, and copies Claude Code scripts to `plugins/paradigm/scripts/`. Eliminates drift between CLI-installed hooks and plugin-shipped hooks. Also fixes over-escaped regex in Check 3 (route detection) that was present in the TS template literals but not the plugin copies.
+- **Hook scripts: single source of truth** — Extracted 6 inline hook constants (~900 lines) from `index.ts` into standalone `.sh` files in `src/commands/hooks/scripts/`. New `generate-hooks.mjs` codegen script reads canonical `.sh` files, generates `generated-hooks.ts` for the TypeScript build, and copies Claude Code scripts to `plugins/paradigm/scripts/`. Eliminates drift between CLI-installed hooks and plugin-shipped hooks.
+- **Version sync** — `@a-company/paradigm` 3.1.3 → 3.1.4, `@a-company/paradigm-mcp` 3.1.2 → 3.1.3.
 
 ### Fixed
 
-- **Stop hook: anchor path resolution** — Check 4 (stale aspect anchors) now tries both `.purpose`-dir-relative AND project-root-relative resolution. This handles both conventions: monorepo packages use `src/file.ts` (relative to package `.purpose`), while some projects write `src/lib/stores/file.ts` (root-relative) in sub-directory `.purpose` files. Only reports a violation if neither resolves.
+- **Stop hook: dual anchor path resolution** — Check 4 (stale aspect anchors) now tries both `.purpose`-dir-relative AND project-root-relative resolution. Handles both conventions: monorepo packages use `src/file.ts` (relative to package `.purpose`), while some projects write `src/lib/stores/file.ts` (root-relative) in sub-directory `.purpose` files. Only reports a violation if neither resolves.
 - **MCP: `paradigm_purpose_add_aspect` validates and auto-corrects anchor paths** — If an anchor is written project-root-relative but the `.purpose` file is in a subdirectory, the tool auto-converts to the correct `.purpose`-dir-relative path. If the file doesn't exist at all, it errors at write time instead of silently writing a broken anchor.
 
 ## [3.1.2] — 2026-02-23
