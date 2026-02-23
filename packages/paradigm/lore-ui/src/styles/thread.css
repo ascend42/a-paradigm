@@ -17,21 +17,76 @@
   transform: translateX(-50%);
 }
 
-/* Date Separator */
-.date-separator {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  margin: 24px 0 16px;
+/* Column Labels */
+.timeline-column-labels {
+  position: sticky;
+  top: 90px;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  margin-bottom: 8px;
+  pointer-events: none;
 }
 
-.date-separator span {
-  background: var(--bg-primary);
-  color: var(--text-muted);
-  font-size: 12px;
+.column-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+}
+
+.column-label.human {
+  color: var(--color-human-note);
+}
+
+.column-label.agent {
+  color: var(--color-agent-session);
+}
+
+/* Date Separator - On-spine marker */
+.date-separator {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0 16px;
+  gap: 8px;
+}
+
+.date-badge {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.date-count {
+  font-size: 10px;
   font-weight: 500;
-  padding: 4px 16px;
-  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.date-count.human {
+  color: var(--color-human-note);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.date-count.agent {
+  color: var(--color-agent-session);
+  background: rgba(129, 140, 248, 0.1);
 }
 
 /* Lore Card */
@@ -52,7 +107,7 @@
   padding-left: 52%;
 }
 
-/* Connector dot */
+/* Connector dot - color-coded */
 .lore-card-row::before {
   content: '';
   position: absolute;
@@ -67,21 +122,33 @@
   z-index: 2;
 }
 
+.lore-card-row.human::before {
+  background: var(--color-human-note);
+}
+
+.lore-card-row.agent::before {
+  background: var(--color-agent-session);
+}
+
+/* Connector arms - color-coded */
 .lore-card-row.human::after,
 .lore-card-row.agent::after {
   content: '';
   position: absolute;
   top: 19px;
   height: 1px;
-  background: var(--spine-color);
 }
 
 .lore-card-row.human::after {
   left: calc(100% - 52% + 8px);
   right: 50%;
+  background: var(--color-human-note);
+  opacity: 0.4;
 }
 
 .lore-card-row.agent::after {
   left: 50%;
   right: calc(100% - 52% + 8px);
+  background: var(--color-agent-session);
+  opacity: 0.4;
 }

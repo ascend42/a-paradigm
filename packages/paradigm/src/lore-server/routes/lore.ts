@@ -122,50 +122,6 @@ export function createLoreRouter(projectDir: string): Router {
     res.json({ total, offset: off, limit: lim, entries });
   });
 
-  // GET /api/lore/:id - Single entry
-  router.get('/:id', (req: Request, res: Response) => {
-    const entries = loadAllEntries(projectDir);
-    const entry = entries.find(e => e.id === req.params.id);
-
-    if (!entry) {
-      res.status(404).json({ error: 'Entry not found' });
-      return;
-    }
-
-    res.json(entry);
-  });
-
-  // PUT /api/lore/:id/review - Add/update review
-  router.put('/:id/review', (req: Request, res: Response) => {
-    const entryId = req.params.id;
-    const entries = loadAllEntries(projectDir);
-    const entry = entries.find(e => e.id === entryId);
-
-    if (!entry) {
-      res.status(404).json({ error: 'Entry not found' });
-      return;
-    }
-
-    const dateStr = entry.timestamp.slice(0, 10);
-    const entryPath = path.join(projectDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-
-    if (!fs.existsSync(entryPath)) {
-      res.status(404).json({ error: 'Entry file not found' });
-      return;
-    }
-
-    entry.review = {
-      reviewer: req.body.reviewer || 'anonymous',
-      completeness: req.body.completeness || 3,
-      quality: req.body.quality || 3,
-      notes: req.body.notes,
-      reviewed_at: new Date().toISOString(),
-    };
-
-    fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
-    res.json({ success: true, entry });
-  });
-
   // GET /api/lore/timeline - Timeline metadata
   router.get('/timeline', (_req: Request, res: Response) => {
     const timelinePath = path.join(projectDir, LORE_DIR, 'timeline.yaml');
@@ -227,6 +183,50 @@ export function createLoreRouter(projectDir: string): Router {
       .sort((a, b) => b.count - a.count);
 
     res.json({ authors });
+  });
+
+  // GET /api/lore/:id - Single entry (MUST be after named routes)
+  router.get('/:id', (req: Request, res: Response) => {
+    const entries = loadAllEntries(projectDir);
+    const entry = entries.find(e => e.id === req.params.id);
+
+    if (!entry) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
+
+    res.json(entry);
+  });
+
+  // PUT /api/lore/:id/review - Add/update review
+  router.put('/:id/review', (req: Request, res: Response) => {
+    const entryId = req.params.id;
+    const entries = loadAllEntries(projectDir);
+    const entry = entries.find(e => e.id === entryId);
+
+    if (!entry) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
+
+    const dateStr = entry.timestamp.slice(0, 10);
+    const entryPath = path.join(projectDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+
+    if (!fs.existsSync(entryPath)) {
+      res.status(404).json({ error: 'Entry file not found' });
+      return;
+    }
+
+    entry.review = {
+      reviewer: req.body.reviewer || 'anonymous',
+      completeness: req.body.completeness || 3,
+      quality: req.body.quality || 3,
+      notes: req.body.notes,
+      reviewed_at: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
+    res.json({ success: true, entry });
   });
 
   return router;

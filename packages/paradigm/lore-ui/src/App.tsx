@@ -6,6 +6,7 @@ import { DetailPanel } from './components/DetailPanel';
 import { ThreadView } from './views/ThreadView';
 import { SymbolView } from './views/SymbolView';
 import { AuthorView } from './views/AuthorView';
+import { SessionView } from './views/SessionView';
 
 export default function App() {
   const view = useLoreStore(s => s.view);
@@ -30,11 +31,12 @@ export default function App() {
           </div>
           <ViewSwitcher />
         </div>
-        {view === 'thread' && <FilterBar />}
+        {view === 'timeline' && <FilterBar />}
       </header>
 
       <main style={{ flex: 1, paddingBottom: 32 }}>
-        {view === 'thread' && <ThreadView />}
+        {view === 'timeline' && <ThreadView />}
+        {view === 'session' && <SessionView />}
         {view === 'symbol' && <SymbolView />}
         {view === 'author' && <AuthorView />}
       </main>
