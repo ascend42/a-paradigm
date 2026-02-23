@@ -254,7 +254,6 @@ fi
 # --- Check 4: Aspect anchor files that no longer exist ---
 for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
   if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
-    purpose_dir=$(dirname "$purpose_file")
     in_anchors=false
     while IFS= read -r line; do
       case "$line" in
@@ -263,8 +262,7 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
           if [ "$in_anchors" = true ]; then
             anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
             if [ -n "$anchor_path" ]; then
-              resolved_path="$purpose_dir/$anchor_path"
-              if [ ! -f "$resolved_path" ]; then
+              if [ ! -f "$anchor_path" ]; then
                 VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
@@ -717,7 +715,6 @@ fi
 # --- Check 4: Aspect anchor files that no longer exist ---
 for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
   if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
-    purpose_dir=$(dirname "$purpose_file")
     in_anchors=false
     while IFS= read -r line; do
       case "$line" in
@@ -726,8 +723,7 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
           if [ "$in_anchors" = true ]; then
             anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
             if [ -n "$anchor_path" ]; then
-              resolved_path="$purpose_dir/$anchor_path"
-              if [ ! -f "$resolved_path" ]; then
+              if [ ! -f "$anchor_path" ]; then
                 VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
