@@ -13,6 +13,7 @@
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
 #   7. Lore entry expected for significant sessions (3+ source files)
+#   8. Blocking habits not satisfied (from paradigm habits check)
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -255,6 +256,23 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   fi
 fi
 
+# --- Auto-evaluate on-stop habits via CLI ---
+if command -v paradigm >/dev/null 2>&1; then
+  paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+elif command -v npx >/dev/null 2>&1; then
+  npx paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+fi
+
+# --- Check 8: Blocking habits ---
+if [ -f ".paradigm/.habits-blocking" ]; then
+  HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
+  VIOLATIONS="$VIOLATIONS
+  - Blocking habit(s) not satisfied:
+    $HABITS_BLOCKING
+    Call paradigm_habits_check with trigger=\"on-stop\" after fixing the above."
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -272,6 +290,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
+  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
   exit 2
 fi
 
@@ -284,5 +303,6 @@ fi
 
 # Clean up pending-review on pass
 rm -f ".paradigm/.pending-review"
+rm -f ".paradigm/.habits-blocking"
 
 exit 0

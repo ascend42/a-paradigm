@@ -1,0 +1,56 @@
+id: L-2026-02-23-002
+type: agent-session
+timestamp: '2026-02-23T18:07:47.110Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Fill Habits & Lore CLI/MCP gaps + University updates
+summary: Implemented full lifecycle management for habits (edit, remove, enable/disable) and lore (edit, delete, timeline) in the CLI. Added three new MCP tools (paradigm_lore_get, paradigm_lore_update, paradigm_lore_delete) and fixed the paradigm_habits_check trigger enum to include on-commit. Expanded habits add with --check-type/--patterns and lore record/list with additional fields and date filtering. Updated university courses para-401 and para-501 with new tool documentation.
+symbols_touched:
+  - '#habits-cli'
+  - '#habits-loader'
+  - '#lore-system'
+  - '#lore-storage'
+  - '#lore-cli'
+  - '#university'
+files_created:
+  - packages/paradigm/src/commands/lore/edit.ts
+  - packages/paradigm/src/commands/lore/delete.ts
+  - packages/paradigm/src/commands/lore/timeline.ts
+files_modified:
+  - packages/paradigm/src/commands/habits/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/lore/record.ts
+  - packages/paradigm/src/commands/lore/list.ts
+  - packages/paradigm/src/core/lore/storage.ts
+  - packages/paradigm/src/core/lore/index.ts
+  - packages/paradigm-mcp/src/tools/habits.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/utils/lore-loader.ts
+  - packages/university/src/content/courses/para-401.json
+  - packages/university/src/content/courses/para-501.json
+  - CHANGELOG.md
+lines_added: 1326
+lines_removed: 18
+commit: a0f7b24
+learnings:
+  - paradigm_habits_list MCP tool was not available as a deferred tool in the plugin — only habits_check and habits_status were discoverable
+  - Running MCP server needs instance restart to pick up rebuilt code — CLI changes are live immediately but MCP tools stay stale until restart
+  - Global habits in ~/.paradigm/habits.yaml (changelog-updated, changes-committed) already existed with block severity, so no project-level addition was needed
+verification:
+  status: pass
+  details:
+    build-cli: pass
+    build-mcp: pass
+    habits-edit: pass
+    habits-remove: pass
+    habits-toggle: pass
+    lore-timeline: pass
+    lore-date-filter: pass
+tags:
+  - habits
+  - lore
+  - cli
+  - mcp
+  - university

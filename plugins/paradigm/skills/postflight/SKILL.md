@@ -95,7 +95,23 @@ If any .purpose or portal.yaml files were modified:
 - Call `paradigm_reindex` to ensure the index is fresh
 - Confirm the reindex completed
 
-## Step 8: Compile Report
+## Step 8: Evaluate Habits
+
+Call `paradigm_habits_check` with the postflight trigger to evaluate habit compliance:
+
+```
+paradigm_habits_check({
+  trigger: "postflight",
+  filesModified: ["src/auth/login.ts", ...],
+  symbolsTouched: ["#login-handler", ...],
+  record: true
+})
+```
+
+Include the results in the compliance report below. If any habits were skipped,
+note the recommendations.
+
+## Step 9: Compile Report
 
 Present a structured compliance report:
 
@@ -123,7 +139,7 @@ Actions Completed:
   - Validated .purpose files
 ```
 
-## Step 9: Final Status
+## Step 10: Final Status
 
 If all checks pass:
 - "All compliance checks passed. You're clear to commit and finish."

@@ -149,6 +149,7 @@ class SessionTracker {
   private session: SessionStats;
   private rootDir: string | null = null;
   private _recovered: boolean = false;
+  private lastLoreEntryId: string | null = null;
 
   constructor() {
     this.session = this.createNewSession();
@@ -377,6 +378,20 @@ class SessionTracker {
     } catch {
       // Silently fail - global persistence is best-effort
     }
+  }
+
+  /**
+   * Set the last lore entry ID recorded in this session
+   */
+  setLastLoreEntryId(id: string): void {
+    this.lastLoreEntryId = id;
+  }
+
+  /**
+   * Get the last lore entry ID recorded in this session
+   */
+  getLastLoreEntryId(): string | null {
+    return this.lastLoreEntryId;
   }
 
   /**
@@ -650,6 +665,7 @@ class SessionTracker {
   reset(): void {
     this.session = this.createNewSession();
     this._recovered = false;
+    this.lastLoreEntryId = null;
   }
 }
 

@@ -19,8 +19,12 @@ import { trackToolCall } from './context.js';
 import {
   loadHabits,
   getHabitsByTrigger,
+  evaluateHabits,
+  buildEvaluationContext,
 } from '../utils/habits-loader.js';
 import { getComplianceRate } from '../utils/practice-store.js';
+import { getSessionTracker } from '../utils/session-tracker.js';
+import { execSync } from 'child_process';
 
 // ============================================================================
 // Constants
@@ -212,18 +216,46 @@ async function runPreflightCheck(task: string, ctx: ProjectContext) {
   }
   requiredChecks.push('purpose-coverage');
 
-  // 6. Active habits for this trigger
-  let activeHabits: Array<{ id: string; name: string; category: string; severity: string }> = [];
+  // 6. Active habits — auto-evaluate preflight habits
+  let habitsEvaluation: {
+    total: number;
+    followed: number;
+    skipped: number;
+    partial: number;
+    results: Array<{ id: string; name: string; severity: string; result: string; reason: string }>;
+  } | null = null;
   let recentCompliance: { rate: number; total: number } | null = null;
+
   try {
     const habits = loadHabits(ctx.rootDir);
-    const preflightHabits = getHabitsByTrigger(habits, 'preflight');
-    activeHabits = preflightHabits.map(h => ({
-      id: h.id,
-      name: h.name,
-      category: h.category,
-      severity: h.severity,
-    }));
+    const tracker = getSessionTracker();
+    const stats = tracker.getStats();
+    const toolsCalled = [...new Set(stats.toolCalls.map((tc) => tc.toolName))];
+
+    const evalContext = buildEvaluationContext({
+      toolsCalled,
+      filesModified: [],
+      symbolsTouched: uniqueSymbols,
+      loreRecorded: false,
+      hasPortalRoutes: portalStatus.exists && portalStatus.routeCount > 0,
+      taskAddsRoutes,
+      taskDescription: task,
+    });
+
+    const evalResult = evaluateHabits(habits, 'preflight', evalContext);
+    habitsEvaluation = {
+      total: evalResult.summary.total,
+      followed: evalResult.summary.followed,
+      skipped: evalResult.summary.skipped,
+      partial: evalResult.summary.partial,
+      results: evalResult.evaluations.map((e) => ({
+        id: e.habit.id,
+        name: e.habit.name,
+        severity: e.habit.severity,
+        result: e.result,
+        reason: e.reason,
+      })),
+    };
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     recentCompliance = await getComplianceRate(ctx.rootDir, { dateFrom: thirtyDaysAgo });
@@ -240,14 +272,11 @@ async function runPreflightCheck(task: string, ctx: ProjectContext) {
     requiredChecks,
     recommendations: buildPreflightRecommendations(affectedSymbols, rippleAnalysis, portalStatus, taskAddsRoutes),
     habits: {
-      active: activeHabits,
+      evaluation: habitsEvaluation,
       recentCompliance: recentCompliance ? {
         rate: recentCompliance.rate,
         totalEvents: recentCompliance.total,
       } : null,
-      note: activeHabits.length > 0
-        ? `${activeHabits.length} preflight habit(s) active. Call paradigm_habits_check with trigger="preflight" to evaluate.`
-        : 'No habits configured. Run paradigm habits init to set up.',
     },
   };
 }
@@ -469,15 +498,72 @@ function runPostflightCheck(
   if (errors > 0) status = 'violations';
   else if (warnings > 0) status = 'warnings';
 
-  // 6. Habit compliance reminder
-  let habitReminder: string | null = null;
+  // 6. Habit evaluation (auto-evaluate instead of just reminding)
+  let habitsEvaluation: {
+    trigger: string;
+    total: number;
+    followed: number;
+    skipped: number;
+    partial: number;
+    blockingViolations: number;
+    results: Array<{ id: string; name: string; severity: string; result: string; reason: string }>;
+  } | null = null;
+
   try {
     const habits = loadHabits(ctx.rootDir);
-    const postflightHabits = getHabitsByTrigger(habits, 'postflight');
-    const stopHabits = getHabitsByTrigger(habits, 'on-stop');
-    const totalActive = postflightHabits.length + stopHabits.length;
-    if (totalActive > 0) {
-      habitReminder = `${totalActive} habit(s) should be checked. Call paradigm_habits_check with trigger="postflight" to evaluate and record practice events.`;
+    const tracker = getSessionTracker();
+    const stats = tracker.getStats();
+    const toolsCalled = [...new Set(stats.toolCalls.map((tc) => tc.toolName))];
+    const loreRecorded = toolsCalled.includes('paradigm_lore_record');
+
+    let gitClean: boolean | undefined;
+    try {
+      const gitStatus = execSync('git status --porcelain', {
+        cwd: ctx.rootDir,
+        encoding: 'utf8',
+        timeout: 5000,
+      });
+      gitClean = gitStatus.trim() === '';
+    } catch {
+      // Git not available
+    }
+
+    const evalContext = buildEvaluationContext({
+      toolsCalled,
+      filesModified,
+      symbolsTouched,
+      loreRecorded,
+      hasPortalRoutes: ctx.gateConfig !== null && (ctx.gateConfig as unknown as Record<string, unknown>).routes != null,
+      taskAddsRoutes: false,
+      gitClean,
+    });
+
+    const evalResult = evaluateHabits(habits, 'postflight', evalContext);
+    habitsEvaluation = {
+      trigger: 'postflight',
+      total: evalResult.summary.total,
+      followed: evalResult.summary.followed,
+      skipped: evalResult.summary.skipped,
+      partial: evalResult.summary.partial,
+      blockingViolations: evalResult.summary.blockingViolations,
+      results: evalResult.evaluations.map((e) => ({
+        id: e.habit.id,
+        name: e.habit.name,
+        severity: e.habit.severity,
+        result: e.result,
+        reason: e.reason,
+      })),
+    };
+
+    // Write .habits-blocking if blocking violations found
+    const markerPath = path.join(ctx.rootDir, '.paradigm', '.habits-blocking');
+    if (evalResult.blocksCompletion) {
+      const blocking = evalResult.evaluations
+        .filter((e) => e.result === 'skipped' && e.habit.severity === 'block')
+        .map((e) => `${e.habit.name}: ${e.reason}`);
+      fs.writeFileSync(markerPath, blocking.join('\n'), 'utf8');
+    } else if (fs.existsSync(markerPath)) {
+      fs.unlinkSync(markerPath);
     }
   } catch {
     // Habits are optional
@@ -493,6 +579,6 @@ function runPostflightCheck(
       errors,
     },
     blocksCompletion: errors > 0,
-    habitReminder,
+    habitsEvaluation,
   };
 }

@@ -30,10 +30,12 @@ export type HabitSeverity = 'advisory' | 'warn' | 'block';
 export type HabitCheckType =
   | 'tool-called'
   | 'file-exists'
+  | 'file-modified'
   | 'lore-recorded'
   | 'symbols-registered'
   | 'gates-declared'
-  | 'tests-exist';
+  | 'tests-exist'
+  | 'git-clean';
 
 export interface HabitCheck {
   type: HabitCheckType;
@@ -54,6 +56,8 @@ export interface HabitDefinition {
   severity: HabitSeverity;
   check: HabitCheck;
   enabled: boolean;
+  /** Platforms this habit applies to (e.g. ['claude', 'cursor', 'cli']). Undefined = all platforms. */
+  platforms?: string[];
 }
 
 export interface HabitOverride {
@@ -84,6 +88,7 @@ export interface EvaluationContext {
   hasPortalRoutes: boolean;
   taskAddsRoutes: boolean;
   taskDescription?: string;
+  gitClean?: boolean;
 }
 
 export interface EvaluationResult {
@@ -291,9 +296,13 @@ export function invalidateHabitsCache(rootDir: string): void {
 export function evaluateHabits(
   habits: HabitDefinition[],
   trigger: HabitTrigger,
-  context: EvaluationContext
+  context: EvaluationContext,
+  platform?: string
 ): EvaluationResult {
-  const activeHabits = getHabitsByTrigger(habits, trigger);
+  let activeHabits = getHabitsByTrigger(habits, trigger);
+  if (platform) {
+    activeHabits = activeHabits.filter((h) => !h.platforms || h.platforms.includes(platform));
+  }
   const evaluations: HabitEvaluation[] = activeHabits.map((h) => evaluateHabit(h, context));
 
   const followed = evaluations.filter((e) => e.result === 'followed').length;
@@ -319,6 +328,7 @@ export function buildEvaluationContext(params: {
   hasPortalRoutes?: boolean;
   taskAddsRoutes?: boolean;
   taskDescription?: string;
+  gitClean?: boolean;
 }): EvaluationContext {
   return {
     toolsCalled: params.toolsCalled || [],
@@ -328,6 +338,7 @@ export function buildEvaluationContext(params: {
     hasPortalRoutes: params.hasPortalRoutes || false,
     taskAddsRoutes: params.taskAddsRoutes || false,
     taskDescription: params.taskDescription,
+    gitClean: params.gitClean,
   };
 }
 
@@ -335,10 +346,12 @@ function evaluateHabit(habit: HabitDefinition, ctx: EvaluationContext): HabitEva
   switch (habit.check.type) {
     case 'tool-called': return evalToolCalled(habit, ctx);
     case 'file-exists': return evalFileExists(habit, ctx);
+    case 'file-modified': return evalFileModified(habit, ctx);
     case 'lore-recorded': return evalLoreRecorded(habit, ctx);
     case 'symbols-registered': return evalSymbolsRegistered(habit, ctx);
     case 'gates-declared': return evalGatesDeclared(habit, ctx);
     case 'tests-exist': return evalTestsExist(habit, ctx);
+    case 'git-clean': return evalGitClean(habit, ctx);
     default: return { habit, result: 'partial', reason: `Unknown check: ${habit.check.type}` };
   }
 }
@@ -419,4 +432,33 @@ function evalTestsExist(habit: HabitDefinition, ctx: EvaluationContext): HabitEv
   );
   if (src.length === 0) return { habit, result: 'followed', reason: 'No source files to test' };
   return { habit, result: 'partial', reason: `${src.length} source file(s), no test files updated`, evidence: src.slice(0, 5) };
+}
+
+function evalFileModified(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  if (ctx.filesModified.length === 0) return { habit, result: 'followed', reason: 'No files modified' };
+
+  const patterns = habit.check.params.patterns || [];
+  if (patterns.length === 0) return { habit, result: 'followed', reason: 'No patterns specified' };
+
+  const matched = ctx.filesModified.filter((f) =>
+    patterns.some((p) => f.includes(p) || path.basename(f) === p)
+  );
+
+  if (matched.length > 0) {
+    return { habit, result: 'followed', reason: `Matching files: ${matched.join(', ')}`, evidence: matched };
+  }
+
+  return { habit, result: 'skipped', reason: `None of [${patterns.join(', ')}] found in modified files` };
+}
+
+function evalGitClean(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  if (ctx.filesModified.length === 0) return { habit, result: 'followed', reason: 'No files modified' };
+
+  if (ctx.gitClean === undefined) {
+    return { habit, result: 'partial', reason: 'Git status not available' };
+  }
+  if (ctx.gitClean) {
+    return { habit, result: 'followed', reason: 'Working tree is clean — changes committed' };
+  }
+  return { habit, result: 'skipped', reason: 'Uncommitted changes in working tree' };
 }
