@@ -9,6 +9,8 @@ export async function loreListCommand(options: Record<string, unknown>): Promise
   if (options.type) filter.type = options.type as LoreEntry['type'];
   if (options.symbol) filter.symbol = options.symbol as string;
   if (options.tags) filter.tags = (options.tags as string).split(',');
+  if (options.from) filter.dateFrom = options.from as string;
+  if (options.to) filter.dateTo = options.to as string;
   filter.limit = parseInt(options.limit as string || '20', 10);
 
   const entries = await loadLoreEntries(rootDir, filter);

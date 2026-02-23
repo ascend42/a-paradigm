@@ -8,6 +8,7 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     id: '', // auto-generated
     type: (options.type as LoreEntry['type']) || 'human-note',
     timestamp: new Date().toISOString(),
+    duration_minutes: options.duration ? parseInt(options.duration as string, 10) : undefined,
     author: {
       type: 'human',
       id: options.author as string || 'unknown',
@@ -15,10 +16,14 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     title: options.title as string || 'Untitled',
     summary: options.summary as string || '',
     symbols_touched: options.symbols ? (options.symbols as string).split(',').map(s => s.trim()) : [],
+    files_modified: options.filesModified ? (options.filesModified as string).split(',').map(f => f.trim()) : undefined,
+    files_created: options.filesCreated ? (options.filesCreated as string).split(',').map(f => f.trim()) : undefined,
+    commit: options.commit as string || undefined,
+    learnings: options.learnings ? (options.learnings as string).split(',').map(l => l.trim()) : undefined,
     tags: options.tags ? (options.tags as string).split(',').map(t => t.trim()) : undefined,
   };
 
   await recordLore(rootDir, entry);
 
-  console.log(chalk.green(`\n  ✓ Lore entry recorded: ${entry.id}\n`));
+  console.log(chalk.green(`\n  Lore entry recorded: ${entry.id}\n`));
 }

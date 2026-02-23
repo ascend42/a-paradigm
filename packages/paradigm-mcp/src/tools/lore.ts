@@ -10,12 +10,16 @@
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   loadLoreEntries,
+  loadLoreEntry,
   loadLoreTimeline,
   recordLoreEntry,
+  updateLoreEntry,
+  deleteLoreEntry,
   type LoreEntry,
   type LoreFilter,
 } from '../utils/lore-loader.js';
 import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
+import { getSessionTracker } from '../utils/session-tracker.js';
 
 /**
  * Get list of lore tools with safety annotations
@@ -197,6 +201,112 @@ export function getLoreToolsList() {
         destructiveHint: false,
       },
     },
+    {
+      name: 'paradigm_lore_get',
+      description:
+        'Fetch a single lore entry by ID. Returns the full entry with all fields.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Lore entry ID (e.g., "L-2026-02-23-001")',
+          },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_lore_update',
+      description:
+        'Update an existing lore entry. Merges provided fields into the existing entry.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Lore entry ID to update',
+          },
+          title: { type: 'string', description: 'New title' },
+          summary: { type: 'string', description: 'New summary' },
+          type: {
+            type: 'string',
+            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'],
+            description: 'New entry type',
+          },
+          symbols_touched: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Updated symbols list',
+          },
+          symbols_created: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Updated created symbols',
+          },
+          files_created: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          files_modified: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          lines_added: { type: 'number' },
+          lines_removed: { type: 'number' },
+          commit: { type: 'string' },
+          duration_minutes: { type: 'number' },
+          learnings: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Updated learnings',
+          },
+          verification: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['pass', 'fail', 'partial', 'untested'] },
+              details: { type: 'object' },
+            },
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_lore_delete',
+      description:
+        'Delete a lore entry. Requires explicit confirmation to prevent accidental deletion.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Lore entry ID to delete',
+          },
+          confirm: {
+            type: 'boolean',
+            description: 'Must be true to proceed with deletion',
+          },
+        },
+        required: ['id', 'confirm'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+      },
+    },
   ];
 }
 
@@ -295,6 +405,7 @@ export async function handleLoreTool(
       };
 
       const id = await recordLoreEntry(ctx.rootDir, entry);
+      getSessionTracker().setLastLoreEntryId(id);
 
       return {
         handled: true,
@@ -352,6 +463,73 @@ export async function handleLoreTool(
             lastActive: info.lastActive,
           })),
         }, null, 2),
+      };
+    }
+
+    case 'paradigm_lore_get': {
+      const id = args.id as string;
+      const entry = await loadLoreEntry(ctx.rootDir, id);
+
+      if (!entry) {
+        return {
+          handled: true,
+          text: JSON.stringify({ error: `Lore entry not found: ${id}` }),
+        };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify(entry, null, 2),
+      };
+    }
+
+    case 'paradigm_lore_update': {
+      const id = args.id as string;
+      const { id: _, ...rest } = args;
+      const partial: Record<string, unknown> = {};
+
+      // Copy all provided fields except 'id'
+      for (const [key, value] of Object.entries(rest)) {
+        if (value !== undefined) {
+          partial[key] = value;
+        }
+      }
+
+      const success = await updateLoreEntry(ctx.rootDir, id, partial as Partial<LoreEntry>);
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          success,
+          id,
+          message: success ? 'Lore entry updated' : `Lore entry not found: ${id}`,
+        }),
+      };
+    }
+
+    case 'paradigm_lore_delete': {
+      const id = args.id as string;
+      const confirm = args.confirm as boolean;
+
+      if (!confirm) {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            success: false,
+            message: 'Deletion requires confirm: true',
+          }),
+        };
+      }
+
+      const success = await deleteLoreEntry(ctx.rootDir, id);
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          success,
+          id,
+          message: success ? 'Lore entry deleted' : `Lore entry not found: ${id}`,
+        }),
       };
     }
 

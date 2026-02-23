@@ -1,7 +1,8 @@
 /**
  * MCP Habits Tools
  *
- * Three tools for the habits behavioral feedback loop:
+ * Four tools for the habits behavioral feedback loop:
+ * - paradigm_habits_list: List all habit definitions (seed + global + project)
  * - paradigm_habits_check: Evaluate habits + record practice events
  * - paradigm_habits_status: Practice profile with compliance rates
  * - paradigm_practice_context: Proactive warnings before modifying symbols
@@ -9,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
@@ -17,6 +19,7 @@ import {
   evaluateHabits,
   buildEvaluationContext,
   type HabitTrigger,
+  type HabitCategory,
   type EvaluationResult,
 } from '../utils/habits-loader.js';
 import {
@@ -33,6 +36,34 @@ import {
 export function getHabitsToolsList() {
   return [
     {
+      name: 'paradigm_habits_list',
+      description:
+        'List all habit definitions: seed (built-in), global (~/.paradigm/habits.yaml), and project (.paradigm/habits.yaml). Shows what habits exist, their triggers, severity, and enabled state. Use to discover available habits before evaluating them.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          trigger: {
+            type: 'string',
+            enum: ['preflight', 'postflight', 'on-commit', 'on-stop'],
+            description: 'Filter by trigger point',
+          },
+          category: {
+            type: 'string',
+            enum: ['discovery', 'verification', 'testing', 'documentation', 'collaboration', 'security'],
+            description: 'Filter by category',
+          },
+          enabled: {
+            type: 'boolean',
+            description: 'Filter by enabled state (default: show all)',
+          },
+        },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
       name: 'paradigm_habits_check',
       description:
         'Evaluate habit compliance for the current session and record practice events. Call at preflight (before implementing), postflight (after implementing), or on-stop (session end). Returns which habits were followed, skipped, or partially met.',
@@ -41,7 +72,7 @@ export function getHabitsToolsList() {
         properties: {
           trigger: {
             type: 'string',
-            enum: ['preflight', 'postflight', 'on-stop'],
+            enum: ['preflight', 'postflight', 'on-stop', 'on-commit'],
             description: 'When to evaluate: preflight (before task), postflight (after task), on-stop (session end)',
           },
           filesModified: {
@@ -130,6 +161,12 @@ export async function handleHabitsTool(
   ctx: ProjectContext
 ): Promise<{ text: string; handled: boolean }> {
   switch (name) {
+    case 'paradigm_habits_list': {
+      const result = handleHabitsList(args, ctx);
+      trackToolCall(result.length, name);
+      return { text: result, handled: true };
+    }
+
     case 'paradigm_habits_check': {
       const result = await handleHabitsCheck(args, ctx);
       trackToolCall(result.length, name);
@@ -151,6 +188,59 @@ export async function handleHabitsTool(
     default:
       return { text: '', handled: false };
   }
+}
+
+// ============================================================================
+// paradigm_habits_list
+// ============================================================================
+
+function handleHabitsList(
+  args: Record<string, unknown>,
+  ctx: ProjectContext
+): string {
+  const triggerFilter = args.trigger as HabitTrigger | undefined;
+  const categoryFilter = args.category as HabitCategory | undefined;
+  const enabledFilter = args.enabled as boolean | undefined;
+
+  let habits = loadHabits(ctx.rootDir);
+
+  if (triggerFilter) habits = habits.filter((h) => h.trigger === triggerFilter);
+  if (categoryFilter) habits = habits.filter((h) => h.category === categoryFilter);
+  if (enabledFilter !== undefined) habits = habits.filter((h) => h.enabled === enabledFilter);
+
+  // Group by trigger for readability
+  const byTrigger: Record<string, typeof habits> = {};
+  for (const h of habits) {
+    if (!byTrigger[h.trigger]) byTrigger[h.trigger] = [];
+    byTrigger[h.trigger].push(h);
+  }
+
+  return JSON.stringify(
+    {
+      total: habits.length,
+      filters: Object.fromEntries(
+        Object.entries({ trigger: triggerFilter, category: categoryFilter, enabled: enabledFilter })
+          .filter(([, v]) => v !== undefined)
+      ),
+      byTrigger: Object.fromEntries(
+        Object.entries(byTrigger).map(([trigger, list]) => [
+          trigger,
+          list.map((h) => ({
+            id: h.id,
+            name: h.name,
+            description: h.description,
+            category: h.category,
+            severity: h.severity,
+            enabled: h.enabled,
+            check: { type: h.check.type, params: h.check.params },
+            platforms: h.platforms || null,
+          })),
+        ])
+      ),
+    },
+    null,
+    2
+  );
 }
 
 // ============================================================================
@@ -185,6 +275,19 @@ async function handleHabitsCheck(
     'get', 'post', 'put', 'patch', 'delete',
   ].some((k) => taskLower.includes(k));
 
+  // Check if working tree is clean (for git-clean habit)
+  let gitClean: boolean | undefined;
+  try {
+    const status = execSync('git status --porcelain', {
+      cwd: ctx.rootDir,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    gitClean = status.trim() === '';
+  } catch {
+    // Git not available or not a repo
+  }
+
   // Build evaluation context
   const evalContext = buildEvaluationContext({
     toolsCalled,
@@ -194,15 +297,18 @@ async function handleHabitsCheck(
     hasPortalRoutes: ctx.gateConfig !== null && (ctx.gateConfig as unknown as Record<string, unknown>).routes != null,
     taskAddsRoutes,
     taskDescription,
+    gitClean,
   });
 
-  // Evaluate
-  const evaluation = evaluateHabits(habits, trigger, evalContext);
+  // Evaluate (MCP = claude or cursor; detect from session context)
+  const platform = 'claude';  // MCP calls always come from Claude or Cursor
+  const evaluation = evaluateHabits(habits, trigger, evalContext, platform);
 
   // Record practice events if requested
   let recordedIds: string[] = [];
   if (shouldRecord && evaluation.evaluations.length > 0) {
     try {
+      const loreEntryId = tracker.getLastLoreEntryId() ?? undefined;
       recordedIds = await recordEvaluationResults(
         ctx.rootDir,
         evaluation.evaluations.map((e) => ({
@@ -214,6 +320,7 @@ async function handleHabitsCheck(
         {
           engineer: 'agent',
           sessionId: stats.sessionId,
+          loreEntryId,
           taskDescription,
           symbolsTouched,
           filesModified,
@@ -295,6 +402,12 @@ function buildRecommendations(evaluation: EvaluationResult): string[] {
           break;
         case 'purpose-coverage':
           recs.push(`Update .purpose files using paradigm_purpose_add_component.`);
+          break;
+        case 'changelog-updated':
+          recs.push(`Update CHANGELOG.md with the changes made in this phase.`);
+          break;
+        case 'changes-committed':
+          recs.push(`Commit all changes to git before finishing this phase.`);
           break;
         default:
           recs.push(`${e.habit.name}: ${e.reason}`);
