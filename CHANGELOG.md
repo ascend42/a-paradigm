@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] — 2026-02-23
+
+### Fixed
+
+- **Stop hook: aspect anchor path resolution** — Check 4 (stale aspect anchors) incorrectly resolved anchor paths relative to the `.purpose` file's directory instead of the project root, causing false-positive "anchor does not exist" violations. Fixed in both Claude Code and Cursor stop hooks.
+
+### Changed
+
+- **Version sync** — `@a-company/paradigm-mcp` 3.1.0 → 3.1.2, `@a-company/university` 3.1.0 → 3.1.2, plugin 3.0.2 → 3.1.2.
+
 ## [3.1.1] — 2026-02-23
 
 ### Added
