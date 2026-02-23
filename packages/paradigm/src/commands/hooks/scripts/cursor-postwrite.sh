@@ -1,21 +1,21 @@
 #!/bin/sh
-# Paradigm Claude Code PostToolUse Hook (v2)
-# Fires after Edit/Write tool calls.
+# Paradigm Cursor PostWrite Hook (v2)
+# Fires after file edits.
 # Tracks modified source files in .paradigm/.pending-review
 # and outputs compliance reminders.
-# Installed by: paradigm hooks install --claude-code
+# Installed by: paradigm hooks install --cursor
 #
-# Hook type: PostToolUse (matcher: Edit,Write)
+# Hook type: afterFileEdit
 # Exit 0 always (never blocks — advisory only)
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
-# Extract the file path from tool_input
+# Extract file path from Cursor's afterFileEdit input
 if command -v jq >/dev/null 2>&1; then
-  FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // empty' 2>/dev/null)
+  FILE_PATH=$(echo "$INPUT" | jq -r '.file // .filePath // empty' 2>/dev/null)
 else
-  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  FILE_PATH=$(echo "$INPUT" | grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
   if [ -z "$FILE_PATH" ]; then
     FILE_PATH=$(echo "$INPUT" | grep -o '"filePath"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"filePath"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
   fi

@@ -1,9 +1,9 @@
 #!/bin/sh
-# Paradigm Claude Code Stop Hook (v2)
+# Paradigm Cursor Stop Hook (v2)
 # Validates paradigm compliance before allowing the agent to finish.
-# Installed by: paradigm hooks install --claude-code
+# Installed by: paradigm hooks install --cursor
 #
-# Hook type: Stop
+# Hook type: stop
 # Exit 0 = allow, Exit 2 = block with message
 #
 # Checks:
@@ -19,11 +19,11 @@
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
-# Extract cwd from input (try jq first, fallback to grep)
+# Extract workspace root from Cursor's input (try jq first, fallback to grep)
 if command -v jq >/dev/null 2>&1; then
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+  CWD=$(echo "$INPUT" | jq -r '.workspace_roots[0] // empty' 2>/dev/null)
 else
-  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  CWD=$(echo "$INPUT" | grep -o '"workspace_roots"[[:space:]]*:[[:space:]]*\["[^"]*"' | head -1 | sed 's/.*\["//' | sed 's/"$//')
 fi
 
 if [ -z "$CWD" ]; then
