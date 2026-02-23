@@ -131,6 +131,9 @@ $RECYCLE.BIN/
 # Private research
 /research/
 
+# Personal podcast content (local only)
+/docs/podcast/
+
 # Local planning and IDE settings
 /.plans/
 /.claude/settings.local.json

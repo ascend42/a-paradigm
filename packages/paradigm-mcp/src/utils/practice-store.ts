@@ -136,6 +136,7 @@ export async function recordEvaluationResults(
   context: {
     engineer: string;
     sessionId: string;
+    loreEntryId?: string;
     taskDescription?: string;
     symbolsTouched?: string[];
     filesModified?: string[];
@@ -149,6 +150,7 @@ export async function recordEvaluationResults(
       result: eval_.result,
       engineer: context.engineer,
       sessionId: context.sessionId,
+      loreEntryId: context.loreEntryId,
       taskDescription: context.taskDescription,
       symbolsTouched: context.symbolsTouched,
       filesModified: context.filesModified,

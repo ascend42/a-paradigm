@@ -369,6 +369,13 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   fi
 fi
 
+# --- Auto-evaluate on-stop habits via CLI ---
+if command -v paradigm >/dev/null 2>&1; then
+  paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+elif command -v npx >/dev/null 2>&1; then
+  npx paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+fi
+
 # --- Check 8: Blocking habits ---
 if [ -f ".paradigm/.habits-blocking" ]; then
   HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
@@ -823,6 +830,13 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
     Include: type, title, summary, and symbols_touched."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   fi
+fi
+
+# --- Auto-evaluate on-stop habits via CLI ---
+if command -v paradigm >/dev/null 2>&1; then
+  paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+elif command -v npx >/dev/null 2>&1; then
+  npx paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
 fi
 
 # --- Check 8: Blocking habits ---

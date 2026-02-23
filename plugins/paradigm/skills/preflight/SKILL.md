@@ -66,7 +66,22 @@ If the task affects symbols involved in flows:
 2. List which flows will be impacted
 3. Note which flow steps need validation after implementation
 
-## Step 6: Compile Pre-flight Report
+## Step 6: Evaluate Preflight Habits
+
+Call `paradigm_habits_check` with the preflight trigger to check habit compliance:
+
+```
+paradigm_habits_check({
+  trigger: "preflight",
+  symbolsTouched: ["#component-a", "#component-b"],
+  taskDescription: "<task description>"
+})
+```
+
+Include any warnings (skipped discovery habits like ripple or wisdom checks)
+in the pre-flight report below.
+
+## Step 7: Compile Pre-flight Report
 
 Present a structured report to the user:
 
@@ -102,7 +117,7 @@ Suggested Agents:
   security — for auth changes
 ```
 
-## Step 7: Recommendations
+## Step 8: Recommendations
 
 Based on the analysis, recommend:
 - Whether to proceed directly or plan first

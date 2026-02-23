@@ -28,10 +28,12 @@ export type HabitSeverity = 'advisory' | 'warn' | 'block';
 export type HabitCheckType =
   | 'tool-called'
   | 'file-exists'
+  | 'file-modified'
   | 'lore-recorded'
   | 'symbols-registered'
   | 'gates-declared'
-  | 'tests-exist';
+  | 'tests-exist'
+  | 'git-clean';
 
 export interface HabitCheckParams {
   /** For tool-called: list of tool names (any one suffices) */
@@ -58,6 +60,8 @@ export interface HabitDefinition {
   severity: HabitSeverity;
   check: HabitCheck;
   enabled: boolean;
+  /** Platforms this habit applies to (e.g. ['claude', 'cursor', 'cli']). Undefined = all platforms. */
+  platforms?: string[];
 }
 
 export interface HabitOverride {
@@ -145,6 +149,8 @@ export interface EvaluationContext {
   taskAddsRoutes: boolean;
   /** Task description */
   taskDescription?: string;
+  /** Whether git working tree is clean (all changes committed) */
+  gitClean?: boolean;
 }
 
 export interface EvaluationResult {

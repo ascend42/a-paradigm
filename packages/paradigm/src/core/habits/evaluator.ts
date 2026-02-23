@@ -5,6 +5,7 @@
  * context to determine whether habits were followed, skipped, or partially met.
  */
 
+import * as path from 'path';
 import type {
   HabitDefinition,
   HabitEvaluation,
@@ -71,6 +72,10 @@ function evaluateHabit(
       return evaluateGatesDeclared(habit, context);
     case 'tests-exist':
       return evaluateTestsExist(habit, context);
+    case 'file-modified':
+      return evaluateFileModified(habit, context);
+    case 'git-clean':
+      return evaluateGitClean(habit, context);
     default:
       return {
         habit,
@@ -389,6 +394,72 @@ function evaluateTestsExist(
 }
 
 /**
+ * Check if specific files were modified (matched by pattern or basename)
+ */
+function evaluateFileModified(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  if (context.filesModified.length === 0) {
+    return { habit, result: 'followed', reason: 'No files modified' };
+  }
+
+  const patterns = habit.check.params.patterns || [];
+  if (patterns.length === 0) {
+    return { habit, result: 'followed', reason: 'No patterns specified' };
+  }
+
+  const matched = context.filesModified.filter((f) =>
+    patterns.some((p) => f.includes(p) || path.basename(f) === p)
+  );
+
+  if (matched.length > 0) {
+    return {
+      habit,
+      result: 'followed',
+      reason: `Matching files: ${matched.join(', ')}`,
+      evidence: matched,
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: `None of [${patterns.join(', ')}] found in modified files`,
+  };
+}
+
+/**
+ * Check if git working tree is clean (all changes committed)
+ */
+function evaluateGitClean(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  if (context.filesModified.length === 0) {
+    return { habit, result: 'followed', reason: 'No files modified' };
+  }
+
+  if (context.gitClean === undefined) {
+    return { habit, result: 'partial', reason: 'Git status not available' };
+  }
+
+  if (context.gitClean) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'Working tree is clean — changes committed',
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: 'Uncommitted changes in working tree',
+  };
+}
+
+/**
  * Build evaluation context from available session data
  */
 export function buildEvaluationContext(params: {
@@ -399,6 +470,7 @@ export function buildEvaluationContext(params: {
   hasPortalRoutes?: boolean;
   taskAddsRoutes?: boolean;
   taskDescription?: string;
+  gitClean?: boolean;
 }): EvaluationContext {
   return {
     toolsCalled: params.toolsCalled || [],
@@ -408,5 +480,6 @@ export function buildEvaluationContext(params: {
     hasPortalRoutes: params.hasPortalRoutes || false,
     taskAddsRoutes: params.taskAddsRoutes || false,
     taskDescription: params.taskDescription,
+    gitClean: params.gitClean,
   };
 }
