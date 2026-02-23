@@ -6,6 +6,8 @@
  * and symbol prefix normalization is handled internally.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
@@ -802,6 +804,26 @@ async function handleAddAspect(
   }
 
   const filePath = resolvePurposeFilePath(purposeFile, ctx.rootDir);
+
+  // Validate anchor files exist (relative to .purpose dir)
+  const purposeDir = path.dirname(filePath);
+  for (const anchor of anchors) {
+    const anchorFile = anchor.replace(/:.*$/, '');
+    const resolved = path.resolve(purposeDir, anchorFile);
+    if (!fs.existsSync(resolved)) {
+      // Check if it's project-root-relative instead
+      const rootResolved = path.resolve(ctx.rootDir, anchorFile);
+      if (fs.existsSync(rootResolved)) {
+        // Convert to .purpose-dir-relative path
+        const corrected = path.relative(purposeDir, rootResolved);
+        const idx = anchors.indexOf(anchor);
+        anchors[idx] = anchor.replace(anchorFile, corrected);
+      } else {
+        return err(`Anchor file not found: "${anchorFile}". Anchors must be relative to the .purpose file directory (${purposeDir}).`);
+      }
+    }
+  }
+
   const data = readPurposeFile(filePath);
 
   if (!data.aspects) data.aspects = {};

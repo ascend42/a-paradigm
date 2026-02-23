@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Stop hook: anchor path resolution (for real this time)** — Check 4 (stale aspect anchors) resolved anchor paths from the project root instead of relative to the `.purpose` file's directory, causing 59 false-positive violations in monorepo packages. Now resolves `$purpose_dir/$anchor_path` correctly.
+- **Stop hook: anchor path resolution** — Check 4 (stale aspect anchors) now tries both `.purpose`-dir-relative AND project-root-relative resolution. This handles both conventions: monorepo packages use `src/file.ts` (relative to package `.purpose`), while some projects write `src/lib/stores/file.ts` (root-relative) in sub-directory `.purpose` files. Only reports a violation if neither resolves.
+- **MCP: `paradigm_purpose_add_aspect` validates and auto-corrects anchor paths** — If an anchor is written project-root-relative but the `.purpose` file is in a subdirectory, the tool auto-converts to the correct `.purpose`-dir-relative path. If the file doesn't exist at all, it errors at write time instead of silently writing a broken anchor.
 
 ## [3.1.2] — 2026-02-23
 
