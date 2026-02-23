@@ -151,7 +151,8 @@ for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not
           if [ "$in_anchors" = true ]; then
             anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
             if [ -n "$anchor_path" ]; then
-              if [ ! -f "$purpose_dir/$anchor_path" ]; then
+              # Try relative to .purpose dir first, then project root
+              if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
                 VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
