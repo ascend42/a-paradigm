@@ -1,0 +1,51 @@
+id: L-2026-02-23-001
+type: agent-session
+timestamp: '2026-02-23T17:34:19.541Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Implement automatic habit execution and platform annotations
+summary: 'Added three layers of automatic habit execution: a CLI command (paradigm habits check), auto-evaluation inside PM preflight/postflight tools, and stop hook integration that runs the CLI before checking .habits-blocking. Also added platform annotations (platforms field) to habit definitions so habits can be scoped to claude, cursor, or cli. Updated both skill files to include habits evaluation steps.'
+symbols_touched:
+  - '#habits-loader'
+  - '#habits-evaluator'
+  - '#habits-cli'
+  - '#pm-tools'
+  - '#stop-hook'
+files_modified:
+  - packages/paradigm/src/core/habits/types.ts
+  - packages/paradigm/src/core/habits/evaluator.ts
+  - packages/paradigm/src/commands/habits/index.ts
+  - packages/paradigm/src/commands/hooks/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/habits.ts
+  - packages/paradigm-mcp/src/utils/habits-loader.ts
+  - plugins/paradigm/scripts/paradigm-stop.sh
+  - plugins/paradigm/skills/postflight/SKILL.md
+  - plugins/paradigm/skills/preflight/SKILL.md
+lines_added: 660
+lines_removed: 33
+decisions:
+  - id: cli-habits-check
+    decision: Add paradigm habits check CLI command that stop hooks can invoke
+    rationale: Shell hooks can't call MCP tools directly, so a CLI command bridges that gap. The stop hook runs it before Check 8 to auto-evaluate on-stop habits and write .habits-blocking.
+  - id: pm-auto-eval
+    decision: Replace habit reminders in PM tools with actual evaluateHabits() calls
+    rationale: Agents shouldn't need a separate paradigm_habits_check call after postflight — the PM tool should do it automatically and return results inline.
+  - id: platform-field
+    decision: Add optional platforms field to HabitDefinition, undefined means all platforms
+    rationale: Some habits (like tool-called checks for MCP tools) only make sense in claude/cursor contexts. CLI-only habits might exist too. The field is optional for backward compatibility.
+verification:
+  status: pass
+  details:
+    build-paradigm: pass
+    build-mcp: pass
+    cli-json-output: pass
+    cli-human-output: pass
+tags:
+  - feature
+  - habits
+  - automation
+  - platform-annotations

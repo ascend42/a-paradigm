@@ -235,6 +235,68 @@ export async function loadLoreEntry(rootDir: string, entryId: string): Promise<L
 }
 
 /**
+ * Update an existing lore entry by merging provided fields
+ */
+export async function updateLoreEntry(
+  rootDir: string,
+  entryId: string,
+  partial: Partial<Omit<LoreEntry, 'id' | 'timestamp' | 'author'>>
+): Promise<boolean> {
+  const entry = await loadLoreEntry(rootDir, entryId);
+  if (!entry) return false;
+
+  const dateStr = entry.timestamp.slice(0, 10);
+  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+  if (!fs.existsSync(entryPath)) return false;
+
+  // Merge provided fields
+  if (partial.title !== undefined) entry.title = partial.title;
+  if (partial.summary !== undefined) entry.summary = partial.summary;
+  if (partial.type !== undefined) entry.type = partial.type;
+  if (partial.duration_minutes !== undefined) entry.duration_minutes = partial.duration_minutes;
+  if (partial.symbols_touched !== undefined) entry.symbols_touched = partial.symbols_touched;
+  if (partial.symbols_created !== undefined) entry.symbols_created = partial.symbols_created;
+  if (partial.files_created !== undefined) entry.files_created = partial.files_created;
+  if (partial.files_modified !== undefined) entry.files_modified = partial.files_modified;
+  if (partial.lines_added !== undefined) entry.lines_added = partial.lines_added;
+  if (partial.lines_removed !== undefined) entry.lines_removed = partial.lines_removed;
+  if (partial.commit !== undefined) entry.commit = partial.commit;
+  if (partial.decisions !== undefined) entry.decisions = partial.decisions;
+  if (partial.errors_encountered !== undefined) entry.errors_encountered = partial.errors_encountered;
+  if (partial.learnings !== undefined) entry.learnings = partial.learnings;
+  if (partial.verification !== undefined) entry.verification = partial.verification;
+  if (partial.tags !== undefined) entry.tags = partial.tags;
+
+  fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
+  await rebuildTimeline(rootDir);
+  return true;
+}
+
+/**
+ * Delete a lore entry by ID
+ */
+export async function deleteLoreEntry(rootDir: string, entryId: string): Promise<boolean> {
+  const entry = await loadLoreEntry(rootDir, entryId);
+  if (!entry) return false;
+
+  const dateStr = entry.timestamp.slice(0, 10);
+  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+  if (!fs.existsSync(entryPath)) return false;
+
+  fs.unlinkSync(entryPath);
+
+  // Clean up empty date directory
+  const dateDir = path.dirname(entryPath);
+  const remaining = fs.readdirSync(dateDir).filter(f => f.endsWith('.yaml'));
+  if (remaining.length === 0) {
+    fs.rmdirSync(dateDir);
+  }
+
+  await rebuildTimeline(rootDir);
+  return true;
+}
+
+/**
  * Migrate old-format lore entries (root-level YAML without date partitioning)
  * to v2 schema in dated directories. Runs automatically on rebuild/load.
  */

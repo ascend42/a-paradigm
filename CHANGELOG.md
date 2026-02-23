@@ -15,7 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Lore UI: Enhanced Filtering** — Author type toggle pills (All / Human / Agent), symbol autocomplete dropdown with match counts, and explicit date range inputs (from/to) in the filter bar.
 
+- **CLI Habits: `edit`, `remove`, `enable`, `disable`** — Full lifecycle management for habits. `habits edit <id>` supports all fields for custom habits; seed habits allow only `--severity` and `--enabled` (writes to overrides). `habits remove <id>` deletes custom habits with `--yes` confirmation; seed habits get a message to disable instead. `habits enable/disable <id>` toggles any habit. Internal `resolveHabitLocation()` helper detects whether a habit is seed, project, or global.
+
+- **CLI Habits: `add` expanded** — New `--check-type` option (all 8 types: tool-called, file-exists, file-modified, lore-recorded, symbols-registered, gates-declared, tests-exist, git-clean) and `--patterns` option for file-based check types. Enum validation on all fields.
+
+- **CLI Lore: `edit`, `delete`, `timeline`** — `lore edit <id>` merges provided fields (title, summary, type, symbols, tags, learnings) into existing entries. `lore delete <id>` with `--yes` confirmation and entry summary display. `lore timeline` groups entries by date, shows hot symbols and active authors, with `--json` for machine-readable output.
+
+- **CLI Lore: `record` expanded** — New `--files-modified`, `--files-created`, `--commit`, `--learnings`, `--duration` options matching the full MCP schema.
+
+- **CLI Lore: `list` expanded** — New `--from` and `--to` date range filtering.
+
+- **MCP: `paradigm_lore_get`** — Fetch a single lore entry by ID with full fields (read-only).
+
+- **MCP: `paradigm_lore_update`** — Merge provided fields into an existing entry.
+
+- **MCP: `paradigm_lore_delete`** — Delete a lore entry with required `confirm: true` safety check (destructive hint).
+
+- **Core: `updateLoreEntry`, `deleteLoreEntry`** — Shared storage functions in both `packages/paradigm/src/core/lore/storage.ts` and `packages/paradigm-mcp/src/utils/lore-loader.ts`. Update merges fields and rebuilds timeline; delete removes the YAML file, cleans empty date directories, and rebuilds timeline.
+
+- **University: para-501 updates** — Habits-practice lesson updated: 8 check types (added `file-modified`, `git-clean`), CLI commands section, `platforms` field documentation. Lore-system lesson updated: CLI tools section, MCP tools expanded from 3 to 6.
+
+- **University: para-401 updates** — MCP-tools-overview lesson: new "Practice Tools" subsection with all 10 habits + lore MCP tools.
+
 ### Fixed
+
+- **MCP `paradigm_habits_check` trigger enum** — Added missing `on-commit` to the trigger enum, aligning with the list tool and the type definitions.
 
 - **Lore API: route ordering bug** — `GET /api/lore/symbols`, `/timeline`, `/authors` were shadowed by `/:id` catch-all due to Express route registration order. Named routes now register before parameterized routes.
 

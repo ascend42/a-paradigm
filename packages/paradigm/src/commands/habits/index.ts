@@ -10,17 +10,104 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import chalk from 'chalk';
 import * as yaml from 'js-yaml';
 import {
   loadHabits,
   getEnabledHabits,
   invalidateHabitsCache,
+  evaluateHabits,
+  buildEvaluationContext,
   type HabitDefinition,
   type HabitsConfig,
+  type HabitTrigger,
 } from '../../core/habits/index.js';
 
 const HABITS_FILE = '.paradigm/habits.yaml';
+
+const SEED_HABIT_IDS = new Set([
+  'explore-before-implement',
+  'ripple-before-modify',
+  'check-fragility',
+  'wisdom-before-implement',
+  'verify-before-done',
+  'postflight-compliance',
+  'test-new-components',
+  'purpose-coverage',
+  'record-lore-for-significant',
+  'gates-for-routes',
+]);
+
+const VALID_CATEGORIES = ['discovery', 'verification', 'testing', 'documentation', 'collaboration', 'security'] as const;
+const VALID_TRIGGERS = ['preflight', 'postflight', 'on-stop', 'on-commit'] as const;
+const VALID_SEVERITIES = ['advisory', 'warn', 'block'] as const;
+const VALID_CHECK_TYPES = ['tool-called', 'file-exists', 'file-modified', 'lore-recorded', 'symbols-registered', 'gates-declared', 'tests-exist', 'git-clean'] as const;
+
+// ════════════════════════════════════════════════════════════════════
+// Helper: Resolve habit location
+// ════════════════════════════════════════════════════════════════════
+
+interface HabitLocation {
+  source: 'seed' | 'project' | 'global';
+  filePath: string;
+  index: number;
+}
+
+function resolveHabitLocation(rootDir: string, habitId: string): HabitLocation | null {
+  // Check project habits
+  const projectPath = path.join(rootDir, HABITS_FILE);
+  const projectLocation = findInConfig(projectPath, habitId);
+  if (projectLocation) return { source: 'project', ...projectLocation };
+
+  // Check global habits
+  const home = process.env.HOME || process.env.USERPROFILE || '~';
+  const globalPath = path.join(home, '.paradigm', 'habits.yaml');
+  const globalLocation = findInConfig(globalPath, habitId);
+  if (globalLocation) return { source: 'global', ...globalLocation };
+
+  // Check if it's a seed habit
+  if (SEED_HABIT_IDS.has(habitId)) return { source: 'seed', filePath: '', index: -1 };
+
+  return null;
+}
+
+function findInConfig(filePath: string, habitId: string): { filePath: string; index: number } | null {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const config = yaml.load(content) as HabitsConfig;
+    if (!config?.habits) return null;
+    const idx = config.habits.findIndex(h => h.id === habitId);
+    if (idx === -1) return null;
+    return { filePath, index: idx };
+  } catch {
+    return null;
+  }
+}
+
+function loadConfigFile(filePath: string): HabitsConfig {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const config = yaml.load(content) as HabitsConfig;
+  if (!config.habits) config.habits = [];
+  if (!config.overrides) config.overrides = {};
+  return config;
+}
+
+function writeConfigFile(filePath: string, config: HabitsConfig): void {
+  fs.writeFileSync(filePath, yaml.dump(config, { lineWidth: 80, noRefs: true }), 'utf8');
+}
+
+function ensureProjectConfig(rootDir: string): string {
+  const configPath = path.join(rootDir, HABITS_FILE);
+  if (!fs.existsSync(configPath)) {
+    const dir = path.dirname(configPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const initial: HabitsConfig = { version: '1.0', habits: [], overrides: {} };
+    writeConfigFile(configPath, initial);
+  }
+  return configPath;
+}
 
 // ════════════════════════════════════════════════════════════════════
 // paradigm habits list
@@ -295,6 +382,8 @@ export async function habitsAddCommand(options: {
   trigger: string;
   severity?: string;
   tools?: string;
+  checkType?: string;
+  patterns?: string;
 }): Promise<void> {
   const rootDir = process.cwd();
   const configPath = path.join(rootDir, HABITS_FILE);
@@ -302,6 +391,26 @@ export async function habitsAddCommand(options: {
   // Ensure config exists
   if (!fs.existsSync(configPath)) {
     console.log(chalk.yellow(`No ${HABITS_FILE} found. Run 'paradigm habits init' first.`));
+    return;
+  }
+
+  // Validate enums
+  if (!VALID_CATEGORIES.includes(options.category as typeof VALID_CATEGORIES[number])) {
+    console.log(chalk.red(`Invalid category: ${options.category}. Valid: ${VALID_CATEGORIES.join(', ')}`));
+    return;
+  }
+  if (!VALID_TRIGGERS.includes(options.trigger as typeof VALID_TRIGGERS[number])) {
+    console.log(chalk.red(`Invalid trigger: ${options.trigger}. Valid: ${VALID_TRIGGERS.join(', ')}`));
+    return;
+  }
+  if (options.severity && !VALID_SEVERITIES.includes(options.severity as typeof VALID_SEVERITIES[number])) {
+    console.log(chalk.red(`Invalid severity: ${options.severity}. Valid: ${VALID_SEVERITIES.join(', ')}`));
+    return;
+  }
+
+  const checkType = (options.checkType || 'tool-called') as HabitDefinition['check']['type'];
+  if (!VALID_CHECK_TYPES.includes(checkType as typeof VALID_CHECK_TYPES[number])) {
+    console.log(chalk.red(`Invalid check-type: ${checkType}. Valid: ${VALID_CHECK_TYPES.join(', ')}`));
     return;
   }
 
@@ -326,8 +435,16 @@ export async function habitsAddCommand(options: {
     return;
   }
 
-  // Parse tools
+  // Parse tools and patterns
   const tools = options.tools ? options.tools.split(',').map((t) => t.trim()) : [];
+  const patterns = options.patterns ? options.patterns.split(',').map((p) => p.trim()) : [];
+
+  // Build check params based on check type
+  const checkParams: HabitDefinition['check']['params'] = {};
+  if (checkType === 'tool-called' && tools.length > 0) checkParams.tools = tools;
+  if ((checkType === 'file-exists' || checkType === 'file-modified' || checkType === 'tests-exist') && patterns.length > 0) {
+    checkParams.patterns = patterns;
+  }
 
   const newHabit: HabitDefinition = {
     id: options.id,
@@ -337,22 +454,407 @@ export async function habitsAddCommand(options: {
     trigger: options.trigger as HabitDefinition['trigger'],
     severity: (options.severity || 'advisory') as HabitDefinition['severity'],
     check: {
-      type: 'tool-called',
-      params: { tools },
+      type: checkType,
+      params: checkParams,
     },
     enabled: true,
   };
 
   config.habits.push(newHabit);
 
-  fs.writeFileSync(configPath, yaml.dump(config, { lineWidth: 80, noRefs: true }), 'utf8');
+  writeConfigFile(configPath, config);
   invalidateHabitsCache(rootDir);
 
   console.log(chalk.green(`Added habit: ${options.id}`));
   console.log(chalk.gray(`  Name: ${options.name}`));
   console.log(chalk.gray(`  Category: ${options.category} | Trigger: ${options.trigger} | Severity: ${options.severity || 'advisory'}`));
-  if (tools.length > 0) {
-    console.log(chalk.gray(`  Tools: ${tools.join(', ')}`));
+  console.log(chalk.gray(`  Check: ${checkType}`));
+  if (tools.length > 0) console.log(chalk.gray(`  Tools: ${tools.join(', ')}`));
+  if (patterns.length > 0) console.log(chalk.gray(`  Patterns: ${patterns.join(', ')}`));
+  console.log();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// paradigm habits edit <id>
+// ════════════════════════════════════════════════════════════════════
+
+export async function habitsEditCommand(
+  id: string,
+  options: {
+    name?: string;
+    description?: string;
+    category?: string;
+    trigger?: string;
+    severity?: string;
+    enabled?: string;
+    checkType?: string;
+    patterns?: string;
+    tools?: string;
   }
+): Promise<void> {
+  const rootDir = process.cwd();
+
+  // Validate enum values if provided
+  if (options.category && !VALID_CATEGORIES.includes(options.category as typeof VALID_CATEGORIES[number])) {
+    console.log(chalk.red(`Invalid category: ${options.category}. Valid: ${VALID_CATEGORIES.join(', ')}`));
+    return;
+  }
+  if (options.trigger && !VALID_TRIGGERS.includes(options.trigger as typeof VALID_TRIGGERS[number])) {
+    console.log(chalk.red(`Invalid trigger: ${options.trigger}. Valid: ${VALID_TRIGGERS.join(', ')}`));
+    return;
+  }
+  if (options.severity && !VALID_SEVERITIES.includes(options.severity as typeof VALID_SEVERITIES[number])) {
+    console.log(chalk.red(`Invalid severity: ${options.severity}. Valid: ${VALID_SEVERITIES.join(', ')}`));
+    return;
+  }
+  if (options.checkType && !VALID_CHECK_TYPES.includes(options.checkType as typeof VALID_CHECK_TYPES[number])) {
+    console.log(chalk.red(`Invalid check-type: ${options.checkType}. Valid: ${VALID_CHECK_TYPES.join(', ')}`));
+    return;
+  }
+
+  const location = resolveHabitLocation(rootDir, id);
+  if (!location) {
+    console.log(chalk.red(`Habit not found: ${id}`));
+    return;
+  }
+
+  if (location.source === 'seed') {
+    // Seed habits: only allow severity and enabled overrides
+    const nonOverrideFields = ['name', 'description', 'category', 'trigger', 'checkType', 'patterns', 'tools'] as const;
+    const hasNonOverride = nonOverrideFields.some(f => options[f] !== undefined);
+    if (hasNonOverride) {
+      console.log(chalk.yellow(`"${id}" is a seed habit. Only --severity and --enabled can be changed.`));
+      console.log(chalk.gray('  Other fields require creating a custom habit with the same functionality.'));
+      return;
+    }
+
+    if (!options.severity && options.enabled === undefined) {
+      console.log(chalk.yellow('No changes specified. Use --severity or --enabled for seed habits.'));
+      return;
+    }
+
+    const configPath = ensureProjectConfig(rootDir);
+    const config = loadConfigFile(configPath);
+    if (!config.overrides) config.overrides = {};
+    if (!config.overrides[id]) config.overrides[id] = {};
+
+    if (options.severity) config.overrides[id].severity = options.severity as HabitDefinition['severity'];
+    if (options.enabled !== undefined) config.overrides[id].enabled = options.enabled === 'true';
+
+    writeConfigFile(configPath, config);
+    invalidateHabitsCache(rootDir);
+
+    console.log(chalk.green(`Updated seed habit override: ${id}`));
+    if (options.severity) console.log(chalk.gray(`  Severity: ${options.severity}`));
+    if (options.enabled !== undefined) console.log(chalk.gray(`  Enabled: ${options.enabled}`));
+    console.log();
+    return;
+  }
+
+  // Custom habit (project or global)
+  const config = loadConfigFile(location.filePath);
+  const habit = config.habits[location.index];
+
+  if (options.name) habit.name = options.name;
+  if (options.description) habit.description = options.description;
+  if (options.category) habit.category = options.category as HabitDefinition['category'];
+  if (options.trigger) habit.trigger = options.trigger as HabitDefinition['trigger'];
+  if (options.severity) habit.severity = options.severity as HabitDefinition['severity'];
+  if (options.enabled !== undefined) habit.enabled = options.enabled === 'true';
+  if (options.checkType) habit.check.type = options.checkType as HabitDefinition['check']['type'];
+  if (options.tools) habit.check.params.tools = options.tools.split(',').map(t => t.trim());
+  if (options.patterns) habit.check.params.patterns = options.patterns.split(',').map(p => p.trim());
+
+  config.habits[location.index] = habit;
+  writeConfigFile(location.filePath, config);
+  invalidateHabitsCache(rootDir);
+
+  const source = location.source === 'global' ? '(global)' : '(project)';
+  console.log(chalk.green(`Updated habit: ${id} ${chalk.gray(source)}`));
+  console.log();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// paradigm habits remove <id>
+// ════════════════════════════════════════════════════════════════════
+
+export async function habitsRemoveCommand(
+  id: string,
+  options: { yes?: boolean }
+): Promise<void> {
+  const rootDir = process.cwd();
+  const location = resolveHabitLocation(rootDir, id);
+
+  if (!location) {
+    console.log(chalk.red(`Habit not found: ${id}`));
+    return;
+  }
+
+  if (location.source === 'seed') {
+    console.log(chalk.yellow(`"${id}" is a seed habit and cannot be removed.`));
+    console.log(chalk.gray(`  Use: paradigm habits edit ${id} --enabled false`));
+    return;
+  }
+
+  // Load habit for display
+  const config = loadConfigFile(location.filePath);
+  const habit = config.habits[location.index];
+
+  if (!options.yes) {
+    console.log(chalk.yellow(`\nWill remove habit: ${habit.name} (${id})`));
+    console.log(chalk.gray(`  Source: ${location.source} (${location.filePath})`));
+    console.log(chalk.gray(`  Use --yes to confirm.\n`));
+    return;
+  }
+
+  config.habits.splice(location.index, 1);
+  writeConfigFile(location.filePath, config);
+  invalidateHabitsCache(rootDir);
+
+  console.log(chalk.green(`Removed habit: ${id}`));
+  console.log();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// paradigm habits enable/disable <id>
+// ════════════════════════════════════════════════════════════════════
+
+export async function habitsToggleCommand(
+  id: string,
+  action: 'enable' | 'disable'
+): Promise<void> {
+  const rootDir = process.cwd();
+  const enabled = action === 'enable';
+  const location = resolveHabitLocation(rootDir, id);
+
+  if (!location) {
+    console.log(chalk.red(`Habit not found: ${id}`));
+    return;
+  }
+
+  if (location.source === 'seed') {
+    // Write override
+    const configPath = ensureProjectConfig(rootDir);
+    const config = loadConfigFile(configPath);
+    if (!config.overrides) config.overrides = {};
+    if (!config.overrides[id]) config.overrides[id] = {};
+    config.overrides[id].enabled = enabled;
+
+    writeConfigFile(configPath, config);
+    invalidateHabitsCache(rootDir);
+
+    console.log(chalk.green(`${enabled ? 'Enabled' : 'Disabled'} seed habit: ${id}`));
+    console.log();
+    return;
+  }
+
+  // Custom habit
+  const config = loadConfigFile(location.filePath);
+  config.habits[location.index].enabled = enabled;
+  writeConfigFile(location.filePath, config);
+  invalidateHabitsCache(rootDir);
+
+  console.log(chalk.green(`${enabled ? 'Enabled' : 'Disabled'} habit: ${id}`));
+  console.log();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// paradigm habits check
+// ════════════════════════════════════════════════════════════════════
+
+export async function habitsCheckCommand(options: {
+  trigger: string;
+  record?: boolean;
+  json?: boolean;
+  files?: string;
+  symbols?: string;
+}): Promise<void> {
+  const rootDir = process.cwd();
+  const trigger = options.trigger as HabitTrigger;
+
+  // Load habits
+  let habits: HabitDefinition[];
+  try {
+    habits = loadHabits(rootDir);
+  } catch (err) {
+    console.log(chalk.red('Failed to load habits:'), (err as Error).message);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Parse --files and --symbols
+  const filesModified = options.files
+    ? options.files.split(',').map((f) => f.trim()).filter(Boolean)
+    : getGitModifiedFiles(rootDir);
+
+  const symbolsTouched = options.symbols
+    ? options.symbols.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  // Check if git working tree is clean
+  let gitClean: boolean | undefined;
+  try {
+    const status = execSync('git status --porcelain', {
+      cwd: rootDir,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    gitClean = status.trim() === '';
+  } catch {
+    // Git not available
+  }
+
+  // Check portal.yaml
+  const portalPath = path.join(rootDir, 'portal.yaml');
+  let hasPortalRoutes = false;
+  if (fs.existsSync(portalPath)) {
+    try {
+      const portalContent = fs.readFileSync(portalPath, 'utf8');
+      const portal = yaml.load(portalContent) as Record<string, unknown>;
+      hasPortalRoutes = portal?.routes != null && Object.keys(portal.routes as object).length > 0;
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Build evaluation context
+  const evalContext = buildEvaluationContext({
+    toolsCalled: [],  // CLI has no session breadcrumbs
+    filesModified,
+    symbolsTouched,
+    loreRecorded: false,
+    hasPortalRoutes,
+    taskAddsRoutes: false,
+    gitClean,
+  });
+
+  // Evaluate
+  const evaluation = evaluateHabits(habits, trigger, evalContext);
+
+  // Record practice events if requested
+  let recordedCount = 0;
+  if (options.record && evaluation.evaluations.length > 0) {
+    try {
+      const sentinelDir = path.join(rootDir, '.paradigm', 'sentinel');
+      if (fs.existsSync(sentinelDir)) {
+        const { SentinelStorage } = await import('@a-company/sentinel');
+        const storage = new SentinelStorage(sentinelDir);
+
+        for (const e of evaluation.evaluations) {
+          storage.recordPracticeEvent({
+            habitId: e.habit.id,
+            habitCategory: e.habit.category,
+            result: e.result,
+            engineer: 'agent',
+            sessionId: `cli-${Date.now().toString(36)}`,
+            symbolsTouched,
+            filesModified,
+            notes: e.reason,
+          });
+          recordedCount++;
+        }
+      }
+    } catch {
+      // Recording is best-effort
+    }
+  }
+
+  // Write/clear .habits-blocking marker
+  const markerPath = path.join(rootDir, '.paradigm', '.habits-blocking');
+  try {
+    if (trigger === 'on-stop' && evaluation.blocksCompletion) {
+      const blocking = evaluation.evaluations
+        .filter((e) => e.result === 'skipped' && e.habit.severity === 'block')
+        .map((e) => `${e.habit.name}: ${e.reason}`);
+      fs.writeFileSync(markerPath, blocking.join('\n'), 'utf8');
+    } else if (trigger === 'on-stop') {
+      if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+    }
+  } catch {
+    // Marker file is best-effort
+  }
+
+  // Output
+  if (options.json) {
+    console.log(JSON.stringify({
+      trigger,
+      evaluation: {
+        total: evaluation.summary.total,
+        followed: evaluation.summary.followed,
+        skipped: evaluation.summary.skipped,
+        partial: evaluation.summary.partial,
+        blockingViolations: evaluation.summary.blockingViolations,
+        blocksCompletion: evaluation.blocksCompletion,
+      },
+      habits: evaluation.evaluations.map((e) => ({
+        id: e.habit.id,
+        name: e.habit.name,
+        category: e.habit.category,
+        severity: e.habit.severity,
+        result: e.result,
+        reason: e.reason,
+        evidence: e.evidence,
+      })),
+      recorded: recordedCount,
+    }, null, 2));
+  } else {
+    printHumanReadableResults(evaluation, recordedCount);
+  }
+
+  // Exit code 1 if blocking violations
+  if (evaluation.blocksCompletion) {
+    process.exitCode = 1;
+  }
+}
+
+function getGitModifiedFiles(rootDir: string): string[] {
+  try {
+    const output = execSync('git diff --name-only HEAD', {
+      cwd: rootDir,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    return output.trim().split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function printHumanReadableResults(
+  evaluation: ReturnType<typeof evaluateHabits>,
+  recordedCount: number
+): void {
+  const { summary } = evaluation;
+
+  console.log(chalk.magenta(`\n  Habits Check (${evaluation.trigger})\n`));
+
+  for (const e of evaluation.evaluations) {
+    const icon = e.result === 'followed'
+      ? chalk.green('PASS')
+      : e.result === 'skipped'
+        ? (e.habit.severity === 'block' ? chalk.red('BLOCK') : chalk.yellow('SKIP'))
+        : chalk.gray('PART');
+
+    const severity = e.habit.severity === 'block'
+      ? chalk.red(e.habit.severity)
+      : e.habit.severity === 'warn'
+        ? chalk.yellow(e.habit.severity)
+        : chalk.gray(e.habit.severity);
+
+    console.log(`  ${icon} ${chalk.white(e.habit.id)} [${severity}]`);
+    console.log(chalk.gray(`       ${e.reason}`));
+  }
+
+  console.log();
+  console.log(chalk.white(`  Summary: ${summary.followed} followed, ${summary.skipped} skipped, ${summary.partial} partial`));
+
+  if (summary.blockingViolations > 0) {
+    console.log(chalk.red(`  ${summary.blockingViolations} blocking violation(s) — exit code 1`));
+  }
+
+  if (recordedCount > 0) {
+    console.log(chalk.gray(`  Recorded ${recordedCount} practice event(s) to Sentinel`));
+  }
+
   console.log();
 }

@@ -1244,6 +1244,8 @@ loreCmd
   .option('--type <type>', 'Filter by type: agent-session, human-note, decision, review, incident, milestone')
   .option('--symbol <symbol>', 'Filter by symbol')
   .option('--tags <tags>', 'Filter by tags (comma-separated)')
+  .option('--from <date>', 'Filter from date (ISO format, e.g., 2026-02-20)')
+  .option('--to <date>', 'Filter to date (ISO format)')
   .option('-l, --limit <number>', 'Number of entries', '20')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -1269,6 +1271,11 @@ loreCmd
   .option('--summary <summary>', 'Entry summary')
   .option('--symbols <symbols>', 'Comma-separated symbols')
   .option('--tags <tags>', 'Comma-separated tags')
+  .option('--files-modified <files>', 'Comma-separated files modified')
+  .option('--files-created <files>', 'Comma-separated files created')
+  .option('--commit <hash>', 'Git commit hash')
+  .option('--learnings <items>', 'Comma-separated learnings')
+  .option('--duration <minutes>', 'Duration in minutes')
   .action(async (options) => {
     const { loreRecordCommand } = await import('./commands/lore/record.js');
     await loreRecordCommand(options);
@@ -1284,6 +1291,39 @@ loreCmd
   .action(async (id, options) => {
     const { loreReviewCommand } = await import('./commands/lore/review.js');
     await loreReviewCommand(id, options);
+  });
+
+loreCmd
+  .command('edit <id>')
+  .description('Edit an existing lore entry')
+  .option('--title <title>', 'New title')
+  .option('--summary <summary>', 'New summary')
+  .option('--type <type>', 'New type: agent-session, human-note, decision, review, incident, milestone')
+  .option('--symbols <symbols>', 'Comma-separated symbols')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--learnings <items>', 'Comma-separated learnings')
+  .action(async (id, options) => {
+    const { loreEditCommand } = await import('./commands/lore/edit.js');
+    await loreEditCommand(id, options);
+  });
+
+loreCmd
+  .command('delete <id>')
+  .description('Delete a lore entry')
+  .option('-y, --yes', 'Skip confirmation')
+  .action(async (id, options) => {
+    const { loreDeleteCommand } = await import('./commands/lore/delete.js');
+    await loreDeleteCommand(id, options);
+  });
+
+loreCmd
+  .command('timeline')
+  .description('Show lore timeline grouped by date with hot symbols and authors')
+  .option('-l, --limit <number>', 'Number of entries', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { loreTimelineCommand } = await import('./commands/lore/timeline.js');
+    await loreTimelineCommand(options);
   });
 
 // Default lore action: launch timeline UI
@@ -1332,6 +1372,19 @@ habitsCmd
   });
 
 habitsCmd
+  .command('check')
+  .description('Evaluate habit compliance for a trigger point')
+  .requiredOption('-t, --trigger <trigger>', 'Trigger: preflight, postflight, on-stop, on-commit')
+  .option('--record', 'Record practice events to Sentinel')
+  .option('--json', 'Output as JSON')
+  .option('--files <files>', 'Comma-separated files modified (default: git diff)')
+  .option('--symbols <symbols>', 'Comma-separated symbols touched')
+  .action(async (options) => {
+    const { habitsCheckCommand } = await import('./commands/habits/index.js');
+    await habitsCheckCommand(options);
+  });
+
+habitsCmd
   .command('add')
   .description('Add a custom habit')
   .requiredOption('--id <id>', 'Habit ID (kebab-case)')
@@ -1341,9 +1394,53 @@ habitsCmd
   .requiredOption('--trigger <trigger>', 'Trigger: preflight, postflight, on-stop, on-commit')
   .option('--severity <severity>', 'Severity: advisory, warn, block', 'advisory')
   .option('--tools <tools>', 'Comma-separated tools to check (for tool-called check type)')
+  .option('--check-type <type>', 'Check type: tool-called, file-exists, file-modified, lore-recorded, symbols-registered, gates-declared, tests-exist, git-clean', 'tool-called')
+  .option('--patterns <patterns>', 'Comma-separated patterns (for file-exists, file-modified, tests-exist check types)')
   .action(async (options) => {
     const { habitsAddCommand } = await import('./commands/habits/index.js');
-    await habitsAddCommand(options);
+    await habitsAddCommand({ ...options, checkType: options.checkType });
+  });
+
+habitsCmd
+  .command('edit <id>')
+  .description('Edit a habit (seed habits: only severity/enabled; custom: all fields)')
+  .option('--name <name>', 'New name')
+  .option('--description <desc>', 'New description')
+  .option('--category <category>', 'New category')
+  .option('--trigger <trigger>', 'New trigger')
+  .option('--severity <severity>', 'New severity: advisory, warn, block')
+  .option('--enabled <bool>', 'Enable or disable: true, false')
+  .option('--check-type <type>', 'New check type')
+  .option('--patterns <patterns>', 'Comma-separated patterns')
+  .option('--tools <tools>', 'Comma-separated tools')
+  .action(async (id, options) => {
+    const { habitsEditCommand } = await import('./commands/habits/index.js');
+    await habitsEditCommand(id, { ...options, checkType: options.checkType });
+  });
+
+habitsCmd
+  .command('remove <id>')
+  .description('Remove a custom habit (seed habits cannot be removed, only disabled)')
+  .option('-y, --yes', 'Skip confirmation')
+  .action(async (id, options) => {
+    const { habitsRemoveCommand } = await import('./commands/habits/index.js');
+    await habitsRemoveCommand(id, options);
+  });
+
+habitsCmd
+  .command('enable <id>')
+  .description('Enable a habit')
+  .action(async (id) => {
+    const { habitsToggleCommand } = await import('./commands/habits/index.js');
+    await habitsToggleCommand(id, 'enable');
+  });
+
+habitsCmd
+  .command('disable <id>')
+  .description('Disable a habit')
+  .action(async (id) => {
+    const { habitsToggleCommand } = await import('./commands/habits/index.js');
+    await habitsToggleCommand(id, 'disable');
   });
 
 // Default habits action (list)
