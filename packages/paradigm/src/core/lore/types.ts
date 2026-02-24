@@ -30,6 +30,13 @@ export interface LoreEntry {
     model?: string; // "claude-opus-4-6" (agents only)
   };
 
+  // Co-authorship
+  assistedBy?: {
+    type: 'agent' | 'tool' | 'human';
+    id: string;
+    role?: string;
+  };
+
   // What
   title: string; // "Built Sentinel Phase 1"
   summary: string; // 2-3 sentence narrative

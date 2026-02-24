@@ -448,22 +448,63 @@ Continue exploring ShopFlow, or start using Paradigm in your own projects!
 }
 
 /**
+ * Checkpoint definition within a tutorial step
+ */
+interface TutorialCheckpoint {
+  type: 'file-exists' | 'symbol-count' | 'gate-count' | 'command-success' | 'bug-fixed';
+  path?: string;
+  command?: string;
+  bug?: string;
+}
+
+/**
+ * A single step in the tutorial curriculum
+ */
+interface CurriculumStep {
+  id: string;
+  title: string;
+  description: string;
+  file: string;
+  checkpoints: TutorialCheckpoint[];
+}
+
+/**
+ * Bug definition in the tutorial curriculum
+ */
+interface CurriculumBug {
+  id: string;
+  title: string;
+  description: string;
+  hint?: string;
+}
+
+/**
+ * Full tutorial curriculum structure
+ */
+interface Curriculum {
+  title: string;
+  description: string;
+  steps: CurriculumStep[];
+  bugs: CurriculumBug[];
+}
+
+/**
  * Load curriculum
  */
-function loadCurriculum(rootDir: string): any {
+function loadCurriculum(rootDir: string): Curriculum {
   const curriculumPath = path.join(rootDir, CURRICULUM_FILE);
   if (!fs.existsSync(curriculumPath)) {
     // Generate default curriculum if it doesn't exist
     generateDefaultCurriculum(rootDir);
   }
-  return yaml.load(fs.readFileSync(curriculumPath, 'utf8'));
+  return yaml.load(fs.readFileSync(curriculumPath, 'utf8')) as Curriculum;
 }
 
 /**
  * Validate checkpoint
  */
-async function validateCheckpoint(rootDir: string, stepId: string, curriculum: any): Promise<boolean> {
-  const step = curriculum.steps.find((s: any) => s.id === stepId);
+async function validateCheckpoint(rootDir: string, stepId: string, curriculum: Curriculum): Promise<boolean> {
+  const step = curriculum.steps.find((s) => s.id === stepId);
   if (!step) {
     return false;
   }
@@ -471,7 +512,7 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: a
   for (const checkpoint of step.checkpoints || []) {
     switch (checkpoint.type) {
       case 'file-exists': {
-        const filePath = path.join(rootDir, checkpoint.path);
+        const filePath = path.join(rootDir, checkpoint.path!);
         if (!fs.existsSync(filePath)) {
           console.log(chalk.red(`❌ Missing: ${checkpoint.path}`));
           return false;
@@ -490,7 +531,7 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: a
       }
       case 'command-success': {
         try {
-          execSync(checkpoint.command, { cwd: rootDir, stdio: 'pipe' });
+          execSync(checkpoint.command!, { cwd: rootDir, stdio: 'pipe' });
         } catch {
           console.log(chalk.red(`❌ Command failed: ${checkpoint.command}`));
           return false;
@@ -499,7 +540,7 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: a
       }
       case 'bug-fixed': {
         const state = loadState(rootDir);
-        if (!state.fixedBugs.includes(checkpoint.bug)) {
+        if (!state.fixedBugs.includes(checkpoint.bug!)) {
           console.log(chalk.red(`❌ Bug not fixed: ${checkpoint.bug}`));
           return false;
         }
@@ -540,7 +581,7 @@ export async function tutorialStartCommand(targetPath: string | undefined): Prom
     console.log(`Completed Steps: ${state.completedSteps.length}/${curriculum.steps.length}\n`);
 
     if (state.currentStep) {
-      const step = curriculum.steps.find((s: any) => s.id === state.currentStep);
+      const step = curriculum.steps.find((s) => s.id === state.currentStep);
       if (step) {
         const stepFile = path.join(rootDir, '.paradigm/tutorial', step.file);
         if (fs.existsSync(stepFile)) {
@@ -621,7 +662,7 @@ export async function tutorialCheckpointCommand(targetPath: string | undefined):
       console.log(chalk.green('✅ All checkpoints passed!\n'));
       
       // Show next step information
-      const currentIndex = curriculum.steps.findIndex((s: any) => s.id === state.currentStep);
+      const currentIndex = curriculum.steps.findIndex((s) => s.id === state.currentStep);
       if (currentIndex < curriculum.steps.length - 1) {
         const nextStep = curriculum.steps[currentIndex + 1];
         const nextStepFile = path.join(rootDir, '.paradigm/tutorial', nextStep.file);
@@ -673,7 +714,7 @@ export async function tutorialNextCommand(targetPath: string | undefined): Promi
     }
 
     // Move to next step
-    const currentIndex = curriculum.steps.findIndex((s: any) => s.id === state.currentStep);
+    const currentIndex = curriculum.steps.findIndex((s) => s.id === state.currentStep);
     if (currentIndex < curriculum.steps.length - 1) {
       state.currentStep = curriculum.steps[currentIndex + 1].id;
       saveState(rootDir, state);
@@ -706,7 +747,7 @@ export async function tutorialStatusCommand(targetPath: string | undefined): Pro
     console.log(`Bugs Fixed: ${state.fixedBugs.length}\n`);
 
     if (state.currentStep) {
-      const step = curriculum.steps.find((s: any) => s.id === state.currentStep);
+      const step = curriculum.steps.find((s) => s.id === state.currentStep);
       if (step) {
         console.log(chalk.cyan(`Current: ${step.title}`));
         console.log(chalk.gray(step.description));

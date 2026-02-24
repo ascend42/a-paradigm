@@ -38,6 +38,7 @@ import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugi
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
+import { toolCache } from '../utils/tool-cache.js';
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -106,7 +107,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         tools: [
           {
             name: 'paradigm_search',
-            description: 'Search for Paradigm symbols by name, description, or tags. Includes fuzzy matching for typo tolerance.',
+            description: 'Search for Paradigm symbols by name, description, or tags. Includes fuzzy matching for typo tolerance. Returns matching symbols with names, paths, types, and descriptions. ~150 tokens.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -137,7 +138,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           },
           {
             name: 'paradigm_ripple',
-            description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes.',
+            description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes. Returns direct and indirect dependents with file paths and dependency depth. ~300 tokens.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -159,7 +160,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           },
           {
             name: 'paradigm_related',
-            description: 'Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on.',
+            description: 'Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on. Returns uses/used-by lists with symbol types. ~150 tokens.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -177,7 +178,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           },
           {
             name: 'paradigm_status',
-            description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features.',
+            description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features. Returns symbol counts by type, project health score, and feature flags. ~100 tokens.',
             inputSchema: {
               type: 'object',
               properties: {},
@@ -189,7 +190,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           },
           {
             name: 'paradigm_gates_for_route',
-            description: 'Suggest which gates should be applied to a route based on patterns in the project',
+            description: 'Suggest which gates should be applied to a route based on patterns in the project. Returns suggested gates with confidence scores and existing patterns. ~150 tokens.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -288,11 +289,14 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             fuzzy?: boolean;
           };
 
-          let results = searchSymbols(ctx.index, query);
-
-          if (type) {
-            results = results.filter(s => s.type === type);
-          }
+          const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}`;
+          let results = await toolCache.getOrCompute(cacheKey, () => {
+            let r = searchSymbols(ctx.index, query);
+            if (type) {
+              r = r.filter(s => s.type === type);
+            }
+            return r;
+          });
 
           // If no exact results and fuzzy is enabled, try fuzzy matching
           let fuzzyMatches: Array<{ symbol: string; distance: number }> = [];
@@ -605,44 +609,46 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_status': {
-          const counts = getSymbolCounts(ctx.index);
-          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          const text = await toolCache.getOrCompute('status', () => {
+            const counts = getSymbolCounts(ctx.index);
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-          // Get some example symbols for each type
-          const examples: Record<string, string[]> = {};
-          for (const type of Object.keys(counts) as Array<keyof typeof counts>) {
-            const symbols = getSymbolsByType(ctx.index, type);
-            examples[type] = symbols.slice(0, 3).map(s => s.symbol);
-          }
+            // Get some example symbols for each type
+            const examples: Record<string, string[]> = {};
+            for (const type of Object.keys(counts) as Array<keyof typeof counts>) {
+              const symbols = getSymbolsByType(ctx.index, type);
+              examples[type] = symbols.slice(0, 3).map(s => s.symbol);
+            }
 
-          // Detect OS for terminal command guidance
-          const platform = os.platform();
-          const isWindows = platform === 'win32';
-          const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
+            // Detect OS for terminal command guidance
+            const platform = os.platform();
+            const isWindows = platform === 'win32';
+            const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
 
-          const text = JSON.stringify({
-            project: ctx.projectName,
-            symbolSystem: 'v2',
-            counts: {
-              '# components': counts.component,
-              '$ flows': counts.flow,
-              '^ gates': counts.gate,
-              '! signals': counts.signal,
-              '~ aspects': counts.aspect,
-            },
-            total,
-            examples,
-            hasPortalYaml: ctx.gateConfig !== null,
-            purposeFiles: ctx.aggregation.purposeFiles.length,
-            note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification',
-            environment: {
-              os: platform,
-              shell,
-              terminalNote: isWindows
-                ? 'Use PowerShell syntax: semicolons for command chaining, backslashes for paths, $env:VAR for env vars'
-                : 'Use Unix syntax: && for command chaining, forward slashes for paths, $VAR for env vars',
-            },
-          }, null, 2);
+            return JSON.stringify({
+              project: ctx.projectName,
+              symbolSystem: 'v2',
+              counts: {
+                '# components': counts.component,
+                '$ flows': counts.flow,
+                '^ gates': counts.gate,
+                '! signals': counts.signal,
+                '~ aspects': counts.aspect,
+              },
+              total,
+              examples,
+              hasPortalYaml: ctx.gateConfig !== null,
+              purposeFiles: ctx.aggregation.purposeFiles.length,
+              note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification',
+              environment: {
+                os: platform,
+                shell,
+                terminalNote: isWindows
+                  ? 'Use PowerShell syntax: semicolons for command chaining, backslashes for paths, $env:VAR for env vars'
+                  : 'Use Unix syntax: && for command chaining, forward slashes for paths, $VAR for env vars',
+              },
+            }, null, 2);
+          });
 
           trackToolCall(text.length, name);
           return {

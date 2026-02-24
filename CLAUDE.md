@@ -271,6 +271,13 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 
 **Rule**: MCP for discovery, files for implementation.
 
+### MCP Tool Caching
+
+Paradigm caches results for `paradigm_search`, `paradigm_status`, and `paradigm_navigate` with a 30-second TTL. This means:
+- Repeated calls within 30 seconds return cached results (faster, zero recomputation)
+- After `paradigm_reindex`, the cache is cleared
+- Configure TTL via `limits.toolCacheTtlMs` in `.paradigm/config.yaml`
+
 ## MCP Resources (On-Demand Content)
 
 Reference content is served via MCP resources instead of being stored locally:
@@ -505,6 +512,10 @@ automatically via `paradigm shift` or `paradigm hooks install`.
 | **Stop hook** | Stop | **BLOCKS** you from finishing if source files were modified without .purpose updates |
 | **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
 | **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
+
+### Plugin Version Compatibility
+
+When installing hooks via `paradigm hooks install`, the system checks `compatibleVersions` in the plugin's `hooks.json`. If the current paradigm version is outside the compatible range, a warning is displayed but installation proceeds.
 
 **If the Stop hook blocks you:**
 1. Update the nearest `.purpose` file for each modified code area

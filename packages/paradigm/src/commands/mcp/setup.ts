@@ -140,7 +140,7 @@ export function detectAllClients(): AIClient[] {
 }
 
 // Config generation
-export function generateMCPConfig(client: AIClient, projectPath: string, projectName: string): object {
+export function generateMCPConfig(client: AIClient, projectPath: string, projectName: string): McpConfigData {
   const serverName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
   
   if (client.id === 'continue') {
@@ -173,45 +173,57 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
   };
 }
 
-function mergeConfig(existing: object, newConfig: object, client: AIClient): object {
+/** Structure of an MCP config file (union of all client formats) */
+interface McpConfigData {
+  experimental?: {
+    modelContextProtocolServers?: Array<{
+      transport: { type: string; command: string; args: string[]; cwd?: string };
+    }>;
+    [key: string]: unknown;
+  };
+  mcpServers?: Record<string, { command: string; args: string[]; cwd?: string }>;
+  [key: string]: unknown;
+}
+
+function mergeConfig(existing: McpConfigData, newConfig: McpConfigData, client: AIClient): McpConfigData {
   if (client.id === 'continue') {
     // Merge Continue format
-    const existingServers = (existing as any)?.experimental?.modelContextProtocolServers || [];
-    const newServers = (newConfig as any)?.experimental?.modelContextProtocolServers || [];
+    const existingServers = existing?.experimental?.modelContextProtocolServers || [];
+    const newServers = newConfig?.experimental?.modelContextProtocolServers || [];
     return {
       ...existing,
       experimental: {
-        ...(existing as any)?.experimental,
+        ...existing?.experimental,
         modelContextProtocolServers: [...existingServers, ...newServers],
       },
     };
   }
-  
+
   // Merge standard MCP format
   return {
     ...existing,
     mcpServers: {
-      ...(existing as any)?.mcpServers,
-      ...(newConfig as any)?.mcpServers,
+      ...existing?.mcpServers,
+      ...newConfig?.mcpServers,
     },
   };
 }
 
-export function writeConfig(client: AIClient, config: object, force: boolean): { success: boolean; message: string } {
+export function writeConfig(client: AIClient, config: McpConfigData, force: boolean): { success: boolean; message: string } {
   const configDir = path.dirname(client.configPath);
-  
+
   // Create directory if needed
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
     log.component('mcp-config').debug('Created config directory', { path: configDir });
   }
-  
+
   // Check for existing config
-  let finalConfig = config;
+  let finalConfig: McpConfigData = config;
   if (fs.existsSync(client.configPath) && !force) {
     try {
       const existingContent = fs.readFileSync(client.configPath, 'utf8');
-      const existingConfig = JSON.parse(existingContent);
+      const existingConfig = JSON.parse(existingContent) as McpConfigData;
       finalConfig = mergeConfig(existingConfig, config, client);
       log.component('mcp-config').debug('Merged with existing config', { client: client.id });
     } catch {
@@ -414,7 +426,7 @@ export async function mcpStatusCommand(options: { json?: boolean }) {
         if (client.id === 'continue') {
           const mcpServers = config?.experimental?.modelContextProtocolServers || [];
           configured = mcpServers.length > 0;
-          servers = mcpServers.map((_: any, i: number) => `server-${i + 1}`);
+          servers = mcpServers.map((_: unknown, i: number) => `server-${i + 1}`);
         } else {
           const mcpServers = config?.mcpServers || {};
           configured = Object.keys(mcpServers).length > 0;
@@ -477,20 +489,26 @@ export function getServersFromConfig(client: AIClient): ServerInfo[] {
     
     if (client.id === 'continue') {
       const mcpServers = config?.experimental?.modelContextProtocolServers || [];
-      return mcpServers.map((server: any, i: number) => ({
-        name: `server-${i + 1}`,
-        cwd: server?.transport?.cwd || 'unknown',
-        command: server?.transport?.command || 'unknown',
-        args: server?.transport?.args || [],
-      }));
+      return mcpServers.map((server: Record<string, unknown>, i: number) => {
+        const transport = server?.transport as Record<string, unknown> | undefined;
+        return {
+          name: `server-${i + 1}`,
+          cwd: (transport?.cwd as string) || 'unknown',
+          command: (transport?.command as string) || 'unknown',
+          args: (transport?.args as string[]) || [],
+        };
+      });
     } else {
       const mcpServers = config?.mcpServers || {};
-      return Object.entries(mcpServers).map(([name, server]: [string, any]) => ({
-        name,
-        cwd: server?.cwd || 'unknown',
-        command: server?.command || 'unknown',
-        args: server?.args || [],
-      }));
+      return Object.entries(mcpServers).map(([name, server]) => {
+        const s = server as Record<string, unknown>;
+        return {
+          name,
+          cwd: (s?.cwd as string) || 'unknown',
+          command: (s?.command as string) || 'unknown',
+          args: (s?.args as string[]) || [],
+        };
+      });
     }
   } catch {
     return [];
@@ -617,8 +635,9 @@ export async function mcpRemoveCommand(serverName: string | undefined, options: 
         // Continue format - remove by cwd match
         const servers = config?.experimental?.modelContextProtocolServers || [];
         const originalLength = servers.length;
-        const filtered = servers.filter((server: any) => {
-          const serverCwd = server?.transport?.cwd || '';
+        const filtered = servers.filter((server: Record<string, unknown>) => {
+          const transport = server?.transport as Record<string, unknown> | undefined;
+          const serverCwd = (transport?.cwd as string) || '';
           // Match by cwd (project path) since Continue doesn't have named servers
           return serverCwd !== projectPath;
         });
@@ -646,7 +665,7 @@ export async function mcpRemoveCommand(serverName: string | undefined, options: 
           // Also try matching by cwd
           let foundByPath = false;
           for (const [name, server] of Object.entries(servers)) {
-            if ((server as any)?.cwd === projectPath) {
+            if ((server as Record<string, unknown>)?.cwd === projectPath) {
               delete servers[name];
               config.mcpServers = servers;
               modified = true;

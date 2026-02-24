@@ -216,6 +216,46 @@ Checking Paradigm setup...
 
 ---
 
+## paradigm lint
+
+**What it does:** Validate `.purpose` files for schema errors and optionally auto-populate coverage.
+
+```bash
+# Lint all .purpose files
+paradigm lint
+
+# Auto-fix common issues (markdown conversion, quote escaping)
+paradigm lint --fix
+
+# Strict mode — warnings also fail
+paradigm lint --strict
+
+# JSON output for CI
+paradigm lint --json
+
+# Discover undocumented source directories
+paradigm lint --auto-populate
+
+# Write draft .purpose files for undocumented directories
+paradigm lint --auto-populate --fix
+```
+
+**Options:**
+- `-f, --fix` — Auto-fix issues where possible
+- `-s, --strict` — Treat warnings as errors
+- `-q, --quiet` — Suppress output except errors
+- `--json` — Output as JSON for CI integration
+- `--auto-populate` — Scan source dirs for undocumented components and suggest `.purpose` entries. With `--fix`, writes draft files.
+
+**Auto-populate details:**
+
+The `--auto-populate` flag scans for source directories (src, lib, features, components, services, etc.) that lack `.purpose` files. For each undiscovered directory, it:
+1. Lists the source files as potential `#component` entries
+2. Generates a draft `.purpose` file with TODO descriptions
+3. With `--fix`, writes the draft files to disk
+
+---
+
 ## paradigm watch
 
 **What it does:** Watch for changes and auto-sync.
@@ -392,6 +432,26 @@ List all gates defined in `portal.yaml`.
 ```bash
 paradigm portal list
 ```
+
+### paradigm portal export
+
+Export portal configuration in json, csv, or markdown format.
+
+```bash
+# JSON (default)
+paradigm portal export
+
+# CSV for spreadsheets
+paradigm portal export --format csv
+
+# Markdown for documentation
+paradigm portal export --format markdown --output docs/portal.md
+```
+
+**Options:**
+- `-f, --format <format>` — Output format: `json` (default), `csv`, `markdown`
+- `-o, --output <path>` — Write output to file instead of stdout
+- `-c, --config <path>` — Path to portal.yaml (default: `./portal.yaml`)
 
 ---
 
@@ -750,13 +810,26 @@ paradigm history validate \
 
 ### paradigm hooks install
 
-Install git hooks for automatic history capture.
+Install git hooks for automatic history capture. Validates bash syntax before writing hooks.
 
 ```bash
 paradigm hooks install
 paradigm hooks install --force
 paradigm hooks install --post-commit  # Only post-commit hook
+paradigm hooks install --dry-run      # Preview what would be installed
 ```
+
+**Options:**
+```
+-f, --force     Overwrite existing hooks
+--post-commit   Only install post-commit hook
+--dry-run       Show what would be installed without making changes
+```
+
+**Dry-run output** shows:
+- Git hooks that would be written (with paths)
+- Claude Code hooks that would be added to settings.json
+- Cursor hooks that would be added to .cursor/hooks/
 
 ### paradigm hooks uninstall
 
@@ -764,6 +837,12 @@ Remove paradigm git hooks.
 
 ```bash
 paradigm hooks uninstall
+paradigm hooks uninstall --dry-run    # Preview what would be removed
+```
+
+**Options:**
+```
+--dry-run       Show what would be removed without making changes
 ```
 
 ### paradigm hooks status

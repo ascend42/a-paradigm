@@ -17,6 +17,27 @@ interface WatchOptions {
   open?: boolean;
 }
 
+interface ExportOptions {
+  format?: 'json' | 'csv' | 'markdown';
+  output?: string;
+  config?: string;
+}
+
+/** Typed interface for the dynamically-imported ViewerServer constructor */
+interface ViewerServerConstructor {
+  new (opts: { port: number; uiPort: number; configPath: string }): {
+    start(): Promise<void>;
+  };
+}
+
+/** Typed interface for the dynamically-imported portal reporter module */
+interface PortalReporterModule {
+  generateReport(session: unknown, options: unknown[]): unknown;
+  formatMarkdown(report: unknown): string;
+  formatSlack(report: unknown): unknown;
+  formatDiscord(report: unknown): unknown;
+}
+
 export async function portalWatchCommand(targetPath?: string, options: WatchOptions = {}) {
   const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
   const port = parseInt(options.port || '42196', 10);   // Marathon + 1 (WebSocket)
@@ -35,11 +56,11 @@ export async function portalWatchCommand(targetPath?: string, options: WatchOpti
     }
 
     // Dynamically import the viewer server
-    let ViewerServer: any;
+    let ViewerServer: ViewerServerConstructor;
     try {
       // @ts-expect-error - optional dependency, handled with try/catch
       const viewerModule = await import('@a-company/portal-viewer');
-      ViewerServer = viewerModule.ViewerServer;
+      ViewerServer = viewerModule.ViewerServer as ViewerServerConstructor;
     } catch (err) {
       spinner.fail('Portal Viewer package not found');
       console.log('');
@@ -112,10 +133,10 @@ export async function portalReportCommand(sessionPath?: string, options: { forma
     const session = JSON.parse(sessionData);
 
     // Import reporter
-    let reporter: any;
+    let reporter: PortalReporterModule;
     try {
       // @ts-expect-error - optional dependency, handled with try/catch
-      reporter = await import('@a-company/portal-viewer/session');
+      reporter = await import('@a-company/portal-viewer/session') as PortalReporterModule;
     } catch {
       spinner.fail('Portal Viewer package not found');
       console.log(chalk.yellow('Install @a-company/portal-viewer to use the reporter.'));
@@ -155,5 +176,96 @@ export async function portalReportCommand(sessionPath?: string, options: { forma
     spinner.fail('Failed to generate report');
     console.error(chalk.red((error as Error).message));
     process.exit(1);
+  }
+}
+
+/**
+ * paradigm portal export - Export portal configuration in various formats
+ */
+export async function portalExportCommand(targetPath?: string, options: ExportOptions = {}) {
+  const rootDir = targetPath ? path.resolve(targetPath) : process.cwd();
+  const configPath = options.config || path.join(rootDir, 'portal.yaml');
+  const format = options.format || 'json';
+
+  if (!fs.existsSync(configPath)) {
+    console.error(chalk.red(`portal.yaml not found at ${configPath}`));
+    process.exit(1);
+  }
+
+  const { parse } = await import('yaml');
+  const raw = fs.readFileSync(configPath, 'utf8');
+  const config = parse(raw);
+
+  const gates = config.gates || {};
+  const routes = config.routes || {};
+
+  let output: string;
+
+  switch (format) {
+    case 'csv': {
+      const lines = ['route,method,gates'];
+      for (const [routeKey, routeGates] of Object.entries(routes)) {
+        const parts = routeKey.split(' ');
+        const method = parts.length > 1 ? parts[0] : 'ANY';
+        const routePath = parts.length > 1 ? parts.slice(1).join(' ') : routeKey;
+        const gateList = Array.isArray(routeGates)
+          ? (routeGates as string[]).join(';')
+          : String(routeGates);
+        lines.push(`${routePath},${method},"${gateList}"`);
+      }
+      output = lines.join('\n');
+      break;
+    }
+
+    case 'markdown': {
+      const lines = [
+        `# Portal Configuration`,
+        '',
+        `**Version:** ${config.version || 'unknown'}`,
+        '',
+        '## Gates',
+        '',
+        '| Gate | Description | Check |',
+        '|------|-------------|-------|',
+      ];
+      for (const [gateId, gate] of Object.entries(gates)) {
+        const g = gate as { description?: string; check?: string };
+        lines.push(`| ^${gateId} | ${g.description || ''} | \`${g.check || ''}\` |`);
+      }
+      lines.push('', '## Routes', '', '| Route | Gates |', '|-------|-------|');
+      for (const [routeKey, routeGates] of Object.entries(routes)) {
+        const gateList = Array.isArray(routeGates)
+          ? (routeGates as string[]).join(', ')
+          : String(routeGates);
+        lines.push(`| ${routeKey} | ${gateList} |`);
+      }
+      output = lines.join('\n');
+      break;
+    }
+
+    case 'json':
+    default: {
+      const exported = {
+        version: config.version,
+        exportedAt: new Date().toISOString(),
+        gates: Object.entries(gates).map(([id, g]) => ({
+          id,
+          ...(g as Record<string, unknown>),
+        })),
+        routes: Object.entries(routes).map(([route, routeGates]) => ({
+          route,
+          gates: routeGates,
+        })),
+      };
+      output = JSON.stringify(exported, null, 2);
+      break;
+    }
+  }
+
+  if (options.output) {
+    fs.writeFileSync(options.output, output, 'utf8');
+    console.log(chalk.green(`Exported portal config to ${chalk.cyan(options.output)} (${format})`));
+  } else {
+    console.log(output);
   }
 }

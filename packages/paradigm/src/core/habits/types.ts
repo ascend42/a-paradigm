@@ -33,7 +33,11 @@ export type HabitCheckType =
   | 'symbols-registered'
   | 'gates-declared'
   | 'tests-exist'
-  | 'git-clean';
+  | 'git-clean'
+  | 'commit-message-format'
+  | 'flow-coverage'
+  | 'context-checked'
+  | 'aspect-anchored';
 
 export interface HabitCheckParams {
   /** For tool-called: list of tool names (any one suffices) */
@@ -44,6 +48,14 @@ export interface HabitCheckParams {
   minSymbols?: number;
   /** For gates-declared: whether portal.yaml must have route entries */
   requireRoutes?: boolean;
+  /** For commit-message-format: regex pattern(s) the commit message must match */
+  messagePatterns?: string[];
+  /** For flow-coverage: minimum number of flow steps to require for multi-component changes */
+  minSteps?: number;
+  /** For context-checked: list of context tools (paradigm_context_check, paradigm_session_recover, etc.) */
+  contextTools?: string[];
+  /** For aspect-anchored: whether to check anchor validity for touched aspects */
+  checkAnchors?: boolean;
 }
 
 export interface HabitCheck {
@@ -151,6 +163,12 @@ export interface EvaluationContext {
   taskDescription?: string;
   /** Whether git working tree is clean (all changes committed) */
   gitClean?: boolean;
+  /** Last commit message (for commit-message-format check) */
+  commitMessage?: string;
+  /** Whether flows exist for multi-component changes (for flow-coverage check) */
+  hasFlowCoverage?: boolean;
+  /** Whether aspects have valid anchors (for aspect-anchored check) */
+  aspectAnchorsValid?: boolean;
 }
 
 export interface EvaluationResult {

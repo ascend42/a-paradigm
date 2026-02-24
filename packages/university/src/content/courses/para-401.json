@@ -8,11 +8,12 @@
       "title": "MCP Tools Overview",
       "content": "## MCP Tools Overview\n\nModel Context Protocol (MCP) tools are the primary interface between AI agents and the Paradigm framework. Rather than reading raw files to understand project structure, agents call MCP tools that return structured, token-efficient responses. Understanding the full tool inventory and when to use each tool is fundamental to effective Paradigm orchestration.\n\nParadigm exposes approximately 15 tool modules, organized into four categories:\n\n### Discovery Tools\nThese tools help agents understand the codebase without reading files directly.\n\n- **`paradigm_search`** (~150 tokens) -- Fuzzy search across symbol names, descriptions, and tags. Supports type filtering (component, flow, gate, signal, aspect).\n- **`paradigm_navigate`** (~200 tokens) -- Three intents: `find` (symbol lookup), `explore` (area browsing), `context` (task-based discovery).\n- **`paradigm_ripple`** (~300 tokens) -- Dependency analysis showing what depends on a symbol, 1-5 levels deep.\n- **`paradigm_related`** (~200 tokens) -- All symbols connected to a given symbol, both upstream and downstream.\n\n### Knowledge Tools\nThese tools access the project's institutional memory.\n\n- **`paradigm_wisdom_context`** -- Retrieves preferences, antipatterns, and decisions for specified symbols.\n- **`paradigm_wisdom_record`** -- Captures new antipatterns or architectural decisions.\n- **`paradigm_wisdom_expert`** -- Identifies human experts for symbols or areas.\n- **`paradigm_history_context`** -- Retrieves implementation history for symbols.\n- **`paradigm_history_record`** -- Logs implementation events.\n- **`paradigm_history_fragility`** -- Checks stability scores.\n\n### Validation Tools\nThese tools verify metadata integrity.\n\n- **`paradigm_purpose_validate`** -- Validates `.purpose` files and optionally `portal.yaml`.\n- **`paradigm_flow_validate`** -- Validates flow definitions against the codebase.\n- **`paradigm_aspect_check`** -- Verifies that aspects have valid code anchors.\n\n### Management Tools\nThese tools modify Paradigm metadata.\n\n- **`paradigm_purpose_add_component`**, **`paradigm_purpose_add_signal`**, **`paradigm_purpose_add_flow`**, etc. -- Add symbols to `.purpose` files.\n- **`paradigm_portal_add_gate`**, **`paradigm_portal_add_route`** -- Manage `portal.yaml` gates and routes.\n- **`paradigm_purpose_rename`** -- Rename symbols across all `.purpose` files.\n- **`paradigm_tags`**, **`paradigm_tags_suggest`** -- Manage the tag bank.\n\n### Token Economics\n\nEvery tool call has a token cost. The general principle is that MCP queries are 5-20x cheaper than reading files:\n\n| Operation | Approximate Cost |\n|---|---|\n| `paradigm_status` | ~100 tokens |\n| `paradigm_search` | ~150 tokens |\n| `paradigm_navigate` | ~200 tokens |\n| `paradigm_ripple` | ~300 tokens |\n| Reading a small file | ~500 tokens |\n| Reading a large file | ~2000+ tokens |\n\nThe rule of thumb: **use MCP tools for discovery and knowledge retrieval; use file reads only when you need exact source code for implementation.** An agent that reads 10 files to understand a feature (10,000+ tokens) versus one that calls `paradigm_navigate` with context intent (200 tokens) has a 50x cost difference for the same information.\n\n### Practice Tools\n\nThese tools manage behavioral discipline and project memory.\n\n**Habits Tools:**\n- **`paradigm_habits_list`** -- List habit definitions with filters (category, trigger, severity, enabled status).\n- **`paradigm_habits_check`** -- Evaluate and record practice compliance. Triggers: `preflight`, `postflight`, `on-stop`, `on-commit`.\n- **`paradigm_habits_status`** -- Practice profile with compliance rates, category breakdowns, trends, and incident correlations.\n- **`paradigm_practice_context`** -- Proactive habit warnings before modifying symbols. Returns relevant habits and recent compliance rates.\n\n**Lore Tools:**\n- **`paradigm_lore_search`** -- Search lore entries by symbol, author, date range, tags, type, and review status.\n- **`paradigm_lore_record`** -- Record new entries (agent sessions, decisions, milestones, incidents, reviews).\n- **`paradigm_lore_get`** -- Fetch a single entry by ID with full detail.\n- **`paradigm_lore_update`** -- Update an existing entry's fields (title, summary, type, symbols, tags, learnings).\n- **`paradigm_lore_delete`** -- Delete an entry by ID. Requires `confirm: true` to prevent accidental deletion.\n- **`paradigm_lore_timeline`** -- Timeline overview with recent entries, hot symbols, and active authors.",
       "keyConcepts": [
-        "Four tool categories: discovery, knowledge, validation, management",
-        "Token economics of MCP vs file reads",
+        "Four tool categories: discovery, knowledge, validation, management — plus practice tools (habits + lore)",
+        "Token economics of MCP vs file reads — each tool description now includes approximate token cost",
         "paradigm_search, paradigm_navigate, paradigm_ripple as core discovery tools",
         "Management tools for .purpose and portal.yaml editing",
-        "5-20x token efficiency over file reads"
+        "5-20x token efficiency over file reads",
+        "Enhanced tool descriptions include return data shape, usage guidance, and token cost estimates"
       ],
       "quiz": [
         {
@@ -633,6 +634,59 @@
           },
           "correct": "C",
           "explanation": "The distinction is habit, not knowledge. Both masters and practitioners know the tools. The master has internalized the framework so deeply that reaching for paradigm_ripple before a modification is reflexive, not deliberate. The question ('what depends on this?') triggers the tool automatically."
+        }
+      ]
+    },
+    {
+      "id": "agent-interop",
+      "title": "Agent Interoperability",
+      "content": "## AGENTS.md and llms.txt\n\nParadigm generates two standard files that make projects accessible to any AI agent, regardless of which IDE or platform is used.\n\n### AGENTS.md — Universal Agent Instructions\n\nAGENTS.md is a cross-IDE standard backed by Google, OpenAI, Cursor, and others. It is a pure Markdown file at the repo root containing everything an AI agent needs to be productive:\n\n- **Symbol system** — the five operational symbols and conventions\n- **MCP tools reference** — when to use each tool and what it returns\n- **Workflow protocol** — before/after task checklists\n- **Commit conventions** — format with Symbols: trailer\n- **Session recovery** — how to pick up where a previous agent left off\n- **Habits compliance** — behavioral expectations at each workflow stage\n- **Lore recording** — when and how to record project history\n- **Session checkpoints** — crash recovery protocol\n\nRegenerate with: `paradigm sync agents`\n\nParadigm enriches AGENTS.md with sections that most projects don't include — habits, lore recording, checkpoint protocol, and llms.txt reference. This gives agents a richer behavioral contract than bare instructions.\n\n### llms.txt — LLM-Readable Project Summary\n\nThe llms.txt standard provides a plain-text project summary optimized for LLM consumption. Unlike AGENTS.md (which contains instructions), llms.txt contains facts:\n\n- Project name and overview\n- Symbol table (prefixes, names, descriptions)\n- Key files from navigator.yaml\n- Defined flows and their triggers\n- Gates and protected routes\n- Conventions\n\nRegenerate with: `paradigm sync-llms`\n\nllms.txt is useful for RAG pipelines, chat interfaces, and any context where a quick project overview is needed without the full instruction set.\n\n### When to Use Which\n\n| File | Purpose | Audience | Content |\n|------|---------|----------|---------|\n| AGENTS.md | Agent instructions | AI agents working on the repo | How to behave, tools to use, conventions to follow |\n| llms.txt | Project summary | Any LLM consuming project info | What the project is, what exists, how it is structured |\n| CLAUDE.md | Claude-specific instructions | Claude Code / Claude API | Superset of AGENTS.md with Claude-specific features |\n\nAll three can coexist. `paradigm sync --all` regenerates AGENTS.md alongside other IDE files. `paradigm sync-llms` handles llms.txt separately because it is not IDE-specific.\n\n## Enhanced MCP Tool Descriptions\n\nEvery MCP tool description now includes three pieces of information that help agents make better decisions:\n\n1. **What it does** — the core functionality\n2. **What it returns** — the shape of the response data\n3. **Token cost** — approximate cost in tokens (~100 to ~400)\n\nThis information is embedded directly in the tool description string, so agents can evaluate tool choice before calling. For example, an agent deciding between `paradigm_search` (~150 tokens) and reading 5 files (~2500 tokens) can make an informed cost/benefit decision.\n\n## The Fresh Context Principle\n\nWhen agents are spawned in isolation (via `paradigm_orchestrate_inline` or IDE task tools), they start with a blank context window. They must orient themselves before working. Paradigm's interop files solve this:\n\n1. **Agent reads AGENTS.md** — learns the symbol system, tools, and workflow\n2. **Agent calls `paradigm_session_recover`** — gets previous session breadcrumbs\n3. **Agent calls `paradigm_navigate` with context intent** — finds relevant code\n\nThis three-step orientation costs ~500 tokens total and gives the agent full context. Without these files, the agent would need to read dozens of source files to achieve the same understanding.",
+      "keyConcepts": [
+        "AGENTS.md is a universal AI agent instruction file generated by 'paradigm sync agents'",
+        "llms.txt is a plain-text project summary for LLM consumption, generated by 'paradigm sync-llms'",
+        "AGENTS.md contains instructions (how to behave), llms.txt contains facts (what exists)",
+        "Enhanced MCP tool descriptions include return data shape and token cost estimates",
+        "The Fresh Context Principle: orientation via AGENTS.md + session_recover + navigate costs ~500 tokens"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A new AI agent is spawned in isolation to implement a feature. What is the most token-efficient orientation sequence?",
+          "choices": {
+            "A": "Read all .purpose files in the project",
+            "B": "Read AGENTS.md, call paradigm_session_recover, call paradigm_navigate with context intent",
+            "C": "Read package.json, then explore the src/ directory",
+            "D": "Call paradigm_search for every symbol type",
+            "E": "Read CLAUDE.md, then read every file in .paradigm/"
+          },
+          "correct": "B",
+          "explanation": "The Fresh Context Principle: AGENTS.md provides instructions and conventions, paradigm_session_recover provides previous session context, and paradigm_navigate with context intent provides task-relevant files. Total cost: ~500 tokens. Reading all .purpose files or exploring directories would cost thousands of tokens for the same information."
+        },
+        {
+          "id": "q2",
+          "question": "What is the key difference between AGENTS.md and llms.txt?",
+          "choices": {
+            "A": "AGENTS.md is for Claude, llms.txt is for other LLMs",
+            "B": "AGENTS.md contains instructions (how to behave), llms.txt contains facts (what exists)",
+            "C": "llms.txt replaces AGENTS.md in newer projects",
+            "D": "AGENTS.md is human-readable, llms.txt is machine-only",
+            "E": "They contain identical information in different formats"
+          },
+          "correct": "B",
+          "explanation": "AGENTS.md is prescriptive — it tells agents what tools to use, what conventions to follow, and what workflow to observe. llms.txt is descriptive — it tells agents what symbols exist, what flows are defined, and how the project is structured. Both serve distinct purposes and can coexist."
+        },
+        {
+          "id": "q3",
+          "question": "Why do enhanced MCP tool descriptions include token cost estimates?",
+          "choices": {
+            "A": "To bill agents for tool usage",
+            "B": "To enforce budget limits on agents",
+            "C": "So agents can make informed cost/benefit decisions when choosing between tools and file reads",
+            "D": "Token costs are required by the MCP specification",
+            "E": "To discourage agents from using expensive tools"
+          },
+          "correct": "C",
+          "explanation": "Token cost estimates enable agents to evaluate tool selection before calling. An agent deciding between paradigm_search (~150 tokens) and reading 5 files (~2500 tokens) can make an informed cost/benefit decision. The goal is efficiency, not restriction."
         }
       ]
     }

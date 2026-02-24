@@ -196,6 +196,67 @@
           "description": "Save a session checkpoint for crash recovery. Captures phase, context, modified files, symbols, and decisions. Stored in .paradigm/session-checkpoint.json with 7-day expiry.",
           "when": "At every phase transition — after planning, during implementation, before validation, and on completion.",
           "example": "paradigm_session_checkpoint({ phase: 'implementing', context: 'Adding JWT auth middleware', modifiedFiles: ['src/middleware/auth.ts'], symbolsTouched: ['#auth-middleware'] })"
+        },
+        {
+          "id": "paradigm-sentinel-record",
+          "name": "paradigm_sentinel_record",
+          "description": "Record a symbolic incident mapping a runtime error to Paradigm symbols. Captures error details, symbolic context, environment, and optional flow position.",
+          "when": "When an error occurs and you want to track it in Sentinel with full symbolic context for pattern matching and triage.",
+          "example": "paradigm_sentinel_record({ error: { message: 'Stripe 429', type: 'RateLimitError' }, symbols: { component: '#payment-service' }, environment: 'production' })"
+        }
+      ]
+    },
+    {
+      "id": "habit-check-types",
+      "title": "Habit Check Types",
+      "cards": [
+        {
+          "id": "tool-called",
+          "name": "tool-called",
+          "description": "Verifies that specified MCP tools were invoked during the session. Any one tool from the list suffices.",
+          "when": "For discovery habits (ripple, navigate), collaboration habits (wisdom), and verification habits (postflight)."
+        },
+        {
+          "id": "file-exists",
+          "name": "file-exists",
+          "description": "Verifies that files matching glob patterns exist. Used for .purpose file coverage and test existence.",
+          "when": "For documentation habits (.purpose coverage) and testing habits (test file existence)."
+        },
+        {
+          "id": "lore-recorded",
+          "name": "lore-recorded",
+          "description": "Verifies a lore entry was created during sessions that modify 3+ source files.",
+          "when": "For documentation habits that enforce lore recording for significant sessions."
+        },
+        {
+          "id": "gates-declared",
+          "name": "gates-declared",
+          "description": "Verifies routes added during the session have corresponding gate declarations in portal.yaml.",
+          "when": "For security habits that ensure every API endpoint has authorization gates."
+        },
+        {
+          "id": "commit-message-format",
+          "name": "commit-message-format",
+          "description": "Verifies commit messages match required regex patterns — default: conventional commit type(#symbol): prefix and Symbols: trailer.",
+          "when": "On-commit trigger to enforce consistent, symbol-aware commit messages."
+        },
+        {
+          "id": "flow-coverage",
+          "name": "flow-coverage",
+          "description": "Verifies that changes spanning 3+ components have a documented $flow or that flow tools were invoked.",
+          "when": "Postflight trigger to ensure multi-component changes are documented as flows."
+        },
+        {
+          "id": "context-checked",
+          "name": "context-checked",
+          "description": "Verifies that session context/recovery tools (paradigm_context_check, paradigm_session_recover, paradigm_session_checkpoint) were called.",
+          "when": "Preflight trigger to encourage session continuity and context awareness."
+        },
+        {
+          "id": "aspect-anchored",
+          "name": "aspect-anchored",
+          "description": "Verifies that aspects (~) touched during the session have valid code anchors via paradigm_aspect_check.",
+          "when": "Postflight trigger to ensure aspect anchors remain valid after code changes."
         }
       ]
     },
@@ -268,6 +329,36 @@
           "command": "paradigm lore <subcommand>",
           "description": "Manage project lore — the timeline of sessions, decisions, milestones, and incidents. Subcommands: list (show recent entries), show (display a specific entry), record (create a new entry interactively), review (add review scores to an entry).",
           "flags": ["list [--limit 10] [--type agent-session]: List recent entries", "show <id>: Display a specific lore entry", "record [--type agent-session]: Record a new entry", "review <id>: Add completeness and quality scores to an entry"]
+        },
+        {
+          "id": "portal-export",
+          "command": "paradigm portal export",
+          "description": "Export portal configuration in machine-readable formats. Outputs gates and routes for CI audits, documentation, or spreadsheet analysis.",
+          "flags": ["-f, --format <format>: Output format — json (default), csv, markdown", "-o, --output <file>: Write to file instead of stdout", "-c, --config <path>: Path to portal.yaml (default: ./portal.yaml)"]
+        },
+        {
+          "id": "lint",
+          "command": "paradigm lint",
+          "description": "Check .purpose files for completeness — validates required fields, symbol formatting, tag references. With --auto-populate, scans source directories for undocumented components and suggests draft .purpose files.",
+          "flags": ["--fix: Auto-fix lint issues (or write draft .purpose files with --auto-populate)", "--strict: Treat warnings as errors", "--auto-populate: Scan source dirs for undocumented components and suggest .purpose drafts"]
+        },
+        {
+          "id": "sync-llms",
+          "command": "paradigm sync-llms",
+          "description": "Generate llms.txt at the project root — a plain-text project summary optimized for LLM consumption. Includes symbols, key files, flows, gates, and conventions.",
+          "flags": ["-o, --output <path>: Output path (default: ./llms.txt)"]
+        },
+        {
+          "id": "flow-diagram",
+          "command": "paradigm flow diagram <flowId>",
+          "description": "Generate a Mermaid flowchart diagram for a flow. Gates appear as diamonds, actions as rectangles, signals as rounded boxes. Color-coded by step type.",
+          "flags": ["-o, --output <path>: Write diagram to file instead of stdout"]
+        },
+        {
+          "id": "global-clean",
+          "command": "paradigm global clean",
+          "description": "Remove old files from ~/.paradigm/ (Global Brain rotation). Scans wisdom, lore, history, and cache subdirectories for files older than the specified duration.",
+          "flags": ["--older-than <duration>: Duration threshold (default: 90d). Supports d (days), h (hours), m (minutes)", "-n, --dry-run: Show what would be deleted without deleting"]
         }
       ]
     },
@@ -390,6 +481,48 @@
             "4. Inform the user of the handoff file location",
             "5. In the new session: call paradigm_session_recover to pick up where you left off"
           ]
+        }
+      ]
+    },
+    {
+      "id": "configurable-limits",
+      "title": "Configurable Limits",
+      "cards": [
+        {
+          "id": "limits-overview",
+          "name": "limits in config.yaml",
+          "description": "Paradigm supports configurable limits in .paradigm/config.yaml under a `limits` key. These tune cache TTLs, breadcrumb retention, and checkpoint lifetimes.",
+          "when": "When default values don't fit your workflow — e.g., longer cache TTL for stable projects, shorter checkpoint expiry for fast-moving teams."
+        },
+        {
+          "id": "habits-cache-ttl",
+          "name": "habitsCacheTtlMs",
+          "description": "Habits cache TTL in milliseconds. Controls how long loaded habit definitions are cached before being re-read from YAML files. Default: 30000 (30 seconds).",
+          "when": "Set higher for stable habit configs; set to 0 to always re-read."
+        },
+        {
+          "id": "tool-cache-ttl",
+          "name": "toolCacheTtlMs",
+          "description": "MCP tool cache TTL in milliseconds. Controls how long paradigm_search, paradigm_status, and paradigm_navigate results are cached. Default: 30000 (30 seconds).",
+          "when": "Set higher for large, stable projects; set to 0 to disable caching."
+        },
+        {
+          "id": "thread-trail-max",
+          "name": "threadTrailMax",
+          "description": "Maximum thread trail/breadcrumb entries retained in thread output. Default: 10.",
+          "when": "Increase for complex sessions that need more trail context."
+        },
+        {
+          "id": "breadcrumbs-max",
+          "name": "breadcrumbsMax",
+          "description": "Maximum session breadcrumbs retained by the session tracker. Default: 50.",
+          "when": "Increase for very long sessions; decrease to reduce checkpoint file size."
+        },
+        {
+          "id": "checkpoint-max-age",
+          "name": "checkpointMaxAgeMs",
+          "description": "Maximum age of session checkpoints before they expire. Default: 604800000 (7 days).",
+          "when": "Shorten for teams that don't want stale recovery data; lengthen for projects with infrequent sessions."
         }
       ]
     }

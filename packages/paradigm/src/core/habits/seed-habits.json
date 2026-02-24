@@ -146,5 +146,65 @@
       }
     },
     "enabled": true
+  },
+  {
+    "id": "commit-message-symbols",
+    "name": "Commit Message Format",
+    "description": "Commit messages should follow type(#symbol): format and include a Symbols: trailer",
+    "category": "documentation",
+    "trigger": "on-commit",
+    "severity": "advisory",
+    "check": {
+      "type": "commit-message-format",
+      "params": {
+        "messagePatterns": ["^(feat|fix|refactor|chore|docs|test|style|perf|ci|build)\\(", "Symbols:"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "flow-coverage-for-multi-component",
+    "name": "Flow Coverage",
+    "description": "Changes spanning 3+ components should have a documented $flow",
+    "category": "documentation",
+    "trigger": "postflight",
+    "severity": "advisory",
+    "check": {
+      "type": "flow-coverage",
+      "params": {
+        "minSteps": 3
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "context-session-awareness",
+    "name": "Context Awareness",
+    "description": "Use session recovery or context check tools for session continuity",
+    "category": "discovery",
+    "trigger": "preflight",
+    "severity": "advisory",
+    "check": {
+      "type": "context-checked",
+      "params": {
+        "contextTools": ["paradigm_context_check", "paradigm_session_recover", "paradigm_session_checkpoint"]
+      }
+    },
+    "enabled": true
+  },
+  {
+    "id": "aspect-anchors-valid",
+    "name": "Aspect Anchors Valid",
+    "description": "Aspects touched during the session should have their code anchors validated",
+    "category": "verification",
+    "trigger": "postflight",
+    "severity": "advisory",
+    "check": {
+      "type": "aspect-anchored",
+      "params": {
+        "checkAnchors": true
+      }
+    },
+    "enabled": true
   }
 ]

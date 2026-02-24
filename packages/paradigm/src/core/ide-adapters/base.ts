@@ -509,6 +509,93 @@ export function generateCheckpointProtocol(): string {
 }
 
 /**
+ * Generate habits compliance section for AGENTS.md
+ */
+export function generateHabitsSection(): string {
+  const lines: string[] = [];
+
+  lines.push('## Habits Compliance');
+  lines.push('');
+  lines.push('Paradigm tracks behavioral habits — repeatable practices that improve code quality.');
+  lines.push('');
+  lines.push('### When to Check Habits');
+  lines.push('');
+  lines.push('| Trigger | When | Tool |');
+  lines.push('|---------|------|------|');
+  lines.push('| `preflight` | Before starting implementation | `paradigm_habits_check({ trigger: "preflight" })` |');
+  lines.push('| `postflight` | After completing implementation | `paradigm_habits_check({ trigger: "postflight" })` |');
+  lines.push('| `on-stop` | Before ending a session | `paradigm_habits_check({ trigger: "on-stop" })` |');
+  lines.push('');
+  lines.push('### Key Habit Categories');
+  lines.push('');
+  lines.push('| Category | Examples |');
+  lines.push('|----------|----------|');
+  lines.push('| Discovery | Call `paradigm_ripple` before modifying symbols |');
+  lines.push('| Security | Declare gates for new routes in portal.yaml |');
+  lines.push('| Documentation | Update .purpose files for modified components |');
+  lines.push('| Quality | Record lore for sessions modifying 3+ files |');
+  lines.push('');
+  lines.push('Use `paradigm_practice_context` before modifying symbols to get habit-aware warnings.');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate lore recording section for AGENTS.md
+ */
+export function generateLoreSection(): string {
+  const lines: string[] = [];
+
+  lines.push('## Lore Recording');
+  lines.push('');
+  lines.push('Lore captures the project timeline — sessions, decisions, milestones, and incidents.');
+  lines.push('');
+  lines.push('### When to Record Lore');
+  lines.push('');
+  lines.push('| Type | When | Example |');
+  lines.push('|------|------|---------|');
+  lines.push('| `agent-session` | After modifying 3+ files | "Added JWT auth to /api/projects" |');
+  lines.push('| `decision` | After making architectural choices | "Chose Redis over Memcached for caching" |');
+  lines.push('| `milestone` | After completing a significant feature | "v2.0 migration complete" |');
+  lines.push('| `incident` | After resolving a production issue | "Fixed OOM in payment worker" |');
+  lines.push('');
+  lines.push('### Recording');
+  lines.push('');
+  lines.push('```');
+  lines.push('paradigm_lore_record({');
+  lines.push('  type: "agent-session",');
+  lines.push('  title: "Short description of work done",');
+  lines.push('  summary: "Detailed summary of changes...",');
+  lines.push('  symbols_touched: ["#component", "^gate"]');
+  lines.push('})');
+  lines.push('```');
+  lines.push('');
+  lines.push('Use `paradigm_lore_timeline` at session start for project history orientation.');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate llms.txt reference section for AGENTS.md
+ */
+export function generateLlmsTxtSection(): string {
+  const lines: string[] = [];
+
+  lines.push('## llms.txt');
+  lines.push('');
+  lines.push('This project provides an `llms.txt` file at the repository root — a plain-text summary');
+  lines.push('of the project optimized for LLM consumption. It includes symbols, key files, flows,');
+  lines.push('gates, and conventions.');
+  lines.push('');
+  lines.push('Regenerate with: `paradigm sync-llms`');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
  * Generate footer section
  */
 export function generateFooter(): string {

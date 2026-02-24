@@ -23,8 +23,26 @@ import type {
 import seedHabitsData from './seed-habits.json' with { type: 'json' };
 const SEED_HABITS: HabitDefinition[] = seedHabitsData as HabitDefinition[];
 
-/** TTL for habits cache (30 seconds) */
-const HABITS_CACHE_TTL_MS = 30 * 1000;
+/** Default TTL for habits cache (30 seconds) */
+const DEFAULT_HABITS_CACHE_TTL_MS = 30 * 1000;
+
+/** Get habits cache TTL — configurable via .paradigm/config.yaml limits.habitsCacheTtlMs */
+function getHabitsCacheTtl(rootDir: string): number {
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      const config = yaml.load(content) as Record<string, unknown>;
+      const limits = config?.limits as Record<string, unknown> | undefined;
+      if (limits?.habitsCacheTtlMs && typeof limits.habitsCacheTtlMs === 'number') {
+        return limits.habitsCacheTtlMs;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+  return DEFAULT_HABITS_CACHE_TTL_MS;
+}
 
 interface HabitsCacheEntry {
   habits: HabitDefinition[];
@@ -40,7 +58,8 @@ export function loadHabits(rootDir: string): HabitDefinition[] {
   const absoluteRoot = path.resolve(rootDir);
 
   const cached = habitsCache.get(absoluteRoot);
-  if (cached && Date.now() - cached.loadedAt < HABITS_CACHE_TTL_MS) {
+  const ttl = getHabitsCacheTtl(absoluteRoot);
+  if (cached && Date.now() - cached.loadedAt < ttl) {
     return cached.habits;
   }
 

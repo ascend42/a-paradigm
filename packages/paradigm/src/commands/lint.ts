@@ -24,6 +24,7 @@ interface LintOptions {
   strict?: boolean;
   quiet?: boolean;
   json?: boolean;
+  autoPopulate?: boolean;
 }
 
 interface FileResult {
@@ -325,6 +326,113 @@ function formatIssue(issue: LintIssue, indent: string = '  '): string[] {
   return lines;
 }
 
+interface AutoPopulateSuggestion {
+  dir: string;
+  relativeDir: string;
+  purposePath: string;
+  relativePurposePath: string;
+  components: string[];
+  content: string;
+}
+
+/** Source directory patterns that should have .purpose coverage */
+const SOURCE_DIR_PATTERNS = [
+  'src', 'lib', 'features', 'components', 'services', 'utils',
+  'routes', 'api', 'commands', 'core', 'middleware', 'models',
+  'handlers', 'hooks', 'stores', 'config', 'plugins',
+];
+
+const SKIP_DIRS = new Set([
+  'node_modules', 'dist', 'build', '.git', '.paradigm', 'coverage',
+  '__pycache__', '.next', '.nuxt', 'vendor', 'target',
+]);
+
+/**
+ * Scan source directories for ones missing .purpose files.
+ * Returns suggestions with draft .purpose content.
+ */
+function findUndocumentedDirs(rootDir: string, existingPurposeFiles: string[]): AutoPopulateSuggestion[] {
+  const coveredDirs = new Set(existingPurposeFiles.map((f) => path.dirname(f)));
+  const suggestions: AutoPopulateSuggestion[] = [];
+
+  function scanDir(dir: string, depth: number) {
+    if (depth > 4) return; // Don't go too deep
+    if (coveredDirs.has(dir)) return;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const dirName = path.basename(dir);
+    if (SKIP_DIRS.has(dirName)) return;
+
+    // Check if this is a source directory worth documenting
+    const isSourceDir =
+      SOURCE_DIR_PATTERNS.includes(dirName) ||
+      entries.some((e) => !e.isDirectory() && /\.(ts|tsx|js|jsx|rs|py|go)$/.test(e.name));
+
+    if (isSourceDir && !entries.some((e) => e.name === '.purpose')) {
+      // Discover components from source files
+      const sourceFiles = entries
+        .filter((e) => !e.isDirectory() && /\.(ts|tsx|js|jsx|rs|py|go)$/.test(e.name))
+        .filter((e) => !e.name.endsWith('.test.ts') && !e.name.endsWith('.spec.ts') && e.name !== 'index.ts')
+        .map((e) => e.name.replace(/\.[^.]+$/, ''));
+
+      const components = sourceFiles.slice(0, 10).map((f) =>
+        f.replace(/([A-Z])/g, (_, c, i) => (i > 0 ? '-' : '') + c.toLowerCase()),
+      );
+
+      if (components.length > 0) {
+        const purposePath = path.join(dir, '.purpose');
+        const relDir = path.relative(rootDir, dir);
+
+        const content = generatePurposeDraft(dirName, components);
+
+        suggestions.push({
+          dir,
+          relativeDir: relDir,
+          purposePath,
+          relativePurposePath: path.relative(rootDir, purposePath),
+          components,
+          content,
+        });
+      }
+    }
+
+    // Recurse into subdirectories
+    for (const entry of entries) {
+      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
+        scanDir(path.join(dir, entry.name), depth + 1);
+      }
+    }
+  }
+
+  scanDir(rootDir, 0);
+  return suggestions;
+}
+
+/**
+ * Generate a draft .purpose file for an undocumented directory.
+ */
+function generatePurposeDraft(dirName: string, components: string[]): string {
+  const lines = [
+    `description: "Components in ${dirName}"`,
+    '',
+    'components:',
+  ];
+
+  for (const comp of components) {
+    lines.push(`  ${comp}:`);
+    lines.push(`    description: "TODO: describe #${comp}"`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
 /**
  * Main lint command
  */
@@ -344,6 +452,62 @@ export async function lintCommand(targetPath: string | undefined, options: LintO
   spinner.stop();
   log.operation('find-files').debug('Purpose files found', { count: files.length });
   
+  // Auto-populate mode: find source dirs without .purpose files
+  if (options.autoPopulate) {
+    spinner.start('Scanning for undocumented source directories...');
+    const suggestions = findUndocumentedDirs(rootDir, files);
+    spinner.stop();
+
+    if (suggestions.length === 0) {
+      if (!options.quiet && !options.json) {
+        console.log(chalk.green('All source directories have .purpose coverage.\n'));
+      }
+      if (options.json) {
+        console.log(JSON.stringify({ suggestions: [], populated: 0 }));
+      }
+      return;
+    }
+
+    if (options.json) {
+      const populated = options.fix ? suggestions.length : 0;
+      if (options.fix) {
+        for (const s of suggestions) {
+          fs.writeFileSync(s.purposePath, s.content, 'utf8');
+        }
+      }
+      console.log(JSON.stringify({
+        suggestions: suggestions.map((s) => ({
+          dir: s.relativeDir,
+          purposePath: s.relativePurposePath,
+          components: s.components,
+        })),
+        populated,
+      }));
+      return;
+    }
+
+    console.log(chalk.yellow(`Found ${suggestions.length} source director${suggestions.length > 1 ? 'ies' : 'y'} without .purpose files:\n`));
+
+    for (const s of suggestions) {
+      console.log(`  ${chalk.cyan(s.relativeDir)}/`);
+      for (const comp of s.components) {
+        console.log(chalk.gray(`    #${comp}`));
+      }
+      if (options.fix) {
+        fs.writeFileSync(s.purposePath, s.content, 'utf8');
+        console.log(chalk.green(`    → Created ${s.relativePurposePath}`));
+      }
+      console.log('');
+    }
+
+    if (!options.fix) {
+      console.log(chalk.gray(`Run ${chalk.cyan('paradigm lint --auto-populate --fix')} to create these .purpose files.\n`));
+    } else {
+      console.log(chalk.green(`Created ${suggestions.length} .purpose file${suggestions.length > 1 ? 's' : ''}.\n`));
+    }
+    return;
+  }
+
   if (files.length === 0) {
     if (options.json) {
       console.log(JSON.stringify({ files: [], summary: { totalFiles: 0 } }));

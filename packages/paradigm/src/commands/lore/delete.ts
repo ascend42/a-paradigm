@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { loadLoreEntry, deleteLoreEntry } from '../../core/lore/index.js';
 
-export async function loreDeleteCommand(id: string, options: { yes?: boolean }): Promise<void> {
+export async function loreDeleteCommand(id: string, options: { yes?: boolean; dryRun?: boolean }): Promise<void> {
   const rootDir = process.cwd();
 
   // Load entry to confirm it exists
@@ -9,6 +9,15 @@ export async function loreDeleteCommand(id: string, options: { yes?: boolean }):
   if (!entry) {
     console.error(chalk.red(`\n  Entry not found: ${id}\n`));
     process.exitCode = 1;
+    return;
+  }
+
+  if (options.dryRun) {
+    console.log(chalk.cyan(`\n  [dry-run] Would delete lore entry:`));
+    console.log(chalk.white(`    ${entry.id} - ${entry.title}`));
+    console.log(chalk.gray(`    Type: ${entry.type} | Author: ${entry.author.id} | ${entry.timestamp}`));
+    console.log(chalk.gray(`    Symbols: ${entry.symbols_touched.join(', ')}`));
+    console.log(chalk.cyan(`\n  [dry-run] No changes made.\n`));
     return;
   }
 

@@ -20,10 +20,114 @@ const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
 const TIMELINE_FILE = 'timeline.yaml';
 
+/** Options for recording lore */
+export interface RecordLoreOptions {
+  /** When true, validate that symbols_touched/symbols_created exist in .purpose files or symbol index */
+  validateSymbols?: boolean;
+}
+
+/** Result of symbol validation during lore recording */
+export interface SymbolValidationResult {
+  /** Symbols that were not found in .purpose files or index */
+  unregistered: string[];
+  /** Warning messages for the caller */
+  warnings: string[];
+}
+
+/**
+ * Validate that symbols referenced in a lore entry are registered in the project.
+ * Checks .purpose files for symbol declarations.
+ */
+function validateLoreSymbols(rootDir: string, symbols: string[]): SymbolValidationResult {
+  const result: SymbolValidationResult = { unregistered: [], warnings: [] };
+  if (symbols.length === 0) return result;
+
+  // Collect all declared symbols from .purpose files
+  const declaredSymbols = new Set<string>();
+
+  try {
+    const findResult = require('child_process').execSync(
+      `find "${rootDir}" -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null || true`,
+      { encoding: 'utf-8' }
+    ) as string;
+
+    for (const purposePath of findResult.split('\n').filter(Boolean)) {
+      try {
+        const content = fs.readFileSync(purposePath, 'utf8');
+        // Match v2 symbol declarations: lines starting with #name:, $name:, ^name:, !name:, ~name:
+        const symbolMatches = content.matchAll(/^([#$^!~][\w-]+):/gm);
+        for (const match of symbolMatches) {
+          declaredSymbols.add(match[1]);
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+  } catch {
+    // find not available — skip validation
+    return result;
+  }
+
+  // Also check flows.yaml
+  const flowsPath = path.join(rootDir, '.paradigm', 'flows.yaml');
+  if (fs.existsSync(flowsPath)) {
+    try {
+      const content = fs.readFileSync(flowsPath, 'utf8');
+      const symbolMatches = content.matchAll(/([#$^!~][\w-]+)/g);
+      for (const match of symbolMatches) {
+        declaredSymbols.add(match[1]);
+      }
+    } catch {
+      // Skip
+    }
+  }
+
+  // Also check portal.yaml for gates
+  const portalPath = path.join(rootDir, 'portal.yaml');
+  if (fs.existsSync(portalPath)) {
+    try {
+      const content = fs.readFileSync(portalPath, 'utf8');
+      const gateMatches = content.matchAll(/\^([\w-]+)/g);
+      for (const match of gateMatches) {
+        declaredSymbols.add(`^${match[1]}`);
+      }
+    } catch {
+      // Skip
+    }
+  }
+
+  for (const symbol of symbols) {
+    if (!declaredSymbols.has(symbol)) {
+      result.unregistered.push(symbol);
+      result.warnings.push(`Symbol "${symbol}" not found in .purpose files or project index`);
+    }
+  }
+
+  return result;
+}
+
 /**
  * Record a new lore entry - writes to dated directory
+ *
+ * When `options.validateSymbols` is true, checks symbols_touched and
+ * symbols_created against .purpose files and logs warnings for unregistered symbols.
+ * The entry is still recorded regardless of validation results.
  */
-export async function recordLore(rootDir: string, entry: LoreEntry): Promise<void> {
+export async function recordLore(
+  rootDir: string,
+  entry: LoreEntry,
+  options?: RecordLoreOptions,
+): Promise<{ validation?: SymbolValidationResult }> {
+  // Validate symbols if requested
+  let validation: SymbolValidationResult | undefined;
+  if (options?.validateSymbols) {
+    const allSymbols = [
+      ...(entry.symbols_touched || []),
+      ...(entry.symbols_created || []),
+    ];
+    validation = validateLoreSymbols(rootDir, allSymbols);
+  }
+
   const lorePath = path.join(rootDir, LORE_DIR);
   const dateStr = entry.timestamp.slice(0, 10); // "2026-02-21"
   const datePath = path.join(lorePath, ENTRIES_DIR, dateStr);
@@ -44,6 +148,52 @@ export async function recordLore(rootDir: string, entry: LoreEntry): Promise<voi
 
   // Rebuild timeline index
   await rebuildTimeline(rootDir);
+
+  return { validation };
+}
+
+/**
+ * Draft a lore entry from session breadcrumbs (auto-lore).
+ * Called when 3+ files were modified in a session.
+ * Returns a partial entry that can be finalized by the user/agent.
+ */
+export function draftLoreFromBreadcrumbs(
+  _rootDir: string,
+  breadcrumbs: Array<{ tool: string; args?: Record<string, unknown>; timestamp?: string }>,
+  modifiedFiles: string[],
+  symbolsTouched: string[],
+  sessionContext?: string,
+): Partial<LoreEntry> {
+  // Infer title from session context or modified files
+  const title = sessionContext
+    ? sessionContext.substring(0, 80)
+    : `Session: ${modifiedFiles.length} files modified`;
+
+  // Infer summary from breadcrumbs
+  const toolCounts = new Map<string, number>();
+  for (const bc of breadcrumbs) {
+    toolCounts.set(bc.tool, (toolCounts.get(bc.tool) || 0) + 1);
+  }
+  const topTools = [...toolCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tool, count]) => `${tool} (${count}x)`)
+    .join(', ');
+
+  const summary = [
+    `Modified ${modifiedFiles.length} files across ${symbolsTouched.length} symbols.`,
+    topTools ? `Key tools used: ${topTools}.` : '',
+    sessionContext ? `Context: ${sessionContext}` : '',
+  ].filter(Boolean).join(' ');
+
+  return {
+    type: 'agent-session',
+    title,
+    summary,
+    symbols_touched: symbolsTouched,
+    files_modified: modifiedFiles,
+    tags: ['auto-draft'],
+  };
 }
 
 /**

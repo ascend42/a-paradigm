@@ -29,7 +29,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_search',
       description:
-        'Search lore entries by symbol, author, date range, type, or tags. Returns project history records.',
+        'Search lore entries by symbol, author, date range, type, or tags. Returns project history records. Returns matching entries with titles, dates, and symbol references. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -86,7 +86,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_record',
       description:
-        'Record a new lore entry (agent session, decision, milestone, etc.). Call after completing significant work.',
+        'Record a new lore entry (agent session, decision, milestone, etc.). Call after completing significant work. Returns the created entry ID and file path. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -186,7 +186,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_timeline',
       description:
-        'Get lore timeline overview: recent entries, active authors, hot symbols. Call for project history orientation.',
+        'Get lore timeline overview: recent entries, active authors, hot symbols. Call for project history orientation. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -204,7 +204,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_get',
       description:
-        'Fetch a single lore entry by ID. Returns the full entry with all fields.',
+        'Fetch a single lore entry by ID. Returns the full entry with all fields. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -223,7 +223,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_update',
       description:
-        'Update an existing lore entry. Merges provided fields into the existing entry.',
+        'Update an existing lore entry. Merges provided fields into the existing entry. Returns updated entry confirmation. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -287,7 +287,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_delete',
       description:
-        'Delete a lore entry. Requires explicit confirmation to prevent accidental deletion.',
+        'Delete a lore entry. Requires explicit confirmation to prevent accidental deletion. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

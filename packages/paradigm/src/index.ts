@@ -140,6 +140,17 @@ portalCmd
     await portalReportCommand(session, options);
   });
 
+portalCmd
+  .command('export [path]')
+  .description('Export portal configuration in json, csv, or markdown format')
+  .option('-f, --format <format>', 'Output format: json, csv, markdown', 'json')
+  .option('-o, --output <path>', 'Output file path')
+  .option('-c, --config <path>', 'Path to portal.yaml')
+  .action(async (path, options) => {
+    const { portalExportCommand } = await import('./commands/portal/watch.js');
+    await portalExportCommand(path, options);
+  });
+
 // paradigm premise <command>
 const premiseCmd = program
   .command('premise')
@@ -174,6 +185,16 @@ program
   .action(async (ide, options) => {
     const { syncCommand } = await import('./commands/sync.js');
     await syncCommand(ide, options);
+  });
+
+// paradigm sync-llms
+program
+  .command('sync-llms')
+  .description('Generate llms.txt — LLM-readable project summary')
+  .option('-o, --output <path>', 'Output path (default: ./llms.txt)')
+  .action(async (options) => {
+    const { syncLlmsCommand } = await import('./commands/sync-llms.js');
+    await syncLlmsCommand(options);
   });
 
 // paradigm cursorrules (deprecated, alias for sync cursor)
@@ -239,6 +260,7 @@ program
   .option('-s, --strict', 'Fail on warnings (not just errors)')
   .option('-q, --quiet', 'Suppress output except errors')
   .option('--json', 'Output as JSON')
+  .option('--auto-populate', 'Scan for undocumented source dirs and suggest .purpose entries (use with --fix to write)')
   .action(async (path, options) => {
     const { lintCommand } = await import('./commands/lint.js');
     await lintCommand(path, options);
@@ -280,6 +302,24 @@ scanCmd
     console.log('  auto [path]  Auto-generate .purpose files from code analysis');
     console.log('\nRun `paradigm scan auto --help` for options.\n');
   });
+
+// paradigm flow <subcommand>
+const flowCmd = program
+  .command('flow')
+  .description('Flow management commands');
+
+flowCmd
+  .command('diagram <flowId>')
+  .description('Generate Mermaid diagram for a flow')
+  .option('-o, --output <path>', 'Output file path')
+  .action(async (flowId, options) => {
+    const { flowDiagramCommand } = await import('./commands/flow.js');
+    await flowDiagramCommand(flowId, options);
+  });
+
+flowCmd.action(() => {
+  flowCmd.outputHelp();
+});
 
 // paradigm team <subcommand>
 const teamCmd = program
@@ -544,6 +584,25 @@ program
     const { doctorCommand } = await import('./commands/doctor.js');
     await doctorCommand();
   });
+
+// paradigm global <subcommand>
+const globalCmd = program
+  .command('global')
+  .description('Manage Global Brain (~/.paradigm/)');
+
+globalCmd
+  .command('clean')
+  .description('Remove old files from ~/.paradigm/ (Global Brain rotation)')
+  .option('--older-than <duration>', 'Remove files older than duration (e.g., 90d, 30d, 7d)', '90d')
+  .option('-n, --dry-run', 'Show what would be deleted without deleting')
+  .action(async (options) => {
+    const { globalCleanCommand } = await import('./commands/global.js');
+    await globalCleanCommand(options);
+  });
+
+globalCmd.action(() => {
+  globalCmd.outputHelp();
+});
 
 // paradigm watch
 program
@@ -1014,6 +1073,7 @@ hooksCmd
   .option('--pre-push', 'Only install pre-push hook')
   .option('--claude-code', 'Only install Claude Code hooks (stop + pre-commit)')
   .option('--cursor', 'Only install Cursor hooks (.cursor/hooks.json)')
+  .option('--dry-run', 'Show what would be installed without making changes')
   .action(async (options) => {
     const { hooksInstallCommand } = await import('./commands/hooks/index.js');
     await hooksInstallCommand(options);
@@ -1023,6 +1083,7 @@ hooksCmd
   .command('uninstall')
   .description('Remove paradigm hooks (git hooks, or --cursor for Cursor hooks)')
   .option('--cursor', 'Remove Cursor hooks instead of git hooks')
+  .option('--dry-run', 'Show what would be removed without making changes')
   .action(async (options) => {
     const { hooksUninstallCommand } = await import('./commands/hooks/index.js');
     await hooksUninstallCommand(options);
@@ -1332,6 +1393,7 @@ loreCmd
   .command('delete <id>')
   .description('Delete a lore entry')
   .option('-y, --yes', 'Skip confirmation')
+  .option('--dry-run', 'Show what would be deleted without making changes')
   .action(async (id, options) => {
     const { loreDeleteCommand } = await import('./commands/lore/delete.js');
     await loreDeleteCommand(id, options);

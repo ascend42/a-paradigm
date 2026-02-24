@@ -36,15 +36,32 @@ export async function sentinelCommand(path: string | undefined, options: Sentine
     // Keep the process running
     await new Promise(() => {});
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND' ||
-        (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
+    const errCode = (error as NodeJS.ErrnoException).code;
+    const errMsg = (error as Error).message || '';
+
+    if (errCode === 'ERR_MODULE_NOT_FOUND' || errCode === 'MODULE_NOT_FOUND') {
       console.error(chalk.red('\n@a-company/sentinel is not installed.'));
       console.log(chalk.gray('Install it with: npm install @a-company/sentinel\n'));
-    } else if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    } else if (errCode === 'EADDRINUSE') {
       console.error(chalk.red(`\nError: Port ${port} is already in use.`));
       console.log(chalk.gray(`Try a different port with: paradigm sentinel --port ${port + 1}\n`));
+    } else if (errCode === 'EACCES') {
+      console.error(chalk.red(`\nError: Permission denied on port ${port}.`));
+      console.log(chalk.gray(`Ports below 1024 require elevated privileges. Try: paradigm sentinel --port 3838\n`));
+    } else if (errCode === 'ENOENT') {
+      console.error(chalk.red(`\nError: Project directory not found: ${projectDir}`));
+      console.log(chalk.gray('Verify the path exists and try again.\n'));
+    } else if (errMsg.includes('ECONNREFUSED') || errMsg.includes('ETIMEDOUT')) {
+      console.error(chalk.red('\nError: Network connection failed.'));
+      console.log(chalk.gray('Check your network configuration and try again.\n'));
     } else {
-      console.error(chalk.red('\nFailed to start Sentinel:'), error);
+      console.error(chalk.red('\nFailed to start Sentinel.'));
+      console.error(chalk.gray(`  Error: ${errMsg || 'Unknown error'}`));
+      if (errCode) console.error(chalk.gray(`  Code:  ${errCode}`));
+      console.log(chalk.gray('\nIf this persists, try:'));
+      console.log(chalk.gray('  1. Ensure @a-company/sentinel is up to date'));
+      console.log(chalk.gray('  2. Check that no other process is using the port'));
+      console.log(chalk.gray('  3. Run `paradigm doctor` to check your setup\n'));
     }
     process.exit(1);
   }

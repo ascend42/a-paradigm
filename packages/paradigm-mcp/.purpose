@@ -61,12 +61,14 @@ description: |
     - src/tools/orchestration.ts:1-1476
 
 #CoreTools:
-  description: Core symbol tools (search, ripple, related, status, gates_for_route)
+  description: Core symbol tools (search, ripple, related, status, gates_for_route) with TTL caching for search and status
   tags: [mcp]
   anchors:
     - src/tools/index.ts:100-800
   signals:
     - !tool-invoked
+  components:
+    - "#ToolCache"
 
 #WisdomTools:
   description: Team wisdom tools (context, record, expert, promote) with global+local merge
@@ -85,10 +87,12 @@ description: |
     - src/tools/history.ts:1-300
 
 #NavigateTools:
-  description: Codebase navigation tools (find, explore, context)
+  description: Codebase navigation tools (find, explore, context) with TTL caching
   tags: [mcp]
   anchors:
-    - src/tools/navigate.ts:1-250
+    - src/tools/navigate.ts:1-261
+  components:
+    - "#ToolCache"
 
 #SentinelTools:
   description: Incident triage tools (triage, show, resolve, patterns, stats)
@@ -105,12 +109,14 @@ description: |
     - !tag-suggested
 
 #ReindexTools:
-  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, and flow-index.json from .purpose files
+  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, and flow-index.json from .purpose files. Clears ToolCache on success.
   tags: [mcp]
   anchors:
-    - src/tools/reindex.ts:1-320
+    - src/tools/reindex.ts:1-454
   signals:
     - !index-rebuilt
+  components:
+    - "#ToolCache"
 
 #ContextTools:
   description: Context monitoring, session persistence, and handoff tools with global store integration
@@ -161,6 +167,12 @@ description: |
   signals:
     - !context-loaded
     - !context-error
+
+#ToolCache:
+  description: TTL-based cache for MCP tool results to avoid redundant recomputation within short windows
+  tags: [performance]
+  anchors:
+    - src/utils/tool-cache.ts:1-69
 
 # ============================================
 # Flows ($)

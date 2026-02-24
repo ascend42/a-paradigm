@@ -37,6 +37,7 @@ export interface ParadigmConfig {
   conventions: string[];
   scan?: ScanSettings;
   logging?: LoggingConfig;
+  limits?: LimitsConfig;
 }
 
 export interface LoggingConfig {
@@ -46,6 +47,19 @@ export interface LoggingConfig {
   'default-level'?: 'debug' | 'info' | 'warn' | 'error';
   /** Map directory patterns to symbol types */
   'symbol-mapping'?: Record<string, string>;
+}
+
+export interface LimitsConfig {
+  /** Habits cache TTL in milliseconds (default: 30000) */
+  habitsCacheTtlMs?: number;
+  /** Maximum session breadcrumbs to retain (default: 50) */
+  breadcrumbsMax?: number;
+  /** Maximum thread trail entries (default: 10) */
+  threadTrailMax?: number;
+  /** MCP tool cache TTL in milliseconds (default: 30000) */
+  toolCacheTtlMs?: number;
+  /** Session checkpoint max age in milliseconds (default: 604800000 = 7 days) */
+  checkpointMaxAgeMs?: number;
 }
 
 export interface ScanSettings {

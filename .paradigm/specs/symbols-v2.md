@@ -575,6 +575,10 @@ paradigm migrate v2 --anchors
 
 ### Symbol Parsing
 
+The `parseSymbol()` function in `flow-schema.ts` and `premise/core` **only accepts v2 prefixes**: `#`, `$`, `^`, `!`, `~`.
+
+Legacy v1 prefixes (`@`, `%`, `?`, `&`) are **rejected** by the parser and return `null`. Use `checkLegacySymbol()` to detect v1 prefixes and get migration guidance.
+
 ```bash
 # Test new parser recognizes only v2 symbols
 echo "#component $flow ^gate !signal ~aspect" | paradigm parse
@@ -583,6 +587,19 @@ echo "#component $flow ^gate !signal ~aspect" | paradigm parse
 echo "@feature &integration %state" | paradigm parse
 # Should output 0 symbols (old prefixes not recognized)
 ```
+
+### Deprecated v1 Prefix Reference
+
+These prefixes are **no longer valid** and will produce errors in flow validation, lore recording, and other tools:
+
+| Deprecated Prefix | Was | Migration |
+|-------------------|-----|-----------|
+| `@` | Feature | Use `#component` with `tags: [feature]` |
+| `%` | State | Use `#component` with `tags: [state]` |
+| `?` | Idea | Use `[idea]` tag on any symbol |
+| `&` | Integration | Use `#component` with `tags: [integration]` |
+
+If you encounter a v1 symbol in flow definitions or .purpose files, update it to the v2 equivalent before proceeding.
 
 ### Tag Bank API
 

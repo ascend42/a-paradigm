@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execSync } from 'child_process';
 import chalk from 'chalk';
 import {
   CLAUDE_CODE_STOP_HOOK,
@@ -55,6 +56,81 @@ function isParadigmPluginActive(): { active: boolean; cacheVersion?: string } {
   } catch {
     return { active: false };
   }
+}
+
+/**
+ * Check if the cached plugin version is compatible with the current paradigm version.
+ * Reads compatibleVersions from the plugin's hooks.json if available.
+ */
+function checkPluginVersionCompatibility(): { compatible: boolean; message?: string } {
+  try {
+    const pluginInfo = isParadigmPluginActive();
+    if (!pluginInfo.active || !pluginInfo.cacheVersion) {
+      return { compatible: true }; // No plugin, no check needed
+    }
+
+    // Read hooks.json from the plugin cache
+    const hooksJsonPath = path.join(
+      os.homedir(), '.claude', 'plugins', 'cache', 'a-paradigm', 'paradigm',
+      pluginInfo.cacheVersion, 'hooks.json'
+    );
+
+    if (!fs.existsSync(hooksJsonPath)) {
+      return { compatible: true }; // No hooks.json, skip check
+    }
+
+    const hooksData = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
+    const compatibleVersions = hooksData.compatibleVersions as string | undefined;
+
+    if (!compatibleVersions) {
+      return { compatible: true }; // No compatibility field defined
+    }
+
+    // Simple semver range check: ">=3.0.0 <4.0.0"
+    const currentVersion = getCurrentParadigmVersion();
+    if (!currentVersion) {
+      return { compatible: true };
+    }
+
+    // Parse the range — support ">=X.Y.Z" and "<X.Y.Z"
+    const parts = compatibleVersions.split(/\s+/);
+    for (const part of parts) {
+      const match = part.match(/^(>=?|<=?)\s*(\d+\.\d+\.\d+)/);
+      if (!match) continue;
+      const [, op, ver] = match;
+      const cmp = compareVersions(currentVersion, ver);
+      if (op === '>=' && cmp < 0) return { compatible: false, message: `Plugin requires paradigm ${compatibleVersions}, current: ${currentVersion}` };
+      if (op === '>' && cmp <= 0) return { compatible: false, message: `Plugin requires paradigm ${compatibleVersions}, current: ${currentVersion}` };
+      if (op === '<=' && cmp > 0) return { compatible: false, message: `Plugin requires paradigm ${compatibleVersions}, current: ${currentVersion}` };
+      if (op === '<' && cmp >= 0) return { compatible: false, message: `Plugin requires paradigm ${compatibleVersions}, current: ${currentVersion}` };
+    }
+
+    return { compatible: true };
+  } catch {
+    return { compatible: true }; // On error, don't block
+  }
+}
+
+/** Get current paradigm version from package.json */
+function getCurrentParadigmVersion(): string | null {
+  try {
+    const pkgPath = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Compare two semver strings. Returns -1, 0, or 1. */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+  }
+  return 0;
 }
 
 /**
@@ -127,6 +203,28 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
   }
 
   return { cleaned: removed.length > 0, removed };
+}
+
+/**
+ * Validate bash syntax of a hook script using `bash -n`.
+ * Returns null on success or an error string on failure.
+ */
+function validateBashSyntax(scriptContent: string, scriptName: string): string | null {
+  try {
+    // Write to a temp file and check syntax
+    const tmpPath = path.join(os.tmpdir(), `paradigm-hook-validate-${Date.now()}.sh`);
+    fs.writeFileSync(tmpPath, scriptContent, 'utf8');
+    try {
+      execSync(`bash -n "${tmpPath}" 2>&1`, { encoding: 'utf-8' });
+      return null; // Syntax OK
+    } catch (err) {
+      return `${scriptName}: bash syntax error — ${(err as Error).message?.split('\n')[0] || 'unknown error'}`;
+    } finally {
+      try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+    }
+  } catch {
+    return null; // Can't validate, assume OK
+  }
 }
 
 const POST_COMMIT_HOOK = `#!/bin/sh
@@ -234,11 +332,47 @@ export async function hooksInstallCommand(options: {
   prePush?: boolean;
   claudeCode?: boolean;
   cursor?: boolean;
+  dryRun?: boolean;
 } = {}): Promise<void> {
   const rootDir = process.cwd();
+  const dryRun = options.dryRun || false;
+
+  if (dryRun) {
+    console.log(chalk.cyan('\n  [dry-run] Showing what would be installed:\n'));
+  }
 
   const onlyClaudeCode = options.claudeCode && !options.postCommit && !options.prePush && !options.cursor;
   const onlyCursor = options.cursor && !options.postCommit && !options.prePush && !options.claudeCode;
+
+  // Validate hook script syntax before installation
+  if (!dryRun) {
+    const scriptsToValidate = [
+      { name: 'post-commit', content: POST_COMMIT_HOOK },
+      { name: 'pre-push', content: PRE_PUSH_HOOK },
+      { name: 'claude-code-stop', content: CLAUDE_CODE_STOP_HOOK },
+      { name: 'claude-code-precommit', content: CLAUDE_CODE_PRECOMMIT_HOOK },
+      { name: 'claude-code-postwrite', content: CLAUDE_CODE_POSTWRITE_HOOK },
+      { name: 'cursor-stop', content: CURSOR_STOP_HOOK },
+      { name: 'cursor-precommit', content: CURSOR_PRECOMMIT_HOOK },
+      { name: 'cursor-postwrite', content: CURSOR_POSTWRITE_HOOK },
+    ];
+
+    for (const script of scriptsToValidate) {
+      const err = validateBashSyntax(script.content, script.name);
+      if (err) {
+        console.log(chalk.red(`Hook syntax error: ${err}`));
+        console.log(chalk.gray('Aborting installation. Fix the hook script and try again.'));
+        return;
+      }
+    }
+  }
+
+  // Check plugin version compatibility
+  const compat = checkPluginVersionCompatibility();
+  if (!compat.compatible) {
+    console.log(chalk.yellow(`\n⚠  ${compat.message}`));
+    console.log(chalk.gray('  Hook installation will continue, but behavior may differ from plugin expectations.\n'));
+  }
 
   // Install git hooks (unless --claude-code or --cursor was the only flag)
   if (!onlyClaudeCode && !onlyCursor) {
@@ -250,52 +384,63 @@ export async function hooksInstallCommand(options: {
     }
 
     const hooksDir = path.join(gitDir, 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
 
-    const installAll = !options.postCommit && !options.prePush && !options.claudeCode;
+    const installAllGit = !options.postCommit && !options.prePush && !options.claudeCode;
     const installed: string[] = [];
 
     // Install post-commit hook
-    if (installAll || options.postCommit) {
+    if (installAllGit || options.postCommit) {
       const hookPath = path.join(hooksDir, 'post-commit');
-      if (fs.existsSync(hookPath) && !options.force) {
-        const content = fs.readFileSync(hookPath, 'utf8');
-        if (!content.includes('paradigm')) {
-          console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
-        } else {
-          console.log(chalk.gray('post-commit hook already installed by paradigm'));
-        }
+      if (dryRun) {
+        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
+        console.log(chalk.gray(`  post-commit: ${action} → ${hookPath}`));
       } else {
-        fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
-        fs.chmodSync(hookPath, '755');
-        installed.push('post-commit');
+        if (fs.existsSync(hookPath) && !options.force) {
+          const content = fs.readFileSync(hookPath, 'utf8');
+          if (!content.includes('paradigm')) {
+            console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
+          } else {
+            console.log(chalk.gray('post-commit hook already installed by paradigm'));
+          }
+        } else {
+          fs.mkdirSync(hooksDir, { recursive: true });
+          fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
+          fs.chmodSync(hookPath, '755');
+          installed.push('post-commit');
+        }
       }
     }
 
     // Install pre-push hook
-    if (installAll || options.prePush) {
+    if (installAllGit || options.prePush) {
       const hookPath = path.join(hooksDir, 'pre-push');
-      if (fs.existsSync(hookPath) && !options.force) {
-        const content = fs.readFileSync(hookPath, 'utf8');
-        if (!content.includes('paradigm')) {
-          console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
-        } else {
-          console.log(chalk.gray('pre-push hook already installed by paradigm'));
-        }
+      if (dryRun) {
+        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
+        console.log(chalk.gray(`  pre-push: ${action} → ${hookPath}`));
       } else {
-        fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
-        fs.chmodSync(hookPath, '755');
-        installed.push('pre-push');
+        if (fs.existsSync(hookPath) && !options.force) {
+          const content = fs.readFileSync(hookPath, 'utf8');
+          if (!content.includes('paradigm')) {
+            console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
+          } else {
+            console.log(chalk.gray('pre-push hook already installed by paradigm'));
+          }
+        } else {
+          fs.mkdirSync(hooksDir, { recursive: true });
+          fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
+          fs.chmodSync(hookPath, '755');
+          installed.push('pre-push');
+        }
       }
     }
 
-    if (installed.length > 0) {
+    if (!dryRun && installed.length > 0) {
       console.log(chalk.green(`Git hooks installed: ${installed.join(', ')}`));
     }
 
     // Initialize history if needed
     const historyDir = path.join(rootDir, '.paradigm/history');
-    if (!fs.existsSync(historyDir)) {
+    if (!fs.existsSync(historyDir) && !dryRun) {
       console.log(chalk.gray('Tip: Run `paradigm history init` to initialize history tracking'));
     }
   }
@@ -303,12 +448,28 @@ export async function hooksInstallCommand(options: {
   // Install Claude Code hooks (when --claude-code flag or no specific flags)
   const installAll = !options.postCommit && !options.prePush && !options.claudeCode && !options.cursor;
   if (installAll || options.claudeCode) {
-    await installClaudeCodeHooks(rootDir, options.force);
+    if (dryRun) {
+      console.log(chalk.gray('  Claude Code hooks: would install paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
+      console.log(chalk.gray(`  → ${path.join(rootDir, '.claude', 'hooks')}/`));
+      console.log(chalk.gray('  → Update .claude/settings.json with hook configuration'));
+    } else {
+      await installClaudeCodeHooks(rootDir, options.force);
+    }
   }
 
   // Install Cursor hooks (when --cursor flag or no specific flags)
   if (installAll || options.cursor) {
-    await installCursorHooks(rootDir, options.force);
+    if (dryRun) {
+      console.log(chalk.gray('  Cursor hooks: would install paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
+      console.log(chalk.gray(`  → ${path.join(rootDir, '.cursor', 'hooks')}/`));
+      console.log(chalk.gray('  → Update .cursor/hooks.json'));
+    } else {
+      await installCursorHooks(rootDir, options.force);
+    }
+  }
+
+  if (dryRun) {
+    console.log(chalk.cyan('\n  [dry-run] No changes made.\n'));
   }
 }
 
@@ -547,8 +708,13 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
 /**
  * paradigm hooks uninstall
  */
-export async function hooksUninstallCommand(options: { cursor?: boolean } = {}): Promise<void> {
+export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?: boolean } = {}): Promise<void> {
   const rootDir = process.cwd();
+  const dryRun = options.dryRun || false;
+
+  if (dryRun) {
+    console.log(chalk.cyan('\n  [dry-run] Showing what would be removed:\n'));
+  }
 
   if (!options.cursor) {
     // Uninstall git hooks
@@ -567,16 +733,24 @@ export async function hooksUninstallCommand(options: { cursor?: boolean } = {}):
       if (fs.existsSync(hookPath)) {
         const content = fs.readFileSync(hookPath, 'utf8');
         if (content.includes('paradigm')) {
-          fs.unlinkSync(hookPath);
+          if (dryRun) {
+            console.log(chalk.gray(`  Would remove: ${hookPath}`));
+          } else {
+            fs.unlinkSync(hookPath);
+          }
           removed.push(hookName);
         }
       }
     }
 
-    if (removed.length > 0) {
-      console.log(chalk.green(`Git hooks removed: ${removed.join(', ')}`));
-    } else {
-      console.log(chalk.gray('No paradigm git hooks found to remove'));
+    if (!dryRun) {
+      if (removed.length > 0) {
+        console.log(chalk.green(`Git hooks removed: ${removed.join(', ')}`));
+      } else {
+        console.log(chalk.gray('No paradigm git hooks found to remove'));
+      }
+    } else if (removed.length === 0) {
+      console.log(chalk.gray('  No paradigm git hooks to remove'));
     }
   }
 
@@ -588,7 +762,11 @@ export async function hooksUninstallCommand(options: { cursor?: boolean } = {}):
     for (const hookName of ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
       const hookPath = path.join(cursorHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
-        fs.unlinkSync(hookPath);
+        if (dryRun) {
+          console.log(chalk.gray(`  Would remove: ${hookPath}`));
+        } else {
+          fs.unlinkSync(hookPath);
+        }
         cursorRemoved.push(hookName);
       }
     }
@@ -596,33 +774,45 @@ export async function hooksUninstallCommand(options: { cursor?: boolean } = {}):
     // Remove paradigm entries from .cursor/hooks.json
     const hooksJsonPath = path.join(rootDir, '.cursor', 'hooks.json');
     if (fs.existsSync(hooksJsonPath)) {
-      try {
-        const hooksConfig = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
-        const hooks = hooksConfig.hooks || {};
+      if (dryRun) {
+        console.log(chalk.gray(`  Would clean paradigm entries from: ${hooksJsonPath}`));
+      } else {
+        try {
+          const hooksConfig = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
+          const hooks = hooksConfig.hooks || {};
 
-        for (const key of ['stop', 'afterFileEdit', 'beforeShellExecution']) {
-          if (Array.isArray(hooks[key])) {
-            hooks[key] = hooks[key].filter(
-              (h: Record<string, unknown>) => !JSON.stringify(h).includes('paradigm-'),
-            );
-            if (hooks[key].length === 0) {
-              delete hooks[key];
+          for (const key of ['stop', 'afterFileEdit', 'beforeShellExecution']) {
+            if (Array.isArray(hooks[key])) {
+              hooks[key] = hooks[key].filter(
+                (h: Record<string, unknown>) => !JSON.stringify(h).includes('paradigm-'),
+              );
+              if (hooks[key].length === 0) {
+                delete hooks[key];
+              }
             }
           }
-        }
 
-        hooksConfig.hooks = hooks;
-        fs.writeFileSync(hooksJsonPath, JSON.stringify(hooksConfig, null, 2) + '\n', 'utf8');
-      } catch {
-        // Ignore parse errors
+          hooksConfig.hooks = hooks;
+          fs.writeFileSync(hooksJsonPath, JSON.stringify(hooksConfig, null, 2) + '\n', 'utf8');
+        } catch {
+          // Ignore parse errors
+        }
       }
     }
 
-    if (cursorRemoved.length > 0) {
-      console.log(chalk.green(`Cursor hooks removed: ${cursorRemoved.join(', ')}`));
-    } else {
-      console.log(chalk.gray('No paradigm Cursor hooks found to remove'));
+    if (!dryRun) {
+      if (cursorRemoved.length > 0) {
+        console.log(chalk.green(`Cursor hooks removed: ${cursorRemoved.join(', ')}`));
+      } else {
+        console.log(chalk.gray('No paradigm Cursor hooks found to remove'));
+      }
+    } else if (cursorRemoved.length === 0) {
+      console.log(chalk.gray('  No paradigm Cursor hooks to remove'));
     }
+  }
+
+  if (dryRun) {
+    console.log(chalk.cyan('\n  [dry-run] No changes made.\n'));
   }
 }
 

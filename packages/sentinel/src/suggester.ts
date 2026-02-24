@@ -44,7 +44,7 @@ export class PatternSuggester {
       },
       resolution: {
         description: incident.resolution?.notes || 'Resolution approach TBD',
-        strategy: 'fix-code',
+        strategy: this.inferStrategy([incident]),
         priority: 'medium',
       },
       source: 'suggested',
@@ -65,6 +65,12 @@ export class PatternSuggester {
     // Build symbol criteria from common symbols
     const symbols = this.buildSymbolCriteria(group.commonSymbols);
 
+    // Load group's incidents for strategy inference
+    const groupIncidents = group.incidents
+      .slice(0, 20)
+      .map((id) => this.storage.getIncident(id))
+      .filter((i): i is SymbolicIncidentRecord => i != null);
+
     const pattern: Partial<FailurePattern> = {
       id: baseId,
       name: group.name || `Pattern from group ${group.id}`,
@@ -78,7 +84,7 @@ export class PatternSuggester {
       },
       resolution: {
         description: 'Resolution approach TBD based on grouped incidents',
-        strategy: 'fix-code',
+        strategy: groupIncidents.length > 0 ? this.inferStrategy(groupIncidents) : 'fix-code',
         priority: this.getPriorityFromCount(group.count),
       },
       source: 'suggested',
@@ -484,31 +490,56 @@ export class PatternSuggester {
   }
 
   /**
-   * Infer resolution strategy from incidents
+   * Infer resolution strategy from incident error patterns and context.
+   * Uses keyword heuristics across all incident messages to pick the
+   * most likely resolution approach.
    */
   private inferStrategy(
     incidents: SymbolicIncidentRecord[]
-  ): 'retry' | 'fallback' | 'fix-data' | 'fix-code' | 'ignore' | 'escalate' {
-    // Check error patterns
+  ): import('./types.js').ResolutionStrategy {
     const messages = incidents.map((i) => i.error.message.toLowerCase());
+    const hasKeyword = (keywords: string[]) =>
+      messages.some((m) => keywords.some((k) => m.includes(k)));
 
-    if (messages.some((m) => m.includes('timeout') || m.includes('network'))) {
+    // Rollback: deployment or version regression signals
+    if (hasKeyword(['revert', 'rollback', 'regression', 'broke after deploy', 'since deploy'])) {
+      return 'rollback';
+    }
+
+    // Config change: environment/configuration issues
+    if (hasKeyword(['config', 'environment variable', 'env var', 'missing key', 'secret', 'credential'])) {
+      return 'config-change';
+    }
+
+    // Scale up: resource exhaustion
+    if (hasKeyword(['out of memory', 'oom', 'heap', 'memory limit', 'capacity', 'too many connections', 'pool exhausted'])) {
+      return 'scale-up';
+    }
+
+    // Retry: transient network/timeout errors
+    if (hasKeyword(['timeout', 'network', 'econnrefused', 'econnreset', 'dns', 'socket hang up'])) {
       return 'retry';
     }
 
-    if (
-      messages.some(
-        (m) =>
-          m.includes('validation') ||
-          m.includes('invalid') ||
-          m.includes('required')
-      )
-    ) {
+    // Fallback: dependency/service unavailable
+    if (hasKeyword(['unavailable', 'service down', 'circuit breaker', 'fallback', '503', '502'])) {
+      return 'fallback';
+    }
+
+    // Fix data: validation and data integrity issues
+    if (hasKeyword(['validation', 'invalid', 'required', 'constraint', 'duplicate', 'not found', '404'])) {
       return 'fix-data';
     }
 
-    if (messages.some((m) => m.includes('permission') || m.includes('403'))) {
+    // Escalate: authorization/permission issues
+    if (hasKeyword(['permission', 'forbidden', '403', '401', 'unauthorized', 'access denied'])) {
       return 'escalate';
+    }
+
+    // Investigate: unclear patterns or mixed signals — needs human triage
+    const uniqueTypes = new Set(incidents.map((i) => i.error.type).filter(Boolean));
+    if (uniqueTypes.size > 2) {
+      return 'investigate';
     }
 
     return 'fix-code';

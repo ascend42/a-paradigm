@@ -1327,10 +1327,45 @@
       ]
     },
     {
+      "type": "standalone",
+      "slot": "slot-059",
+      "course": "para-201",
+      "variants": [
+        {
+          "id": "plsat-059",
+          "scenario": "You run `paradigm flow validate` on your project and receive this output:\n\n```\n⚠ Circular Dependencies (1)\n\n  $order-flow → $inventory-flow → $order-flow\n```\n\nBoth flows reference each other via `relatedFlows`.",
+          "question": "What is the best way to resolve this circular dependency?",
+          "choices": {
+            "A": "Delete one of the flows — circular flows are always a design error",
+            "B": "Extract the shared logic into a new `$stock-check-flow` that both flows reference, breaking the cycle",
+            "C": "Ignore it — circular dependencies are just warnings and do not affect anything",
+            "D": "Rename the flows so the validator does not detect the cycle",
+            "E": "Move both flows into the same .purpose file to merge them"
+          },
+          "correct": "B",
+          "explanation": "The recommended resolution for circular flow dependencies is to extract shared logic into a separate flow. If $order-flow and $inventory-flow both need shared behavior, create a third flow (e.g., $stock-check-flow) that both reference unidirectionally. This eliminates the cycle while preserving the relationships. Deletion (A) loses documentation, ignoring (C) hides architectural coupling, and renaming (D) is a workaround that does not fix the underlying issue."
+        },
+        {
+          "id": "plsat-059b",
+          "scenario": "Your project has three flows with these `relatedFlows` references:\n- `$checkout-flow` → `[$payment-flow]`\n- `$payment-flow` → `[$receipt-flow]`\n- `$receipt-flow` → `[$checkout-flow]`\n\nYou run `paradigm_flow_validate({})` to validate all flows.",
+          "question": "What will the circular dependency detection report?",
+          "choices": {
+            "A": "No issues — each flow only references one other flow",
+            "B": "Three separate circular dependencies, one for each flow",
+            "C": "One circular dependency: $checkout-flow → $payment-flow → $receipt-flow → $checkout-flow",
+            "D": "A warning that flows should not have relatedFlows at all",
+            "E": "An error that three-flow cycles are not supported"
+          },
+          "correct": "C",
+          "explanation": "Paradigm's circular dependency detector uses depth-first search to trace the full dependency graph. Starting from $checkout-flow, it follows: $checkout-flow → $payment-flow → $receipt-flow → $checkout-flow, detecting a single 3-node cycle. The cycle is normalized (starting from the lexicographically smallest node) and reported once, not three times."
+        }
+      ]
+    },
+    {
       "type": "passage",
       "slot": "passage-habits-review",
       "course": "para-501",
-      "passage": "Your team's `.paradigm/habits.yaml` for an e-commerce project:\n\n```yaml\noverrides:\n  ripple-before-modify:\n    severity: block\n  explore-before-implement:\n    severity: warn\n  test-new-components:\n    enabled: false\n  record-lore-for-significant:\n    severity: block\n\ncustom:\n  - id: check-price-validation\n    name: Validate Price Calculations\n    description: Ensure price calculation tests exist for any payment-related changes\n    category: testing\n    trigger: postflight\n    severity: warn\n    check:\n      type: tests-exist\n      params:\n        patterns: [\"**/price*.test.*\", \"**/payment*.test.*\"]\n    enabled: true\n```\n\nThe seed habits that are NOT shown in overrides retain their default values. The project has 10 seed habits plus 1 custom habit.",
+      "passage": "Your team's `.paradigm/habits.yaml` for an e-commerce project:\n\n```yaml\noverrides:\n  ripple-before-modify:\n    severity: block\n  explore-before-implement:\n    severity: warn\n  test-new-components:\n    enabled: false\n  record-lore-for-significant:\n    severity: block\n\ncustom:\n  - id: check-price-validation\n    name: Validate Price Calculations\n    description: Ensure price calculation tests exist for any payment-related changes\n    category: testing\n    trigger: postflight\n    severity: warn\n    check:\n      type: tests-exist\n      params:\n        patterns: [\"**/price*.test.*\", \"**/payment*.test.*\"]\n    enabled: true\n```\n\nThe seed habits that are NOT shown in overrides retain their default values. The project has 14 seed habits plus 1 custom habit.",
       "questions": [
         {
           "slot": "pg-habits-q1",
@@ -1388,6 +1423,509 @@
               "explanation": "The stop hook evaluates ALL checks independently. `record-lore-for-significant` is overridden to `severity: block` and 5 files exceeds the 3-file threshold — this blocks. `check-price-validation` has `trigger: postflight` and `severity: warn`, and if payment files were modified without matching test files, it warns. Both violations are reported. The stop hook blocks because at least one violation has `severity: block`, but it reports all violations so the agent can fix everything in one pass."
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-060",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-060",
+          "scenario": "A project has these habits enabled:\n- `commit-message-symbols` (on-commit/advisory) — checks commit messages match `type(#symbol):` format and include a `Symbols:` trailer\n- `flow-coverage-for-multi-component` (postflight/advisory) — checks that changes spanning 3+ components have a documented $flow\n\nAn agent modifies `#auth-handler`, `#session-store`, `#login-page`, and `#password-reset` but does not create a $flow. The agent then commits with message: `fix: update auth logic`.",
+          "question": "Which habits are violated?",
+          "choices": {
+            "A": "Only commit-message-symbols — the message lacks type(#symbol): format",
+            "B": "Only flow-coverage — 4 components without a $flow",
+            "C": "Both: commit message lacks #symbol in parens and Symbols: trailer, plus 4 components touched without a flow",
+            "D": "Neither — both are advisory and don't actually check anything",
+            "E": "Only flow-coverage — the commit message format is correct"
+          },
+          "correct": "C",
+          "explanation": "The commit message `fix: update auth logic` matches the conventional prefix `fix:` but lacks a #symbol in parentheses (should be `fix(#auth-handler):`) and has no `Symbols:` trailer. Additionally, 4 components were modified (>= 3 threshold) without a documented $flow. Both habits are violated — the advisory severity means they log notes rather than blocking."
+        },
+        {
+          "id": "plsat-060b",
+          "scenario": "A project enables `context-session-awareness` (preflight/advisory) and `aspect-anchors-valid` (postflight/advisory).\n\nAn agent starts a session, immediately begins modifying `~rate-limited` aspect without calling any context or session recovery tools. After modifying the aspect's anchor locations, the agent calls `paradigm_aspect_check` to verify the anchors are valid.",
+          "question": "What do the habit evaluations show?",
+          "choices": {
+            "A": "Both followed — the agent did check the aspect",
+            "B": "context-session-awareness: skipped (no context tools called); aspect-anchors-valid: followed (paradigm_aspect_check was called)",
+            "C": "Both skipped — advisory habits are always skipped",
+            "D": "context-session-awareness: followed (aspect_check counts as context); aspect-anchors-valid: skipped (anchors were modified)",
+            "E": "Both partial — the agent did some work for each"
+          },
+          "correct": "B",
+          "explanation": "context-session-awareness checks if paradigm_context_check, paradigm_session_recover, or paradigm_session_checkpoint was called — paradigm_aspect_check does not count. aspect-anchors-valid checks if paradigm_aspect_check was called for touched aspects, which it was. So the first is skipped and the second is followed."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-061",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-061",
+          "scenario": "Sentinel groups 8 incidents affecting `#payment-service` with these error messages:\n- 4 incidents: \"Stripe API returned 429: rate limited\"\n- 2 incidents: \"Payment webhook timeout after 30s\"\n- 2 incidents: \"Connection reset by peer during payment callback\"\n\nThe pattern suggester infers a resolution strategy from the grouped incidents.",
+          "question": "What strategy will the suggester infer?",
+          "choices": {
+            "A": "fix-code — the default for any group of incidents",
+            "B": "retry — timeout and network-related errors dominate the group",
+            "C": "scale-up — rate limiting means the service needs more capacity",
+            "D": "rollback — the errors suggest a recent deployment broke something",
+            "E": "config-change — the 429 means the API key needs updating"
+          },
+          "correct": "B",
+          "explanation": "The strategy inference checks error messages for keywords. 'timeout' and 'connection reset' match the retry strategy (timeout, network keywords). While '429: rate limited' could suggest scale-up, the 'timeout' keyword in 2 messages triggers the retry check first in the keyword priority order. The inference returns the first matching strategy, which is retry for timeout/network errors."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-062",
+      "course": "para-201",
+      "variants": [
+        {
+          "id": "plsat-062a",
+          "scenario": "A portal.yaml defines a gate `^subscription-required` with two locks:\n\n```yaml\nlocks:\n  - id: has-user\n    keys:\n      - expression: \"req.user != null\"\n  - id: active-sub\n    keys:\n      - expression: \"req.user.subscription.status === 'active'\"\n      - expression: \"req.user.subscription.plan !== 'free'\"\n```\n\nYou run `paradigm portal test --gate ^subscription-required`.",
+          "question": "How many test cases does the gate lock introspection auto-generate?",
+          "choices": {
+            "A": "2 — one passing case and one failing case",
+            "B": "3 — one passing case, one per-lock failure case for each of the 2 locks, but no empty entity case",
+            "C": "4 — one passing case, one per-lock failure case for each of the 2 locks, and one empty entity case",
+            "D": "5 — one case per key expression plus one empty entity case",
+            "E": "1 — only the passing case with all properties populated"
+          },
+          "correct": "C",
+          "explanation": "Gate lock introspection generates: (1) a passing case with all properties populated from all key expressions, (2) one failure case per lock (omitting that lock's required properties), and (3) an empty entity case that should always fail. With 2 locks, that's 1 + 2 + 1 = 4 test cases."
+        },
+        {
+          "id": "plsat-062b",
+          "scenario": "You need a machine-readable export of your portal configuration for a CI audit pipeline. Your portal.yaml has 5 gates and 12 routes.",
+          "question": "Which command produces a structured export suitable for programmatic consumption in CI?",
+          "choices": {
+            "A": "paradigm portal export --format json",
+            "B": "paradigm portal export --format csv",
+            "C": "paradigm portal export --format markdown",
+            "D": "paradigm doctor --json",
+            "E": "paradigm scan --verbose"
+          },
+          "correct": "A",
+          "explanation": "paradigm portal export --format json produces a structured JSON output with gates and routes arrays, ideal for CI pipelines. CSV is for spreadsheet analysis, markdown for documentation. paradigm doctor --json reports health checks, not portal config."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-063",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-063",
+          "scenario": "You join a team working on a large codebase. Many source directories have code but no `.purpose` files documenting their components. You want to quickly generate draft documentation.",
+          "question": "What is the correct approach using Paradigm's lint tooling?",
+          "choices": {
+            "A": "paradigm lint --fix — automatically creates .purpose files for all undocumented directories",
+            "B": "paradigm lint --auto-populate — scans source directories and suggests .purpose drafts, then paradigm lint --auto-populate --fix to write them",
+            "C": "paradigm scan --fix — rebuilds the index and creates missing .purpose files",
+            "D": "paradigm doctor --fix — finds missing documentation and generates stubs"
+          },
+          "correct": "B",
+          "explanation": "paradigm lint --auto-populate scans source directories (max depth 4) for undocumented components — directories containing source files but no .purpose file. Without --fix it reports suggestions; with --fix it writes draft .purpose files. paradigm lint --fix only fixes lint issues in existing .purpose files, it doesn't create new ones. scan and doctor don't generate .purpose files."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-064",
+      "course": "para-401",
+      "variants": [
+        {
+          "id": "plsat-064a",
+          "scenario": "A team has both AGENTS.md and llms.txt in their Paradigm project. A new developer asks what each file is for.",
+          "question": "Which statement correctly distinguishes the two files?",
+          "choices": {
+            "A": "AGENTS.md is for Claude, llms.txt is for all other LLMs",
+            "B": "AGENTS.md contains instructions (how to behave), llms.txt contains facts (what exists)",
+            "C": "llms.txt replaces AGENTS.md in Paradigm v2",
+            "D": "They contain the same information in different formats",
+            "E": "AGENTS.md is auto-generated but llms.txt must be hand-written"
+          },
+          "correct": "B",
+          "explanation": "AGENTS.md is prescriptive — it tells agents what tools to use, what conventions to follow, and what workflow to observe. llms.txt is descriptive — it tells agents what symbols exist, what flows are defined, and how the project is structured. Both are auto-generated by Paradigm (sync agents and sync-llms respectively) and serve distinct purposes."
+        },
+        {
+          "id": "plsat-064b",
+          "scenario": "An AI agent spawned in isolation needs to orient itself before working on a task. It has access to AGENTS.md, MCP tools, and the full codebase.",
+          "question": "What is the most token-efficient orientation sequence?",
+          "choices": {
+            "A": "Read all .purpose files, then read portal.yaml",
+            "B": "Read AGENTS.md → paradigm_session_recover → paradigm_navigate with context intent (~500 tokens total)",
+            "C": "paradigm_search for every symbol type → read matching files",
+            "D": "Read every file in .paradigm/ for full context",
+            "E": "Call paradigm_status repeatedly until context is sufficient"
+          },
+          "correct": "B",
+          "explanation": "The Fresh Context Principle: AGENTS.md provides instructions and conventions, paradigm_session_recover provides previous session context, and paradigm_navigate with context intent provides task-relevant files. Total cost: ~500 tokens — compared to thousands of tokens for file-reading approaches."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-065",
+      "course": "para-201",
+      "variants": [
+        {
+          "id": "plsat-065",
+          "scenario": "You have a `$checkout-flow` with these steps:\n1. ^authenticated (gate)\n2. #validate-cart (action)\n3. #process-payment (action)\n4. !order-placed (signal)\n\nYou run `paradigm flow diagram $checkout-flow`.",
+          "question": "In the generated Mermaid diagram, what shapes represent each step type?",
+          "choices": {
+            "A": "All steps are rectangles with different colors",
+            "B": "Gates are diamonds, actions are rectangles, signals are rounded boxes",
+            "C": "Gates are hexagons, actions are circles, signals are parallelograms",
+            "D": "All steps are circles connected by labeled arrows",
+            "E": "Gates are rounded boxes, actions are diamonds, signals are rectangles"
+          },
+          "correct": "B",
+          "explanation": "Paradigm's Mermaid diagram generator uses conventional flowchart shapes: diamond shapes (decision points) for gates, rectangles for actions, and rounded rectangles for signals. Gates also show deny paths when a failResponse or errorSignal is defined. Steps are color-coded: yellow for gates, blue for actions, green for signals."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-066",
+      "course": "para-401",
+      "variants": [
+        {
+          "id": "plsat-066",
+          "scenario": "Your MCP-connected agent calls `paradigm_search` for `#auth` twice within 10 seconds. The project has a ToolCache with a 30-second TTL configured.",
+          "question": "What happens on the second call?",
+          "choices": {
+            "A": "The search runs again because each MCP call is stateless",
+            "B": "The cached result is returned instantly without re-scanning the index",
+            "C": "The cache is checked but always invalidated because search results may change",
+            "D": "The second call is queued until the first cache entry expires",
+            "E": "An error is returned because duplicate calls are rate-limited"
+          },
+          "correct": "B",
+          "explanation": "The ToolCache uses a time-based TTL (default 30 seconds). When the same tool is called with the same arguments within the TTL window, the cached result is returned immediately without re-executing the underlying scan. This saves significant compute for repeated discovery operations like search, status, and navigate."
+        },
+        {
+          "id": "plsat-066b",
+          "scenario": "An agent calls `paradigm_reindex` to rebuild the static index after modifying several .purpose files. The project has ToolCache enabled.",
+          "question": "What happens to the ToolCache when reindex completes?",
+          "choices": {
+            "A": "Nothing — the cache is independent of the index",
+            "B": "Only search-related cache entries are invalidated",
+            "C": "The entire cache is cleared to ensure fresh results from the rebuilt index",
+            "D": "Cache entries are marked stale but still served until they expire naturally",
+            "E": "The cache TTL is doubled to avoid redundant scans after reindex"
+          },
+          "correct": "C",
+          "explanation": "When paradigm_reindex completes successfully, it calls toolCache.clear() to invalidate ALL cached entries. This is critical because the reindex rebuilds the underlying data that search, navigate, and status tools depend on. Serving stale cached results after a reindex would return outdated symbol information."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-067",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-067",
+          "scenario": "An agent has been working for 45 minutes, modifying 5 source files and touching symbols `#auth-middleware`, `^rate-limited`, and `!login-failed`. The session has 12 breadcrumbs recorded.",
+          "question": "What triggers auto-lore drafting?",
+          "choices": {
+            "A": "Auto-lore drafts after every file modification regardless of count",
+            "B": "Auto-lore drafts when 3+ files are modified, generating a partial LoreEntry from session breadcrumbs",
+            "C": "Auto-lore drafts only when the agent explicitly calls paradigm_lore_record",
+            "D": "Auto-lore drafts at a fixed time interval (every 30 minutes)",
+            "E": "Auto-lore drafts only during the on-stop habit check"
+          },
+          "correct": "B",
+          "explanation": "The draftLoreFromBreadcrumbs() function generates a partial LoreEntry when 3+ files have been modified in a session. It extracts tool usage statistics from breadcrumbs, includes the symbols touched and files modified, and tags the draft with 'auto-draft' for review. The 3-file threshold ensures trivial edits don't generate noise."
+        },
+        {
+          "id": "plsat-067b",
+          "scenario": "After a long coding session, the auto-lore system generates a draft entry. You inspect the draft and notice it has a tag you didn't add.",
+          "question": "What tag does auto-lore always apply to drafted entries?",
+          "choices": {
+            "A": "`auto-generated` — marking it as machine-created",
+            "B": "`auto-draft` — indicating it needs human review before finalization",
+            "C": "`session-log` — categorizing it as a session record",
+            "D": "`pending-review` — flagging it for team approval",
+            "E": "`unverified` — warning that the content may be incomplete"
+          },
+          "correct": "B",
+          "explanation": "Auto-drafted lore entries are always tagged with 'auto-draft' to distinguish them from manually recorded entries. This tag signals that the entry was machine-generated from session breadcrumbs and should be reviewed for accuracy before being treated as authoritative project history."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-068",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-068",
+          "scenario": "Your project's `.paradigm/config.yaml` contains:\n```yaml\nlimits:\n  habitsCacheTtlMs: 60000\n  threadTrailMax: 20\n  breadcrumbsMax: 100\n```",
+          "question": "What do these configurable limits control?",
+          "choices": {
+            "A": "Maximum file sizes for paradigm-managed files",
+            "B": "Rate limits for MCP tool calls per session",
+            "C": "Tunable parameters for habits cache duration, thread trail depth, and breadcrumb history length",
+            "D": "Hard caps on the number of symbols, flows, and gates allowed",
+            "E": "Timeout durations for CLI commands"
+          },
+          "correct": "C",
+          "explanation": "The LimitsConfig in config.yaml allows projects to tune operational parameters: habitsCacheTtlMs controls how long habit definitions are cached (default 30000ms), threadTrailMax sets the maximum breadcrumbs shown in thread trail output (default 10), and breadcrumbsMax sets the maximum breadcrumbs stored per session. These defaults work for most projects but can be adjusted for larger codebases."
+        },
+        {
+          "id": "plsat-068b",
+          "scenario": "A large monorepo project finds that paradigm_search is running too frequently, consuming unnecessary compute. They want to increase the cache duration for MCP tool results.",
+          "question": "Which config.yaml field controls MCP tool cache duration?",
+          "choices": {
+            "A": "`limits.searchCacheTtlMs` — specific to search operations",
+            "B": "`limits.toolCacheTtlMs` — controls the ToolCache TTL for all cached MCP tools",
+            "C": "`limits.mcpTimeoutMs` — sets the MCP response timeout",
+            "D": "`cache.ttl` — global cache setting for all paradigm operations",
+            "E": "`limits.habitsCacheTtlMs` — since habits and tools share the same cache"
+          },
+          "correct": "B",
+          "explanation": "The limits.toolCacheTtlMs field in config.yaml controls the TTL for the ToolCache that wraps paradigm_search, paradigm_status, and paradigm_navigate. The default is 30000ms (30 seconds). Increasing this value reduces redundant computations but may serve slightly stale results. It's separate from habitsCacheTtlMs which controls the habits definition cache."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-069",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-069",
+          "scenario": "Your team uses Paradigm's Global Brain (`~/.paradigm/`) to share wisdom, lore, and history across projects. After a year, the global directory has grown to contain hundreds of old entries.",
+          "question": "How do you clean up old Global Brain entries?",
+          "choices": {
+            "A": "Manually delete files from `~/.paradigm/` using `rm -rf`",
+            "B": "`paradigm global clean --older-than 90d` removes files older than the specified duration",
+            "C": "`paradigm scan --prune` removes unused global entries",
+            "D": "Global Brain entries are automatically pruned on each `paradigm shift`",
+            "E": "`paradigm doctor --fix` cleans up stale global files"
+          },
+          "correct": "B",
+          "explanation": "The `paradigm global clean` command scans ~/.paradigm/ directories (wisdom, lore, history, cache) for files older than the specified duration. The --older-than flag accepts human-readable durations like 90d, 30d, or 7d. Use --dry-run first to preview what would be deleted. This is safer than manual deletion because it respects directory structure and cleans up empty directories afterward."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-070",
+      "course": "para-401",
+      "variants": [
+        {
+          "id": "plsat-070",
+          "scenario": "A Claude Code plugin's `hooks.json` includes:\n```json\n{\n  \"compatibleVersions\": {\n    \"min\": \"3.0.0\",\n    \"max\": \"4.0.0\"\n  }\n}\n```\nYour installed Paradigm CLI is version 3.1.6.",
+          "question": "What happens when you run `paradigm hooks install`?",
+          "choices": {
+            "A": "Installation fails because 3.1.6 is not exactly 3.0.0 or 4.0.0",
+            "B": "Installation proceeds normally — 3.1.6 is within the compatible range",
+            "C": "A warning is shown but installation is blocked until you upgrade",
+            "D": "The plugin is downgraded to match version 3.0.0",
+            "E": "The compatibleVersions field is ignored during installation"
+          },
+          "correct": "B",
+          "explanation": "The plugin version compatibility check compares the installed Paradigm version against the min/max range in hooks.json. Since 3.1.6 >= 3.0.0 and 3.1.6 < 4.0.0, installation proceeds normally. If the version were outside the range (e.g., 2.9.0 or 4.1.0), a warning would be displayed advising the user to update their Paradigm version or the plugin."
+        },
+        {
+          "id": "plsat-070b",
+          "scenario": "You're developing a Paradigm plugin and want to ensure it only works with Paradigm versions that support the habits system (introduced in v3.0).",
+          "question": "Where do you declare this version requirement?",
+          "choices": {
+            "A": "In the plugin's `package.json` under `peerDependencies`",
+            "B": "In the plugin's `hooks.json` under the `compatibleVersions` field with `min: \"3.0.0\"`",
+            "C": "In the plugin's `.purpose` file under `dependencies`",
+            "D": "In the project's `.paradigm/config.yaml` under `plugins`",
+            "E": "Version requirements are not enforceable — plugins work with any version"
+          },
+          "correct": "B",
+          "explanation": "Plugin version compatibility is declared in the plugin's hooks.json file using the compatibleVersions field. Setting min to '3.0.0' ensures that paradigm hooks install will warn users running older versions that lack habits support. This check runs at the start of hook installation before any hooks are written."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-071",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-071",
+          "scenario": "You want to record a lore entry that credits both the human developer and the AI agent that collaborated on a feature. The lore system supports co-authorship tracking.",
+          "question": "Which field on a LoreEntry captures AI collaboration?",
+          "choices": {
+            "A": "`author` — set to the AI agent's name",
+            "B": "`assistedBy` — with type ('agent', 'tool', or 'human'), id, and optional role",
+            "C": "`contributors` — an array of all participant names",
+            "D": "`metadata.aiModel` — storing the model name used",
+            "E": "`tags` — add an 'ai-assisted' tag"
+          },
+          "correct": "B",
+          "explanation": "The assistedBy field on LoreEntry provides structured co-authorship tracking. It records the type of assistant (agent, tool, or human), their identifier (e.g., 'claude-opus-4', 'copilot'), and an optional role description. The author field remains the human developer, while assistedBy captures the AI collaboration context for project history."
+        },
+        {
+          "id": "plsat-071b",
+          "scenario": "Your team reviews lore entries from the past month and wants to understand how much AI assistance was involved in recent changes.",
+          "question": "How does the `assistedBy` field help with this analysis?",
+          "choices": {
+            "A": "It tracks token usage per AI interaction",
+            "B": "It records the AI's confidence score for each change",
+            "C": "It provides structured data (type, id, role) showing which AI tools or agents assisted each recorded session",
+            "D": "It measures the percentage of code written by AI vs human",
+            "E": "It links to the AI conversation transcript"
+          },
+          "correct": "C",
+          "explanation": "The assistedBy field captures three dimensions of AI collaboration: type (was it an agent like Claude, a tool like Copilot, or a human pair-programmer?), id (which specific model or tool?), and role (what was their contribution — implementation, review, planning?). This structured data enables teams to analyze collaboration patterns across their lore timeline."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-072",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-072",
+          "scenario": "A project has no `limits` section in `.paradigm/config.yaml`. An agent calls tools that rely on configurable limits — habits cache, thread trail, and ToolCache.",
+          "question": "What values are used when limits are not configured?",
+          "choices": {
+            "A": "All limits are set to 0 (unlimited)",
+            "B": "An error is thrown requiring explicit configuration",
+            "C": "Sensible defaults: habitsCacheTtlMs=30000, threadTrailMax=10, toolCacheTtlMs=30000, breadcrumbsMax=unlimited",
+            "D": "Limits are inherited from the Global Brain (~/.paradigm/) configuration",
+            "E": "Each tool prompts the user to set a limit on first use"
+          },
+          "correct": "C",
+          "explanation": "All configurable limits have sensible defaults that match the pre-configuration behavior: habits cache refreshes every 30 seconds, thread trail shows the last 10 breadcrumbs, ToolCache entries expire after 30 seconds. These defaults work well for most projects. The limits section in config.yaml is entirely optional — only override when you have a specific need."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-073",
+      "course": "para-401",
+      "variants": [
+        {
+          "id": "plsat-073",
+          "scenario": "An agent working on a complex feature calls these MCP tools in sequence:\n1. `paradigm_status` (cached)\n2. `paradigm_search` for `#auth` (cached)\n3. Edits 3 files, adds a new component\n4. `paradigm_reindex`\n5. `paradigm_search` for `#auth` again",
+          "question": "Does step 5 return the updated results including the new component?",
+          "choices": {
+            "A": "No — the search cache still has the old results from step 2",
+            "B": "Yes — reindex at step 4 clears all caches, so step 5 runs a fresh search against the rebuilt index",
+            "C": "Only if 30 seconds have passed since step 2",
+            "D": "Only if the agent explicitly called toolCache.clear()",
+            "E": "The search always bypasses cache after a write operation"
+          },
+          "correct": "B",
+          "explanation": "The reindex operation at step 4 has two effects: it rebuilds the static index from .purpose files and clears the entire ToolCache. This means step 5 performs a fresh search against the newly rebuilt index, which includes the new component. This cache-invalidation-on-reindex pattern ensures that discovery tools always reflect the current state after structural changes."
+        }
+      ]
+    },
+    {
+      "type": "variant-group",
+      "slot": "slot-074",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-074",
+          "scenario": "An auto-lore draft is generated from session breadcrumbs after modifying 6 files. The breadcrumbs show: 4 Edit tool calls, 2 Write tool calls, 8 Read tool calls, 3 paradigm_navigate calls.",
+          "question": "What information does the auto-lore draft extract from these breadcrumbs?",
+          "choices": {
+            "A": "Only the file paths that were modified",
+            "B": "A complete diff of all code changes",
+            "C": "Tool usage statistics (edit count, write count, read count) plus modified files and symbols touched",
+            "D": "The full text of every tool call and response",
+            "E": "Only the symbols referenced in paradigm_navigate calls"
+          },
+          "correct": "C",
+          "explanation": "The auto-lore drafting function analyzes breadcrumbs to extract tool usage statistics — counting edits, writes, reads, and paradigm tool calls. It combines this with the list of modified files and symbols touched to generate a summary. The draft doesn't include full diffs or response text, keeping the lore entry concise and focused on what happened rather than how."
+        },
+        {
+          "id": "plsat-074b",
+          "scenario": "An agent completes a task that modified only 2 files. The habits system runs the on-stop check.",
+          "question": "Will auto-lore drafting generate an entry?",
+          "choices": {
+            "A": "Yes — any file modification triggers auto-lore",
+            "B": "No — auto-lore requires 3+ modified files to trigger",
+            "C": "Yes — but only if the session lasted longer than 15 minutes",
+            "D": "No — auto-lore only runs during postflight, not on-stop",
+            "E": "It depends on the project's limits.breadcrumbsMax setting"
+          },
+          "correct": "B",
+          "explanation": "Auto-lore drafting has a 3-file minimum threshold. Modifying only 2 files does not trigger a draft because such small changes are typically routine fixes that don't warrant project history entries. This threshold aligns with the lore recording decision tree: 'Did I modify 3+ source files? YES → Record lore.' The threshold prevents noise in project history."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-075",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-075",
+          "scenario": "You run `paradigm global clean --older-than 30d --dry-run` and see:\n```\nWould delete 23 files from wisdom/\nWould delete 45 files from lore/\nWould delete 12 files from history/\nWould delete 0 files from cache/\n```",
+          "question": "What is the safest next step?",
+          "choices": {
+            "A": "Run `paradigm global clean --older-than 30d` to delete all 80 files immediately",
+            "B": "Review the specific files listed, then run without --dry-run if the deletions look correct",
+            "C": "Run `paradigm global clean --older-than 7d` to be more aggressive",
+            "D": "Delete the `~/.paradigm/` directory entirely since most files are old",
+            "E": "Skip cleanup — 80 files is too many to safely remove"
+          },
+          "correct": "B",
+          "explanation": "The --dry-run flag exists specifically to preview destructive operations. The safest workflow is: (1) dry-run to see what would be deleted, (2) review the file list for anything you want to keep, (3) run without --dry-run once satisfied. Global Brain files contain cross-project wisdom and lore that may be valuable — always review before bulk deletion."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-076",
+      "course": "para-401",
+      "variants": [
+        {
+          "id": "plsat-076",
+          "scenario": "Your project uses both the ToolCache (for MCP tool results) and the habits cache (for habit definitions). Both have configurable TTLs.",
+          "question": "Why are these two separate caches rather than one unified cache?",
+          "choices": {
+            "A": "Historical accident — they were built by different teams",
+            "B": "They cache different data types with different invalidation needs: tool results change on reindex, habit definitions change on file edits",
+            "C": "Performance — two smaller caches are faster than one large cache",
+            "D": "Security — MCP tool results must be isolated from habit definitions",
+            "E": "They are the same cache with different configuration keys"
+          },
+          "correct": "B",
+          "explanation": "The ToolCache caches MCP tool results (search, navigate, status) and is invalidated on reindex when the underlying index changes. The habits cache stores parsed habit definitions from habits.yaml and is invalidated when the file's modification time changes. These fundamentally different invalidation strategies require separate cache implementations — flushing all habit definitions because a .purpose file changed would be wasteful, and vice versa."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-077",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-077",
+          "scenario": "You're configuring a large monorepo with 500+ symbols. Sessions often span 30+ minutes with many breadcrumbs. You want to optimize the Paradigm configuration.",
+          "question": "Which limits configuration would be most appropriate?",
+          "choices": {
+            "A": "Set all limits to maximum values for the largest possible buffers",
+            "B": "Increase threadTrailMax to 25 and toolCacheTtlMs to 60000 for the larger codebase, keep other defaults",
+            "C": "Decrease all TTLs to 5000ms to ensure data is always fresh",
+            "D": "Remove the limits section entirely and rely on defaults",
+            "E": "Set breadcrumbsMax to 10 to save memory"
+          },
+          "correct": "B",
+          "explanation": "For large monorepos, increasing threadTrailMax (from default 10 to 25) provides more session context for complex tasks, and increasing toolCacheTtlMs (from 30s to 60s) reduces redundant index scans across the larger symbol space. Other defaults work well regardless of project size. Setting TTLs too low causes excessive recomputation, while setting breadcrumbsMax too low loses valuable session context."
         }
       ]
     }

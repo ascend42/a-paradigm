@@ -22,6 +22,10 @@ import {
   generateMcpToolReference,
   generateWorkflowProtocol,
   generateHandoffProtocol,
+  generateCheckpointProtocol,
+  generateHabitsSection,
+  generateLoreSection,
+  generateLlmsTxtSection,
 } from './base.js';
 
 export class AgentsAdapter implements IDEAdapter {
@@ -76,6 +80,18 @@ export class AgentsAdapter implements IDEAdapter {
 
     // Session recovery & handoff (new shared generator)
     sections.push(generateHandoffProtocol());
+
+    // Session checkpoints
+    sections.push(generateCheckpointProtocol());
+
+    // Habits compliance
+    sections.push(generateHabitsSection());
+
+    // Lore recording
+    sections.push(generateLoreSection());
+
+    // llms.txt reference
+    sections.push(generateLlmsTxtSection());
 
     // Update rules
     const updateSection = generateUpdateRules(config);

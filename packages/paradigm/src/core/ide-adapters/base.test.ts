@@ -12,6 +12,10 @@ import {
   generateCommitConvention,
   generateUpdateRules,
   generateCommandsReference,
+  generateCheckpointProtocol,
+  generateHabitsSection,
+  generateLoreSection,
+  generateLlmsTxtSection,
 } from './base.js';
 import { getDefaultParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
 
@@ -176,5 +180,55 @@ describe('generateCommandsReference', () => {
     expect(result).toContain('paradigm sync');
     expect(result).toContain('paradigm doctor');
     expect(result).toContain('paradigm status');
+  });
+});
+
+describe('generateCheckpointProtocol', () => {
+  it('includes checkpoint phases and usage example', () => {
+    const result = generateCheckpointProtocol();
+    expect(result).toContain('## Session Checkpoints');
+    expect(result).toContain('planning');
+    expect(result).toContain('implementing');
+    expect(result).toContain('validating');
+    expect(result).toContain('complete');
+    expect(result).toContain('paradigm_session_checkpoint');
+  });
+});
+
+describe('generateHabitsSection', () => {
+  it('includes habit triggers and categories', () => {
+    const result = generateHabitsSection();
+    expect(result).toContain('## Habits Compliance');
+    expect(result).toContain('preflight');
+    expect(result).toContain('postflight');
+    expect(result).toContain('on-stop');
+    expect(result).toContain('paradigm_habits_check');
+    expect(result).toContain('Discovery');
+    expect(result).toContain('Security');
+    expect(result).toContain('Documentation');
+    expect(result).toContain('Quality');
+    expect(result).toContain('paradigm_practice_context');
+  });
+});
+
+describe('generateLoreSection', () => {
+  it('includes lore types and recording example', () => {
+    const result = generateLoreSection();
+    expect(result).toContain('## Lore Recording');
+    expect(result).toContain('agent-session');
+    expect(result).toContain('decision');
+    expect(result).toContain('milestone');
+    expect(result).toContain('incident');
+    expect(result).toContain('paradigm_lore_record');
+    expect(result).toContain('paradigm_lore_timeline');
+  });
+});
+
+describe('generateLlmsTxtSection', () => {
+  it('references llms.txt and sync command', () => {
+    const result = generateLlmsTxtSection();
+    expect(result).toContain('## llms.txt');
+    expect(result).toContain('llms.txt');
+    expect(result).toContain('paradigm sync-llms');
   });
 });
