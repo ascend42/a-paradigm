@@ -12,6 +12,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import chalk from 'chalk';
 import {
   CLAUDE_CODE_STOP_HOOK,
@@ -21,6 +22,112 @@ import {
   CURSOR_POSTWRITE_HOOK,
   CURSOR_PRECOMMIT_HOOK,
 } from './generated-hooks.js';
+
+/**
+ * Detect whether the Paradigm plugin is active in Claude Code.
+ * Checks ~/.claude/settings.json for enabledPlugins and verifies the cache exists.
+ */
+function isParadigmPluginActive(): { active: boolean; cacheVersion?: string } {
+  try {
+    const globalSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+    if (!fs.existsSync(globalSettingsPath)) return { active: false };
+
+    const settings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
+    const enabled = settings.enabledPlugins?.['paradigm@a-paradigm'];
+    if (!enabled) return { active: false };
+
+    // Verify the cache actually exists with hooks
+    const cacheBase = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'a-paradigm', 'paradigm');
+    if (!fs.existsSync(cacheBase)) return { active: false };
+
+    const versions = fs.readdirSync(cacheBase)
+      .filter(d => fs.statSync(path.join(cacheBase, d)).isDirectory())
+      .sort()
+      .reverse();
+
+    if (versions.length === 0) return { active: false };
+
+    const latestCache = path.join(cacheBase, versions[0]);
+    const hooksJson = path.join(latestCache, 'hooks', 'hooks.json');
+    if (!fs.existsSync(hooksJson)) return { active: false };
+
+    return { active: true, cacheVersion: versions[0] };
+  } catch {
+    return { active: false };
+  }
+}
+
+/**
+ * Remove paradigm project-level Claude Code hooks (scripts + settings.json entries).
+ * Called when the plugin is handling hooks instead.
+ */
+function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; removed: string[] } {
+  const removed: string[] = [];
+
+  // Remove hook scripts
+  const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
+  if (fs.existsSync(claudeHooksDir)) {
+    for (const hookName of ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+      const hookPath = path.join(claudeHooksDir, hookName);
+      if (fs.existsSync(hookPath)) {
+        fs.unlinkSync(hookPath);
+        removed.push(hookName);
+      }
+    }
+    // Remove hooks dir if empty
+    try {
+      const remaining = fs.readdirSync(claudeHooksDir);
+      if (remaining.length === 0) {
+        fs.rmdirSync(claudeHooksDir);
+      }
+    } catch {
+      // Not critical
+    }
+  }
+
+  // Remove paradigm hook entries from settings.json
+  const settingsPath = path.join(rootDir, '.claude', 'settings.json');
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+
+      if (hooks) {
+        let modified = false;
+
+        for (const [key, arr] of Object.entries(hooks)) {
+          if (!Array.isArray(arr)) continue;
+          const filtered = arr.filter(
+            (h: unknown) => !JSON.stringify(h).includes('paradigm-'),
+          );
+          if (filtered.length !== arr.length) {
+            modified = true;
+            if (filtered.length === 0) {
+              delete hooks[key];
+            } else {
+              hooks[key] = filtered;
+            }
+          }
+        }
+
+        if (modified) {
+          // Remove empty hooks object
+          if (Object.keys(hooks).length === 0) {
+            delete settings.hooks;
+          } else {
+            settings.hooks = hooks;
+          }
+          fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+          removed.push('settings.json hooks');
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return { cleaned: removed.length > 0, removed };
+}
 
 const POST_COMMIT_HOOK = `#!/bin/sh
 # Paradigm post-commit hook - captures history from commits
@@ -207,8 +314,32 @@ export async function hooksInstallCommand(options: {
 
 /**
  * Install Claude Code hooks (.claude/hooks/ scripts + settings.json)
+ *
+ * When the Paradigm plugin is active, project-level hooks are unnecessary —
+ * the plugin's hooks.json delivers hooks via ${CLAUDE_PLUGIN_ROOT}/scripts/
+ * which always resolves to the latest cached version. In that case, we skip
+ * installation and clean up any existing stale project hooks.
  */
 async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise<void> {
+  // Check if the plugin is handling hooks
+  const plugin = isParadigmPluginActive();
+
+  if (plugin.active) {
+    console.log(chalk.cyan(`  Paradigm plugin v${plugin.cacheVersion} is active — hooks are managed by the plugin.`));
+
+    // Clean up any stale project-level hooks that would shadow the plugin
+    const { cleaned, removed } = cleanupProjectClaudeCodeHooks(rootDir);
+    if (cleaned) {
+      console.log(chalk.green(`  Cleaned up stale project hooks: ${removed.join(', ')}`));
+    } else {
+      console.log(chalk.gray('  No stale project hooks to clean up.'));
+    }
+
+    console.log(chalk.gray('  Plugin hooks auto-update with each session — no manual install needed.'));
+    return;
+  }
+
+  // No plugin — install project-level hooks as before
   const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
   fs.mkdirSync(claudeHooksDir, { recursive: true });
 
@@ -545,35 +676,69 @@ export async function hooksStatusCommand(): Promise<void> {
   // Claude Code hooks status
   console.log(chalk.magenta('  Claude Code Hooks Status\n'));
 
-  const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
-  const claudeHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
+  const plugin = isParadigmPluginActive();
+  if (plugin.active) {
+    console.log(chalk.cyan(`  Plugin: paradigm v${plugin.cacheVersion} (active)`));
+    console.log(chalk.green('  Hooks are managed by the plugin — auto-updates with each session.'));
 
-  for (const hookName of claudeHooks) {
-    const hookPath = path.join(claudeHooksDir, hookName);
-    if (fs.existsSync(hookPath)) {
-      console.log(chalk.green(`  ${hookName}: installed`));
-    } else {
-      console.log(chalk.gray(`  ${hookName}: not installed`));
+    // Warn about stale project hooks that shadow the plugin
+    const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
+    const staleHooks: string[] = [];
+    for (const hookName of ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+      if (fs.existsSync(path.join(claudeHooksDir, hookName))) {
+        staleHooks.push(hookName);
+      }
     }
-  }
 
-  // Check settings.json
-  const settingsPath = path.join(rootDir, '.claude', 'settings.json');
-  if (fs.existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      const hooks = settings.hooks || {};
-      const hasStop = JSON.stringify(hooks.Stop || []).includes('paradigm-stop.sh');
-      const hasPrecommit = JSON.stringify(hooks.PreToolUse || []).includes('paradigm-precommit.sh');
-      const hasPostwrite = JSON.stringify(hooks.PostToolUse || []).includes('paradigm-postwrite.sh');
-      console.log(chalk.gray(`  settings.json Stop hook: ${hasStop ? 'configured' : 'missing'}`));
-      console.log(chalk.gray(`  settings.json PreToolUse hook: ${hasPrecommit ? 'configured' : 'missing'}`));
-      console.log(chalk.gray(`  settings.json PostToolUse hook: ${hasPostwrite ? 'configured' : 'missing'}`));
-    } catch {
-      console.log(chalk.yellow('  settings.json: parse error'));
+    const settingsPath = path.join(rootDir, '.claude', 'settings.json');
+    let hasProjectHookEntries = false;
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        hasProjectHookEntries = JSON.stringify(settings.hooks || {}).includes('paradigm-');
+      } catch {
+        // Ignore
+      }
+    }
+
+    if (staleHooks.length > 0 || hasProjectHookEntries) {
+      console.log(chalk.yellow(`  WARNING: Stale project hooks detected (${staleHooks.join(', ')}${hasProjectHookEntries ? ', settings.json entries' : ''})`));
+      console.log(chalk.yellow('  These shadow the plugin hooks and may run outdated logic.'));
+      console.log(chalk.gray('  Run `paradigm hooks install --claude-code` to clean them up.'));
     }
   } else {
-    console.log(chalk.gray('  settings.json: not found'));
+    console.log(chalk.gray('  Plugin: not active (using project-level hooks)'));
+
+    const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
+    const claudeHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
+
+    for (const hookName of claudeHooks) {
+      const hookPath = path.join(claudeHooksDir, hookName);
+      if (fs.existsSync(hookPath)) {
+        console.log(chalk.green(`  ${hookName}: installed`));
+      } else {
+        console.log(chalk.gray(`  ${hookName}: not installed`));
+      }
+    }
+
+    // Check settings.json
+    const settingsPath = path.join(rootDir, '.claude', 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const hooks = settings.hooks || {};
+        const hasStop = JSON.stringify(hooks.Stop || []).includes('paradigm-stop.sh');
+        const hasPrecommit = JSON.stringify(hooks.PreToolUse || []).includes('paradigm-precommit.sh');
+        const hasPostwrite = JSON.stringify(hooks.PostToolUse || []).includes('paradigm-postwrite.sh');
+        console.log(chalk.gray(`  settings.json Stop hook: ${hasStop ? 'configured' : 'missing'}`));
+        console.log(chalk.gray(`  settings.json PreToolUse hook: ${hasPrecommit ? 'configured' : 'missing'}`));
+        console.log(chalk.gray(`  settings.json PostToolUse hook: ${hasPostwrite ? 'configured' : 'missing'}`));
+      } catch {
+        console.log(chalk.yellow('  settings.json: parse error'));
+      }
+    } else {
+      console.log(chalk.gray('  settings.json: not found'));
+    }
   }
 
   // Cursor hooks status

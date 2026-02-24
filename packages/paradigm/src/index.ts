@@ -515,6 +515,27 @@ teamCmd
     await teamStatusCommand(undefined, {});
   });
 
+// paradigm plugin <command>
+const pluginCmd = program
+  .command('plugin')
+  .description('Plugin management commands');
+
+pluginCmd
+  .command('check')
+  .description('Check for updates to installed Claude Code plugins')
+  .option('-u, --update', 'Pull latest changes for all stale marketplace clones')
+  .action(async (options) => {
+    const { pluginCheckCommand } = await import('./commands/plugin/check.js');
+    await pluginCheckCommand(options);
+  });
+
+// Default plugin action (check)
+pluginCmd
+  .action(async () => {
+    const { pluginCheckCommand } = await import('./commands/plugin/check.js');
+    await pluginCheckCommand({});
+  });
+
 // paradigm doctor
 program
   .command('doctor')

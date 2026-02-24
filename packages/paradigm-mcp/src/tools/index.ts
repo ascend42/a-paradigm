@@ -34,6 +34,7 @@ import { getPmToolsList, handlePmTool } from './pm.js';
 import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { getLoreToolsList, handleLoreTool } from './lore.js';
 import { getHabitsToolsList, handleHabitsTool } from './habits.js';
+import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
@@ -237,6 +238,19 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getLoreToolsList(),
           // Habits tools
           ...getHabitsToolsList(),
+          // Plugin update check
+          {
+            name: 'paradigm_plugin_check',
+            description: 'Check for updates to installed Claude Code plugins. Reports which marketplace clones have newer remote commits and which cached versions are stale.',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+            },
+            annotations: {
+              readOnlyHint: true,
+              destructiveHint: false,
+            },
+          },
         ],
       };
     }
@@ -254,8 +268,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       const tracker = getSessionTracker();
       tracker.setRootDir(ctx.rootDir);
       let recoveryPreamble: string | null = null;
+      let updateNotice: string | null = null;
       if (!tracker.hasRecoveredThisSession()) {
         recoveryPreamble = buildRecoveryPreamble(ctx.rootDir);
+        updateNotice = getPluginUpdateNotice();
+        schedulePluginUpdateCheck();
         tracker.markRecovered();
       }
 
@@ -814,6 +831,40 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           };
         }
 
+        case 'paradigm_plugin_check': {
+          const { runPluginUpdateCheck } = await import('../utils/plugin-update-checker.js');
+          const results = await runPluginUpdateCheck();
+          const updatable = results.filter(r => r.hasRemoteUpdate || r.hasCacheStale);
+
+          if (updatable.length === 0) {
+            const msg = results.length === 0
+              ? 'No Claude Code plugins found in ~/.claude/plugins/marketplaces/.'
+              : 'All installed plugins are up to date.';
+            trackToolCall(msg.length, name);
+            return { content: [{ type: 'text', text: msg }] };
+          }
+
+          const lines = ['Plugin updates available:\n'];
+          const pullCmds: string[] = [];
+          for (const r of updatable) {
+            if (r.hasRemoteUpdate) {
+              lines.push(`  ${r.plugin} (${r.repo}): remote has newer commits`);
+              pullCmds.push(`git -C ${r.marketplacePath} pull origin main`);
+            } else if (r.hasCacheStale) {
+              lines.push(`  ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (restart needed)`);
+            }
+          }
+          if (pullCmds.length > 0) {
+            lines.push(`\nUpdate command:\n  ${pullCmds.join(' && \\\n  ')}`);
+            lines.push('\nAfter running, restart the session to apply updates.');
+          } else {
+            lines.push('\nRestart the session to apply cached updates.');
+          }
+          const pluginText = lines.join('\n');
+          trackToolCall(pluginText.length, name);
+          return { content: [{ type: 'text', text: pluginText }] };
+        }
+
         default: {
           // Try navigate tool
           if (name === 'paradigm_navigate') {
@@ -976,11 +1027,12 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
       })(); // end IIFE for tool dispatch
 
-      // Prepend recovery preamble to the first tool response of a new session
-      if (recoveryPreamble) {
+      // Prepend recovery preamble and/or plugin update notice to the first tool response
+      if (recoveryPreamble || updateNotice) {
         const first = toolResult.content?.[0];
         if (first && typeof first === 'object' && 'text' in first && typeof first.text === 'string') {
-          first.text = recoveryPreamble + '\n\n' + first.text;
+          const preamble = [updateNotice, recoveryPreamble].filter(Boolean).join('\n\n');
+          first.text = preamble + '\n\n' + first.text;
         }
       }
 
