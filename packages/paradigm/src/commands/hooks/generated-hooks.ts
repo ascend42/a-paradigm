@@ -245,6 +245,8 @@ fi
 # --- Check 7: Lore entry expected for significant sessions ---
 if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   LORE_RECORDED=false
+
+  # Check git diff first (covers staged/committed lore)
   for file in $MODIFIED; do
     case "$file" in
       .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml)
@@ -253,6 +255,17 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
         ;;
     esac
   done
+
+  # Also check for recent lore on disk (covers MCP-written entries not yet staged)
+  if [ "$LORE_RECORDED" = false ]; then
+    TODAY=$(date -u +"%Y-%m-%d")
+    if [ -d ".paradigm/lore/entries/$TODAY" ]; then
+      ENTRY_COUNT=$(find ".paradigm/lore/entries/$TODAY" -name "*.yaml" 2>/dev/null | head -1)
+      if [ -n "$ENTRY_COUNT" ]; then
+        LORE_RECORDED=true
+      fi
+    fi
+  fi
 
   if [ "$LORE_RECORDED" = false ]; then
     VIOLATIONS="$VIOLATIONS
@@ -703,6 +716,8 @@ fi
 # --- Check 7: Lore entry expected for significant sessions ---
 if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   LORE_RECORDED=false
+
+  # Check git diff first (covers staged/committed lore)
   for file in $MODIFIED; do
     case "$file" in
       .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml)
@@ -711,6 +726,17 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
         ;;
     esac
   done
+
+  # Also check for recent lore on disk (covers MCP-written entries not yet staged)
+  if [ "$LORE_RECORDED" = false ]; then
+    TODAY=$(date -u +"%Y-%m-%d")
+    if [ -d ".paradigm/lore/entries/$TODAY" ]; then
+      ENTRY_COUNT=$(find ".paradigm/lore/entries/$TODAY" -name "*.yaml" 2>/dev/null | head -1)
+      if [ -n "$ENTRY_COUNT" ]; then
+        LORE_RECORDED=true
+      fi
+    fi
+  fi
 
   if [ "$LORE_RECORDED" = false ]; then
     VIOLATIONS="$VIOLATIONS
