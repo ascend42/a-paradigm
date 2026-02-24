@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.6] — 2026-02-24
+
+### Fixed
+
+- **Stop hook: lore check now finds MCP-written entries** — Check 7 (lore entry required for 3+ source file sessions) previously only looked in `git diff` output for lore files. MCP-written lore entries go to disk but aren't staged, so the check always failed. Now also checks for lore entries on disk with today's date. Fixes the loop where agents record lore but the hook keeps blocking.
+
+### Changed
+
+- **Version sync** — `@a-company/paradigm` 3.1.5 → 3.1.6, plugin 3.1.5 → 3.1.6.
+
 ## [3.1.5] — 2026-02-23
 
 ### Added
