@@ -29,6 +29,35 @@ export interface SwitchOptions {
 
 type McpMode = 'dev' | 'prod';
 
+/** Server transport config for the Continue client */
+interface ContinueServerTransport {
+  type?: string;
+  command: string;
+  args?: string[];
+  cwd?: string;
+}
+
+/** Server entry in Continue-style config */
+interface ContinueServerEntry {
+  transport?: ContinueServerTransport;
+}
+
+/** Standard MCP server entry (Cursor, Claude Desktop, Cline) */
+interface McpServerEntry {
+  command: string;
+  args?: string[];
+  cwd?: string;
+}
+
+/** Union config structure covering both Continue and standard MCP formats */
+interface McpConfigFile {
+  experimental?: {
+    modelContextProtocolServers?: ContinueServerEntry[];
+  };
+  mcpServers?: Record<string, McpServerEntry>;
+  [key: string]: unknown;
+}
+
 // ============================================================================
 // Core Logic
 // ============================================================================
@@ -74,10 +103,10 @@ function switchClient(
     return { success: false, message: 'Config file not found', changed: false };
   }
 
-  let config: any;
+  let config: McpConfigFile;
   try {
     const content = fs.readFileSync(client.configPath, 'utf-8');
-    config = JSON.parse(content);
+    config = JSON.parse(content) as McpConfigFile;
   } catch {
     return { success: false, message: 'Could not parse config', changed: false };
   }
@@ -108,14 +137,14 @@ function switchClient(
   } else {
     // Standard MCP format (Cursor, Claude Desktop, Claude Code, Cline)
     const servers = config?.mcpServers || {};
-    for (const [name, server] of Object.entries(servers) as [string, any][]) {
+    for (const [name, server] of Object.entries(servers)) {
       if (!isParadigmServer(name, server?.command || '')) continue;
 
       if (mode === 'dev') {
         server.command = 'node';
-        server.args = [devMcpPath, ...(server.args?.filter((a: string) => a !== 'paradigm-mcp') || ['.'])];
+        server.args = [devMcpPath, ...(server.args?.filter((a) => a !== 'paradigm-mcp') || ['.'])];
         // Ensure '.' is in args if no path argument exists
-        if (!server.args.some((a: string) => a === '.' || a.startsWith('/'))) {
+        if (!server.args.some((a) => a === '.' || a.startsWith('/'))) {
           server.args.push('.');
         }
         // Remove any duplicate '.'

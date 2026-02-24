@@ -11,11 +11,36 @@ import type {
   SymbolicContext,
 } from './types.js';
 
-// Similarity threshold for grouping (0-1)
-const SIMILARITY_THRESHOLD = 0.6;
+// Default similarity threshold for grouping (0-1)
+const DEFAULT_SIMILARITY_THRESHOLD = 0.6;
+
+// Time-decay half-life in days (older incidents contribute less to similarity)
+const DECAY_HALF_LIFE_DAYS = 14;
+
+export interface GrouperConfig {
+  /** Similarity threshold 0-1 (default: 0.6) */
+  similarityThreshold?: number;
+  /** Time-decay half-life in days (default: 14) */
+  decayHalfLifeDays?: number;
+  /** Enable stack trace fingerprinting for better grouping (default: true) */
+  useStackFingerprint?: boolean;
+}
 
 export class IncidentGrouper {
-  constructor(private storage: SentinelStorage) {}
+  private similarityThreshold: number;
+  private decayHalfLifeDays: number;
+  private useStackFingerprint: boolean;
+
+  constructor(
+    private storage: SentinelStorage,
+    config?: GrouperConfig,
+  ) {
+    this.similarityThreshold =
+      config?.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
+    this.decayHalfLifeDays =
+      config?.decayHalfLifeDays ?? DECAY_HALF_LIFE_DAYS;
+    this.useStackFingerprint = config?.useStackFingerprint ?? true;
+  }
 
   /**
    * Try to find or create a group for an incident
@@ -81,7 +106,7 @@ export class IncidentGrouper {
 
       const score = this.calculateSimilarity(incident, candidate);
 
-      if (score >= SIMILARITY_THRESHOLD) {
+      if (score >= this.similarityThreshold) {
         similar.push({ incident: candidate, score });
       }
     }
@@ -115,7 +140,7 @@ export class IncidentGrouper {
         (other) =>
           other.id !== incident.id &&
           !processed.has(other.id) &&
-          this.calculateSimilarity(incident, other) >= SIMILARITY_THRESHOLD
+          this.calculateSimilarity(incident, other) >= this.similarityThreshold
       );
 
       if (similar.length + 1 >= minSize) {
@@ -150,6 +175,8 @@ export class IncidentGrouper {
 
   /**
    * Calculate similarity between two incidents (0-1)
+   * Applies time-decay so older incidents contribute less, and optionally
+   * uses stack trace fingerprinting for more accurate grouping.
    */
   private calculateSimilarity(
     a: SymbolicIncidentRecord,
@@ -158,8 +185,14 @@ export class IncidentGrouper {
     let score = 0;
     let maxScore = 0;
 
-    // Symbol matching (60% weight)
-    const symbolWeight = 0.6;
+    // Determine weights based on whether stack fingerprinting is active
+    const hasStacks = this.useStackFingerprint && a.error.stack && b.error.stack;
+    const symbolWeight = hasStacks ? 0.45 : 0.6;
+    const errorWeight = hasStacks ? 0.25 : 0.3;
+    const envWeight = 0.1;
+    const stackWeight = hasStacks ? 0.2 : 0;
+
+    // Symbol matching
     const symbolTypes: (keyof SymbolicContext)[] = [
       'feature',
       'component',
@@ -182,8 +215,7 @@ export class IncidentGrouper {
       }
     }
 
-    // Error message similarity (30% weight)
-    const errorWeight = 0.3;
+    // Error message similarity
     const errorSimilarity = this.stringSimilarity(
       a.error.message,
       b.error.message
@@ -191,14 +223,69 @@ export class IncidentGrouper {
     score += errorWeight * errorSimilarity;
     maxScore += errorWeight;
 
-    // Same environment bonus (10% weight)
-    const envWeight = 0.1;
+    // Same environment bonus
     if (a.environment === b.environment) {
       score += envWeight;
     }
     maxScore += envWeight;
 
-    return maxScore > 0 ? score / maxScore : 0;
+    // Stack trace fingerprint similarity
+    if (hasStacks) {
+      const aFingerprint = this.fingerprintStack(a.error.stack!);
+      const bFingerprint = this.fingerprintStack(b.error.stack!);
+      const stackSimilarity = this.compareFingerprints(aFingerprint, bFingerprint);
+      score += stackWeight * stackSimilarity;
+      maxScore += stackWeight;
+    }
+
+    const rawScore = maxScore > 0 ? score / maxScore : 0;
+
+    // Apply time-decay: reduce score for incidents far apart in time
+    const timeDelta = Math.abs(
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    const daysDelta = timeDelta / (1000 * 60 * 60 * 24);
+    const decayFactor = Math.pow(0.5, daysDelta / this.decayHalfLifeDays);
+
+    return rawScore * decayFactor;
+  }
+
+  /**
+   * Extract a fingerprint from a stack trace by normalizing frames.
+   * Strips line numbers, column numbers, and absolute paths to capture
+   * the structural signature of the call stack.
+   */
+  private fingerprintStack(stack: string): string[] {
+    return stack
+      .split('\n')
+      .filter((line) => line.trim().startsWith('at '))
+      .slice(0, 10)
+      .map((frame) => {
+        return frame
+          .trim()
+          .replace(/:\d+:\d+\)?$/, '')     // strip :line:col
+          .replace(/\(.*[/\\]/, '(')        // strip absolute path prefix
+          .replace(/^\s*at\s+/, '');         // strip "at " prefix
+      });
+  }
+
+  /**
+   * Compare two stack fingerprints (0-1 similarity)
+   */
+  private compareFingerprints(a: string[], b: string[]): number {
+    if (a.length === 0 && b.length === 0) return 1;
+    if (a.length === 0 || b.length === 0) return 0;
+
+    let matches = 0;
+    const maxLen = Math.max(a.length, b.length);
+
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] === b[i]) {
+        matches++;
+      }
+    }
+
+    return matches / maxLen;
   }
 
   /**

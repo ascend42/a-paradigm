@@ -120,6 +120,10 @@ export type ResolutionStrategy =
   | 'fallback'
   | 'fix-data'
   | 'fix-code'
+  | 'rollback'
+  | 'config-change'
+  | 'scale-up'
+  | 'investigate'
   | 'ignore'
   | 'escalate';
 export type PatternPriority = 'low' | 'medium' | 'high' | 'critical';

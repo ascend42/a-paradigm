@@ -14,6 +14,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/navigator.js';
 import { loadNavigatorContext, navigate, getSkipPatterns } from '../utils/navigator-loader.js';
 import { getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
+import { toolCache } from '../utils/tool-cache.js';
 
 /**
  * Navigate tool definition
@@ -21,7 +22,7 @@ import { getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
 export const navigateTool: Tool = {
   name: 'paradigm_navigate',
   description:
-    'Navigate the codebase efficiently. Use "find" to locate a symbol, "explore" to browse an area, or "context" to get relevant files for a task.',
+    'Navigate the codebase efficiently. Use "find" to locate a symbol, "explore" to browse an area, or "context" to get relevant files for a task. Returns file paths, symbol locations, and context summaries. ~200 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -137,43 +138,49 @@ export async function handleNavigateTool(
     };
   }
 
-  // Execute navigation
-  const result = navigate(navCtx.config, input, ctx.rootDir);
+  // Build cache key from input parameters
+  const navCacheKey = `navigate:${input.intent}:${input.target || ''}:${input.task || ''}`;
+  const cachedText = await toolCache.getOrCompute(navCacheKey, () => {
+    // Execute navigation
+    const result = navigate(navCtx.config, input, ctx.rootDir);
 
-  // Format response
-  const response: Record<string, unknown> = {
-    intent: input.intent,
-    ...(input.target && { target: input.target }),
-    ...(input.task && { task: input.task }),
-    paths: result.paths,
-    symbols: result.symbols,
-    skip: result.skip.slice(0, 10), // Limit skip patterns in output
-    suggested_order: result.suggested_order,
-    ...(result.explanation && { explanation: result.explanation }),
-  };
+    // Format response
+    const response: Record<string, unknown> = {
+      intent: input.intent,
+      ...(input.target && { target: input.target }),
+      ...(input.task && { task: input.task }),
+      paths: result.paths,
+      symbols: result.symbols,
+      skip: result.skip.slice(0, 10), // Limit skip patterns in output
+      suggested_order: result.suggested_order,
+      ...(result.explanation && { explanation: result.explanation }),
+    };
 
-  // Indicate if using auto-generated navigator
-  if (navCtx.config?.auto_generated) {
-    response.auto_generated = true;
-    response.tip = 'Using auto-generated navigator from .purpose files. Run `paradigm scan` for more accurate results.';
-  }
+    // Indicate if using auto-generated navigator
+    if (navCtx.config?.auto_generated) {
+      response.auto_generated = true;
+      response.tip = 'Using auto-generated navigator from .purpose files. Run `paradigm scan` for more accurate results.';
+    }
 
-  // Add helpful metadata and recovery suggestions
-  if (result.paths.length === 0) {
-    response.note = 'No paths found.';
-    response.recovery = [
-      'Try a different search term',
-      'Use `paradigm_search` to find symbols by name',
-      'Check `.purpose` files exist in your project',
-      'Run `paradigm scan` to build the full navigator index',
-    ];
-  } else if (result.paths.length > 5) {
-    response.tip = response.tip || 'Many paths returned. Start with suggested_order for efficient exploration.';
-  }
+    // Add helpful metadata and recovery suggestions
+    if (result.paths.length === 0) {
+      response.note = 'No paths found.';
+      response.recovery = [
+        'Try a different search term',
+        'Use `paradigm_search` to find symbols by name',
+        'Check `.purpose` files exist in your project',
+        'Run `paradigm scan` to build the full navigator index',
+      ];
+    } else if (result.paths.length > 5) {
+      response.tip = response.tip || 'Many paths returned. Start with suggested_order for efficient exploration.';
+    }
+
+    return JSON.stringify(response, null, 2);
+  });
 
   return {
     handled: true,
-    text: JSON.stringify(response, null, 2),
+    text: cachedText,
   };
 }
 

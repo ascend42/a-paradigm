@@ -224,7 +224,13 @@ class SessionTracker {
       filesExplored: this.extractFilesFromBreadcrumbs(),
     };
 
-    const jsonData = JSON.stringify(data, null, 2);
+    let jsonData: string;
+    try {
+      jsonData = JSON.stringify(data, null, 2);
+    } catch (err) {
+      console.error('[paradigm-mcp] persistBreadcrumbs: JSON.stringify failed:', (err as Error).message);
+      return;
+    }
 
     // Write to local .paradigm/session-breadcrumbs.json
     try {
@@ -234,8 +240,8 @@ class SessionTracker {
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(filePath, jsonData);
-    } catch {
-      // Silently fail - breadcrumbs are optional
+    } catch (err) {
+      console.error('[paradigm-mcp] persistBreadcrumbs: local write failed:', (err as Error).message);
     }
 
     // Write to global ~/.paradigm/sessions/{hash}/breadcrumbs.json
@@ -243,8 +249,8 @@ class SessionTracker {
       const globalSessionDir = getSessionDir(this.rootDir);
       fs.writeFileSync(path.join(globalSessionDir, 'breadcrumbs.json'), jsonData);
       writeProjectMeta(this.rootDir);
-    } catch {
-      // Silently fail - global persistence is best-effort
+    } catch (err) {
+      console.error('[paradigm-mcp] persistBreadcrumbs: global write failed:', (err as Error).message);
     }
   }
 
@@ -283,6 +289,7 @@ class SessionTracker {
   /**
    * Save a cognitive-transition checkpoint for crash recovery.
    * Fills in timestamp, sessionId, and snapshots recent breadcrumbs.
+   * Returns the checkpoint and whether it was persisted to disk.
    */
   saveCheckpoint(data: {
     phase: SessionCheckpoint['phase'];
@@ -291,7 +298,7 @@ class SessionTracker {
     modifiedFiles?: string[];
     symbolsTouched?: string[];
     decisions?: string[];
-  }): SessionCheckpoint {
+  }): { checkpoint: SessionCheckpoint; persisted: { local: boolean; global: boolean } } {
     const checkpoint: SessionCheckpoint = {
       phase: data.phase,
       context: data.context,
@@ -303,8 +310,8 @@ class SessionTracker {
       decisions: data.decisions,
       recentBreadcrumbs: this.session.breadcrumbs.slice(-10),
     };
-    this.persistCheckpoint(checkpoint);
-    return checkpoint;
+    const persisted = this.persistCheckpoint(checkpoint);
+    return { checkpoint, persisted };
   }
 
   /**
@@ -352,11 +359,23 @@ class SessionTracker {
 
   /**
    * Persist checkpoint to both local and global paths.
+   * Returns which writes succeeded so callers can report accurately.
    */
-  private persistCheckpoint(checkpoint: SessionCheckpoint): void {
-    if (!this.rootDir) return;
+  private persistCheckpoint(checkpoint: SessionCheckpoint): { local: boolean; global: boolean } {
+    const result = { local: false, global: false };
 
-    const jsonData = JSON.stringify(checkpoint, null, 2);
+    if (!this.rootDir) {
+      console.error('[paradigm-mcp] persistCheckpoint: rootDir not set, skipping write');
+      return result;
+    }
+
+    let jsonData: string;
+    try {
+      jsonData = JSON.stringify(checkpoint, null, 2);
+    } catch (err) {
+      console.error('[paradigm-mcp] persistCheckpoint: JSON.stringify failed:', (err as Error).message);
+      return result;
+    }
 
     // Write to local .paradigm/session-checkpoint.json
     try {
@@ -366,8 +385,9 @@ class SessionTracker {
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(filePath, jsonData);
-    } catch {
-      // Silently fail - checkpoints are best-effort
+      result.local = true;
+    } catch (err) {
+      console.error('[paradigm-mcp] persistCheckpoint: local write failed:', (err as Error).message);
     }
 
     // Write to global ~/.paradigm/sessions/{hash}/checkpoint.json
@@ -375,9 +395,12 @@ class SessionTracker {
       const globalSessionDir = getSessionDir(this.rootDir);
       fs.writeFileSync(path.join(globalSessionDir, 'checkpoint.json'), jsonData);
       writeProjectMeta(this.rootDir);
-    } catch {
-      // Silently fail - global persistence is best-effort
+      result.global = true;
+    } catch (err) {
+      console.error('[paradigm-mcp] persistCheckpoint: global write failed:', (err as Error).message);
     }
+
+    return result;
   }
 
   /**

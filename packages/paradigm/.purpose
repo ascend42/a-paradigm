@@ -86,6 +86,10 @@ features:
     components:
       - '#sync-handler'
       - '#ide-adapters'
+  sync-llms-command:
+    description: Generate llms.txt - LLM-readable project summary following the llms.txt standard
+    components:
+      - '#sync-llms-handler'
   cursorrules-command:
     description: Generate .cursorrules from .paradigm config
     components:
@@ -225,10 +229,14 @@ features:
       - '#claude-code-hooks-installer'
       - '#cursor-hooks-installer'
   thread-command:
-    description: Session continuity management (thread.md)
+    description: Session continuity management (thread.md) with configurable trail/breadcrumb limits via limits.threadTrailMax in config.yaml
     components:
       - '#thread-handler'
       - '#session-storage'
+  global-command:
+    description: Manage Global Brain (~/.paradigm/) including rotation of old files from wisdom, lore, history, and cache directories
+    components:
+      - '#global-clean-handler'
   sentinel-command:
     description: Launch the unified codebase intelligence UI
     components:
@@ -262,6 +270,8 @@ components:
     description: Detects existing IDE files and project type
   sync-handler:
     description: Handles paradigm sync command logic
+  sync-llms-handler:
+    description: Generates llms.txt from .paradigm config, navigator.yaml, flows.yaml, and portal.yaml
   ide-adapters:
     description: Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)
   lint-handler:
@@ -377,6 +387,8 @@ components:
     description: Generates and runs gate tests
   portal-viewer:
     description: Real-time portal visualization dashboard
+  global-clean-handler:
+    description: Scans and removes old files from ~/.paradigm/ subdirectories with configurable age threshold
 signals:
   init-success:
     description: Paradigm initialized successfully

@@ -35,7 +35,7 @@ export function getWisdomToolsList() {
     {
       name: 'paradigm_wisdom_context',
       description:
-        'Get team wisdom (preferences, antipatterns, decisions) for symbols before implementing. Call this before making changes to understand team patterns.',
+        'Get team wisdom (preferences, antipatterns, decisions) for symbols before implementing. Call this before making changes to understand team patterns. Returns preferences, antipatterns, and decisions relevant to the specified symbols. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -59,7 +59,7 @@ export function getWisdomToolsList() {
     {
       name: 'paradigm_wisdom_record',
       description:
-        'Record a new team learning: antipattern (what not to do) or decision (architectural choice)',
+        'Record a new team learning: antipattern (what not to do) or decision (architectural choice). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -144,7 +144,7 @@ export function getWisdomToolsList() {
     },
     {
       name: 'paradigm_wisdom_promote',
-      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects.',
+      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -167,7 +167,7 @@ export function getWisdomToolsList() {
     },
     {
       name: 'paradigm_wisdom_promote',
-      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects.',
+      description: 'Promote a project-local antipattern or decision to global scope (~/.paradigm/wisdom/). Makes it available across all projects. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -186,7 +186,7 @@ export function getWisdomToolsList() {
     },
     {
       name: 'paradigm_wisdom_expert',
-      description: 'Find human experts who know about specific symbols or areas',
+      description: 'Find human experts who know about specific symbols or areas. Returns names and contact info for relevant experts. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

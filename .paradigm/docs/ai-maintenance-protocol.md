@@ -236,6 +236,61 @@ Before completing any task, ask yourself:
 
 ---
 
+## Decision Trees
+
+### Should I Record Lore?
+
+```
+Did I modify 3+ source files?
+  YES → Record lore (type: agent-session)
+  NO  → Did I make an architectural decision?
+          YES → Record lore (type: decision)
+          NO  → Did I complete a significant milestone?
+                  YES → Record lore (type: milestone)
+                  NO  → Did I resolve a production incident?
+                          YES → Record lore (type: incident)
+                          NO  → Skip lore recording
+```
+
+### Should I Create a Flow?
+
+```
+Does the feature have 3+ ordered steps?
+  YES → Does it involve authorization gates?
+          YES → Definitely create a $flow
+          NO  → Does it span multiple components?
+                  YES → Create a $flow
+                  NO  → Probably not needed
+  NO  → Is there a defined sequence of gate → action → signal?
+          YES → Create a $flow (even short flows benefit)
+          NO  → Skip — use .purpose components instead
+```
+
+### New Feature Compliance Checklist
+
+```
+Starting a new feature:
+1. □ Run paradigm_pm_preflight with task description
+2. □ Run paradigm_ripple for symbols you'll modify
+3. □ Run paradigm_gates_for_route for any new API endpoints
+4. □ Run paradigm_habits_check({ trigger: "preflight" })
+
+During implementation:
+5. □ Create .purpose file in feature directory
+6. □ Update portal.yaml for any protected routes
+7. □ Define $flow in flows.yaml if feature spans 3+ steps
+8. □ Save paradigm_session_checkpoint at phase transitions
+
+After implementation:
+9.  □ Run paradigm_habits_check({ trigger: "postflight" })
+10. □ Run paradigm_pm_postflight with modified files and symbols
+11. □ Run paradigm_reindex to rebuild static index
+12. □ Record lore if 3+ files were modified
+13. □ Run paradigm_flow_validate if flows were affected
+```
+
+---
+
 ## Automated Reminders
 
 ### In CLAUDE.md / .cursorrules

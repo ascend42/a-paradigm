@@ -76,6 +76,14 @@ function evaluateHabit(
       return evaluateFileModified(habit, context);
     case 'git-clean':
       return evaluateGitClean(habit, context);
+    case 'commit-message-format':
+      return evaluateCommitMessageFormat(habit, context);
+    case 'flow-coverage':
+      return evaluateFlowCoverage(habit, context);
+    case 'context-checked':
+      return evaluateContextChecked(habit, context);
+    case 'aspect-anchored':
+      return evaluateAspectAnchored(habit, context);
     default:
       return {
         habit,
@@ -460,6 +468,201 @@ function evaluateGitClean(
 }
 
 /**
+ * Check if commit messages follow the required format (e.g., Symbols: trailer)
+ */
+function evaluateCommitMessageFormat(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  if (!context.commitMessage) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'No commit message to check (not a commit trigger)',
+    };
+  }
+
+  const patterns = habit.check.params.messagePatterns || [
+    '^(feat|fix|refactor|chore|docs|test|style|perf|ci|build)\\(',
+    'Symbols:',
+  ];
+
+  const matchedPatterns = patterns.filter((p) =>
+    new RegExp(p, 'm').test(context.commitMessage!)
+  );
+
+  if (matchedPatterns.length === patterns.length) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'Commit message matches all required patterns',
+      evidence: matchedPatterns,
+    };
+  }
+
+  if (matchedPatterns.length > 0) {
+    const missing = patterns.filter(
+      (p) => !new RegExp(p, 'm').test(context.commitMessage!)
+    );
+    return {
+      habit,
+      result: 'partial',
+      reason: `Commit message matches ${matchedPatterns.length}/${patterns.length} patterns. Missing: ${missing.join(', ')}`,
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: 'Commit message does not match required format patterns',
+  };
+}
+
+/**
+ * Check if multi-component changes have flow coverage
+ */
+function evaluateFlowCoverage(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  // Only relevant when 3+ components are touched
+  const componentSymbols = context.symbolsTouched.filter((s) =>
+    s.startsWith('#')
+  );
+
+  if (componentSymbols.length < 3) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'Fewer than 3 components touched — flow not required',
+    };
+  }
+
+  if (context.hasFlowCoverage) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'Flow coverage exists for multi-component changes',
+    };
+  }
+
+  // Check if flow validation tools were called
+  const flowTools = [
+    'paradigm_flow_validate',
+    'paradigm_flows_affected',
+    'paradigm_purpose_add_flow',
+  ];
+  const calledFlowTools = flowTools.filter((t) =>
+    context.toolsCalled.includes(t)
+  );
+
+  if (calledFlowTools.length > 0) {
+    return {
+      habit,
+      result: 'followed',
+      reason: `Flow tools called: ${calledFlowTools.join(', ')}`,
+      evidence: calledFlowTools,
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: `${componentSymbols.length} components touched without flow coverage or flow tools called`,
+    evidence: componentSymbols.slice(0, 5),
+  };
+}
+
+/**
+ * Check if context/session tools were called for session awareness
+ */
+function evaluateContextChecked(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  const contextTools = habit.check.params.contextTools || [
+    'paradigm_context_check',
+    'paradigm_session_recover',
+    'paradigm_session_checkpoint',
+  ];
+
+  const calledTools = contextTools.filter((t) =>
+    context.toolsCalled.includes(t)
+  );
+
+  if (calledTools.length > 0) {
+    return {
+      habit,
+      result: 'followed',
+      reason: `Context tools called: ${calledTools.join(', ')}`,
+      evidence: calledTools,
+    };
+  }
+
+  // Not applicable if no significant work happened
+  if (
+    context.filesModified.length === 0 &&
+    context.symbolsTouched.length === 0
+  ) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'No modifications made, context check not applicable',
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: 'No context/session tools called during session',
+  };
+}
+
+/**
+ * Check if aspect anchors are valid for touched aspects
+ */
+function evaluateAspectAnchored(
+  habit: HabitDefinition,
+  context: EvaluationContext
+): HabitEvaluation {
+  const aspectSymbols = context.symbolsTouched.filter((s) =>
+    s.startsWith('~')
+  );
+
+  if (aspectSymbols.length === 0) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'No aspects touched',
+    };
+  }
+
+  if (context.aspectAnchorsValid === true) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'Aspect anchors validated and valid',
+    };
+  }
+
+  // Check if aspect check tool was called
+  if (context.toolsCalled.includes('paradigm_aspect_check')) {
+    return {
+      habit,
+      result: 'followed',
+      reason: 'paradigm_aspect_check was called to validate anchors',
+    };
+  }
+
+  return {
+    habit,
+    result: 'skipped',
+    reason: `${aspectSymbols.length} aspect(s) touched without anchor validation`,
+    evidence: aspectSymbols.slice(0, 5),
+  };
+}
+
+/**
  * Build evaluation context from available session data
  */
 export function buildEvaluationContext(params: {
@@ -471,6 +674,9 @@ export function buildEvaluationContext(params: {
   taskAddsRoutes?: boolean;
   taskDescription?: string;
   gitClean?: boolean;
+  commitMessage?: string;
+  hasFlowCoverage?: boolean;
+  aspectAnchorsValid?: boolean;
 }): EvaluationContext {
   return {
     toolsCalled: params.toolsCalled || [],
@@ -481,5 +687,8 @@ export function buildEvaluationContext(params: {
     taskAddsRoutes: params.taskAddsRoutes || false,
     taskDescription: params.taskDescription,
     gitClean: params.gitClean,
+    commitMessage: params.commitMessage,
+    hasFlowCoverage: params.hasFlowCoverage,
+    aspectAnchorsValid: params.aspectAnchorsValid,
   };
 }

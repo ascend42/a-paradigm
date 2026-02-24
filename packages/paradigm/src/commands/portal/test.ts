@@ -11,6 +11,7 @@ import { validateGateway } from '@a-company/portal-manager';
 import { parseGateConfig } from '@a-company/portal-core';
 import { setGateClient, createGate } from '@a-company/portal-sdk';
 import type { GatewayTestCase } from '@a-company/portal-manager';
+import type { Gate } from '@a-company/portal-core';
 
 /**
  * Options for gate test command
@@ -26,6 +27,146 @@ interface GateTestOptions {
   framework?: 'jest' | 'vitest' | 'mocha';
   /** Output directory */
   output?: string;
+}
+
+/**
+ * Extract property paths from a JavaScript expression.
+ * Parses patterns like `req.user`, `entity.roles.includes(...)`, `obj.id !== null`
+ * and returns the root property paths referenced.
+ */
+function extractPropertiesFromExpression(expr: string): string[] {
+  // Match property access patterns: word.word, word.word.word, etc.
+  const propPattern = /\b([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)+)/g;
+  const matches = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = propPattern.exec(expr)) !== null) {
+    matches.add(match[1]);
+  }
+
+  return [...matches];
+}
+
+/**
+ * Build a minimal test entity that satisfies a property path.
+ * e.g., "req.user.id" → { req: { user: { id: "test-value" } } }
+ */
+function buildEntityFromPath(path: string): Record<string, unknown> {
+  const parts = path.split('.');
+  const root: Record<string, unknown> = {};
+  let current: Record<string, unknown> = root;
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (i === parts.length - 1) {
+      // Leaf — assign a plausible test value
+      current[part] = 'test-value';
+    } else {
+      const next: Record<string, unknown> = {};
+      current[part] = next;
+      current = next;
+    }
+  }
+
+  return root;
+}
+
+/**
+ * Deep merge two objects (second wins on conflict).
+ */
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      result[key] &&
+      typeof result[key] === 'object' &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMerge(
+        result[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Auto-generate test cases by introspecting gate lock key expressions.
+ * Parses each lock's key expressions to discover required entity properties
+ * and produces a passing fixture and per-lock failure fixtures.
+ */
+function generateTestCasesFromLocks(gate: Gate): GatewayTestCase[] {
+  const cases: GatewayTestCase[] = [];
+
+  if (!gate.locks || gate.locks.length === 0) {
+    // No locks — gate always passes
+    cases.push({
+      name: `${gate.id}: no locks (should pass)`,
+      entity: { user: { id: 'test-user' } },
+      expected: true,
+    });
+    return cases;
+  }
+
+  // Build a "full" entity that satisfies all locks
+  let fullEntity: Record<string, unknown> = {};
+
+  for (const lock of gate.locks) {
+    for (const key of lock.keys) {
+      const paths = extractPropertiesFromExpression(key.expression);
+      for (const p of paths) {
+        const partial = buildEntityFromPath(p);
+        fullEntity = deepMerge(fullEntity, partial);
+      }
+    }
+  }
+
+  // Passing case with all properties present
+  cases.push({
+    name: `${gate.id}: entity satisfying all locks (should pass)`,
+    entity: fullEntity,
+    expected: true,
+  });
+
+  // Per-lock failure cases: omit properties for each lock
+  for (const lock of gate.locks) {
+    const lockPaths: string[] = [];
+    for (const key of lock.keys) {
+      lockPaths.push(...extractPropertiesFromExpression(key.expression));
+    }
+
+    if (lockPaths.length > 0) {
+      // Build entity missing this lock's required properties
+      const missingEntity: Record<string, unknown> = {};
+      for (const otherLock of gate.locks) {
+        if (otherLock.id === lock.id) continue;
+        for (const key of otherLock.keys) {
+          const paths = extractPropertiesFromExpression(key.expression);
+          for (const p of paths) {
+            const partial = buildEntityFromPath(p);
+            Object.assign(missingEntity, deepMerge(missingEntity, partial));
+          }
+        }
+      }
+
+      cases.push({
+        name: `${gate.id}: missing lock "${lock.id}" properties (should fail)`,
+        entity: gate.locks.length === 1 ? {} : missingEntity,
+        expected: false,
+      });
+    }
+  }
+
+  return cases;
 }
 
 /**
@@ -106,21 +247,14 @@ export async function gateTestCommand(
         process.exit(1);
       }
 
-      // Create basic test cases
+      // Auto-generate test cases from gate lock expressions
       const testCases: GatewayTestCase[] = [
         {
           name: 'Empty entity (should fail)',
           entity: {},
           expected: false,
         },
-        {
-          name: 'Entity with required properties',
-          entity: {
-            // TODO: Add properties based on gate locks
-            user: { id: 'test-user' },
-          },
-          expected: true,
-        },
+        ...generateTestCasesFromLocks(gate),
       ];
 
       const result = await validateGateway(options.gate, testCases, client);

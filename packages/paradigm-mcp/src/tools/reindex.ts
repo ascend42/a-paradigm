@@ -12,6 +12,7 @@ import { aggregateFromDirectory, type AggregationResult, type FlowIndex, type Te
 import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
+import { toolCache } from '../utils/tool-cache.js';
 
 // ============================================================================
 // Navigator constants (ported from packages/paradigm/src/commands/scan/navigator.ts)
@@ -62,7 +63,7 @@ export function getReindexToolsList() {
     {
       name: 'paradigm_reindex',
       description:
-        'Rebuild scan-index.json, navigator.yaml, and flow-index.json from .purpose files. Call after modifying paradigm files or at the end of a work session to ensure static index files are fresh.',
+        'Rebuild scan-index.json, navigator.yaml, and flow-index.json from .purpose files. Call after modifying paradigm files or at the end of a work session to ensure static index files are fresh. Returns counts of indexed symbols, files processed, and any errors. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -92,6 +93,7 @@ export async function handleReindexTool(
   try {
     const result = await rebuildStaticFiles(ctx.rootDir, ctx);
     await reloadContext();
+    toolCache.clear();
 
     const text = JSON.stringify(result, null, 2);
     trackToolCall(text.length, name);

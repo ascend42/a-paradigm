@@ -43,7 +43,7 @@ import type {
 
 const purposeInitTool: Tool = {
   name: 'paradigm_purpose_init',
-  description: 'Create or update file-level metadata on a .purpose file. Does NOT overwrite existing components/signals/etc — only touches top-level metadata (name, description, context, version).',
+  description: 'Create or update file-level metadata on a .purpose file. Does NOT overwrite existing components/signals/etc — only touches top-level metadata (name, description, context, version). ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -79,7 +79,7 @@ const purposeInitTool: Tool = {
 
 const purposeAddComponentTool: Tool = {
   name: 'paradigm_purpose_add_component',
-  description: 'Add or update a component (#) or feature in a .purpose file. Strips # prefix from id automatically.',
+  description: 'Add or update a component (#) or feature in a .purpose file. Strips # prefix from id automatically. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -154,7 +154,7 @@ const purposeAddComponentTool: Tool = {
 
 const purposeAddAspectTool: Tool = {
   name: 'paradigm_purpose_add_aspect',
-  description: 'Add or update an aspect (~) with ENFORCED anchors. Anchors are required and must point to code locations. Strips ~ prefix automatically. This prevents the common "~aspect:name" format error.',
+  description: 'Add or update an aspect (~) with ENFORCED anchors. Anchors are required and must point to code locations. Strips ~ prefix automatically. This prevents the common "~aspect:name" format error. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -200,7 +200,7 @@ const purposeAddAspectTool: Tool = {
 
 const purposeAddSignalTool: Tool = {
   name: 'paradigm_purpose_add_signal',
-  description: 'Add a signal (!) definition. Handles YAML ! quoting automatically. Strips ! prefix from id.',
+  description: 'Add a signal (!) definition. Handles YAML ! quoting automatically. Strips ! prefix from id. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -250,7 +250,7 @@ const purposeAddSignalTool: Tool = {
 
 const purposeAddFlowTool: Tool = {
   name: 'paradigm_purpose_add_flow',
-  description: 'Add a flow ($) definition. Strips $ prefix from id.',
+  description: 'Add a flow ($) definition. Strips $ prefix from id. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -305,7 +305,7 @@ const purposeAddFlowTool: Tool = {
 
 const purposeAddGateTool: Tool = {
   name: 'paradigm_purpose_add_gate',
-  description: 'Add a gate (^) to a .purpose file\'s gates section. This is for purpose-level gates, NOT portal.yaml. Strips ^ prefix.',
+  description: 'Add a gate (^) to a .purpose file\'s gates section. This is for purpose-level gates, NOT portal.yaml. Strips ^ prefix. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -347,7 +347,7 @@ const purposeAddGateTool: Tool = {
 
 const purposeAddStateTool: Tool = {
   name: 'paradigm_purpose_add_state',
-  description: 'Add a state definition to a .purpose file.',
+  description: 'Add a state definition to a .purpose file. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -385,7 +385,7 @@ const purposeAddStateTool: Tool = {
 
 const purposeLinkTool: Tool = {
   name: 'paradigm_purpose_link',
-  description: 'Add references to an existing component without rewriting all fields. Merges into existing arrays (no clobber). Example: add ~rate-limited to #payment-service\'s aspects.',
+  description: 'Add references to an existing component without rewriting all fields. Merges into existing arrays (no clobber). Example: add ~rate-limited to #payment-service\'s aspects. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -438,7 +438,7 @@ const purposeLinkTool: Tool = {
 
 const purposeRemoveTool: Tool = {
   name: 'paradigm_purpose_remove',
-  description: 'Remove any element by section + id from a .purpose file.',
+  description: 'Remove any element by section + id from a .purpose file. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -466,7 +466,7 @@ const purposeRemoveTool: Tool = {
 
 const purposeRenameTool: Tool = {
   name: 'paradigm_purpose_rename',
-  description: 'Rename a symbol across ALL .purpose files in the project. Updates both definitions and references.',
+  description: 'Rename a symbol across ALL .purpose files in the project. Updates both definitions and references. ~200 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -494,7 +494,7 @@ const purposeRenameTool: Tool = {
 
 const portalAddGateTool: Tool = {
   name: 'paradigm_portal_add_gate',
-  description: 'Add or update a gate (^) in portal.yaml. Creates portal.yaml if it doesn\'t exist. Strips ^ prefix.',
+  description: 'Add or update a gate (^) in portal.yaml. Creates portal.yaml if it doesn\'t exist. Strips ^ prefix. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -556,7 +556,7 @@ const portalAddGateTool: Tool = {
 
 const portalAddRouteTool: Tool = {
   name: 'paradigm_portal_add_route',
-  description: 'Add a route with gates to portal.yaml. Creates routes section if needed.',
+  description: 'Add a route with gates to portal.yaml. Creates routes section if needed. ~100 tokens.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -585,7 +585,7 @@ const portalAddRouteTool: Tool = {
 
 const purposeValidateTool: Tool = {
   name: 'paradigm_purpose_validate',
-  description: 'Validate .purpose files and portal.yaml. Returns issues found. If no purposeFile specified, validates all files.',
+  description: 'Validate .purpose files and portal.yaml. Returns issues found. If no purposeFile specified, validates all files. ~200 tokens.',
   inputSchema: {
     type: 'object',
     properties: {

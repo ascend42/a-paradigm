@@ -38,7 +38,7 @@ export function getHabitsToolsList() {
     {
       name: 'paradigm_habits_list',
       description:
-        'List all habit definitions: seed (built-in), global (~/.paradigm/habits.yaml), and project (.paradigm/habits.yaml). Shows what habits exist, their triggers, severity, and enabled state. Use to discover available habits before evaluating them.',
+        'List all habit definitions: seed (built-in), global (~/.paradigm/habits.yaml), and project (.paradigm/habits.yaml). Shows what habits exist, their triggers, severity, and enabled state. Use to discover available habits before evaluating them. Returns habit definitions with id, check type, trigger, severity, category, and enabled state. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -66,7 +66,7 @@ export function getHabitsToolsList() {
     {
       name: 'paradigm_habits_check',
       description:
-        'Evaluate habit compliance for the current session and record practice events. Call at preflight (before implementing), postflight (after implementing), or on-stop (session end). Returns which habits were followed, skipped, or partially met.',
+        'Evaluate habit compliance for the current session and record practice events. Call at preflight (before implementing), postflight (after implementing), or on-stop (session end). Returns which habits were followed, skipped, or partially met. Returns per-habit follow/skip/partial results and blocking status. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -104,7 +104,7 @@ export function getHabitsToolsList() {
     {
       name: 'paradigm_habits_status',
       description:
-        'View practice profile: compliance rates by category, trends, and incident correlations. Shows how well habits are being followed over time.',
+        'View practice profile: compliance rates by category, trends, and incident correlations. Shows how well habits are being followed over time. Returns overall rate, per-category rates, trend direction, and incident correlations. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -127,7 +127,7 @@ export function getHabitsToolsList() {
     {
       name: 'paradigm_practice_context',
       description:
-        'Get proactive practice warnings before modifying symbols. Shows recent compliance gaps and team-aware suggestions. Call this alongside paradigm_wisdom_context for full context.',
+        'Get proactive practice warnings before modifying symbols. Shows recent compliance gaps and team-aware suggestions. Call this alongside paradigm_wisdom_context for full context. Returns relevant habits, compliance gaps, and behavioral suggestions. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

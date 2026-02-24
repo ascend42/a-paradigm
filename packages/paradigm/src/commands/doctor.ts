@@ -302,6 +302,203 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
+  // Check portal.yaml validity
+  const portalPath = path.join(cwd, 'portal.yaml');
+  if (fs.existsSync(portalPath)) {
+    try {
+      const portalContent = fs.readFileSync(portalPath, 'utf8');
+      const { parse } = await import('yaml');
+      const portal = parse(portalContent);
+      if (portal?.version && portal?.gates) {
+        const gateCount = Object.keys(portal.gates || {}).length;
+        const routeCount = Object.keys(portal.routes || {}).length;
+        results.push({
+          name: 'portal.yaml',
+          status: 'ok',
+          message: `Valid (${gateCount} gates, ${routeCount} routes)`,
+        });
+      } else {
+        results.push({
+          name: 'portal.yaml',
+          status: 'warn',
+          message: 'Missing version or gates section',
+          fix: 'Add version: "1.0" and gates: {} to portal.yaml',
+        });
+      }
+    } catch (e) {
+      results.push({
+        name: 'portal.yaml',
+        status: 'error',
+        message: `Invalid YAML: ${(e as Error).message}`,
+        fix: 'Check YAML syntax in portal.yaml',
+      });
+    }
+  }
+
+  // Check flows.yaml validation
+  const flowsPath = path.join(paradigmDir, 'flows.yaml');
+  if (fs.existsSync(flowsPath)) {
+    try {
+      const flowsContent = fs.readFileSync(flowsPath, 'utf8');
+      const { parse } = await import('yaml');
+      const flows = parse(flowsContent);
+      if (flows?.version && flows?.flows) {
+        const flowCount = Object.keys(flows.flows || {}).length;
+        const emptyFlows = Object.entries(flows.flows || {}).filter(
+          ([, f]) => !(f as { steps?: unknown[] })?.steps || ((f as { steps?: unknown[] }).steps?.length ?? 0) === 0
+        );
+        if (emptyFlows.length > 0) {
+          results.push({
+            name: '.paradigm/flows.yaml',
+            status: 'warn',
+            message: `${flowCount} flows defined, ${emptyFlows.length} have no steps`,
+            fix: 'Add steps to empty flow definitions',
+          });
+        } else {
+          results.push({
+            name: '.paradigm/flows.yaml',
+            status: 'ok',
+            message: `Valid (${flowCount} flows)`,
+          });
+        }
+      } else {
+        results.push({
+          name: '.paradigm/flows.yaml',
+          status: 'warn',
+          message: 'Missing version or flows section',
+          fix: 'Ensure flows.yaml has version: "1.0" and flows: {}',
+        });
+      }
+    } catch (e) {
+      results.push({
+        name: '.paradigm/flows.yaml',
+        status: 'error',
+        message: `Invalid YAML: ${(e as Error).message}`,
+        fix: 'Check YAML syntax in flows.yaml',
+      });
+    }
+  }
+
+  // Check lore health
+  const loreDir = path.join(paradigmDir, 'lore');
+  if (fs.existsSync(loreDir)) {
+    try {
+      const loreFiles = fs.readdirSync(loreDir).filter((f) => f.endsWith('.yaml'));
+      if (loreFiles.length === 0) {
+        results.push({
+          name: 'Lore entries',
+          status: 'warn',
+          message: 'Lore directory exists but no entries found',
+          fix: 'Record a lore entry: paradigm lore record',
+        });
+      } else {
+        results.push({
+          name: 'Lore entries',
+          status: 'ok',
+          message: `${loreFiles.length} lore file${loreFiles.length > 1 ? 's' : ''}`,
+        });
+      }
+    } catch {
+      results.push({
+        name: 'Lore entries',
+        status: 'warn',
+        message: 'Could not read lore directory',
+      });
+    }
+  }
+
+  // Check hook freshness
+  const hooksJsonPath = path.join(cwd, '.claude', 'hooks.json');
+  const pluginHooksPath = path.join(cwd, 'plugins', 'paradigm', 'hooks.json');
+  if (fs.existsSync(hooksJsonPath)) {
+    const stat = fs.statSync(hooksJsonPath);
+    const ageMs = Date.now() - stat.mtime.getTime();
+    const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+    if (ageDays > 30) {
+      results.push({
+        name: 'Claude Code hooks',
+        status: 'warn',
+        message: `Hooks are ${ageDays} days old — may be outdated`,
+        fix: 'paradigm hooks install',
+      });
+    } else {
+      results.push({
+        name: 'Claude Code hooks',
+        status: 'ok',
+        message: ageDays > 0 ? `${ageDays} days old` : 'Fresh',
+      });
+    }
+  } else if (fs.existsSync(pluginHooksPath)) {
+    results.push({
+      name: 'Claude Code hooks',
+      status: 'ok',
+      message: 'Using plugin hooks',
+    });
+  } else {
+    results.push({
+      name: 'Claude Code hooks',
+      status: 'missing',
+      message: 'No hooks installed',
+      fix: 'paradigm hooks install',
+    });
+  }
+
+  // Check habits config validity
+  const habitsPath = path.join(paradigmDir, 'habits.yaml');
+  if (fs.existsSync(habitsPath)) {
+    try {
+      const habitsContent = fs.readFileSync(habitsPath, 'utf8');
+      const { parse } = await import('yaml');
+      const habits = parse(habitsContent);
+      if (habits?.version && Array.isArray(habits?.habits)) {
+        const enabled = habits.habits.filter((h: { enabled?: boolean }) => h.enabled !== false).length;
+        results.push({
+          name: 'Habits config',
+          status: 'ok',
+          message: `Valid (${enabled}/${habits.habits.length} enabled)`,
+        });
+      } else {
+        results.push({
+          name: 'Habits config',
+          status: 'warn',
+          message: 'Missing version or habits array',
+          fix: 'Regenerate habits.yaml with paradigm habits init',
+        });
+      }
+    } catch (e) {
+      results.push({
+        name: 'Habits config',
+        status: 'error',
+        message: `Invalid YAML: ${(e as Error).message}`,
+        fix: 'Check YAML syntax in habits.yaml',
+      });
+    }
+  }
+
+  // Check AGENTS.md staleness
+  const agentsMdPath = path.join(cwd, 'AGENTS.md');
+  if (fs.existsSync(agentsMdPath)) {
+    const stat = fs.statSync(agentsMdPath);
+    const ageMs = Date.now() - stat.mtime.getTime();
+    const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+    if (ageDays > 60) {
+      results.push({
+        name: 'AGENTS.md',
+        status: 'warn',
+        message: `${ageDays} days since last update — may be stale`,
+        fix: 'paradigm sync',
+      });
+    } else {
+      results.push({
+        name: 'AGENTS.md',
+        status: 'ok',
+        message: ageDays > 0 ? `Updated ${ageDays} days ago` : 'Fresh',
+      });
+    }
+  }
+
   // Display results
   let errorCount = 0;
   let warnCount = 0;

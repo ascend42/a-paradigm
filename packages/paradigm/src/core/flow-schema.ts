@@ -195,19 +195,52 @@ export interface AllFlowsValidationResult {
     message: string;
     flows: string[];
   }>;
+
+  /** Detected circular dependency chains */
+  circularDependencies: Array<{
+    /** The cycle path, e.g. ["$a", "$b", "$c", "$a"] */
+    cycle: string[];
+    /** Human-readable description */
+    message: string;
+  }>;
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
+/** Valid v2 symbol prefixes */
+export const V2_PREFIXES = ['#', '$', '^', '!', '~'] as const;
+
+/** Deprecated v1 prefixes — use v2 equivalents instead */
+export const LEGACY_PREFIXES = ['@', '%', '?', '&'] as const;
+
 /**
- * Extract symbol prefix and name from a symbol string
+ * Extract symbol prefix and name from a symbol string.
+ * Only accepts v2 prefixes (#, $, ^, !, ~). Returns null for legacy v1 prefixes.
  */
 export function parseSymbol(symbol: string): { prefix: string; name: string } | null {
-  const match = symbol.match(/^([@#$%^!?&~])(.+)$/);
+  const match = symbol.match(/^([#$^!~])(.+)$/);
   if (!match) return null;
   return { prefix: match[1], name: match[2] };
+}
+
+/**
+ * Check if a symbol uses a deprecated v1 prefix (@, %, ?, &).
+ * Returns migration guidance if so, null otherwise.
+ */
+export function checkLegacySymbol(symbol: string): { prefix: string; name: string; migration: string } | null {
+  const match = symbol.match(/^([@%?&])(.+)$/);
+  if (!match) return null;
+
+  const migrations: Record<string, string> = {
+    '@': 'Use #component with tags: [feature]',
+    '%': 'Use #component with tags: [state]',
+    '?': 'Use [idea] tag on any symbol',
+    '&': 'Use #component with tags: [integration]',
+  };
+
+  return { prefix: match[1], name: match[2], migration: migrations[match[1]] };
 }
 
 /**
@@ -216,7 +249,6 @@ export function parseSymbol(symbol: string): { prefix: string; name: string } | 
 export function getExpectedStepType(prefix: string): FlowStepType | null {
   const mapping: Record<string, FlowStepType> = {
     '^': 'gate',
-    '@': 'action',
     '#': 'action',
     '!': 'signal',
     '$': 'action', // Flows can reference other flows as actions

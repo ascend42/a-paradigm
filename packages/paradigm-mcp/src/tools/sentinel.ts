@@ -65,7 +65,7 @@ export function getSentinelToolsList() {
     {
       name: 'paradigm_sentinel_triage',
       description:
-        'View and filter incidents with pattern matches. Returns recent errors with symbolic context and resolution suggestions.',
+        'View and filter incidents with pattern matches. Returns recent errors with symbolic context and resolution suggestions. ~200-400 tokens depending on incident count.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -100,7 +100,7 @@ export function getSentinelToolsList() {
     {
       name: 'paradigm_sentinel_show',
       description:
-        'Get full details of a specific incident including timeline and matched patterns.',
+        'Get full details of a specific incident including timeline and matched patterns. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -127,7 +127,7 @@ export function getSentinelToolsList() {
     {
       name: 'paradigm_sentinel_resolve',
       description:
-        'Mark an incident as resolved with optional pattern and commit reference.',
+        'Mark an incident as resolved with optional pattern and commit reference. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -153,7 +153,7 @@ export function getSentinelToolsList() {
     },
     {
       name: 'paradigm_sentinel_patterns',
-      description: 'List and filter failure patterns with confidence scores.',
+      description: 'List and filter failure patterns with confidence scores. Returns pattern names, match counts, and confidence scores. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -179,7 +179,7 @@ export function getSentinelToolsList() {
     },
     {
       name: 'paradigm_sentinel_add_pattern',
-      description: 'Create a new failure pattern.',
+      description: 'Create a new failure pattern. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -240,7 +240,7 @@ export function getSentinelToolsList() {
     },
     {
       name: 'paradigm_sentinel_record',
-      description: 'Manually record a new incident.',
+      description: 'Manually record a new incident. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -289,7 +289,7 @@ export function getSentinelToolsList() {
     },
     {
       name: 'paradigm_sentinel_stats',
-      description: 'Get statistics and health metrics.',
+      description: 'Get statistics and health metrics. Returns open/resolved counts, MTTR, and symbol breakdown. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -310,7 +310,7 @@ export function getSentinelToolsList() {
     },
     {
       name: 'paradigm_sentinel_suggest_pattern',
-      description: 'Get AI suggestions for patterns based on incidents.',
+      description: 'Get AI suggestions for patterns based on incidents. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -352,8 +352,71 @@ See working implementations:
 
 ---
 
+## Test Fixture Generation from Gate Locks
+
+The `paradigm portal test --gate <id>` command auto-generates test fixtures by introspecting gate lock key expressions.
+
+### How It Works
+
+1. Each gate has **locks**, and each lock has **keys** with JavaScript `expression` fields
+2. The test generator parses each expression to extract property paths (e.g., `req.user.id`, `entity.roles.includes(...)`)
+3. It builds a minimal test entity with all discovered properties populated
+4. It generates:
+   - A **passing case** with all properties present
+   - A **per-lock failure case** for each lock, omitting that lock's required properties
+   - An **empty entity case** that should always fail
+
+### Example
+
+For a gate with:
+```yaml
+locks:
+  - id: auth
+    keys:
+      - expression: "req.user != null"
+  - id: admin
+    keys:
+      - expression: "req.user.role === 'admin'"
+```
+
+The generator produces:
+- Entity `{ req: { user: { role: "test-value" } } }` → should pass
+- Entity `{ req: { user: { role: "test-value" } } }` minus auth properties → should fail
+- Entity `{}` → should fail
+
+---
+
+## Portal Export
+
+Export portal configuration in machine-readable formats:
+
+```bash
+# JSON (default)
+paradigm portal export
+
+# CSV for spreadsheets
+paradigm portal export --format csv
+
+# Markdown for documentation
+paradigm portal export --format markdown
+
+# Save to file
+paradigm portal export --format markdown --output docs/portal-config.md
+```
+
+### Export Formats
+
+| Format | Use Case |
+|--------|----------|
+| `json` | Programmatic access, CI pipelines, diffing |
+| `csv` | Spreadsheet analysis, stakeholder review |
+| `markdown` | Documentation, PRs, README sections |
+
+---
+
 ## Changelog
 
 | Version | Changes |
 |---------|---------|
+| 1.1 | Added test fixture generation from gate locks, portal export command |
 | 1.0 | Initial specification |

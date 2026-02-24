@@ -54,7 +54,7 @@ export function getPmToolsList() {
     {
       name: 'paradigm_pm_preflight',
       description:
-        'REQUIRED before implementing features. Call with mode="plan" to get the right agents and cost estimate. Skipping this for complex tasks leads to missed security reviews and wasted tokens.\n\nRuns pre-flight compliance checks: extracts affected symbols, runs ripple analysis, checks portal.yaml status, and suggests required agents.',
+        'REQUIRED before implementing features. Call with mode="plan" to get the right agents and cost estimate. Skipping this for complex tasks leads to missed security reviews and wasted tokens.\n\nRuns pre-flight compliance checks: extracts affected symbols, runs ripple analysis, checks portal.yaml status, and suggests required agents. Returns affected symbols, ripple summary, gate recommendations, and suggested agents. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -73,7 +73,7 @@ export function getPmToolsList() {
     {
       name: 'paradigm_pm_postflight',
       description:
-        'Run after completing a task to check compliance. Verifies that new components, routes, and events are properly registered in .purpose files and portal.yaml. Flags unregistered symbols and uncaptured wisdom.',
+        'Run after completing a task to check compliance. Verifies that new components, routes, and events are properly registered in .purpose files and portal.yaml. Flags unregistered symbols and uncaptured wisdom. Returns compliance checklist with pass/fail status for purpose files, portal.yaml, and wisdom capture. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

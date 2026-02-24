@@ -26,7 +26,7 @@ export function getHistoryToolsList() {
     {
       name: 'paradigm_history_context',
       description:
-        'Get implementation history for symbols before modifying. Shows recent changes, stability, and who has worked on these areas.',
+        'Get implementation history for symbols before modifying. Shows recent changes, stability, and who has worked on these areas. Returns recent commits, authors, and change frequency. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -46,7 +46,7 @@ export function getHistoryToolsList() {
     {
       name: 'paradigm_history_record',
       description:
-        'Record an implementation event (feature, fix, refactor). Call this after making changes to track what was done.',
+        'Record an implementation event (feature, fix, refactor). Call this after making changes to track what was done. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -93,7 +93,7 @@ export function getHistoryToolsList() {
     {
       name: 'paradigm_history_validate',
       description:
-        'Record a validation result (tests passed/failed). Call this after running tests.',
+        'Record a validation result (tests passed/failed). Call this after running tests. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -126,7 +126,7 @@ export function getHistoryToolsList() {
     {
       name: 'paradigm_history_fragility',
       description:
-        'Check fragility of symbols before modifying. Returns stability scores and warnings for fragile areas.',
+        'Check fragility of symbols before modifying. Returns stability scores and warnings for fragile areas. Returns numeric stability scores (0-100) and actionable warnings. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

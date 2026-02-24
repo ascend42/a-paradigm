@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import * as yaml from 'js-yaml';
 
 export interface ThreadOptions {
   quiet?: boolean;
@@ -47,6 +48,24 @@ const THREAD_TEMPLATE = `# Thread - Session Continuity
 *Run \`paradigm thread save "message"\` to update*
 *Run \`paradigm thread clear\` to reset*
 `;
+
+/** Get configurable thread trail limit from config, default 10 */
+function getThreadTrailMax(): number {
+  try {
+    const configPath = path.join(process.cwd(), '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      const config = yaml.load(content) as Record<string, unknown>;
+      const limits = config?.limits as Record<string, unknown> | undefined;
+      if (limits?.threadTrailMax && typeof limits.threadTrailMax === 'number') {
+        return limits.threadTrailMax;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+  return 10;
+}
 
 /**
  * Parse existing thread.md file
@@ -119,7 +138,7 @@ function generateThread(data: ThreadData): string {
   let trailContent = '_No activity recorded yet_';
   if (data.trail.length > 0) {
     trailContent = data.trail
-      .slice(-10) // Keep last 10 entries
+      .slice(-getThreadTrailMax()) // Keep last N entries (configurable via limits.threadTrailMax)
       .map(entry => `- ${entry.message}`)
       .join('\n');
   }
@@ -136,7 +155,7 @@ function generateThread(data: ThreadData): string {
   let breadcrumbsContent = '_No notes yet_';
   if (data.breadcrumbs.length > 0) {
     breadcrumbsContent = data.breadcrumbs
-      .slice(-10) // Keep last 10 breadcrumbs
+      .slice(-getThreadTrailMax()) // Keep last N breadcrumbs (configurable via limits.threadTrailMax)
       .map(item => `- ${item}`)
       .join('\n');
   }

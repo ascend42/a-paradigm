@@ -131,7 +131,7 @@ export function getContextToolsList() {
   return [
     {
       name: 'paradigm_context_check',
-      description: 'Check if context handoff is recommended based on session activity. Call this periodically during long sessions.',
+      description: 'Check if context handoff is recommended based on session activity. Call this periodically during long sessions. Returns usage percentage and recommendation (continue, consider-handoff, handoff-recommended, handoff-urgent). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -152,7 +152,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_handoff_prepare',
-      description: 'Prepare a handoff summary. Generates a structured handoff file with markdown summary and recovery instructions.',
+      description: 'Prepare a handoff summary. Generates a structured handoff file with markdown summary and recovery instructions. Returns structured markdown with summary, modified files, and next steps. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -194,7 +194,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_session_stats',
-      description: 'Get current session statistics (MCP interactions, estimated tokens)',
+      description: 'Get current session statistics (MCP interactions, estimated tokens). Returns tool call count, estimated tokens used, and cost breakdown. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -206,7 +206,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_session_recover',
-      description: 'Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before.',
+      description: 'Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before. Returns symbols modified, files explored, recent actions, and suggestions for continuity. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -218,7 +218,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_session_checkpoint',
-      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete).',
+      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -260,7 +260,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_session_checkpoint',
-      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete).',
+      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -613,7 +613,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
     const symbolsTouched = args.symbolsTouched as string[] | undefined;
     const decisions = args.decisions as string[] | undefined;
 
-    const checkpoint = tracker.saveCheckpoint({
+    const { checkpoint, persisted } = tracker.saveCheckpoint({
       phase,
       context,
       plan,
@@ -622,10 +622,13 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
       decisions,
     });
 
+    const anyPersisted = persisted.local || persisted.global;
+
     return {
       handled: true,
       text: JSON.stringify({
-        saved: true,
+        saved: anyPersisted,
+        persisted,
         checkpoint: {
           phase: checkpoint.phase,
           context: checkpoint.context,
@@ -636,7 +639,10 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
           decisions: checkpoint.decisions?.length || 0,
           recentBreadcrumbs: checkpoint.recentBreadcrumbs?.length || 0,
         },
-        note: 'Checkpoint saved. Recovery data will be auto-surfaced on the first tool call of the next session.',
+        ...(anyPersisted
+          ? { note: 'Checkpoint saved. Recovery data will be auto-surfaced on the first tool call of the next session.' }
+          : { warning: 'Checkpoint was NOT persisted to disk. Both local and global writes failed. Check MCP server stderr for details.' }
+        ),
       }, null, 2),
     };
   }

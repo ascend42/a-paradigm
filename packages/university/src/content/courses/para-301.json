@@ -402,13 +402,15 @@
     {
       "id": "sentinel-observability",
       "title": "Sentinel & Observability",
-      "content": "## Sentinel & Observability\n\nParadigm Sentinel is the error tracking and observability system that maps runtime errors back to Paradigm symbols. When something breaks in production, Sentinel does not just show you a stack trace -- it tells you which `#component` failed, which `$flow` was interrupted, which `^gate` was involved, and whether there is a known failure pattern that matches.\n\nIncidents are the core unit of Sentinel. Each incident records the error message, stack trace, environment, affected symbols, and the flow position (where in a multi-step flow the failure occurred). Incidents can be created automatically by instrumented code or manually via `paradigm_sentinel_record`.\n\n```\nparadigm_sentinel_record({\n  error: {\n    message: \"Stripe API returned 429: rate limited\",\n    type: \"RateLimitError\",\n    code: \"STRIPE_429\"\n  },\n  symbols: {\n    component: \"#payment-service\",\n    flow: \"$checkout-flow\",\n    gate: \"^authenticated\"\n  },\n  environment: \"production\",\n  service: \"api-server\"\n})\n```\n\n**Pattern matching** is what makes Sentinel more than a log aggregator. You define failure patterns that describe known error signatures -- which error messages to look for, which symbols are typically involved, and what the resolution strategy is. When an incident is recorded, Sentinel matches it against known patterns and suggests resolutions.\n\n```\nparadigm_sentinel_add_pattern({\n  id: \"stripe-rate-limit\",\n  name: \"Stripe Rate Limit\",\n  pattern: {\n    errorContains: [\"429\", \"rate limit\"],\n    symbols: { component: \"#payment-service\" }\n  },\n  resolution: {\n    description: \"Implement exponential backoff retry\",\n    strategy: \"retry\",\n    priority: \"high\"\n  }\n})\n```\n\nThe triage workflow uses `paradigm_sentinel_triage` to filter and view incidents. You can filter by status (open, investigating, resolved), by symbol, by environment, or by search text in error messages. Once an incident is understood and fixed, mark it resolved with `paradigm_sentinel_resolve`, optionally linking the fix commit and matched pattern.\n\nSentinel also provides health metrics via `paradigm_sentinel_stats`. You can see incident counts over time periods (1d, 7d, 30d, 90d) and get health scores for specific symbols. A symbol with many recent incidents and low resolution rates has poor health -- another signal that pairs with fragility tracking to identify problem areas. The web UI, launched with `paradigm sentinel`, provides a visual dashboard for all of this.",
+      "content": "## Sentinel & Observability\n\nParadigm Sentinel is the error tracking and observability system that maps runtime errors back to Paradigm symbols. When something breaks in production, Sentinel does not just show you a stack trace -- it tells you which `#component` failed, which `$flow` was interrupted, which `^gate` was involved, and whether there is a known failure pattern that matches.\n\nIncidents are the core unit of Sentinel. Each incident records the error message, stack trace, environment, affected symbols, and the flow position (where in a multi-step flow the failure occurred). Incidents can be created automatically by instrumented code or manually via `paradigm_sentinel_record`.\n\n```\nparadigm_sentinel_record({\n  error: {\n    message: \"Stripe API returned 429: rate limited\",\n    type: \"RateLimitError\",\n    code: \"STRIPE_429\"\n  },\n  symbols: {\n    component: \"#payment-service\",\n    flow: \"$checkout-flow\",\n    gate: \"^authenticated\"\n  },\n  environment: \"production\",\n  service: \"api-server\"\n})\n```\n\n**Pattern matching** is what makes Sentinel more than a log aggregator. You define failure patterns that describe known error signatures -- which error messages to look for, which symbols are typically involved, and what the resolution strategy is. When an incident is recorded, Sentinel matches it against known patterns and suggests resolutions.\n\n```\nparadigm_sentinel_add_pattern({\n  id: \"stripe-rate-limit\",\n  name: \"Stripe Rate Limit\",\n  pattern: {\n    errorContains: [\"429\", \"rate limit\"],\n    symbols: { component: \"#payment-service\" }\n  },\n  resolution: {\n    description: \"Implement exponential backoff retry\",\n    strategy: \"retry\",\n    priority: \"high\"\n  }\n})\n```\n\nThe triage workflow uses `paradigm_sentinel_triage` to filter and view incidents. You can filter by status (open, investigating, resolved), by symbol, by environment, or by search text in error messages. Once an incident is understood and fixed, mark it resolved with `paradigm_sentinel_resolve`, optionally linking the fix commit and matched pattern.\n\nSentinel also provides health metrics via `paradigm_sentinel_stats`. You can see incident counts over time periods (1d, 7d, 30d, 90d) and get health scores for specific symbols. A symbol with many recent incidents and low resolution rates has poor health -- another signal that pairs with fragility tracking to identify problem areas. The web UI, launched with `paradigm sentinel`, provides a visual dashboard for all of this.\n\n## Incident Grouping\n\nWhen incidents pile up, grouping helps identify systemic issues. Sentinel's incident grouper clusters similar incidents using three signals: **symbol context similarity** (which components, flows, and gates are involved), **error message similarity** (Levenshtein distance between messages), and **stack trace fingerprinting** (normalizing stack frames by stripping line numbers and paths to capture structural similarity). A time-decay factor ensures recent incidents weigh more heavily in similarity calculations -- incidents from two weeks ago contribute half as much as fresh ones. The grouper's similarity threshold is configurable to tune sensitivity for your project.\n\n## Resolution Strategy Inference\n\nWhen Sentinel suggests a failure pattern from grouped incidents, it infers the most likely resolution strategy from error message keywords:\n\n| Strategy | Triggered By | Action |\n|---|---|---|\n| `retry` | timeout, network, ECONNREFUSED | Retry with backoff |\n| `fallback` | unavailable, service down, 503 | Use alternative path |\n| `fix-data` | validation, invalid, required, 404 | Correct the data |\n| `fix-code` | General code errors | Change the code |\n| `rollback` | regression, revert, broke after deploy | Roll back deployment |\n| `config-change` | config, environment variable, missing key | Update configuration |\n| `scale-up` | out of memory, OOM, capacity | Add resources |\n| `investigate` | Mixed error types, unclear pattern | Needs human triage |\n| `ignore` | Known non-issues | Suppress notifications |\n| `escalate` | permission, 403, unauthorized | Needs authorization change |",
       "keyConcepts": [
         "Incidents map errors to symbols",
         "Failure pattern matching",
         "paradigm_sentinel_triage for filtering",
         "paradigm_sentinel_resolve for closing incidents",
-        "paradigm_sentinel_stats for health metrics"
+        "paradigm_sentinel_stats for health metrics",
+        "Incident grouping clusters similar incidents by symbol context, error similarity, and stack fingerprints",
+        "10 resolution strategies: retry, fallback, fix-data, fix-code, rollback, config-change, scale-up, investigate, ignore, escalate"
       ],
       "quiz": [
         {
@@ -426,16 +428,16 @@
         },
         {
           "id": "q2",
-          "question": "Which resolution strategies can be assigned to a Sentinel failure pattern?",
+          "question": "Which of the following is NOT a valid Sentinel resolution strategy?",
           "choices": {
-            "A": "Only 'fix-code' and 'ignore'",
-            "B": "retry, fallback, fix-data, fix-code, ignore, escalate",
-            "C": "low, medium, high, critical",
-            "D": "open, investigating, resolved",
-            "E": "implement, refactor, rollback"
+            "A": "rollback",
+            "B": "config-change",
+            "C": "auto-deploy",
+            "D": "investigate",
+            "E": "scale-up"
           },
-          "correct": "B",
-          "explanation": "Sentinel supports six resolution strategies: retry (try again), fallback (use alternative), fix-data (correct the data), fix-code (code change needed), ignore (known non-issue), and escalate (needs human attention). The other options are priority levels, incident statuses, and history change types respectively."
+          "correct": "C",
+          "explanation": "Sentinel supports 10 resolution strategies: retry, fallback, fix-data, fix-code, rollback, config-change, scale-up, investigate, ignore, and escalate. 'auto-deploy' is not a strategy — Sentinel suggests actions for humans to take, not automated deployments."
         },
         {
           "id": "q3",
@@ -461,7 +463,8 @@
         "paradigm scan for full index rebuild",
         "AI Maintenance Protocol",
         "Maintaining .purpose files alongside code changes",
-        "Practical maintenance rhythm"
+        "Practical maintenance rhythm",
+        "paradigm lint --auto-populate discovers undocumented source directories and drafts .purpose files"
       ],
       "quiz": [
         {

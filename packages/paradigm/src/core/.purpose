@@ -51,7 +51,7 @@ components:
     path: context-builder.ts
 
   flow-validator:
-    description: Validate flow definitions against the actual codebase implementation
+    description: Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams
     path: flow-validator.ts
 
   portal-compliance:

@@ -29,7 +29,7 @@ export function getFixturesToolsList() {
     {
       name: 'paradigm_test_fixtures',
       description:
-        'Get test fixtures for validating flows. Returns users (for auth testing), resources (for entity testing), and sample payloads (for API testing).',
+        'Get test fixtures for validating flows. Returns users (for auth testing), resources (for entity testing), and sample payloads (for API testing). ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

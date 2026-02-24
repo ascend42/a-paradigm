@@ -5,6 +5,74 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Phase 1: Type Safety & Quick Wins
+- **Typed interfaces** — Replaced `any` types across `portal/watch.ts`, `mcp/switch.ts`, `mcp/setup.ts`, and `tutorial/index.ts` with proper typed interfaces
+- **Actionable sentinel errors** — Generic catch in `sentinel.ts` now provides specific error messages with remediation steps
+- **v2-only symbol validation** — `parseSymbol` in `flow-schema.ts` now rejects deprecated v1 prefixes (`@`, `%`, `?`, `&`)
+
+#### Phase 2: Validation & Safety Hardening
+- **Circular dependency detection** — DFS-based cycle detection in `flow-validator.ts`; reports cycles in `AllFlowsValidationResult`
+- **Lore symbol validation** — `recordLore()` optionally validates `symbols_touched` against registered .purpose, flow, and portal symbols
+- **`--dry-run` flag** — Added to `hooks install`, `hooks uninstall`, `lore delete`, and `upgrade` commands
+- **`.purpose` file checking** — `symbolExistsInCode` now checks .purpose declarations in addition to source code grep
+- **Hook syntax validation** — `bash -n` check on generated hook scripts before writing
+
+#### Phase 3: Habits, Sentinel & Doctor Expansion
+- **4 new habit check types** — `commit-message-format`, `flow-coverage`, `context-checked`, `aspect-anchored` with evaluators and seed definitions
+- **Configurable sentinel grouping** — `SIMILARITY_THRESHOLD`, time-decay weighting, stack trace fingerprinting in `grouper.ts`
+- **Escalation strategy inference** — `suggester.ts` infers strategy (`fix-code`, `rollback`, `config-change`, `scale-up`, `investigate`) instead of hardcoded `fix-code`
+- **6 new doctor checks** — Portal.yaml validity, flows.yaml validation, lore health, hook freshness, habits config validity, AGENTS.md staleness
+
+#### Phase 4: Portal, Lint & Pre-Publish
+- **Portal test auto-generation** — `portal test` introspects gate `check` expressions to auto-generate test fixtures
+- **Portal export** — `paradigm portal export` subcommand outputs gates/routes in csv, json, or markdown format
+- **`lint --auto-populate`** — Scans source directories for undocumented components, suggests `.purpose` entries, writes drafts with `--fix`
+- **Pre-publish check script** — `scripts/pre-publish-check.mjs` validates builds, version consistency, changelogs, doctor, and plugin hooks.json
+
+#### Phase 5: Documentation Standards & AI Interop
+- **`paradigm sync-llms`** — Generates `llms.txt` at repo root with symbols, key files, flows, gates, and conventions
+- **AGENTS.md expansion** — Generated AGENTS.md now includes habits compliance, lore recording, session checkpoints, and llms.txt sections
+- **`paradigm flow diagram`** — CLI command generates Mermaid flowchart from flow definitions (diamonds for gates, rectangles for actions, rounded boxes for signals)
+- **Enhanced MCP tool descriptions** — 52 tools across 14 modules updated with return data shape, usage guidance, and token cost estimates
+- **Expanded patterns.md** — 4 new patterns: multi-agent handoff, lore recording, habit compliance, flow-first development
+- **Expanded ai-maintenance-protocol.md** — Decision trees for lore recording, flow creation, and new feature compliance checklist
+
+#### Phase 6: Advanced Intelligence
+- **ToolCache** — In-memory TTL cache (30s default) for `paradigm_search`, `paradigm_status`, and `paradigm_navigate` MCP tools; cleared on `paradigm_reindex`
+- **Plugin version compatibility** — `hooks install` checks `compatibleVersions` field in plugin `hooks.json` and warns if Paradigm version is outside the min/max range
+- **Co-authorship tracking** — `assistedBy` field on `LoreEntry` with type (`agent`/`tool`/`human`), id, and optional role
+- **Auto-lore drafting** — `draftLoreFromBreadcrumbs()` generates partial lore entries from session data when 3+ files are modified; tagged with `auto-draft`
+- **Configurable limits** — `LimitsConfig` in `.paradigm/config.yaml` for `habitsCacheTtlMs`, `breadcrumbsMax`, `threadTrailMax`, `toolCacheTtlMs`, `checkpointMaxAgeMs`
+- **`paradigm global clean`** — Cleans old files from `~/.paradigm/` Global Brain directories with `--older-than` duration and `--dry-run` preview
+- **Integration tests** — 4 new test files (13 tests) for build verification, hook validation, ToolCache, and auto-lore drafting
+
+### Changed
+
+- **MCP tool caching** — `paradigm_search`, `paradigm_status`, and `paradigm_navigate` now return cached results within TTL window for repeated calls
+- **Habits cache** — TTL now configurable via `limits.habitsCacheTtlMs` (default 30000ms) instead of hardcoded
+- **Thread trail depth** — Configurable via `limits.threadTrailMax` (default 10) instead of hardcoded `.slice(-10)`
+
+### Documentation
+
+- **New specs** — `caching.md` (MCP tool caching strategy), `habits.md` (all check types and semantics), `publishing.md` (pre-publish validation)
+- **Updated specs** — `symbols-v2.md` (v2-only prefixes), `history.md` (auto-lore + co-authorship), `portal-validation.md` (test generator + webhook config)
+- **Updated docs** — `commands.md` (new commands), `troubleshooting.md` (new error messages), `error-patterns.md` (actionable error patterns)
+- **CLAUDE.md** — Added MCP Tool Caching and Plugin Version Compatibility sections
+
+### University
+
+- **PARA 101** — Added `llms.txt` key concept to project structure lesson
+- **PARA 201** — Added Mermaid flow visualization key concept; circular dependency detection content
+- **PARA 301** — Added sentinel escalation strategies, doctor checks, `lint --auto-populate` content
+- **PARA 401** — Enhanced MCP tools overview; new `agent-interop` lesson covering AGENTS.md and llms.txt
+- **PARA 501** — Added 4 new habit check types, lore symbol validation, co-authorship content
+- **PLSAT v3.0** — 16 new exam slots (slots 062-077) with 28 question variants covering all 6 phases
+- **Reference card** — Added cards for `sync-llms`, `flow diagram`, `portal export`, `lint --auto-populate`, `global clean`, and configurable limits
+
 ## [3.1.6] — 2026-02-24
 
 ### Added

@@ -619,6 +619,149 @@ Only the `cwd` needs to change per project.
 
 ---
 
+## Circular Flow Dependencies
+
+### Symptoms
+- `paradigm flow validate` reports "Circular dependency detected"
+- Flow validation shows cycle chains like `$a → $b → $c → $a`
+- `paradigm_flow_validate` returns `circularDependencies` array
+
+### Understanding the Error
+
+Circular dependencies occur when flows reference each other in a cycle. Paradigm detects these via DFS traversal of `relatedFlows` and step-level `$flow` references.
+
+**Example error output:**
+```
+⚠ Circular Dependencies (1)
+
+  $checkout-flow → $payment-flow → $checkout-flow
+
+  Resolution: Break the cycle by extracting shared logic into a
+  separate flow, or remove one direction of the dependency.
+```
+
+### Solutions
+
+1. **Identify the cycle** — the arrow chain shows the exact dependency loop:
+   ```
+   $a → $b → $c → $a
+   ```
+   This means `$a` references `$b`, which references `$c`, which references `$a` again.
+
+2. **Extract shared logic** — create a new flow for the shared dependency:
+   ```yaml
+   # Before (circular):
+   $checkout-flow:
+     relatedFlows: [$payment-flow]
+   $payment-flow:
+     relatedFlows: [$checkout-flow]
+
+   # After (extracted):
+   $checkout-flow:
+     relatedFlows: [$payment-processing]
+   $payment-flow:
+     relatedFlows: [$payment-processing]
+   $payment-processing:
+     # Shared logic lives here
+   ```
+
+3. **Remove one direction** — if only one flow truly depends on the other, remove the reverse reference.
+
+4. **Use signals instead** — replace a direct flow reference with a signal:
+   ```yaml
+   $payment-flow:
+     # Instead of relatedFlows: [$checkout-flow]
+     steps:
+       - type: signal
+         symbol: "!payment-completed"
+   # $checkout-flow listens for !payment-completed separately
+   ```
+
+5. **Validate after fixing:**
+   ```bash
+   paradigm flow validate
+   # Or via MCP:
+   # paradigm_flow_validate({})
+   ```
+
+---
+
+## Dry-Run Mode
+
+### Overview
+
+Several commands support `--dry-run` to preview changes without side effects.
+
+### Supported Commands
+
+| Command | What It Shows |
+|---------|---------------|
+| `paradigm upgrade --all --dry-run` | Files that would be created or updated |
+| `paradigm hooks install --dry-run` | Git hooks, Claude Code hooks, and Cursor hooks that would be installed |
+| `paradigm hooks uninstall --dry-run` | Hooks and files that would be removed |
+| `paradigm lore delete <id> --dry-run` | Lore entry details that would be deleted |
+
+### Examples
+
+```bash
+# Preview hook installation
+paradigm hooks install --dry-run
+
+# Preview what upgrade would change
+paradigm upgrade --all --dry-run
+
+# Preview lore entry deletion
+paradigm lore delete entry-001 --dry-run
+```
+
+---
+
+## Doctor Check Failures
+
+The `paradigm doctor` command validates project health. Here are the new checks and how to resolve failures:
+
+### portal.yaml Invalid YAML
+**Status:** error
+**Message:** `Invalid YAML: <parse error>`
+**Fix:** Check YAML syntax in portal.yaml — ensure proper indentation, quoted strings, and valid structure with `version` and `gates` keys.
+
+### flows.yaml Validation
+**Status:** warn
+**Message:** `N flows defined, M have no steps`
+**Fix:** Add steps to empty flow definitions in `.paradigm/flows.yaml`. Each flow should have at least one step with type (gate/action/signal) and a symbol reference.
+
+### Lore Health
+**Status:** warn
+**Message:** `Lore directory exists but no entries found`
+**Fix:** Record your first lore entry: `paradigm lore record` or use `paradigm_lore_record` via MCP. Lore entries document session history and decisions.
+
+### Hook Freshness
+**Status:** warn
+**Message:** `Hooks are N days old — may be outdated`
+**Fix:** Reinstall hooks to pick up latest paradigm changes:
+```bash
+paradigm hooks install
+```
+
+### Habits Config
+**Status:** error/warn
+**Message:** `Invalid YAML: <parse error>` or `Missing version or habits array`
+**Fix:** Regenerate a valid habits config:
+```bash
+paradigm habits init
+```
+Or manually ensure `.paradigm/habits.yaml` has `version: "1.0"` and a `habits: []` array.
+
+### AGENTS.md Staleness
+**Status:** warn
+**Message:** `N days since last update — may be stale`
+**Fix:** Regenerate AGENTS.md to include current project symbols and conventions:
+```bash
+paradigm sync
+```
+
+---
+
 ## Getting Help
 
 If none of these solutions work:

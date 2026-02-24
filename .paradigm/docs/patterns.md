@@ -402,4 +402,149 @@ afterEach:
 | `$` | `log.flow()` | Multi-step processes |
 | `~` | `log.aspect()` | Cross-cutting rules |
 
+---
+
+## Multi-Agent Handoff Pattern
+
+When a task spans multiple agent specializations, use orchestrated handoffs:
+
+```
+1. Planning Agent (architect)
+   - Call paradigm_orchestrate_inline({ task: "...", mode: "plan" })
+   - Get agent assignments, estimated cost, and execution stages
+   - Review and approve the plan
+
+2. Execution Agents (builder, security, tester)
+   - Each agent receives a scoped prompt via paradigm_agent_prompt
+   - Agent calls paradigm_session_checkpoint at phase transitions
+   - Agent calls paradigm_pm_postflight when done
+
+3. Handoff Between Agents
+   - Outgoing agent: paradigm_handoff_prepare({ summary, nextSteps })
+   - Incoming agent: paradigm_session_recover()
+   - Each agent inherits previous breadcrumbs automatically
+```
+
+**Key points:**
+- Always use `paradigm_orchestrate_inline` for tasks affecting 3+ files
+- Agents with `canRunParallel: true` can be launched simultaneously
+- Use `paradigm_context_check` to know when to hand off
+
+---
+
+## Lore Recording Pattern
+
+Record project history after significant work sessions:
+
+```
+// After completing a significant task (3+ files modified):
+
+1. Summarize what was done
+   - What changed and why
+   - Key decisions made
+   - Symbols touched
+
+2. Record the lore entry
+   paradigm_lore_record({
+     type: "agent-session",
+     title: "Add payment processing with Stripe",
+     summary: "Implemented #stripe-integration with ^authenticated gate...",
+     symbols_touched: ["#stripe-integration", "^authenticated", "$checkout-flow"],
+     tags: ["feature", "payments"]
+   })
+
+3. For architectural decisions, use type: "decision"
+   paradigm_lore_record({
+     type: "decision",
+     title: "Chose Redis for session storage",
+     summary: "Evaluated Redis vs Memcached. Redis selected for...",
+     symbols_touched: ["#session-store"],
+     tags: ["architecture", "infrastructure"]
+   })
+```
+
+**Key points:**
+- Record after sessions with 3+ file modifications (enforced by habits)
+- Use `paradigm_lore_timeline` at session start for orientation
+- Include all affected symbols in `symbols_touched`
+
+---
+
+## Habit Compliance Pattern
+
+Ensure behavioral compliance at each workflow stage:
+
+```
+// BEFORE implementing (preflight):
+paradigm_habits_check({ trigger: "preflight", symbolsTouched: [...] })
+// → Verifies: ripple called, wisdom checked, context recovered
+
+// AFTER implementing (postflight):
+paradigm_habits_check({ trigger: "postflight",
+  symbolsTouched: [...],
+  filesModified: [...]
+})
+// → Verifies: .purpose updated, gates declared, flows documented
+
+// BEFORE ending session (on-stop):
+paradigm_habits_check({ trigger: "on-stop",
+  symbolsTouched: [...],
+  filesModified: [...]
+})
+// → Verifies: lore recorded, index rebuilt, checkpoint saved
+```
+
+**Key points:**
+- Habits have severity levels: `info`, `warn`, `error`, `blocking`
+- Blocking habits prevent session completion until resolved
+- Use `paradigm_practice_context` for proactive warnings before modifying symbols
+- Check `paradigm_habits_status` to review compliance trends
+
+---
+
+## Flow-First Development Pattern
+
+Define flows BEFORE implementing features that span multiple steps:
+
+```
+1. DEFINE the flow
+   - Add to .paradigm/flows.yaml:
+     $user-registration:
+       name: User Registration Flow
+       trigger: "POST /api/auth/register"
+       steps:
+         - type: gate
+           symbol: ^rate-limited
+         - type: action
+           symbol: #validate-input
+         - type: action
+           symbol: #create-user
+         - type: signal
+           symbol: "!user-registered"
+       successSignal: "!user-registered"
+
+2. VALIDATE the flow
+   paradigm_flow_validate({ flowId: "$user-registration" })
+
+3. VISUALIZE the flow
+   paradigm flow diagram $user-registration
+
+4. IMPLEMENT each step
+   - Gates → middleware/auth checks
+   - Actions → business logic
+   - Signals → event handlers
+
+5. VALIDATE with implementation check
+   paradigm_flow_validate({
+     flowId: "$user-registration",
+     checkImplementation: true
+   })
+```
+
+**Key points:**
+- Define flows when logic spans 3+ components
+- Each step becomes a clear implementation target
+- Use `paradigm flow diagram` to generate Mermaid visualizations
+- Validate both before and after implementing
+
 *Part of Paradigm v2.0*

@@ -82,7 +82,7 @@ export function getTagsToolsList() {
     {
       name: 'paradigm_tags',
       description:
-        'List, search, and manage tags in the Tag Bank. Use to find available tags for classification.',
+        'List, search, and manage tags in the Tag Bank. Use to find available tags for classification. Returns tags organized by section (core, project, suggested) with usage counts. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -115,7 +115,7 @@ export function getTagsToolsList() {
     {
       name: 'paradigm_tags_suggest',
       description:
-        'AI proposes a new tag for human review. Tag will be added to the suggested section for approval.',
+        'AI proposes a new tag for human review. Tag will be added to the suggested section for approval. Returns confirmation of suggestion with section placement. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -152,7 +152,7 @@ export function getTagsToolsList() {
     {
       name: 'paradigm_aspect_check',
       description:
-        'Verify an aspect has valid anchors and check coverage. Aspects (~) REQUIRE code anchors.',
+        'Verify an aspect has valid anchors and check coverage. Aspects (~) REQUIRE code anchors. Returns anchor validity, coverage stats, and missing anchor warnings. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

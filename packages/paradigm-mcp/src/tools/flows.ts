@@ -31,7 +31,7 @@ export function getFlowsToolsList() {
     {
       name: 'paradigm_flows_affected',
       description:
-        'Find flows affected by changes to a symbol. Returns flows that include the symbol in their steps, with downstream impact analysis and validation commands.',
+        'Find flows affected by changes to a symbol. Returns flows that include the symbol in their steps, with downstream impact analysis and validation commands. Returns flow IDs, step positions, and validation commands. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -55,7 +55,7 @@ export function getFlowsToolsList() {
     {
       name: 'paradigm_flow_validate',
       description:
-        'Validate flow definitions against the codebase. Checks that gates exist in portal.yaml, actions are implemented, and signals are emitted.',
+        'Validate flow definitions against the codebase. Checks that gates exist in portal.yaml, actions are implemented, and signals are emitted. Returns per-step validation results with issue severity. ~200-400 tokens depending on flow size.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -373,7 +373,7 @@ interface FlowValidationResult {
 }
 
 function parseSymbolSimple(symbol: string): { prefix: string; name: string } | null {
-  const match = symbol.match(/^([@#$%^!?&~])(.+)$/);
+  const match = symbol.match(/^([#$^!~])(.+)$/);
   if (!match) return null;
   return { prefix: match[1], name: match[2] };
 }
