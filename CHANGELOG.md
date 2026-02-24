@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.5] — 2026-02-23
+
+### Added
+
+- **Plugin auto-update checker** — On the first MCP tool call of each session, reads stored check results from `~/.paradigm/plugin-update-check.json` and prepends an update notice to the response if installed plugins are behind their remote. Fires a background check (throttled to 6h) for next session. New `paradigm_plugin_check` MCP tool for manual checks. New `paradigm plugin check` CLI command with `--update` flag to pull latest for stale marketplace clones.
+
+### Fixed
+
+- **Stale project hooks no longer shadow plugin hooks** — When the Paradigm plugin is active in Claude Code, `paradigm hooks install` now detects this and skips project-level hook installation. Any existing stale `.claude/hooks/` scripts and `settings.json` hook entries are cleaned up automatically. This fixes the root cause where project-level hook copies (from a previous `paradigm hooks install`) would run outdated logic instead of the plugin's always-current `${CLAUDE_PLUGIN_ROOT}/scripts/` hooks.
+
+### Changed
+
+- **`paradigm hooks status` shows plugin state** — When the plugin is active, displays the cached version and warns about any stale project hooks. When the plugin is not active, shows the traditional project-level hooks status.
+- **Version sync** — `@a-company/paradigm` 3.1.4 → 3.1.5, `@a-company/paradigm-mcp` 3.1.3 → 3.1.4, plugin 3.1.4 → 3.1.5.
+
 ## [3.1.4] — 2026-02-23
 
 ### Changed
