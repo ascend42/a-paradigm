@@ -6,6 +6,14 @@ alwaysApply: true
 
 > **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm)
 
+## CRITICAL RULES (Non-Negotiable)
+
+1. **You MUST update the nearest `.purpose` file when you change behavior.** No exceptions.
+2. **You MUST call `paradigm_session_recover` at session start and `paradigm_pm_postflight` when finishing.** See `paradigm-workflow.mdc` for the full protocol.
+3. **You MUST call `paradigm_ripple` before modifying any documented symbol.** Check impact before changing code.
+
+Violating these rules means your changes are non-compliant. The `paradigm-workflow.mdc` file contains the complete workflow — follow it.
+
 ## Overview
 
 This project uses Paradigm v2 for structured AI-assisted development.

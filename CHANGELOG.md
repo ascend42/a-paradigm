@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] — 2026-02-24
+
+### Added
+- **`paradigm-workflow.mdc`** — New Cursor rule file (`alwaysApply: true`) with session bookends, graduated task-size compliance guide, essential MCP tools table, and non-negotiable `.purpose` update rule
+- **`paradigm-practices.mdc`** — New Cursor rule file consolidating Phase 5/6 content (habits compliance, lore recording, llms.txt) — closes parity gap with AGENTS.md
+
+### Changed
+- **`paradigm-agent-hints.mdc`** — Rewritten to be MCP-first: all CLI command references (`paradigm ripple --json`, `paradigm echo --json`, `jq` queries) replaced with MCP tool calls (`paradigm_ripple()`, `paradigm_search()`, `paradigm_navigate()`)
+- **`paradigm-core.mdc`** — Added "CRITICAL RULES (Non-Negotiable)" section with 3 MUST-follow bullets and reference to workflow file
+- **Cursor adapter** generates 15 rule files (was 13)
+
 ## [3.2.0] — 2026-02-24
 
 ### Added
