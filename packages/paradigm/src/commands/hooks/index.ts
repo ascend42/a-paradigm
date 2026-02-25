@@ -19,6 +19,7 @@ import {
   CLAUDE_CODE_STOP_HOOK,
   CLAUDE_CODE_POSTWRITE_HOOK,
   CLAUDE_CODE_PRECOMMIT_HOOK,
+  CURSOR_SESSION_START_HOOK,
   CURSOR_STOP_HOOK,
   CURSOR_POSTWRITE_HOOK,
   CURSOR_PRECOMMIT_HOOK,
@@ -352,6 +353,7 @@ export async function hooksInstallCommand(options: {
       { name: 'claude-code-stop', content: CLAUDE_CODE_STOP_HOOK },
       { name: 'claude-code-precommit', content: CLAUDE_CODE_PRECOMMIT_HOOK },
       { name: 'claude-code-postwrite', content: CLAUDE_CODE_POSTWRITE_HOOK },
+      { name: 'cursor-session-start', content: CURSOR_SESSION_START_HOOK },
       { name: 'cursor-stop', content: CURSOR_STOP_HOOK },
       { name: 'cursor-precommit', content: CURSOR_PRECOMMIT_HOOK },
       { name: 'cursor-postwrite', content: CURSOR_POSTWRITE_HOOK },
@@ -460,7 +462,7 @@ export async function hooksInstallCommand(options: {
   // Install Cursor hooks (when --cursor flag or no specific flags)
   if (installAll || options.cursor) {
     if (dryRun) {
-      console.log(chalk.gray('  Cursor hooks: would install paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
+      console.log(chalk.gray('  Cursor hooks: would install paradigm-session-start.sh, paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
       console.log(chalk.gray(`  → ${path.join(rootDir, '.cursor', 'hooks')}/`));
       console.log(chalk.gray('  → Update .cursor/hooks.json'));
     } else {
@@ -616,6 +618,7 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
   const installed: string[] = [];
 
   const hookScripts = [
+    { name: 'paradigm-session-start.sh', content: CURSOR_SESSION_START_HOOK },
     { name: 'paradigm-stop.sh', content: CURSOR_STOP_HOOK },
     { name: 'paradigm-precommit.sh', content: CURSOR_PRECOMMIT_HOOK },
     { name: 'paradigm-postwrite.sh', content: CURSOR_POSTWRITE_HOOK },
@@ -651,9 +654,14 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
   const hooks = (hooksConfig.hooks || {}) as Record<string, unknown[]>;
 
   // Paradigm hook entries
+  const paradigmSessionStartEntry = {
+    command: '.cursor/hooks/paradigm-session-start.sh',
+    timeout: 5,
+  };
   const paradigmStopEntry = {
     command: '.cursor/hooks/paradigm-stop.sh',
     timeout: 10,
+    loop_limit: 3,
   };
   const paradigmPostwriteEntry = {
     command: '.cursor/hooks/paradigm-postwrite.sh',
@@ -664,6 +672,16 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
     matcher: 'git commit',
     timeout: 30,
   };
+
+  // Merge sessionStart hooks
+  const sessionStartHooks = (hooks.sessionStart || []) as Array<Record<string, unknown>>;
+  const hasParadigmSessionStart = sessionStartHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-session-start.sh'),
+  );
+  if (!hasParadigmSessionStart) {
+    sessionStartHooks.push(paradigmSessionStartEntry);
+  }
+  hooks.sessionStart = sessionStartHooks;
 
   // Merge stop hooks (preserve non-paradigm entries)
   const stopHooks = (hooks.stop || []) as Array<Record<string, unknown>>;
@@ -759,7 +777,7 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
     const cursorHooksDir = path.join(rootDir, '.cursor', 'hooks');
     const cursorRemoved: string[] = [];
 
-    for (const hookName of ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+    for (const hookName of ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
       const hookPath = path.join(cursorHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         if (dryRun) {
@@ -781,7 +799,7 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
           const hooksConfig = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
           const hooks = hooksConfig.hooks || {};
 
-          for (const key of ['stop', 'afterFileEdit', 'beforeShellExecution']) {
+          for (const key of ['sessionStart', 'stop', 'afterFileEdit', 'beforeShellExecution']) {
             if (Array.isArray(hooks[key])) {
               hooks[key] = hooks[key].filter(
                 (h: Record<string, unknown>) => !JSON.stringify(h).includes('paradigm-'),
@@ -935,7 +953,7 @@ export async function hooksStatusCommand(): Promise<void> {
   console.log(chalk.magenta('\n  Cursor Hooks Status\n'));
 
   const cursorHooksDir = path.join(rootDir, '.cursor', 'hooks');
-  const cursorHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
+  const cursorHooks = ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
 
   for (const hookName of cursorHooks) {
     const hookPath = path.join(cursorHooksDir, hookName);
@@ -952,9 +970,11 @@ export async function hooksStatusCommand(): Promise<void> {
     try {
       const hooksJson = JSON.parse(fs.readFileSync(cursorHooksJsonPath, 'utf8'));
       const hooks = hooksJson.hooks || {};
+      const hasSessionStart = JSON.stringify(hooks.sessionStart || []).includes('paradigm-session-start.sh');
       const hasStop = JSON.stringify(hooks.stop || []).includes('paradigm-stop.sh');
       const hasPostwrite = JSON.stringify(hooks.afterFileEdit || []).includes('paradigm-postwrite.sh');
       const hasPrecommit = JSON.stringify(hooks.beforeShellExecution || []).includes('paradigm-precommit.sh');
+      console.log(chalk.gray(`  hooks.json sessionStart: ${hasSessionStart ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json stop: ${hasStop ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json afterFileEdit: ${hasPostwrite ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json beforeShellExecution: ${hasPrecommit ? 'configured' : 'missing'}`));

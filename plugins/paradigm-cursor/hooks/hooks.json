@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./scripts/paradigm-session-start.sh",
+        "timeout": 5
+      }
+    ],
+    "stop": [
+      {
+        "command": "./scripts/paradigm-stop.sh",
+        "timeout": 10,
+        "loop_limit": 3
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "./scripts/paradigm-postwrite.sh",
+        "timeout": 5
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "./scripts/paradigm-precommit.sh",
+        "matcher": "git commit",
+        "timeout": 30
+      }
+    ]
+  }
+}

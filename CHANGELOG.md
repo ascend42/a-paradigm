@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] — 2026-02-24
+
+### Added
+- **Cursor `sessionStart` hook** — New `cursor-session-start.sh` fires before the agent does anything, injecting `additional_context` with 3 non-negotiable rules (session bookends, .purpose updates, ripple before modify), essential MCP tool signatures, and task-size tiers. Deterministic — not subject to context compaction.
+- **Cursor `followup_message` compliance loop** — Stop hook now outputs `followup_message` JSON to stdout when violations are found. Cursor auto-submits this as the next user message, creating a retry loop (up to `loop_limit: 3`).
+- **Cursor plugin** (`plugins/paradigm-cursor/`) — Full `.cursor-plugin/` format plugin with hooks, skills (preflight, postflight, lore, scan), MCP server config, and README. Mirrors the existing Claude Code plugin for Cursor's plugin system.
+- **Dual-plugin hook generation** — `generate-hooks.mjs` now copies scripts to both `plugins/paradigm/scripts/` (Claude Code) and `plugins/paradigm-cursor/scripts/` (Cursor) as the single source of truth.
+
+### Changed
+- **`paradigm hooks install --cursor`** — Now installs 4 hooks (was 3): added `sessionStart` with `paradigm-session-start.sh`; stop hook entry includes `loop_limit: 3`
+- **`paradigm hooks uninstall --cursor`** — Cleans up `sessionStart` entries alongside existing hooks
+- **`paradigm hooks status`** — Shows `sessionStart` hook status for Cursor
+- **Version sync** — `@a-company/paradigm` 3.2.1 → 3.3.0, `@a-company/paradigm-mcp` 3.2.1 → 3.3.0
+
 ## [3.2.1] — 2026-02-24
 
 ### Added
