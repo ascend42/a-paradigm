@@ -546,3 +546,122 @@ export interface PracticeEventQuery {
   limit?: number;
   offset?: number;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// STRUCTURED LOGGING TYPES
+// ═══════════════════════════════════════════════════════════════════
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogSymbolType = 'component' | 'gate' | 'signal' | 'flow' | 'aspect' | 'raw';
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: LogLevel;
+  symbol: string;
+  symbolType: LogSymbolType;
+  message: string;
+  data?: Record<string, unknown>;
+  service: string;
+  sessionId?: string;
+  correlationId?: string;
+  durationMs?: number;
+  environment?: string;
+}
+
+export interface LogEntryInput {
+  id?: string;
+  timestamp?: string;
+  level: LogLevel;
+  symbol: string;
+  symbolType?: LogSymbolType;
+  message: string;
+  data?: Record<string, unknown>;
+  service: string;
+  sessionId?: string;
+  correlationId?: string;
+  durationMs?: number;
+  environment?: string;
+}
+
+export interface LogQueryOptions {
+  level?: LogLevel;
+  symbol?: string;
+  service?: string;
+  sessionId?: string;
+  correlationId?: string;
+  search?: string;
+  since?: string;
+  until?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SERVICE REGISTRY TYPES
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ServiceInfo {
+  name: string;
+  version?: string;
+  pid?: number;
+  startedAt: string;
+  lastSeenAt: string;
+  environment?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ServiceRegistration {
+  name: string;
+  version?: string;
+  pid?: number;
+  environment?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LIVE STATE TRACKING
+// ═══════════════════════════════════════════════════════════════════
+
+export interface AppState {
+  service: string;
+  sessionId: string;
+  timestamp: string;
+  state: Record<string, unknown>;
+  activeFlows?: string[];
+  activeGates?: string[];
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SYMBOL VALIDATION
+// ═══════════════════════════════════════════════════════════════════
+
+export interface SymbolValidationResult {
+  symbol: string;
+  known: boolean;
+  type?: string;
+  definedIn?: string;
+  suggestion?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SERVER CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════
+
+export interface SentinelServerConfig {
+  port: number;
+  maxLogs: number;
+  maxBatchSize: number;
+  wsMaxSubscribers: number;
+  pruneIntervalInserts: number;
+  logRetentionDays: number;
+}
+
+export const DEFAULT_SERVER_CONFIG: SentinelServerConfig = {
+  port: 3838,
+  maxLogs: 10000,
+  maxBatchSize: 500,
+  wsMaxSubscribers: 256,
+  pruneIntervalInserts: 100,
+  logRetentionDays: 0,
+};

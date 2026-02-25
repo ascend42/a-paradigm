@@ -329,6 +329,70 @@ export function getSentinelToolsList() {
         destructiveHint: false,
       },
     },
+    // ─── Observability Tools ──────────────────────────────────────
+    {
+      name: 'paradigm_sentinel_logs',
+      description: 'Query structured logs from connected apps. Filters by level, symbol, service, search text, time range. ~200-400 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          level: { type: 'string', enum: ['debug', 'info', 'warn', 'error'], description: 'Filter by log level' },
+          symbol: { type: 'string', description: 'Filter by symbol (partial match)' },
+          service: { type: 'string', description: 'Filter by service name' },
+          search: { type: 'string', description: 'Search in log messages' },
+          since: { type: 'string', description: 'ISO timestamp — logs after this time' },
+          sessionId: { type: 'string', description: 'Filter by session ID' },
+          correlationId: { type: 'string', description: 'Filter by correlation ID' },
+          limit: { type: 'number', description: 'Max results (default: 50)' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_services',
+      description: 'List all registered services with version, environment, and last-seen time. ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_app_state',
+      description: 'Get live app state snapshots. Shows current state, active flows, and held gates for connected services. ~200 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          service: { type: 'string', description: 'Filter by service name' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_validate_symbol',
+      description: 'Check if a symbol exists in the project index. Returns known/unknown status with suggestions for typos. ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          symbol: { type: 'string', description: 'Symbol to validate (e.g., #checkout, ^auth)' },
+        },
+        required: ['symbol'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_flow_activity',
+      description: 'Get recent flow events — which flow nodes were hit, in what order, by which service. ~200 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          flowId: { type: 'string', description: 'Filter by flow ID (e.g., $checkout-flow)' },
+          service: { type: 'string', description: 'Filter by service name' },
+          since: { type: 'string', description: 'ISO timestamp — events after this time' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
   ];
 }
 
@@ -756,6 +820,147 @@ export async function handleSentinelTool(
           null,
           2
         ),
+      };
+    }
+
+    // ─── Observability Tools ──────────────────────────────────────
+
+    case 'paradigm_sentinel_logs': {
+      const { level, symbol, service, search, since, sessionId, correlationId, limit = 50 } = args as {
+        level?: string;
+        symbol?: string;
+        service?: string;
+        search?: string;
+        since?: string;
+        sessionId?: string;
+        correlationId?: string;
+        limit?: number;
+      };
+
+      const logs = store.queryLogs({
+        level: level as any,
+        symbol,
+        service,
+        search,
+        since,
+        sessionId,
+        correlationId,
+        limit,
+      });
+
+      const total = store.getLogCount({ level: level as any, symbol, service, since });
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: logs.length,
+          total,
+          logs: logs.map((l) => ({
+            timestamp: l.timestamp,
+            level: l.level,
+            symbol: l.symbol,
+            service: l.service,
+            message: l.message,
+            data: l.data,
+            sessionId: l.sessionId,
+            correlationId: l.correlationId,
+            durationMs: l.durationMs,
+          })),
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_services': {
+      const services = store.getServices();
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: services.length,
+          services: services.map((s) => ({
+            name: s.name,
+            version: s.version,
+            environment: s.environment,
+            lastSeen: s.lastSeenAt,
+            startedAt: s.startedAt,
+            pid: s.pid,
+          })),
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_app_state': {
+      const { service: svc } = args as { service?: string };
+
+      const states = svc ? store.getAppState(svc) : store.getAllAppStates();
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          states: states.map((s) => ({
+            service: s.service,
+            sessionId: s.sessionId,
+            state: s.state,
+            activeFlows: s.activeFlows,
+            activeGates: s.activeGates,
+            timestamp: s.timestamp,
+          })),
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_validate_symbol': {
+      const { symbol: sym } = args as { symbol: string };
+
+      // Check against stored logs to see if it's been used
+      const logCount = store.getLogCount({ symbol: sym });
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          symbol: sym,
+          usedInLogs: logCount > 0,
+          logCount,
+          tip: logCount === 0
+            ? 'This symbol has not appeared in any logs. It may be a typo or unused.'
+            : `This symbol has been used in ${logCount} log entries.`,
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_flow_activity': {
+      const { flowId, service: flowSvc, since: flowSince } = args as {
+        flowId?: string;
+        service?: string;
+        since?: string;
+      };
+
+      // Query logs that are flow/signal/gate type
+      const flowLogs = store.queryLogs({
+        symbol: flowId,
+        service: flowSvc,
+        since: flowSince,
+        limit: 100,
+      });
+
+      // Filter to flow-related entries
+      const flowEvents = flowLogs
+        .filter((l) => ['flow', 'signal', 'gate'].includes(l.symbolType))
+        .map((l) => ({
+          timestamp: l.timestamp,
+          symbol: l.symbol,
+          symbolType: l.symbolType,
+          service: l.service,
+          message: l.message,
+          level: l.level,
+        }));
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: flowEvents.length,
+          events: flowEvents,
+        }, null, 2),
       };
     }
 
