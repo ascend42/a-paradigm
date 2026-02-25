@@ -5,8 +5,17 @@ AI-native project architecture for Cursor. Deterministic enforcement hooks,
 
 ## Installation
 
-Copy or symlink this directory into your project as `.cursor-plugin/paradigm/`,
-or install via `paradigm hooks install --cursor` for per-project hook injection.
+> **Note:** Cursor's plugin marketplace is not yet available for third-party plugins.
+> For now, install hooks per-project using the CLI.
+
+**Per-project (recommended):**
+```bash
+npx @a-company/paradigm hooks install --cursor   # Hooks only
+npx @a-company/paradigm shift                     # Full setup (hooks + rules + MCP + .paradigm/)
+```
+
+**Manual plugin install** (when Cursor supports it):
+Copy or symlink this directory into your project as `.cursor-plugin/paradigm/`.
 
 ## What You Get
 
@@ -72,19 +81,22 @@ guaranteed lifecycle points.
 | 2-3 files | + ripple before modify + update .purpose files |
 | 3+ files | + full workflow (ripple, .purpose, lore entry, portal.yaml for routes) |
 
-## Per-Project Installation
+## Plugin vs Per-Project Setup
 
-For projects that want hooks without the plugin:
+| | Plugin | `paradigm shift` (per-project) |
+|---|---|---|
+| **Scope** | Every project automatically | One project at a time |
+| **Hooks** | Bundled in plugin, resolved via plugin root | Copied to `.cursor/hooks/` in the project |
+| **Skills** | preflight, postflight, lore, scan | None (skills are plugin-only) |
+| **Rules** | Not included (rules are project-specific) | `.cursor/rules/*.mdc` generated per-project |
+| **MCP** | `.mcp.json` in the plugin | `.cursor/mcp.json` in the project |
+| **Updates** | Update plugin once, all projects get it | Re-run `paradigm shift` or `paradigm hooks install --cursor` |
 
-```bash
-npx @a-company/paradigm hooks install --cursor
-```
-
-This copies hook scripts to `.cursor/hooks/` and creates `.cursor/hooks.json`.
+Most teams use both: the plugin for global enforcement, `paradigm shift` for project-specific context.
 
 ## Requirements
 
-- Cursor 2.5 or later (for plugin + hook support)
+- Cursor 2.5 or later (for hook support)
 - Node.js >= 18
 - `@a-company/paradigm` npm package (auto-installed via `npx`)
 
