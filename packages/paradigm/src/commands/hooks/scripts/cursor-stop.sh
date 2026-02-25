@@ -37,6 +37,26 @@ fi
 
 cd "$CWD" || exit 0
 
+# --- Loop guard: prevent infinite retry loops ---
+# Cursor's stop hook with loop_limit fires repeatedly. Cap retries at 3.
+LOOP_GUARD_FILE=".paradigm/.stop-hook-active"
+if [ -f "$LOOP_GUARD_FILE" ]; then
+  RETRY_COUNT=$(cat "$LOOP_GUARD_FILE" 2>/dev/null | tr -d '[:space:]')
+  RETRY_COUNT=${RETRY_COUNT:-0}
+  if [ "$RETRY_COUNT" -ge 3 ]; then
+    # Max retries reached — allow session to end to avoid infinite loop
+    echo "[paradigm] Stop hook: max retries (3) reached. Allowing session to end." >&2
+    rm -f "$LOOP_GUARD_FILE"
+    rm -f ".paradigm/.pending-review"
+    rm -f ".paradigm/.habits-blocking"
+    exit 0
+  fi
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  echo "$RETRY_COUNT" > "$LOOP_GUARD_FILE"
+else
+  echo "1" > "$LOOP_GUARD_FILE"
+fi
+
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
@@ -322,8 +342,9 @@ if [ -n "$ADVISORY" ]; then
   echo "$ADVISORY" >&2
 fi
 
-# Clean up pending-review on pass
+# Clean up pending-review and loop guard on pass
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
+rm -f ".paradigm/.stop-hook-active"
 
 exit 0

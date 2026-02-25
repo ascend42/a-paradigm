@@ -616,6 +616,26 @@ fi
 
 cd "$CWD" || exit 0
 
+# --- Loop guard: prevent infinite retry loops ---
+# Cursor's stop hook with loop_limit fires repeatedly. Cap retries at 3.
+LOOP_GUARD_FILE=".paradigm/.stop-hook-active"
+if [ -f "$LOOP_GUARD_FILE" ]; then
+  RETRY_COUNT=$(cat "$LOOP_GUARD_FILE" 2>/dev/null | tr -d '[:space:]')
+  RETRY_COUNT=\${RETRY_COUNT:-0}
+  if [ "$RETRY_COUNT" -ge 3 ]; then
+    # Max retries reached — allow session to end to avoid infinite loop
+    echo "[paradigm] Stop hook: max retries (3) reached. Allowing session to end." >&2
+    rm -f "$LOOP_GUARD_FILE"
+    rm -f ".paradigm/.pending-review"
+    rm -f ".paradigm/.habits-blocking"
+    exit 0
+  fi
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  echo "$RETRY_COUNT" > "$LOOP_GUARD_FILE"
+else
+  echo "1" > "$LOOP_GUARD_FILE"
+fi
+
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
@@ -901,19 +921,25 @@ if [ -n "$ADVISORY" ]; then
   echo "$ADVISORY" >&2
 fi
 
-# Clean up pending-review on pass
+# Clean up pending-review and loop guard on pass
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
+rm -f ".paradigm/.stop-hook-active"
 
 exit 0
 `;
 
 export const CURSOR_POSTWRITE_HOOK = `#!/bin/sh
-# Paradigm Cursor PostWrite Hook (v2)
-# Fires after file edits.
-# Tracks modified source files in .paradigm/.pending-review
-# and outputs compliance reminders.
+# Paradigm Cursor PostWrite Hook (v2) — LEGACY
+# Fires after file edits via Cursor's afterFileEdit hook type.
 # Installed by: paradigm hooks install --cursor
+#
+# IMPORTANT: Cursor ignores all output (stdout + stderr) from afterFileEdit hooks.
+# This hook's advisory messages are INVISIBLE to the agent. The postToolUse hook
+# (cursor-posttooluse.sh) is now the primary advisory mechanism.
+#
+# This hook is kept for backward compatibility and background file tracking only.
+# Both preToolUse and stop hooks depend on the .pending-review file this writes.
 #
 # Hook type: afterFileEdit
 # Exit 0 always (never blocks — advisory only)
@@ -992,18 +1018,8 @@ if [ -z "$found_purpose" ] && [ -f ".purpose" ]; then
   found_purpose=".purpose"
 fi
 
-if [ -z "$found_purpose" ]; then
-  file_dir=$(dirname "$REL_PATH")
-  echo "" >&2
-  echo "[paradigm] No .purpose file covers $file_dir/" >&2
-  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
-  echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
-elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
-  echo "" >&2
-  echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
-  echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
-  echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
-fi
+# NOTE: No stderr output here — Cursor ignores afterFileEdit output.
+# Advisory messages are handled by cursor-posttooluse.sh (postToolUse hook).
 
 exit 0
 `;
@@ -1052,6 +1068,265 @@ for f in .paradigm/scan-index.json .paradigm/navigator.yaml .paradigm/flow-index
 done
 
 # Never block — exit 0
+exit 0
+`;
+
+export const CURSOR_PRETOOLUSE_HOOK = `#!/bin/sh
+# Paradigm Cursor PreToolUse Hook — Graduated Blocking
+# Fires BEFORE the agent calls Edit or Write.
+# Uses graduated enforcement based on uncovered source edits.
+# Installed by: paradigm hooks install --cursor
+#
+# Hook type: preToolUse
+# Matcher: Edit|Write
+# Exit 0 = allow, Exit 2 = block with stderr message
+#
+# Graduated enforcement:
+#   1-2 uncovered edits → silent pass (exit 0)
+#   3-4 uncovered edits → warn via stderr (exit 0)
+#   5+  uncovered edits → BLOCK (exit 2 + stderr)
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Extract tool_name and file_path from preToolUse input
+if command -v jq >/dev/null 2>&1; then
+  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+  FILE_PATH=$(echo "$INPUT" | jq -r '.file_path // .input.file_path // empty' 2>/dev/null)
+else
+  TOOL_NAME=$(echo "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+# Must have a file path to check
+if [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+# Extract workspace root
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.workspace_roots[0] // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"workspace_roots"[[:space:]]*:[[:space:]]*\\["[^"]*"' | head -1 | sed 's/.*\\["//' | sed 's/"$//')
+fi
+
+if [ -z "$CWD" ]; then
+  CWD="$(pwd)"
+fi
+
+# Not a paradigm project — pass
+if [ ! -d "$CWD/.paradigm" ]; then
+  exit 0
+fi
+
+cd "$CWD" || exit 0
+
+# Convert to relative path
+REL_PATH="$FILE_PATH"
+case "$FILE_PATH" in
+  "$CWD"/*) REL_PATH=$(echo "$FILE_PATH" | sed "s|^$CWD/||") ;;
+esac
+
+# If still absolute, file is outside project — skip
+case "$REL_PATH" in
+  /*) exit 0 ;;
+esac
+
+# Skip non-source files (paradigm metadata, docs, config)
+case "$REL_PATH" in
+  *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;
+esac
+
+# Skip .paradigm, .claude, and .cursor directories
+case "$REL_PATH" in
+  .paradigm/*|.claude/*|.cursor/*) exit 0 ;;
+esac
+
+# Check if target file has a covering .purpose file
+dir=$(dirname "$REL_PATH")
+has_purpose=false
+
+while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ "$dir" != "" ]; do
+  if [ -f "$dir/.purpose" ]; then
+    has_purpose=true
+    break
+  fi
+  dir=$(dirname "$dir")
+done
+
+# Check root .purpose
+if [ "$has_purpose" = false ] && [ -f ".purpose" ]; then
+  has_purpose=true
+fi
+
+# If this file already has .purpose coverage, always allow
+if [ "$has_purpose" = true ]; then
+  exit 0
+fi
+
+# Count uncovered source edits from .pending-review
+PENDING_FILE=".paradigm/.pending-review"
+UNCOVERED_COUNT=0
+
+if [ -f "$PENDING_FILE" ]; then
+  while IFS= read -r tracked_file; do
+    [ -z "$tracked_file" ] && continue
+    # Check if this tracked file has .purpose coverage
+    check_dir=$(dirname "$tracked_file")
+    found=false
+    while [ "$check_dir" != "." ] && [ "$check_dir" != "/" ] && [ "$check_dir" != "" ]; do
+      if [ -f "$check_dir/.purpose" ]; then
+        found=true
+        break
+      fi
+      check_dir=$(dirname "$check_dir")
+    done
+    if [ "$found" = false ] && [ -f ".purpose" ]; then
+      found=true
+    fi
+    if [ "$found" = false ]; then
+      UNCOVERED_COUNT=$((UNCOVERED_COUNT + 1))
+    fi
+  done < "$PENDING_FILE"
+fi
+
+# Include the current file (not yet tracked)
+UNCOVERED_COUNT=$((UNCOVERED_COUNT + 1))
+
+# Graduated enforcement
+if [ "$UNCOVERED_COUNT" -le 2 ]; then
+  # Silent pass — don't slow down small fixes
+  exit 0
+elif [ "$UNCOVERED_COUNT" -le 4 ]; then
+  # Warn but allow
+  echo "" >&2
+  echo "[paradigm] Warning: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
+  echo "  Update the nearest .purpose file before the stop hook blocks you." >&2
+  echo "  Use: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  exit 0
+else
+  # Block — too many uncovered edits
+  echo "" >&2
+  echo "[paradigm] BLOCKED: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
+  echo "  You must update .purpose files before continuing." >&2
+  echo "  Steps:" >&2
+  echo "    1. paradigm_purpose_init — create .purpose in uncovered directories" >&2
+  echo "    2. paradigm_purpose_add_component — register code units" >&2
+  echo "    3. paradigm_reindex — rebuild the index" >&2
+  echo "  Then retry your edit." >&2
+  exit 2
+fi
+`;
+
+export const CURSOR_POSTTOOLUSE_HOOK = `#!/bin/sh
+# Paradigm Cursor PostToolUse Hook — Advisory Feedback
+# Fires AFTER the agent calls Edit or Write.
+# Tracks modified source files and outputs advisory the agent can see.
+# Installed by: paradigm hooks install --cursor
+#
+# Hook type: postToolUse
+# Matcher: Edit|Write
+# Exit 0 always (never blocks — advisory only)
+#
+# Unlike afterFileEdit, postToolUse output is visible to the Cursor agent.
+# This is the primary advisory mechanism for Cursor enforcement.
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Extract file_path from postToolUse input
+if command -v jq >/dev/null 2>&1; then
+  FILE_PATH=$(echo "$INPUT" | jq -r '.file_path // .input.file_path // empty' 2>/dev/null)
+else
+  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+if [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+# Extract workspace root
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.workspace_roots[0] // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"workspace_roots"[[:space:]]*:[[:space:]]*\\["[^"]*"' | head -1 | sed 's/.*\\["//' | sed 's/"$//')
+fi
+
+if [ -z "$CWD" ]; then
+  CWD="$(pwd)"
+fi
+
+# Not a paradigm project — pass
+if [ ! -d "$CWD/.paradigm" ]; then
+  exit 0
+fi
+
+cd "$CWD" || exit 0
+
+# Convert to relative path
+REL_PATH="$FILE_PATH"
+case "$FILE_PATH" in
+  "$CWD"/*) REL_PATH=$(echo "$FILE_PATH" | sed "s|^$CWD/||") ;;
+esac
+
+# If still absolute, file is outside project — skip
+case "$REL_PATH" in
+  /*) exit 0 ;;
+esac
+
+# Skip non-source files
+case "$REL_PATH" in
+  *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;
+esac
+
+# Skip .paradigm, .claude, and .cursor directories
+case "$REL_PATH" in
+  .paradigm/*|.claude/*|.cursor/*) exit 0 ;;
+esac
+
+# Track: append to .paradigm/.pending-review (deduplicated)
+PENDING_FILE=".paradigm/.pending-review"
+if [ -f "$PENDING_FILE" ]; then
+  if ! grep -qxF "$REL_PATH" "$PENDING_FILE" 2>/dev/null; then
+    echo "$REL_PATH" >> "$PENDING_FILE"
+  fi
+else
+  echo "$REL_PATH" > "$PENDING_FILE"
+fi
+
+# Count pending files
+PENDING_COUNT=$(wc -l < "$PENDING_FILE" | tr -d ' ')
+
+# Walk up from the file's directory to find a .purpose file
+dir=$(dirname "$REL_PATH")
+found_purpose=""
+
+while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ "$dir" != "" ]; do
+  if [ -f "$dir/.purpose" ]; then
+    found_purpose="$dir/.purpose"
+    break
+  fi
+  dir=$(dirname "$dir")
+done
+
+# Check root .purpose
+if [ -z "$found_purpose" ] && [ -f ".purpose" ]; then
+  found_purpose=".purpose"
+fi
+
+if [ -z "$found_purpose" ]; then
+  file_dir=$(dirname "$REL_PATH")
+  echo "" >&2
+  echo "[paradigm] No .purpose file covers $file_dir/" >&2
+  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
+elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
+  echo "" >&2
+  echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
+  echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
+  echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
+fi
+
 exit 0
 `;
 
