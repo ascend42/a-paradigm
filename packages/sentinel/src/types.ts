@@ -648,6 +648,11 @@ export interface SymbolValidationResult {
 // SERVER CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════
 
+export interface CorsConfig {
+  origin?: string | string[];
+  credentials?: boolean;
+}
+
 export interface SentinelServerConfig {
   port: number;
   maxLogs: number;
@@ -657,6 +662,7 @@ export interface SentinelServerConfig {
   logRetentionDays: number;
   auth: AuthConfig;
   rateLimit: RateLimitConfig;
+  cors?: CorsConfig;
   tls?: { cert: string; key: string };
 }
 

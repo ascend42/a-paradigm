@@ -5,6 +5,7 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
+      transport: 'src/transport.ts',
       'server/index': 'src/server/index.ts',
       'adapters/express': 'src/adapters/express.ts',
       'adapters/fastify': 'src/adapters/fastify.ts',

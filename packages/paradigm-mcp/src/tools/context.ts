@@ -594,6 +594,9 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
     }
     result.suggestion = suggestion;
 
+    // Instruct the agent to ask the user before proceeding
+    result.agentInstruction = 'Present a brief summary of the previous session, then ask the user what they would like to do: (1) Continue — pick up where the last session left off, (2) Discard — ignore the previous session and start fresh, or (3) let them describe what they want to work on instead. Do NOT automatically continue without asking.';
+
     // Mark recovery as done so auto-recovery doesn't duplicate
     tracker.markRecovered();
 
@@ -705,6 +708,8 @@ export function buildRecoveryPreamble(rootDir: string): string | null {
     }
   }
 
+  lines.push('');
+  lines.push('IMPORTANT: Present a brief summary of this recovery data to the user, then ask what they would like to do: (1) Continue — pick up where the last session left off, (2) Discard — ignore the previous session and start fresh, or (3) let them describe what they want to work on instead. Do NOT automatically continue without asking.');
   lines.push('---');
 
   return lines.join('\n');

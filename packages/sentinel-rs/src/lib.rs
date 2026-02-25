@@ -22,6 +22,9 @@
 //! # }
 //! ```
 
+#[cfg(feature = "tracing")]
+pub mod tracing_layer;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
