@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { DesignView } from './views/DesignView';
 import { IncidentsView } from './views/IncidentsView';
+import { LogsView } from './views/LogsView';
+import { FlowsView } from './views/FlowsView';
 import { useThemeStore } from './store/themeStore';
 
 // Declare the version injected by Vite
 declare const __PARADIGM_VERSION__: string;
 
-type ViewType = 'design' | 'incidents';
+type ViewType = 'design' | 'incidents' | 'logs' | 'flows';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('design');
@@ -106,6 +108,19 @@ function App() {
             Design
           </button>
           <button
+            className={`view-tab ${currentView === 'logs' ? 'active' : ''}`}
+            onClick={() => setCurrentView('logs')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            Logs
+          </button>
+          <button
             className={`view-tab ${currentView === 'incidents' ? 'active' : ''}`}
             onClick={() => setCurrentView('incidents')}
           >
@@ -115,6 +130,19 @@ function App() {
               <line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             Incidents
+          </button>
+          <button
+            className={`view-tab ${currentView === 'flows' ? 'active' : ''}`}
+            onClick={() => setCurrentView('flows')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="5" cy="12" r="3"/>
+              <circle cx="19" cy="6" r="3"/>
+              <circle cx="19" cy="18" r="3"/>
+              <line x1="8" y1="12" x2="16" y2="6"/>
+              <line x1="8" y1="12" x2="16" y2="18"/>
+            </svg>
+            Flows
           </button>
         </div>
 
@@ -133,7 +161,9 @@ function App() {
       {/* Main Content */}
       <main className="main-content">
         {currentView === 'design' && <DesignView />}
+        {currentView === 'logs' && <LogsView />}
         {currentView === 'incidents' && <IncidentsView />}
+        {currentView === 'flows' && <FlowsView />}
       </main>
     </div>
   );
