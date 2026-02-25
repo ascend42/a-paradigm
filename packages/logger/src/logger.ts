@@ -1,4 +1,4 @@
-import type { LogLevel, LogData, SymbolType, SymbolLogger, DurationTracker, LoggerOptions } from './types';
+import type { LogLevel, LogData, SymbolType, SymbolLogger, DurationTracker, LoggerOptions, LogTransport } from './types';
 import { formatPretty, formatJSON } from './formatters';
 import { getCorrelationId } from './correlation';
 
@@ -69,6 +69,7 @@ class SymbolLoggerImpl implements SymbolLogger {
     private symbolFilter: string[] | null,
     private format: 'pretty' | 'json',
     private output: (line: string) => void,
+    private transports: LogTransport[] = [],
   ) {}
 
   debug(message: string, data?: LogData): void { this.emit('debug', message, data); }
@@ -93,6 +94,21 @@ class SymbolLoggerImpl implements SymbolLogger {
     const formatter = this.format === 'json' ? formatJSON : formatPretty;
     const line = formatter(level, this.symbol, this.symbolType, message, data, correlationId);
     this.output(line);
+
+    if (this.transports.length > 0) {
+      const entry = {
+        level,
+        symbol: this.symbol,
+        symbolType: this.symbolType,
+        message,
+        data,
+        correlationId,
+        timestamp: new Date().toISOString(),
+      };
+      for (const transport of this.transports) {
+        transport.send(entry);
+      }
+    }
   }
 }
 
@@ -101,12 +117,23 @@ export class ParadigmLogger {
   private symbolFilter: string[] | null;
   private format: 'pretty' | 'json';
   private output: (line: string) => void;
+  private transports: LogTransport[];
 
   constructor(options?: LoggerOptions) {
     this.level = options?.level ?? resolveLevel();
     this.symbolFilter = options?.symbols ?? resolveSymbolFilter();
     this.format = options?.format ?? resolveFormat();
     this.output = options?.output ?? ((line: string) => console.log(line));
+    this.transports = options?.transports ?? [];
+  }
+
+  addTransport(transport: LogTransport): void {
+    this.transports.push(transport);
+  }
+
+  removeTransport(transport: LogTransport): void {
+    const idx = this.transports.indexOf(transport);
+    if (idx !== -1) this.transports.splice(idx, 1);
   }
 
   component(symbol: string): SymbolLogger {
@@ -130,12 +157,12 @@ export class ParadigmLogger {
   }
 
   raw(symbol: string): SymbolLogger {
-    return new SymbolLoggerImpl(symbol, 'raw', this.level, this.symbolFilter, this.format, this.output);
+    return new SymbolLoggerImpl(symbol, 'raw', this.level, this.symbolFilter, this.format, this.output, this.transports);
   }
 
   private create(symbol: string, type: SymbolType, expectedPrefix: string): SymbolLogger {
     const normalized = symbol.startsWith(expectedPrefix) ? symbol : `${expectedPrefix}${symbol}`;
-    return new SymbolLoggerImpl(normalized, type, this.level, this.symbolFilter, this.format, this.output);
+    return new SymbolLoggerImpl(normalized, type, this.level, this.symbolFilter, this.format, this.output, this.transports);
   }
 }
 

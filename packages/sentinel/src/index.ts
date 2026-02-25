@@ -49,6 +49,9 @@ export { PatternImporter } from './importer.js';
 // Seed Patterns
 export { loadUniversalPatterns, loadParadigmPatterns, loadAllSeedPatterns } from './seeds/loader.js';
 
+// Logger Transport Bridge
+export { SentinelTransport, createSentinelTransport, enableSentinel } from './transport.js';
+
 // Practice Events (Habits System)
 // Types are exported from ./types.js via `export * from './types.js'`
 // Storage methods are on SentinelStorage (recordPracticeEvent, getPracticeEvents, etc.)

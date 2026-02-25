@@ -92,6 +92,7 @@ export class SentinelClient {
   private metricsBuffer: MetricInput[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private closed = false;
+  private beforeUnloadHandler: (() => void) | null = null;
 
   constructor(options: SentinelClientOptions) {
     this.url = (options.url ?? DEFAULTS.url).replace(/\/+$/, '');
@@ -118,6 +119,14 @@ export class SentinelClient {
     // Prevent the timer from blocking Node.js shutdown
     if (this.flushTimer && typeof this.flushTimer === 'object' && 'unref' in this.flushTimer) {
       this.flushTimer.unref();
+    }
+
+    // Browser: flush on page unload to avoid losing buffered entries
+    if (typeof globalThis !== 'undefined' && typeof globalThis.addEventListener === 'function') {
+      this.beforeUnloadHandler = () => {
+        this.flushSync();
+      };
+      globalThis.addEventListener('beforeunload', this.beforeUnloadHandler);
     }
 
     // Register service (fire-and-forget)
@@ -280,6 +289,12 @@ export class SentinelClient {
       this.flushTimer = null;
     }
 
+    // Remove browser beforeunload listener
+    if (this.beforeUnloadHandler && typeof globalThis !== 'undefined' && typeof globalThis.removeEventListener === 'function') {
+      globalThis.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler = null;
+    }
+
     // Final flush — best-effort
     try {
       await this.flush();
@@ -291,6 +306,28 @@ export class SentinelClient {
   /** Get the session ID assigned to this client instance */
   getSessionId(): string {
     return this.sessionId;
+  }
+
+  /**
+   * Synchronous best-effort flush using sendBeacon (browser) or sync XHR fallback.
+   * Used in beforeunload where async is unreliable.
+   */
+  private flushSync(): void {
+    const logEntries = this.drainLogBuffer();
+    const metricEntries = this.drainMetricsBuffer();
+
+    const sendBeacon = typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function'
+      ? navigator.sendBeacon.bind(navigator)
+      : undefined;
+
+    if (sendBeacon) {
+      if (logEntries.length > 0) {
+        sendBeacon(`${this.url}/api/logs`, JSON.stringify({ entries: logEntries }));
+      }
+      if (metricEntries.length > 0) {
+        sendBeacon(`${this.url}/api/metrics`, JSON.stringify({ entries: metricEntries }));
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════

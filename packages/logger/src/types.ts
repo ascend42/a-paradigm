@@ -18,9 +18,22 @@ export interface DurationTracker {
   end(level: LogLevel, message: string, data?: LogData): void;
 }
 
+export interface LogTransport {
+  send(entry: {
+    level: LogLevel;
+    symbol: string;
+    symbolType: SymbolType;
+    message: string;
+    data?: LogData;
+    correlationId?: string;
+    timestamp: string;
+  }): void;
+}
+
 export interface LoggerOptions {
   level?: LogLevel;
   symbols?: string[];
   format?: 'pretty' | 'json';
   output?: (line: string) => void;
+  transports?: LogTransport[];
 }

@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Logger Transport Layer (`@a-company/paradigm-logger` 1.0.0 → 1.1.0)
+- **`LogTransport` interface** — pluggable transport for forwarding structured log entries to external sinks
+- **`addTransport()` / `removeTransport()`** — runtime transport management on `ParadigmLogger`
+- **Transport dispatch** — `SymbolLoggerImpl.emit()` forwards entries (level, symbol, symbolType, message, data, correlationId, timestamp) to all registered transports after console output
+
+#### SentinelTransport Bridge (`@a-company/sentinel` 0.3.0 → 0.4.0)
+- **`SentinelTransport`** — bridges `LogTransport` to `SentinelClient` using structural typing (no hard dependency on logger package)
+- **`createSentinelTransport()`** — factory accepting `SentinelClient` or `SentinelClientOptions`
+- **`enableSentinel()`** — one-liner: `enableSentinel(log, { service: 'my-app' })` attaches transport to logger
+- **`./transport` sub-path export** — `import { enableSentinel } from '@a-company/sentinel/transport'`
+- **Optional peer dependency** — `@a-company/paradigm-logger >=1.1.0` (optional)
+
+#### Rust Tracing Layer (`sentinel-client` 0.1.0 → 0.2.0)
+- **`SentinelLayer`** — `tracing-subscriber::Layer` implementation that forwards tracing events to Sentinel
+- **Level mapping** — TRACE/DEBUG → debug, INFO → info, WARN → warn, ERROR → error
+- **Symbol extraction** — uses `symbol` field from events, falls back to module path conversion (`my_app::checkout::handler` → `#checkout-handler`)
+- **`tracing` feature flag** — opt-in via `sentinel-client = { features = ["tracing"] }`
+
+#### Plugin Updates (paradigm 3.3.0 → 3.4.0)
+- **`/paradigm:observe` skill** — view live logs, metrics, and traces from Sentinel; integration setup examples for TS and Rust
+- **Sentinel skill** — expanded with observability cross-referencing (correlationId tracing, metrics anomaly checks)
+
+#### Session Recovery
+- **User-prompt on recovery** — `paradigm_session_recover` and auto-recovery now instruct agents to ask users whether to continue, discard, or describe a new task before proceeding
+
+### Changed
+- Coordinated version bumps: `@a-company/paradigm` 3.4.0, `@a-company/paradigm-mcp` 3.4.0, `@a-company/sentinel` 0.4.0, `@a-company/paradigm-logger` 1.1.0, `sentinel-client` 0.2.0, plugin 3.4.0
+
 #### Sentinel Observability Server (`@a-company/sentinel`)
 - **Structured logging API** — `POST/GET /api/logs` with level, symbol, service, session, correlation ID filtering
 - **Metrics API** — `POST/GET /api/metrics` with counter, gauge, histogram types; `GET /api/metrics/aggregate/:name` for aggregation (count, sum, min, max, avg)

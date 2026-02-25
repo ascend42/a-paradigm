@@ -1,6 +1,6 @@
 {
   "name": "@a-company/sentinel",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Semantic error monitoring — errors that speak your language",
   "type": "module",
   "main": "./dist/index.js",
@@ -29,6 +29,18 @@
     "./hono": {
       "types": "./dist/adapters/hono.d.ts",
       "import": "./dist/adapters/hono.js"
+    },
+    "./transport": {
+      "types": "./dist/transport.d.ts",
+      "import": "./dist/transport.js"
+    }
+  },
+  "peerDependencies": {
+    "@a-company/paradigm-logger": ">=1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@a-company/paradigm-logger": {
+      "optional": true
     }
   },
   "files": [

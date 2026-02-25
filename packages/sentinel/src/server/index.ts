@@ -76,11 +76,16 @@ export function createApp(options: ServerOptions & {
   // Middleware
   app.use(express.json({ limit: '5mb' }));
 
-  // CORS for development
+  // CORS — configurable origin via serverConfig.cors, defaults to '*'
   app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const corsOrigin = options.serverConfig?.cors?.origin;
+    const origin = Array.isArray(corsOrigin) ? corsOrigin.join(', ') : (corsOrigin ?? '*');
+    res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (options.serverConfig?.cors?.credentials) {
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
     if (_req.method === 'OPTIONS') {
       res.sendStatus(204);
       return;

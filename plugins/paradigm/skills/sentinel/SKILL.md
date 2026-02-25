@@ -156,6 +156,31 @@ Recommendations:
   3. Consider refactoring #component-x (high fragility score)
 ```
 
+## Observability Cross-Reference
+
+When triaging incidents, cross-reference with live observability data:
+
+### Pull recent logs around the incident
+```bash
+curl -s "http://localhost:3838/api/logs?symbol=%23affected-component&limit=50" | jq .
+```
+
+### Check if metrics show anomalies
+```bash
+curl -s "http://localhost:3838/api/metrics?service=affected-service" | jq .
+```
+
+### Trace the request path
+If the incident has a `correlationId`, trace it across services:
+```bash
+curl -s "http://localhost:3838/api/logs?correlationId=<id>" | jq .
+```
+
+### Integration with Logger Transport
+If the app uses `enableSentinel(log, { service: '...' })`, all Paradigm logger
+output is automatically available in Sentinel. Use the `/paradigm:observe` skill
+for general log viewing, and this skill for incident-specific triage.
+
 ## When to Proactively Suggest This
 
 Suggest `/paradigm:sentinel` when:
