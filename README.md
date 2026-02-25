@@ -335,14 +335,50 @@ Generate instructions for every major AI-native editor from a single config:
 
 All generated from `.paradigm/config.yaml` — one source of truth.
 
+### Enforcement Hooks
+
+Rules files (`.mdc`, `CLAUDE.md`) are **advisory** — agents can ignore them. Paradigm also provides **deterministic enforcement hooks** that execute as shell scripts at guaranteed lifecycle points:
+
+| Hook | Claude Code | Cursor | Behavior |
+|------|-------------|--------|----------|
+| Session start | — | `sessionStart` | Injects mandatory protocol as `additional_context` |
+| Stop | `Stop` | `stop` | **Blocks** if .purpose files not updated, missing portal.yaml, no lore entry |
+| After file edit | `PostToolUse` | `afterFileEdit` | Advisory reminder about .purpose coverage |
+| Before commit | `PreToolUse` | `beforeShellExecution` | Auto-rebuilds symbol index |
+
+Cursor's stop hook outputs a `followup_message` that auto-retries compliance (up to 3 loops).
+
+**Install hooks per-project:**
+```bash
+paradigm shift                        # Full setup (includes hooks)
+paradigm hooks install                # All hooks (git + Claude Code + Cursor)
+paradigm hooks install --cursor       # Cursor hooks only
+paradigm hooks install --claude-code  # Claude Code hooks only
+```
+
+### Plugins
+
+Paradigm ships plugins for both Claude Code and Cursor that bundle hooks, skills, and MCP configuration:
+
+| Plugin | Location | Format | Distribution |
+|--------|----------|--------|--------------|
+| **Claude Code** | `plugins/paradigm/` | `.claude-plugin/` | `/plugin marketplace add ascend42/a-paradigm` |
+| **Cursor** | `plugins/paradigm-cursor/` | `.cursor-plugin/` | Manual install (Cursor plugin marketplace TBD) |
+
+**Plugin vs per-project setup:**
+
+- **Plugins** provide hooks + skills + MCP globally — install once, works in every project
+- **`paradigm shift`** creates per-project files (`.paradigm/`, `.purpose`, `.cursor/rules/`, `portal.yaml`) committed to git
+- Most teams use both: plugin for enforcement, `paradigm shift` for project-specific context
+
 ---
 
 ## Packages
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `@a-company/paradigm` | 1.5.0 | Unified CLI |
-| `@a-company/paradigm-mcp` | 1.4.0 | MCP server for AI integrations |
+| `@a-company/paradigm` | 3.3.0 | Unified CLI |
+| `@a-company/paradigm-mcp` | 3.3.0 | MCP server for AI integrations |
 | `@a-company/purpose-core` | 0.1.0 | `.purpose` file parsing and validation |
 | `@a-company/portal-core` | 0.1.0 | `portal.yaml` parsing and validation |
 | `@a-company/portal-sdk` | 0.1.0 | Runtime authorization SDK |
