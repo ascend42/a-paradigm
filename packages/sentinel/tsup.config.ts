@@ -13,7 +13,7 @@ export default defineConfig([
     format: ['esm'],
     dts: true,
     clean: true,
-    external: ['express', 'simple-git', 'open'],
+    external: ['express', 'simple-git', 'open', 'ws'],
   },
   // Config 2: CLI entry (shebang, no DTS)
   {

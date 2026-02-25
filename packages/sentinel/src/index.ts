@@ -14,7 +14,7 @@ export { Sentinel, FlowTracker } from './sdk.js';
 export * from './types.js';
 
 // Config
-export { loadConfig, writeConfig, type SentinelYamlConfig } from './config.js';
+export { loadConfig, writeConfig, loadServerConfig, type SentinelYamlConfig } from './config.js';
 
 // Detection
 export { detectSymbols, generateConfig } from './detector.js';

@@ -1,18 +1,26 @@
 /**
- * Sentinel Server - Express server for the visualizer UI
+ * Sentinel Server - Express server with WebSocket for real-time log streaming
  */
 
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
+import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
+import { WebSocketServer, WebSocket } from 'ws';
 
 import { createSymbolsRouter } from './routes/symbols.js';
 import { createInfoRouter } from './routes/info.js';
 import { createCommitsRouter } from './routes/commits.js';
 import { createIncidentsRouter } from './routes/incidents.js';
 import { createPatternsRouter } from './routes/patterns.js';
+import { createLogsRouter } from './routes/logs.js';
+import { createServicesRouter, createStateRouter } from './routes/services.js';
+import { SentinelStorage } from '../storage.js';
+import { loadServerConfig } from '../config.js';
+import { loadSymbolIndex } from './loaders/symbols.js';
+import type { LogEntry, SentinelServerConfig } from '../types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,31 +54,54 @@ export interface ServerOptions {
   port: number;
   projectDir: string;
   open?: boolean;
+  dbPath?: string;
+  logPruneLimit?: number;
 }
 
 /**
  * Create the Express application with all routes configured
  */
-export function createApp(options: ServerOptions): Express {
+export function createApp(options: ServerOptions & {
+  storage?: SentinelStorage;
+  serverConfig?: SentinelServerConfig;
+  symbolIndex?: Array<{ symbol: string; type: string; filePath: string }>;
+  onLogReceived?: (entry: LogEntry, validation?: { known: boolean; suggestion?: string }) => void;
+}): Express {
   const app = express();
 
   // Middleware
-  app.use(express.json());
+  app.use(express.json({ limit: '5mb' }));
 
   // CORS for development
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
+    if (_req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
     next();
   });
 
-  // API routes
+  // Existing API routes (keep their own storage instances)
   app.use('/api/symbols', createSymbolsRouter(options.projectDir));
   app.use('/api/info', createInfoRouter(options.projectDir));
   app.use('/api/commits', createCommitsRouter(options.projectDir));
   app.use('/api/incidents', createIncidentsRouter(options.projectDir));
   app.use('/api/patterns', createPatternsRouter(options.projectDir));
+
+  // New observability routes (shared storage)
+  if (options.storage && options.serverConfig) {
+    app.use('/api/logs', createLogsRouter({
+      storage: options.storage,
+      serverConfig: options.serverConfig,
+      onLogReceived: options.onLogReceived,
+      symbolIndex: options.symbolIndex,
+    }));
+    app.use('/api/services', createServicesRouter({ storage: options.storage }));
+    app.use('/api/state', createStateRouter({ storage: options.storage }));
+  }
 
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -95,20 +126,137 @@ export function createApp(options: ServerOptions): Express {
 }
 
 /**
- * Start the Sentinel server
+ * Start the Sentinel server with WebSocket support
  */
 export async function startServer(options: ServerOptions): Promise<void> {
-  const app = createApp(options);
+  // Load server config
+  const serverConfig = loadServerConfig(options.projectDir);
+  if (options.logPruneLimit !== undefined) {
+    serverConfig.maxLogs = options.logPruneLimit;
+  }
+
+  // Create shared storage
+  const storage = new SentinelStorage(options.dbPath);
+  await storage.ensureReady();
+
+  // Load symbol index for validation
+  let symbolIndex: Array<{ symbol: string; type: string; filePath: string }> = [];
+  try {
+    symbolIndex = await loadSymbolIndex(options.projectDir);
+  } catch {
+    log.component('sentinel-server').warn('Could not load symbol index for validation');
+  }
+
+  // WebSocket subscriber tracking
+  const wsClients = new Set<WebSocket>();
+
+  /**
+   * Broadcast a message to all connected WebSocket clients
+   */
+  function broadcast(message: Record<string, unknown>): void {
+    const data = JSON.stringify(message);
+    for (const client of wsClients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data);
+      }
+    }
+  }
+
+  /**
+   * Called when a log entry is received — broadcasts to WS subscribers
+   */
+  function onLogReceived(entry: LogEntry, validation?: { known: boolean; suggestion?: string }): void {
+    const message: Record<string, unknown> = { type: 'log', entry };
+    if (validation && !validation.known) {
+      message.validation = validation;
+    }
+
+    broadcast(message);
+
+    // Emit flow events for flow/signal/gate symbols
+    if (entry.symbolType === 'signal' || entry.symbolType === 'gate' || entry.symbolType === 'flow') {
+      broadcast({
+        type: 'flow_event',
+        flowId: entry.symbolType === 'flow' ? entry.symbol : undefined,
+        nodeSymbol: entry.symbol,
+        event: entry.symbolType,
+        timestamp: entry.timestamp,
+        service: entry.service,
+      });
+    }
+  }
+
+  const app = createApp({
+    ...options,
+    storage,
+    serverConfig,
+    symbolIndex,
+    onLogReceived,
+  });
 
   log.component('sentinel-server').info('Starting server', { port: options.port });
   log.component('sentinel-server').info('Project directory', { path: options.projectDir });
 
   return new Promise((resolve, reject) => {
-    const server = app.listen(options.port, () => {
+    const httpServer = http.createServer(app);
+
+    // Create WebSocket server attached to the HTTP server
+    const wss = new WebSocketServer({ server: httpServer });
+
+    wss.on('connection', (ws) => {
+      if (wsClients.size >= serverConfig.wsMaxSubscribers) {
+        ws.close(1013, 'Max subscribers reached');
+        return;
+      }
+
+      wsClients.add(ws);
+      log.component('sentinel-ws').info('Client connected', { total: wsClients.size });
+
+      ws.on('message', (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+
+          // JSON-RPC 2.0 style messages
+          if (msg.method === 'ping') {
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              result: { pong: true, timestamp: new Date().toISOString() },
+              id: msg.id,
+            }));
+          } else if (msg.method === 'subscribe') {
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              result: { subscribed: true },
+              id: msg.id,
+            }));
+          } else if (msg.method === 'query_logs') {
+            const logs = storage.queryLogs(msg.params || {});
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              result: { logs },
+              id: msg.id,
+            }));
+          }
+        } catch {
+          // Ignore malformed messages
+        }
+      });
+
+      ws.on('close', () => {
+        wsClients.delete(ws);
+        log.component('sentinel-ws').info('Client disconnected', { total: wsClients.size });
+      });
+
+      ws.on('error', () => {
+        wsClients.delete(ws);
+      });
+    });
+
+    httpServer.listen(options.port, () => {
       log.component('sentinel-server').success('Server running', { url: `http://localhost:${options.port}` });
+      log.component('sentinel-ws').success('WebSocket ready', { url: `ws://localhost:${options.port}` });
 
       if (options.open) {
-        // Dynamic import for 'open' package
         import('open').then((openModule) => {
           openModule.default(`http://localhost:${options.port}`);
           log.component('sentinel-server').info('Opened browser');
@@ -120,7 +268,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
       resolve();
     });
 
-    server.on('error', (err: NodeJS.ErrnoException) => {
+    httpServer.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
         log.component('sentinel-server').error('Port already in use', { port: options.port });
       } else {

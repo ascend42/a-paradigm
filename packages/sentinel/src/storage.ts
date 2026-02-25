@@ -30,9 +30,16 @@ import type {
   PracticeEvent,
   PracticeEventInput,
   PracticeEventQuery,
+  LogEntry,
+  LogEntryInput,
+  LogQueryOptions,
+  LogSymbolType,
+  ServiceInfo,
+  ServiceRegistration,
+  AppState,
 } from './types.js';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // Default confidence for new patterns
 const DEFAULT_CONFIDENCE: PatternConfidence = {
@@ -164,6 +171,44 @@ export class SentinelStorage {
         notes TEXT
       );
 
+      -- Structured logs table
+      CREATE TABLE IF NOT EXISTS logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        level TEXT NOT NULL CHECK (level IN ('debug','info','warn','error')),
+        symbol TEXT NOT NULL,
+        symbol_type TEXT NOT NULL DEFAULT 'raw',
+        message TEXT NOT NULL,
+        data_json TEXT,
+        service TEXT NOT NULL,
+        session_id TEXT,
+        correlation_id TEXT,
+        duration_ms REAL,
+        environment TEXT
+      );
+
+      -- Service registry
+      CREATE TABLE IF NOT EXISTS services (
+        name TEXT PRIMARY KEY,
+        version TEXT,
+        pid INTEGER,
+        started_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        environment TEXT,
+        metadata_json TEXT
+      );
+
+      -- Live app state snapshots (latest-wins per service+session)
+      CREATE TABLE IF NOT EXISTS app_state (
+        service TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        state_json TEXT NOT NULL,
+        active_flows_json TEXT,
+        active_gates_json TEXT,
+        PRIMARY KEY (service, session_id)
+      );
+
       -- Indexes
       CREATE INDEX IF NOT EXISTS idx_incidents_timestamp ON incidents(timestamp);
       CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
@@ -173,6 +218,12 @@ export class SentinelStorage {
       CREATE INDEX IF NOT EXISTS idx_practice_events_habit_id ON practice_events(habit_id);
       CREATE INDEX IF NOT EXISTS idx_practice_events_engineer ON practice_events(engineer);
       CREATE INDEX IF NOT EXISTS idx_practice_events_session_id ON practice_events(session_id);
+      CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
+      CREATE INDEX IF NOT EXISTS idx_logs_symbol ON logs(symbol);
+      CREATE INDEX IF NOT EXISTS idx_logs_service ON logs(service);
+      CREATE INDEX IF NOT EXISTS idx_logs_session_id ON logs(session_id);
+      CREATE INDEX IF NOT EXISTS idx_logs_correlation_id ON logs(correlation_id);
     `);
 
     // Set schema version
@@ -328,6 +379,62 @@ export class SentinelStorage {
 
       this.db.run(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '2')"
+      );
+      currentVersion = 2;
+    }
+
+    if (currentVersion < 3) {
+      // v2 → v3: Add logs, services, and app_state tables
+      try {
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS logs (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            level TEXT NOT NULL CHECK (level IN ('debug','info','warn','error')),
+            symbol TEXT NOT NULL,
+            symbol_type TEXT NOT NULL DEFAULT 'raw',
+            message TEXT NOT NULL,
+            data_json TEXT,
+            service TEXT NOT NULL,
+            session_id TEXT,
+            correlation_id TEXT,
+            duration_ms REAL,
+            environment TEXT
+          );
+
+          CREATE TABLE IF NOT EXISTS services (
+            name TEXT PRIMARY KEY,
+            version TEXT,
+            pid INTEGER,
+            started_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            environment TEXT,
+            metadata_json TEXT
+          );
+
+          CREATE TABLE IF NOT EXISTS app_state (
+            service TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            state_json TEXT NOT NULL,
+            active_flows_json TEXT,
+            active_gates_json TEXT,
+            PRIMARY KEY (service, session_id)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
+          CREATE INDEX IF NOT EXISTS idx_logs_symbol ON logs(symbol);
+          CREATE INDEX IF NOT EXISTS idx_logs_service ON logs(service);
+          CREATE INDEX IF NOT EXISTS idx_logs_session_id ON logs(session_id);
+          CREATE INDEX IF NOT EXISTS idx_logs_correlation_id ON logs(correlation_id);
+        `);
+      } catch {
+        // Tables might already exist
+      }
+
+      this.db.run(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '3')"
       );
     }
   }
@@ -1584,6 +1691,367 @@ export class SentinelStorage {
       filesModified: JSON.parse((obj.files_modified as string) || '[]'),
       relatedIncidentId: (obj.related_incident_id as string) || undefined,
       notes: (obj.notes as string) || undefined,
+    };
+  }
+
+  // ─── Structured Logs ─────────────────────────────────────────────
+
+  private inferSymbolType(symbol: string): LogSymbolType {
+    if (symbol.startsWith('#')) return 'component';
+    if (symbol.startsWith('^')) return 'gate';
+    if (symbol.startsWith('!')) return 'signal';
+    if (symbol.startsWith('$')) return 'flow';
+    if (symbol.startsWith('~')) return 'aspect';
+    return 'raw';
+  }
+
+  insertLog(input: LogEntryInput): string {
+    this.initializeSync();
+    const id = input.id || uuidv4();
+    const timestamp = input.timestamp || new Date().toISOString();
+    const symbolType = input.symbolType || this.inferSymbolType(input.symbol);
+
+    this.db!.run(
+      `INSERT INTO logs (
+        id, timestamp, level, symbol, symbol_type, message, data_json,
+        service, session_id, correlation_id, duration_ms, environment
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        timestamp,
+        input.level,
+        input.symbol,
+        symbolType,
+        input.message,
+        input.data ? JSON.stringify(input.data) : null,
+        input.service,
+        input.sessionId || null,
+        input.correlationId || null,
+        input.durationMs ?? null,
+        input.environment || null,
+      ]
+    );
+
+    this.save();
+    return id;
+  }
+
+  insertLogBatch(entries: LogEntryInput[]): { accepted: number; errors: string[] } {
+    this.initializeSync();
+    let accepted = 0;
+    const errors: string[] = [];
+
+    for (const input of entries) {
+      try {
+        const id = input.id || uuidv4();
+        const timestamp = input.timestamp || new Date().toISOString();
+        const symbolType = input.symbolType || this.inferSymbolType(input.symbol);
+
+        this.db!.run(
+          `INSERT INTO logs (
+            id, timestamp, level, symbol, symbol_type, message, data_json,
+            service, session_id, correlation_id, duration_ms, environment
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            timestamp,
+            input.level,
+            input.symbol,
+            symbolType,
+            input.message,
+            input.data ? JSON.stringify(input.data) : null,
+            input.service,
+            input.sessionId || null,
+            input.correlationId || null,
+            input.durationMs ?? null,
+            input.environment || null,
+          ]
+        );
+        accepted++;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    this.save();
+    return { accepted, errors };
+  }
+
+  queryLogs(options: LogQueryOptions = {}): LogEntry[] {
+    this.initializeSync();
+    const { limit = 100, offset = 0 } = options;
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.level) {
+      conditions.push('level = ?');
+      params.push(options.level);
+    }
+
+    if (options.symbol) {
+      conditions.push('symbol LIKE ?');
+      params.push(`%${options.symbol}%`);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.sessionId) {
+      conditions.push('session_id = ?');
+      params.push(options.sessionId);
+    }
+
+    if (options.correlationId) {
+      conditions.push('correlation_id = ?');
+      params.push(options.correlationId);
+    }
+
+    if (options.search) {
+      conditions.push('message LIKE ?');
+      params.push(`%${options.search}%`);
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT * FROM logs ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToLogEntry(result[0].columns, row)
+    );
+  }
+
+  getLogCount(options: LogQueryOptions = {}): number {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.level) {
+      conditions.push('level = ?');
+      params.push(options.level);
+    }
+
+    if (options.symbol) {
+      conditions.push('symbol LIKE ?');
+      params.push(`%${options.symbol}%`);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT COUNT(*) as count FROM logs ${whereClause}`,
+      params
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) return 0;
+    return result[0].values[0][0] as number;
+  }
+
+  pruneLogs(maxCount: number): number {
+    this.initializeSync();
+    if (maxCount <= 0) return 0;
+
+    const currentCount = this.getLogCount();
+    if (currentCount <= maxCount) return 0;
+
+    const deleteCount = currentCount - maxCount;
+    this.db!.run(
+      `DELETE FROM logs WHERE id IN (
+        SELECT id FROM logs ORDER BY timestamp ASC LIMIT ?
+      )`,
+      [deleteCount]
+    );
+
+    this.save();
+    return deleteCount;
+  }
+
+  private rowToLogEntry(columns: string[], row: SqlValue[]): LogEntry {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      id: obj.id as string,
+      timestamp: obj.timestamp as string,
+      level: obj.level as LogEntry['level'],
+      symbol: obj.symbol as string,
+      symbolType: (obj.symbol_type as LogEntry['symbolType']) || 'raw',
+      message: obj.message as string,
+      data: obj.data_json ? JSON.parse(obj.data_json as string) : undefined,
+      service: obj.service as string,
+      sessionId: (obj.session_id as string) || undefined,
+      correlationId: (obj.correlation_id as string) || undefined,
+      durationMs: (obj.duration_ms as number) || undefined,
+      environment: (obj.environment as string) || undefined,
+    };
+  }
+
+  // ─── Service Registry ──────────────────────────────────────────
+
+  registerService(reg: ServiceRegistration): void {
+    this.initializeSync();
+    const now = new Date().toISOString();
+
+    this.db!.run(
+      `INSERT INTO services (name, version, pid, started_at, last_seen_at, environment, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(name) DO UPDATE SET
+         version = excluded.version,
+         pid = excluded.pid,
+         last_seen_at = excluded.last_seen_at,
+         environment = excluded.environment,
+         metadata_json = excluded.metadata_json`,
+      [
+        reg.name,
+        reg.version || null,
+        reg.pid ?? null,
+        now,
+        now,
+        reg.environment || null,
+        reg.metadata ? JSON.stringify(reg.metadata) : null,
+      ]
+    );
+
+    this.save();
+  }
+
+  updateServiceLastSeen(name: string): void {
+    this.initializeSync();
+    const now = new Date().toISOString();
+    this.db!.run(
+      'UPDATE services SET last_seen_at = ? WHERE name = ?',
+      [now, name]
+    );
+    this.save();
+  }
+
+  getServices(): ServiceInfo[] {
+    this.initializeSync();
+    const result = this.db!.exec(
+      'SELECT * FROM services ORDER BY last_seen_at DESC'
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) => {
+      const obj: Record<string, unknown> = {};
+      result[0].columns.forEach((col, i) => {
+        obj[col] = row[i];
+      });
+
+      return {
+        name: obj.name as string,
+        version: (obj.version as string) || undefined,
+        pid: (obj.pid as number) || undefined,
+        startedAt: obj.started_at as string,
+        lastSeenAt: obj.last_seen_at as string,
+        environment: (obj.environment as string) || undefined,
+        metadata: obj.metadata_json ? JSON.parse(obj.metadata_json as string) : undefined,
+      };
+    });
+  }
+
+  // ─── App State ──────────────────────────────────────────────────
+
+  upsertAppState(state: AppState): void {
+    this.initializeSync();
+
+    this.db!.run(
+      `INSERT INTO app_state (service, session_id, timestamp, state_json, active_flows_json, active_gates_json)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(service, session_id) DO UPDATE SET
+         timestamp = excluded.timestamp,
+         state_json = excluded.state_json,
+         active_flows_json = excluded.active_flows_json,
+         active_gates_json = excluded.active_gates_json`,
+      [
+        state.service,
+        state.sessionId,
+        state.timestamp || new Date().toISOString(),
+        JSON.stringify(state.state),
+        state.activeFlows ? JSON.stringify(state.activeFlows) : null,
+        state.activeGates ? JSON.stringify(state.activeGates) : null,
+      ]
+    );
+
+    this.save();
+  }
+
+  getAppState(service: string, sessionId?: string): AppState[] {
+    this.initializeSync();
+
+    let query = 'SELECT * FROM app_state WHERE service = ?';
+    const params: string[] = [service];
+
+    if (sessionId) {
+      query += ' AND session_id = ?';
+      params.push(sessionId);
+    }
+
+    query += ' ORDER BY timestamp DESC';
+
+    const result = this.db!.exec(query, params);
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) => this.rowToAppState(result[0].columns, row));
+  }
+
+  getAllAppStates(): AppState[] {
+    this.initializeSync();
+    const result = this.db!.exec(
+      'SELECT * FROM app_state ORDER BY timestamp DESC'
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) => this.rowToAppState(result[0].columns, row));
+  }
+
+  private rowToAppState(columns: string[], row: SqlValue[]): AppState {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      service: obj.service as string,
+      sessionId: obj.session_id as string,
+      timestamp: obj.timestamp as string,
+      state: JSON.parse(obj.state_json as string),
+      activeFlows: obj.active_flows_json ? JSON.parse(obj.active_flows_json as string) : undefined,
+      activeGates: obj.active_gates_json ? JSON.parse(obj.active_gates_json as string) : undefined,
     };
   }
 

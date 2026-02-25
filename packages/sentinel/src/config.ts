@@ -7,6 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { DEFAULT_SERVER_CONFIG, type SentinelServerConfig } from './types.js';
 
 export interface SentinelYamlConfig {
   version: string;
@@ -22,6 +23,14 @@ export interface SentinelYamlConfig {
   scrub?: {
     headers?: string[];
     fields?: string[];
+  };
+  server?: {
+    port?: number;
+    maxLogs?: number;
+    maxBatchSize?: number;
+    wsMaxSubscribers?: number;
+    pruneIntervalInserts?: number;
+    logRetentionDays?: number;
   };
 }
 
@@ -82,7 +91,7 @@ function parseSimpleYaml(content: string): SentinelYamlConfig {
       continue;
     }
 
-    // Section header (e.g. "symbols:", "routes:", "scrub:")
+    // Section header (e.g. "symbols:", "routes:", "scrub:", "server:")
     const sectionMatch = trimmed.match(/^(\w+):$/);
     if (sectionMatch) {
       currentSection = sectionMatch[1];
@@ -95,6 +104,9 @@ function parseSimpleYaml(content: string): SentinelYamlConfig {
       }
       if (currentSection === 'scrub' && !config.scrub) {
         config.scrub = {};
+      }
+      if (currentSection === 'server' && !config.server) {
+        config.server = {};
       }
       continue;
     }
@@ -132,6 +144,17 @@ function parseSimpleYaml(content: string): SentinelYamlConfig {
     if (routeMatch && currentSection === 'routes' && config.routes) {
       const route = routeMatch[1].replace(/['"]/g, '');
       config.routes[route] = routeMatch[2];
+      continue;
+    }
+
+    // Server section key-value pairs (e.g. "  port: 3838")
+    const serverKvMatch = trimmed.match(/^\s+(\w+):\s+(\d+)$/);
+    if (serverKvMatch && currentSection === 'server' && config.server) {
+      const key = serverKvMatch[1];
+      const value = parseInt(serverKvMatch[2], 10);
+      if (key in { port: 1, maxLogs: 1, maxBatchSize: 1, wsMaxSubscribers: 1, pruneIntervalInserts: 1, logRetentionDays: 1 }) {
+        (config.server as any)[key] = value;
+      }
       continue;
     }
   }
@@ -192,6 +215,47 @@ function serializeSimpleYaml(config: SentinelYamlConfig): string {
     }
   }
 
+  if (config.server && Object.keys(config.server).length > 0) {
+    lines.push('');
+    lines.push('server:');
+    for (const [key, value] of Object.entries(config.server)) {
+      if (value !== undefined) {
+        lines.push(`  ${key}: ${value}`);
+      }
+    }
+  }
+
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Load server configuration with resolution order:
+ * env vars → local .sentinel.yaml → global ~/.paradigm/sentinel.yaml → defaults
+ */
+export function loadServerConfig(projectDir?: string): SentinelServerConfig {
+  const config = { ...DEFAULT_SERVER_CONFIG };
+
+  // Load from YAML (project-level first, then global)
+  const yamlConfig = projectDir ? loadConfig(projectDir) : null;
+  const globalDir = path.join(process.env.HOME || '~', '.paradigm');
+  const globalConfig = loadConfig(globalDir);
+
+  // Apply global config first, then project config (project overrides global)
+  for (const src of [globalConfig, yamlConfig]) {
+    if (src?.server) {
+      if (src.server.port !== undefined) config.port = src.server.port;
+      if (src.server.maxLogs !== undefined) config.maxLogs = src.server.maxLogs;
+      if (src.server.maxBatchSize !== undefined) config.maxBatchSize = src.server.maxBatchSize;
+      if (src.server.wsMaxSubscribers !== undefined) config.wsMaxSubscribers = src.server.wsMaxSubscribers;
+      if (src.server.pruneIntervalInserts !== undefined) config.pruneIntervalInserts = src.server.pruneIntervalInserts;
+      if (src.server.logRetentionDays !== undefined) config.logRetentionDays = src.server.logRetentionDays;
+    }
+  }
+
+  // Env vars override everything
+  if (process.env.SENTINEL_PORT) config.port = parseInt(process.env.SENTINEL_PORT, 10);
+  if (process.env.SENTINEL_MAX_LOGS) config.maxLogs = parseInt(process.env.SENTINEL_MAX_LOGS, 10);
+
+  return config;
 }
