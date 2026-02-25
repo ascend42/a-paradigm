@@ -21,6 +21,9 @@ import {
   generateCommandsReference,
   generateCommitConvention,
   generateCheckpointProtocol,
+  generateHabitsSection,
+  generateLoreSection,
+  generateLlmsTxtSection,
 } from './base.js';
 import type { AgentsManifest } from '../../commands/team/types.js';
 
@@ -89,13 +92,19 @@ export class CursorAdapter implements IDEAdapter {
       content: this.generateCoreRules(projectName, config),
     });
 
-    // 2. Symbol system (always apply - fundamental to understanding)
+    // 2. Workflow protocol (always apply - the most important compliance file)
+    generatedFiles.push({
+      path: 'paradigm-workflow.mdc',
+      content: this.generateWorkflowMdc(),
+    });
+
+    // 3. Symbol system (always apply - fundamental to understanding)
     generatedFiles.push({
       path: 'paradigm-symbols.mdc',
       content: this.generateSymbolRules(config),
     });
 
-    // 3. Logging rules (TypeScript/JavaScript files)
+    // 4. Logging rules (TypeScript/JavaScript files)
     const loggingContent = generateLoggingRules(config);
     if (loggingContent) {
       generatedFiles.push({
@@ -104,49 +113,49 @@ export class CursorAdapter implements IDEAdapter {
       });
     }
 
-    // 4. Purpose file conventions
+    // 5. Purpose file conventions
     generatedFiles.push({
       path: 'paradigm-purpose.mdc',
       content: this.generatePurposeMdc(),
     });
 
-    // 5. Portal rules
+    // 6. Portal rules
     generatedFiles.push({
       path: 'paradigm-portal.mdc',
       content: this.generatePortalMdc(),
     });
 
-    // 6. Commands reference (manual selection - not always needed)
+    // 7. Commands reference (manual selection - not always needed)
     generatedFiles.push({
       path: 'paradigm-commands.mdc',
       content: this.generateCommandsMdc(),
     });
 
-    // 7. Conventions (language-specific)
+    // 8. Conventions (language-specific)
     generatedFiles.push({
       path: 'paradigm-conventions.mdc',
       content: this.generateConventionsMdc(config),
     });
 
-    // 8. Agent Hints (when to query CLI)
+    // 9. Agent Hints (MCP-first queries)
     generatedFiles.push({
       path: 'paradigm-agent-hints.mdc',
       content: this.generateAgentHintsMdc(),
     });
 
-    // 9. Navigator (AI exploration optimization)
+    // 10. Navigator (AI exploration optimization)
     generatedFiles.push({
       path: 'paradigm-navigator.mdc',
       content: this.generateNavigatorMdc(),
     });
 
-    // 10. Context Monitoring (session management)
+    // 11. Context Monitoring (session management)
     generatedFiles.push({
       path: 'paradigm-context.mdc',
       content: this.generateContextMdc(),
     });
 
-    // 11. Orchestration Protocol (multi-agent workflow)
+    // 12. Orchestration Protocol (multi-agent workflow)
     // Load agents manifest if rootDir is provided
     const agentsManifest = rootDir ? this.loadAgentsManifest(rootDir) : null;
     generatedFiles.push({
@@ -154,13 +163,19 @@ export class CursorAdapter implements IDEAdapter {
       content: this.generateOrchestrationMdc(agentsManifest),
     });
 
-    // 12. Flow-First Development (flow validation and planning)
+    // 13. Flow-First Development (flow validation and planning)
     generatedFiles.push({
       path: 'paradigm-flows.mdc',
       content: this.generateFlowsMdc(),
     });
 
-    // 13. Commit conventions (always apply)
+    // 14. Practices - habits, lore, llms.txt (Phase 5/6 content)
+    generatedFiles.push({
+      path: 'paradigm-practices.mdc',
+      content: this.generatePracticesMdc(),
+    });
+
+    // 15. Commit conventions (always apply)
     generatedFiles.push({
       path: 'paradigm-commits.mdc',
       content: this.generateCommitsMdc(),
@@ -174,10 +189,17 @@ export class CursorAdapter implements IDEAdapter {
    */
   private generateCoreRules(projectName: string, config: ParadigmFiles['config']): string {
     const overview = generateOverview(config);
-    
+
     return frontmatter('Paradigm core rules - project overview and fundamentals', { alwaysApply: true }) +
       `# Paradigm - ${projectName}\n\n` +
       '> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm)\n\n' +
+      `## CRITICAL RULES (Non-Negotiable)
+
+1. **You MUST update the nearest \`.purpose\` file when you change behavior.** No exceptions.
+2. **You MUST call \`paradigm_session_recover\` at session start and \`paradigm_pm_postflight\` when finishing.** See \`paradigm-workflow.mdc\` for the full protocol.
+3. **You MUST call \`paradigm_ripple\` before modifying any documented symbol.** Check impact before changing code.
+
+Violating these rules means your changes are non-compliant. The \`paradigm-workflow.mdc\` file contains the complete workflow — follow it.\n\n` +
       overview + '\n\n' +
       generateUpdateRules(config);
   }
@@ -318,75 +340,79 @@ gate.allow('Access granted');
   }
 
   /**
-   * Agent Hints - when to query CLI commands
+   * Agent Hints - MCP-first queries for AI agents
    */
   private generateAgentHintsMdc(): string {
-    return frontmatter('Paradigm CLI queries for AI agents - prefer CLI over reading large files', {
+    return frontmatter('Paradigm MCP tool queries for AI agents - use MCP tools instead of reading large files or running CLI commands', {
       alwaysApply: true
     }) +
-      `# Agent CLI Queries (Token-Efficient)
+      `# Agent MCP Queries (Token-Efficient)
 
-Instead of reading large context files, query Paradigm CLI on-demand for fresh, precise data.
+**Use MCP tool calls, NOT CLI commands.** MCP tools return structured data directly — no shell overhead, no parsing, no latency.
 
 ## When to Query
 
-| Before doing this... | Run this command |
-|---------------------|------------------|
-| Modifying a symbol | \`paradigm ripple #symbol --json\` |
-| Debugging an error | \`paradigm echo ERROR_CODE --json\` |
-| Starting a session | \`paradigm thread --json\` |
-| Understanding relationships | \`paradigm constellation\` |
-| Getting oriented | \`paradigm beacon --json\` |
+| Before doing this... | Call this MCP tool |
+|---------------------|-------------------|
+| Modifying a symbol | \`paradigm_ripple({ symbol: "#symbol" })\` |
+| Debugging / searching | \`paradigm_search({ query: "ERROR_CODE" })\` |
+| Starting a session | \`paradigm_session_recover()\` |
+| Understanding relationships | \`paradigm_navigate({ intent: "find", target: "#symbol" })\` |
+| Getting oriented | \`paradigm_status()\` |
+| Checking impact on flows | \`paradigm_flows_affected({ symbol: "#symbol" })\` |
+| Adding API endpoints | \`paradigm_gates_for_route({ method: "POST", path: "/api/resource" })\` |
 
 ## Query Patterns
 
 ### Before Changing Code
 
-\`\`\`bash
-# See what depends on what you're changing
-paradigm ripple #checkout --json
+\`\`\`
+// See what depends on what you're changing
+paradigm_ripple({ symbol: "#checkout" })
 
-# Output includes: upstream deps, downstream effects, flow membership
+// Returns: upstream deps, downstream effects, flow membership
 \`\`\`
 
 ### When Debugging
 
-\`\`\`bash
-# Look up error context
-paradigm echo AUTH_REQUIRED --json
+\`\`\`
+// Search for error context
+paradigm_search({ query: "AUTH_REQUIRED" })
 
-# Then check ripple effects of the related symbol
-paradigm ripple ^authenticated --json
+// Then check ripple effects of the related symbol
+paradigm_ripple({ symbol: "^authenticated" })
 \`\`\`
 
 ### Starting Work
 
-\`\`\`bash
-# Check previous session context
-paradigm thread --json
+\`\`\`
+// Load previous session context (MUST do this at session start)
+paradigm_session_recover()
 
-# Quick orientation
-paradigm beacon --json
+// Quick project orientation
+paradigm_status()
 \`\`\`
 
-### Querying Constellation
+### Finding Code Locations
 
-\`\`\`bash
-# Get specific symbol
-jq '.stars["#checkout"]' .paradigm/constellation.json
+\`\`\`
+// Find a specific symbol
+paradigm_navigate({ intent: "find", target: "#checkout" })
 
-# Find what requires a gate
-jq '[.stars | to_entries[] | select(.value.gates[]? == "^authenticated") | .key]' .paradigm/constellation.json
+// Explore an area of code
+paradigm_navigate({ intent: "explore", target: "authentication" })
 
-# List all flows
-jq '.orbits | keys' .paradigm/constellation.json
+// Get context for a task
+paradigm_navigate({ intent: "context", task: "add Apple Pay" })
 \`\`\`
 
-## Benefits
+## Why MCP Over CLI
 
+- **No shell overhead**: Direct structured responses, no \`--json\` flags or \`jq\` parsing
 - **Fresh data**: Always current, not stale from file generation
 - **Precise**: Only get the data you need
-- **Token-efficient**: ~100 tokens per query vs ~2000 upfront
+- **Token-efficient**: ~100-300 tokens per query vs ~2000 for file reads
+- **No latency**: No process spawn — MCP tools respond directly
 `;
   }
 
@@ -517,6 +543,102 @@ paradigm_session_stats()
 \`\`\`
 
 ${generateCheckpointProtocol()}`;
+  }
+
+  /**
+   * Workflow protocol - the single most important compliance file.
+   * Contains session bookends, task-size guide, essential MCP tools, and non-negotiable rules.
+   */
+  private generateWorkflowMdc(): string {
+    return frontmatter('Paradigm workflow protocol - MUST follow for every task. Session bookends, task-size compliance, essential MCP tools.', {
+      alwaysApply: true,
+    }) +
+      `# Paradigm Workflow Protocol
+
+**This file defines the non-negotiable workflow for every task. Follow it.**
+
+## Session Bookends (MUST Do)
+
+### Session Start
+\`\`\`
+paradigm_session_recover()
+\`\`\`
+Call this FIRST in every session. Returns previous context, modified symbols, and suggestions.
+
+### Session End
+\`\`\`
+paradigm_pm_postflight({ summary: "what you did" })
+\`\`\`
+Call this LAST before finishing. Catches missing .purpose files, missing gates, and compliance gaps.
+
+## Task-Size Compliance Guide
+
+Not every task needs the full ceremony. Match your effort to the scope:
+
+### Single-file bug fix (1 file changed)
+1. Session bookends (start + end)
+2. That's it — fix the bug, run postflight
+
+### Multi-file fix (2-3 files changed)
+1. Session bookends
+2. \`paradigm_ripple({ symbol: "#affected-symbol" })\` before changing
+3. Update nearest \`.purpose\` file if behavior changed
+4. Postflight
+
+### Feature build (3+ files, new behavior)
+1. Session bookends
+2. \`paradigm_pm_preflight({ task: "description" })\` — get compliance plan
+3. \`paradigm_ripple\` for each symbol you'll modify
+4. Implement the feature
+5. Create/update \`.purpose\` files for new directories
+6. Update \`portal.yaml\` if adding protected routes
+7. \`paradigm_pm_postflight\` — verify compliance
+8. \`paradigm_lore_record\` — record what you learned
+
+## The One Non-Negotiable Rule
+
+**You MUST update the nearest \`.purpose\` file when you change behavior.**
+
+- Adding a feature? Create a \`.purpose\` in the feature directory.
+- Modifying a component? Update its \`.purpose\` description, gates, or signals.
+- Deleting code? Remove the symbol from \`.purpose\`.
+- Not sure? Run \`paradigm_pm_postflight\` — it will tell you what's missing.
+
+## Essential MCP Tools (Use These, NOT CLI Commands)
+
+| Tool | When | Cost |
+|------|------|------|
+| \`paradigm_session_recover\` | Session start | ~100 tokens |
+| \`paradigm_ripple\` | Before modifying any symbol | ~300 tokens |
+| \`paradigm_navigate\` | Finding code locations | ~200 tokens |
+| \`paradigm_pm_preflight\` | Before starting a feature (3+ files) | ~200 tokens |
+| \`paradigm_pm_postflight\` | After finishing any task | ~200 tokens |
+| \`paradigm_reindex\` | After creating/modifying .purpose files | ~100 tokens |
+| \`paradigm_gates_for_route\` | Before adding API endpoints | ~150 tokens |
+| \`paradigm_lore_record\` | After completing a feature (record learnings) | ~100 tokens |
+
+## Red Flags — STOP and Check
+
+If you find yourself doing any of these, STOP:
+
+- **Modifying 3+ files without calling \`paradigm_ripple\`** → Check impact first
+- **Adding routes without checking \`paradigm_gates_for_route\`** → Get gate suggestions
+- **Finishing without running \`paradigm_pm_postflight\`** → You'll miss compliance gaps
+- **Creating directories without a \`.purpose\` file** → Every directory needs context
+`;
+  }
+
+  /**
+   * Practices - habits compliance, lore recording, llms.txt (Phase 5/6 content)
+   */
+  private generatePracticesMdc(): string {
+    return frontmatter('Paradigm practices - habits, lore recording, and llms.txt. Apply when finishing tasks, recording history, or checking compliance.', {
+      alwaysApply: false,
+    }) +
+      `# Paradigm Practices\n\n` +
+      generateHabitsSection() + '\n\n' +
+      generateLoreSection() + '\n\n' +
+      generateLlmsTxtSection();
   }
 
   /**
