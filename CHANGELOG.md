@@ -5,7 +5,7 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.2.0] — 2026-02-24
 
 ### Added
 
@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MCP tool caching** — `paradigm_search`, `paradigm_status`, and `paradigm_navigate` now return cached results within TTL window for repeated calls
 - **Habits cache** — TTL now configurable via `limits.habitsCacheTtlMs` (default 30000ms) instead of hardcoded
 - **Thread trail depth** — Configurable via `limits.threadTrailMax` (default 10) instead of hardcoded `.slice(-10)`
+- **Version sync** — `@a-company/paradigm` 3.1.6 → 3.2.0, `@a-company/paradigm-mcp` 3.1.6 → 3.2.0, `@a-company/sentinel` 0.2.0 → 0.3.0, `@a-company/university` 3.1.2 → 3.2.0
 
 ### Documentation
 
