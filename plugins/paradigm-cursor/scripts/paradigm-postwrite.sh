@@ -1,9 +1,14 @@
 #!/bin/sh
-# Paradigm Cursor PostWrite Hook (v2)
-# Fires after file edits.
-# Tracks modified source files in .paradigm/.pending-review
-# and outputs compliance reminders.
+# Paradigm Cursor PostWrite Hook (v2) — LEGACY
+# Fires after file edits via Cursor's afterFileEdit hook type.
 # Installed by: paradigm hooks install --cursor
+#
+# IMPORTANT: Cursor ignores all output (stdout + stderr) from afterFileEdit hooks.
+# This hook's advisory messages are INVISIBLE to the agent. The postToolUse hook
+# (cursor-posttooluse.sh) is now the primary advisory mechanism.
+#
+# This hook is kept for backward compatibility and background file tracking only.
+# Both preToolUse and stop hooks depend on the .pending-review file this writes.
 #
 # Hook type: afterFileEdit
 # Exit 0 always (never blocks — advisory only)
@@ -82,17 +87,7 @@ if [ -z "$found_purpose" ] && [ -f ".purpose" ]; then
   found_purpose=".purpose"
 fi
 
-if [ -z "$found_purpose" ]; then
-  file_dir=$(dirname "$REL_PATH")
-  echo "" >&2
-  echo "[paradigm] No .purpose file covers $file_dir/" >&2
-  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
-  echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
-elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
-  echo "" >&2
-  echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
-  echo "  -> #components, ~aspects (with anchors), !signals, \$flows, ^gates" >&2
-  echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
-fi
+# NOTE: No stderr output here — Cursor ignores afterFileEdit output.
+# Advisory messages are handled by cursor-posttooluse.sh (postToolUse hook).
 
 exit 0

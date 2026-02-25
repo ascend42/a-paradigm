@@ -20,6 +20,20 @@
         "timeout": 5
       }
     ],
+    "preToolUse": [
+      {
+        "command": "./scripts/paradigm-pretooluse.sh",
+        "matcher": "Edit|Write",
+        "timeout": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "./scripts/paradigm-posttooluse.sh",
+        "matcher": "Edit|Write",
+        "timeout": 5
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": "./scripts/paradigm-precommit.sh",

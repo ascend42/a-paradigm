@@ -33,6 +33,8 @@ const HOOKS = [
   { file: 'cursor-stop.sh',            exportName: 'CURSOR_STOP_HOOK' },
   { file: 'cursor-postwrite.sh',       exportName: 'CURSOR_POSTWRITE_HOOK' },
   { file: 'cursor-precommit.sh',       exportName: 'CURSOR_PRECOMMIT_HOOK' },
+  { file: 'cursor-pretooluse.sh',      exportName: 'CURSOR_PRETOOLUSE_HOOK' },
+  { file: 'cursor-posttooluse.sh',     exportName: 'CURSOR_POSTTOOLUSE_HOOK' },
 ];
 
 // Map: claude-code script → Claude Code plugin destination filename
@@ -48,6 +50,8 @@ const CURSOR_PLUGIN_COPIES = [
   { src: 'cursor-stop.sh',            dest: 'paradigm-stop.sh' },
   { src: 'cursor-postwrite.sh',       dest: 'paradigm-postwrite.sh' },
   { src: 'cursor-precommit.sh',       dest: 'paradigm-precommit.sh' },
+  { src: 'cursor-pretooluse.sh',      dest: 'paradigm-pretooluse.sh' },
+  { src: 'cursor-posttooluse.sh',     dest: 'paradigm-posttooluse.sh' },
 ];
 
 /**

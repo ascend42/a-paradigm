@@ -23,6 +23,8 @@ import {
   CURSOR_STOP_HOOK,
   CURSOR_POSTWRITE_HOOK,
   CURSOR_PRECOMMIT_HOOK,
+  CURSOR_PRETOOLUSE_HOOK,
+  CURSOR_POSTTOOLUSE_HOOK,
 } from './generated-hooks.js';
 
 /**
@@ -357,6 +359,8 @@ export async function hooksInstallCommand(options: {
       { name: 'cursor-stop', content: CURSOR_STOP_HOOK },
       { name: 'cursor-precommit', content: CURSOR_PRECOMMIT_HOOK },
       { name: 'cursor-postwrite', content: CURSOR_POSTWRITE_HOOK },
+      { name: 'cursor-pretooluse', content: CURSOR_PRETOOLUSE_HOOK },
+      { name: 'cursor-posttooluse', content: CURSOR_POSTTOOLUSE_HOOK },
     ];
 
     for (const script of scriptsToValidate) {
@@ -462,7 +466,7 @@ export async function hooksInstallCommand(options: {
   // Install Cursor hooks (when --cursor flag or no specific flags)
   if (installAll || options.cursor) {
     if (dryRun) {
-      console.log(chalk.gray('  Cursor hooks: would install paradigm-session-start.sh, paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
+      console.log(chalk.gray('  Cursor hooks: would install paradigm-session-start.sh, paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh, paradigm-pretooluse.sh, paradigm-posttooluse.sh'));
       console.log(chalk.gray(`  → ${path.join(rootDir, '.cursor', 'hooks')}/`));
       console.log(chalk.gray('  → Update .cursor/hooks.json'));
     } else {
@@ -622,6 +626,8 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
     { name: 'paradigm-stop.sh', content: CURSOR_STOP_HOOK },
     { name: 'paradigm-precommit.sh', content: CURSOR_PRECOMMIT_HOOK },
     { name: 'paradigm-postwrite.sh', content: CURSOR_POSTWRITE_HOOK },
+    { name: 'paradigm-pretooluse.sh', content: CURSOR_PRETOOLUSE_HOOK },
+    { name: 'paradigm-posttooluse.sh', content: CURSOR_POSTTOOLUSE_HOOK },
   ];
 
   for (const hook of hookScripts) {
@@ -703,6 +709,36 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
   }
   hooks.afterFileEdit = afterFileEditHooks;
 
+  // Merge preToolUse hooks (graduated blocking before Edit/Write)
+  const paradigmPretoolUseEntry = {
+    command: '.cursor/hooks/paradigm-pretooluse.sh',
+    matcher: 'Edit|Write',
+    timeout: 5,
+  };
+  const preToolUseHooks = (hooks.preToolUse || []) as Array<Record<string, unknown>>;
+  const hasParadigmPretoolUse = preToolUseHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-pretooluse.sh'),
+  );
+  if (!hasParadigmPretoolUse) {
+    preToolUseHooks.push(paradigmPretoolUseEntry);
+  }
+  hooks.preToolUse = preToolUseHooks;
+
+  // Merge postToolUse hooks (advisory feedback after Edit/Write)
+  const paradigmPosttoolUseEntry = {
+    command: '.cursor/hooks/paradigm-posttooluse.sh',
+    matcher: 'Edit|Write',
+    timeout: 5,
+  };
+  const postToolUseHooks = (hooks.postToolUse || []) as Array<Record<string, unknown>>;
+  const hasParadigmPosttoolUse = postToolUseHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-posttooluse.sh'),
+  );
+  if (!hasParadigmPosttoolUse) {
+    postToolUseHooks.push(paradigmPosttoolUseEntry);
+  }
+  hooks.postToolUse = postToolUseHooks;
+
   // Merge beforeShellExecution hooks
   const beforeShellHooks = (hooks.beforeShellExecution || []) as Array<Record<string, unknown>>;
   const hasParadigmPrecommit = beforeShellHooks.some(
@@ -777,7 +813,7 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
     const cursorHooksDir = path.join(rootDir, '.cursor', 'hooks');
     const cursorRemoved: string[] = [];
 
-    for (const hookName of ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+    for (const hookName of ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-pretooluse.sh', 'paradigm-posttooluse.sh']) {
       const hookPath = path.join(cursorHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         if (dryRun) {
@@ -799,7 +835,7 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
           const hooksConfig = JSON.parse(fs.readFileSync(hooksJsonPath, 'utf8'));
           const hooks = hooksConfig.hooks || {};
 
-          for (const key of ['sessionStart', 'stop', 'afterFileEdit', 'beforeShellExecution']) {
+          for (const key of ['sessionStart', 'stop', 'afterFileEdit', 'beforeShellExecution', 'preToolUse', 'postToolUse']) {
             if (Array.isArray(hooks[key])) {
               hooks[key] = hooks[key].filter(
                 (h: Record<string, unknown>) => !JSON.stringify(h).includes('paradigm-'),
@@ -953,7 +989,7 @@ export async function hooksStatusCommand(): Promise<void> {
   console.log(chalk.magenta('\n  Cursor Hooks Status\n'));
 
   const cursorHooksDir = path.join(rootDir, '.cursor', 'hooks');
-  const cursorHooks = ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
+  const cursorHooks = ['paradigm-session-start.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-pretooluse.sh', 'paradigm-posttooluse.sh'];
 
   for (const hookName of cursorHooks) {
     const hookPath = path.join(cursorHooksDir, hookName);
@@ -974,9 +1010,13 @@ export async function hooksStatusCommand(): Promise<void> {
       const hasStop = JSON.stringify(hooks.stop || []).includes('paradigm-stop.sh');
       const hasPostwrite = JSON.stringify(hooks.afterFileEdit || []).includes('paradigm-postwrite.sh');
       const hasPrecommit = JSON.stringify(hooks.beforeShellExecution || []).includes('paradigm-precommit.sh');
+      const hasPretoolUse = JSON.stringify(hooks.preToolUse || []).includes('paradigm-pretooluse.sh');
+      const hasPosttoolUse = JSON.stringify(hooks.postToolUse || []).includes('paradigm-posttooluse.sh');
       console.log(chalk.gray(`  hooks.json sessionStart: ${hasSessionStart ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json stop: ${hasStop ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json afterFileEdit: ${hasPostwrite ? 'configured' : 'missing'}`));
+      console.log(chalk.gray(`  hooks.json preToolUse: ${hasPretoolUse ? 'configured' : 'missing'}`));
+      console.log(chalk.gray(`  hooks.json postToolUse: ${hasPosttoolUse ? 'configured' : 'missing'}`));
       console.log(chalk.gray(`  hooks.json beforeShellExecution: ${hasPrecommit ? 'configured' : 'missing'}`));
     } catch {
       console.log(chalk.yellow('  hooks.json: parse error'));

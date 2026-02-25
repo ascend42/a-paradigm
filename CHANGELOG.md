@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] — 2026-02-24
+
+### Added
+- **Cursor `preToolUse` hook** — New `cursor-pretooluse.sh` fires before Edit/Write with graduated enforcement: silent for 1-2 uncovered edits, warns at 3-4, blocks (exit 2) at 5+. Unlike `afterFileEdit`, `preToolUse` can actually block the agent.
+- **Cursor `postToolUse` hook** — New `cursor-posttooluse.sh` fires after Edit/Write with advisory feedback. Unlike `afterFileEdit`, `postToolUse` output is visible to the Cursor agent.
+
+### Fixed
+- **Stop hook infinite loop guard** — `cursor-stop.sh` now tracks retry count in `.paradigm/.stop-hook-active`. After 3 retries, allows session to end instead of looping forever.
+- **Invisible `afterFileEdit` output** — Cursor ignores all stderr/stdout from `afterFileEdit` hooks. Moved advisory messages to `postToolUse` hook; `cursor-postwrite.sh` now only does background file tracking.
+
+### Changed
+- **`paradigm hooks install --cursor`** — Now installs 6 hooks (was 4): added `preToolUse` and `postToolUse` with `Edit|Write` matcher
+- **`paradigm hooks uninstall --cursor`** — Cleans up `preToolUse` and `postToolUse` entries alongside existing hooks
+- **`paradigm hooks status`** — Shows `preToolUse` and `postToolUse` hook status for Cursor
+- **Cursor plugin `hooks.json`** — Added `preToolUse` and `postToolUse` entries
+- **Version sync** — `@a-company/paradigm` 3.3.0 → 3.3.1, `@a-company/paradigm-mcp` 3.3.0 → 3.3.1
+
 ## [3.3.0] — 2026-02-24
 
 ### Added
