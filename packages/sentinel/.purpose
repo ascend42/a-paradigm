@@ -104,6 +104,18 @@ description: |
   anchors:
     - ui/src/components/Panel/PropertiesPanel.tsx:1-350
 
+#SentinelClient:
+  description: Lightweight JS/TS client SDK for sending structured logs, metrics, and traces to the Sentinel server with batching, ring buffer, auto-retry, and graceful degradation
+  tags: [feature, sdk, client]
+  anchors:
+    - src/client.ts:1-350
+  endpoints:
+    - POST /api/logs
+    - POST /api/metrics
+    - POST /api/traces
+    - POST /api/services
+    - POST /api/state
+
 #NodesStore:
   description: Zustand store managing symbol nodes, filters, and layout state
   tags: [state]

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-23T18:48:51.467Z'
+generated: '2026-02-25T05:34:47.931Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -252,7 +252,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_23
+      - &ref_24
         id: h0038
         ts: '2026-02-23T18:47:21Z'
         type: implement
@@ -281,7 +281,7 @@ by_symbol:
           - packages/university/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#stop-hook): anchor path resolution + version bump to 3.1.2'
-      - &ref_25
+      - &ref_27
         id: h0033
         ts: '2026-02-22T22:37:17Z'
         type: implement
@@ -498,11 +498,34 @@ by_symbol:
       agent: []
   '#cursor-adapter':
     symbol: '#cursor-adapter'
-    total_changes: 4
-    last_modified: '2026-02-18T19:54:14Z'
+    total_changes: 5
+    last_modified: '2026-02-25T00:42:36Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_34
+        id: h0049
+        ts: '2026-02-25T00:42:36Z'
+        type: implement
+        symbols:
+          - '#cursor-adapter'
+          - '#paradigm-practices'
+          - '#paradigm-workflow'
+        author:
+          type: human
+          id: ascend
+        commit: 5bc6dc9915648140a59cbb5071a71f8d7de1be6a
+        intent: feature
+        files:
+          - .cursor/rules/paradigm-agent-hints.mdc
+          - .cursor/rules/paradigm-core.mdc
+          - .cursor/rules/paradigm-practices.mdc
+          - .cursor/rules/paradigm-workflow.mdc
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/core/ide-adapters/cursor.ts
+        description: 'feat(#cursor-adapter): MCP-first workflow, practices, and forceful compliance for Cursor agents'
       - *ref_5
       - &ref_7
         id: h0010
@@ -559,11 +582,114 @@ by_symbol:
       agent: []
   '#doctor':
     symbol: '#doctor'
-    total_changes: 1
-    last_modified: '2026-02-14T11:22:26Z'
+    total_changes: 2
+    last_modified: '2026-02-24T21:22:14Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_18
+        id: h0047
+        ts: '2026-02-24T21:22:14Z'
+        type: implement
+        symbols:
+          - '#doctor'
+          - '#flow-validator'
+          - '#global'
+          - '#habits'
+          - '#hooks'
+          - '#lint'
+          - '#lore'
+          - '#paradigm'
+          - '#portal'
+          - '#sentinel'
+          - '#sync-llms'
+          - '#thread'
+          - ~audit-required
+          - $checkout-flow
+        author:
+          type: human
+          id: ascend
+        commit: 86072cb781ee7fe8ca45e1ee00a3ab687cdc7431
+        intent: feature
+        files:
+          - .paradigm/docs/ai-maintenance-protocol.md
+          - .paradigm/docs/commands.md
+          - .paradigm/docs/error-patterns.md
+          - .paradigm/docs/patterns.md
+          - .paradigm/docs/publishing.md
+          - .paradigm/docs/troubleshooting.md
+          - .paradigm/specs/caching.md
+          - .paradigm/specs/habits.md
+          - .paradigm/specs/history.md
+          - .paradigm/specs/portal-validation.md
+          - .paradigm/specs/symbols-v2.md
+          - CHANGELOG.md
+          - CLAUDE.md
+          - package.json
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm-mcp/src/tools/fixtures.ts
+          - packages/paradigm-mcp/src/tools/flows.ts
+          - packages/paradigm-mcp/src/tools/habits.ts
+          - packages/paradigm-mcp/src/tools/history.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/lore.ts
+          - packages/paradigm-mcp/src/tools/navigate.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/tools/purpose-portal.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/tools/sentinel.ts
+          - packages/paradigm-mcp/src/tools/tags.ts
+          - packages/paradigm-mcp/src/tools/wisdom.ts
+          - packages/paradigm-mcp/src/utils/session-tracker.ts
+          - packages/paradigm-mcp/src/utils/tool-cache.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/__tests__/integration-build.test.ts
+          - packages/paradigm/src/__tests__/integration-hooks.test.ts
+          - packages/paradigm/src/__tests__/integration-lore-draft.test.ts
+          - packages/paradigm/src/__tests__/integration-tool-cache.test.ts
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/commands/flow.ts
+          - packages/paradigm/src/commands/global.ts
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/lint.ts
+          - packages/paradigm/src/commands/lore/delete.ts
+          - packages/paradigm/src/commands/mcp/setup.ts
+          - packages/paradigm/src/commands/mcp/switch.ts
+          - packages/paradigm/src/commands/portal/test.ts
+          - packages/paradigm/src/commands/portal/watch.ts
+          - packages/paradigm/src/commands/sentinel.ts
+          - packages/paradigm/src/commands/sync-llms.ts
+          - packages/paradigm/src/commands/thread.ts
+          - packages/paradigm/src/commands/tutorial/index.ts
+          - packages/paradigm/src/core/.purpose
+          - packages/paradigm/src/core/flow-schema.ts
+          - packages/paradigm/src/core/flow-validator.test.ts
+          - packages/paradigm/src/core/flow-validator.ts
+          - packages/paradigm/src/core/habits/evaluator.ts
+          - packages/paradigm/src/core/habits/loader.ts
+          - packages/paradigm/src/core/habits/seed-habits.json
+          - packages/paradigm/src/core/habits/types.ts
+          - packages/paradigm/src/core/ide-adapters/agents.ts
+          - packages/paradigm/src/core/ide-adapters/base.test.ts
+          - packages/paradigm/src/core/ide-adapters/base.ts
+          - packages/paradigm/src/core/lore/storage.ts
+          - packages/paradigm/src/core/lore/types.ts
+          - packages/paradigm/src/core/paradigm-config.ts
+          - packages/paradigm/src/index.ts
+          - packages/sentinel/src/grouper.ts
+          - packages/sentinel/src/suggester.ts
+          - packages/sentinel/src/types.ts
+          - packages/university/src/content/courses/para-101.json
+          - packages/university/src/content/courses/para-201.json
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/src/content/courses/para-501.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/src/content/reference.json
+          - scripts/pre-publish-check.mjs
+        description: 'feat(#paradigm): comprehensive 6-phase improvement — type safety, validation, habits, sentinel, portal, docs, AI interop, caching'
       - &ref_6
         id: h0009
         ts: '2026-02-14T11:22:26Z'
@@ -1274,7 +1400,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_19
+      - &ref_20
         id: h0037
         ts: '2026-02-23T18:19:22Z'
         type: implement
@@ -1378,7 +1504,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_20
+      - &ref_21
         id: h0036
         ts: '2026-02-23T18:06:31Z'
         type: implement
@@ -1450,7 +1576,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_18
+      - &ref_19
         id: h0030
         ts: '2026-02-22T18:01:21Z'
         type: implement
@@ -1491,12 +1617,13 @@ by_symbol:
       agent: []
   '#habits':
     symbol: '#habits'
-    total_changes: 1
-    last_modified: '2026-02-22T18:01:21Z'
+    total_changes: 2
+    last_modified: '2026-02-24T21:22:14Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_18
+      - *ref_19
     contributors:
       human:
         - ascend
@@ -1508,9 +1635,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_19
       - *ref_20
-      - *ref_18
+      - *ref_21
+      - *ref_19
     contributors:
       human:
         - ascend
@@ -1522,19 +1649,41 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_18
+      - *ref_19
     contributors:
       human:
         - ascend
       agent: []
   '#lore':
     symbol: '#lore'
-    total_changes: 1
-    last_modified: '2026-02-22T18:20:51Z'
+    total_changes: 3
+    last_modified: '2026-02-24T21:22:14Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_21
+      - *ref_18
+      - &ref_29
+        id: h0045
+        ts: '2026-02-24T00:17:42Z'
+        type: implement
+        symbols:
+          - '#lore'
+          - '#stop-hook'
+        author:
+          type: human
+          id: ascend
+        commit: a2cf8c202fd252d94dbc286e6f61126d2aa38bba
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'fix(#stop-hook): lore check finds MCP-written entries on disk'
+      - &ref_22
         id: h0031
         ts: '2026-02-22T18:20:51Z'
         type: implement
@@ -1563,7 +1712,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_21
+      - *ref_22
     contributors:
       human:
         - ascend
@@ -1575,8 +1724,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
       - *ref_21
+      - *ref_22
     contributors:
       human:
         - ascend
@@ -1588,7 +1737,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_22
+      - &ref_23
         id: h0032
         ts: '2026-02-22T22:28:41Z'
         type: implement
@@ -1619,21 +1768,43 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_22
+      - *ref_23
     contributors:
       human:
         - ascend
       agent: []
   '#university':
     symbol: '#university'
-    total_changes: 4
-    last_modified: '2026-02-23T18:47:21Z'
+    total_changes: 5
+    last_modified: '2026-02-25T00:26:40Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_23
-      - *ref_20
-      - &ref_24
+      - &ref_25
+        id: h0048
+        ts: '2026-02-25T00:26:40Z'
+        type: implement
+        symbols:
+          - '#paradigm'
+          - '#sentinel'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: cf1def903d3b21bac2fc0389d7a19de9a68ff312
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - docs/guides/apt-2-comprehensive-improvement.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/sentinel/package.json
+          - packages/university/package.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'chore(#release): bump paradigm 3.2.0, paradigm-mcp 3.2.0, sentinel 0.3.0, university 3.2.0'
+      - *ref_24
+      - *ref_21
+      - &ref_26
         id: h0034
         ts: '2026-02-22T22:39:23Z'
         type: implement
@@ -1648,21 +1819,23 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs(#paradigm): add 3.1.0 changelog entries'
-      - *ref_22
+      - *ref_23
     contributors:
       human:
         - ascend
       agent: []
   '#paradigm':
     symbol: '#paradigm'
-    total_changes: 3
-    last_modified: '2026-02-23T18:47:21Z'
+    total_changes: 5
+    last_modified: '2026-02-25T00:26:40Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_23
-      - *ref_24
       - *ref_25
+      - *ref_18
+      - *ref_24
+      - *ref_26
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -1674,7 +1847,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_26
+      - &ref_28
         id: h0035
         ts: '2026-02-23T16:33:27Z'
         type: implement
@@ -1716,7 +1889,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_26
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -1728,7 +1901,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_26
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -1740,7 +1913,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_26
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -1752,7 +1925,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_26
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -1764,7 +1937,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -1776,7 +1949,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -1788,7 +1961,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_19
+      - *ref_20
     contributors:
       human:
         - ascend
@@ -1800,20 +1973,585 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_19
+      - *ref_20
     contributors:
       human:
         - ascend
       agent: []
   '#stop-hook':
     symbol: '#stop-hook'
-    total_changes: 2
-    last_modified: '2026-02-23T18:47:21Z'
+    total_changes: 5
+    last_modified: '2026-02-24T00:17:42Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_23
-      - *ref_19
+      - *ref_29
+      - &ref_32
+        id: h0041
+        ts: '2026-02-23T23:20:52Z'
+        type: implement
+        symbols:
+          - '#purpose-portal'
+          - '#stop-hook'
+          - ~aspect-anchors
+        author:
+          type: human
+          id: ascend
+        commit: 4f0110c40401fd336c3db729e2721c12185bccf3
+        intent: fix
+        files:
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/purpose-portal.ts
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'fix(#stop-hook): dual anchor resolution + MCP write-time validation'
+      - &ref_30
+        id: h0040
+        ts: '2026-02-23T21:49:43Z'
+        type: implement
+        symbols:
+          - '#generate-hooks'
+          - '#hooks'
+          - '#stop-hook'
+        author:
+          type: human
+          id: ascend
+        commit: 3074214514842c9b0cec3d4ac8f33a8cffe841a1
+        intent: refactor
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-precommit.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-precommit.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm/scripts/paradigm-postwrite.sh
+          - plugins/paradigm/scripts/paradigm-precommit.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'refactor(#hooks): single source of truth for hook scripts + version bump to 3.1.3'
+      - *ref_24
+      - *ref_20
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#generate-hooks':
+    symbol: '#generate-hooks'
+    total_changes: 3
+    last_modified: '2026-02-25T02:54:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_35
+        id: h0050
+        ts: '2026-02-25T02:54:52Z'
+        type: implement
+        symbols:
+          - '#cursor-hooks'
+          - '#cursor-plugin'
+          - '#cursor-session-start'
+          - '#cursor-stop'
+          - '#generate-hooks'
+        author:
+          type: human
+          id: ascend
+        commit: bafda699e33a341ab83ae31973ea30220db568ff
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/cursor-session-start.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm-cursor/.cursor-plugin/plugin.json
+          - plugins/paradigm-cursor/README.md
+          - plugins/paradigm-cursor/hooks/hooks.json
+          - plugins/paradigm-cursor/scripts/paradigm-postwrite.sh
+          - plugins/paradigm-cursor/scripts/paradigm-precommit.sh
+          - plugins/paradigm-cursor/scripts/paradigm-session-start.sh
+          - plugins/paradigm-cursor/scripts/paradigm-stop.sh
+          - plugins/paradigm-cursor/skills/lore/SKILL.md
+          - plugins/paradigm-cursor/skills/postflight/SKILL.md
+          - plugins/paradigm-cursor/skills/preflight/SKILL.md
+          - plugins/paradigm-cursor/skills/scan/SKILL.md
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#cursor-hooks): sessionStart hook, followup_message loop, and Cursor plugin'
+      - *ref_30
+      - &ref_31
+        id: h0039
+        ts: '2026-02-23T21:34:59Z'
+        type: implement
+        symbols:
+          - '#generate-hooks'
+          - '#hooks'
+        author:
+          type: human
+          id: ascend
+        commit: 2c90cda1bb25d1b32806c6220538caa70a61ae1a
+        intent: refactor
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-precommit.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-precommit.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm/scripts/paradigm-postwrite.sh
+          - plugins/paradigm/scripts/paradigm-precommit.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'refactor(#hooks): single source of truth for hook scripts + version bump to 3.1.3'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hooks':
+    symbol: '#hooks'
+    total_changes: 4
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+      - &ref_33
+        id: h0044
+        ts: '2026-02-24T00:11:54Z'
+        type: implement
+        symbols:
+          - '#hooks'
+          - '#plugin-check'
+          - '#plugin-update-checker'
+        author:
+          type: human
+          id: ascend
+        commit: b6b36eeadb477a1ece466d2813aff0f967511043
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/utils/plugin-update-checker.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/plugin/check.ts
+          - packages/paradigm/src/index.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'fix(#hooks): plugin-aware hook install + auto-update checker'
+      - *ref_30
+      - *ref_31
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#purpose-portal':
+    symbol: '#purpose-portal'
+    total_changes: 1
+    last_modified: '2026-02-23T23:20:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_32
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~aspect-anchors:
+    symbol: ~aspect-anchors
+    total_changes: 1
+    last_modified: '2026-02-23T23:20:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_32
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#release':
+    symbol: '#release'
+    total_changes: 2
+    last_modified: '2026-02-24T00:22:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0046
+        ts: '2026-02-24T00:22:11Z'
+        type: implement
+        symbols:
+          - '#release'
+        author:
+          type: human
+          id: ascend
+        commit: 672654fc1bf87482a514048ca81b5f9e4b7443d0
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+        description: 'chore(#release): bump paradigm 3.1.6, paradigm-mcp 3.1.6'
+      - id: h0042
+        ts: '2026-02-23T23:24:05Z'
+        type: implement
+        symbols:
+          - '#release'
+        author:
+          type: human
+          id: ascend
+        commit: 86b2244c268a78118610a817492eeda9456185a3
+        intent: feature
+        files:
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+        description: 'chore(#release): bump paradigm 3.1.4, paradigm-mcp 3.1.3'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#plugin':
+    symbol: '#plugin'
+    total_changes: 1
+    last_modified: '2026-02-23T23:29:16Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0043
+        ts: '2026-02-23T23:29:16Z'
+        type: implement
+        symbols:
+          - '#plugin'
+        author:
+          type: human
+          id: ascend
+        commit: 112a3fd4717e30100e22a2460d8a5df1ae9a143d
+        intent: feature
+        files:
+          - .paradigm/scan-index.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'chore(#plugin): bump plugin version to 3.1.4'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#plugin-check':
+    symbol: '#plugin-check'
+    total_changes: 1
+    last_modified: '2026-02-24T00:11:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_33
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#plugin-update-checker':
+    symbol: '#plugin-update-checker'
+    total_changes: 1
+    last_modified: '2026-02-24T00:11:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_33
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#flow-validator':
+    symbol: '#flow-validator'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#global':
+    symbol: '#global'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lint':
+    symbol: '#lint'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#portal':
+    symbol: '#portal'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel':
+    symbol: '#sentinel'
+    total_changes: 2
+    last_modified: '2026-02-25T00:26:40Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_25
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sync-llms':
+    symbol: '#sync-llms'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#thread':
+    symbol: '#thread'
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~audit-required:
+    symbol: ~audit-required
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $checkout-flow:
+    symbol: $checkout-flow
+    total_changes: 1
+    last_modified: '2026-02-24T21:22:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_18
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-practices':
+    symbol: '#paradigm-practices'
+    total_changes: 1
+    last_modified: '2026-02-25T00:42:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_34
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-workflow':
+    symbol: '#paradigm-workflow'
+    total_changes: 1
+    last_modified: '2026-02-25T00:42:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_34
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-hooks':
+    symbol: '#cursor-hooks'
+    total_changes: 2
+    last_modified: '2026-02-25T03:01:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_36
+        id: h0051
+        ts: '2026-02-25T03:01:11Z'
+        type: implement
+        symbols:
+          - '#cursor-hooks'
+          - '#cursor-plugin'
+        author:
+          type: human
+          id: ascend
+        commit: c5c41078fc0feafe29318cb20a9d49b3254673ea
+        intent: feature
+        files:
+          - README.md
+          - plugins/paradigm-cursor/README.md
+        description: 'docs(#cursor-plugin): document hooks, plugins, and plugin-vs-shift in README'
+      - *ref_35
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-plugin':
+    symbol: '#cursor-plugin'
+    total_changes: 2
+    last_modified: '2026-02-25T03:01:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_36
+      - *ref_35
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-session-start':
+    symbol: '#cursor-session-start'
+    total_changes: 1
+    last_modified: '2026-02-25T02:54:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_35
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-stop':
+    symbol: '#cursor-stop'
+    total_changes: 2
+    last_modified: '2026-02-25T05:18:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_37
+        id: h0052
+        ts: '2026-02-25T05:18:50Z'
+        type: implement
+        symbols:
+          - '#cursor-posttooluse'
+          - '#cursor-postwrite'
+          - '#cursor-pretooluse'
+          - '#cursor-stop'
+          - ^loop-guard
+        author:
+          type: human
+          id: ascend
+        commit: a2cad5420d599f6611f38bcd278f52b711100805
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/cursor-posttooluse.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-pretooluse.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - plugins/paradigm-cursor/hooks/hooks.json
+          - plugins/paradigm-cursor/scripts/paradigm-posttooluse.sh
+          - plugins/paradigm-cursor/scripts/paradigm-postwrite.sh
+          - plugins/paradigm-cursor/scripts/paradigm-pretooluse.sh
+          - plugins/paradigm-cursor/scripts/paradigm-stop.sh
+        description: 'feat(#cursor-hooks): preToolUse + postToolUse hooks, stop loop guard'
+      - *ref_35
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-posttooluse':
+    symbol: '#cursor-posttooluse'
+    total_changes: 1
+    last_modified: '2026-02-25T05:18:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_37
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-postwrite':
+    symbol: '#cursor-postwrite'
+    total_changes: 1
+    last_modified: '2026-02-25T05:18:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_37
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cursor-pretooluse':
+    symbol: '#cursor-pretooluse'
+    total_changes: 1
+    last_modified: '2026-02-25T05:18:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_37
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^loop-guard:
+    symbol: ^loop-guard
+    total_changes: 1
+    last_modified: '2026-02-25T05:18:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_37
     contributors:
       human:
         - ascend
