@@ -32,6 +32,16 @@ out/
 # Sentinel runtime data
 .paradigm/sentinel/
 .sentinel/
+**/.paradigm/sentinel/
+
+# Paradigm ephemeral hook state
+**/.habits-blocking
+
+# Generated docs site
+docs/site/
+
+# Rust build artifacts
+**/target/
 
 # BUT keep everything in examples/ (hydrated reference)
 !examples/**

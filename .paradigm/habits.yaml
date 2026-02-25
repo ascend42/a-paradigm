@@ -1,0 +1,5 @@
+version: '1.0'
+habits: []
+overrides:
+  verify-before-done:
+    severity: warn
