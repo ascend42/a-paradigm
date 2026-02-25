@@ -655,7 +655,120 @@ export interface SentinelServerConfig {
   wsMaxSubscribers: number;
   pruneIntervalInserts: number;
   logRetentionDays: number;
+  auth: AuthConfig;
+  rateLimit: RateLimitConfig;
+  tls?: { cert: string; key: string };
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTHENTICATION
+// ═══════════════════════════════════════════════════════════════════
+
+export interface AuthConfig {
+  enabled: boolean;
+  tokens: AuthToken[];
+}
+
+export interface AuthToken {
+  id: string;
+  name: string;
+  token: string;           // Bearer token value
+  permissions: AuthPermission[];
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export type AuthPermission = 'read' | 'write' | 'admin';
+
+export const DEFAULT_AUTH_CONFIG: AuthConfig = {
+  enabled: false,
+  tokens: [],
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// METRICS / TIME-SERIES
+// ═══════════════════════════════════════════════════════════════════
+
+export type MetricType = 'counter' | 'gauge' | 'histogram';
+
+export interface MetricEntry {
+  id: string;
+  timestamp: string;
+  name: string;              // e.g. "http.request.duration", "checkout.attempts"
+  type: MetricType;
+  value: number;
+  tags: Record<string, string>; // e.g. {service: "star", method: "POST", status: "200"}
+  service: string;
+  environment?: string;
+}
+
+export interface MetricInput {
+  name: string;
+  type: MetricType;
+  value: number;
+  tags?: Record<string, string>;
+  service: string;
+  timestamp?: string;
+  environment?: string;
+}
+
+export interface MetricQueryOptions {
+  name?: string;
+  type?: MetricType;
+  service?: string;
+  tag?: string;              // "key=value" filter
+  since?: string;
+  until?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface MetricAggregation {
+  name: string;
+  count: number;
+  sum: number;
+  min: number;
+  max: number;
+  avg: number;
+  p50?: number;
+  p95?: number;
+  p99?: number;
+}
+
+export interface HistogramBucket {
+  le: number;                // Less-than-or-equal boundary
+  count: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RATE LIMITING
+// ═══════════════════════════════════════════════════════════════════
+
+export interface RateLimitConfig {
+  enabled: boolean;
+  global: RateLimitRule;
+  perService: Record<string, RateLimitRule>;
+}
+
+export interface RateLimitRule {
+  maxRequestsPerMinute: number;
+  maxEntriesPerBatch: number;
+  samplingRate: number;      // 0.0 to 1.0 — 1.0 means accept all
+}
+
+export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
+  enabled: false,
+  global: {
+    maxRequestsPerMinute: 600,
+    maxEntriesPerBatch: 500,
+    samplingRate: 1.0,
+  },
+  perService: {},
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SERVER CONFIG DEFAULTS (must be after auth + rate limit defaults)
+// ═══════════════════════════════════════════════════════════════════
 
 export const DEFAULT_SERVER_CONFIG: SentinelServerConfig = {
   port: 3838,
@@ -664,4 +777,49 @@ export const DEFAULT_SERVER_CONFIG: SentinelServerConfig = {
   wsMaxSubscribers: 256,
   pruneIntervalInserts: 100,
   logRetentionDays: 0,
+  auth: DEFAULT_AUTH_CONFIG,
+  rateLimit: DEFAULT_RATE_LIMIT_CONFIG,
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// CROSS-APP TRACING
+// ═══════════════════════════════════════════════════════════════════
+
+export interface TraceSpan {
+  traceId: string;           // Shared across all services in a trace
+  spanId: string;            // Unique to this span
+  parentSpanId?: string;     // Parent span (for nesting)
+  service: string;
+  symbol: string;
+  operation: string;         // e.g. "POST /api/checkout", "process-payment"
+  startTime: string;
+  endTime?: string;
+  durationMs?: number;
+  status: 'ok' | 'error';
+  tags: Record<string, string>;
+  logs: string[];            // Log entry IDs associated with this span
+}
+
+export interface TraceSpanInput {
+  traceId: string;
+  spanId?: string;
+  parentSpanId?: string;
+  service: string;
+  symbol: string;
+  operation: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  status?: 'ok' | 'error';
+  tags?: Record<string, string>;
+  logIds?: string[];
+}
+
+export interface TraceView {
+  traceId: string;
+  spans: TraceSpan[];
+  services: string[];
+  totalDurationMs: number;
+  startTime: string;
+  endTime: string;
+}

@@ -37,9 +37,16 @@ import type {
   ServiceInfo,
   ServiceRegistration,
   AppState,
+  MetricEntry,
+  MetricInput,
+  MetricQueryOptions,
+  MetricAggregation,
+  TraceSpan,
+  TraceSpanInput,
+  TraceView,
 } from './types.js';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // Default confidence for new patterns
 const DEFAULT_CONFIDENCE: PatternConfidence = {
@@ -209,6 +216,34 @@ export class SentinelStorage {
         PRIMARY KEY (service, session_id)
       );
 
+      -- Metrics table
+      CREATE TABLE IF NOT EXISTS metrics (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('counter','gauge','histogram')),
+        value REAL NOT NULL,
+        tags_json TEXT DEFAULT '{}',
+        service TEXT NOT NULL,
+        environment TEXT
+      );
+
+      -- Traces table
+      CREATE TABLE IF NOT EXISTS traces (
+        trace_id TEXT NOT NULL,
+        span_id TEXT PRIMARY KEY,
+        parent_span_id TEXT,
+        service TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        duration_ms REAL,
+        status TEXT NOT NULL DEFAULT 'ok',
+        tags_json TEXT DEFAULT '{}',
+        log_ids_json TEXT DEFAULT '[]'
+      );
+
       -- Indexes
       CREATE INDEX IF NOT EXISTS idx_incidents_timestamp ON incidents(timestamp);
       CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
@@ -224,6 +259,12 @@ export class SentinelStorage {
       CREATE INDEX IF NOT EXISTS idx_logs_service ON logs(service);
       CREATE INDEX IF NOT EXISTS idx_logs_session_id ON logs(session_id);
       CREATE INDEX IF NOT EXISTS idx_logs_correlation_id ON logs(correlation_id);
+      CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(name);
+      CREATE INDEX IF NOT EXISTS idx_metrics_service ON metrics(service);
+      CREATE INDEX IF NOT EXISTS idx_traces_trace_id ON traces(trace_id);
+      CREATE INDEX IF NOT EXISTS idx_traces_service ON traces(service);
+      CREATE INDEX IF NOT EXISTS idx_traces_start_time ON traces(start_time);
     `);
 
     // Set schema version
@@ -435,6 +476,53 @@ export class SentinelStorage {
 
       this.db.run(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '3')"
+      );
+      currentVersion = 3;
+    }
+
+    if (currentVersion < 4) {
+      // v3 → v4: Add metrics and traces tables
+      try {
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS metrics (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('counter','gauge','histogram')),
+            value REAL NOT NULL,
+            tags_json TEXT DEFAULT '{}',
+            service TEXT NOT NULL,
+            environment TEXT
+          );
+
+          CREATE TABLE IF NOT EXISTS traces (
+            trace_id TEXT NOT NULL,
+            span_id TEXT PRIMARY KEY,
+            parent_span_id TEXT,
+            service TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT,
+            duration_ms REAL,
+            status TEXT NOT NULL DEFAULT 'ok',
+            tags_json TEXT DEFAULT '{}',
+            log_ids_json TEXT DEFAULT '[]'
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(name);
+          CREATE INDEX IF NOT EXISTS idx_metrics_service ON metrics(service);
+          CREATE INDEX IF NOT EXISTS idx_traces_trace_id ON traces(trace_id);
+          CREATE INDEX IF NOT EXISTS idx_traces_service ON traces(service);
+          CREATE INDEX IF NOT EXISTS idx_traces_start_time ON traces(start_time);
+        `);
+      } catch {
+        // Tables might already exist
+      }
+
+      this.db.run(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '4')"
       );
     }
   }
@@ -2052,6 +2140,396 @@ export class SentinelStorage {
       state: JSON.parse(obj.state_json as string),
       activeFlows: obj.active_flows_json ? JSON.parse(obj.active_flows_json as string) : undefined,
       activeGates: obj.active_gates_json ? JSON.parse(obj.active_gates_json as string) : undefined,
+    };
+  }
+
+  // ─── Metrics ───────────────────────────────────────────────────
+
+  insertMetric(input: MetricInput): string {
+    this.initializeSync();
+    const id = uuidv4();
+    const timestamp = input.timestamp || new Date().toISOString();
+
+    this.db!.run(
+      `INSERT INTO metrics (
+        id, timestamp, name, type, value, tags_json, service, environment
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        timestamp,
+        input.name,
+        input.type,
+        input.value,
+        JSON.stringify(input.tags || {}),
+        input.service,
+        input.environment || null,
+      ]
+    );
+
+    this.save();
+    return id;
+  }
+
+  insertMetricBatch(entries: MetricInput[]): { accepted: number; errors: string[] } {
+    this.initializeSync();
+    let accepted = 0;
+    const errors: string[] = [];
+
+    for (const input of entries) {
+      try {
+        const id = uuidv4();
+        const timestamp = input.timestamp || new Date().toISOString();
+
+        this.db!.run(
+          `INSERT INTO metrics (
+            id, timestamp, name, type, value, tags_json, service, environment
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            timestamp,
+            input.name,
+            input.type,
+            input.value,
+            JSON.stringify(input.tags || {}),
+            input.service,
+            input.environment || null,
+          ]
+        );
+        accepted++;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    this.save();
+    return { accepted, errors };
+  }
+
+  queryMetrics(options: MetricQueryOptions = {}): MetricEntry[] {
+    this.initializeSync();
+    const { limit = 100, offset = 0 } = options;
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.name) {
+      conditions.push('name = ?');
+      params.push(options.name);
+    }
+
+    if (options.type) {
+      conditions.push('type = ?');
+      params.push(options.type);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.tag) {
+      // Parse "key=value" format
+      const eqIdx = options.tag.indexOf('=');
+      if (eqIdx > 0) {
+        const tagKey = options.tag.substring(0, eqIdx);
+        const tagValue = options.tag.substring(eqIdx + 1);
+        conditions.push('tags_json LIKE ?');
+        params.push(`%"${tagKey}":"${tagValue}"%`);
+      }
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT * FROM metrics ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToMetricEntry(result[0].columns, row)
+    );
+  }
+
+  getMetricCount(options: MetricQueryOptions = {}): number {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.name) {
+      conditions.push('name = ?');
+      params.push(options.name);
+    }
+
+    if (options.type) {
+      conditions.push('type = ?');
+      params.push(options.type);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.tag) {
+      const eqIdx = options.tag.indexOf('=');
+      if (eqIdx > 0) {
+        const tagKey = options.tag.substring(0, eqIdx);
+        const tagValue = options.tag.substring(eqIdx + 1);
+        conditions.push('tags_json LIKE ?');
+        params.push(`%"${tagKey}":"${tagValue}"%`);
+      }
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT COUNT(*) as count FROM metrics ${whereClause}`,
+      params
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) return 0;
+    return result[0].values[0][0] as number;
+  }
+
+  aggregateMetric(
+    name: string,
+    options?: { service?: string; since?: string; until?: string }
+  ): MetricAggregation {
+    this.initializeSync();
+    const conditions: string[] = ['name = ?'];
+    const params: (string | number)[] = [name];
+
+    if (options?.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options?.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options?.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    const result = this.db!.exec(
+      `SELECT COUNT(*) as count, SUM(value) as sum, MIN(value) as min, MAX(value) as max, AVG(value) as avg
+       FROM metrics ${whereClause}`,
+      params
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) {
+      return { name, count: 0, sum: 0, min: 0, max: 0, avg: 0 };
+    }
+
+    const row = result[0].values[0];
+    return {
+      name,
+      count: (row[0] as number) || 0,
+      sum: (row[1] as number) || 0,
+      min: (row[2] as number) || 0,
+      max: (row[3] as number) || 0,
+      avg: (row[4] as number) || 0,
+    };
+  }
+
+  pruneMetrics(maxCount: number): number {
+    this.initializeSync();
+    if (maxCount <= 0) return 0;
+
+    const currentCount = this.getMetricCount();
+    if (currentCount <= maxCount) return 0;
+
+    const deleteCount = currentCount - maxCount;
+    this.db!.run(
+      `DELETE FROM metrics WHERE id IN (
+        SELECT id FROM metrics ORDER BY timestamp ASC LIMIT ?
+      )`,
+      [deleteCount]
+    );
+
+    this.save();
+    return deleteCount;
+  }
+
+  private rowToMetricEntry(columns: string[], row: SqlValue[]): MetricEntry {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      id: obj.id as string,
+      timestamp: obj.timestamp as string,
+      name: obj.name as string,
+      type: obj.type as MetricEntry['type'],
+      value: obj.value as number,
+      tags: obj.tags_json ? JSON.parse(obj.tags_json as string) : {},
+      service: obj.service as string,
+      environment: (obj.environment as string) || undefined,
+    };
+  }
+
+  // ─── Traces ───────────────────────────────────────────────────
+
+  insertSpan(input: TraceSpanInput): string {
+    this.initializeSync();
+    const spanId = input.spanId || uuidv4();
+    const startTime = input.startTime || new Date().toISOString();
+
+    this.db!.run(
+      `INSERT INTO traces (
+        trace_id, span_id, parent_span_id, service, symbol, operation,
+        start_time, end_time, duration_ms, status, tags_json, log_ids_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.traceId,
+        spanId,
+        input.parentSpanId || null,
+        input.service,
+        input.symbol,
+        input.operation,
+        startTime,
+        input.endTime || null,
+        input.durationMs ?? null,
+        input.status || 'ok',
+        JSON.stringify(input.tags || {}),
+        JSON.stringify(input.logIds || []),
+      ]
+    );
+
+    this.save();
+    return spanId;
+  }
+
+  getTrace(traceId: string): TraceView | null {
+    this.initializeSync();
+    const result = this.db!.exec(
+      'SELECT * FROM traces WHERE trace_id = ? ORDER BY start_time ASC',
+      [traceId]
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) return null;
+
+    const spans = result[0].values.map((row) =>
+      this.rowToTraceSpan(result[0].columns, row)
+    );
+
+    const services = [...new Set(spans.map((s) => s.service))];
+
+    // Compute overall timing from spans
+    const startTimes = spans.map((s) => s.startTime);
+    const endTimes = spans
+      .filter((s) => s.endTime)
+      .map((s) => s.endTime as string);
+
+    const startTime = startTimes.sort()[0];
+    const endTime = endTimes.length > 0 ? endTimes.sort().reverse()[0] : startTime;
+
+    const startMs = new Date(startTime).getTime();
+    const endMs = new Date(endTime).getTime();
+    const totalDurationMs = endMs - startMs;
+
+    return {
+      traceId,
+      spans,
+      services,
+      totalDurationMs: totalDurationMs > 0 ? totalDurationMs : 0,
+      startTime,
+      endTime,
+    };
+  }
+
+  queryTraces(
+    options: { service?: string; symbol?: string; since?: string; limit?: number } = {}
+  ): TraceView[] {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.symbol) {
+      conditions.push('symbol = ?');
+      params.push(options.symbol);
+    }
+
+    if (options.since) {
+      conditions.push('start_time >= ?');
+      params.push(options.since);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const traceLimit = Math.min(options.limit || 20, 20);
+
+    const result = this.db!.exec(
+      `SELECT DISTINCT trace_id FROM traces ${whereClause} ORDER BY start_time DESC LIMIT ?`,
+      [...params, traceLimit]
+    );
+
+    if (result.length === 0) return [];
+
+    const traces: TraceView[] = [];
+    for (const row of result[0].values) {
+      const traceId = row[0] as string;
+      const trace = this.getTrace(traceId);
+      if (trace) {
+        traces.push(trace);
+      }
+    }
+
+    return traces;
+  }
+
+  private rowToTraceSpan(columns: string[], row: SqlValue[]): TraceSpan {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      traceId: obj.trace_id as string,
+      spanId: obj.span_id as string,
+      parentSpanId: (obj.parent_span_id as string) || undefined,
+      service: obj.service as string,
+      symbol: obj.symbol as string,
+      operation: obj.operation as string,
+      startTime: obj.start_time as string,
+      endTime: (obj.end_time as string) || undefined,
+      durationMs: (obj.duration_ms as number) || undefined,
+      status: (obj.status as TraceSpan['status']) || 'ok',
+      tags: obj.tags_json ? JSON.parse(obj.tags_json as string) : {},
+      logs: obj.log_ids_json ? JSON.parse(obj.log_ids_json as string) : [],
     };
   }
 

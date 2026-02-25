@@ -334,6 +334,37 @@ function getToolsList() {
         },
       },
     },
+    {
+      name: 'sentinel_metrics',
+      description: 'Query metrics (counters, gauges, histograms) from connected apps. Supports filtering and aggregation.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          name: { type: 'string', description: 'Metric name filter' },
+          type: { type: 'string', enum: ['counter', 'gauge', 'histogram'], description: 'Metric type filter' },
+          service: { type: 'string', description: 'Service name filter' },
+          since: { type: 'string', description: 'ISO timestamp — metrics after this time' },
+          aggregate: { type: 'boolean', description: 'If true and name is provided, return aggregation instead of raw data' },
+          limit: { type: 'number', description: 'Max results (default: 50)' },
+        },
+      },
+    },
+    {
+      name: 'sentinel_traces',
+      description: 'Query distributed traces across services. Shows span trees with timing, status, and service hops.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          traceId: { type: 'string', description: 'Get a specific trace by ID' },
+          service: { type: 'string', description: 'Filter by service name' },
+          symbol: { type: 'string', description: 'Filter by symbol' },
+          since: { type: 'string', description: 'ISO timestamp — traces after this time' },
+          limit: { type: 'number', description: 'Max traces (default: 10, max: 20)' },
+        },
+      },
+    },
   ];
 }
 
@@ -739,6 +770,55 @@ async function handleTool(
         }));
 
       return JSON.stringify({ count: flowEvents.length, events: flowEvents }, null, 2);
+    }
+
+    case 'sentinel_metrics': {
+      const { name: metricName, type: metricType, service: metricSvc, since: metricSince, aggregate, limit: metricLimit } = args as {
+        name?: string; type?: string; service?: string; since?: string; aggregate?: boolean; limit?: number;
+      };
+
+      if (aggregate && metricName) {
+        const agg = store.aggregateMetric(metricName, { service: metricSvc, since: metricSince });
+        return JSON.stringify(agg, null, 2);
+      }
+
+      const metrics = store.queryMetrics({
+        name: metricName, type: metricType as any, service: metricSvc, since: metricSince,
+        limit: Math.min(metricLimit || 50, 100),
+      });
+
+      return JSON.stringify({
+        count: metrics.length,
+        metrics: metrics.map((m) => ({
+          timestamp: m.timestamp, name: m.name, type: m.type, value: m.value,
+          tags: m.tags, service: m.service,
+        })),
+      }, null, 2);
+    }
+
+    case 'sentinel_traces': {
+      const { traceId: tid, service: traceSvc, symbol: traceSym, since: traceSince, limit: traceLimit } = args as {
+        traceId?: string; service?: string; symbol?: string; since?: string; limit?: number;
+      };
+
+      if (tid) {
+        const trace = store.getTrace(tid);
+        if (!trace) return JSON.stringify({ error: 'Trace not found' });
+        return JSON.stringify(trace, null, 2);
+      }
+
+      const traces = store.queryTraces({
+        service: traceSvc, symbol: traceSym, since: traceSince,
+        limit: Math.min(traceLimit || 10, 20),
+      });
+
+      return JSON.stringify({
+        count: traces.length,
+        traces: traces.map((t) => ({
+          traceId: t.traceId, services: t.services, spanCount: t.spans.length,
+          totalDurationMs: t.totalDurationMs, startTime: t.startTime, endTime: t.endTime,
+        })),
+      }, null, 2);
     }
 
     default:

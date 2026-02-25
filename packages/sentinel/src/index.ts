@@ -10,6 +10,9 @@
 // SDK
 export { Sentinel, FlowTracker } from './sdk.js';
 
+// Client SDK
+export { SentinelClient, createSentinelClient, type SentinelClientOptions, type SpanContext } from './client.js';
+
 // Types
 export * from './types.js';
 

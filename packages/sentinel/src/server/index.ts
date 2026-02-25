@@ -17,6 +17,10 @@ import { createIncidentsRouter } from './routes/incidents.js';
 import { createPatternsRouter } from './routes/patterns.js';
 import { createLogsRouter } from './routes/logs.js';
 import { createServicesRouter, createStateRouter } from './routes/services.js';
+import { createMetricsRouter } from './routes/metrics.js';
+import { createTracesRouter } from './routes/traces.js';
+import { createAuthMiddleware } from './middleware/auth.js';
+import { createRateLimiter } from './middleware/rate-limit.js';
 import { SentinelStorage } from '../storage.js';
 import { loadServerConfig } from '../config.js';
 import { loadSymbolIndex } from './loaders/symbols.js';
@@ -93,14 +97,30 @@ export function createApp(options: ServerOptions & {
 
   // New observability routes (shared storage)
   if (options.storage && options.serverConfig) {
-    app.use('/api/logs', createLogsRouter({
+    const config = options.serverConfig;
+
+    // Auth middleware (only applied to observability routes when enabled)
+    const auth = createAuthMiddleware(config.auth);
+
+    // Rate limiting middleware
+    const rateLimiter = createRateLimiter(config.rateLimit);
+
+    // Write endpoints: auth(write) + rate limit
+    app.use('/api/logs', rateLimiter, auth('write'), createLogsRouter({
       storage: options.storage,
-      serverConfig: options.serverConfig,
+      serverConfig: config,
       onLogReceived: options.onLogReceived,
       symbolIndex: options.symbolIndex,
     }));
-    app.use('/api/services', createServicesRouter({ storage: options.storage }));
-    app.use('/api/state', createStateRouter({ storage: options.storage }));
+    app.use('/api/services', rateLimiter, auth('write'), createServicesRouter({ storage: options.storage }));
+    app.use('/api/state', rateLimiter, auth('write'), createStateRouter({ storage: options.storage }));
+    app.use('/api/metrics', rateLimiter, auth('write'), createMetricsRouter({
+      storage: options.storage,
+      serverConfig: config,
+    }));
+    app.use('/api/traces', rateLimiter, auth('write'), createTracesRouter({
+      storage: options.storage,
+    }));
   }
 
   // Health check
