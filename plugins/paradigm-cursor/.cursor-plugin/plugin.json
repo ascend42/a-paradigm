@@ -1,6 +1,7 @@
 {
   "name": "paradigm",
-  "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
+  "displayName": "Paradigm",
+  "description": "AI-native project architecture — enforcement hooks, 50+ MCP tools, compliance skills",
   "version": "3.3.0",
   "author": {
     "name": "ascend42",
@@ -13,11 +14,10 @@
     "paradigm",
     "architecture",
     "mcp",
-    "ai-context",
-    "developer-tools",
-    "multi-agent",
     "enforcement",
-    "sentinel",
-    "lore"
-  ]
+    "hooks",
+    "cursor"
+  ],
+  "hooks": "./hooks/hooks.json",
+  "skills": "./skills/"
 }
