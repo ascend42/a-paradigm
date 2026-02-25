@@ -5,6 +5,57 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — APT-2 branch
+
+### Added
+
+#### Sentinel Observability Server (`@a-company/sentinel`)
+- **Structured logging API** — `POST/GET /api/logs` with level, symbol, service, session, correlation ID filtering
+- **Metrics API** — `POST/GET /api/metrics` with counter, gauge, histogram types; `GET /api/metrics/aggregate/:name` for aggregation (count, sum, min, max, avg)
+- **Distributed tracing API** — `POST/GET /api/traces` with span trees, parent-child relationships, cross-service correlation
+- **Service registry** — `POST/GET /api/services` with version, PID, environment, last-seen tracking
+- **Live state tracking** — `POST/GET /api/state` for real-time app state snapshots with active flows and gates
+- **WebSocket streaming** — Real-time broadcast of log entries, flow events, and symbol validation warnings via `ws://`
+- **Auto-promote errors to incidents** — Error-level logs automatically create incidents with Sentinel's existing pattern matching
+- **Symbol validation on ingestion** — Cross-references log symbols against `.purpose` index, suggests fixes for typos
+
+#### Security & Rate Limiting
+- **Bearer token auth middleware** — Permission levels (read/write/admin), token expiry, configurable per-server
+- **Per-service rate limiting** — Sliding window counters (1-minute windows), sampling rate support, batch size enforcement
+- **Server configuration** — `sentinel.yaml` server section with port, maxLogs, maxBatchSize, auth, rateLimit, TLS settings
+- **Environment variable overrides** — `SENTINEL_PORT`, `SENTINEL_MAX_LOGS`, etc.
+
+#### Dashboard UI
+- **Logs tab** — Real-time log viewer with WebSocket streaming, level/service/search filters, auto-scroll, expandable JSON data payloads
+- **Flows tab** — Live flow visualization (nodes light up as signals/gates fire) plus flow composer for creating new `$flows` from existing symbols via drag-and-drop
+- **4-tab navigation** — Design, Logs, Incidents, Flows (was 2 tabs)
+
+#### Client SDKs
+- **JS/TS client** (`SentinelClient` in `@a-company/sentinel`) — Batching with ring buffer, auto-retry with exponential backoff + jitter, graceful degradation when server is down, log/metric/trace/state push APIs, `createSentinelClient()` factory
+- **Rust client** (`sentinel-rs/`) — Async batching via reqwest/tokio, builder pattern, `debug`/`info`/`warn`/`error` convenience methods, counter/gauge metrics, 10 unit tests
+
+#### MCP Tools (both `@a-company/paradigm-mcp` and standalone `sentinel-mcp`)
+- `paradigm_sentinel_logs` — Query structured logs with filters
+- `paradigm_sentinel_services` — List registered services
+- `paradigm_sentinel_app_state` — Get live app state snapshots
+- `paradigm_sentinel_validate_symbol` — Check symbol existence with typo suggestions
+- `paradigm_sentinel_flow_activity` — Get recent flow events by symbol type
+- `paradigm_sentinel_metrics` — Query and aggregate metrics
+- `paradigm_sentinel_traces` — Query distributed traces with span trees
+
+#### Storage
+- **Schema v3 migration** — `logs`, `services`, `app_state` tables with 5 indexes
+- **Schema v4 migration** — `metrics`, `traces` tables with 6 indexes
+- **15+ new storage methods** — insertLog, insertLogBatch, queryLogs, getLogCount, pruneLogs, registerService, updateServiceLastSeen, getServices, upsertAppState, getAppState, getAllAppStates, insertMetric, insertMetricBatch, queryMetrics, getMetricCount, aggregateMetric, pruneMetrics, insertSpan, getTrace, queryTraces
+
+### Changed
+- `packages/sentinel/src/server/index.ts` — Rewrote to support WebSocket, shared storage instance, auth + rate-limit middleware on all observability routes
+- `packages/sentinel/src/types.ts` — Extended with LogEntry, MetricEntry, TraceSpan, AuthConfig, RateLimitConfig, SentinelServerConfig (158 new lines)
+- `packages/paradigm-mcp/src/tools/sentinel.ts` — Added 7 new MCP tool definitions and handlers (121 new lines)
+- `packages/sentinel/src/mcp.ts` — Added matching 7 standalone MCP tools (80 new lines)
+
+---
+
 ## [3.3.1] — 2026-02-24
 
 ### Added
