@@ -5,6 +5,43 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] — 2026-02-26
+
+### Added
+
+#### Task Management (`@a-company/paradigm-mcp` 3.6.0 → 3.7.0)
+
+Persistent personal task tracking that survives context windows. Minimal structure, maximum linkability.
+
+- **`paradigm_task_create`** — create a task with blurb, priority (high/medium/low), tags, and optional lore links
+- **`paradigm_task_list`** — list/filter tasks by status (open/done/shelved), priority, tags; sorted by priority then date
+- **`paradigm_task_update`** — update blurb, priority, status, tags, or linked assessments/lore
+- **`paradigm_task_done`** — mark task complete (shorthand)
+- **`paradigm_task_shelve`** — shelve a task for later (shorthand)
+- Storage: `.paradigm/tasks/entries/{YYYY-MM-DD}/T-*.yaml` with auto-generated sequential IDs
+- Session recovery surfaces top 5 open tasks by priority
+
+#### Assessment Loops (`@a-company/paradigm-mcp` 3.6.0 → 3.7.0)
+
+Threaded narrative arcs for sprint-retro-style reflection. AI-generated with human review.
+
+- **`paradigm_assessment_record`** — add a reflection entry to an arc (auto-creates arc if new)
+- **`paradigm_assessment_list`** — list arcs, or entries within an arc
+- **`paradigm_assessment_get`** — get full entry or arc detail (pass `A-*` for entry, `arc-*` for arc)
+- **`paradigm_assessment_search`** — cross-arc search by symbol, tag, type, or date range
+- **`paradigm_assessment_arc_create`** — explicitly create an arc
+- **`paradigm_assessment_arc_close`** — mark an arc complete or archived
+- Entry types: `retro`, `insight`, `decision`, `milestone`
+- Cross-references: linked lore entries, task IDs, and commit hashes per entry
+- Globally unique entry IDs (`A-YYYY-MM-DD-NNN`) across all arcs
+- Storage: `.paradigm/assessments/arcs/{arc-id}/arc.yaml` + `entries/A-*.yaml`
+- Session recovery surfaces active arcs related to recovered symbols
+
+#### Session Integration
+
+- Recovery preamble now includes open tasks and active assessment arcs
+- Breadcrumb extraction for all 11 new tools
+
 ## [3.6.0] — 2026-02-25
 
 ### Added
