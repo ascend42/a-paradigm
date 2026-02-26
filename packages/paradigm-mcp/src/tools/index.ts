@@ -34,6 +34,7 @@ import { getPmToolsList, handlePmTool } from './pm.js';
 import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { getLoreToolsList, handleLoreTool } from './lore.js';
 import { getHabitsToolsList, handleHabitsTool } from './habits.js';
+import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -239,6 +240,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getLoreToolsList(),
           // Habits tools
           ...getHabitsToolsList(),
+          // Aspect graph tools
+          ...getAspectGraphToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1008,6 +1011,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try habits tools
           if (name.startsWith('paradigm_habits_') || name === 'paradigm_practice_context') {
             const result = await handleHabitsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try aspect graph tools
+          if (name.startsWith('paradigm_aspect_') && name !== 'paradigm_aspect_check') {
+            const result = await handleAspectGraphTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {
