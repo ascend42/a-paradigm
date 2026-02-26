@@ -104,9 +104,15 @@ description: |
   anchors:
     - ui/src/components/Panel/PropertiesPanel.tsx:1-350
 
+#sentinel-sdk:
+  description: Unified Sentinel SDK — TypeScript client for sending structured logs, metrics, and traces to Sentinel with batching, ring buffer, auto-retry, and graceful degradation. See also #SentinelRustClient in sentinel-rs for the Rust variant.
+  tags: [feature, sdk]
+  components:
+    - '#SentinelClient'
+
 #SentinelClient:
   description: Lightweight JS/TS client SDK for sending structured logs, metrics, and traces to the Sentinel server with batching, ring buffer, auto-retry, and graceful degradation
-  tags: [feature, sdk, client]
+  tags: [sdk, client]
   anchors:
     - src/client.ts:1-350
   endpoints:

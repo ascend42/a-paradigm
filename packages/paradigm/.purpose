@@ -474,3 +474,16 @@ aspects:
       - src/core/ide-adapters/base.ts:12-19
     applies-to:
       - "#ide-adapters"
+
+  ~audit-required:
+    description: All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging
+    category: compliance
+    severity: high
+    tags: [audit, compliance, logging]
+    anchors:
+      - src/core/audit-logger.ts:1-433
+      - src/core/agent-spawner.ts:274-288
+    applies-to:
+      - "#audit-logger"
+      - "#agent-spawner"
+      - "#orchestrator"

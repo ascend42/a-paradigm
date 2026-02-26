@@ -32,6 +32,16 @@ features:
     aspects:
       - "~file-glob-discovery"
 components:
+  purpose-parser:
+    description: '#purpose-parser: Main orchestrator for parsing .purpose files — YAML pre-processing for symbol-prefixed keys (# is YAML comment, ! is YAML tag), normalization, and Zod validation'
+    tags: [core, parser]
+    anchors:
+      - src/parser.ts:1-350
+    signals:
+      - '!parse-success'
+      - '!parse-error'
+    flows:
+      - $purpose-parsing
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from .purpose files'
   zod-schemas:

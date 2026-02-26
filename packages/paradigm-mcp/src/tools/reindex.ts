@@ -462,7 +462,7 @@ function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
         result.push({
           id: (s.id as string) || `step-${i + 1}`,
           action,
-          symbol: s.symbol as string | undefined,
+          symbol: (s.symbol as string | undefined) || (s.component as string | undefined),
           expect: s.expect as string | undefined,
         });
       }
