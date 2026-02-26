@@ -5,6 +5,40 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] — 2026-02-26
+
+### Added
+
+#### Smart Drift Detection (`@a-company/paradigm-mcp` 3.7.0 → 3.8.0)
+
+Upgrades `paradigm_aspect_drift` from a brittle hash-only tripwire to a layered, self-healing anchor system.
+
+**Phase 1 — Normalized Hashing:**
+- `normalizeForHash()` strips trailing whitespace, blank lines, and collapses internal spaces before hashing
+- Two hashes stored per anchor: `content_hash` (exact) and `normalized_hash` (format-tolerant)
+- Formatter runs (`prettier`, `eslint --fix`) no longer trigger false drift
+- Cosmetic-only changes auto-heal by updating the exact hash in-place
+
+**Phase 2 — Git-Aware Line Mapping:**
+- `materialized_at_commit` records git HEAD at reindex time
+- `parseUnifiedDiffHunks()` parses `@@ -old,count +new,count @@` format
+- `computeLineShift()` translates anchor line ranges through accumulated diff offsets
+- When code shifts position without changing, anchors auto-update in both the SQLite DB and `.purpose` files
+- Handles shift + cosmetic combo (lines moved AND reformatted)
+- Falls back gracefully when git is unavailable
+
+**DriftResult v2:**
+- `status`: `clean` | `cosmetic` | `shifted` | `relocated` | `modified` | `missing`
+- `resolvedBy`: `exact-hash` | `normalized-hash` | `git-line-mapping` | `content-search` | `none`
+- `suggestedStart`/`suggestedEnd` for shifted anchors
+- `autoHealed` flag indicates whether fixes were applied
+- Backwards-compatible `drifted` boolean retained
+
+**Tool updates:**
+- `paradigm_aspect_drift` gains `autoHeal` parameter (default: `true`)
+- Response reports cosmetic, shifted, and modified counts separately
+- Auto-healed anchors report which `.purpose` files were patched
+
 ## [3.7.0] — 2026-02-26
 
 ### Added
