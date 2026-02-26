@@ -1,0 +1,74 @@
+id: L-2026-02-26-001
+type: agent-session
+timestamp: '2026-02-26T02:32:40.589Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Full aspect audit (200 aspects) + purpose parser fix for symbol-prefixed YAML keys
+summary: 'Documented 200 aspects across 19 .purpose files covering the entire monorepo — rules, decisions, constraints, configurations, and invariants for every package. During testing, discovered that the purpose-core parser couldn''t handle #Component: format files (# is a YAML comment) or !signal arrays (! is a YAML tag). Fixed with regex pre-processing and normalization before Zod validation, raising indexable symbols from 333 to 504. Also updated university content: PARA-201/501 lessons, reference cards, and 12 new PLSAT v3.0 question slots.'
+symbols_touched:
+  - '#purpose-parser'
+  - ~aspects
+  - '#university-platform'
+  - '#plsat-router'
+  - ~plsat-fisher-yates-shuffle
+  - ~plsat-pass-threshold-80pct
+  - ~plsat-v3-variant-resolution
+symbols_created:
+  - ~plsat-fisher-yates-shuffle
+  - ~plsat-pass-threshold-80pct
+  - ~plsat-v3-variant-resolution
+  - ~university-cors-wildcard
+files_created:
+  - packages/sentinel-rs/.purpose
+  - packages/paradigm-vscode/.purpose
+files_modified:
+  - packages/purpose/core/src/parser.ts
+  - packages/purpose/core/src/aggregator.ts
+  - .purpose
+  - CHANGELOG.md
+  - packages/paradigm-mcp/.purpose
+  - packages/sentinel/.purpose
+  - packages/university/.purpose
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/src/content/courses/para-201.json
+  - packages/university/src/content/courses/para-501.json
+  - packages/university/src/content/reference.json
+lines_added: 4253
+lines_removed: 339
+commit: b67abcd
+decisions:
+  - id: parser-preprocess-before-yaml
+    decision: Pre-process .purpose files with regex to quote symbol prefixes before YAML parsing
+    rationale: '#/~/!/$/^ prefixes conflict with YAML syntax (comments, tags). Quoting them inline is simpler than requiring users to always quote symbols in their .purpose files.'
+  - id: normalize-before-zod
+    decision: Normalize symbol-prefixed top-level keys into standard dicts BEFORE Zod validation
+    rationale: 'Zod''s safeParse strips unknown keys. If normalization happens after validation, #MCPServer entries are lost. Moving it before validation preserves them as components.MCPServer.'
+  - id: mcp-server-no-hot-reload
+    decision: Accept that MCP server needs restart for engine changes, no hot-reload needed
+    rationale: Normal user workflow (editing .purpose files) already works with reloadContext(). Only framework developer changes to parser code require restart — rare enough not to warrant hot-reload complexity.
+errors_encountered:
+  - description: paradigm_reindex via MCP only found 11 aspects (expected 200)
+    resolution: 'Root cause: purpose-core parser couldn''t handle #Component: format (YAML comment) and !signal arrays (YAML tag). Fixed with regex pre-processing + normalization before Zod validation.'
+    time_to_fix: 45min
+  - description: After parser fix, MCP reindex still showed 79 aspects
+    resolution: Node.js module cache — MCP server process has old purpose-core loaded. CLI works fine (fresh process). Server needs restart to pick up engine changes.
+learnings:
+  - Node.js caches ES modules in long-running processes — changing dist on disk doesn't affect already-imported code
+  - Zod safeParse strips unknown keys, so any normalization of custom keys must happen BEFORE validation
+  - 'The #Component: format in .purpose files was silently broken for YAML parsing since inception — # starts a YAML comment'
+  - 'PLSAT rule: questions = minutes (86 questions = 86 minutes = 5160 seconds)'
+verification:
+  status: partial
+  details:
+    build: pass
+    cli_index: pass (200 aspects)
+    mcp_reindex: stale (79 aspects — needs server restart)
+    plsat_slots: pass (86 slots, 86 min)
+tags:
+  - aspect-audit
+  - parser-fix
+  - university
+  - plsat
+  - purpose-core

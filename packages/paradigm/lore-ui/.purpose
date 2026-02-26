@@ -1,0 +1,26 @@
+description: Auto-generated purpose file for packages/paradigm/lore-ui
+components:
+  date-separator:
+    description: DateSeparator component
+  detail-panel:
+    description: DetailPanel component
+  filter-bar:
+    description: FilterBar component
+  lore-card:
+    description: LoreCard component
+  review-stars:
+    description: ReviewStars component
+  symbol-tag:
+    description: SymbolTag component
+  verification-badge:
+    description: VerificationBadge component
+  view-switcher:
+    description: ViewSwitcher component
+  author-view:
+    description: AuthorView component
+  session-view:
+    description: SessionView component
+  symbol-view:
+    description: SymbolView component
+  thread-view:
+    description: ThreadView component

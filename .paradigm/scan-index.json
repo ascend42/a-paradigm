@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-02-26T03:40:04.037Z",
+    "generatedAt": "2026-02-26T03:45:50.101Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 21,
@@ -1056,6 +1056,39 @@
         "#command-generator"
       ]
     },
+    "portal-parsing": {
+      "id": "portal-parsing",
+      "name": "Portal Parsing",
+      "symbol": "#portal-parsing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-parsing: Parse portal.yaml into structured data",
+      "visualTags": [],
+      "related": [
+        "~yaml-config-loading",
+        "$portal-validation-flow",
+        "!parse-success",
+        "!parse-error",
+        "#yaml-parser",
+        "#gate-schemas"
+      ]
+    },
+    "portal-validation": {
+      "id": "portal-validation",
+      "name": "Portal Validation",
+      "symbol": "#portal-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "@portal-validation: Validate portal.yaml configuration",
+      "visualTags": [],
+      "related": [
+        "~file-glob-discovery",
+        "!validation-passed",
+        "!validation-failed",
+        "#validator",
+        "#topology-checker"
+      ]
+    },
     "gate-checking": {
       "id": "gate-checking",
       "name": "Gate Checking",
@@ -1096,39 +1129,6 @@
       "related": [
         "#portal-client",
         "#gate-client"
-      ]
-    },
-    "portal-parsing": {
-      "id": "portal-parsing",
-      "name": "Portal Parsing",
-      "symbol": "#portal-parsing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-parsing: Parse portal.yaml into structured data",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "$portal-validation-flow",
-        "!parse-success",
-        "!parse-error",
-        "#yaml-parser",
-        "#gate-schemas"
-      ]
-    },
-    "portal-validation": {
-      "id": "portal-validation",
-      "name": "Portal Validation",
-      "symbol": "#portal-validation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "@portal-validation: Validate portal.yaml configuration",
-      "visualTags": [],
-      "related": [
-        "~file-glob-discovery",
-        "!validation-passed",
-        "!validation-failed",
-        "#validator",
-        "#topology-checker"
       ]
     },
     "commander-setup": {
@@ -1448,36 +1448,6 @@
       "visualTags": [],
       "related": []
     },
-    "SentinelRustClient": {
-      "id": "SentinelRustClient",
-      "name": "SentinelRustClient",
-      "symbol": "#SentinelRustClient",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
-      "description": "Async Rust client with buffered log and metric submission, batch-on-threshold flush, and bearer token auth",
-      "visualTags": [],
-      "related": []
-    },
-    "SentinelClientBuilder": {
-      "id": "SentinelClientBuilder",
-      "name": "SentinelClientBuilder",
-      "symbol": "#SentinelClientBuilder",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
-      "description": "Builder pattern for constructing SentinelClient with configurable URL, token, environment, and batch size",
-      "visualTags": [],
-      "related": []
-    },
-    "SentinelTracingLayer": {
-      "id": "SentinelTracingLayer",
-      "name": "SentinelTracingLayer",
-      "symbol": "#SentinelTracingLayer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
-      "description": "tracing_subscriber Layer that intercepts Rust tracing events and forwards them to Sentinel as structured log entries",
-      "visualTags": [],
-      "related": []
-    },
     "IncidentStorage": {
       "id": "IncidentStorage",
       "name": "IncidentStorage",
@@ -1662,6 +1632,36 @@
         "!node-selected",
         "!filters-changed"
       ]
+    },
+    "SentinelRustClient": {
+      "id": "SentinelRustClient",
+      "name": "SentinelRustClient",
+      "symbol": "#SentinelRustClient",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Async Rust client with buffered log and metric submission, batch-on-threshold flush, and bearer token auth",
+      "visualTags": [],
+      "related": []
+    },
+    "SentinelClientBuilder": {
+      "id": "SentinelClientBuilder",
+      "name": "SentinelClientBuilder",
+      "symbol": "#SentinelClientBuilder",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Builder pattern for constructing SentinelClient with configurable URL, token, environment, and batch size",
+      "visualTags": [],
+      "related": []
+    },
+    "SentinelTracingLayer": {
+      "id": "SentinelTracingLayer",
+      "name": "SentinelTracingLayer",
+      "symbol": "#SentinelTracingLayer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "tracing_subscriber Layer that intercepts Rust tracing events and forwards them to Sentinel as structured log entries",
+      "visualTags": [],
+      "related": []
     },
     "university-server": {
       "id": "university-server",
@@ -3008,46 +3008,6 @@
       "visualTags": [],
       "related": []
     },
-    "generator": {
-      "id": "generator",
-      "name": "Generator",
-      "symbol": "#generator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#generator: Generates scan-index.json",
-      "visualTags": [],
-      "related": []
-    },
-    "component-scanner": {
-      "id": "component-scanner",
-      "name": "Component Scanner",
-      "symbol": "#component-scanner",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#component-scanner: Scans for UI components",
-      "visualTags": [],
-      "related": []
-    },
-    "protocol-handler": {
-      "id": "protocol-handler",
-      "name": "Protocol Handler",
-      "symbol": "#protocol-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#protocol-handler: Handles probe protocol requests",
-      "visualTags": [],
-      "related": []
-    },
-    "matcher": {
-      "id": "matcher",
-      "name": "Matcher",
-      "symbol": "#matcher",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#matcher: Matches images to components",
-      "visualTags": [],
-      "related": []
-    },
     "App": {
       "id": "App",
       "name": "App",
@@ -3183,6 +3143,46 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
       "description": "Zustand store for UI theme (spectrum, focus, deep)",
+      "visualTags": [],
+      "related": []
+    },
+    "generator": {
+      "id": "generator",
+      "name": "Generator",
+      "symbol": "#generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#generator: Generates scan-index.json",
+      "visualTags": [],
+      "related": []
+    },
+    "component-scanner": {
+      "id": "component-scanner",
+      "name": "Component Scanner",
+      "symbol": "#component-scanner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#component-scanner: Scans for UI components",
+      "visualTags": [],
+      "related": []
+    },
+    "protocol-handler": {
+      "id": "protocol-handler",
+      "name": "Protocol Handler",
+      "symbol": "#protocol-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#protocol-handler: Handles probe protocol requests",
+      "visualTags": [],
+      "related": []
+    },
+    "matcher": {
+      "id": "matcher",
+      "name": "Matcher",
+      "symbol": "#matcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#matcher: Matches images to components",
       "visualTags": [],
       "related": []
     },
@@ -3372,6 +3372,26 @@
       "visualTags": [],
       "related": []
     },
+    "gate-schemas": {
+      "id": "gate-schemas",
+      "name": "Gate Schemas",
+      "symbol": "#gate-schemas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
+      "visualTags": [],
+      "related": []
+    },
+    "topology-checker": {
+      "id": "topology-checker",
+      "name": "Topology Checker",
+      "symbol": "#topology-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "#topology-checker: Checks for circular dependencies in gates",
+      "visualTags": [],
+      "related": []
+    },
     "evaluator": {
       "id": "evaluator",
       "name": "Evaluator",
@@ -3429,26 +3449,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "#gate-client: Low-level gate checking client",
-      "visualTags": [],
-      "related": []
-    },
-    "gate-schemas": {
-      "id": "gate-schemas",
-      "name": "Gate Schemas",
-      "symbol": "#gate-schemas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key",
-      "visualTags": [],
-      "related": []
-    },
-    "topology-checker": {
-      "id": "topology-checker",
-      "name": "Topology Checker",
-      "symbol": "#topology-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
-      "description": "#topology-checker: Checks for circular dependencies in gates",
       "visualTags": [],
       "related": []
     },
@@ -5353,15 +5353,6 @@
       "description": "!validation-failed: Portal validation found issues",
       "related": []
     },
-    "index-generated": {
-      "id": "index-generated",
-      "name": "Index Generated",
-      "symbol": "!index-generated",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "!index-generated: Scan index was generated",
-      "related": []
-    },
     "node-selected": {
       "id": "node-selected",
       "name": "Node Selected",
@@ -5396,6 +5387,15 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
       "description": "Symbol properties were edited and saved",
+      "related": []
+    },
+    "index-generated": {
+      "id": "index-generated",
+      "name": "Index Generated",
+      "symbol": "!index-generated",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "!index-generated: Scan index was generated",
       "related": []
     },
     "aggregation-complete": {
@@ -5510,6 +5510,2286 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #paradigm-hooks",
+      "related": [
+        "#paradigm-hooks"
+      ]
+    }
+  },
+  "aspects": {
+    "yaml-config-loading": {
+      "id": "yaml-config-loading",
+      "name": "Yaml Config Loading",
+      "symbol": "~yaml-config-loading",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "All config files (.purpose, portal.yaml, premise) parsed via js-yaml with consistent error handling",
+      "related": [
+        "#yaml-parser",
+        "#portal-core",
+        "#aggregator"
+      ]
+    },
+    "zod-validated": {
+      "id": "zod-validated",
+      "name": "Zod Validated",
+      "symbol": "~zod-validated",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Input validated through Zod schemas before processing — ensures type-safe parsing of all config files",
+      "related": [
+        "#zod-schemas",
+        "#symbol-parser",
+        "#aggregator"
+      ]
+    },
+    "symbol-typed-logging": {
+      "id": "symbol-typed-logging",
+      "name": "Symbol Typed Logging",
+      "symbol": "~symbol-typed-logging",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "All logging uses symbol-prefixed methods (component/gate/signal/flow/aspect) instead of raw console.log",
+      "related": [
+        "#paradigm-logger",
+        "#symbol-logger"
+      ]
+    },
+    "mcp-tool-handler": {
+      "id": "mcp-tool-handler",
+      "name": "Mcp Tool Handler",
+      "symbol": "~mcp-tool-handler",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "MCP tools follow a registration + dispatch pattern — tools declared in ListToolsRequest, dispatched in CallToolRequest",
+      "related": [
+        "#mcp-tools",
+        "#CoreTools",
+        "#WisdomTools",
+        "#HistoryTools"
+      ]
+    },
+    "ide-adapter-pattern": {
+      "id": "ide-adapter-pattern",
+      "name": "Ide Adapter Pattern",
+      "symbol": "~ide-adapter-pattern",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "IDE output generated via adapter interface — shared base class with per-IDE overrides for Cursor, Claude, Copilot, Windsurf",
+      "related": [
+        "#cursor-adapter",
+        "#claude-adapter",
+        "#copilot-adapter",
+        "#windsurf-adapter"
+      ]
+    },
+    "provider-cascade": {
+      "id": "provider-cascade",
+      "name": "Provider Cascade",
+      "symbol": "~provider-cascade",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Agent providers tried in priority order (claude → claude-code-teams → claude-code → cursor-cli → claude-cli → manual) with automatic fallback",
+      "related": [
+        "#provider-registry",
+        "#agent-spawner"
+      ]
+    },
+    "express-server": {
+      "id": "express-server",
+      "name": "Express Server",
+      "symbol": "~express-server",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "HTTP/WS servers follow Express middleware pattern with CORS, JSON parsing, and static file serving",
+      "related": [
+        "#SentinelServer",
+        "#portal-viewer"
+      ]
+    },
+    "budget-enforced": {
+      "id": "budget-enforced",
+      "name": "Budget Enforced",
+      "symbol": "~budget-enforced",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Token budgets checked before and during agent execution — prevents runaway costs in orchestration",
+      "related": [
+        "#budget-tracker",
+        "#orchestrator"
+      ]
+    },
+    "file-glob-discovery": {
+      "id": "file-glob-discovery",
+      "name": "File Glob Discovery",
+      "symbol": "~file-glob-discovery",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Config files (.purpose, portal.yaml) discovered via glob patterns with consistent ignore rules (node_modules, dist, .git)",
+      "related": [
+        "#aggregator",
+        "#portal-core"
+      ]
+    },
+    "correlation-tracked": {
+      "id": "correlation-tracked",
+      "name": "Correlation Tracked",
+      "symbol": "~correlation-tracked",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Requests traced via AsyncLocalStorage correlation IDs — propagated through async call chains without manual threading",
+      "related": [
+        "#paradigm-logger",
+        "#correlation-tracker"
+      ]
+    },
+    "global-persistence": {
+      "id": "global-persistence",
+      "name": "Global Persistence",
+      "symbol": "~global-persistence",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories",
+      "related": [
+        "#GlobalStore",
+        "#SessionTracker",
+        "#ContextTools",
+        "#WisdomLoader"
+      ]
+    },
+    "aspect-graph-derived-artifact": {
+      "id": "aspect-graph-derived-artifact",
+      "name": "Aspect Graph Derived Artifact",
+      "symbol": "~aspect-graph-derived-artifact",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "The SQLite aspect-graph.db is a derived build artifact rebuilt from scratch on every reindex — YAML .purpose files remain the authoritative source",
+      "related": [
+        "#AspectGraph",
+        "#ReindexTools"
+      ]
+    },
+    "three-tier-search": {
+      "id": "three-tier-search",
+      "name": "Three Tier Search",
+      "symbol": "~three-tier-search",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Aspect search uses three tiers in order — Tier 1 learned mappings, Tier 2 FTS5 full-text, Tier 3 Levenshtein fuzzy — first tier to return results wins",
+      "related": [
+        "#AspectSearch",
+        "#AspectGraphTools"
+      ]
+    },
+    "search-weight-learning": {
+      "id": "search-weight-learning",
+      "name": "Search Weight Learning",
+      "symbol": "~search-weight-learning",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.purpose",
+      "description": "Search results improve via confirm feedback — confirmed aspect gets +1.0, alternatives decay by *0.95 per query",
+      "related": [
+        "#AspectSearch",
+        "#AspectGraphTools"
+      ]
+    },
+    "symbolic-context-required": {
+      "id": "symbolic-context-required",
+      "name": "Symbolic Context Required",
+      "symbol": "~symbolic-context-required",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "All incidents MUST include at least one Paradigm symbol for triage to work",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "confidence-tracking": {
+      "id": "confidence-tracking",
+      "name": "Confidence Tracking",
+      "symbol": "~confidence-tracking",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "All pattern matches must update pattern confidence metrics",
+      "related": [
+        "#PatternMatcher",
+        "!pattern-confidence-updated"
+      ]
+    },
+    "schema-version-4": {
+      "id": "schema-version-4",
+      "name": "Schema Version 4",
+      "symbol": "~schema-version-4",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "SQLite schema is versioned at v4 with sequential migration support (v1->v2->v3->v4)",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "incident-id-format-inc-nnn": {
+      "id": "incident-id-format-inc-nnn",
+      "name": "Incident Id Format Inc Nnn",
+      "symbol": "~incident-id-format-inc-nnn",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Incident IDs use sequential format INC-NNN (zero-padded to 3 digits), derived from an in-memory counter",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "default-pattern-confidence-50": {
+      "id": "default-pattern-confidence-50",
+      "name": "Default Pattern Confidence 50",
+      "symbol": "~default-pattern-confidence-50",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "New patterns start with a default confidence score of 50, 0 matches, 0 resolved, 0 recurred",
+      "related": [
+        "#IncidentStorage",
+        "#PatternMatcher"
+      ]
+    },
+    "confidence-score-adjustment-rules": {
+      "id": "confidence-score-adjustment-rules",
+      "name": "Confidence Score Adjustment Rules",
+      "symbol": "~confidence-score-adjustment-rules",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Confidence score adjusts +2 on resolution (max 100), -5 on recurrence (min 10)",
+      "related": [
+        "#IncidentStorage",
+        "#PatternMatcher"
+      ]
+    },
+    "sqlite-write-after-mutation": {
+      "id": "sqlite-write-after-mutation",
+      "name": "Sqlite Write After Mutation",
+      "symbol": "~sqlite-write-after-mutation",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Every mutation (insert, update, delete) calls save() to persist the in-memory SQLite database to disk",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "db-path-env-resolution": {
+      "id": "db-path-env-resolution",
+      "name": "Db Path Env Resolution",
+      "symbol": "~db-path-env-resolution",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Database path resolved via SENTINEL_DATA_DIR, then PARADIGM_DATA_DIR, then .paradigm/sentinel/sentinel.db",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "log-pruning-oldest-first": {
+      "id": "log-pruning-oldest-first",
+      "name": "Log Pruning Oldest First",
+      "symbol": "~log-pruning-oldest-first",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Log pruning deletes oldest entries first (ORDER BY timestamp ASC) when count exceeds maxLogs",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "app-state-latest-wins": {
+      "id": "app-state-latest-wins",
+      "name": "App State Latest Wins",
+      "symbol": "~app-state-latest-wins",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "App state uses UPSERT (latest-wins) per service+session composite key",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "bidirectional-incident-linking": {
+      "id": "bidirectional-incident-linking",
+      "name": "Bidirectional Incident Linking",
+      "symbol": "~bidirectional-incident-linking",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Linking incidents creates references in both directions automatically",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "match-score-cap-100": {
+      "id": "match-score-cap-100",
+      "name": "Match Score Cap 100",
+      "symbol": "~match-score-cap-100",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Pattern match scores are capped at 100 with weighted categories — symbols max 50, error text max 25, missing signals max 25",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "min-match-score-30": {
+      "id": "min-match-score-30",
+      "name": "Min Match Score 30",
+      "symbol": "~min-match-score-30",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Default minimum match score threshold is 30; matches below this are discarded",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "max-match-results-5": {
+      "id": "max-match-results-5",
+      "name": "Max Match Results 5",
+      "symbol": "~max-match-results-5",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Pattern matcher returns at most 5 results by default, sorted by confidence descending",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "confidence-boost-formula": {
+      "id": "confidence-boost-formula",
+      "name": "Confidence Boost Formula",
+      "symbol": "~confidence-boost-formula",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "When boostConfidence is enabled, final confidence = score * (0.5 + 0.5 * patternConfidence/100)",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "wildcard-symbol-matching": {
+      "id": "wildcard-symbol-matching",
+      "name": "Wildcard Symbol Matching",
+      "symbol": "~wildcard-symbol-matching",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Symbol matching supports wildcards — prefix (foo*), suffix (*bar), interior (foo*bar), and universal (*)",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "symbol-score-exact-10-wildcard-5-array-7": {
+      "id": "symbol-score-exact-10-wildcard-5-array-7",
+      "name": "Symbol Score Exact 10 Wildcard 5 Array 7",
+      "symbol": "~symbol-score-exact-10-wildcard-5-array-7",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Symbol matching scoring — exact match = 10pts, wildcard match = 5pts, array-any match = 7pts",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "environment-filter-precheck": {
+      "id": "environment-filter-precheck",
+      "name": "Environment Filter Precheck",
+      "symbol": "~environment-filter-precheck",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Patterns with environment filters are skipped before scoring if incident environment does not match",
+      "related": [
+        "#PatternMatcher"
+      ]
+    },
+    "similarity-threshold-0-6": {
+      "id": "similarity-threshold-0-6",
+      "name": "Similarity Threshold 0 6",
+      "symbol": "~similarity-threshold-0-6",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Default similarity threshold for incident grouping is 0.6 (60%)",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "time-decay-half-life-14d": {
+      "id": "time-decay-half-life-14d",
+      "name": "Time Decay Half Life 14d",
+      "symbol": "~time-decay-half-life-14d",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Time-decay half-life for similarity scoring is 14 days — older incidents contribute exponentially less",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "similarity-weights-with-stack": {
+      "id": "similarity-weights-with-stack",
+      "name": "Similarity Weights With Stack",
+      "symbol": "~similarity-weights-with-stack",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Similarity weights vary by stack availability — with stacks (symbol 0.45, error 0.25, env 0.1, stack 0.2), without stacks (symbol 0.6, error 0.3, env 0.1)",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "stack-fingerprint-top-10-frames": {
+      "id": "stack-fingerprint-top-10-frames",
+      "name": "Stack Fingerprint Top 10 Frames",
+      "symbol": "~stack-fingerprint-top-10-frames",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Stack trace fingerprinting normalizes and compares only the top 10 frames, stripping line numbers, column numbers, and absolute paths",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "group-join-threshold-50pct": {
+      "id": "group-join-threshold-50pct",
+      "name": "Group Join Threshold 50pct",
+      "symbol": "~group-join-threshold-50pct",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "An incident joins an existing group if it matches >= 50% of common symbols OR any common error pattern",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "common-error-pattern-60pct-majority": {
+      "id": "common-error-pattern-60pct-majority",
+      "name": "Common Error Pattern 60pct Majority",
+      "symbol": "~common-error-pattern-60pct-majority",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Error words appearing in >= 60% of grouped incidents are extracted as common patterns (max 5 words)",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "auto-group-min-size-3": {
+      "id": "auto-group-min-size-3",
+      "name": "Auto Group Min Size 3",
+      "symbol": "~auto-group-min-size-3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Automatic grouping (analyzeAndGroup) requires a minimum cluster size of 3 incidents by default",
+      "related": [
+        "#IncidentGrouper"
+      ]
+    },
+    "pattern-candidate-min-occurrences-3": {
+      "id": "pattern-candidate-min-occurrences-3",
+      "name": "Pattern Candidate Min Occurrences 3",
+      "symbol": "~pattern-candidate-min-occurrences-3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Pattern candidate discovery requires at least 3 resolved incidents with the same symbol signature",
+      "related": [
+        "#PatternSuggester"
+      ]
+    },
+    "priority-from-count-thresholds": {
+      "id": "priority-from-count-thresholds",
+      "name": "Priority From Count Thresholds",
+      "symbol": "~priority-from-count-thresholds",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Auto-suggested pattern priority is derived from occurrence count — >=20 critical, >=10 high, >=5 medium, else low",
+      "related": [
+        "#PatternSuggester"
+      ]
+    },
+    "strategy-inference-keyword-heuristics": {
+      "id": "strategy-inference-keyword-heuristics",
+      "name": "Strategy Inference Keyword Heuristics",
+      "symbol": "~strategy-inference-keyword-heuristics",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Resolution strategy is inferred from error message keywords using ordered heuristic rules (rollback, config-change, scale-up, retry, fallback, fix-data, escalate, investigate, fix-code)",
+      "related": [
+        "#PatternSuggester"
+      ]
+    },
+    "duplicate-pattern-guard-2-symbol-match": {
+      "id": "duplicate-pattern-guard-2-symbol-match",
+      "name": "Duplicate Pattern Guard 2 Symbol Match",
+      "symbol": "~duplicate-pattern-guard-2-symbol-match",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Pattern suggestion is skipped if an existing pattern already matches >= 2 symbols of the candidate incident",
+      "related": [
+        "#PatternSuggester"
+      ]
+    },
+    "server-default-port-3838": {
+      "id": "server-default-port-3838",
+      "name": "Server Default Port 3838",
+      "symbol": "~server-default-port-3838",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Sentinel server defaults to port 3838",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "json-body-limit-5mb": {
+      "id": "json-body-limit-5mb",
+      "name": "Json Body Limit 5mb",
+      "symbol": "~json-body-limit-5mb",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Express JSON body parser is configured with a 5MB limit",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "cors-configurable-default-wildcard": {
+      "id": "cors-configurable-default-wildcard",
+      "name": "Cors Configurable Default Wildcard",
+      "symbol": "~cors-configurable-default-wildcard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "CORS origin is configurable via serverConfig.cors, defaulting to '*' (allow all)",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "ws-max-subscribers-256": {
+      "id": "ws-max-subscribers-256",
+      "name": "Ws Max Subscribers 256",
+      "symbol": "~ws-max-subscribers-256",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "WebSocket server enforces a maximum of 256 concurrent subscribers (configurable), rejecting excess with close code 1013",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "ws-jsonrpc-protocol": {
+      "id": "ws-jsonrpc-protocol",
+      "name": "Ws Jsonrpc Protocol",
+      "symbol": "~ws-jsonrpc-protocol",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "WebSocket messages follow JSON-RPC 2.0 style with methods ping, subscribe, query_logs",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "error-log-auto-promote-to-incident": {
+      "id": "error-log-auto-promote-to-incident",
+      "name": "Error Log Auto Promote To Incident",
+      "symbol": "~error-log-auto-promote-to-incident",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Log entries with level 'error' are automatically promoted to incidents in the incident storage",
+      "related": [
+        "#SentinelServer",
+        "#IncidentStorage"
+      ]
+    },
+    "log-prune-interval-100-inserts": {
+      "id": "log-prune-interval-100-inserts",
+      "name": "Log Prune Interval 100 Inserts",
+      "symbol": "~log-prune-interval-100-inserts",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Log pruning runs every 100 inserts (configurable via pruneIntervalInserts) when maxLogs > 0",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "max-batch-size-500": {
+      "id": "max-batch-size-500",
+      "name": "Max Batch Size 500",
+      "symbol": "~max-batch-size-500",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Server rejects batches exceeding maxBatchSize (default 500 entries) with HTTP 413",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "max-logs-default-10000": {
+      "id": "max-logs-default-10000",
+      "name": "Max Logs Default 10000",
+      "symbol": "~max-logs-default-10000",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Maximum stored log entries defaults to 10000; oldest entries pruned first when exceeded",
+      "related": [
+        "#SentinelServer",
+        "#IncidentStorage"
+      ]
+    },
+    "auth-permission-hierarchy": {
+      "id": "auth-permission-hierarchy",
+      "name": "Auth Permission Hierarchy",
+      "symbol": "~auth-permission-hierarchy",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Auth permissions follow a numeric hierarchy — read=1, write=2, admin=3; a token with higher permission satisfies lower requirements",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "auth-disabled-passthrough": {
+      "id": "auth-disabled-passthrough",
+      "name": "Auth Disabled Passthrough",
+      "symbol": "~auth-disabled-passthrough",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "When auth.enabled is false, all requests pass through without authentication checks",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "auth-token-expiry-check": {
+      "id": "auth-token-expiry-check",
+      "name": "Auth Token Expiry Check",
+      "symbol": "~auth-token-expiry-check",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Auth tokens are checked for expiry; expired tokens receive HTTP 401",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "rate-limit-sliding-window-60s": {
+      "id": "rate-limit-sliding-window-60s",
+      "name": "Rate Limit Sliding Window 60s",
+      "symbol": "~rate-limit-sliding-window-60s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Rate limiting uses in-memory sliding window counters with a 60-second window",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "rate-limit-global-600rpm": {
+      "id": "rate-limit-global-600rpm",
+      "name": "Rate Limit Global 600rpm",
+      "symbol": "~rate-limit-global-600rpm",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Global rate limit defaults to 600 requests per minute",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "rate-limit-sampling-drop": {
+      "id": "rate-limit-sampling-drop",
+      "name": "Rate Limit Sampling Drop",
+      "symbol": "~rate-limit-sampling-drop",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "When samplingRate < 1.0, requests are randomly dropped (HTTP 200 with sampled=true) before rate counting",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "client-default-url-localhost-3838": {
+      "id": "client-default-url-localhost-3838",
+      "name": "Client Default Url Localhost 3838",
+      "symbol": "~client-default-url-localhost-3838",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client SDK defaults to http://localhost:3838 as the Sentinel server URL",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-batch-size-50": {
+      "id": "client-batch-size-50",
+      "name": "Client Batch Size 50",
+      "symbol": "~client-batch-size-50",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client auto-flushes when log or metric buffer reaches 50 entries (configurable)",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-flush-interval-5s": {
+      "id": "client-flush-interval-5s",
+      "name": "Client Flush Interval 5s",
+      "symbol": "~client-flush-interval-5s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client runs periodic flush every 5000ms (configurable), timer is unref'd to not block Node.js shutdown",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-ring-buffer-max-1000": {
+      "id": "client-ring-buffer-max-1000",
+      "name": "Client Ring Buffer Max 1000",
+      "symbol": "~client-ring-buffer-max-1000",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client ring buffer holds max 1000 entries (configurable); overflow drops oldest 10% and calls onDrop callback",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-retry-exponential-backoff-3": {
+      "id": "client-retry-exponential-backoff-3",
+      "name": "Client Retry Exponential Backoff 3",
+      "symbol": "~client-retry-exponential-backoff-3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client retries network errors and 5xx responses up to 3 times with exponential backoff (base 1000ms) plus 0-25% jitter; 4xx errors are never retried",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-graceful-degradation": {
+      "id": "client-graceful-degradation",
+      "name": "Client Graceful Degradation",
+      "symbol": "~client-graceful-degradation",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client degrades gracefully — if fetch is unavailable, returns undefined; registration is fire-and-forget; close swallows errors",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-browser-beforeunload-flush": {
+      "id": "client-browser-beforeunload-flush",
+      "name": "Client Browser Beforeunload Flush",
+      "symbol": "~client-browser-beforeunload-flush",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Client registers a beforeunload handler in browser environments to flush buffered entries using sendBeacon before page unload",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "client-failed-send-restore-to-buffer": {
+      "id": "client-failed-send-restore-to-buffer",
+      "name": "Client Failed Send Restore To Buffer",
+      "symbol": "~client-failed-send-restore-to-buffer",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "On send failure, unsent log/metric entries are restored to the front of the buffer (up to maxBufferSize), excess entries trigger onDrop",
+      "related": [
+        "#SentinelClient"
+      ]
+    },
+    "config-resolution-order": {
+      "id": "config-resolution-order",
+      "name": "Config Resolution Order",
+      "symbol": "~config-resolution-order",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Server config resolution order — env vars override local .sentinel.yaml which overrides global ~/.paradigm/sentinel.yaml which overrides defaults",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "symbol-prefix-type-inference": {
+      "id": "symbol-prefix-type-inference",
+      "name": "Symbol Prefix Type Inference",
+      "symbol": "~symbol-prefix-type-inference",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Symbol type is inferred from prefix —",
+      "related": [
+        "#SentinelServer",
+        "#IncidentStorage"
+      ]
+    },
+    "symbol-validation-fuzzy-suggestion": {
+      "id": "symbol-validation-fuzzy-suggestion",
+      "name": "Symbol Validation Fuzzy Suggestion",
+      "symbol": "~symbol-validation-fuzzy-suggestion",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Unknown symbols receive fuzzy match suggestions using shared prefix length scoring with a > 0.5 threshold",
+      "related": [
+        "#SentinelServer"
+      ]
+    },
+    "trace-query-limit-max-20": {
+      "id": "trace-query-limit-max-20",
+      "name": "Trace Query Limit Max 20",
+      "symbol": "~trace-query-limit-max-20",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "Trace queries are hard-capped at 20 results regardless of requested limit",
+      "related": [
+        "#IncidentStorage"
+      ]
+    },
+    "v1-symbol-fields-deprecated": {
+      "id": "v1-symbol-fields-deprecated",
+      "name": "V1 Symbol Fields Deprecated",
+      "symbol": "~v1-symbol-fields-deprecated",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "SymbolicContext fields feature, state, and integration are deprecated in v2; component with tags should be used instead",
+      "related": [
+        "#PatternMatcher",
+        "#IncidentGrouper"
+      ]
+    },
+    "resolution-strategy-10-options": {
+      "id": "resolution-strategy-10-options",
+      "name": "Resolution Strategy 10 Options",
+      "symbol": "~resolution-strategy-10-options",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
+      "description": "ResolutionStrategy is a closed union of 10 values — retry, fallback, fix-data, fix-code, rollback, config-change, scale-up, investigate, ignore, escalate",
+      "related": [
+        "#PatternSuggester"
+      ]
+    },
+    "rust-batch-size-default-50": {
+      "id": "rust-batch-size-default-50",
+      "name": "Rust Batch Size Default 50",
+      "symbol": "~rust-batch-size-default-50",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust client defaults to batch size of 50 entries before auto-flushing, matching the TypeScript client default",
+      "related": [
+        "#SentinelRustClient",
+        "#SentinelClientBuilder"
+      ]
+    },
+    "rust-default-url-localhost-3838": {
+      "id": "rust-default-url-localhost-3838",
+      "name": "Rust Default Url Localhost 3838",
+      "symbol": "~rust-default-url-localhost-3838",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust client defaults to http://localhost:3838, consistent with the TypeScript client",
+      "related": [
+        "#SentinelClientBuilder"
+      ]
+    },
+    "tracing-level-mapping": {
+      "id": "tracing-level-mapping",
+      "name": "Tracing Level Mapping",
+      "symbol": "~tracing-level-mapping",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust tracing levels map to Sentinel levels — TRACE and DEBUG both map to debug, INFO to info, WARN to warn, ERROR to error",
+      "related": [
+        "#SentinelTracingLayer"
+      ]
+    },
+    "module-path-to-symbol-conversion": {
+      "id": "module-path-to-symbol-conversion",
+      "name": "Module Path To Symbol Conversion",
+      "symbol": "~module-path-to-symbol-conversion",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust module paths are converted to Paradigm symbols by stripping the crate root, replacing underscores with dashes, joining with dashes, and prefixing with",
+      "related": [
+        "#SentinelTracingLayer"
+      ]
+    },
+    "tracing-event-symbol-field-override": {
+      "id": "tracing-event-symbol-field-override",
+      "name": "Tracing Event Symbol Field Override",
+      "symbol": "~tracing-event-symbol-field-override",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "If a tracing event includes an explicit 'symbol' field, it overrides the auto-inferred module-path symbol",
+      "related": [
+        "#SentinelTracingLayer"
+      ]
+    },
+    "tracing-async-fire-and-forget": {
+      "id": "tracing-async-fire-and-forget",
+      "name": "Tracing Async Fire And Forget",
+      "symbol": "~tracing-async-fire-and-forget",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Tracing layer forwards events via tokio::spawn (fire-and-forget); failures do not block the instrumented code",
+      "related": [
+        "#SentinelTracingLayer"
+      ]
+    },
+    "rust-buffer-drain-before-send": {
+      "id": "rust-buffer-drain-before-send",
+      "name": "Rust Buffer Drain Before Send",
+      "symbol": "~rust-buffer-drain-before-send",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust client drains buffers via mem::take before sending, allowing new entries to accumulate during the network request",
+      "related": [
+        "#SentinelRustClient"
+      ]
+    },
+    "rust-serde-camel-case-serialization": {
+      "id": "rust-serde-camel-case-serialization",
+      "name": "Rust Serde Camel Case Serialization",
+      "symbol": "~rust-serde-camel-case-serialization",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
+      "description": "Rust types use serde rename_all = camelCase to match the TypeScript/JSON API contract, with skip_serializing_if for Optional fields",
+      "related": [
+        "#SentinelRustClient"
+      ]
+    },
+    "~plsat-pass-threshold-80pct": {
+      "id": "~plsat-pass-threshold-80pct",
+      "name": "~plsat Pass Threshold 80pct",
+      "symbol": "~~plsat-pass-threshold-80pct",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "PLSAT pass threshold is 0.8 (80%); defined in content JSON and read by the server at runtime",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~plsat-fisher-yates-shuffle": {
+      "id": "~plsat-fisher-yates-shuffle",
+      "name": "~plsat Fisher Yates Shuffle",
+      "symbol": "~~plsat-fisher-yates-shuffle",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "v3.0 exam blocks are shuffled using Fisher-Yates algorithm; passage groups move as a unit to keep related questions together",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~plsat-v3-variant-resolution": {
+      "id": "~plsat-v3-variant-resolution",
+      "name": "~plsat V3 Variant Resolution",
+      "symbol": "~~plsat-v3-variant-resolution",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "v3.0 items have multiple variants per slot; server picks one random variant per slot so each exam attempt is unique while covering the same topics",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~university-cors-wildcard": {
+      "id": "~university-cors-wildcard",
+      "name": "~university Cors Wildcard",
+      "symbol": "~~university-cors-wildcard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "University server sets Access-Control-Allow-Origin: * for development cross-origin API access",
+      "related": [
+        "#university-server"
+      ]
+    },
+    "token-tracking": {
+      "id": "token-tracking",
+      "name": "Token Tracking",
+      "symbol": "~token-tracking",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "All tool responses must track token usage for context management",
+      "related": [
+        "#CoreTools",
+        "#WisdomTools",
+        "#HistoryTools",
+        "#NavigateTools",
+        "#ContextTools",
+        "#SentinelTools",
+        "#TagsTools",
+        "#ReindexTools"
+      ]
+    },
+    "v2-symbol-types": {
+      "id": "v2-symbol-types",
+      "name": "V2 Symbol Types",
+      "symbol": "~v2-symbol-types",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "All symbol type enums use v2 types only",
+      "related": [
+        "#CoreTools"
+      ]
+    },
+    "tool-cache-ttl-30s": {
+      "id": "tool-cache-ttl-30s",
+      "name": "Tool Cache Ttl 30s",
+      "symbol": "~tool-cache-ttl-30s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Shared ToolCache singleton uses a 30-second TTL for all cached MCP tool results",
+      "related": [
+        "#ToolCache",
+        "#CoreTools",
+        "#NavigateTools"
+      ]
+    },
+    "tool-cache-clear-on-reindex": {
+      "id": "tool-cache-clear-on-reindex",
+      "name": "Tool Cache Clear On Reindex",
+      "symbol": "~tool-cache-clear-on-reindex",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "The tool cache is fully cleared after every successful reindex to prevent stale data",
+      "related": [
+        "#ReindexTools",
+        "#ToolCache"
+      ]
+    },
+    "index-cache-ttl-30s": {
+      "id": "index-cache-ttl-30s",
+      "name": "Index Cache Ttl 30s",
+      "symbol": "~index-cache-ttl-30s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "ProjectContext index cache uses a 30-second TTL before considering re-aggregation",
+      "related": [
+        "#IndexLoader"
+      ]
+    },
+    "wisdom-cache-ttl-30s": {
+      "id": "wisdom-cache-ttl-30s",
+      "name": "Wisdom Cache Ttl 30s",
+      "symbol": "~wisdom-cache-ttl-30s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Wisdom context cache uses a 30-second TTL with invalidation on write",
+      "related": [
+        "#WisdomLoader"
+      ]
+    },
+    "flow-cache-ttl-30s": {
+      "id": "flow-cache-ttl-30s",
+      "name": "Flow Cache Ttl 30s",
+      "symbol": "~flow-cache-ttl-30s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Flow index cache uses a 30-second TTL matching other caches",
+      "related": [
+        "#CoreTools"
+      ]
+    },
+    "fixtures-cache-ttl-60s": {
+      "id": "fixtures-cache-ttl-60s",
+      "name": "Fixtures Cache Ttl 60s",
+      "symbol": "~fixtures-cache-ttl-60s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Fixtures cache uses a 60-second TTL (longer than other caches because fixtures change less frequently)",
+      "related": []
+    },
+    "max-breadcrumbs-50": {
+      "id": "max-breadcrumbs-50",
+      "name": "Max Breadcrumbs 50",
+      "symbol": "~max-breadcrumbs-50",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Session breadcrumb history is capped at 50 entries (FIFO eviction)",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "checkpoint-max-age-7d": {
+      "id": "checkpoint-max-age-7d",
+      "name": "Checkpoint Max Age 7d",
+      "symbol": "~checkpoint-max-age-7d",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Session checkpoints older than 7 days are discarded on load",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "default-model-sonnet": {
+      "id": "default-model-sonnet",
+      "name": "Default Model Sonnet",
+      "symbol": "~default-model-sonnet",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Session tracker defaults to claude-sonnet-4 for cost calculations",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "token-estimation-3.5-chars": {
+      "id": "token-estimation-3.5-chars",
+      "name": "Token Estimation 3.5 Chars",
+      "symbol": "~token-estimation-3.5-chars",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Token count is estimated at 1 token per 3.5 characters (ceil division)",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "model-pricing-table": {
+      "id": "model-pricing-table",
+      "name": "Model Pricing Table",
+      "symbol": "~model-pricing-table",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Three Claude models with fixed per-1M-token pricing for cost estimation",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "handoff-threshold-levels": {
+      "id": "handoff-threshold-levels",
+      "name": "Handoff Threshold Levels",
+      "symbol": "~handoff-threshold-levels",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Four handoff recommendation thresholds at 50%, 70%, 85%, and below 50%",
+      "related": [
+        "#SessionTracker",
+        "#ContextTools"
+      ]
+    },
+    "handoff-signal-thresholds": {
+      "id": "handoff-signal-thresholds",
+      "name": "Handoff Signal Thresholds",
+      "symbol": "~handoff-signal-thresholds",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Additional handoff signals fire at 50 calls, 30 min duration, and 500KB data volume",
+      "related": [
+        "#SessionTracker"
+      ]
+    },
+    "auto-recovery-once-per-session": {
+      "id": "auto-recovery-once-per-session",
+      "name": "Auto Recovery Once Per Session",
+      "symbol": "~auto-recovery-once-per-session",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Auto-recovery fires only once per MCP session to avoid duplicate preambles",
+      "related": [
+        "#SessionTracker",
+        "#ToolHandlers"
+      ]
+    },
+    "context-window-default-200k": {
+      "id": "context-window-default-200k",
+      "name": "Context Window Default 200k",
+      "symbol": "~context-window-default-200k",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Default context window size for handoff calculations is 200,000 tokens",
+      "related": [
+        "#SessionTracker",
+        "#ContextTools"
+      ]
+    },
+    "project-hash-sha256-12char": {
+      "id": "project-hash-sha256-12char",
+      "name": "Project Hash Sha256 12char",
+      "symbol": "~project-hash-sha256-12char",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Project identity uses a 12-character truncated SHA-256 hash of the absolute root path",
+      "related": [
+        "#GlobalStore"
+      ]
+    },
+    "handoff-oldest-first-delivery": {
+      "id": "handoff-oldest-first-delivery",
+      "name": "Handoff Oldest First Delivery",
+      "symbol": "~handoff-oldest-first-delivery",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Pending handoffs are delivered in chronological order (oldest first)",
+      "related": [
+        "#GlobalStore"
+      ]
+    },
+    "wisdom-local-wins-on-conflict": {
+      "id": "wisdom-local-wins-on-conflict",
+      "name": "Wisdom Local Wins On Conflict",
+      "symbol": "~wisdom-local-wins-on-conflict",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "When merging global and local wisdom, local (project) entries win on duplicate ID",
+      "related": [
+        "#WisdomLoader"
+      ]
+    },
+    "ripple-bfs-max-depth-5": {
+      "id": "ripple-bfs-max-depth-5",
+      "name": "Ripple Bfs Max Depth 5",
+      "symbol": "~ripple-bfs-max-depth-5",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Recursive ripple traversal has a maximum depth of 5 hops and minimum weight of 0.1",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "ripple-bfs-queue-limit-1000": {
+      "id": "ripple-bfs-queue-limit-1000",
+      "name": "Ripple Bfs Queue Limit 1000",
+      "symbol": "~ripple-bfs-queue-limit-1000",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "BFS ripple traversal is bounded to 1000 results to prevent unbounded expansion",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "inferred-edge-weight-0.5": {
+      "id": "inferred-edge-weight-0.5",
+      "name": "Inferred Edge Weight 0.5",
+      "symbol": "~inferred-edge-weight-0.5",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Edges inferred from appliesTo references have weight 0.5 (half of explicit edges)",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "index-reference-weight-0.5": {
+      "id": "index-reference-weight-0.5",
+      "name": "Index Reference Weight 0.5",
+      "symbol": "~index-reference-weight-0.5",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Symbol index references (references/referencedBy) use implicit weight 0.5 during ripple traversal",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "aspect-category-inference": {
+      "id": "aspect-category-inference",
+      "name": "Aspect Category Inference",
+      "symbol": "~aspect-category-inference",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect category is inferred from description keywords when not explicitly set",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "aspect-severity-inference": {
+      "id": "aspect-severity-inference",
+      "name": "Aspect Severity Inference",
+      "symbol": "~aspect-severity-inference",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect severity is inferred from tags when not explicitly set (security/compliance tags => high)",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "drift-detection-sha256": {
+      "id": "drift-detection-sha256",
+      "name": "Drift Detection Sha256",
+      "symbol": "~drift-detection-sha256",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Anchor drift is detected by comparing SHA-256 hashes of file content at anchor line ranges",
+      "related": [
+        "#AspectGraph"
+      ]
+    },
+    "fts5-graceful-degradation": {
+      "id": "fts5-graceful-degradation",
+      "name": "Fts5 Graceful Degradation",
+      "symbol": "~fts5-graceful-degradation",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "FTS5 full-text search is optional — the system degrades gracefully if sql.js lacks FTS5 support",
+      "related": [
+        "#AspectGraph",
+        "#AspectSearch"
+      ]
+    },
+    "search-decay-factor-0.95": {
+      "id": "search-decay-factor-0.95",
+      "name": "Search Decay Factor 0.95",
+      "symbol": "~search-decay-factor-0.95",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Non-selected search mappings decay by factor 0.95 on each confirmation",
+      "related": [
+        "#AspectSearch"
+      ]
+    },
+    "search-fuzzy-threshold-0.3": {
+      "id": "search-fuzzy-threshold-0.3",
+      "name": "Search Fuzzy Threshold 0.3",
+      "symbol": "~search-fuzzy-threshold-0.3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Tier-3 fuzzy search results require a minimum score of 0.3 to be included",
+      "related": [
+        "#AspectSearch"
+      ]
+    },
+    "search-default-limit-10": {
+      "id": "search-default-limit-10",
+      "name": "Search Default Limit 10",
+      "symbol": "~search-default-limit-10",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect search returns at most 10 results by default",
+      "related": [
+        "#AspectSearch"
+      ]
+    },
+    "search-three-tier-fallthrough": {
+      "id": "search-three-tier-fallthrough",
+      "name": "Search Three Tier Fallthrough",
+      "symbol": "~search-three-tier-fallthrough",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Search uses a three-tier strategy — learned mappings, then FTS5, then fuzzy — stopping at the first tier with results",
+      "related": [
+        "#AspectSearch"
+      ]
+    },
+    "search-query-normalization": {
+      "id": "search-query-normalization",
+      "name": "Search Query Normalization",
+      "symbol": "~search-query-normalization",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Search queries are normalized by lowercasing, removing stop words, and sorting tokens alphabetically",
+      "related": [
+        "#AspectSearch"
+      ]
+    },
+    "suggest-skip-test-files": {
+      "id": "suggest-skip-test-files",
+      "name": "Suggest Skip Test Files",
+      "symbol": "~suggest-skip-test-files",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect auto-suggestion skips test files entirely (7 path segment patterns + filename patterns)",
+      "related": [
+        "#AspectSuggest"
+      ]
+    },
+    "suggest-8-pattern-detectors": {
+      "id": "suggest-8-pattern-detectors",
+      "name": "Suggest 8 Pattern Detectors",
+      "symbol": "~suggest-8-pattern-detectors",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect suggestion uses 8 ordered regex pattern detectors with confidence-based priority",
+      "related": [
+        "#AspectSuggest"
+      ]
+    },
+    "lore-inferred-edge-weight-0.3": {
+      "id": "lore-inferred-edge-weight-0.3",
+      "name": "Lore Inferred Edge Weight 0.3",
+      "symbol": "~lore-inferred-edge-weight-0.3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Edges inferred from shared lore entries use weight 0.3 and origin 'learned'",
+      "related": [
+        "#AspectLoreBridge"
+      ]
+    },
+    "lore-link-materialization-idempotent": {
+      "id": "lore-link-materialization-idempotent",
+      "name": "Lore Link Materialization Idempotent",
+      "symbol": "~lore-link-materialization-idempotent",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Lore link materialization is idempotent — clears all existing links before rebuilding",
+      "related": [
+        "#AspectLoreBridge"
+      ]
+    },
+    "agent-default-model-assignments": {
+      "id": "agent-default-model-assignments",
+      "name": "Agent Default Model Assignments",
+      "symbol": "~agent-default-model-assignments",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Default model assignments — architect/security=opus, reviewer=sonnet, builder/tester=haiku",
+      "related": [
+        "#OrchestrationTools"
+      ]
+    },
+    "agent-token-estimates": {
+      "id": "agent-token-estimates",
+      "name": "Agent Token Estimates",
+      "symbol": "~agent-token-estimates",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Per-agent token usage estimates for cost preview (builder is the largest at 10K-50K)",
+      "related": [
+        "#OrchestrationTools"
+      ]
+    },
+    "orchestration-cost-pricing": {
+      "id": "orchestration-cost-pricing",
+      "name": "Orchestration Cost Pricing",
+      "symbol": "~orchestration-cost-pricing",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Orchestration cost preview uses its own pricing table (opus $15/$75, sonnet $3/$15, haiku $0.25/$1.25)",
+      "related": [
+        "#OrchestrationTools"
+      ]
+    },
+    "builder-fresh-context-principle": {
+      "id": "builder-fresh-context-principle",
+      "name": "Builder Fresh Context Principle",
+      "symbol": "~builder-fresh-context-principle",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Builder agents must never carry assumptions from previous tasks — each runs in a clean context",
+      "related": [
+        "#OrchestrationTools"
+      ]
+    },
+    "reviewer-two-stage-protocol": {
+      "id": "reviewer-two-stage-protocol",
+      "name": "Reviewer Two Stage Protocol",
+      "symbol": "~reviewer-two-stage-protocol",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Reviewer must pass spec compliance (stage 1) before code quality review (stage 2) with minimum 3 findings",
+      "related": [
+        "#OrchestrationTools"
+      ]
+    },
+    "tool-dispatch-prefix-routing": {
+      "id": "tool-dispatch-prefix-routing",
+      "name": "Tool Dispatch Prefix Routing",
+      "symbol": "~tool-dispatch-prefix-routing",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Tool dispatch uses name prefix matching — each tool family is routed by its paradigm_ prefix",
+      "related": [
+        "#ToolHandlers"
+      ]
+    },
+    "context-tools-skip-tracking": {
+      "id": "context-tools-skip-tracking",
+      "name": "Context Tools Skip Tracking",
+      "symbol": "~context-tools-skip-tracking",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Context tools (paradigm_context_*, paradigm_session_*) do not call trackToolCall to avoid infinite recursion",
+      "related": [
+        "#ToolHandlers",
+        "#ContextTools"
+      ]
+    },
+    "recovery-preamble-first-response": {
+      "id": "recovery-preamble-first-response",
+      "name": "Recovery Preamble First Response",
+      "symbol": "~recovery-preamble-first-response",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Recovery preamble and plugin update notice are prepended to the first tool response only",
+      "related": [
+        "#ToolHandlers"
+      ]
+    },
+    "fuzzy-search-max-distance-3": {
+      "id": "fuzzy-search-max-distance-3",
+      "name": "Fuzzy Search Max Distance 3",
+      "symbol": "~fuzzy-search-max-distance-3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Fuzzy symbol search uses a maximum Levenshtein distance of 3 and returns at most 5 results",
+      "related": [
+        "#CoreTools"
+      ]
+    },
+    "route-similarity-threshold-0.6": {
+      "id": "route-similarity-threshold-0.6",
+      "name": "Route Similarity Threshold 0.6",
+      "symbol": "~route-similarity-threshold-0.6",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Gate suggestions require a minimum route similarity score of 0.6 to match portal.yaml patterns",
+      "related": [
+        "#CoreTools"
+      ]
+    },
+    "ripple-depth-clamp-1-to-5": {
+      "id": "ripple-depth-clamp-1-to-5",
+      "name": "Ripple Depth Clamp 1 To 5",
+      "symbol": "~ripple-depth-clamp-1-to-5",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Ripple analysis depth is clamped to the range 1-5 (user cannot request depth 0 or >5)",
+      "related": [
+        "#CoreTools"
+      ]
+    },
+    "reindex-5-stage-pipeline": {
+      "id": "reindex-5-stage-pipeline",
+      "name": "Reindex 5 Stage Pipeline",
+      "symbol": "~reindex-5-stage-pipeline",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Reindex rebuilds 5 artifacts in order — scan-index.json, navigator.yaml, flow-index.json, aspect-graph.db, and lore links",
+      "related": [
+        "#ReindexTools"
+      ]
+    },
+    "aspect-graph-build-non-fatal": {
+      "id": "aspect-graph-build-non-fatal",
+      "name": "Aspect Graph Build Non Fatal",
+      "symbol": "~aspect-graph-build-non-fatal",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Aspect graph build failure during reindex is non-fatal — it is caught and silently skipped",
+      "related": [
+        "#ReindexTools",
+        "#AspectGraph"
+      ]
+    },
+    "stdio-transport-only": {
+      "id": "stdio-transport-only",
+      "name": "Stdio Transport Only",
+      "symbol": "~stdio-transport-only",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "The MCP server uses stdio transport exclusively (no HTTP, no WebSocket)",
+      "related": [
+        "#MCPServer"
+      ]
+    },
+    "background-reindex-on-mutation": {
+      "id": "background-reindex-on-mutation",
+      "name": "Background Reindex On Mutation",
+      "symbol": "~background-reindex-on-mutation",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Purpose/portal mutations trigger a non-blocking background reindex to keep static files in sync",
+      "related": [
+        "#MCPServer",
+        "#PurposePortalTools"
+      ]
+    },
+    "resource-uri-paradigm-scheme": {
+      "id": "resource-uri-paradigm-scheme",
+      "name": "Resource Uri Paradigm Scheme",
+      "symbol": "~resource-uri-paradigm-scheme",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "All MCP resources must use the paradigm:// URI scheme — unknown schemes throw an error",
+      "related": [
+        "#ResourceHandlers"
+      ]
+    },
+    "~activation-requires-purpose-files": {
+      "id": "~activation-requires-purpose-files",
+      "name": "~activation Requires Purpose Files",
+      "symbol": "~~activation-requires-purpose-files",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "Extension activates only when workspace contains .purpose, portal.yaml, or .paradigm/config.yaml files",
+      "related": [
+        "#extension-entry"
+      ]
+    },
+    "~symbol-regex-all-prefixes": {
+      "id": "~symbol-regex-all-prefixes",
+      "name": "~symbol Regex All Prefixes",
+      "symbol": "~~symbol-regex-all-prefixes",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "Symbol detection regex matches both v2 (#$^!~) and legacy (@%?&) prefixes: /[@#$%^!?~&][a-zA-Z][a-zA-Z0-9._-]*/",
+      "related": [
+        "#index-service"
+      ]
+    },
+    "~file-watcher-debounce-500ms": {
+      "id": "~file-watcher-debounce-500ms",
+      "name": "~file Watcher Debounce 500ms",
+      "symbol": "~~file-watcher-debounce-500ms",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "File watcher debounces index rebuilds by 500ms to avoid thrashing during rapid edits",
+      "related": [
+        "#index-service"
+      ]
+    },
+    "~diagnostics-scope-purpose-files": {
+      "id": "~diagnostics-scope-purpose-files",
+      "name": "~diagnostics Scope Purpose Files",
+      "symbol": "~~diagnostics-scope-purpose-files",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "Diagnostics run on .purpose, portal.yaml, and .paradigm/*.yaml files — not on general YAML or code files",
+      "related": [
+        "#diagnostics-provider"
+      ]
+    },
+    "~completion-trigger-all-prefixes": {
+      "id": "~completion-trigger-all-prefixes",
+      "name": "~completion Trigger All Prefixes",
+      "symbol": "~~completion-trigger-all-prefixes",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "Autocomplete triggers on all 9 prefix characters: @ # ^ ! $ % ? ~ &",
+      "related": [
+        "#completion-provider"
+      ]
+    },
+    "~symbol-injection-scope": {
+      "id": "~symbol-injection-scope",
+      "name": "~symbol Injection Scope",
+      "symbol": "~~symbol-injection-scope",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-vscode/.purpose",
+      "description": "Paradigm symbol TextMate grammar is injected into YAML, Markdown, TypeScript, TSX, JavaScript, JSX, and .purpose files",
+      "related": [
+        "#paradigm-symbols-grammar"
+      ]
+    },
+    "~log-level-env-resolution": {
+      "id": "~log-level-env-resolution",
+      "name": "~log Level Env Resolution",
+      "symbol": "~~log-level-env-resolution",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Log level resolves from LOG_LEVEL env var first; if unset, defaults to debug in development and info in production (NODE_ENV=production)",
+      "related": [
+        "#paradigm-logger"
+      ]
+    },
+    "~format-auto-detection": {
+      "id": "~format-auto-detection",
+      "name": "~format Auto Detection",
+      "symbol": "~~format-auto-detection",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Log format resolves from PARADIGM_LOG_FORMAT env var (json forces JSON); otherwise defaults to JSON in production, pretty in development; pretty format uses ANSI color codes per level (gray/cyan/yellow/red)",
+      "related": [
+        "#paradigm-logger",
+        "#formatter-pretty",
+        "#formatter-json"
+      ]
+    },
+    "~symbol-auto-prefix-normalization": {
+      "id": "~symbol-auto-prefix-normalization",
+      "name": "~symbol Auto Prefix Normalization",
+      "symbol": "~~symbol-auto-prefix-normalization",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Symbol loggers auto-prefix symbols with their type prefix if not already present — component() adds",
+      "related": [
+        "#paradigm-logger",
+        "#symbol-logger"
+      ]
+    },
+    "~correlation-async-local-storage": {
+      "id": "~correlation-async-local-storage",
+      "name": "~correlation Async Local Storage",
+      "symbol": "~~correlation-async-local-storage",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Correlation tracking uses Node.js AsyncLocalStorage to propagate correlation IDs through async call chains without explicit parameter threading; IDs are UUIDs from crypto.randomUUID",
+      "related": [
+        "#correlation-tracker"
+      ]
+    },
+    "~symbol-filter-env-var": {
+      "id": "~symbol-filter-env-var",
+      "name": "~symbol Filter Env Var",
+      "symbol": "~~symbol-filter-env-var",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "PARADIGM_SYMBOLS env var provides comma-separated prefix filter (e.g., \"#,^\") to restrict which symbol types emit logs; null means all symbols pass",
+      "related": [
+        "#paradigm-logger",
+        "#symbol-logger"
+      ]
+    },
+    "~provider-cascade": {
+      "id": "~provider-cascade",
+      "name": "~provider Cascade",
+      "symbol": "~~provider-cascade",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Agent providers are tried in priority order (claude > claude-code-teams > claude-code > cursor-cli > claude-cli > manual) until one is available; manual is always the ultimate fallback",
+      "related": [
+        "#provider-registry",
+        "#agent-spawner"
+      ]
+    },
+    "~budget-enforced": {
+      "id": "~budget-enforced",
+      "name": "~budget Enforced",
+      "symbol": "~~budget-enforced",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "All orchestrations enforce token and cost budgets at global (default 500K tokens, $5 USD) and per-agent levels; exceeding triggers budget-exceeded signal and halts agent",
+      "related": [
+        "#budget-tracker",
+        "#orchestrator"
+      ]
+    },
+    "~ide-adapter-pattern": {
+      "id": "~ide-adapter-pattern",
+      "name": "~ide Adapter Pattern",
+      "symbol": "~~ide-adapter-pattern",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "IDE instruction files are generated from shared base helpers in a fixed section ordering; each adapter overrides detection and generation methods for its target IDE",
+      "related": [
+        "#ide-adapters"
+      ]
+    },
+    "~audit-required": {
+      "id": "~audit-required",
+      "name": "~audit Required",
+      "symbol": "~~audit-required",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging",
+      "related": [
+        "#audit-logger",
+        "#agent-spawner",
+        "#orchestrator"
+      ]
+    },
+    "~purpose-schema-passthrough": {
+      "id": "~purpose-schema-passthrough",
+      "name": "~purpose Schema Passthrough",
+      "symbol": "~~purpose-schema-passthrough",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "PurposeItemSchema uses Zod passthrough() to allow extra fields (tags, location, uses, used-by, etc.) without validation errors",
+      "related": [
+        "#zod-schemas"
+      ]
+    },
+    "~purpose-file-depth-sort": {
+      "id": "~purpose-file-depth-sort",
+      "name": "~purpose File Depth Sort",
+      "symbol": "~~purpose-file-depth-sort",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": ".purpose files are sorted by directory depth (shallowest first) for correct parent-to-child aggregation",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "~purpose-glob-ignore-patterns": {
+      "id": "~purpose-glob-ignore-patterns",
+      "name": "~purpose Glob Ignore Patterns",
+      "symbol": "~~purpose-glob-ignore-patterns",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "findPurposeFiles ignores node_modules, dist, and .git directories",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "v2-symbols-only": {
+      "id": "v2-symbols-only",
+      "name": "V2 Symbols Only",
+      "symbol": "~v2-symbols-only",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "UI only renders v2 symbol types (#, $, ^, !, ~)",
+      "related": [
+        "#NodesStore",
+        "#NodeRenderer"
+      ]
+    },
+    "responsive-layout": {
+      "id": "responsive-layout",
+      "name": "Responsive Layout",
+      "symbol": "~responsive-layout",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "UI adapts to viewport size for all layout modes",
+      "related": [
+        "#App",
+        "#Canvas",
+        "#GridView",
+        "#ListView"
+      ]
+    },
+    "~visual-tag-inference-patterns": {
+      "id": "~visual-tag-inference-patterns",
+      "name": "~visual Tag Inference Patterns",
+      "symbol": "~~visual-tag-inference-patterns",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "Component names are matched against 30+ regex patterns (button, form, modal, nav, etc.) to infer visual tags for image-to-code mapping",
+      "related": [
+        "#component-scanner"
+      ]
+    },
+    "~scan-index-schema-version-1-0-0": {
+      "id": "~scan-index-schema-version-1-0-0",
+      "name": "~scan Index Schema Version 1 0 0",
+      "symbol": "~~scan-index-schema-version-1-0-0",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "Scan index $meta.version is always '1.0.0'; tracked separately from paradigmVersion",
+      "related": [
+        "#generator"
+      ]
+    },
+    "~symbol-blocklist-framework-aliases": {
+      "id": "~symbol-blocklist-framework-aliases",
+      "name": "~symbol Blocklist Framework Aliases",
+      "symbol": "~~symbol-blocklist-framework-aliases",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "$lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "~symbol-ref-pattern-letter-guard": {
+      "id": "~symbol-ref-pattern-letter-guard",
+      "name": "~symbol Ref Pattern Letter Guard",
+      "symbol": "~~symbol-ref-pattern-letter-guard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "~anchor-parse-formats": {
+      "id": "~anchor-parse-formats",
+      "name": "~anchor Parse Formats",
+      "symbol": "~~anchor-parse-formats",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "~viewer-ws-port-42196": {
+      "id": "~viewer-ws-port-42196",
+      "name": "~viewer Ws Port 42196",
+      "symbol": "~~viewer-ws-port-42196",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "WebSocket server defaults to port 42196 (marathon + 1); UI defaults to 42195",
+      "related": [
+        "#websocket-server"
+      ]
+    },
+    "~viewer-cors-wildcard": {
+      "id": "~viewer-cors-wildcard",
+      "name": "~viewer Cors Wildcard",
+      "symbol": "~~viewer-cors-wildcard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "API responses set Access-Control-Allow-Origin: * for cross-origin access",
+      "related": [
+        "#websocket-server"
+      ]
+    },
+    "~viewer-sdk-ui-client-routing": {
+      "id": "~viewer-sdk-ui-client-routing",
+      "name": "~viewer Sdk Ui Client Routing",
+      "symbol": "~~viewer-sdk-ui-client-routing",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "WebSocket clients are routed to SDK or UI handler based on URL path (/ui prefix)",
+      "related": [
+        "#websocket-server"
+      ]
+    },
+    "~portal-yaml-version-required": {
+      "id": "~portal-yaml-version-required",
+      "name": "~portal Yaml Version Required",
+      "symbol": "~~portal-yaml-version-required",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Gate config must have a \"version\" field; parsing throws if missing",
+      "related": [
+        "#yaml-parser"
+      ]
+    },
+    "~gate-id-kebab-case": {
+      "id": "~gate-id-kebab-case",
+      "name": "~gate Id Kebab Case",
+      "symbol": "~~gate-id-kebab-case",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Gate, lock, and prize IDs must match kebab-case pattern /^[a-z][a-z0-9-]*$/",
+      "related": [
+        "#validator"
+      ]
+    },
+    "~lock-mode-default-all": {
+      "id": "~lock-mode-default-all",
+      "name": "~lock Mode Default All",
+      "symbol": "~~lock-mode-default-all",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Lock mode defaults to \"all\" when not specified; only \"all\" and \"any\" are valid",
+      "related": [
+        "#yaml-parser"
+      ]
+    },
+    "~portal-glob-ignore-patterns": {
+      "id": "~portal-glob-ignore-patterns",
+      "name": "~portal Glob Ignore Patterns",
+      "symbol": "~~portal-glob-ignore-patterns",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "findGateFiles ignores node_modules, dist, and .git directories",
+      "related": [
+        "#yaml-parser"
+      ]
+    },
+    "~portal-dev-ports-marathon": {
+      "id": "~portal-dev-ports-marathon",
+      "name": "~portal Dev Ports Marathon",
+      "symbol": "~~portal-dev-ports-marathon",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Default dev ports are 42195 (visualizer, marathon 42.195km) and 42196 (watcher)",
+      "related": [
+        "#yaml-parser"
+      ]
+    },
+    "~gates-portals-key-alias": {
+      "id": "~gates-portals-key-alias",
+      "name": "~gates Portals Key Alias",
+      "symbol": "~~gates-portals-key-alias",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Parser supports both 'gates' and legacy 'portals' keys for backward compatibility",
+      "related": [
+        "#yaml-parser"
+      ]
+    },
+    "~lock-requires-keys": {
+      "id": "~lock-requires-keys",
+      "name": "~lock Requires Keys",
+      "symbol": "~~lock-requires-keys",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "A lock with zero keys is a validation error (can never be opened)",
+      "related": [
+        "#validator"
+      ]
+    },
+    "~flow-gates-must-exist": {
+      "id": "~flow-gates-must-exist",
+      "name": "~flow Gates Must Exist",
+      "symbol": "~~flow-gates-must-exist",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Flow gate references must point to declared gate IDs; unknown refs are errors",
+      "related": [
+        "#topology-checker"
+      ]
+    },
+    "~strict-equality-warning": {
+      "id": "~strict-equality-warning",
+      "name": "~strict Equality Warning",
+      "symbol": "~~strict-equality-warning",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
+      "description": "Key expressions using == instead of === emit a warning suggesting strict equality",
+      "related": [
+        "#validator"
+      ]
+    },
+    "~safe-expression-evaluator-no-eval": {
+      "id": "~safe-expression-evaluator-no-eval",
+      "name": "~safe Expression Evaluator No Eval",
+      "symbol": "~~safe-expression-evaluator-no-eval",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "Expression evaluator uses custom tokenizer + recursive descent parser; never uses eval()",
+      "related": [
+        "#evaluator"
+      ]
+    },
+    "~one-time-prize-tracking": {
+      "id": "~one-time-prize-tracking",
+      "name": "~one Time Prize Tracking",
+      "symbol": "~~one-time-prize-tracking",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "One-time prizes are tracked per entity ID and skipped if already fired for that entity",
+      "related": [
+        "#gate-client"
+      ]
+    },
+    "~watcher-reconnect-5s": {
+      "id": "~watcher-reconnect-5s",
+      "name": "~watcher Reconnect 5s",
+      "symbol": "~~watcher-reconnect-5s",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "WebSocket watcher reconnects after 5 seconds on close (dev mode only)",
+      "related": [
+        "#gate-client"
+      ]
+    },
+    "~gate-guard-fail-modes": {
+      "id": "~gate-guard-fail-modes",
+      "name": "~gate Guard Fail Modes",
+      "symbol": "~~gate-guard-fail-modes",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "GateGuard decorator supports three failure modes: throw, return-null, return-false",
+      "related": [
+        "#gate-decorator"
+      ]
+    },
+    "~validator-production-disabled": {
+      "id": "~validator-production-disabled",
+      "name": "~validator Production Disabled",
+      "symbol": "~~validator-production-disabled",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "Portal validator logging is disabled in production unless PORTAL_VALIDATION=true",
+      "related": [
+        "#portal-client"
+      ]
+    },
+    "~validator-max-stored-results-100": {
+      "id": "~validator-max-stored-results-100",
+      "name": "~validator Max Stored Results 100",
+      "symbol": "~~validator-max-stored-results-100",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "Gate results store keeps at most 100 entries to prevent memory leaks",
+      "related": [
+        "#portal-client"
+      ]
+    },
+    "~solo-vs-faceted-modes": {
+      "id": "~solo-vs-faceted-modes",
+      "name": "~solo Vs Faceted Modes",
+      "symbol": "~~solo-vs-faceted-modes",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Orchestrator supports two modes — solo (single generalist agent, uses opus) and faceted (multi-agent with role-specific prompts); default is faceted",
+      "related": [
+        "#orchestrator"
+      ]
+    },
+    "~default-agent-model-assignments": {
+      "id": "~default-agent-model-assignments",
+      "name": "~default Agent Model Assignments",
+      "symbol": "~~default-agent-model-assignments",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Default model tier per agent role — architect/security use opus, reviewer uses sonnet, builder/tester use haiku",
+      "related": [
+        "#orchestrator",
+        "#agent-prompts"
+      ]
+    },
+    "~confidence-threshold-3-match": {
+      "id": "~confidence-threshold-3-match",
+      "name": "~confidence Threshold 3 Match",
+      "symbol": "~~confidence-threshold-3-match",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Agent matcher confidence levels — high requires 3+ matches or multiple match types, medium requires 2, low is 1",
+      "related": [
+        "#agent-matcher"
+      ]
+    },
+    "~fresh-context-principle": {
+      "id": "~fresh-context-principle",
+      "name": "~fresh Context Principle",
+      "symbol": "~~fresh-context-principle",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Builder prompt enforces Fresh Context Principle — each builder task runs in separate clean context with no assumptions carried from prior tasks",
+      "related": [
+        "#agent-prompts"
+      ]
+    },
+    "~reviewer-two-stage-minimum-3": {
+      "id": "~reviewer-two-stage-minimum-3",
+      "name": "~reviewer Two Stage Minimum 3",
+      "symbol": "~~reviewer-two-stage-minimum-3",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Reviewer prompt uses two-stage review (spec compliance then code quality) with Stage 1 blocking Stage 2; every review must produce at least 3 categorized findings",
+      "related": [
+        "#agent-prompts"
+      ]
+    },
+    "~model-discovery-order": {
+      "id": "~model-discovery-order",
+      "name": "~model Discovery Order",
+      "symbol": "~~model-discovery-order",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Model discovery follows a 3-tier fallback — API providers first, then remote manifest (cached 7 days), then hardcoded presets",
+      "related": [
+        "#model-discovery"
+      ]
+    },
+    "~provider-cascade-order": {
+      "id": "~provider-cascade-order",
+      "name": "~provider Cascade Order",
+      "symbol": "~~provider-cascade-order",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Provider cascade order is claude, claude-code-teams, claude-code, cursor-cli, claude-cli, manual — manual is always-available ultimate fallback",
+      "related": [
+        "#provider-registry",
+        "#agent-spawner"
+      ]
+    },
+    "~task-classification-priority": {
+      "id": "~task-classification-priority",
+      "name": "~task Classification Priority",
+      "symbol": "~~task-classification-priority",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Task type classification priority is analysis > documentation > bugfix > refactor > feature (default); complexity scored from symbol count, word count, prefix diversity, gate/flow symbols, affected files",
+      "related": [
+        "#task-classifier"
+      ]
+    },
+    "~budget-defaults-500k-5usd-80pct": {
+      "id": "~budget-defaults-500k-5usd-80pct",
+      "name": "~budget Defaults 500k 5usd 80pct",
+      "symbol": "~~budget-defaults-500k-5usd-80pct",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Default budget limits are 500K tokens, $5.00 USD max cost, warning at 80% usage; enforced at global and per-agent levels",
+      "related": [
+        "#budget-tracker"
+      ]
+    },
+    "~cost-estimation-per-million": {
+      "id": "~cost-estimation-per-million",
+      "name": "~cost Estimation Per Million",
+      "symbol": "~~cost-estimation-per-million",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Model pricing is per-million tokens — opus $15/$75, sonnet $3/$15, haiku $0.25/$1.25 (input/output); cost estimation uses complexity multipliers (low 0.6x, medium 1.0x, high 1.5x)",
+      "related": [
+        "#cost-estimator"
+      ]
+    },
+    "~context-role-specific-includes": {
+      "id": "~context-role-specific-includes",
+      "name": "~context Role Specific Includes",
+      "symbol": "~~context-role-specific-includes",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Context builder uses role-specific include/exclude patterns — architect gets specs and .purpose files (excludes src), builder gets src and tests (excludes specs), security gets portal.yaml and auth directories",
+      "related": [
+        "#context-builder"
+      ]
+    },
+    "~flow-mermaid-generation": {
+      "id": "~flow-mermaid-generation",
+      "name": "~flow Mermaid Generation",
+      "symbol": "~~flow-mermaid-generation",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Flow validator generates Mermaid flowchart TD diagrams — gates as diamonds, actions as rectangles, signals as rounded rectangles; includes deny paths for gates and color-coded class definitions",
+      "related": [
+        "#flow-validator"
+      ]
+    },
+    "~portal-language-agnostic-grep": {
+      "id": "~portal-language-agnostic-grep",
+      "name": "~portal Language Agnostic Grep",
+      "symbol": "~~portal-language-agnostic-grep",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Portal compliance uses grep-based language-agnostic pattern matching to find gate references across ts/js/py/go files; searches for ^symbol patterns and function-based checks (checkGate, requireGate, @Gate)",
+      "related": [
+        "#portal-compliance"
+      ]
+    },
+    "~audit-log-yaml-per-orchestration": {
+      "id": "~audit-log-yaml-per-orchestration",
+      "name": "~audit Log Yaml Per Orchestration",
+      "symbol": "~~audit-log-yaml-per-orchestration",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Audit logs are stored as YAML files in .paradigm/orchestrations/ with date-prefixed filenames; each file contains full agent details, token counts, costs, and artifacts",
+      "related": [
+        "#audit-logger"
+      ]
+    },
+    "~background-accept-reject-workflow": {
+      "id": "~background-accept-reject-workflow",
+      "name": "~background Accept Reject Workflow",
+      "symbol": "~~background-accept-reject-workflow",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Background orchestrations follow a pending/running/completed/accepted/rejected lifecycle; only completed orchestrations can be accepted or rejected, rejection can optionally clean up created files",
+      "related": [
+        "#background-orchestrator"
+      ]
+    },
+    "~provider-api-key-requirements": {
+      "id": "~provider-api-key-requirements",
+      "name": "~provider Api Key Requirements",
+      "symbol": "~~provider-api-key-requirements",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose",
+      "description": "Each provider has specific environment detection — claude requires ANTHROPIC_API_KEY, claude-code requires CLAUDE_CODE=1 or TERM_PROGRAM=claude, cursor-cli requires Cursor IDE environment, claude-cli checks claude command in PATH",
+      "related": [
+        "#claude-provider",
+        "#claude-code-provider",
+        "#cursor-cli-provider",
+        "#claude-cli-provider"
+      ]
+    },
+    "~manual-always-available-fallback": {
+      "id": "~manual-always-available-fallback",
+      "name": "~manual Always Available Fallback",
+      "symbol": "~~manual-always-available-fallback",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose",
+      "description": "Manual provider is always available (isAvailable returns true unconditionally) and creates file-based handoff tasks in .paradigm/handoffs/ and .paradigm/tasks/ for human execution",
+      "related": [
+        "#manual-provider"
+      ]
+    },
+    "~adapter-section-ordering": {
+      "id": "~adapter-section-ordering",
+      "name": "~adapter Section Ordering",
+      "symbol": "~~adapter-section-ordering",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "All IDE adapters emit sections in a shared order — header, overview, symbol system, terminal guidance, navigation, MCP tools, workflow protocol, session recovery, checkpoints, logging rules, conventions, commit convention, update rules, scan protocol, footer; sections are only included if the config has relevant data",
+      "related": [
+        "#adapter-base",
+        "#cursor-adapter",
+        "#claude-adapter",
+        "#copilot-adapter",
+        "#windsurf-adapter",
+        "#agents-adapter"
+      ]
+    },
+    "~stop-hook-8-compliance-checks": {
+      "id": "~stop-hook-8-compliance-checks",
+      "name": "~stop Hook 8 Compliance Checks",
+      "symbol": "~~stop-hook-8-compliance-checks",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "Stop hook blocks agent completion unless 8 checks pass:\n(1) source files modified without .purpose updates (threshold 2+),\n(2) modified directories missing .purpose files entirely,\n(3) route patterns added without portal.yaml,\n(4) aspect anchor files that no longer exist,\n(5) per-directory .purpose freshness via .pending-review,\n(6) aspect coverage advisory,\n(7) lore entry expected for 3+ source file sessions,\n(8) blocking habits not satisfied\n",
+      "related": [
+        "#paradigm-hooks"
+      ]
+    },
+    "~pre-tool-use-auto-reindex": {
+      "id": "~pre-tool-use-auto-reindex",
+      "name": "~pre Tool Use Auto Reindex",
+      "symbol": "~~pre-tool-use-auto-reindex",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "PreToolUse hook intercepts Bash calls matching git commit patterns and automatically runs paradigm reindex before the commit proceeds; never blocks the tool call",
+      "related": [
+        "#paradigm-hooks"
+      ]
+    },
+    "~post-tool-use-advisory": {
+      "id": "~post-tool-use-advisory",
+      "name": "~post Tool Use Advisory",
+      "symbol": "~~post-tool-use-advisory",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "PostToolUse hook fires after Edit/Write tool calls and emits an advisory reminder when source files are edited without nearby .purpose coverage; advisory only, never blocks",
       "related": [
         "#paradigm-hooks"
       ]
@@ -5813,6 +8093,14 @@
       "category": "components",
       "id": "command-palette"
     },
+    "#portal-parsing": {
+      "category": "components",
+      "id": "portal-parsing"
+    },
+    "#portal-validation": {
+      "category": "components",
+      "id": "portal-validation"
+    },
     "#gate-checking": {
       "category": "components",
       "id": "gate-checking"
@@ -5824,14 +8112,6 @@
     "#client-api": {
       "category": "components",
       "id": "client-api"
-    },
-    "#portal-parsing": {
-      "category": "components",
-      "id": "portal-parsing"
-    },
-    "#portal-validation": {
-      "category": "components",
-      "id": "portal-validation"
     },
     "#commander-setup": {
       "category": "components",
@@ -5953,18 +8233,6 @@
       "category": "components",
       "id": "model-configurator"
     },
-    "#SentinelRustClient": {
-      "category": "components",
-      "id": "SentinelRustClient"
-    },
-    "#SentinelClientBuilder": {
-      "category": "components",
-      "id": "SentinelClientBuilder"
-    },
-    "#SentinelTracingLayer": {
-      "category": "components",
-      "id": "SentinelTracingLayer"
-    },
     "#IncidentStorage": {
       "category": "components",
       "id": "IncidentStorage"
@@ -6028,6 +8296,18 @@
     "#NodesStore": {
       "category": "components",
       "id": "NodesStore"
+    },
+    "#SentinelRustClient": {
+      "category": "components",
+      "id": "SentinelRustClient"
+    },
+    "#SentinelClientBuilder": {
+      "category": "components",
+      "id": "SentinelClientBuilder"
+    },
+    "#SentinelTracingLayer": {
+      "category": "components",
+      "id": "SentinelTracingLayer"
     },
     "#university-server": {
       "category": "components",
@@ -6525,22 +8805,6 @@
       "category": "components",
       "id": "symbol-extractor"
     },
-    "#generator": {
-      "category": "components",
-      "id": "generator"
-    },
-    "#component-scanner": {
-      "category": "components",
-      "id": "component-scanner"
-    },
-    "#protocol-handler": {
-      "category": "components",
-      "id": "protocol-handler"
-    },
-    "#matcher": {
-      "category": "components",
-      "id": "matcher"
-    },
     "#App": {
       "category": "components",
       "id": "App"
@@ -6588,6 +8852,22 @@
     "#ThemeStore": {
       "category": "components",
       "id": "ThemeStore"
+    },
+    "#generator": {
+      "category": "components",
+      "id": "generator"
+    },
+    "#component-scanner": {
+      "category": "components",
+      "id": "component-scanner"
+    },
+    "#protocol-handler": {
+      "category": "components",
+      "id": "protocol-handler"
+    },
+    "#matcher": {
+      "category": "components",
+      "id": "matcher"
     },
     "#source-loader": {
       "category": "components",
@@ -6661,6 +8941,14 @@
       "category": "components",
       "id": "command-generator"
     },
+    "#gate-schemas": {
+      "category": "components",
+      "id": "gate-schemas"
+    },
+    "#topology-checker": {
+      "category": "components",
+      "id": "topology-checker"
+    },
     "#evaluator": {
       "category": "components",
       "id": "evaluator"
@@ -6684,14 +8972,6 @@
     "#gate-client": {
       "category": "components",
       "id": "gate-client"
-    },
-    "#gate-schemas": {
-      "category": "components",
-      "id": "gate-schemas"
-    },
-    "#topology-checker": {
-      "category": "components",
-      "id": "topology-checker"
     },
     "#date-separator": {
       "category": "components",
@@ -7077,10 +9357,6 @@
       "category": "signals",
       "id": "validation-failed"
     },
-    "!index-generated": {
-      "category": "signals",
-      "id": "index-generated"
-    },
     "!node-selected": {
       "category": "signals",
       "id": "node-selected"
@@ -7096,6 +9372,10 @@
     "!symbol-updated": {
       "category": "signals",
       "id": "symbol-updated"
+    },
+    "!index-generated": {
+      "category": "signals",
+      "id": "index-generated"
     },
     "!aggregation-complete": {
       "category": "signals",
@@ -7128,6 +9408,810 @@
     "!provider-unavailable": {
       "category": "signals",
       "id": "provider-unavailable"
+    },
+    "~yaml-config-loading": {
+      "category": "aspects",
+      "id": "yaml-config-loading"
+    },
+    "~zod-validated": {
+      "category": "aspects",
+      "id": "zod-validated"
+    },
+    "~symbol-typed-logging": {
+      "category": "aspects",
+      "id": "symbol-typed-logging"
+    },
+    "~mcp-tool-handler": {
+      "category": "aspects",
+      "id": "mcp-tool-handler"
+    },
+    "~ide-adapter-pattern": {
+      "category": "aspects",
+      "id": "ide-adapter-pattern"
+    },
+    "~provider-cascade": {
+      "category": "aspects",
+      "id": "provider-cascade"
+    },
+    "~express-server": {
+      "category": "aspects",
+      "id": "express-server"
+    },
+    "~budget-enforced": {
+      "category": "aspects",
+      "id": "budget-enforced"
+    },
+    "~file-glob-discovery": {
+      "category": "aspects",
+      "id": "file-glob-discovery"
+    },
+    "~correlation-tracked": {
+      "category": "aspects",
+      "id": "correlation-tracked"
+    },
+    "~global-persistence": {
+      "category": "aspects",
+      "id": "global-persistence"
+    },
+    "~aspect-graph-derived-artifact": {
+      "category": "aspects",
+      "id": "aspect-graph-derived-artifact"
+    },
+    "~three-tier-search": {
+      "category": "aspects",
+      "id": "three-tier-search"
+    },
+    "~search-weight-learning": {
+      "category": "aspects",
+      "id": "search-weight-learning"
+    },
+    "~symbolic-context-required": {
+      "category": "aspects",
+      "id": "symbolic-context-required"
+    },
+    "~confidence-tracking": {
+      "category": "aspects",
+      "id": "confidence-tracking"
+    },
+    "~schema-version-4": {
+      "category": "aspects",
+      "id": "schema-version-4"
+    },
+    "~incident-id-format-inc-nnn": {
+      "category": "aspects",
+      "id": "incident-id-format-inc-nnn"
+    },
+    "~default-pattern-confidence-50": {
+      "category": "aspects",
+      "id": "default-pattern-confidence-50"
+    },
+    "~confidence-score-adjustment-rules": {
+      "category": "aspects",
+      "id": "confidence-score-adjustment-rules"
+    },
+    "~sqlite-write-after-mutation": {
+      "category": "aspects",
+      "id": "sqlite-write-after-mutation"
+    },
+    "~db-path-env-resolution": {
+      "category": "aspects",
+      "id": "db-path-env-resolution"
+    },
+    "~log-pruning-oldest-first": {
+      "category": "aspects",
+      "id": "log-pruning-oldest-first"
+    },
+    "~app-state-latest-wins": {
+      "category": "aspects",
+      "id": "app-state-latest-wins"
+    },
+    "~bidirectional-incident-linking": {
+      "category": "aspects",
+      "id": "bidirectional-incident-linking"
+    },
+    "~match-score-cap-100": {
+      "category": "aspects",
+      "id": "match-score-cap-100"
+    },
+    "~min-match-score-30": {
+      "category": "aspects",
+      "id": "min-match-score-30"
+    },
+    "~max-match-results-5": {
+      "category": "aspects",
+      "id": "max-match-results-5"
+    },
+    "~confidence-boost-formula": {
+      "category": "aspects",
+      "id": "confidence-boost-formula"
+    },
+    "~wildcard-symbol-matching": {
+      "category": "aspects",
+      "id": "wildcard-symbol-matching"
+    },
+    "~symbol-score-exact-10-wildcard-5-array-7": {
+      "category": "aspects",
+      "id": "symbol-score-exact-10-wildcard-5-array-7"
+    },
+    "~environment-filter-precheck": {
+      "category": "aspects",
+      "id": "environment-filter-precheck"
+    },
+    "~similarity-threshold-0-6": {
+      "category": "aspects",
+      "id": "similarity-threshold-0-6"
+    },
+    "~time-decay-half-life-14d": {
+      "category": "aspects",
+      "id": "time-decay-half-life-14d"
+    },
+    "~similarity-weights-with-stack": {
+      "category": "aspects",
+      "id": "similarity-weights-with-stack"
+    },
+    "~stack-fingerprint-top-10-frames": {
+      "category": "aspects",
+      "id": "stack-fingerprint-top-10-frames"
+    },
+    "~group-join-threshold-50pct": {
+      "category": "aspects",
+      "id": "group-join-threshold-50pct"
+    },
+    "~common-error-pattern-60pct-majority": {
+      "category": "aspects",
+      "id": "common-error-pattern-60pct-majority"
+    },
+    "~auto-group-min-size-3": {
+      "category": "aspects",
+      "id": "auto-group-min-size-3"
+    },
+    "~pattern-candidate-min-occurrences-3": {
+      "category": "aspects",
+      "id": "pattern-candidate-min-occurrences-3"
+    },
+    "~priority-from-count-thresholds": {
+      "category": "aspects",
+      "id": "priority-from-count-thresholds"
+    },
+    "~strategy-inference-keyword-heuristics": {
+      "category": "aspects",
+      "id": "strategy-inference-keyword-heuristics"
+    },
+    "~duplicate-pattern-guard-2-symbol-match": {
+      "category": "aspects",
+      "id": "duplicate-pattern-guard-2-symbol-match"
+    },
+    "~server-default-port-3838": {
+      "category": "aspects",
+      "id": "server-default-port-3838"
+    },
+    "~json-body-limit-5mb": {
+      "category": "aspects",
+      "id": "json-body-limit-5mb"
+    },
+    "~cors-configurable-default-wildcard": {
+      "category": "aspects",
+      "id": "cors-configurable-default-wildcard"
+    },
+    "~ws-max-subscribers-256": {
+      "category": "aspects",
+      "id": "ws-max-subscribers-256"
+    },
+    "~ws-jsonrpc-protocol": {
+      "category": "aspects",
+      "id": "ws-jsonrpc-protocol"
+    },
+    "~error-log-auto-promote-to-incident": {
+      "category": "aspects",
+      "id": "error-log-auto-promote-to-incident"
+    },
+    "~log-prune-interval-100-inserts": {
+      "category": "aspects",
+      "id": "log-prune-interval-100-inserts"
+    },
+    "~max-batch-size-500": {
+      "category": "aspects",
+      "id": "max-batch-size-500"
+    },
+    "~max-logs-default-10000": {
+      "category": "aspects",
+      "id": "max-logs-default-10000"
+    },
+    "~auth-permission-hierarchy": {
+      "category": "aspects",
+      "id": "auth-permission-hierarchy"
+    },
+    "~auth-disabled-passthrough": {
+      "category": "aspects",
+      "id": "auth-disabled-passthrough"
+    },
+    "~auth-token-expiry-check": {
+      "category": "aspects",
+      "id": "auth-token-expiry-check"
+    },
+    "~rate-limit-sliding-window-60s": {
+      "category": "aspects",
+      "id": "rate-limit-sliding-window-60s"
+    },
+    "~rate-limit-global-600rpm": {
+      "category": "aspects",
+      "id": "rate-limit-global-600rpm"
+    },
+    "~rate-limit-sampling-drop": {
+      "category": "aspects",
+      "id": "rate-limit-sampling-drop"
+    },
+    "~client-default-url-localhost-3838": {
+      "category": "aspects",
+      "id": "client-default-url-localhost-3838"
+    },
+    "~client-batch-size-50": {
+      "category": "aspects",
+      "id": "client-batch-size-50"
+    },
+    "~client-flush-interval-5s": {
+      "category": "aspects",
+      "id": "client-flush-interval-5s"
+    },
+    "~client-ring-buffer-max-1000": {
+      "category": "aspects",
+      "id": "client-ring-buffer-max-1000"
+    },
+    "~client-retry-exponential-backoff-3": {
+      "category": "aspects",
+      "id": "client-retry-exponential-backoff-3"
+    },
+    "~client-graceful-degradation": {
+      "category": "aspects",
+      "id": "client-graceful-degradation"
+    },
+    "~client-browser-beforeunload-flush": {
+      "category": "aspects",
+      "id": "client-browser-beforeunload-flush"
+    },
+    "~client-failed-send-restore-to-buffer": {
+      "category": "aspects",
+      "id": "client-failed-send-restore-to-buffer"
+    },
+    "~config-resolution-order": {
+      "category": "aspects",
+      "id": "config-resolution-order"
+    },
+    "~symbol-prefix-type-inference": {
+      "category": "aspects",
+      "id": "symbol-prefix-type-inference"
+    },
+    "~symbol-validation-fuzzy-suggestion": {
+      "category": "aspects",
+      "id": "symbol-validation-fuzzy-suggestion"
+    },
+    "~trace-query-limit-max-20": {
+      "category": "aspects",
+      "id": "trace-query-limit-max-20"
+    },
+    "~v1-symbol-fields-deprecated": {
+      "category": "aspects",
+      "id": "v1-symbol-fields-deprecated"
+    },
+    "~resolution-strategy-10-options": {
+      "category": "aspects",
+      "id": "resolution-strategy-10-options"
+    },
+    "~rust-batch-size-default-50": {
+      "category": "aspects",
+      "id": "rust-batch-size-default-50"
+    },
+    "~rust-default-url-localhost-3838": {
+      "category": "aspects",
+      "id": "rust-default-url-localhost-3838"
+    },
+    "~tracing-level-mapping": {
+      "category": "aspects",
+      "id": "tracing-level-mapping"
+    },
+    "~module-path-to-symbol-conversion": {
+      "category": "aspects",
+      "id": "module-path-to-symbol-conversion"
+    },
+    "~tracing-event-symbol-field-override": {
+      "category": "aspects",
+      "id": "tracing-event-symbol-field-override"
+    },
+    "~tracing-async-fire-and-forget": {
+      "category": "aspects",
+      "id": "tracing-async-fire-and-forget"
+    },
+    "~rust-buffer-drain-before-send": {
+      "category": "aspects",
+      "id": "rust-buffer-drain-before-send"
+    },
+    "~rust-serde-camel-case-serialization": {
+      "category": "aspects",
+      "id": "rust-serde-camel-case-serialization"
+    },
+    "~~plsat-pass-threshold-80pct": {
+      "category": "aspects",
+      "id": "~plsat-pass-threshold-80pct"
+    },
+    "~~plsat-fisher-yates-shuffle": {
+      "category": "aspects",
+      "id": "~plsat-fisher-yates-shuffle"
+    },
+    "~~plsat-v3-variant-resolution": {
+      "category": "aspects",
+      "id": "~plsat-v3-variant-resolution"
+    },
+    "~~university-cors-wildcard": {
+      "category": "aspects",
+      "id": "~university-cors-wildcard"
+    },
+    "~token-tracking": {
+      "category": "aspects",
+      "id": "token-tracking"
+    },
+    "~v2-symbol-types": {
+      "category": "aspects",
+      "id": "v2-symbol-types"
+    },
+    "~tool-cache-ttl-30s": {
+      "category": "aspects",
+      "id": "tool-cache-ttl-30s"
+    },
+    "~tool-cache-clear-on-reindex": {
+      "category": "aspects",
+      "id": "tool-cache-clear-on-reindex"
+    },
+    "~index-cache-ttl-30s": {
+      "category": "aspects",
+      "id": "index-cache-ttl-30s"
+    },
+    "~wisdom-cache-ttl-30s": {
+      "category": "aspects",
+      "id": "wisdom-cache-ttl-30s"
+    },
+    "~flow-cache-ttl-30s": {
+      "category": "aspects",
+      "id": "flow-cache-ttl-30s"
+    },
+    "~fixtures-cache-ttl-60s": {
+      "category": "aspects",
+      "id": "fixtures-cache-ttl-60s"
+    },
+    "~max-breadcrumbs-50": {
+      "category": "aspects",
+      "id": "max-breadcrumbs-50"
+    },
+    "~checkpoint-max-age-7d": {
+      "category": "aspects",
+      "id": "checkpoint-max-age-7d"
+    },
+    "~default-model-sonnet": {
+      "category": "aspects",
+      "id": "default-model-sonnet"
+    },
+    "~token-estimation-3.5-chars": {
+      "category": "aspects",
+      "id": "token-estimation-3.5-chars"
+    },
+    "~model-pricing-table": {
+      "category": "aspects",
+      "id": "model-pricing-table"
+    },
+    "~handoff-threshold-levels": {
+      "category": "aspects",
+      "id": "handoff-threshold-levels"
+    },
+    "~handoff-signal-thresholds": {
+      "category": "aspects",
+      "id": "handoff-signal-thresholds"
+    },
+    "~auto-recovery-once-per-session": {
+      "category": "aspects",
+      "id": "auto-recovery-once-per-session"
+    },
+    "~context-window-default-200k": {
+      "category": "aspects",
+      "id": "context-window-default-200k"
+    },
+    "~project-hash-sha256-12char": {
+      "category": "aspects",
+      "id": "project-hash-sha256-12char"
+    },
+    "~handoff-oldest-first-delivery": {
+      "category": "aspects",
+      "id": "handoff-oldest-first-delivery"
+    },
+    "~wisdom-local-wins-on-conflict": {
+      "category": "aspects",
+      "id": "wisdom-local-wins-on-conflict"
+    },
+    "~ripple-bfs-max-depth-5": {
+      "category": "aspects",
+      "id": "ripple-bfs-max-depth-5"
+    },
+    "~ripple-bfs-queue-limit-1000": {
+      "category": "aspects",
+      "id": "ripple-bfs-queue-limit-1000"
+    },
+    "~inferred-edge-weight-0.5": {
+      "category": "aspects",
+      "id": "inferred-edge-weight-0.5"
+    },
+    "~index-reference-weight-0.5": {
+      "category": "aspects",
+      "id": "index-reference-weight-0.5"
+    },
+    "~aspect-category-inference": {
+      "category": "aspects",
+      "id": "aspect-category-inference"
+    },
+    "~aspect-severity-inference": {
+      "category": "aspects",
+      "id": "aspect-severity-inference"
+    },
+    "~drift-detection-sha256": {
+      "category": "aspects",
+      "id": "drift-detection-sha256"
+    },
+    "~fts5-graceful-degradation": {
+      "category": "aspects",
+      "id": "fts5-graceful-degradation"
+    },
+    "~search-decay-factor-0.95": {
+      "category": "aspects",
+      "id": "search-decay-factor-0.95"
+    },
+    "~search-fuzzy-threshold-0.3": {
+      "category": "aspects",
+      "id": "search-fuzzy-threshold-0.3"
+    },
+    "~search-default-limit-10": {
+      "category": "aspects",
+      "id": "search-default-limit-10"
+    },
+    "~search-three-tier-fallthrough": {
+      "category": "aspects",
+      "id": "search-three-tier-fallthrough"
+    },
+    "~search-query-normalization": {
+      "category": "aspects",
+      "id": "search-query-normalization"
+    },
+    "~suggest-skip-test-files": {
+      "category": "aspects",
+      "id": "suggest-skip-test-files"
+    },
+    "~suggest-8-pattern-detectors": {
+      "category": "aspects",
+      "id": "suggest-8-pattern-detectors"
+    },
+    "~lore-inferred-edge-weight-0.3": {
+      "category": "aspects",
+      "id": "lore-inferred-edge-weight-0.3"
+    },
+    "~lore-link-materialization-idempotent": {
+      "category": "aspects",
+      "id": "lore-link-materialization-idempotent"
+    },
+    "~agent-default-model-assignments": {
+      "category": "aspects",
+      "id": "agent-default-model-assignments"
+    },
+    "~agent-token-estimates": {
+      "category": "aspects",
+      "id": "agent-token-estimates"
+    },
+    "~orchestration-cost-pricing": {
+      "category": "aspects",
+      "id": "orchestration-cost-pricing"
+    },
+    "~builder-fresh-context-principle": {
+      "category": "aspects",
+      "id": "builder-fresh-context-principle"
+    },
+    "~reviewer-two-stage-protocol": {
+      "category": "aspects",
+      "id": "reviewer-two-stage-protocol"
+    },
+    "~tool-dispatch-prefix-routing": {
+      "category": "aspects",
+      "id": "tool-dispatch-prefix-routing"
+    },
+    "~context-tools-skip-tracking": {
+      "category": "aspects",
+      "id": "context-tools-skip-tracking"
+    },
+    "~recovery-preamble-first-response": {
+      "category": "aspects",
+      "id": "recovery-preamble-first-response"
+    },
+    "~fuzzy-search-max-distance-3": {
+      "category": "aspects",
+      "id": "fuzzy-search-max-distance-3"
+    },
+    "~route-similarity-threshold-0.6": {
+      "category": "aspects",
+      "id": "route-similarity-threshold-0.6"
+    },
+    "~ripple-depth-clamp-1-to-5": {
+      "category": "aspects",
+      "id": "ripple-depth-clamp-1-to-5"
+    },
+    "~reindex-5-stage-pipeline": {
+      "category": "aspects",
+      "id": "reindex-5-stage-pipeline"
+    },
+    "~aspect-graph-build-non-fatal": {
+      "category": "aspects",
+      "id": "aspect-graph-build-non-fatal"
+    },
+    "~stdio-transport-only": {
+      "category": "aspects",
+      "id": "stdio-transport-only"
+    },
+    "~background-reindex-on-mutation": {
+      "category": "aspects",
+      "id": "background-reindex-on-mutation"
+    },
+    "~resource-uri-paradigm-scheme": {
+      "category": "aspects",
+      "id": "resource-uri-paradigm-scheme"
+    },
+    "~~activation-requires-purpose-files": {
+      "category": "aspects",
+      "id": "~activation-requires-purpose-files"
+    },
+    "~~symbol-regex-all-prefixes": {
+      "category": "aspects",
+      "id": "~symbol-regex-all-prefixes"
+    },
+    "~~file-watcher-debounce-500ms": {
+      "category": "aspects",
+      "id": "~file-watcher-debounce-500ms"
+    },
+    "~~diagnostics-scope-purpose-files": {
+      "category": "aspects",
+      "id": "~diagnostics-scope-purpose-files"
+    },
+    "~~completion-trigger-all-prefixes": {
+      "category": "aspects",
+      "id": "~completion-trigger-all-prefixes"
+    },
+    "~~symbol-injection-scope": {
+      "category": "aspects",
+      "id": "~symbol-injection-scope"
+    },
+    "~~log-level-env-resolution": {
+      "category": "aspects",
+      "id": "~log-level-env-resolution"
+    },
+    "~~format-auto-detection": {
+      "category": "aspects",
+      "id": "~format-auto-detection"
+    },
+    "~~symbol-auto-prefix-normalization": {
+      "category": "aspects",
+      "id": "~symbol-auto-prefix-normalization"
+    },
+    "~~correlation-async-local-storage": {
+      "category": "aspects",
+      "id": "~correlation-async-local-storage"
+    },
+    "~~symbol-filter-env-var": {
+      "category": "aspects",
+      "id": "~symbol-filter-env-var"
+    },
+    "~~provider-cascade": {
+      "category": "aspects",
+      "id": "~provider-cascade"
+    },
+    "~~budget-enforced": {
+      "category": "aspects",
+      "id": "~budget-enforced"
+    },
+    "~~ide-adapter-pattern": {
+      "category": "aspects",
+      "id": "~ide-adapter-pattern"
+    },
+    "~~audit-required": {
+      "category": "aspects",
+      "id": "~audit-required"
+    },
+    "~~purpose-schema-passthrough": {
+      "category": "aspects",
+      "id": "~purpose-schema-passthrough"
+    },
+    "~~purpose-file-depth-sort": {
+      "category": "aspects",
+      "id": "~purpose-file-depth-sort"
+    },
+    "~~purpose-glob-ignore-patterns": {
+      "category": "aspects",
+      "id": "~purpose-glob-ignore-patterns"
+    },
+    "~v2-symbols-only": {
+      "category": "aspects",
+      "id": "v2-symbols-only"
+    },
+    "~responsive-layout": {
+      "category": "aspects",
+      "id": "responsive-layout"
+    },
+    "~~visual-tag-inference-patterns": {
+      "category": "aspects",
+      "id": "~visual-tag-inference-patterns"
+    },
+    "~~scan-index-schema-version-1-0-0": {
+      "category": "aspects",
+      "id": "~scan-index-schema-version-1-0-0"
+    },
+    "~~symbol-blocklist-framework-aliases": {
+      "category": "aspects",
+      "id": "~symbol-blocklist-framework-aliases"
+    },
+    "~~symbol-ref-pattern-letter-guard": {
+      "category": "aspects",
+      "id": "~symbol-ref-pattern-letter-guard"
+    },
+    "~~anchor-parse-formats": {
+      "category": "aspects",
+      "id": "~anchor-parse-formats"
+    },
+    "~~viewer-ws-port-42196": {
+      "category": "aspects",
+      "id": "~viewer-ws-port-42196"
+    },
+    "~~viewer-cors-wildcard": {
+      "category": "aspects",
+      "id": "~viewer-cors-wildcard"
+    },
+    "~~viewer-sdk-ui-client-routing": {
+      "category": "aspects",
+      "id": "~viewer-sdk-ui-client-routing"
+    },
+    "~~portal-yaml-version-required": {
+      "category": "aspects",
+      "id": "~portal-yaml-version-required"
+    },
+    "~~gate-id-kebab-case": {
+      "category": "aspects",
+      "id": "~gate-id-kebab-case"
+    },
+    "~~lock-mode-default-all": {
+      "category": "aspects",
+      "id": "~lock-mode-default-all"
+    },
+    "~~portal-glob-ignore-patterns": {
+      "category": "aspects",
+      "id": "~portal-glob-ignore-patterns"
+    },
+    "~~portal-dev-ports-marathon": {
+      "category": "aspects",
+      "id": "~portal-dev-ports-marathon"
+    },
+    "~~gates-portals-key-alias": {
+      "category": "aspects",
+      "id": "~gates-portals-key-alias"
+    },
+    "~~lock-requires-keys": {
+      "category": "aspects",
+      "id": "~lock-requires-keys"
+    },
+    "~~flow-gates-must-exist": {
+      "category": "aspects",
+      "id": "~flow-gates-must-exist"
+    },
+    "~~strict-equality-warning": {
+      "category": "aspects",
+      "id": "~strict-equality-warning"
+    },
+    "~~safe-expression-evaluator-no-eval": {
+      "category": "aspects",
+      "id": "~safe-expression-evaluator-no-eval"
+    },
+    "~~one-time-prize-tracking": {
+      "category": "aspects",
+      "id": "~one-time-prize-tracking"
+    },
+    "~~watcher-reconnect-5s": {
+      "category": "aspects",
+      "id": "~watcher-reconnect-5s"
+    },
+    "~~gate-guard-fail-modes": {
+      "category": "aspects",
+      "id": "~gate-guard-fail-modes"
+    },
+    "~~validator-production-disabled": {
+      "category": "aspects",
+      "id": "~validator-production-disabled"
+    },
+    "~~validator-max-stored-results-100": {
+      "category": "aspects",
+      "id": "~validator-max-stored-results-100"
+    },
+    "~~solo-vs-faceted-modes": {
+      "category": "aspects",
+      "id": "~solo-vs-faceted-modes"
+    },
+    "~~default-agent-model-assignments": {
+      "category": "aspects",
+      "id": "~default-agent-model-assignments"
+    },
+    "~~confidence-threshold-3-match": {
+      "category": "aspects",
+      "id": "~confidence-threshold-3-match"
+    },
+    "~~fresh-context-principle": {
+      "category": "aspects",
+      "id": "~fresh-context-principle"
+    },
+    "~~reviewer-two-stage-minimum-3": {
+      "category": "aspects",
+      "id": "~reviewer-two-stage-minimum-3"
+    },
+    "~~model-discovery-order": {
+      "category": "aspects",
+      "id": "~model-discovery-order"
+    },
+    "~~provider-cascade-order": {
+      "category": "aspects",
+      "id": "~provider-cascade-order"
+    },
+    "~~task-classification-priority": {
+      "category": "aspects",
+      "id": "~task-classification-priority"
+    },
+    "~~budget-defaults-500k-5usd-80pct": {
+      "category": "aspects",
+      "id": "~budget-defaults-500k-5usd-80pct"
+    },
+    "~~cost-estimation-per-million": {
+      "category": "aspects",
+      "id": "~cost-estimation-per-million"
+    },
+    "~~context-role-specific-includes": {
+      "category": "aspects",
+      "id": "~context-role-specific-includes"
+    },
+    "~~flow-mermaid-generation": {
+      "category": "aspects",
+      "id": "~flow-mermaid-generation"
+    },
+    "~~portal-language-agnostic-grep": {
+      "category": "aspects",
+      "id": "~portal-language-agnostic-grep"
+    },
+    "~~audit-log-yaml-per-orchestration": {
+      "category": "aspects",
+      "id": "~audit-log-yaml-per-orchestration"
+    },
+    "~~background-accept-reject-workflow": {
+      "category": "aspects",
+      "id": "~background-accept-reject-workflow"
+    },
+    "~~provider-api-key-requirements": {
+      "category": "aspects",
+      "id": "~provider-api-key-requirements"
+    },
+    "~~manual-always-available-fallback": {
+      "category": "aspects",
+      "id": "~manual-always-available-fallback"
+    },
+    "~~adapter-section-ordering": {
+      "category": "aspects",
+      "id": "~adapter-section-ordering"
+    },
+    "~~stop-hook-8-compliance-checks": {
+      "category": "aspects",
+      "id": "~stop-hook-8-compliance-checks"
+    },
+    "~~pre-tool-use-auto-reindex": {
+      "category": "aspects",
+      "id": "~pre-tool-use-auto-reindex"
+    },
+    "~~post-tool-use-advisory": {
+      "category": "aspects",
+      "id": "~post-tool-use-advisory"
     },
     "#ora-spinners": {
       "category": "components",

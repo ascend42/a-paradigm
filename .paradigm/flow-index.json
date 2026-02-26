@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-02-26T03:40:04.044Z",
+  "generatedAt": "2026-02-26T03:45:50.107Z",
   "flows": {
     "$plsat-exam-flow": {
       "id": "$plsat-exam-flow",
@@ -8,27 +8,33 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Display intro, rules, and name input"
+          "action": "Display intro, rules, and name input",
+          "symbol": "#plsat-view"
         },
         {
           "id": "step-2",
-          "action": "Start 86-minute countdown"
+          "action": "Start 86-minute countdown",
+          "symbol": "#plsat-timer"
         },
         {
           "id": "step-3",
-          "action": "Present 86 shuffled questions (with passage blocks for grouped questions)"
+          "action": "Present 86 shuffled questions (with passage blocks for grouped questions)",
+          "symbol": "#question-card"
         },
         {
           "id": "step-4",
-          "action": "Calculate score on submit or time-up"
+          "action": "Calculate score on submit or time-up",
+          "symbol": "#plsat-view"
         },
         {
           "id": "step-5",
-          "action": "Persist certificate to LocalStorage"
+          "action": "Persist certificate to LocalStorage",
+          "symbol": "#plsat-store"
         },
         {
           "id": "step-6",
-          "action": "Display printable certificate if passed"
+          "action": "Display printable certificate if passed",
+          "symbol": "#certificate-view"
         }
       ],
       "definedIn": "packages/university/.purpose"
@@ -39,19 +45,23 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Detect target IDE from project files"
+          "action": "Detect target IDE from project files",
+          "symbol": "#adapter-registry"
         },
         {
           "id": "step-2",
-          "action": "Load config, specs, and docs"
+          "action": "Load config, specs, and docs",
+          "symbol": "#adapter-base"
         },
         {
           "id": "step-3",
-          "action": "Generate IDE-specific output files"
+          "action": "Generate IDE-specific output files",
+          "symbol": "#cursor-adapter"
         },
         {
           "id": "step-4",
-          "action": "Write files to appropriate locations"
+          "action": "Write files to appropriate locations",
+          "symbol": "#adapter-registry"
         }
       ],
       "definedIn": "packages/paradigm/src/core/ide-adapters/.purpose"
@@ -62,23 +72,28 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Classify task complexity and match agent team"
+          "action": "Classify task complexity and match agent team",
+          "symbol": "#task-classifier"
         },
         {
           "id": "step-2",
-          "action": "Check token/cost budget availability"
+          "action": "Check token/cost budget availability",
+          "symbol": "#budget-tracker"
         },
         {
           "id": "step-3",
-          "action": "Spawn agents in parallel where possible"
+          "action": "Spawn agents in parallel where possible",
+          "symbol": "#agent-spawner"
         },
         {
           "id": "step-4",
-          "action": "Collect results and handle handoffs"
+          "action": "Collect results and handle handoffs",
+          "symbol": "#orchestrator"
         },
         {
           "id": "step-5",
-          "action": "Log execution and costs"
+          "action": "Log execution and costs",
+          "symbol": "#audit-logger"
         }
       ],
       "definedIn": "packages/paradigm/src/core/.purpose"
@@ -89,19 +104,23 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Read YAML file and parse with js-yaml"
+          "action": "Read YAML file and parse with js-yaml",
+          "symbol": "#yaml-parser"
         },
         {
           "id": "step-2",
-          "action": "Validate parsed data against PurposeFileSchema"
+          "action": "Validate parsed data against PurposeFileSchema",
+          "symbol": "#zod-schemas"
         },
         {
           "id": "step-3",
-          "action": "Extract components, gates, signals, flows, aspects from validated data"
+          "action": "Extract components, gates, signals, flows, aspects from validated data",
+          "symbol": "#symbol-extractor"
         },
         {
           "id": "step-4",
-          "action": "Return structured PurposeFile or validation errors"
+          "action": "Return structured PurposeFile or validation errors",
+          "symbol": "#validator"
         }
       ],
       "definedIn": "packages/purpose/core/.purpose"
@@ -112,27 +131,33 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Find all .purpose files via glob"
+          "action": "Find all .purpose files via glob",
+          "symbol": "#aggregator"
         },
         {
           "id": "step-2",
-          "action": "Parse each file with yaml + Zod validation"
+          "action": "Parse each file with yaml + Zod validation",
+          "symbol": "#source-loader"
         },
         {
           "id": "step-3",
-          "action": "Extract components, gates, signals, flows, aspects"
+          "action": "Extract components, gates, signals, flows, aspects",
+          "symbol": "#symbol-extractor"
         },
         {
           "id": "step-4",
-          "action": "Build searchable in-memory index"
+          "action": "Build searchable in-memory index",
+          "symbol": "#symbol-index"
         },
         {
           "id": "step-5",
-          "action": "Resolve cross-file symbol references"
+          "action": "Resolve cross-file symbol references",
+          "symbol": "#reference-tracker"
         },
         {
           "id": "step-6",
-          "action": "Build relationship graph"
+          "action": "Build relationship graph",
+          "symbol": "#graph-builder"
         }
       ],
       "definedIn": "packages/premise/core/.purpose"
@@ -143,27 +168,123 @@
       "steps": [
         {
           "id": "step-1",
-          "action": "Find and parse portal.yaml via glob"
+          "action": "Find and parse portal.yaml via glob",
+          "symbol": "#yaml-parser"
         },
         {
           "id": "step-2",
-          "action": "Validate gate definitions against Zod schemas"
+          "action": "Validate gate definitions against Zod schemas",
+          "symbol": "#gate-schemas"
         },
         {
           "id": "step-3",
-          "action": "Check for circular dependencies in gate requires"
+          "action": "Check for circular dependencies in gate requires",
+          "symbol": "#topology-checker"
         },
         {
           "id": "step-4",
-          "action": "Validate routes reference declared gates"
+          "action": "Validate routes reference declared gates",
+          "symbol": "#validator"
         },
         {
           "id": "step-5",
-          "action": "Report issues and compliance status"
+          "action": "Report issues and compliance status",
+          "symbol": "#validator"
         }
       ],
       "definedIn": "packages/portal/core/.purpose"
     }
   },
-  "symbolToFlows": {}
+  "symbolToFlows": {
+    "#plsat-view": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-timer": [
+      "$plsat-exam-flow"
+    ],
+    "#question-card": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-store": [
+      "$plsat-exam-flow"
+    ],
+    "#certificate-view": [
+      "$plsat-exam-flow"
+    ],
+    "#detection-engine": [
+      "$ide-sync-flow"
+    ],
+    "#sync-handler": [
+      "$ide-sync-flow"
+    ],
+    "#ide-adapters": [
+      "$ide-sync-flow"
+    ],
+    "#mcp-setup-handler": [
+      "$ide-sync-flow"
+    ],
+    "#agent-classifier": [
+      "$agent-orchestration-flow"
+    ],
+    "#budget-tracker": [
+      "$agent-orchestration-flow"
+    ],
+    "#agent-spawner": [
+      "$agent-orchestration-flow"
+    ],
+    "#orchestrator": [
+      "$agent-orchestration-flow"
+    ],
+    "#audit-logger": [
+      "$agent-orchestration-flow"
+    ],
+    "#yaml-parser": [
+      "$purpose-parsing",
+      "$portal-validation-flow"
+    ],
+    "#zod-schemas": [
+      "$purpose-parsing"
+    ],
+    "#symbol-extractor": [
+      "$purpose-parsing",
+      "$symbol-aggregation"
+    ],
+    "#validator": [
+      "$purpose-parsing",
+      "$portal-validation-flow"
+    ],
+    "#aggregator": [
+      "$symbol-aggregation"
+    ],
+    "#source-loader": [
+      "$symbol-aggregation"
+    ],
+    "#symbol-index": [
+      "$symbol-aggregation"
+    ],
+    "#reference-tracker": [
+      "$symbol-aggregation"
+    ],
+    "#graph-builder": [
+      "$symbol-aggregation"
+    ],
+    "#gate-schemas": [
+      "$portal-validation-flow"
+    ],
+    "#topology-checker": [
+      "$portal-validation-flow"
+    ],
+    "#task-classifier": [
+      "$agent-orchestration-flow"
+    ],
+    "#adapter-registry": [
+      "$ide-sync-flow"
+    ],
+    "#adapter-base": [
+      "$ide-sync-flow"
+    ],
+    "#cursor-adapter": [
+      "$ide-sync-flow"
+    ]
+  }
 }
