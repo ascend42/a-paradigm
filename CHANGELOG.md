@@ -5,9 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — APT-2 branch
+## [Unreleased] — APT-2 + APT-3 branches
 
 ### Added
+
+#### Aspect Graph System (`@a-company/paradigm-mcp` 3.4.0 → 3.5.0)
+- **SQLite graph engine** — `.paradigm/aspect-graph.db` stores aspects, code anchors, weighted edges, lore links, search weights, and access heatmap; rebuilt from `.purpose` files on every `paradigm_reindex`
+- **Three-tier search** — learned mappings (Tier 1) → FTS5 full-text (Tier 2) → Levenshtein fuzzy (Tier 3); search quality improves over time via `paradigm_aspect_confirm` learning loop
+- **Recursive ripple** — weighted BFS through aspect graph edges + symbol-index references with multiplicative decay, maxDepth/minWeight pruning, and queue limit
+- **Lore bridge** — materializes links between aspects and lore decision records; infers `related-to` edges between aspects that share lore entries
+- **Auto-suggest engine** — 8 regex heuristic detectors (magic numbers, hardcoded strings, rate limits, time values, env checks, feature flags, regex patterns, conditional logic) scan source files for undocumented aspects
+- **Drift detection** — SHA-256 content hashing of code at anchor line ranges; `paradigm_aspect_drift` reports stale anchors
+- **AspectDefinition v3.5 fields** — `value`, `category`, `severity`, `edges`, `lore` (all optional, backwards-compatible)
+- **7 new MCP tools** — `paradigm_aspect_search`, `paradigm_aspect_get`, `paradigm_aspect_graph`, `paradigm_aspect_heatmap`, `paradigm_aspect_suggest_scan`, `paradigm_aspect_drift`, `paradigm_aspect_confirm`
+- **Materialization in reindex** — `paradigm_reindex` now builds aspect-graph.db alongside scan-index.json, navigator.yaml, and flow-index.json
 
 #### Logger Transport Layer (`@a-company/paradigm-logger` 1.0.0 → 1.1.0)
 - **`LogTransport` interface** — pluggable transport for forwarding structured log entries to external sinks
@@ -35,7 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **User-prompt on recovery** — `paradigm_session_recover` and auto-recovery now instruct agents to ask users whether to continue, discard, or describe a new task before proceeding
 
 ### Changed
-- Coordinated version bumps: `@a-company/paradigm` 3.4.0, `@a-company/paradigm-mcp` 3.4.0, `@a-company/sentinel` 0.4.0, `@a-company/paradigm-logger` 1.1.0, `sentinel-client` 0.2.0, plugin 3.4.0
+- Coordinated version bumps: `@a-company/paradigm` 3.5.0, `@a-company/paradigm-mcp` 3.5.0, `@a-company/sentinel` 0.4.0, `@a-company/paradigm-logger` 1.1.0, `sentinel-client` 0.2.0, plugin 3.5.0
+- `paradigm_reindex` now returns `aspectGraphStats` with aspect/anchor/edge/loreLink counts
+- Premise-core aggregator passes aspect `tags` and `enforcement` through to `SymbolEntry`
 
 #### Sentinel Observability Server (`@a-company/sentinel`)
 - **Structured logging API** — `POST/GET /api/logs` with level, symbol, service, session, correlation ID filtering

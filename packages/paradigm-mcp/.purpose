@@ -47,6 +47,7 @@ description: |
     - "#GlobalStore"
     - "#PurposePortalTools"
     - "#OrchestrationTools"
+    - "#AspectGraphTools"
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
@@ -109,14 +110,43 @@ description: |
     - !tag-suggested
 
 #ReindexTools:
-  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, and flow-index.json from .purpose files. Clears ToolCache on success.
+  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Clears ToolCache on success.
   tags: [mcp]
   anchors:
-    - src/tools/reindex.ts:1-454
+    - src/tools/reindex.ts:1-475
   signals:
     - !index-rebuilt
   components:
     - "#ToolCache"
+    - "#AspectGraph"
+
+#AspectGraphTools:
+  description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm
+  tags: [mcp, aspect-graph]
+  anchors:
+    - src/tools/aspect-graph.ts:1-550
+  components:
+    - "#AspectGraph"
+    - "#AspectSearch"
+    - "#AspectSuggest"
+
+#AspectSearch:
+  description: Three-tier search engine (learned→FTS5→fuzzy) with query normalization and learning loop
+  tags: [feature, aspect-graph]
+  anchors:
+    - src/utils/aspect-search.ts:1-615
+
+#AspectLoreBridge:
+  description: Links aspects to lore decision records via lore_links table. Infers edges between aspects sharing lore.
+  tags: [feature, aspect-graph]
+  anchors:
+    - src/utils/aspect-lore-bridge.ts:1-434
+
+#AspectSuggest:
+  description: Heuristic auto-suggestion engine — scans source files for undocumented aspects using 8 regex pattern detectors
+  tags: [feature, aspect-graph]
+  anchors:
+    - src/utils/aspect-suggest.ts:1-350
 
 #ContextTools:
   description: Context monitoring, session persistence, and handoff tools with global store integration

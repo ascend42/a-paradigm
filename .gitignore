@@ -28,6 +28,7 @@ out/
 .paradigm/handoffs/
 .paradigm/session-breadcrumbs.json
 .paradigm/session-checkpoint.json
+.paradigm/aspect-graph.db
 
 # Sentinel runtime data
 .paradigm/sentinel/
