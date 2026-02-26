@@ -41,6 +41,70 @@ gates:
     description: '^gate-check: Internal gate for SDK validation'
     keys:
       - context.valid
+aspects:
+  ~safe-expression-evaluator-no-eval:
+    description: "Expression evaluator uses custom tokenizer + recursive descent parser; never uses eval()"
+    category: decision
+    severity: critical
+    tags: [security, evaluation]
+    anchors:
+      - src/evaluator.ts:1-6
+      - src/evaluator.ts:155-388
+    applies-to:
+      - "#evaluator"
+
+  ~one-time-prize-tracking:
+    description: One-time prizes are tracked per entity ID and skipped if already fired for that entity
+    category: rule
+    severity: high
+    tags: [prizes, state]
+    anchors:
+      - src/client.ts:196-212
+    applies-to:
+      - "#gate-client"
+
+  ~watcher-reconnect-5s:
+    description: WebSocket watcher reconnects after 5 seconds on close (dev mode only)
+    category: configuration
+    severity: low
+    tags: [dev, websocket]
+    anchors:
+      - src/client.ts:89-92
+    applies-to:
+      - "#gate-client"
+
+  ~gate-guard-fail-modes:
+    description: "GateGuard decorator supports three failure modes: throw, return-null, return-false"
+    category: decision
+    severity: medium
+    tags: [decorators, error-handling]
+    anchors:
+      - src/decorators/index.ts:36
+      - src/decorators/index.ts:86-94
+    applies-to:
+      - "#gate-decorator"
+
+  ~validator-production-disabled:
+    description: Portal validator logging is disabled in production unless PORTAL_VALIDATION=true
+    category: rule
+    severity: medium
+    tags: [logging, environment]
+    anchors:
+      - src/validator.ts:27-46
+    applies-to:
+      - "#portal-client"
+
+  ~validator-max-stored-results-100:
+    description: Gate results store keeps at most 100 entries to prevent memory leaks
+    category: configuration
+    severity: low
+    tags: [memory, testing]
+    anchors:
+      - src/validator.ts:73
+      - src/validator.ts:328-329
+    applies-to:
+      - "#portal-client"
+
 signals:
   gate-passed:
     description: '!gate-passed: Gate check passed, access granted'

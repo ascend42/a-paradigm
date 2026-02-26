@@ -69,6 +69,7 @@ export function generateScanIndex(
     state: {},
     gates: {},
     signals: {},
+    aspects: {},
     screens: {},
     symbolMap: {},
   };
@@ -145,6 +146,9 @@ function processSymbol(
       break;
     case 'signal':
       addSignal(symbol, index);
+      break;
+    case 'aspect':
+      addAspect(symbol, index);
       break;
     default:
       // Skip unknown types
@@ -307,6 +311,29 @@ function addSignal(
 
   index.signals[id] = element;
   index.symbolMap[symbol.symbol] = { category: 'signals', id };
+}
+
+/**
+ * Add an aspect to the index
+ */
+function addAspect(
+  symbol: AggregationInput['symbols'][0],
+  index: ScanIndex
+): void {
+  const id = extractId(symbol.symbol);
+
+  const element: ScanElement = {
+    id,
+    name: formatName(id),
+    symbol: symbol.symbol,
+    category: 'aspects',
+    path: symbol.filePath,
+    description: symbol.description,
+    related: symbol.references,
+  };
+
+  index.aspects[id] = element;
+  index.symbolMap[symbol.symbol] = { category: 'aspects', id };
 }
 
 /**

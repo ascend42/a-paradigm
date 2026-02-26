@@ -1,6 +1,46 @@
 components:
   paradigm-hooks:
-    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 7 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
+    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 8 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     signals:
       - '!compliance-violation'
       - '!hook-installed'
+
+aspects:
+  ~stop-hook-8-compliance-checks:
+    description: |
+      Stop hook blocks agent completion unless 8 checks pass:
+      (1) source files modified without .purpose updates (threshold 2+),
+      (2) modified directories missing .purpose files entirely,
+      (3) route patterns added without portal.yaml,
+      (4) aspect anchor files that no longer exist,
+      (5) per-directory .purpose freshness via .pending-review,
+      (6) aspect coverage advisory,
+      (7) lore entry expected for 3+ source file sessions,
+      (8) blocking habits not satisfied
+    category: rule
+    severity: critical
+    tags: [hooks, compliance, enforcement]
+    anchors:
+      - generated-hooks.ts:7-24
+    applies-to:
+      - "#paradigm-hooks"
+
+  ~pre-tool-use-auto-reindex:
+    description: PreToolUse hook intercepts Bash calls matching git commit patterns and automatically runs paradigm reindex before the commit proceeds; never blocks the tool call
+    category: rule
+    severity: low
+    tags: [hooks, reindex]
+    anchors:
+      - generated-hooks.ts:7-7
+    applies-to:
+      - "#paradigm-hooks"
+
+  ~post-tool-use-advisory:
+    description: PostToolUse hook fires after Edit/Write tool calls and emits an advisory reminder when source files are edited without nearby .purpose coverage; advisory only, never blocks
+    category: rule
+    severity: low
+    tags: [hooks, advisory]
+    anchors:
+      - generated-hooks.ts:7-7
+    applies-to:
+      - "#paradigm-hooks"

@@ -42,3 +42,31 @@ signals:
   provider-unavailable:
     description: A provider was tried but not available, falling back to next
     tags: [team, warning]
+
+aspects:
+  ~provider-api-key-requirements:
+    description: Each provider has specific environment detection — claude requires ANTHROPIC_API_KEY, claude-code requires CLAUDE_CODE=1 or TERM_PROGRAM=claude, cursor-cli requires Cursor IDE environment, claude-cli checks claude command in PATH
+    category: constraint
+    severity: high
+    tags: [providers, configuration]
+    anchors:
+      - claude.ts:1-1
+      - claude-code.ts:1-1
+      - cursor-cli.ts:1-1
+      - claude-cli.ts:1-1
+    applies-to:
+      - "#claude-provider"
+      - "#claude-code-provider"
+      - "#cursor-cli-provider"
+      - "#claude-cli-provider"
+
+  ~manual-always-available-fallback:
+    description: Manual provider is always available (isAvailable returns true unconditionally) and creates file-based handoff tasks in .paradigm/handoffs/ and .paradigm/tasks/ for human execution
+    category: invariant
+    severity: high
+    tags: [providers, fallback]
+    anchors:
+      - manual.ts:54-57
+      - manual.ts:62-160
+    applies-to:
+      - "#manual-provider"

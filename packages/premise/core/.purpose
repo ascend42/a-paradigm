@@ -48,6 +48,37 @@ signals:
     description: '!aggregation-complete: Symbol aggregation finished'
     category: premise
     severity: info
+aspects:
+  ~symbol-blocklist-framework-aliases:
+    description: "$lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON"
+    category: rule
+    severity: medium
+    tags: [symbol-extraction, false-positives]
+    anchors:
+      - src/aggregator.ts:364-367
+    applies-to:
+      - "#aggregator"
+
+  ~symbol-ref-pattern-letter-guard:
+    description: "Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)"
+    category: rule
+    severity: medium
+    tags: [symbol-extraction, regex]
+    anchors:
+      - src/aggregator.ts:382-383
+    applies-to:
+      - "#aggregator"
+
+  ~anchor-parse-formats:
+    description: "Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30"
+    category: decision
+    severity: low
+    tags: [anchors, parsing]
+    anchors:
+      - src/aggregator.ts:335-358
+    applies-to:
+      - "#aggregator"
+
 flows:
   symbol-aggregation:
     description: Aggregate all symbols from .purpose and portal.yaml files into a unified index

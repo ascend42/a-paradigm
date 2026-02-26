@@ -36,3 +36,65 @@ signals:
   log-emitted:
     description: A structured log entry was written
     tags: [observability]
+
+aspects:
+  ~log-level-env-resolution:
+    description: Log level resolves from LOG_LEVEL env var first; if unset, defaults to debug in development and info in production (NODE_ENV=production)
+    category: configuration
+    severity: medium
+    tags: [logging, configuration]
+    anchors:
+      - src/logger.ts:20-25
+    applies-to:
+      - "#paradigm-logger"
+
+  ~format-auto-detection:
+    description: Log format resolves from PARADIGM_LOG_FORMAT env var (json forces JSON); otherwise defaults to JSON in production, pretty in development; pretty format uses ANSI color codes per level (gray/cyan/yellow/red)
+    category: configuration
+    severity: medium
+    tags: [logging, formatting]
+    anchors:
+      - src/logger.ts:27-32
+      - src/formatters.ts:3-8
+      - src/formatters.ts:27-40
+      - src/formatters.ts:42-60
+    applies-to:
+      - "#paradigm-logger"
+      - "#formatter-pretty"
+      - "#formatter-json"
+
+  ~symbol-auto-prefix-normalization:
+    description: Symbol loggers auto-prefix symbols with their type prefix if not already present — component() adds #, gate() adds ^, signal() adds !, flow() adds $, aspect() adds ~
+    category: rule
+    severity: medium
+    tags: [logging, symbols]
+    anchors:
+      - src/logger.ts:163-165
+      - src/logger.ts:139-161
+    applies-to:
+      - "#paradigm-logger"
+      - "#symbol-logger"
+
+  ~correlation-async-local-storage:
+    description: Correlation tracking uses Node.js AsyncLocalStorage to propagate correlation IDs through async call chains without explicit parameter threading; IDs are UUIDs from crypto.randomUUID
+    category: decision
+    severity: medium
+    tags: [correlation, observability]
+    anchors:
+      - src/correlation.ts:1-4
+      - src/correlation.ts:10-12
+      - src/correlation.ts:14-16
+    applies-to:
+      - "#correlation-tracker"
+
+  ~symbol-filter-env-var:
+    description: PARADIGM_SYMBOLS env var provides comma-separated prefix filter (e.g., "#,^") to restrict which symbol types emit logs; null means all symbols pass
+    category: configuration
+    severity: low
+    tags: [logging, filtering]
+    anchors:
+      - src/logger.ts:34-39
+      - src/logger.ts:88-91
+    applies-to:
+      - "#paradigm-logger"
+      - "#symbol-logger"

@@ -238,7 +238,7 @@ interface ExtendedFlowDefinition {
  * Generate flow index from .purpose files
  * Parses extended flow definitions with steps and validation
  */
-async function generateFlowIndex(
+export async function generateFlowIndex(
   rootDir: string,
   purposeFiles: string[],
   options: { quiet?: boolean }
@@ -333,7 +333,7 @@ export function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
         result.push({
           id: (s.id as string) || `step-${index + 1}`,
           action,
-          symbol: s.symbol as string | undefined,
+          symbol: (s.symbol as string | undefined) || (s.component as string | undefined),
           expect: s.expect as string | undefined,
         });
       }

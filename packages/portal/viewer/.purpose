@@ -55,6 +55,37 @@ components:
     description: '#palette-component: React component for command palette'
   command-generator:
     description: '#command-generator: Generates contextual CLI commands'
+aspects:
+  ~viewer-ws-port-42196:
+    description: WebSocket server defaults to port 42196 (marathon + 1); UI defaults to 42195
+    category: configuration
+    severity: low
+    tags: [ports, websocket]
+    anchors:
+      - src/server.ts:44-45
+    applies-to:
+      - "#websocket-server"
+
+  ~viewer-cors-wildcard:
+    description: "API responses set Access-Control-Allow-Origin: * for cross-origin access"
+    category: decision
+    severity: medium
+    tags: [cors, security]
+    anchors:
+      - src/server.ts:369
+    applies-to:
+      - "#websocket-server"
+
+  ~viewer-sdk-ui-client-routing:
+    description: "WebSocket clients are routed to SDK or UI handler based on URL path (/ui prefix)"
+    category: rule
+    severity: medium
+    tags: [websocket, routing]
+    anchors:
+      - src/server.ts:113-121
+    applies-to:
+      - "#websocket-server"
+
 states:
   session: {}
 signals:

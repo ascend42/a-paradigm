@@ -1,0 +1,115 @@
+name: paradigm-vscode
+description: VS Code extension providing rich IDE support for the Paradigm symbol system — syntax highlighting, hover info, go-to-definition, find references, diagnostics, CodeLens, autocomplete, and quick fixes for .purpose files.
+
+components:
+  extension-entry:
+    description: Extension activation/deactivation lifecycle, provider registration, and command registration
+    file: src/extension.ts
+    tags: [feature]
+
+  index-service:
+    description: Manages SymbolIndex lifecycle — builds from premise-core aggregation, watches .purpose/portal.yaml files, debounced rebuild on change
+    file: src/services/index-service.ts
+    tags: [state]
+
+  hover-provider:
+    description: Shows symbol type, description, file path, references, and tags on hover over any Paradigm symbol
+    file: src/providers/hover.ts
+
+  definition-provider:
+    description: Go-to-definition and find-all-references for Paradigm symbols across all supported file types
+    file: src/providers/definition.ts
+
+  diagnostics-provider:
+    description: Validates .purpose files on open/save/change — reports YAML errors, schema errors, and undefined symbol references
+    file: src/providers/diagnostics.ts
+
+  codelens-provider:
+    description: Shows reference count lenses above symbol definitions in .purpose files
+    file: src/providers/codelens.ts
+
+  completion-provider:
+    description: Symbol autocomplete triggered by prefix characters (# $ ^ ! ~ @ % ? &) with type-aware filtering
+    file: src/providers/completion.ts
+
+  quickfix-provider:
+    description: Quick fix code actions for undefined symbols — offers to create symbol definition in nearest .purpose file
+    file: src/providers/quickfix.ts
+
+  document-symbol-provider:
+    description: Document outline for .purpose files showing components, gates, signals, flows, and aspects
+    file: src/providers/symbols.ts
+
+  workspace-symbol-provider:
+    description: Workspace-wide symbol search across all indexed Paradigm symbols
+    file: src/providers/symbols.ts
+
+  purpose-grammar:
+    description: TextMate grammar for .purpose file syntax highlighting
+    file: syntaxes/purpose.tmLanguage.json
+
+  paradigm-symbols-grammar:
+    description: TextMate injection grammar for Paradigm symbol highlighting in YAML, Markdown, TypeScript, and JavaScript
+    file: syntaxes/paradigm-symbols.tmLanguage.json
+
+aspects:
+  ~activation-requires-purpose-files:
+    description: "Extension activates only when workspace contains .purpose, portal.yaml, or .paradigm/config.yaml files"
+    category: rule
+    severity: medium
+    tags: [activation, performance]
+    anchors:
+      - package.json:22-26
+    applies-to:
+      - "#extension-entry"
+
+  ~symbol-regex-all-prefixes:
+    description: "Symbol detection regex matches both v2 (#$^!~) and legacy (@%?&) prefixes: /[@#$%^!?~&][a-zA-Z][a-zA-Z0-9._-]*/"
+    category: decision
+    severity: high
+    tags: [regex, backward-compatibility]
+    anchors:
+      - src/services/index-service.ts:213
+      - src/services/index-service.ts:244
+    applies-to:
+      - "#index-service"
+
+  ~file-watcher-debounce-500ms:
+    description: File watcher debounces index rebuilds by 500ms to avoid thrashing during rapid edits
+    category: configuration
+    severity: low
+    tags: [performance, debounce]
+    anchors:
+      - src/services/index-service.ts:177-178
+    applies-to:
+      - "#index-service"
+
+  ~diagnostics-scope-purpose-files:
+    description: "Diagnostics run on .purpose, portal.yaml, and .paradigm/*.yaml files — not on general YAML or code files"
+    category: rule
+    severity: medium
+    tags: [diagnostics, scope]
+    anchors:
+      - src/providers/diagnostics.ts:145-151
+    applies-to:
+      - "#diagnostics-provider"
+
+  ~completion-trigger-all-prefixes:
+    description: "Autocomplete triggers on all 9 prefix characters: @ # ^ ! $ % ? ~ &"
+    category: configuration
+    severity: low
+    tags: [autocomplete, ux]
+    anchors:
+      - src/providers/completion.ts:9
+    applies-to:
+      - "#completion-provider"
+
+  ~symbol-injection-scope:
+    description: Paradigm symbol TextMate grammar is injected into YAML, Markdown, TypeScript, TSX, JavaScript, JSX, and .purpose files
+    category: decision
+    severity: medium
+    tags: [syntax-highlighting, injection]
+    anchors:
+      - package.json:46-54
+    applies-to:
+      - "#paradigm-symbols-grammar"
