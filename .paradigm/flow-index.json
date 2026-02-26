@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-02-21T18:23:44.299Z",
+  "generatedAt": "2026-02-26T02:06:41.932Z",
   "flows": {
     "$plsat-exam-flow": {
       "id": "$plsat-exam-flow",
@@ -12,11 +12,11 @@
         },
         {
           "id": "step-2",
-          "action": "Start 45-minute countdown"
+          "action": "Start 86-minute countdown"
         },
         {
           "id": "step-3",
-          "action": "Present 50 shuffled questions (with passage blocks for grouped questions)"
+          "action": "Present 86 shuffled questions (with passage blocks for grouped questions)"
         },
         {
           "id": "step-4",

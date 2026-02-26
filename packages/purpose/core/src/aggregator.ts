@@ -45,6 +45,45 @@ export interface ParsedPurposeFile {
 }
 
 /**
+ * Normalize top-level symbol-prefixed keys into standard dict format.
+ * Converts #Component: → components.Component, $flow: → flows.flow, etc.
+ * This allows .purpose files using the #Component: shorthand to be indexed.
+ */
+export function normalizeSymbolKeys(data: PurposeFile): PurposeFile {
+  const prefixMap: Record<string, string> = {
+    '#': 'components',
+    '$': 'flows',
+    '^': 'gates',
+    '!': 'signals',
+    '~': 'aspects',
+  };
+
+  for (const key of Object.keys(data)) {
+    const prefix = key[0];
+    const target = prefixMap[prefix];
+    if (!target || key.length < 2) continue;
+
+    const id = key.slice(1); // strip prefix
+    const value = (data as Record<string, unknown>)[key];
+    if (typeof value !== 'object' || value === null) continue;
+
+    // Initialize target dict if needed
+    const dict = ((data as Record<string, unknown>)[target] as Record<string, unknown>) || {};
+    if (!(target in data)) {
+      (data as Record<string, unknown>)[target] = dict;
+    }
+    // Don't overwrite existing entries
+    if (!(id in dict)) {
+      dict[id] = value;
+    }
+    // Remove the top-level prefixed key
+    delete (data as Record<string, unknown>)[key];
+  }
+
+  return data;
+}
+
+/**
  * Aggregate multiple purpose files into a single context
  */
 export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedPurpose {
