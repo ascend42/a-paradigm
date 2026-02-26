@@ -7,12 +7,14 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { aggregateFromDirectory } from '@a-company/premise-core';
-import { 
-  generateScanIndex, 
+import {
+  generateScanIndex,
   serializeScanIndex,
-  type ScanIndex 
+  type ScanIndex
 } from '@a-company/probe-core';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
+import { generateFlowIndex } from '../scan/index.js';
+import { generateNavigator } from '../scan/navigator.js';
 
 interface IndexOptions {
   output?: string;
@@ -131,6 +133,20 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     process.exit(1);
   }
 
+  // Generate navigator.yaml for AI exploration
+  await generateNavigator(rootDir, aggregation, { quiet: options.quiet });
+
+  // Generate flow index for testable flows
+  const flowIndex = await generateFlowIndex(rootDir, aggregation.purposeFiles, { quiet: options.quiet });
+  if (flowIndex && Object.keys(flowIndex.flows).length > 0) {
+    const flowIndexPath = path.join(rootDir, '.paradigm', 'flow-index.json');
+    fs.writeFileSync(flowIndexPath, JSON.stringify(flowIndex, null, 2), 'utf8');
+    if (!options.quiet) {
+      const symbolCount = Object.keys(flowIndex.symbolToFlows).length;
+      spinner.succeed(chalk.green(`Flow index generated (${Object.keys(flowIndex.flows).length} flows, ${symbolCount} symbol mappings)`));
+    }
+  }
+
   // Summary
   if (!options.quiet) {
     console.log(chalk.gray(`\n  Output: ${outputPath}`));
@@ -140,6 +156,7 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     console.log(chalk.gray(`  State: ${Object.keys(index.state).length}`));
     console.log(chalk.gray(`  Gates: ${Object.keys(index.gates).length}`));
     console.log(chalk.gray(`  Signals: ${Object.keys(index.signals).length}`));
+    console.log(chalk.gray(`  Aspects: ${Object.keys(index.aspects).length}`));
     console.log();
     console.log(chalk.blue('✨ Scan index ready for "paradigm scan" queries'));
     console.log(chalk.gray('   Attach an image and say "paradigm scan" to map UI to code\n'));

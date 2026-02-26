@@ -132,9 +132,10 @@ function parsePurposeFileDetailed(filePath) {
     detailedErrors.push({ message: error, type: "file" });
     return { data: null, errors, detailedErrors, rawContent: void 0, isYamlValid: false };
   }
+  const processedContent = rawContent.replace(/^([#~!$^][\w-]+):/gm, '"$1":').replace(/^(\s*-\s+)([!#][\w-]+)$/gm, '$1"$2"');
   let data = null;
   try {
-    data = yaml.load(rawContent);
+    data = yaml.load(processedContent);
   } catch (e) {
     const yamlError = e;
     const line = yamlError.mark?.line ? yamlError.mark.line + 1 : void 0;
@@ -156,6 +157,28 @@ function parsePurposeFileDetailed(filePath) {
       isYamlValid: true
     };
   }
+  if (typeof data === "object" && data !== null) {
+    const obj = data;
+    const prefixMap = {
+      "#": "components",
+      "$": "flows",
+      "^": "gates",
+      "!": "signals",
+      "~": "aspects"
+    };
+    for (const key of Object.keys(obj)) {
+      const prefix = key[0];
+      const target = prefixMap[prefix];
+      if (!target || key.length < 2) continue;
+      const id = key.slice(1);
+      const value = obj[key];
+      if (typeof value !== "object" || value === null) continue;
+      const dict = obj[target] || {};
+      if (!(target in obj)) obj[target] = dict;
+      if (!(id in dict)) dict[id] = value;
+      delete obj[key];
+    }
+  }
   const parseResult = PurposeFileSchema.safeParse(data);
   if (!parseResult.success) {
     for (const issue of parseResult.error.issues) {
@@ -175,9 +198,10 @@ function parsePurposeFileDetailed(filePath) {
 function parsePurposeContent(content) {
   const errors = [];
   const detailedErrors = [];
+  const processedContent = content.replace(/^([#~!$^][\w-]+):/gm, '"$1":').replace(/^(\s*-\s+)([!#][\w-]+)$/gm, '$1"$2"');
   let data = null;
   try {
-    data = yaml.load(content);
+    data = yaml.load(processedContent);
   } catch (e) {
     const yamlError = e;
     const line = yamlError.mark?.line ? yamlError.mark.line + 1 : void 0;
@@ -198,6 +222,28 @@ function parsePurposeContent(content) {
       rawContent: content,
       isYamlValid: true
     };
+  }
+  if (typeof data === "object" && data !== null) {
+    const obj = data;
+    const prefixMap = {
+      "#": "components",
+      "$": "flows",
+      "^": "gates",
+      "!": "signals",
+      "~": "aspects"
+    };
+    for (const key of Object.keys(obj)) {
+      const prefix = key[0];
+      const target = prefixMap[prefix];
+      if (!target || key.length < 2) continue;
+      const id = key.slice(1);
+      const value = obj[key];
+      if (typeof value !== "object" || value === null) continue;
+      const dict = obj[target] || {};
+      if (!(target in obj)) obj[target] = dict;
+      if (!(id in dict)) dict[id] = value;
+      delete obj[key];
+    }
   }
   const parseResult = PurposeFileSchema.safeParse(data);
   if (!parseResult.success) {

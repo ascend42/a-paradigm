@@ -1,0 +1,26 @@
+id: '001'
+title: Paradigm must be its own paragon — all test queries must return full results
+status: accepted
+date: '2026-02-26'
+symbols:
+  - '#paradigm-mcp'
+  - '#purpose-parser'
+  - '#sentinel-sdk'
+  - ~audit-required
+context: As the framework's own showcase project, gaps in a-paradigm's self-coverage undermine credibility. Case study 002 demonstrated that 93% is not enough — the remaining 7% creates the impression of systemic fragility.
+decision: The a-paradigm repo must maintain 100% success rate on the 22-query stress test battery. Every symbol referenced in tests, case studies, and lore must be declared in .purpose files. Every MCP tool must have a degraded fallback path.
+rationale:
+  factors:
+    - Framework credibility requires self-consistency
+    - Stress test is reproducible and automated
+    - Gap count was small (7 items) and fixable in one session
+  conclusion: Invest in closing all gaps now rather than accumulating technical debt in our own showcase
+consequences:
+  positive:
+    - 100% stress test pass rate
+    - Case study 003 validates the fix
+    - Sets precedent for quality bar
+  negative:
+    - Some symbols exist only for test coverage, not organic need
+  mitigations:
+    - Tag test-only symbols with [showcase] so they're identifiable

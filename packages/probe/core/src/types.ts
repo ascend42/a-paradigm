@@ -9,13 +9,14 @@
 /**
  * Element category in the scan index
  */
-export type ScanCategory = 
+export type ScanCategory =
   | 'components'   // UI elements, reusable modules
   | 'features'     // Business logic, user-facing functionality
   | 'flows'        // Multi-step processes, user journeys
   | 'state'        // Stores, state slices, reactive data
   | 'gates'        // Access control, permissions
   | 'signals'      // Events, side effects
+  | 'aspects'      // Cross-cutting rules, constraints, decisions
   | 'screens'      // Full page/view definitions
   | 'layouts';     // Layout components, structural elements
 
@@ -202,6 +203,8 @@ export interface ScanIndex {
   gates: Record<string, ScanElement>;
   /** Signals (events) */
   signals: Record<string, ScanElement>;
+  /** Aspects (cross-cutting rules, constraints, decisions) */
+  aspects: Record<string, ScanElement>;
   /** Screens/pages */
   screens: Record<string, ScanScreen>;
   /** Symbol lookup table (symbol -> category + id) */

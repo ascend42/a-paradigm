@@ -24,6 +24,28 @@ components:
     description: '#protocol-handler: Handles probe protocol requests'
   matcher:
     description: '#matcher: Matches images to components'
+aspects:
+  ~visual-tag-inference-patterns:
+    description: Component names are matched against 30+ regex patterns (button, form, modal, nav, etc.) to infer visual tags for image-to-code mapping
+    category: rule
+    severity: medium
+    tags: [visual-tags, inference]
+    anchors:
+      - src/generator.ts:365-408
+    applies-to:
+      - "#component-scanner"
+
+  ~scan-index-schema-version-1-0-0:
+    description: "Scan index $meta.version is always '1.0.0'; tracked separately from paradigmVersion"
+    category: configuration
+    severity: low
+    tags: [versioning, schema]
+    anchors:
+      - src/generator.ts:20
+      - src/generator.ts:108
+    applies-to:
+      - "#generator"
+
 signals:
   index-generated:
     description: '!index-generated: Scan index was generated'

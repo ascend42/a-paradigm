@@ -108,6 +108,22 @@ features:
       - "!quiz-completed"
     flows:
       - $plsat-exam-flow
+  aspect-graph:
+    description: SQLite-backed aspect graph with materialization, three-tier search, drift detection, and auto-suggest
+    aspects:
+      - "~aspect-graph-derived-artifact"
+      - "~three-tier-search"
+      - "~search-weight-learning"
+    components:
+      - '#AspectGraph'
+      - '#AspectSearch'
+      - '#AspectLoreBridge'
+      - '#AspectSuggest'
+      - '#AspectGraphTools'
+    signals:
+      - '!index-rebuilt'
+    flows:
+      - $aspect-materialization
   portal-authorization:
     description: Runtime authorization with visual testing
     flows:
@@ -355,6 +371,46 @@ aspects:
     applies-to:
       - '#global-store'
       - '#mcp-tools'
+  aspect-graph-derived-artifact:
+    description: The SQLite aspect-graph.db is a derived build artifact rebuilt from scratch on every reindex — YAML .purpose files remain the authoritative source
+    category: invariant
+    severity: critical
+    tags:
+      - aspect-graph
+      - architecture
+    anchors:
+      - packages/paradigm-mcp/src/tools/reindex.ts:140-175
+      - packages/paradigm-mcp/src/utils/aspect-graph.ts:1-50
+    applies-to:
+      - '#AspectGraph'
+      - '#ReindexTools'
+    enforcement: |
+      The aspect-graph.db is rebuilt by dropping all tables and re-materializing
+      from SymbolEntry[] on every reindex. Never edit the database directly.
+  three-tier-search:
+    description: Aspect search uses three tiers in order — Tier 1 learned mappings, Tier 2 FTS5 full-text, Tier 3 Levenshtein fuzzy — first tier to return results wins
+    category: decision
+    severity: high
+    tags:
+      - aspect-graph
+      - search
+    anchors:
+      - packages/paradigm-mcp/src/utils/aspect-search.ts:1-50
+    applies-to:
+      - '#AspectSearch'
+      - '#AspectGraphTools'
+  search-weight-learning:
+    description: Search results improve via confirm feedback — confirmed aspect gets +1.0, alternatives decay by *0.95 per query
+    category: rule
+    severity: medium
+    tags:
+      - aspect-graph
+      - learning
+    anchors:
+      - packages/paradigm-mcp/src/utils/aspect-search.ts:100-150
+    applies-to:
+      - '#AspectSearch'
+      - '#AspectGraphTools'
 relationships:
   - '#cli-commands USES #commander-setup, #ora-spinners, #chalk-output'
   - '#symbol-system USES #symbol-parser, #symbol-index'
@@ -364,6 +420,7 @@ relationships:
   - '#sentinel-dashboard USES #sentinel-ui, #node-renderer, #connection-lines'
   - '#portal-authorization USES #portal-core, #portal-sdk, #portal-viewer'
   - '#team-orchestration USES #agent-spawner, #orchestrator, #model-discovery'
+  - '#aspect-graph USES #AspectGraph, #AspectSearch, #AspectLoreBridge, #AspectSuggest, #AspectGraphTools'
 flows:
   init-flow:
     description: Initialize Paradigm in a new project
@@ -415,6 +472,15 @@ flows:
       - Agent calls paradigm_wisdom_promote
       - Local item validated and copied to global store
       - Cache invalidated for merged refresh
+  aspect-materialization:
+    description: Rebuild aspect-graph.db from .purpose files during reindex
+    steps:
+      - Open or create .paradigm/aspect-graph.db
+      - Drop and recreate all tables (aspects, anchors, edges, lore_links, search_weights, heatmap)
+      - Materialize aspects and anchors from SymbolEntry[]
+      - Materialize lore links from .paradigm/lore/ files
+      - Infer edges from shared lore references
+      - Close database and write to disk
   install-flow:
     description: Install Paradigm CLI and MCP server from source
     steps:

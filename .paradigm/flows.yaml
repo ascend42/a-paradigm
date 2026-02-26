@@ -1,0 +1,197 @@
+version: "1.0"
+flows:
+  $init-flow:
+    name: Project Initialization
+    description: Initialize Paradigm in a new project — detect IDE, create .paradigm/, generate config, copy templates, run initial sync
+    trigger: "paradigm init"
+    steps:
+      - type: action
+        symbol: "#detection-engine"
+        description: Detect existing IDE files and project structure
+      - type: action
+        symbol: "#config-generator"
+        description: Create .paradigm/ directory and generate config.yaml
+      - type: action
+        symbol: "#sync-handler"
+        description: Run initial sync to generate IDE instruction files
+      - type: signal
+        symbol: "!command-success"
+        description: Emit init success
+    successSignal: "!command-success"
+
+  $sync-flow:
+    name: IDE Sync
+    description: Sync .paradigm/ configuration to IDE-specific instruction files
+    trigger: "paradigm sync"
+    steps:
+      - type: action
+        symbol: "#detection-engine"
+        description: Detect target IDE from project files
+      - type: action
+        symbol: "#sync-handler"
+        description: Load .paradigm/config.yaml and specs/docs
+      - type: action
+        symbol: "#ide-adapters"
+        description: Call adapter.generate() for detected IDE
+      - type: action
+        symbol: "#mcp-setup-handler"
+        description: Write MCP config if applicable
+      - type: signal
+        symbol: "!command-success"
+        description: Emit sync success
+    successSignal: "!command-success"
+
+  $probe-flow:
+    name: Visual Discovery
+    description: Visual discovery workflow — receive screenshot, match against scan-index, return component mappings
+    trigger: "paradigm probe <screenshot>"
+    steps:
+      - type: action
+        symbol: "#probe-engine"
+        description: Receive and process screenshot
+      - type: action
+        symbol: "#symbol-parser"
+        description: Match visual elements against scan-index.json
+      - type: signal
+        symbol: "!probe-match"
+        description: Emit matched component locations
+    successSignal: "!probe-match"
+
+  $authorization-flow:
+    name: Gate Authorization
+    description: Runtime gate checking for protected routes defined in portal.yaml
+    trigger: "HTTP request to protected route"
+    steps:
+      - type: gate
+        symbol: "^authenticated"
+        description: Check if user is authenticated
+      - type: gate
+        symbol: "^gate-check"
+        description: Evaluate gate keys against request context
+      - type: signal
+        symbol: "!gate-passed"
+        description: Emit access granted signal
+    successSignal: "!gate-passed"
+
+  $orchestration-flow:
+    name: Multi-Agent Orchestration
+    description: Coordinate a multi-agent task from classification through execution to result merge
+    trigger: "paradigm team orchestrate <task>"
+    steps:
+      - type: action
+        symbol: "#agent-classifier"
+        description: Classify task complexity and match agent team
+      - type: action
+        symbol: "#budget-tracker"
+        description: Check token/cost budget availability
+      - type: action
+        symbol: "#agent-spawner"
+        description: Spawn agents in parallel where possible
+      - type: action
+        symbol: "#orchestrator"
+        description: Collect results and handle handoffs between agents
+      - type: action
+        symbol: "#audit-logger"
+        description: Log orchestration execution and costs
+      - type: signal
+        symbol: "!orchestration-completed"
+        description: Emit orchestration completion
+    successSignal: "!orchestration-completed"
+
+  $purpose-parsing:
+    name: Purpose File Parsing
+    description: Parse a .purpose file from raw YAML into validated structured data with symbol extraction
+    trigger: "File read of *.purpose"
+    steps:
+      - type: action
+        symbol: "#purpose-parser"
+        description: Pre-process YAML to handle symbol-prefixed keys (# comments, ! tags)
+      - type: action
+        symbol: "#yaml-parser"
+        description: Parse normalized YAML with js-yaml
+      - type: action
+        symbol: "#zod-schemas"
+        description: Validate parsed data against PurposeFileSchema
+      - type: action
+        symbol: "#symbol-extractor"
+        description: Extract components, gates, signals, flows, aspects from validated data
+      - type: signal
+        symbol: "!parse-success"
+        description: Emit successful parse with extracted symbols
+    successSignal: "!parse-success"
+
+  $incident-triage:
+    name: Incident Triage
+    description: Complete flow from incident recording to resolution suggestion
+    trigger: "Error/exception captured by Sentinel transport"
+    steps:
+      - type: action
+        symbol: "#IncidentStorage"
+        description: Record incident with structured metadata
+      - type: action
+        symbol: "#PatternMatcher"
+        description: Match incident against known error patterns
+      - type: action
+        symbol: "#IncidentEnricher"
+        description: Enrich with symbol context and file locations
+      - type: action
+        symbol: "#IncidentGrouper"
+        description: Group with related incidents
+      - type: signal
+        symbol: "!incident-recorded"
+        description: Emit recorded incident for triage
+    successSignal: "!incident-recorded"
+
+  $plsat-exam-flow:
+    name: PLSAT Certification Exam
+    description: University PLSAT exam flow — load questions, Fisher-Yates shuffle, present exam, grade with 80% threshold
+    trigger: "Student starts PLSAT exam"
+    steps:
+      - type: action
+        symbol: "#plsat-router"
+        description: Load exam questions from PLSAT bank
+      - type: action
+        symbol: "#plsat-store"
+        description: Shuffle questions via Fisher-Yates and manage exam state
+      - type: action
+        symbol: "#progress-store"
+        description: Track answer submissions and timing
+      - type: gate
+        symbol: "^authenticated"
+        description: Student must be logged in
+      - type: signal
+        symbol: "!plsat-completed"
+        description: Emit exam completion with pass/fail result
+    successSignal: "!plsat-completed"
+
+  $handoff-roundtrip:
+    name: Session Handoff
+    description: Session handoff persistence and recovery via global store
+    trigger: "Agent calls paradigm_handoff_prepare"
+    steps:
+      - type: action
+        symbol: "#session-manager"
+        description: Prepare handoff payload with summary, next steps, modified files
+      - type: action
+        symbol: "#session-manager"
+        description: Write payload to ~/.paradigm/sessions/{hash}/pending-handoffs/
+      - type: signal
+        symbol: "!handoff-ready"
+        description: Emit handoff ready for pickup
+    successSignal: "!handoff-ready"
+
+  $wisdom-promotion:
+    name: Wisdom Promotion
+    description: Promote project-local wisdom (antipatterns, decisions) to global ~/.paradigm/wisdom/
+    trigger: "paradigm_wisdom_promote"
+    steps:
+      - type: action
+        symbol: "#wisdom-store"
+        description: Validate local wisdom item exists and is complete
+      - type: action
+        symbol: "#wisdom-store"
+        description: Copy item to global ~/.paradigm/wisdom/ store
+      - type: signal
+        symbol: "!wisdom-promoted"
+        description: Emit promotion confirmation
+    successSignal: "!wisdom-promoted"

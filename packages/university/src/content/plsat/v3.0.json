@@ -1,10 +1,11 @@
 {
   "version": "3.0",
   "frameworkVersion": "2.0",
-  "timeLimit": 3000,
+  "timeLimit": 5160,
+  "totalSlots": 86,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
-  "description": "50 questions. 50 minutes. 80% to pass. Good luck, scholar.",
+  "description": "86 questions. 86 minutes. 80% to pass. Good luck, scholar.",
   "items": [
     {
       "type": "standalone",
@@ -1926,6 +1927,272 @@
           },
           "correct": "B",
           "explanation": "For large monorepos, increasing threadTrailMax (from default 10 to 25) provides more session context for complex tasks, and increasing toolCacheTtlMs (from 30s to 60s) reduces redundant index scans across the larger symbol space. Other defaults work well regardless of project size. Setting TTLs too low causes excessive recomputation, while setting breadcrumbsMax too low loses valuable session context."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-078",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-078",
+          "scenario": "Your project has aspects categorized as rules, decisions, constraints, configurations, and invariants. A new aspect states: 'API response payloads must not exceed 5MB.' A developer is unsure which category to assign.",
+          "question": "Which aspect category is correct for this aspect?",
+          "choices": {
+            "A": "`rule` \u2014 because it uses 'must not', indicating a mandatory pattern",
+            "B": "`constraint` \u2014 because it defines a quantitative limit (5MB) on system behavior",
+            "C": "`configuration` \u2014 because the 5MB value could be changed per environment",
+            "D": "`invariant` \u2014 because it must always hold true",
+            "E": "`decision` \u2014 because someone decided 5MB was the right limit"
+          },
+          "correct": "B",
+          "explanation": "The key indicator is the quantitative limit: '5MB'. Constraints define measurable boundaries on system behavior \u2014 file sizes, rate limits, timeouts, quotas. While 'must not exceed' sounds like a rule, the category inference system prioritizes 'limit', 'maximum', 'cannot exceed' keywords for `constraint`. A rule would be a pattern without a specific numeric boundary (e.g., 'all responses must include request IDs'). Configuration would apply if the value explicitly varies by environment."
+        },
+        {
+          "id": "plsat-078b",
+          "scenario": "An aspect definition reads: 'The team decided to use PostgreSQL over MongoDB for the user service due to relational query requirements.' No category field is explicitly set.",
+          "question": "What category will Paradigm's category inference assign?",
+          "choices": {
+            "A": "`rule` \u2014 because it implies PostgreSQL must be used",
+            "B": "`constraint` \u2014 because it limits the database technology",
+            "C": "`decision` \u2014 because the description contains 'decided' and 'chose'",
+            "D": "`configuration` \u2014 because the database choice is a deployment setting",
+            "E": "`invariant` \u2014 because the database choice should never change"
+          },
+          "correct": "C",
+          "explanation": "Category inference uses keyword matching on the description. Words like 'decided', 'chosen', 'selected', 'opted' trigger the `decision` category. The description explicitly says 'The team decided to use PostgreSQL over MongoDB' \u2014 this is a textbook architectural decision with rationale."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-079",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-079",
+          "scenario": "Your aspect graph has the following edges:\n- `~token-expiry-24h` --depends-on--> `~jwt-signing-rs256`\n- `~jwt-signing-rs256` --enforced-by--> `#auth-middleware`\n- `~cache-aggressively` --contradicts--> `~always-fresh-data`\n- `~rate-limit-v2` --supersedes--> `~rate-limit-v1`\n\nYou need to modify `~jwt-signing-rs256` to change the signing algorithm.",
+          "question": "Which aspect will paradigm_ripple surface as impacted through the 'depends-on' edge?",
+          "choices": {
+            "A": "`~cache-aggressively` \u2014 because it has a contradicts edge in the same graph",
+            "B": "`~token-expiry-24h` \u2014 because it depends-on the aspect being modified",
+            "C": "`~rate-limit-v2` \u2014 because it supersedes another aspect",
+            "D": "`#auth-middleware` \u2014 because it enforces the aspect",
+            "E": "All four aspects \u2014 ripple follows all edge types equally"
+          },
+          "correct": "B",
+          "explanation": "Ripple follows dependency edges to discover indirect impacts. `~token-expiry-24h` has a `depends-on` edge to `~jwt-signing-rs256`, meaning changes to the signing algorithm may affect token expiry behavior. `#auth-middleware` has an `enforced-by` edge (reverse direction \u2014 it enforces the aspect, but the aspect doesn't depend on it for correctness). The contradicts and supersedes edges involve unrelated aspects."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-080",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-080",
+          "scenario": "You run `paradigm_aspect_search({ query: 'jwt expiry' })` and get three results:\n- Tier 1 (learned): `~token-expiry-24h` (weight: 3.0)\n- Tier 2 (FTS5): `~session-timeout-30m` (BM25: 0.7)\n- Tier 3 (fuzzy): `~jwt-refresh-rotation` (distance: 2)\n\nThe Tier 1 result is exactly what you need.",
+          "question": "What should you do to reinforce this search mapping?",
+          "choices": {
+            "A": "Nothing \u2014 Tier 1 results are already reinforced by being in the search_weights table",
+            "B": "Call `paradigm_aspect_confirm({ query: 'jwt expiry', aspectId: 'token-expiry-24h' })` to add +1.0 weight and decay the others",
+            "C": "Manually update the search_weights SQLite table to increase the weight",
+            "D": "Call `paradigm_aspect_get({ aspectId: 'token-expiry-24h' })` to register a direct access",
+            "E": "Call `paradigm_reindex` to rebuild the learned mappings"
+          },
+          "correct": "B",
+          "explanation": "paradigm_aspect_confirm is the feedback mechanism for the learning system. Calling it with the query and selected aspect ID adds +1.0 to the confirmed result's weight (3.0 \u2192 4.0) and decays all other results for that query by *0.95. This reinforces the correct mapping. Reindex rebuilds the graph but does not affect search_weights \u2014 those persist across reindexes. Direct access via aspect_get records a heatmap entry but does not affect search learning."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-081",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-081",
+          "scenario": "The aspect graph materialization pipeline runs during `paradigm_reindex`. It processes aspects from .purpose files through a specific sequence of steps.",
+          "question": "What is the correct order of the five-step materialization pipeline?",
+          "choices": {
+            "A": "materialize aspects \u2192 open graph \u2192 materialize lore links \u2192 infer lore edges \u2192 close graph",
+            "B": "open graph \u2192 materialize aspects \u2192 materialize lore links \u2192 infer lore edges \u2192 close graph",
+            "C": "open graph \u2192 infer lore edges \u2192 materialize aspects \u2192 materialize lore links \u2192 close graph",
+            "D": "materialize aspects \u2192 materialize lore links \u2192 open graph \u2192 infer lore edges \u2192 close graph",
+            "E": "open graph \u2192 materialize lore links \u2192 materialize aspects \u2192 close graph \u2192 infer lore edges"
+          },
+          "correct": "B",
+          "explanation": "The materialization pipeline follows a strict order: (1) openAspectGraph opens or creates the SQLite database and clears all tables. (2) materializeAspects reads .purpose files and writes aspects, anchors, and explicit/inferred edges. (3) materializeLoreLinks creates entries connecting aspects to their referenced lore entries. (4) inferLoreEdges scans for shared lore references between aspects and creates learned edges. (5) closeAspectGraph commits changes, runs ANALYZE, and closes the connection."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-082",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-082",
+          "scenario": "You define an aspect with an `applies-to` reference to a component:\n\n```yaml\n~audit-required:\n  description: Financial operations must produce audit logs\n  applies-to: [\"#payment-service\"]\n  edges:\n    - target: \"#audit-middleware\"\n      relation: enforced-by\n```",
+          "question": "What edges will the materialization pipeline create, and what are their origins and weights?",
+          "choices": {
+            "A": "One edge: `enforced-by` to `#audit-middleware` with origin `explicit` and weight 1.0",
+            "B": "Two edges: `enforced-by` to `#audit-middleware` (origin: explicit, weight: 1.0) and an inferred edge to `#payment-service` (origin: inferred, weight: 0.5)",
+            "C": "Two edges: both with origin `explicit` and weight 1.0",
+            "D": "Three edges: one explicit, one inferred, and one learned",
+            "E": "One edge: `applies-to` is documentation only and does not generate edges"
+          },
+          "correct": "B",
+          "explanation": "The materialization pipeline creates edges from two sources. The explicit `edges` field generates an edge to `#audit-middleware` with origin `explicit` and weight 1.0. The `applies-to` reference generates an inferred edge to `#payment-service` with origin `inferred` and weight 0.5. Inferred edges have lower weight because they represent a weaker relationship than explicitly declared edges."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-083",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-083",
+          "scenario": "An aspect `~session-timeout-30m` was created 3 months ago with an anchor at `src/middleware/session.ts:15-25`. Since then, a developer refactored the file and the session timeout logic is now at lines 40-55. The aspect definition was not updated.\n\nYou run `paradigm_aspect_drift({ aspectId: 'session-timeout-30m' })`.",
+          "question": "What will the drift detection report?",
+          "choices": {
+            "A": "No drift \u2014 the file still exists, so the anchor is valid",
+            "B": "Drift detected: the SHA-256 content hash of lines 15-25 no longer matches the stored hash, indicating the code at the anchored location has changed",
+            "C": "An error \u2014 the anchor line range exceeds the current file length",
+            "D": "Partial drift \u2014 only some lines within the range changed",
+            "E": "No drift \u2014 drift detection only checks whether the file exists, not its contents"
+          },
+          "correct": "B",
+          "explanation": "Drift detection computes a SHA-256 hash of the current code at the anchored line range (15-25) and compares it to the hash stored during materialization. Since the timeout logic moved to different lines, the code at lines 15-25 is now different \u2014 the hashes will not match, and drift is reported. The fix is to update the anchor to `src/middleware/session.ts:40-55` to point to the new location of the timeout logic."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-084",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-084",
+          "scenario": "You run `paradigm_aspect_suggest_scan({ filePath: 'src/auth/jwt.ts' })` on a file containing:\n\n```typescript\nconst TOKEN_EXPIRY = 86400; // 24 hours in seconds\nconst MAX_REFRESH_ATTEMPTS = 3;\nif (process.env.NODE_ENV === 'production') { ... }\nconst EMAIL_REGEX = /^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$/;\n```",
+          "question": "Which of the 8 built-in detectors will fire for each pattern?",
+          "choices": {
+            "A": "All four lines trigger the 'magic numbers' detector only",
+            "B": "TOKEN_EXPIRY: time values; MAX_REFRESH_ATTEMPTS: magic numbers; process.env: environment checks; EMAIL_REGEX: regex patterns",
+            "C": "TOKEN_EXPIRY: magic numbers; MAX_REFRESH_ATTEMPTS: rate limits; process.env: feature flags; EMAIL_REGEX: hardcoded strings",
+            "D": "All four lines trigger the 'hardcoded strings' detector",
+            "E": "TOKEN_EXPIRY: configuration; MAX_REFRESH_ATTEMPTS: constraint; process.env: environment checks; EMAIL_REGEX: assertion guards"
+          },
+          "correct": "B",
+          "explanation": "Each pattern matches a specific detector: (1) 86400 with a comment mentioning '24 hours' matches the time values detector (durations, timeouts, TTLs, expiry). (2) MAX_REFRESH_ATTEMPTS = 3 is a numeric literal that is not 0 or 1, matching the magic numbers detector. (3) process.env.NODE_ENV matches the environment checks detector. (4) The regular expression literal matches the regex patterns detector. The detectors are specialized for these exact pattern types."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-085",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-085",
+          "scenario": "Two aspects in your project both reference lore entry `L-2026-01-15-003`:\n- `~token-expiry-24h` has `lore: [L-2026-01-15-003]`\n- `~refresh-token-rotation` has `lore: [L-2026-01-15-003]`\n\nNeither aspect has an explicit edge to the other.",
+          "question": "What happens during the `inferLoreEdges` step of materialization?",
+          "choices": {
+            "A": "Nothing \u2014 edges are only created from explicit YAML definitions",
+            "B": "A learned edge is created between the two aspects with origin 'learned' and weight proportional to shared lore references",
+            "C": "Both aspects are merged into a single aspect",
+            "D": "A lore_links entry is created but no edge is generated",
+            "E": "An explicit edge with weight 1.0 is created between them"
+          },
+          "correct": "B",
+          "explanation": "The inferLoreEdges step scans the lore_links table for aspects that share lore references. When two aspects both reference the same lore entry, a learned edge is created between them with origin 'learned' and a weight proportional to the number of shared references. This discovers implicit relationships \u2014 aspects that were discussed in the same lore context are likely related even without explicit edges."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-086",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-086",
+          "scenario": "Your project has three edge origins in the aspect graph:\n- Explicit edges (weight 1.0) from YAML `edges` fields\n- Inferred edges (weight 0.5) from `applies-to` references\n- Learned edges from shared lore references\n\nDuring recursive ripple, the BFS traverses: an explicit edge (1.0) then an inferred edge (0.5) then another inferred edge (0.5).",
+          "question": "What is the cumulative path weight after these three hops, and will it be pruned by the default minWeight threshold?",
+          "choices": {
+            "A": "Weight: 2.0 (additive) \u2014 well above the 0.1 threshold, not pruned",
+            "B": "Weight: 0.25 (multiplicative: 1.0 * 0.5 * 0.5) \u2014 above 0.1, not pruned",
+            "C": "Weight: 0.5 (only the weakest edge counts) \u2014 above 0.1, not pruned",
+            "D": "Weight: 0.0625 (multiplicative: 1.0 * 0.25 * 0.25) \u2014 below 0.1, pruned",
+            "E": "Weight: 0.167 (average of all three) \u2014 above 0.1, not pruned"
+          },
+          "correct": "B",
+          "explanation": "Recursive ripple uses multiplicative decay: the weight at each hop is multiplied by the edge weight. Starting at 1.0, after an explicit edge (1.0): 1.0 * 1.0 = 1.0. After an inferred edge (0.5): 1.0 * 0.5 = 0.5. After another inferred edge (0.5): 0.5 * 0.5 = 0.25. The cumulative weight 0.25 is above the default minWeight threshold of 0.1, so this path is NOT pruned. One more inferred edge would drop it to 0.125, still above threshold. Two more would reach 0.0625, below threshold and pruned."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-087",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-087",
+          "scenario": "Your project's aspect graph SQLite database at `.paradigm/aspect-graph.db` has six tables. During a governance review, you want to understand which aspects are discovered most frequently and how they are typically found.",
+          "question": "Which table stores this information, and what are its columns?",
+          "choices": {
+            "A": "The `aspects` table with an `access_count` column",
+            "B": "The `edges` table with a `traversal_count` column",
+            "C": "The `heatmap` table with columns: aspect_id, access_type, count, and last_accessed",
+            "D": "The `search_weights` table with a `hit_count` column",
+            "E": "The `anchors` table with a `reference_count` column"
+          },
+          "correct": "C",
+          "explanation": "The `heatmap` table tracks aspect access patterns with four columns: `aspect_id` (which aspect), `access_type` (how it was discovered: search, ripple, navigate, or direct), `count` (frequency), and `last_accessed` (timestamp). This table powers `paradigm_aspect_heatmap` and reveals whether aspects are typically found via search, encountered during ripple analysis, discovered through navigation, or accessed by direct ID lookup."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-088",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-088",
+          "scenario": "You want to extend `paradigm_aspect_suggest_scan` to detect SOC2 compliance annotations specific to your project. The built-in 8 detectors do not cover this pattern.",
+          "question": "How do you add a custom detector?",
+          "choices": {
+            "A": "Edit the Paradigm source code to add a 9th built-in detector",
+            "B": "Define a custom detector in `.paradigm/aspect-detectors.yaml` with regex patterns, language filters, and suggested category/severity",
+            "C": "Create a `.paradigm/plugins/soc2-detector.js` plugin file",
+            "D": "Add a `detectors` section to `.paradigm/config.yaml`",
+            "E": "Custom detectors are not supported \u2014 use paradigm_aspect_search instead"
+          },
+          "correct": "B",
+          "explanation": "Custom detectors are defined in `.paradigm/aspect-detectors.yaml`. Each detector specifies an id, name, description, regex patterns with language filters, and suggestions for category, severity, and tags. Custom detectors are loaded alongside the built-in 8 during `paradigm_aspect_suggest_scan`, extending the detection system without modifying Paradigm's source code."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-089",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-089",
+          "scenario": "During a quarterly governance review of a project with 150 aspects, the heatmap shows 40 aspects with zero access. The drift audit reveals 12 drifted anchors. The category distribution is: 95 rules, 20 constraints, 15 configurations, 12 decisions, 8 invariants.",
+          "question": "What does the category distribution suggest about this project's aspect governance?",
+          "choices": {
+            "A": "The distribution is healthy \u2014 rules should always be the majority",
+            "B": "The project may be over-documenting constraints as rules, and under-documenting strategic decisions \u2014 review whether some 'rules' are actually constraints or decisions",
+            "C": "The project needs more invariants to balance the distribution",
+            "D": "Configuration aspects should equal rules in a well-governed project",
+            "E": "The 40 zero-access aspects indicate the project should reduce to 110 aspects"
+          },
+          "correct": "B",
+          "explanation": "A 63% concentration in the `rule` category (95 out of 150) suggests over-classification. Many numeric limits (which should be constraints) and architectural choices (which should be decisions) may be categorized as rules. The low decision count (12) is a red flag \u2014 a project with 150 aspects likely made more than 12 strategic decisions. The governance review should reclassify mistyped aspects and document missing decisions. Zero-access aspects (40) are a separate concern requiring individual evaluation."
         }
       ]
     }
