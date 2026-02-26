@@ -1,6 +1,6 @@
 {
   "name": "@a-company/portal-e2e",
-  "version": "1.0.0",
+  "version": "3.5.0",
   "description": "Portal validation utilities for AI-agent driven E2E testing",
   "type": "module",
   "main": "dist/index.js",

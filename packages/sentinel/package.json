@@ -1,6 +1,6 @@
 {
   "name": "@a-company/sentinel",
-  "version": "0.4.0",
+  "version": "3.5.0",
   "description": "Semantic error monitoring — errors that speak your language",
   "type": "module",
   "main": "./dist/index.js",

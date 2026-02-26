@@ -2,7 +2,7 @@
   "name": "paradigm-vscode",
   "displayName": "Paradigm",
   "description": "Rich IDE support for Paradigm symbol system and .purpose files",
-  "version": "1.0.1",
+  "version": "3.5.0",
   "publisher": "a-company",
   "engines": {
     "vscode": "^1.85.0"
@@ -29,8 +29,13 @@
     "languages": [
       {
         "id": "purpose",
-        "aliases": ["Purpose", "purpose"],
-        "extensions": [".purpose"],
+        "aliases": [
+          "Purpose",
+          "purpose"
+        ],
+        "extensions": [
+          ".purpose"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],

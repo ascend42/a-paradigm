@@ -1,6 +1,6 @@
 {
   "name": "@a-company/portal-viewer",
-  "version": "0.1.0",
+  "version": "3.5.0",
   "description": "Portal Viewer - Real-time visualization and testing dashboard for portal activations",
   "type": "module",
   "main": "./dist/index.js",

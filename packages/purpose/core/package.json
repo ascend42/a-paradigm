@@ -1,6 +1,6 @@
 {
   "name": "@a-company/purpose-core",
-  "version": "0.1.0",
+  "version": "3.5.0",
   "description": "Purpose file parsing, validation, and aggregation",
   "type": "module",
   "main": "./dist/index.js",
