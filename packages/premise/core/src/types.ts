@@ -155,6 +155,71 @@ export interface SymbolEntry {
 }
 
 // ============================================
+// Aspect Graph Types (v3.5)
+// ============================================
+
+/**
+ * Edge relation types between aspect graph nodes
+ */
+export type AspectRelation =
+  | 'enforced-by'   // this aspect is enforced by the target
+  | 'depends-on'    // this aspect depends on the target being true
+  | 'contradicts'   // this aspect conflicts with the target
+  | 'supersedes'    // this aspect replaces the target
+  | 'related-to';   // general association
+
+/**
+ * Aspect severity levels
+ */
+export type AspectSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+/**
+ * Aspect category
+ */
+export type AspectCategory =
+  | 'rule'          // must always be true
+  | 'decision'      // a choice that was made
+  | 'constraint'    // a limitation from external factors
+  | 'configuration' // a tunable value
+  | 'invariant';    // something that must never change
+
+/**
+ * An explicit edge in the aspect graph
+ */
+export interface AspectEdge {
+  /** Source aspect or symbol */
+  source: string;
+  /** Target aspect or symbol */
+  target: string;
+  /** Relationship type */
+  relation: AspectRelation;
+  /** Traversal priority (0.0-1.0) */
+  weight?: number;
+  /** How this edge was created */
+  origin: 'explicit' | 'inferred' | 'learned';
+}
+
+/**
+ * Line-level anchor with resolved content
+ */
+export interface ResolvedAnchor {
+  /** File path relative to project root */
+  path: string;
+  /** Start line */
+  startLine: number;
+  /** End line (same as startLine for single-line anchors) */
+  endLine: number;
+  /** The actual code at this anchor */
+  content?: string;
+  /** Content hash for drift detection */
+  contentHash?: string;
+  /** Whether the file exists */
+  exists: boolean;
+  /** Whether content has drifted from last scan */
+  drifted?: boolean;
+}
+
+// ============================================
 // Premise File Types
 // ============================================
 
