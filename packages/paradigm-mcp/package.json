@@ -28,6 +28,7 @@
     "@a-company/portal-core": "*",
     "@a-company/sentinel": "*",
     "js-yaml": "^4.1.0",
+    "sql.js": "^1.10.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
