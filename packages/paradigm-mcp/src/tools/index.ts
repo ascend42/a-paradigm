@@ -35,6 +35,8 @@ import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { getLoreToolsList, handleLoreTool } from './lore.js';
 import { getHabitsToolsList, handleHabitsTool } from './habits.js';
 import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.js';
+import { getTasksToolsList, handleTasksTool } from './tasks.js';
+import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -242,6 +244,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getHabitsToolsList(),
           // Aspect graph tools
           ...getAspectGraphToolsList(),
+          // Task management tools
+          ...getTasksToolsList(),
+          // Assessment loop tools
+          ...getAssessmentToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -274,7 +280,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       let recoveryPreamble: string | null = null;
       let updateNotice: string | null = null;
       if (!tracker.hasRecoveredThisSession()) {
-        recoveryPreamble = buildRecoveryPreamble(ctx.rootDir);
+        recoveryPreamble = await buildRecoveryPreamble(ctx.rootDir);
         updateNotice = getPluginUpdateNotice();
         schedulePluginUpdateCheck();
         tracker.markRecovered();
@@ -1060,6 +1066,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try aspect graph tools
           if (name.startsWith('paradigm_aspect_') && name !== 'paradigm_aspect_check') {
             const result = await handleAspectGraphTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try task tools
+          if (name.startsWith('paradigm_task_')) {
+            const result = await handleTasksTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try assessment tools
+          if (name.startsWith('paradigm_assessment_')) {
+            const result = await handleAssessmentTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

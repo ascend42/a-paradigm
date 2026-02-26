@@ -103,6 +103,32 @@ function extractBreadcrumbInfo(toolName: string, args: Record<string, unknown>):
       return {
         summary: `Checkpoint: phase=${args.phase}, ${(args.context as string || '').slice(0, 60)}`,
       };
+    case 'paradigm_task_create':
+      return { summary: `Created task: "${(args.blurb as string || '').slice(0, 60)}"` };
+    case 'paradigm_task_done':
+      return { summary: `Completed task ${args.id}` };
+    case 'paradigm_task_shelve':
+      return { summary: `Shelved task ${args.id}` };
+    case 'paradigm_task_list':
+      return { summary: `Listed tasks (status: ${args.status || 'open'})` };
+    case 'paradigm_task_update':
+      return { summary: `Updated task ${args.id}` };
+    case 'paradigm_assessment_record':
+      return {
+        summary: `Assessment: ${(args.title as string || '').slice(0, 60)} → ${args.arc_id}`,
+        symbol: Array.isArray(args.symbols) ? (args.symbols as string[])[0] : undefined,
+      };
+    case 'paradigm_assessment_list':
+      return { summary: args.arc_id ? `Listed entries in ${args.arc_id}` : 'Listed assessment arcs' };
+    case 'paradigm_assessment_search':
+      return {
+        summary: `Searched assessments${args.symbol ? ` for ${args.symbol}` : ''}`,
+        symbol: args.symbol as string | undefined,
+      };
+    case 'paradigm_assessment_arc_create':
+      return { summary: `Created arc: ${args.id}` };
+    case 'paradigm_assessment_arc_close':
+      return { summary: `Closed arc: ${args.arc_id}` };
     default: {
       // Generic fallback: strip paradigm_ prefix, pick first meaningful arg
       const shortName = toolName.replace(/^paradigm_/, '');
@@ -658,7 +684,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
  * Returns null if no recovery data is available.
  * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
  */
-export function buildRecoveryPreamble(rootDir: string): string | null {
+export async function buildRecoveryPreamble(rootDir: string): Promise<string | null> {
   const tracker = getSessionTracker();
   tracker.setRootDir(rootDir);
 
@@ -706,6 +732,44 @@ export function buildRecoveryPreamble(rootDir: string): string | null {
     if (latest.nextSteps.length > 0) {
       lines.push(`Next steps: ${latest.nextSteps.slice(0, 3).join(', ')}`);
     }
+  }
+
+  // Surface open tasks
+  try {
+    const { loadTasks } = await import('../utils/task-loader.js');
+    const openTasks = await loadTasks(rootDir, { status: 'open', limit: 5 });
+    if (openTasks.length > 0) {
+      lines.push('');
+      lines.push('Open tasks:');
+      for (const task of openTasks) {
+        const tags = task.tags.length > 0 ? ` [${task.tags.join(', ')}]` : '';
+        lines.push(`  [${task.priority}] ${task.id}: ${task.blurb}${tags}`);
+      }
+    }
+  } catch {
+    // Tasks not initialized yet — skip
+  }
+
+  // Surface active assessment arcs related to recovered symbols
+  try {
+    const { loadArcs } = await import('../utils/assessment-loader.js');
+    const activeArcs = await loadArcs(rootDir, 'active');
+    if (activeArcs.length > 0) {
+      const checkpointSymbols = checkpoint?.symbolsTouched || [];
+      const relevantArcs = checkpointSymbols.length > 0
+        ? activeArcs.filter(arc => arc.symbols.some(s => checkpointSymbols.includes(s)))
+        : activeArcs.slice(0, 3);
+
+      if (relevantArcs.length > 0) {
+        lines.push('');
+        lines.push('Active assessment arcs:');
+        for (const arc of relevantArcs) {
+          lines.push(`  ${arc.id}: ${arc.name} (${arc.entry_count} entries)`);
+        }
+      }
+    }
+  } catch {
+    // Assessments not initialized yet — skip
   }
 
   lines.push('');
