@@ -45,6 +45,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Session Recovery
 - **User-prompt on recovery** — `paradigm_session_recover` and auto-recovery now instruct agents to ask users whether to continue, discard, or describe a new task before proceeding
 
+#### Full Aspect Audit — 200 aspects documented
+- **19 `.purpose` files** updated with cross-cutting rules, decisions, constraints, configurations, and invariants
+- **paradigm-mcp** — 54 aspects (tool cache TTLs, session tracking, aspect graph config, search config, orchestration, dispatch, reindex pipeline, MCP server config)
+- **sentinel** — 58 aspects (storage schema, matcher, grouper, suggester, server config, auth, rate limiting, client SDK)
+- **sentinel-rs** — 8 aspects (new `.purpose` file for Rust client SDK)
+- **CLI core** — 21 aspects across 5 files (orchestration, budget, cost estimation, hook compliance, provider requirements)
+- **logger** — 5 aspects (log level env resolution, format auto-detection, symbol normalization, correlation, symbol filter)
+- **portal** — 18 aspects across 3 packages (core, SDK, viewer)
+- **premise/purpose/probe** — 8 aspects (aggregation, parsing, scan generation)
+- **university** — 4 aspects (PLSAT threshold, Fisher-Yates shuffle, variant resolution, CORS)
+- **paradigm-vscode** — 6 aspects (new `.purpose` file for VS Code extension)
+
+#### University Content Updates (`@a-company/university` 3.2.0 → 3.5.0)
+- **PARA-201** — "The Aspect Graph" lesson added to intermediate course
+- **PARA-501** — Expanded Sentinel Deep Dive + new "Aspect Graph at Scale" lesson
+- **Reference cards** — 7 new MCP tools, Aspect Categories, Edge Relations sections
+- **PLSAT v3.0** — 12 new question slots (slot-078 through slot-089) covering aspect graph, drift detection, search tiers, and lore bridge
+
+### Fixed
+
+#### Purpose Parser — Symbol-Prefixed YAML Keys (`@a-company/purpose-core`)
+- **Regex pre-processing** — `#Foo:` → `"#Foo":` and `- !signal` → `- "!signal"` before YAML parse, fixing files using `#Component:` shorthand format
+- **Normalization before validation** — top-level `#MCPServer` → `components.MCPServer` before Zod strips unknown keys
+- **Result** — indexable symbols jumped from 333 → 504, aspects from 11 → 200
+
 ### Changed
 - Coordinated version bumps: `@a-company/paradigm` 3.5.0, `@a-company/paradigm-mcp` 3.5.0, `@a-company/sentinel` 0.4.0, `@a-company/paradigm-logger` 1.1.0, `sentinel-client` 0.2.0, plugin 3.5.0
 - `paradigm_reindex` now returns `aspectGraphStats` with aspect/anchor/edge/loreLink counts
