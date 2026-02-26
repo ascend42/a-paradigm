@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-25T05:34:47.931Z'
+generated: '2026-02-25T23:37:54.755Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1546,13 +1546,152 @@ by_symbol:
       agent: []
   '#sentinel-server':
     symbol: '#sentinel-server'
-    total_changes: 2
-    last_modified: '2026-02-22T03:49:11Z'
+    total_changes: 7
+    last_modified: '2026-02-25T22:53:30Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_10
-      - *ref_11
+      - &ref_40
+        id: h0057
+        ts: '2026-02-25T22:53:30Z'
+        type: implement
+        symbols:
+          - '#paradigm-logger'
+          - '#sentinel-client'
+          - '#sentinel-server'
+          - '#sentinel-transport'
+        author:
+          type: human
+          id: ascend
+        commit: b6606deecaf589a5ae7aecbb5cfac33fb75f8b3a
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/logger/package.json
+          - packages/logger/src/index.ts
+          - packages/logger/src/logger.ts
+          - packages/logger/src/types.ts
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/context.ts
+          - packages/paradigm/package.json
+          - packages/sentinel-rs/Cargo.lock
+          - packages/sentinel-rs/Cargo.toml
+          - packages/sentinel-rs/src/lib.rs
+          - packages/sentinel-rs/src/tracing_layer.rs
+          - packages/sentinel/API.md
+          - packages/sentinel/package.json
+          - packages/sentinel/src/client.ts
+          - packages/sentinel/src/index.ts
+          - packages/sentinel/src/server/index.ts
+          - packages/sentinel/src/transport.ts
+          - packages/sentinel/src/types.ts
+          - packages/sentinel/tsup.config.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/skills/observe/SKILL.md
+          - plugins/paradigm/skills/sentinel/SKILL.md
+        description: 'feat(#sentinel-client): logger transport layer, SentinelTransport bridge, Rust tracing Layer, plugin updates'
+      - &ref_41
+        id: h0056
+        ts: '2026-02-25T16:13:24Z'
+        type: implement
+        symbols:
+          - '#sentinel-rs'
+          - '#sentinel-server'
+        author:
+          type: human
+          id: ascend
+        commit: 6c0c728c9841b9c97d0148c5a9dd566cff59bea7
+        intent: feature
+        files:
+          - .gitignore
+          - .paradigm/habits.yaml
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - packages/sentinel-rs/Cargo.lock
+          - packages/sentinel/.paradigm/sentinel/sentinel.db
+          - packages/sentinel/.purpose
+        description: 'chore(#sentinel-server): gitignore cleanup, untrack runtime db, add Cargo.lock'
+      - id: h0055
+        ts: '2026-02-25T16:11:04Z'
+        type: implement
+        symbols:
+          - '#sentinel-server'
+        author:
+          type: human
+          id: ascend
+        commit: 871d8d7902f30829dcb5259039eb6ec117c5c82d
+        intent: feature
+        files:
+          - CHANGELOG.md
+        description: 'docs(#sentinel-server): add changelog for full observability platform'
+      - &ref_38
+        id: h0054
+        ts: '2026-02-25T15:59:25Z'
+        type: implement
+        symbols:
+          - '#sentinel-client'
+          - '#sentinel-mcp'
+          - '#sentinel-rs'
+          - '#sentinel-server'
+          - '#sentinel-storage'
+          - ^auth
+          - ^rate-limit
+          - $metrics-flow
+          - $trace-flow
+        author:
+          type: human
+          id: ascend
+        commit: 26a35f2c34167afb840acf18fd60be8ef831cc92
+        intent: feature
+        files:
+          - packages/paradigm-mcp/src/tools/sentinel.ts
+          - packages/sentinel-rs/Cargo.toml
+          - packages/sentinel-rs/README.md
+          - packages/sentinel-rs/src/lib.rs
+          - packages/sentinel/src/client.ts
+          - packages/sentinel/src/index.ts
+          - packages/sentinel/src/mcp.ts
+          - packages/sentinel/src/server/index.ts
+          - packages/sentinel/src/server/middleware/auth.ts
+          - packages/sentinel/src/server/middleware/rate-limit.ts
+          - packages/sentinel/src/server/routes/metrics.ts
+          - packages/sentinel/src/server/routes/traces.ts
+          - packages/sentinel/src/storage.ts
+          - packages/sentinel/src/types.ts
+          - packages/sentinel/ui/src/App.tsx
+          - packages/sentinel/ui/src/store/logsStore.ts
+          - packages/sentinel/ui/src/styles/index.css
+          - packages/sentinel/ui/src/views/FlowsView.tsx
+          - packages/sentinel/ui/src/views/LogsView.tsx
+        description: 'feat(#sentinel-server): full observability platform — metrics, traces, auth, rate limiting, dashboard UI, client SDKs'
+      - &ref_39
+        id: h0053
+        ts: '2026-02-25T15:35:42Z'
+        type: implement
+        symbols:
+          - '#sentinel-mcp'
+          - '#sentinel-server'
+          - '#sentinel-storage'
+          - '#sentinel-ws'
+        author:
+          type: human
+          id: ascend
+        commit: 037ba8e92d47ac4c2b04ef72ca64b503a5215f67
+        intent: feature
+        files:
+          - package-lock.json
+          - packages/paradigm-mcp/src/tools/sentinel.ts
+          - packages/sentinel/package.json
+          - packages/sentinel/src/config.ts
+          - packages/sentinel/src/index.ts
+          - packages/sentinel/src/mcp.ts
+          - packages/sentinel/src/server/index.ts
+          - packages/sentinel/src/server/routes/logs.ts
+          - packages/sentinel/src/server/routes/services.ts
+          - packages/sentinel/src/storage.ts
+          - packages/sentinel/src/types.ts
+          - packages/sentinel/tsup.config.ts
+        description: 'feat(#sentinel-server): structured logging, service registry, and live state API'
     contributors:
       human:
         - ascend
@@ -2552,6 +2691,158 @@ by_symbol:
     fragility: low
     recent:
       - *ref_37
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-mcp':
+    symbol: '#sentinel-mcp'
+    total_changes: 2
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+      - *ref_39
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-storage':
+    symbol: '#sentinel-storage'
+    total_changes: 2
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+      - *ref_39
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-ws':
+    symbol: '#sentinel-ws'
+    total_changes: 1
+    last_modified: '2026-02-25T15:35:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_39
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-client':
+    symbol: '#sentinel-client'
+    total_changes: 3
+    last_modified: '2026-02-25T23:37:48Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_42
+        id: h0058
+        ts: '2026-02-25T23:37:48Z'
+        type: implement
+        symbols:
+          - '#sentinel-client'
+          - '#sentinel-transport'
+        author:
+          type: human
+          id: ascend
+        commit: 5d0b169c92c0b8ad3715143ba28fcb6cfe36f6da
+        intent: feature
+        files:
+          - docs/guides/sentinel-upgrade.md
+        description: 'docs: per-project Sentinel upgrade guide'
+      - *ref_40
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-rs':
+    symbol: '#sentinel-rs'
+    total_changes: 2
+    last_modified: '2026-02-25T16:13:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_41
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^auth:
+    symbol: ^auth
+    total_changes: 1
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^rate-limit:
+    symbol: ^rate-limit
+    total_changes: 1
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $metrics-flow:
+    symbol: $metrics-flow
+    total_changes: 1
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $trace-flow:
+    symbol: $trace-flow
+    total_changes: 1
+    last_modified: '2026-02-25T15:59:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_38
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-logger':
+    symbol: '#paradigm-logger'
+    total_changes: 1
+    last_modified: '2026-02-25T22:53:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_40
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-transport':
+    symbol: '#sentinel-transport'
+    total_changes: 2
+    last_modified: '2026-02-25T23:37:48Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_42
+      - *ref_40
     contributors:
       human:
         - ascend

@@ -67,6 +67,19 @@ interface AspectDefinition {
     'applies-to'?: string[];
     /** Description of how this aspect should be enforced */
     enforcement?: string;
+    /** Concrete value for configuration aspects (e.g., "24 * 60 * 60 * 1000") */
+    value?: string;
+    /** Aspect category */
+    category?: 'rule' | 'decision' | 'constraint' | 'configuration' | 'invariant';
+    /** Severity level */
+    severity?: 'low' | 'medium' | 'high' | 'critical';
+    /** Explicit graph edges to other symbols */
+    edges?: Array<{
+        symbol: string;
+        relation: 'enforced-by' | 'depends-on' | 'contradicts' | 'supersedes' | 'related-to';
+    }>;
+    /** Linked lore entry IDs */
+    lore?: string[];
 }
 /**
  * A signal defined in a purpose file

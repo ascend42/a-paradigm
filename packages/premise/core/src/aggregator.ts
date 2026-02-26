@@ -144,6 +144,8 @@ export async function aggregateFromPremise(
             description: item.description,
             anchors: item.anchors?.map(a => parseAnchorString(a)),
             appliesTo: item['applies-to'],
+            tags: item.tags,
+            enforcement: item.enforcement,
           }));
         }
 
