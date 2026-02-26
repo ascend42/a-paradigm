@@ -118,6 +118,12 @@ export interface HeatmapEntry {
 // Drift Detection
 // ============================================
 
+/** Drift detection status */
+export type DriftStatus = 'clean' | 'cosmetic' | 'shifted' | 'relocated' | 'modified' | 'missing';
+
+/** Which detection layer resolved the check */
+export type DriftResolvedBy = 'exact-hash' | 'normalized-hash' | 'git-line-mapping' | 'content-search' | 'none';
+
 /** Result of checking an anchor for content drift */
 export interface DriftResult {
   /** Aspect symbol */
@@ -127,12 +133,20 @@ export interface DriftResult {
   /** Line range */
   startLine: number;
   endLine: number;
-  /** Whether the content has drifted */
-  drifted: boolean;
+  /** Drift status */
+  status: DriftStatus;
+  /** Which detection layer resolved the check */
+  resolvedBy: DriftResolvedBy;
   /** Whether the file still exists */
   exists: boolean;
-  /** Current content (if drifted) */
+  /** Current content (if drifted/modified) */
   currentContent?: string;
+  /** Similarity score for content-search layer (0.0-1.0) */
+  similarity?: number;
+
+  // ── Backwards compat (derived from status) ──
+  /** @deprecated Use status !== 'clean' && status !== 'cosmetic' instead */
+  drifted: boolean;
 }
 
 // ============================================
@@ -161,6 +175,7 @@ export interface AnchorRow {
   start_line: number;
   end_line: number;
   content_hash: string | null;
+  normalized_hash: string | null;
   last_verified: string | null;
   drifted: number;
 }

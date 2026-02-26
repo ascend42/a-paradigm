@@ -155,7 +155,7 @@ export function getAspectGraphToolsList() {
     {
       name: 'paradigm_aspect_drift',
       description:
-        'Check if code at aspect anchor locations has changed since last materialization. Detects broken or stale anchors. ~200 tokens.',
+        'Smart drift detection for code anchors. Layer 1: exact hash match. Layer 1b: normalized hash (ignores whitespace/formatting). Auto-heals cosmetic drift. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -166,7 +166,7 @@ export function getAspectGraphToolsList() {
         },
       },
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
       },
     },
@@ -722,32 +722,42 @@ async function handleAspectDrift(
 
     const results = checkDrift(db, ctx.rootDir, normalizedId);
 
-    const driftedCount = results.filter((r) => r.drifted).length;
-    const missingCount = results.filter((r) => !r.exists).length;
-    const healthyCount = results.filter((r) => !r.drifted && r.exists).length;
+    const cleanCount = results.filter((r) => r.status === 'clean').length;
+    const cosmeticCount = results.filter((r) => r.status === 'cosmetic').length;
+    const modifiedCount = results.filter((r) => r.status === 'modified').length;
+    const missingCount = results.filter((r) => r.status === 'missing').length;
+
+    const overallStatus = modifiedCount === 0 && missingCount === 0
+      ? (cosmeticCount > 0 ? 'clean-with-cosmetic-heals' : 'clean')
+      : 'drift-detected';
 
     const response = {
       ...(normalizedId ? { aspectId: normalizedId } : { scope: 'all' }),
       totalAnchors: results.length,
-      healthy: healthyCount,
-      drifted: driftedCount,
+      clean: cleanCount,
+      cosmetic: cosmeticCount,
+      modified: modifiedCount,
       missing: missingCount,
-      status: driftedCount === 0 && missingCount === 0 ? 'clean' : 'drift-detected',
+      status: overallStatus,
       results: results.map((r) => ({
         aspectId: r.aspectId,
         path: r.path,
         startLine: r.startLine,
         endLine: r.endLine,
-        drifted: r.drifted,
+        status: r.status,
+        resolvedBy: r.resolvedBy,
         exists: r.exists,
-        // Include current content only for drifted anchors (truncated)
-        ...(r.drifted && r.currentContent
+        // Include current content only for modified anchors (truncated)
+        ...(r.status === 'modified' && r.currentContent
           ? { currentContent: r.currentContent.slice(0, 500) }
           : {}),
       })),
-      ...(driftedCount > 0 || missingCount > 0
+      ...(cosmeticCount > 0
+        ? { healed: `${cosmeticCount} anchor(s) had cosmetic-only changes (whitespace/formatting) — exact hashes auto-updated.` }
+        : {}),
+      ...(modifiedCount > 0 || missingCount > 0
         ? {
-            suggestion: 'Run `paradigm scan` to re-materialize the aspect graph and update anchor hashes. Review drifted anchors to ensure aspects still apply.',
+            suggestion: 'Review drifted anchors to ensure aspects still apply. Run `paradigm scan` to re-materialize after fixing.',
           }
         : {}),
     };

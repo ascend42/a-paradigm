@@ -66,6 +66,7 @@ const SCHEMA_STATEMENTS = [
     start_line INTEGER NOT NULL,
     end_line INTEGER NOT NULL,
     content_hash TEXT,
+    normalized_hash TEXT,
     last_verified TEXT,
     drifted INTEGER DEFAULT 0
   )`,
@@ -279,12 +280,12 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[]): void {
     if (entry.anchors) {
       for (const anchor of entry.anchors) {
         const { startLine, endLine } = resolveAnchorLines(anchor);
-        const contentHash = computeAnchorHash(anchor, null);
+        const hashes = computeAnchorHash(anchor, null);
 
         db.run(
-          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, last_verified)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [entry.symbol, anchor.path, startLine, endLine, contentHash, now]
+          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, last_verified)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, now]
         );
       }
     }
@@ -672,8 +673,10 @@ export function checkDrift(
         path: anchor.file_path,
         startLine: anchor.start_line,
         endLine: anchor.end_line,
-        drifted: true,
+        status: 'missing',
+        resolvedBy: 'none',
         exists: false,
+        drifted: true,
       });
       continue;
     }
@@ -684,34 +687,93 @@ export function checkDrift(
       const startIdx = Math.max(0, anchor.start_line - 1);
       const endIdx = Math.min(lines.length, anchor.end_line);
       const sliceContent = lines.slice(startIdx, endIdx).join('\n');
-      const currentHash = crypto.createHash('sha256').update(sliceContent).digest('hex');
+      const currentExactHash = crypto.createHash('sha256').update(sliceContent).digest('hex');
 
-      const drifted = anchor.content_hash != null && currentHash !== anchor.content_hash;
+      // Layer 1a: Exact hash match
+      if (anchor.content_hash != null && currentExactHash === anchor.content_hash) {
+        results.push({
+          aspectId: anchor.aspect_id,
+          path: anchor.file_path,
+          startLine: anchor.start_line,
+          endLine: anchor.end_line,
+          status: 'clean',
+          resolvedBy: 'exact-hash',
+          exists: true,
+          drifted: false,
+        });
+
+        if (anchor.drifted === 1) {
+          db.run('UPDATE anchors SET drifted = 0 WHERE id = ?', [anchor.id]);
+        }
+        continue;
+      }
+
+      // Layer 1b: Normalized hash match (cosmetic change only)
+      const currentNormalizedHash = crypto.createHash('sha256').update(normalizeForHash(sliceContent)).digest('hex');
+
+      if (anchor.normalized_hash != null && currentNormalizedHash === anchor.normalized_hash) {
+        // Cosmetic drift — whitespace/formatting changed but content is the same
+        // Auto-heal: update the exact hash to the current value
+        db.run('UPDATE anchors SET content_hash = ?, drifted = 0 WHERE id = ?', [currentExactHash, anchor.id]);
+
+        results.push({
+          aspectId: anchor.aspect_id,
+          path: anchor.file_path,
+          startLine: anchor.start_line,
+          endLine: anchor.end_line,
+          status: 'cosmetic',
+          resolvedBy: 'normalized-hash',
+          exists: true,
+          drifted: false,
+        });
+        continue;
+      }
+
+      // No hash stored yet (first check after materialization without rootDir)
+      if (anchor.content_hash == null && anchor.normalized_hash == null) {
+        // Store both hashes now
+        db.run(
+          'UPDATE anchors SET content_hash = ?, normalized_hash = ?, drifted = 0 WHERE id = ?',
+          [currentExactHash, currentNormalizedHash, anchor.id]
+        );
+
+        results.push({
+          aspectId: anchor.aspect_id,
+          path: anchor.file_path,
+          startLine: anchor.start_line,
+          endLine: anchor.end_line,
+          status: 'clean',
+          resolvedBy: 'exact-hash',
+          exists: true,
+          drifted: false,
+        });
+        continue;
+      }
+
+      // Real drift — content genuinely changed (future: Layer 2 git mapping, Layer 3 search)
+      db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
 
       results.push({
         aspectId: anchor.aspect_id,
         path: anchor.file_path,
         startLine: anchor.start_line,
         endLine: anchor.end_line,
-        drifted,
+        status: 'modified',
+        resolvedBy: 'none',
         exists: true,
-        currentContent: drifted ? sliceContent : undefined,
+        currentContent: sliceContent,
+        drifted: true,
       });
-
-      // Update the anchor's drift status in the database
-      if (drifted) {
-        db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
-      } else if (anchor.drifted === 1) {
-        db.run('UPDATE anchors SET drifted = 0 WHERE id = ?', [anchor.id]);
-      }
     } catch {
       results.push({
         aspectId: anchor.aspect_id,
         path: anchor.file_path,
         startLine: anchor.start_line,
         endLine: anchor.end_line,
-        drifted: true,
+        status: 'modified',
+        resolvedBy: 'none',
         exists: true,
+        drifted: true,
       });
     }
   }
@@ -748,17 +810,30 @@ function resolveAnchorLines(anchor: CodeAnchor): { startLine: number; endLine: n
 }
 
 /**
- * Compute a SHA-256 hash of an anchor's content for drift detection.
- * Returns null if the file cannot be read.
+ * Normalize content before hashing to ignore cosmetic changes.
+ * Strips trailing whitespace, removes blank lines, and collapses internal whitespace.
  */
-function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): string | null {
-  if (!rootDir) return null;
+function normalizeForHash(content: string): string {
+  return content
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter(line => line.trim() !== '')
+    .map(line => line.replace(/\s+/g, ' '))
+    .join('\n');
+}
+
+/**
+ * Compute SHA-256 hashes of an anchor's content for drift detection.
+ * Returns both exact and normalized hashes, or null if the file cannot be read.
+ */
+function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): { exact: string | null; normalized: string | null } {
+  if (!rootDir) return { exact: null, normalized: null };
 
   const absolutePath = path.isAbsolute(anchor.path)
     ? anchor.path
     : path.join(rootDir, anchor.path);
 
-  if (!fs.existsSync(absolutePath)) return null;
+  if (!fs.existsSync(absolutePath)) return { exact: null, normalized: null };
 
   try {
     const fileContent = fs.readFileSync(absolutePath, 'utf8');
@@ -767,9 +842,11 @@ function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): string |
     const startIdx = Math.max(0, startLine - 1);
     const endIdx = Math.min(lines.length, endLine);
     const sliceContent = lines.slice(startIdx, endIdx).join('\n');
-    return crypto.createHash('sha256').update(sliceContent).digest('hex');
+    const exact = crypto.createHash('sha256').update(sliceContent).digest('hex');
+    const normalized = crypto.createHash('sha256').update(normalizeForHash(sliceContent)).digest('hex');
+    return { exact, normalized };
   } catch {
-    return null;
+    return { exact: null, normalized: null };
   }
 }
 
