@@ -5,6 +5,46 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+#### ESM Bundling — Aspect Graph Tools (`@a-company/paradigm-mcp`)
+- **Externalized `sql.js`** in tsup.config.ts — aspect tools (`aspect_search`, `aspect_get`, `aspect_graph`, `aspect_heatmap`, `aspect_drift`, `aspect_confirm`, `aspect_suggest_scan`) were failing with "Dynamic require of `fs` is not supported" because sql.js's Node.js loader was inlined into ESM bundle
+- After fix: all 7 aspect graph MCP tools functional
+
+#### `paradigm_related` Grep Fallback (`@a-company/paradigm-mcp`)
+- **Added grep fallback** when symbol is not in index — mirrors `paradigm_ripple`'s fallback pattern
+- Returns approximate `usedBy` with file locations and reference counts instead of hard "Symbol not found" error
+- Clearly labeled as `status: "not-indexed"` with suggestion to run `paradigm scan`
+
+#### Flow Index — `symbolToFlows` Empty (`@a-company/paradigm`, `@a-company/paradigm-mcp`)
+- **`parseFlowSteps` now reads `component:` field** as fallback for `symbol:` — .purpose flow steps use `component: '#name'` format but indexer only checked `symbol:` field
+- Fixed in both CLI (`scan/index.ts`) and MCP (`reindex.ts`) code paths
+- **`paradigm index` now generates flow-index.json** — previously only `paradigm shift` and `paradigm init` generated it; added `generateFlowIndex` + `generateNavigator` to `probe/index.ts`
+- Exported `generateFlowIndex` from `scan/index.ts` for reuse
+- Result: 29 symbol-to-flow mappings now populated, `paradigm_flows_affected` returns real data
+
+#### Aspects Missing from Scan Index (`@a-company/probe-core`)
+- **Added `aspect` type** to `ScanCategory` union and `ScanIndex` interface
+- **Added `addAspect()` handler** in `processSymbol` — aspects were extracted by premise-core but silently dropped by probe-core's generator (`default: break`)
+- Result: 201 aspects now in scan-index.json alongside components, flows, gates, signals
+
+### Added
+
+#### Project-Level "Paragon" Fixes
+- **`#purpose-parser`** declared in `packages/purpose/core/.purpose` — was referenced in lore/case studies but never indexed
+- **`#sentinel-sdk`** declared as feature aggregator in `packages/sentinel/.purpose` — umbrella for `#SentinelClient` (TS) and `#SentinelRustClient` (Rust)
+- **`~audit-required`** declared with code anchors in `packages/paradigm/.purpose` — anchored to `audit-logger.ts` and `agent-spawner.ts:274-288`
+- **`.paradigm/flows.yaml`** — 10 formal flow definitions with symbol-typed steps: `$init-flow`, `$sync-flow`, `$probe-flow`, `$authorization-flow`, `$orchestration-flow`, `$purpose-parsing`, `$incident-triage`, `$plsat-exam-flow`, `$handoff-roundtrip`, `$wisdom-promotion`
+- **Wisdom entries** — 2 antipatterns (`mcp-001`: don't bundle native modules, `mcp-002`: always add grep fallback) + 1 decision (`001`: a-paradigm must maintain 100% stress test pass rate)
+- **Case studies** — `docs/case-studies/002-ripple-stress-test-post-restart.md`
+
+### Changed
+- Symbol count: 616 → 636 (CLI) / 619 (MCP)
+- Scan index now includes `aspects` section (201 entries)
+- Flow index `symbolToFlows` now contains 29 mappings across 6 flows
+
 ## [3.5.0] — 2026-02-25
 
 ### Added

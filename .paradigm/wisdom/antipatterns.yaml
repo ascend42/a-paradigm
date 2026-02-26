@@ -9,3 +9,21 @@ antipatterns:
     reason: Security vulnerability - passwords can be leaked if database is compromised
     alternative: Use bcrypt or argon2 to hash passwords before storage
     added: '2026-02-04T18:37:14.045Z'
+  - id: mcp-001
+    symbols:
+      - '#paradigm-mcp'
+      - ~zod-validated
+      - '#aspect-graph'
+    description: Bundling native Node.js modules (sql.js, better-sqlite3) into ESM output without externalizing them
+    reason: Dynamic require() calls inside native modules fail when inlined into ESM bundles — produces 'Dynamic require of fs is not supported' at runtime, silently disabling all tools that depend on the module
+    alternative: Always add native modules to the `external` array in tsup/esbuild config. See sentinel/tsup.config.ts for the correct pattern.
+    added: '2026-02-26T03:20:17.359Z'
+  - id: mcp-002
+    symbols:
+      - '#paradigm-mcp'
+      - '#paradigm-related'
+      - '#paradigm-ripple'
+    description: Hard-failing MCP tools when a symbol is not in the index, without grep fallback
+    reason: Symbols may be referenced in lore, history, or case studies without being declared in .purpose files. Hard failure returns zero useful data. Grep fallback (like ripple uses) still returns file locations and reference counts — enough to be actionable.
+    alternative: Always add a grep fallback path using grepForReferences() when getSymbol() returns null. Return degraded results clearly labeled as fallback, not errors.
+    added: '2026-02-26T03:20:22.446Z'

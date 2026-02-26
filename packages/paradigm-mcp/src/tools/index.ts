@@ -564,15 +564,53 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const entry = getSymbol(ctx.index, symbol as string);
 
           if (!entry) {
+            // Fallback: grep for references when symbol isn't indexed
+            const references = grepForReferences(ctx.rootDir, symbol as string, { maxResults: 20 });
+
+            if (references.length === 0) {
+              const text = JSON.stringify({
+                error: 'Symbol not found',
+                symbol,
+                fallback: 'searched',
+                referencesFound: 0,
+                recovery: [
+                  'Run `paradigm_search` with a partial name to find similar symbols',
+                  'Check `.purpose` files for symbol definitions',
+                  'Use `paradigm_status` to see available symbols by type',
+                  'The symbol may not be indexed yet - run `paradigm scan`',
+                ],
+              }, null, 2);
+              trackToolCall(text.length, name);
+              return {
+                content: [{
+                  type: 'text',
+                  text,
+                }],
+              };
+            }
+
+            // Analyze grep results into uses/usedBy approximation
+            const filesAffected = [...new Set(references.map(r => r.filePath))];
+            const purposeRefs = references.filter(r => r.context === 'purpose');
+            const codeRefs = references.filter(r => r.context === 'code');
+
             const text = JSON.stringify({
-              error: 'Symbol not found',
               symbol,
-              recovery: [
-                'Run `paradigm_search` with a partial name to find similar symbols',
-                'Check `.purpose` files for symbol definitions',
-                'Use `paradigm_status` to see available symbols by type',
-                'The symbol may not be indexed yet - run `paradigm scan`',
-              ],
+              status: 'not-indexed',
+              fallback: 'grep-search',
+              note: 'Approximate relationships from grep — run `paradigm scan` for accurate graph data.',
+              usedBy: filesAffected.slice(0, 10).map(f => ({
+                file: f,
+                references: references.filter(r => r.filePath === f).length,
+              })),
+              uses: [],
+              summary: {
+                totalFiles: filesAffected.length,
+                totalReferences: references.length,
+                purposeFileRefs: purposeRefs.length,
+                codeRefs: codeRefs.length,
+              },
+              suggestion: 'Run `paradigm scan` to enable full relationship tracking',
             }, null, 2);
             trackToolCall(text.length, name);
             return {
