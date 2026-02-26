@@ -765,6 +765,8 @@ function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
 function createMinimalStructure(paradigmDir: string, projectName: string): void {
   fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
   fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(paradigmDir, 'tasks'), { recursive: true });
+  fs.mkdirSync(path.join(paradigmDir, 'assessments'), { recursive: true });
   // Note: prompts/ not created - served via MCP resources
 
   const minimalConfig = `# Paradigm Configuration

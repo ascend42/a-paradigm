@@ -679,6 +679,116 @@
           "explanation": "Zero-access aspects are candidates for review, not automatic deletion. Some may be legitimate but poorly named (rename to improve discoverability). Some may be truly stale with drifted anchors (remove or update). Some may have been superseded by newer aspects (consolidate with supersedes edges). The governance review evaluates each case individually."
         }
       ]
+    },
+    {
+      "id": "task-management",
+      "title": "Task Management",
+      "content": "## Why Tasks Exist\n\nAI agent sessions are stateless. You can discuss a plan, identify five things that need doing, and then the session ends. The next session starts blank — those five items are gone. Sticky notes on a monitor do not help when your developer is a language model.\n\nParadigm's Task Management system provides a persistent scratch pad that survives context windows. Tasks are lightweight, date-partitioned YAML entries that capture what needs doing, how urgent it is, and what project knowledge relates to it. They are not a full project management system — they are the missing short-term memory between sessions.\n\nThe key difference from lore: lore records what happened (past tense). Tasks record what should happen (future tense). Together they form a complete timeline — memory of the past and intention for the future.\n\n## Anatomy of a Task\n\nEvery task follows a consistent structure:\n\n```yaml\nid: T-2026-02-26-001\nblurb: \"Add rate limiting to the /api/payments endpoint\"\npriority: high\nstatus: open\ntags: [security, payments]\nrelated_lore: [L-2026-02-25-003]\ncreated: \"2026-02-26T10:15:00Z\"\nupdated: \"2026-02-26T10:15:00Z\"\n```\n\nThe `id` field is auto-generated: `T-{date}-{sequence}`, following the same date-partitioned pattern as lore entries. The `blurb` is the only required field — a concise description of what needs to be done. Everything else is optional but useful.\n\nThree priority levels exist: `high` (do this soon), `medium` (do this eventually), and `low` (nice to have). Tasks without an explicit priority default to `medium`.\n\nThree statuses track lifecycle: `open` (needs doing), `done` (completed), and `shelved` (parked for later — not abandoned, just deferred).\n\n## Storage: Date-Partitioned YAML\n\nTasks live in `.paradigm/tasks/entries/` organized by creation date:\n\n```\n.paradigm/tasks/\n  entries/\n    2026-02-25/\n      T-2026-02-25-001.yaml\n      T-2026-02-25-002.yaml\n    2026-02-26/\n      T-2026-02-26-001.yaml\n```\n\nDate partitioning keeps directories small. Each task is a standalone YAML file, making them easy to read, edit, and version-control. The date in the path matches the date in the task ID.\n\n## The Five MCP Tools\n\n**`paradigm_task_create`** — Create a new task. The `blurb` field is required — a short description of what needs to be done. Optional fields include `priority` (high/medium/low), `tags` (for categorization and filtering), and `related_lore` (linking to lore entries that provide context). The task is written to the correct date directory with an auto-incremented ID and starts with status `open`.\n\n**`paradigm_task_list`** — List tasks with filters. Filter by `status` (open/done/shelved/all), `priority` (high/medium/low), or `tag`. Results are sorted by priority (high first) then by date (newest first). Without filters, it returns all open tasks.\n\n**`paradigm_task_update`** — Update any field on an existing task by ID. You can change the blurb, priority, status, tags, or related_lore. Only specified fields are modified — everything else is preserved.\n\n**`paradigm_task_done`** — Shorthand to mark a task as complete. Pass the task ID and the status changes to `done` with an updated timestamp. This is equivalent to `paradigm_task_update` with `status: done` but more ergonomic for the common case.\n\n**`paradigm_task_shelve`** — Shorthand to shelve a task for later. Pass the task ID and the status changes to `shelved`. Shelved tasks are not deleted — they remain searchable and can be reopened by updating their status back to `open`.\n\n## Session Recovery Integration\n\nThe top 5 open tasks are automatically surfaced during session recovery. When a new session starts and the agent calls any Paradigm MCP tool, the recovery data includes the highest-priority open tasks alongside the usual breadcrumbs and checkpoint data.\n\nThis means every session begins with awareness of outstanding work. The agent does not need to ask \"what should I work on?\" — the task list is already there, sorted by priority. This is the scratch-pad-that-survives pattern: write tasks in one session, see them in the next.\n\n## When to Create Tasks\n\nCreate tasks when:\n- You identify work that cannot be completed in the current session\n- A code review surfaces follow-up items\n- You discover a bug or improvement while working on something else\n- The user mentions something that should be tracked but is not the current focus\n- A handoff needs to communicate specific next steps\n\nDo not use tasks for:\n- Tracking completed work (that is what lore is for)\n- Long-term roadmap items (use your project management tool)\n- Architectural decisions (use lore entries with type `decision`)\n\nTasks are ephemeral intentions — they should be created quickly, completed or shelved promptly, and never allowed to accumulate into a backlog of hundreds. If your task list grows beyond 20-30 open items, it is time to triage: shelve the low-priority items and focus on what matters.",
+      "keyConcepts": [
+        "Tasks are persistent scratch-pad items that survive context windows",
+        "Auto-generated IDs: T-{date}-{sequence}, date-partitioned in .paradigm/tasks/entries/{YYYY-MM-DD}/",
+        "Three priority levels: high, medium (default), low",
+        "Three statuses: open, done, shelved",
+        "Five MCP tools: paradigm_task_create, paradigm_task_list, paradigm_task_update, paradigm_task_done, paradigm_task_shelve",
+        "Top 5 open tasks surfaced automatically on session recovery",
+        "Tasks record future intention; lore records past action"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You are midway through adding authentication when you notice the payment service has a null-check bug. You cannot fix it now. What is the correct action?",
+          "choices": {
+            "A": "Record a lore entry describing the bug for future reference",
+            "B": "Call `paradigm_task_create` with a blurb describing the null-check bug, priority high, and tags [bug, payments]",
+            "C": "Add a TODO comment in the payment service code and move on",
+            "D": "Call `paradigm_sentinel_record` to log it as an incident",
+            "E": "Mention it in the session's handoff summary and hope the next session picks it up"
+          },
+          "correct": "B",
+          "explanation": "This is exactly what tasks are for — capturing work you cannot complete in the current session. A task with priority `high` ensures it surfaces at the top of the next session's recovery data. A lore entry (A) records what happened, not what needs to happen. A TODO comment (C) is invisible to Paradigm. Sentinel (D) is for production incidents. A handoff mention (E) is fragile — tasks are persistent."
+        },
+        {
+          "id": "q2",
+          "question": "A new session starts. The agent calls `paradigm_status`. Among the recovery data, it sees 3 high-priority tasks and 12 medium-priority tasks. How were these surfaced?",
+          "choices": {
+            "A": "The agent must explicitly call `paradigm_task_list` to see tasks — they are not in recovery data",
+            "B": "All 15 tasks appear in the recovery data automatically",
+            "C": "The top 5 open tasks (sorted by priority then date) are automatically included in recovery data on the first Paradigm tool call",
+            "D": "Only high-priority tasks are surfaced during recovery",
+            "E": "Tasks are only surfaced if the previous session created a handoff"
+          },
+          "correct": "C",
+          "explanation": "Session recovery automatically includes the top 5 open tasks, sorted by priority (high first) then by date (newest first). So the agent would see the 3 high-priority tasks plus 2 of the most recent medium-priority tasks. The remaining 10 medium-priority tasks are available via `paradigm_task_list` but are not in the initial recovery data."
+        },
+        {
+          "id": "q3",
+          "question": "Your task list has grown to 35 open items. What should you do?",
+          "choices": {
+            "A": "Delete the oldest tasks to keep the list manageable",
+            "B": "Increase the session recovery limit from 5 to 35 so all tasks are visible",
+            "C": "Triage: shelve low-priority items with `paradigm_task_shelve` and focus on what matters — tasks should not accumulate into a large backlog",
+            "D": "Convert all tasks to lore entries since the list is too long for task management",
+            "E": "Tasks have no practical limit — 35 is fine, just filter by priority when working"
+          },
+          "correct": "C",
+          "explanation": "Tasks are meant to be a lightweight scratch pad, not a project management backlog. When the list grows beyond 20-30 items, it is time to triage. Use `paradigm_task_shelve` to park items that are not immediately relevant. Shelved tasks are not deleted — they remain searchable and can be reopened. This keeps the active list focused and the session recovery data meaningful."
+        }
+      ]
+    },
+    {
+      "id": "assessment-loops",
+      "title": "Assessment Loops",
+      "content": "## The Three Layers of Project Memory\n\nParadigm captures project knowledge at three distinct layers, each with a different nature, author, and granularity:\n\n| Layer | Nature | Created by | Granularity |\n|---|---|---|---|\n| Commits | Raw facts | Git | Per-change |\n| Lore | Session events | Agent + user | Per-session |\n| Assessments | Synthesized insight | Agent (mostly) + user | Per-arc milestone |\n\nCommits record what changed in the code. Lore records what happened in a session — the context, decisions, and learnings. Assessments synthesize patterns across multiple sessions and commits into higher-order insights: retrospectives, strategic decisions, and milestone reflections.\n\nAssessments reference downward. An assessment entry can link to specific lore entries and commits, creating a hierarchy: assessments summarize lore, lore summarizes commits. This layering means you can zoom in from a high-level insight to the specific session that produced it, and from there to the exact code change.\n\n## Arcs: Grouping Related Assessments\n\nAssessments are organized into arcs. An arc is a named grouping that represents a theme, project phase, or ongoing concern — think of it as a folder for related reflections.\n\n```yaml\nid: arc-auth-hardening\nname: Authentication Hardening\ndescription: Assessments related to the Q1 auth security initiative\nstatus: active\ncreated: \"2026-02-01T09:00:00Z\"\n```\n\nArc IDs use kebab-case with an `arc-` prefix: `arc-auth-hardening`, `arc-performance-tuning`, `arc-v2-migration`. The status is either `active` (ongoing), `complete` (finished successfully), or `archived` (closed without completion).\n\nArcs are stored at `.paradigm/assessments/arcs/{arc-id}/arc.yaml`, with their entries in a sibling `entries/` directory:\n\n```\n.paradigm/assessments/\n  arcs/\n    arc-auth-hardening/\n      arc.yaml\n      entries/\n        A-2026-02-10-001.yaml\n        A-2026-02-15-002.yaml\n    arc-performance-tuning/\n      arc.yaml\n      entries/\n        A-2026-02-12-001.yaml\n```\n\n## Anatomy of an Assessment Entry\n\nEach assessment entry captures a synthesized reflection:\n\n```yaml\nid: A-2026-02-15-002\narc: arc-auth-hardening\ntype: retro\ntimestamp: \"2026-02-15T16:00:00Z\"\ntitle: \"JWT refresh token rotation — what we learned\"\ncontent: |\n  After three sessions implementing refresh token rotation,\n  the key insight is that storing refresh tokens in httpOnly\n  cookies eliminates an entire class of XSS vulnerabilities.\n  The initial approach of localStorage was abandoned after\n  session L-2026-02-12-001 surfaced the risk.\nsymbols: [\"#refresh-token-handler\", \"^authenticated\"]\nrelated_lore: [L-2026-02-10-003, L-2026-02-12-001, L-2026-02-14-002]\nrelated_commits: [a1b2c3d, e4f5g6h]\ntags: [security, auth, jwt]\n```\n\nEntry IDs follow the pattern `A-{YYYY-MM-DD}-{NNN}` and are globally unique across all arcs. The sequence number increments globally, not per-arc, so you will never have two entries with the same ID in different arcs.\n\nFour entry types capture different kinds of synthesized insight:\n\n| Type | When to Use |\n|---|---|\n| `retro` | Looking back at a completed piece of work — what went well, what did not, what to change |\n| `insight` | A realization or pattern discovered across multiple sessions |\n| `decision` | A strategic or architectural decision with rationale and alternatives considered |\n| `milestone` | A significant achievement or phase completion worth marking |\n\n## The Six MCP Tools\n\n**`paradigm_assessment_record`** — Add a reflection to an arc. If the arc does not exist, it is auto-created from the arc ID. Pass `arc` (the arc ID), `type` (retro/insight/decision/milestone), `title`, `content`, and optionally `symbols`, `related_lore`, `related_commits`, and `tags`. The entry is written with an auto-generated globally unique ID.\n\n**`paradigm_assessment_list`** — List arcs or entries within an arc. Without an arc ID, it returns all arcs with their status and entry count. With an arc ID, it returns entries within that arc sorted by date.\n\n**`paradigm_assessment_get`** — Fetch full detail for a single entry (pass an `A-*` ID) or a full arc with all its entries (pass an `arc-*` ID). This is the deep-dive tool — use it when you need the complete content and all linked references.\n\n**`paradigm_assessment_search`** — Cross-arc search with filters: by symbol, tag, entry type, and date range. This searches across all arcs simultaneously, making it easy to find every retrospective that mentions `#payment-service` regardless of which arc it lives in.\n\n**`paradigm_assessment_arc_create`** — Explicitly create an arc with a name, description, and initial status. While `paradigm_assessment_record` auto-creates arcs, this tool lets you set up an arc with a proper description before adding entries to it.\n\n**`paradigm_assessment_arc_close`** — Mark an arc as `complete` or `archived`. Complete arcs represent finished initiatives. Archived arcs represent work that was abandoned or superseded. Closed arcs remain searchable — closing is a status change, not a deletion.\n\n## The Assessment Feedback Loop\n\nAssessments do not exist in isolation. They connect to the rest of Paradigm through two feedback mechanisms:\n\n**Downward references.** Every assessment entry can link to specific lore entries (`related_lore`) and commits (`related_commits`). This creates traceability: an insight about authentication can point to the three sessions that produced it and the five commits that implemented it. When someone reads the assessment, they can drill down to the raw evidence.\n\n**Task-to-assessment nudge.** When a task is marked as complete via `paradigm_task_done`, the system nudges the agent to consider recording an assessment. Completing a task is a natural reflection point — was this harder than expected? Did we learn something? Should we change our approach? The nudge is advisory, not mandatory, but it creates a habit of reflection tied to completion.\n\n## When to Record Assessments\n\nAssessments are higher-order than lore. While lore should be recorded for any session that modifies 3+ files, assessments should be recorded at natural reflection points:\n\n- **After completing a multi-session feature** — What did we learn across the sessions? (retro)\n- **When a pattern emerges across unrelated work** — \"Every time we touch the auth system, we find expired token edge cases\" (insight)\n- **When making a decision that affects future work** — \"We are switching from REST to GraphQL for the admin API\" (decision)\n- **When reaching a project milestone** — \"v2.0 shipped to production\" (milestone)\n\nThe general rule: if the knowledge would be valuable in 3 months, it belongs in an assessment. If it is only relevant for the next session, a task or lore entry is sufficient.\n\n## Arc Lifecycle\n\nArcs follow a natural lifecycle:\n\n1. **Creation** — An arc is created (explicitly or auto-created) when a theme emerges. The name should be descriptive: `arc-auth-hardening`, not `arc-misc`.\n2. **Active collection** — Entries accumulate as work progresses. Retros after implementations, insights as patterns emerge, decisions when direction changes.\n3. **Closure** — When the initiative is complete or the theme is no longer active, close the arc with `paradigm_assessment_arc_close`. Use `complete` for successful initiatives, `archived` for abandoned ones.\n4. **Reference** — Closed arcs remain fully searchable. Future sessions can reference them when similar themes arise. The arc becomes part of institutional memory.\n\nWell-managed arcs have 5-15 entries over weeks or months. An arc with 1 entry should probably be merged into a broader arc. An arc with 50+ entries should probably be split into sub-themes.",
+      "keyConcepts": [
+        "Three-layer model: commits (raw facts) -> lore (session events) -> assessments (synthesized insight)",
+        "Arcs group related assessments by theme or initiative with arc-{kebab-case} IDs",
+        "Entry IDs are globally unique: A-{YYYY-MM-DD}-{NNN}, not scoped per arc",
+        "Four entry types: retro, insight, decision, milestone",
+        "Six MCP tools: paradigm_assessment_record, paradigm_assessment_list, paradigm_assessment_get, paradigm_assessment_search, paradigm_assessment_arc_create, paradigm_assessment_arc_close",
+        "Assessments reference downward — linking to lore entries and commits for traceability",
+        "Task completion nudges assessment recording as a natural reflection point"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You have completed a three-session effort to add rate limiting. Across those sessions, you recorded three lore entries and completed two tasks. What is the most appropriate assessment entry type and why?",
+          "choices": {
+            "A": "`milestone` — completing a multi-session feature is always a milestone",
+            "B": "`retro` — this is a natural reflection point after completing a body of work, capturing what went well and what to change",
+            "C": "`decision` — you decided to use rate limiting, so record the decision",
+            "D": "`insight` — you gained insight into rate limiting through three sessions",
+            "E": "`retro` and `milestone` — record both entries in the same arc"
+          },
+          "correct": "B",
+          "explanation": "A retro is the right type for reflecting on completed work — it captures what happened across sessions, what went well, what did not, and what to change next time. A milestone (A) marks a significant project event like a release, not a feature completion. A decision (C) would be appropriate if the assessment focused on choosing the rate limiting strategy, but the question asks about the post-implementation reflection. Recording both (E) could be valid but the retro is the primary and most appropriate single entry."
+        },
+        {
+          "id": "q2",
+          "question": "An assessment entry has `related_lore: [L-2026-02-10-003, L-2026-02-12-001]` and `related_commits: [a1b2c3d]`. What does this downward referencing enable?",
+          "choices": {
+            "A": "It automatically updates the lore entries and commits with a backlink to the assessment",
+            "B": "It creates traceability — readers can drill from the synthesized insight down to the specific sessions that produced it and the exact code changes",
+            "C": "It prevents the referenced lore entries from being deleted",
+            "D": "It triggers Sentinel to check those commits for incidents",
+            "E": "It merges the lore entries into the assessment content automatically"
+          },
+          "correct": "B",
+          "explanation": "Downward references create a traceability chain: assessment -> lore -> commits. A reader encountering the insight can follow the `related_lore` links to see the full session context, and the `related_commits` links to see the exact code changes. This layered referencing is the core design of the three-layer model — each layer summarizes the one below it, with links to drill down for detail."
+        },
+        {
+          "id": "q3",
+          "question": "You want to find every retrospective that mentions `#payment-service` across all arcs in your project. Which tool and approach is correct?",
+          "choices": {
+            "A": "`paradigm_assessment_list` for each arc, then manually filter entries mentioning the symbol",
+            "B": "`paradigm_assessment_search` with `symbol: '#payment-service'` and `type: 'retro'` — it searches across all arcs simultaneously",
+            "C": "`paradigm_assessment_get` with the arc ID containing payment-related work",
+            "D": "`paradigm_lore_search` with `symbol: '#payment-service'` — lore and assessments share the same search",
+            "E": "`paradigm_search` with `query: 'payment retro'` — the general search covers assessments"
+          },
+          "correct": "B",
+          "explanation": "`paradigm_assessment_search` is designed for cross-arc queries with filters. Passing `symbol: '#payment-service'` and `type: 'retro'` returns all retrospective entries that reference the payment service, regardless of which arc they belong to. Listing per-arc (A) works but is tedious. `paradigm_lore_search` (D) only searches lore entries, not assessments — they are separate systems. `paradigm_search` (E) searches the symbol index, not assessment content."
+        }
+      ]
     }
   ]
 }

@@ -235,6 +235,9 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Getting test data** | `paradigm_test_fixtures` for fixtures |
 | **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
+| **Tracking work items** | `paradigm_task_create` / `paradigm_task_list` for persistent tasks |
+| **Recording reflections** | `paradigm_assessment_record` for arc-based insights |
+| **Reviewing progress** | `paradigm_assessment_search` across arcs by symbol/tag |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
@@ -253,6 +256,10 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_navigate` | ~200 | Finding code locations |
 | `paradigm_ripple` | ~300 | Before modifying symbols |
 | `paradigm_gates_for_route` | ~150 | Adding API endpoints |
+| `paradigm_task_create` | ~100 | Creating a work item |
+| `paradigm_task_list` | ~200 | Checking open tasks |
+| `paradigm_assessment_record` | ~150 | Adding a reflection entry |
+| `paradigm_assessment_search` | ~200 | Cross-arc search |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |
@@ -374,6 +381,8 @@ See `.paradigm/specs/logger.md` for full specification.
 - When adding authorization, update portal.yaml with ^gate
 - When adding cross-cutting rules, create ~aspect with required anchors
 - When exploring ideas, add [idea] tag to the symbol
+- When tracking work items, use `paradigm_task_create` (stored in `.paradigm/tasks/`)
+- When recording reflections/decisions, use `paradigm_assessment_record` (stored in `.paradigm/assessments/`)
 - Always update references when renaming symbols
 
 ## Multi-Agent Orchestration

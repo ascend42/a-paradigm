@@ -167,6 +167,51 @@ If you're adding middleware like `authenticate`, `requireAdmin`, `checkOwnership
 3. Update all references to note deprecation
 ```
 
+### Tracking Work with Tasks
+
+When a session identifies work items that won't be completed immediately:
+
+```
+1. Create a task with paradigm_task_create:
+   - blurb: One-line description of what needs doing
+   - priority: high/medium/low
+   - tags: Relevant symbols (#component) and freeform labels
+   - related_lore: Link to the lore entry that identified this work
+
+2. During implementation, check open tasks with paradigm_task_list
+
+3. When complete, mark done with paradigm_task_done
+   - Consider recording an assessment entry if the task was significant
+
+4. Shelve tasks that aren't relevant now with paradigm_task_shelve
+```
+
+### Recording Assessments
+
+When a significant milestone, decision, or insight emerges:
+
+```
+1. Choose or create an arc:
+   - Arcs group related reflections (e.g., arc-auth-hardening, arc-perf-optimization)
+   - paradigm_assessment_record auto-creates arcs if arc_name is provided
+
+2. Record the entry with paradigm_assessment_record:
+   - title + summary (required) — what happened
+   - body — full reflection (what was learned, what changed)
+   - type: retro | insight | decision | milestone
+   - Link to lore, tasks, and commits for traceability
+
+3. Close arcs when the work thread is complete:
+   - paradigm_assessment_arc_close with status complete or archived
+```
+
+**Three-Layer Model:**
+| Layer | Nature | Granularity |
+|-------|--------|-------------|
+| Commits | Raw facts | Per-change |
+| Lore | Session events | Per-session |
+| Assessments | Synthesized insight | Per-arc milestone |
+
 ### Adding a Multi-Step Flow (Flow-First Development)
 
 For features that involve multiple steps, gates, and signals, **define the flow first**:

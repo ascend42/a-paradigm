@@ -35,7 +35,7 @@ Plus tooling that makes it all work:
 
 | Tool | What It Does |
 |------|--------------|
-| **MCP Server** | 40+ tools for AI agents to query context on-demand (~100 tokens vs ~2000 per query) |
+| **MCP Server** | 50+ tools for AI agents to query context on-demand (~100 tokens vs ~2000 per query) |
 | **Sentinel** | Incident tracking, failure patterns, symbol-correlated observability |
 | **University** | Interactive courses and PLSAT certification exam |
 | **Multi-Agent Orchestration** | Coordinate architect, builder, reviewer, tester, and security agents |
@@ -171,6 +171,8 @@ your-project/
 │   ├── docs/               # Patterns, troubleshooting
 │   ├── wisdom/             # Team antipatterns & decisions
 │   ├── history/            # Implementation history
+│   ├── tasks/              # Persistent work items (runtime)
+│   ├── assessments/        # Assessment arcs & reflections (runtime)
 │   └── tags.yaml           # Project tag bank
 ├── .purpose                # Feature & component context
 ├── portal.yaml             # Authorization topology
@@ -231,7 +233,7 @@ Default agents: **architect** → **builder** → **reviewer** → **tester** + 
 
 ## MCP Server (AI Integration)
 
-For dynamic, mid-conversation context, Paradigm provides an MCP server with 40+ tools that works with Claude Code, Claude Desktop, Cursor, and other MCP-compatible clients.
+For dynamic, mid-conversation context, Paradigm provides an MCP server with 50+ tools that works with Claude Code, Claude Desktop, Cursor, and other MCP-compatible clients.
 
 ### Why MCP?
 
@@ -253,6 +255,8 @@ For dynamic, mid-conversation context, Paradigm provides an MCP server with 40+ 
 | `paradigm_flows_affected` | Check which flows a change impacts |
 | `paradigm_orchestrate_inline` | Plan multi-agent task execution |
 | `paradigm_sentinel_triage` | View and filter incidents |
+| `paradigm_task_create` | Create persistent work items that survive context windows |
+| `paradigm_assessment_record` | Add reflections to assessment arcs |
 | `paradigm_pm_preflight` | Pre-implementation compliance check |
 
 ### Setup

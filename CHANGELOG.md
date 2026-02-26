@@ -42,6 +42,17 @@ Threaded narrative arcs for sprint-retro-style reflection. AI-generated with hum
 - Recovery preamble now includes open tasks and active assessment arcs
 - Breadcrumb extraction for all 11 new tools
 
+#### Documentation & Onboarding (`@a-company/paradigm` 3.6.0 → 3.7.0)
+
+- **CLAUDE.md** — Task/assessment tools added to MCP Workflow Protocol, Token Budget, and update rules
+- **README.md** — Tool count updated to 50+, key tools table and directory tree extended
+- **commands.md** — Full documentation for all 11 new MCP tools with examples
+- **ai-maintenance-protocol.md** — Task tracking and assessment recording workflow sections
+- **init.ts** — `paradigm init` now scaffolds `tasks/` and `assessments/` directories
+- **.gitignore** — `.paradigm/assessments/` added to runtime data exclusions
+- **PARA 501** — Two new lessons: Task Management and Assessment Loops
+- **PLSAT v3.0** — 4 new exam questions (86 → 90 slots)
+
 ## [3.6.0] — 2026-02-25
 
 ### Added

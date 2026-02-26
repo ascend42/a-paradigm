@@ -24,6 +24,7 @@ out/
 .paradigm/model-cache.json
 .paradigm/orchestrations/
 .paradigm/tasks/
+.paradigm/assessments/
 .paradigm/team-state.yaml
 .paradigm/handoffs/
 .paradigm/session-breadcrumbs.json

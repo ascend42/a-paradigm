@@ -1003,3 +1003,182 @@ Returns recent tool call breadcrumbs, symbols modified, and files explored from 
 | > 85% | Handoff urgently needed |
 
 See `.paradigm/specs/context-tracking.md` for full specification.
+
+---
+
+## Task Management (MCP)
+
+**Persistent work items that survive context windows.** Tasks are stored in `.paradigm/tasks/entries/{YYYY-MM-DD}/T-*.yaml` and surfaced automatically on session recovery.
+
+### MCP Tool: paradigm_task_create
+
+Create a new task:
+
+```bash
+paradigm_task_create({
+  blurb: "Add rate limiting to /api/projects",
+  priority: "high",
+  tags: ["#api-routes", "security"],
+  related_lore: ["L-2026-02-25-003"]
+})
+```
+
+**Parameters:**
+- `blurb` (required) — One-line task description
+- `priority` — `high`, `medium` (default), or `low`
+- `tags` — Symbols (#component), freeform labels
+- `related_lore` — Linked lore entry IDs
+
+**Returns:** Created task ID (e.g., `T-2026-02-26-001`) and full task object.
+
+### MCP Tool: paradigm_task_list
+
+List/filter tasks:
+
+```bash
+paradigm_task_list({ status: "open", priority: "high", tag: "#api-routes" })
+```
+
+**Parameters:**
+- `status` — `open` (default), `done`, `shelved`, or `all`
+- `priority` — Filter by `high`, `medium`, or `low`
+- `tag` — Filter by tag (symbol or freeform)
+- `limit` — Maximum results (default: 20)
+
+**Returns:** Task list sorted by priority then date.
+
+### MCP Tool: paradigm_task_update
+
+Update any task fields:
+
+```bash
+paradigm_task_update({
+  id: "T-2026-02-26-001",
+  priority: "medium",
+  tags: ["#api-routes", "security", "done-review"]
+})
+```
+
+**Parameters:**
+- `id` (required) — Task ID
+- `blurb`, `priority`, `status`, `tags`, `related_lore`, `related_assessments` — Fields to update
+
+### MCP Tool: paradigm_task_done
+
+Mark a task as done (shorthand):
+
+```bash
+paradigm_task_done({ id: "T-2026-02-26-001" })
+```
+
+### MCP Tool: paradigm_task_shelve
+
+Shelve a task for later (shorthand):
+
+```bash
+paradigm_task_shelve({ id: "T-2026-02-26-001" })
+```
+
+---
+
+## Assessment Loops (MCP)
+
+**Synthesized insights organized into arcs.** Assessments sit above lore in the three-layer model: Commits (raw facts) → Lore (session events) → Assessments (synthesized insight). Stored in `.paradigm/assessments/arcs/{arc-id}/`.
+
+### MCP Tool: paradigm_assessment_record
+
+Add a reflection entry to an arc (creates the arc if new):
+
+```bash
+paradigm_assessment_record({
+  arc_id: "arc-auth-hardening",
+  arc_name: "Auth Hardening",
+  title: "JWT refresh token rotation complete",
+  summary: "Implemented RS256 token rotation with httpOnly cookies",
+  body: "Full reflection text...",
+  type: "milestone",
+  symbols: ["#auth-middleware", "^authenticated"],
+  linked_commits: ["a1b2c3d"],
+  linked_tasks: ["T-2026-02-25-001"]
+})
+```
+
+**Parameters:**
+- `arc_id` (required) — Arc ID (e.g., `arc-telemetry`). Auto-creates if new.
+- `arc_name` — Human-readable name (required when creating a new arc)
+- `arc_description` — Arc description (used when creating a new arc)
+- `title` (required), `summary` (required) — Entry title and summary
+- `body` — Full reflection text
+- `type` — `retro` (default), `insight`, `decision`, or `milestone`
+- `symbols`, `tags` — Classification
+- `linked_lore`, `linked_tasks`, `linked_commits` — Cross-references
+
+**Returns:** Entry ID (e.g., `A-2026-02-26-001`) — globally unique across all arcs.
+
+### MCP Tool: paradigm_assessment_list
+
+List arcs or entries within an arc:
+
+```bash
+# List all active arcs
+paradigm_assessment_list({ status: "active" })
+
+# List entries in a specific arc
+paradigm_assessment_list({ arc_id: "arc-auth-hardening" })
+```
+
+**Parameters:**
+- `arc_id` — If provided, lists entries in this arc. Otherwise lists all arcs.
+- `status` — Filter arcs: `active` (default), `complete`, `archived`, or `all`
+- `limit` — Maximum results (default: 20)
+
+### MCP Tool: paradigm_assessment_get
+
+Get full detail for an entry or arc:
+
+```bash
+# Get an entry
+paradigm_assessment_get({ id: "A-2026-02-26-001" })
+
+# Get an arc with its entries
+paradigm_assessment_get({ id: "arc-auth-hardening" })
+```
+
+**Parameters:**
+- `id` (required) — Entry ID (`A-*`) or arc ID (`arc-*`)
+
+### MCP Tool: paradigm_assessment_search
+
+Cross-arc search by symbol, tag, type, or date range:
+
+```bash
+paradigm_assessment_search({
+  symbol: "#auth-middleware",
+  type: "decision",
+  dateFrom: "2026-02-01",
+  limit: 10
+})
+```
+
+**Parameters:**
+- `symbol`, `tag`, `type`, `dateFrom`, `dateTo`, `limit`
+
+### MCP Tool: paradigm_assessment_arc_create
+
+Explicitly create an arc without adding an entry:
+
+```bash
+paradigm_assessment_arc_create({
+  id: "arc-performance",
+  name: "Performance Optimization",
+  description: "Tracking all perf-related decisions and benchmarks",
+  tags: ["performance"]
+})
+```
+
+### MCP Tool: paradigm_assessment_arc_close
+
+Mark an arc as complete or archived:
+
+```bash
+paradigm_assessment_arc_close({ arc_id: "arc-auth-hardening", status: "complete" })

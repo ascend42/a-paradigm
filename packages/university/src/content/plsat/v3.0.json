@@ -1,11 +1,11 @@
 {
   "version": "3.0",
   "frameworkVersion": "2.0",
-  "timeLimit": 5160,
-  "totalSlots": 86,
+  "timeLimit": 5400,
+  "totalSlots": 90,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
-  "description": "86 questions. 86 minutes. 80% to pass. Good luck, scholar.",
+  "description": "90 questions. 90 minutes. 80% to pass. Good luck, scholar.",
   "items": [
     {
       "type": "standalone",
@@ -2193,6 +2193,90 @@
           },
           "correct": "B",
           "explanation": "A 63% concentration in the `rule` category (95 out of 150) suggests over-classification. Many numeric limits (which should be constraints) and architectural choices (which should be decisions) may be categorized as rules. The low decision count (12) is a red flag \u2014 a project with 150 aspects likely made more than 12 strategic decisions. The governance review should reclassify mistyped aspects and document missing decisions. Zero-access aspects (40) are a separate concern requiring individual evaluation."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-090",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-090",
+          "scenario": "Your team uses Paradigm task management to track work across context windows. An agent creates three tasks on 2026-03-10: a high-priority auth bug, a medium-priority docs update, and a low-priority refactor. Later that day, a fourth task is created. The next morning (2026-03-11), a new agent session starts and calls `paradigm_session_recover`.",
+          "question": "What task ID is assigned to the fourth task on 2026-03-10, and how are tasks surfaced in the new session?",
+          "choices": {
+            "A": "T-2026-03-10-004. All four tasks are fully displayed in the recovery payload.",
+            "B": "T-2026-03-10-004. The top 5 open tasks sorted by priority are surfaced in the session recovery, so all four appear (high first, then medium, then low).",
+            "C": "T-004. Only tasks explicitly pinned to the session are recovered.",
+            "D": "T-2026-03-11-001. Task IDs reset per calendar day, so recovery re-numbers them.",
+            "E": "T-2026-03-10-004. Tasks are not surfaced automatically \u2014 the agent must call `paradigm_task_list` to see them."
+          },
+          "correct": "B",
+          "explanation": "Task IDs follow the format T-YYYY-MM-DD-NNN with per-date sequential numbering, so the fourth task on 2026-03-10 is T-2026-03-10-004. Tasks are designed to survive context windows \u2014 on session recovery, the top 5 open tasks (sorted by priority: high > medium > low) are automatically surfaced. Since there are only four open tasks, all four appear. This ensures continuity without requiring the agent to manually query task state."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-091",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-091",
+          "scenario": "An agent finishes a debugging session and wants to record the root cause and resolution as a lasting insight. The team already has an assessment arc called `arc-auth-hardening` tracking authentication improvements. The agent calls `paradigm_assessment_record` with `type: \"insight\"`, `arc_id: \"arc-auth-hardening\"`, and a summary of the fix. Three entries already exist across all arcs today (2026-04-02).",
+          "question": "What entry ID is assigned, and where is the file stored?",
+          "choices": {
+            "A": "A-2026-04-02-001 stored in `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-001.yaml` \u2014 entry IDs are sequential per arc.",
+            "B": "A-2026-04-02-004 stored in `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-004.yaml` \u2014 entry IDs are globally unique across all arcs.",
+            "C": "I-2026-04-02-004 stored in `.paradigm/assessments/insights/I-2026-04-02-004.yaml` \u2014 insights have their own prefix and directory.",
+            "D": "A-auth-hardening-004 stored in `.paradigm/assessments/entries/A-auth-hardening-004.yaml` \u2014 entry IDs embed the arc name.",
+            "E": "A-2026-04-02-004 stored in `.paradigm/assessments/entries/2026-04-02/A-2026-04-02-004.yaml` \u2014 entries are grouped by date, not arc."
+          },
+          "correct": "B",
+          "explanation": "Assessment entry IDs follow the format A-YYYY-MM-DD-NNN where NNN is globally unique across ALL arcs \u2014 the ID generator scans every arc's entries directory to determine the next sequence number. Since three entries already exist today, this one gets A-2026-04-02-004. The file is stored under the arc's own entries directory at `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-004.yaml`. This global uniqueness guarantees that an entry ID alone is sufficient to locate any assessment entry without knowing which arc it belongs to."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-092",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-092",
+          "scenario": "A developer asks their agent to record a retrospective about a failed deployment. The agent calls `paradigm_assessment_record` with `type: \"retro\"`, `arc_name: \"Q1 Platform Stability\"`, but does NOT provide an `arc_id`. No arc for platform stability exists yet.",
+          "question": "What happens when `arc_name` is provided without an `arc_id` to `paradigm_assessment_record`?",
+          "choices": {
+            "A": "The call fails with an error \u2014 `arc_id` is always required when recording an entry.",
+            "B": "The entry is recorded as an orphan in `.paradigm/assessments/unassigned/`.",
+            "C": "The tool auto-creates a new arc (deriving an arc_id like `arc-q1-platform-stability` from the name) and records the entry inside it.",
+            "D": "The tool searches existing arcs by name and fails if no exact match is found.",
+            "E": "The entry is recorded with a temporary arc_id that must be manually linked later."
+          },
+          "correct": "C",
+          "explanation": "When `arc_name` is provided without an `arc_id`, `paradigm_assessment_record` auto-creates the arc. The arc_id is derived by converting the name to kebab-case and prefixing with `arc-` (validated against `/^arc-[a-z0-9-]+$/`). This creates the arc directory structure at `.paradigm/assessments/arcs/arc-q1-platform-stability/` with an `arc.yaml` and the entry in its `entries/` subdirectory. This convenience behavior reduces friction \u2014 agents can record assessments without a separate arc creation step."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-093",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-093",
+          "scenario": "Your project has been running for six months. The codebase has 200+ commits (raw facts in git), 45 lore entries (session-level events captured by the post-commit hook), and 12 assessment entries across 3 arcs (synthesized insights from retrospectives and decisions). A new team member asks how these three layers relate to each other.",
+          "question": "Which statement BEST describes Paradigm's three-layer knowledge model?",
+          "choices": {
+            "A": "Commits, lore, and assessments are independent systems \u2014 they share no data and serve different audiences.",
+            "B": "Lore replaces commit messages with richer context, and assessments replace lore when insights are finalized.",
+            "C": "Commits capture raw facts (what changed), lore captures session-level events (what happened and why), and assessments synthesize cross-session insights (what we learned) \u2014 each layer builds on the one below it.",
+            "D": "Assessments are the authoritative layer \u2014 commits and lore are temporary and should be pruned once assessments exist.",
+            "E": "Lore and assessments are both subsets of the commit history, just filtered by different criteria."
+          },
+          "correct": "C",
+          "explanation": "Paradigm's three-layer knowledge model is: Commits (raw facts \u2014 what code changed, captured by git), Lore (session events \u2014 what happened during a work session and why, captured by the post-commit hook into `.paradigm/history/`), and Assessments (synthesized insight \u2014 what the team learned across multiple sessions, recorded into `.paradigm/assessments/`). Each layer adds interpretation: commits are mechanical diffs, lore adds narrative context, and assessments distill patterns and decisions. All three layers persist and remain valuable \u2014 none replaces or supersedes the others."
         }
       ]
     }
