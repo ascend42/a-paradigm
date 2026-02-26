@@ -179,10 +179,18 @@ export function parsePurposeFileDetailed(filePath: string): ParseResult {
     return { data: null, errors, detailedErrors, rawContent: undefined, isYamlValid: false };
   }
 
+  // Pre-process: quote Paradigm symbol prefixes that conflict with YAML syntax.
+  // 1. Keys: #Foo: → "#Foo": and ~foo: → "~foo": (# = comment, ! = tag)
+  // 2. Array values: - !signal → - "!signal" (! = YAML tag prefix)
+  // 3. Inline refs: - #component → - "#component" (# after whitespace = comment)
+  const processedContent = rawContent
+    .replace(/^([#~!$^][\w-]+):/gm, '"$1":')
+    .replace(/^(\s*-\s+)([!#][\w-]+)$/gm, '$1"$2"');
+
   // Parse YAML
   let data: unknown = null;
   try {
-    data = yaml.load(rawContent);
+    data = yaml.load(processedContent);
   } catch (e: unknown) {
     const yamlError = e as yaml.YAMLException;
     const line = yamlError.mark?.line ? yamlError.mark.line + 1 : undefined;
@@ -205,6 +213,27 @@ export function parsePurposeFileDetailed(filePath: string): ParseResult {
       rawContent,
       isYamlValid: true,
     };
+  }
+
+  // Normalize symbol-prefixed top-level keys into standard dicts
+  // e.g., "#MCPServer": {...} → components: { MCPServer: {...} }
+  if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+    const prefixMap: Record<string, string> = {
+      '#': 'components', '$': 'flows', '^': 'gates', '!': 'signals', '~': 'aspects',
+    };
+    for (const key of Object.keys(obj)) {
+      const prefix = key[0];
+      const target = prefixMap[prefix];
+      if (!target || key.length < 2) continue;
+      const id = key.slice(1);
+      const value = obj[key];
+      if (typeof value !== 'object' || value === null) continue;
+      const dict = (obj[target] as Record<string, unknown>) || {};
+      if (!(target in obj)) obj[target] = dict;
+      if (!(id in dict)) dict[id] = value;
+      delete obj[key];
+    }
   }
 
   // Validate against schema
@@ -235,10 +264,15 @@ export function parsePurposeContent(content: string): ParseResult {
   const errors: string[] = [];
   const detailedErrors: ParseError[] = [];
 
+  // Pre-process: quote Paradigm symbol prefixes that conflict with YAML syntax
+  const processedContent = content
+    .replace(/^([#~!$^][\w-]+):/gm, '"$1":')
+    .replace(/^(\s*-\s+)([!#][\w-]+)$/gm, '$1"$2"');
+
   // Parse YAML
   let data: unknown = null;
   try {
-    data = yaml.load(content);
+    data = yaml.load(processedContent);
   } catch (e: unknown) {
     const yamlError = e as yaml.YAMLException;
     const line = yamlError.mark?.line ? yamlError.mark.line + 1 : undefined;
@@ -261,6 +295,26 @@ export function parsePurposeContent(content: string): ParseResult {
       rawContent: content,
       isYamlValid: true,
     };
+  }
+
+  // Normalize symbol-prefixed top-level keys into standard dicts
+  if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+    const prefixMap: Record<string, string> = {
+      '#': 'components', '$': 'flows', '^': 'gates', '!': 'signals', '~': 'aspects',
+    };
+    for (const key of Object.keys(obj)) {
+      const prefix = key[0];
+      const target = prefixMap[prefix];
+      if (!target || key.length < 2) continue;
+      const id = key.slice(1);
+      const value = obj[key];
+      if (typeof value !== 'object' || value === null) continue;
+      const dict = (obj[target] as Record<string, unknown>) || {};
+      if (!(target in obj)) obj[target] = dict;
+      if (!(id in dict)) dict[id] = value;
+      delete obj[key];
+    }
   }
 
   // Validate against schema
