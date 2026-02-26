@@ -1,0 +1,115 @@
+# Paradigm Sentinel Rust Client - Tracing Integration
+# Version: 2.0 (Symbol System v2)
+
+description: |
+  Rust client SDK for Paradigm Sentinel observability server. Provides async batched
+  logging and metrics submission via reqwest, plus a tracing subscriber Layer that
+  forwards Rust tracing events to Sentinel with automatic symbol inference.
+
+# ============================================
+# Components (#)
+# ============================================
+
+#SentinelRustClient:
+  description: Async Rust client with buffered log and metric submission, batch-on-threshold flush, and bearer token auth
+  tags: [feature, sdk, client, rust]
+  anchors:
+    - src/lib.rs:192-397
+
+#SentinelClientBuilder:
+  description: Builder pattern for constructing SentinelClient with configurable URL, token, environment, and batch size
+  tags: [sdk, client, rust]
+  anchors:
+    - src/lib.rs:125-186
+
+#SentinelTracingLayer:
+  description: tracing_subscriber Layer that intercepts Rust tracing events and forwards them to Sentinel as structured log entries
+  tags: [feature, tracing, integration, rust]
+  anchors:
+    - src/tracing_layer.rs:39-84
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~rust-batch-size-default-50:
+  description: Rust client defaults to batch size of 50 entries before auto-flushing, matching the TypeScript client default
+  category: configuration
+  severity: medium
+  tags: [client, sdk, batching, rust]
+  anchors:
+    - src/lib.rs:144-144
+  applies-to:
+    - "#SentinelRustClient"
+    - "#SentinelClientBuilder"
+
+~rust-default-url-localhost-3838:
+  description: Rust client defaults to http://localhost:3838, consistent with the TypeScript client
+  category: configuration
+  severity: low
+  tags: [client, sdk, rust]
+  anchors:
+    - src/lib.rs:141-141
+  applies-to:
+    - "#SentinelClientBuilder"
+
+~tracing-level-mapping:
+  description: Rust tracing levels map to Sentinel levels — TRACE and DEBUG both map to debug, INFO to info, WARN to warn, ERROR to error
+  category: rule
+  severity: medium
+  tags: [tracing, level-mapping, rust]
+  anchors:
+    - src/tracing_layer.rs:87-94
+  applies-to:
+    - "#SentinelTracingLayer"
+
+~module-path-to-symbol-conversion:
+  description: Rust module paths are converted to Paradigm symbols by stripping the crate root, replacing underscores with dashes, joining with dashes, and prefixing with #
+  category: rule
+  severity: medium
+  tags: [tracing, symbols, rust]
+  anchors:
+    - src/tracing_layer.rs:100-115
+  applies-to:
+    - "#SentinelTracingLayer"
+
+~tracing-event-symbol-field-override:
+  description: If a tracing event includes an explicit 'symbol' field, it overrides the auto-inferred module-path symbol
+  category: rule
+  severity: medium
+  tags: [tracing, symbols, rust]
+  anchors:
+    - src/tracing_layer.rs:62-64
+  applies-to:
+    - "#SentinelTracingLayer"
+
+~tracing-async-fire-and-forget:
+  description: Tracing layer forwards events via tokio::spawn (fire-and-forget); failures do not block the instrumented code
+  category: decision
+  severity: high
+  tags: [tracing, resilience, rust]
+  anchors:
+    - src/tracing_layer.rs:79-82
+  applies-to:
+    - "#SentinelTracingLayer"
+
+~rust-buffer-drain-before-send:
+  description: Rust client drains buffers via mem::take before sending, allowing new entries to accumulate during the network request
+  category: rule
+  severity: medium
+  tags: [client, sdk, concurrency, rust]
+  anchors:
+    - src/lib.rs:318-326
+  applies-to:
+    - "#SentinelRustClient"
+
+~rust-serde-camel-case-serialization:
+  description: Rust types use serde rename_all = camelCase to match the TypeScript/JSON API contract, with skip_serializing_if for Optional fields
+  category: decision
+  severity: medium
+  tags: [client, sdk, serialization, rust]
+  anchors:
+    - src/lib.rs:51-51
+    - src/lib.rs:80-80
+  applies-to:
+    - "#SentinelRustClient"

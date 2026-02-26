@@ -51,6 +51,100 @@ signals:
     description: '!validation-failed: Portal validation found issues'
     category: portal
     severity: warn
+aspects:
+  ~portal-yaml-version-required:
+    description: Gate config must have a "version" field; parsing throws if missing
+    category: invariant
+    severity: critical
+    tags: [validation, parsing]
+    anchors:
+      - src/parser.ts:43-45
+    applies-to:
+      - "#yaml-parser"
+
+  ~gate-id-kebab-case:
+    description: Gate, lock, and prize IDs must match kebab-case pattern /^[a-z][a-z0-9-]*$/
+    category: rule
+    severity: medium
+    tags: [validation, naming]
+    anchors:
+      - src/validator.ts:56-62
+      - src/validator.ts:84-90
+      - src/validator.ts:119-125
+    applies-to:
+      - "#validator"
+
+  ~lock-mode-default-all:
+    description: Lock mode defaults to "all" when not specified; only "all" and "any" are valid
+    category: decision
+    severity: medium
+    tags: [parsing, evaluation]
+    anchors:
+      - src/parser.ts:169
+      - src/validator.ts:157-163
+    applies-to:
+      - "#yaml-parser"
+
+  ~portal-glob-ignore-patterns:
+    description: "findGateFiles ignores node_modules, dist, and .git directories"
+    category: configuration
+    severity: low
+    tags: [discovery, glob]
+    anchors:
+      - src/parser.ts:284-288
+    applies-to:
+      - "#yaml-parser"
+
+  ~portal-dev-ports-marathon:
+    description: Default dev ports are 42195 (visualizer, marathon 42.195km) and 42196 (watcher)
+    category: configuration
+    severity: low
+    tags: [dev, configuration]
+    anchors:
+      - src/parser.ts:22-26
+    applies-to:
+      - "#yaml-parser"
+
+  ~gates-portals-key-alias:
+    description: "Parser supports both 'gates' and legacy 'portals' keys for backward compatibility"
+    category: decision
+    severity: low
+    tags: [parsing, backward-compatibility]
+    anchors:
+      - src/parser.ts:48-55
+    applies-to:
+      - "#yaml-parser"
+
+  ~lock-requires-keys:
+    description: A lock with zero keys is a validation error (can never be opened)
+    category: invariant
+    severity: high
+    tags: [validation]
+    anchors:
+      - src/validator.ts:128-134
+    applies-to:
+      - "#validator"
+
+  ~flow-gates-must-exist:
+    description: Flow gate references must point to declared gate IDs; unknown refs are errors
+    category: invariant
+    severity: high
+    tags: [validation, referential-integrity]
+    anchors:
+      - src/validator.ts:182-189
+    applies-to:
+      - "#topology-checker"
+
+  ~strict-equality-warning:
+    description: "Key expressions using == instead of === emit a warning suggesting strict equality"
+    category: rule
+    severity: low
+    tags: [validation, best-practice]
+    anchors:
+      - src/validator.ts:147-153
+    applies-to:
+      - "#validator"
+
 flows:
   portal-validation-flow:
     description: Validate portal.yaml gate configuration and route compliance

@@ -51,3 +51,24 @@ flows:
         action: Generate IDE-specific output files
       - component: "#adapter-registry"
         action: Write files to appropriate locations
+
+aspects:
+  ~adapter-section-ordering:
+    description: All IDE adapters emit sections in a shared order — header, overview, symbol system, terminal guidance, navigation, MCP tools, workflow protocol, session recovery, checkpoints, logging rules, conventions, commit convention, update rules, scan protocol, footer; sections are only included if the config has relevant data
+    category: rule
+    severity: medium
+    tags: [ide-adapters, generation]
+    anchors:
+      - base.ts:12-19
+      - base.ts:24-44
+      - base.ts:49-71
+      - base.ts:76-112
+      - base.ts:229-275
+      - base.ts:377-411
+    applies-to:
+      - "#adapter-base"
+      - "#cursor-adapter"
+      - "#claude-adapter"
+      - "#copilot-adapter"
+      - "#windsurf-adapter"
+      - "#agents-adapter"

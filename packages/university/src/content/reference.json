@@ -142,6 +142,55 @@
           "example": "paradigm_aspect_check({ aspect: '~audit-required' })"
         },
         {
+          "id": "paradigm-aspect-search",
+          "name": "paradigm_aspect_search",
+          "description": "Search aspects using three-tier learning search (learned mappings → FTS5 → fuzzy). Returns ranked results with scores and tiers. Call paradigm_aspect_confirm after selecting a result to improve future searches.",
+          "when": "When looking for aspects by keyword, description, or related concept. The search improves over time as you confirm results.",
+          "example": "paradigm_aspect_search({ query: 'jwt expiry' })"
+        },
+        {
+          "id": "paradigm-aspect-get",
+          "name": "paradigm_aspect_get",
+          "description": "Get full aspect details — description, category, severity, code anchor snippets, graph edges, and linked lore entries.",
+          "when": "After finding an aspect via search, to see its full context including the actual code at anchor locations.",
+          "example": "paradigm_aspect_get({ aspectId: 'token-expiry-24h' })"
+        },
+        {
+          "id": "paradigm-aspect-graph",
+          "name": "paradigm_aspect_graph",
+          "description": "Get the subgraph neighborhood of a symbol — all aspects and edges within N hops.",
+          "when": "When exploring how aspects relate to each other and to symbols in the codebase.",
+          "example": "paradigm_aspect_graph({ symbol: '~token-expiry-24h', hops: 2 })"
+        },
+        {
+          "id": "paradigm-aspect-heatmap",
+          "name": "paradigm_aspect_heatmap",
+          "description": "Get most-accessed aspects ranked by usage frequency, broken down by access type (search, ripple, navigate, direct).",
+          "when": "To understand which aspects are most frequently referenced and which might be under-utilized.",
+          "example": "paradigm_aspect_heatmap({ limit: 10 })"
+        },
+        {
+          "id": "paradigm-aspect-suggest-scan",
+          "name": "paradigm_aspect_suggest_scan",
+          "description": "Scan a source file for undocumented aspects — magic numbers, hardcoded strings, rate limits, time values, env checks, feature flags, and regex patterns.",
+          "when": "When auditing a file for rules and constraints that should be documented as aspects.",
+          "example": "paradigm_aspect_suggest_scan({ filePath: 'src/auth/jwt.ts' })"
+        },
+        {
+          "id": "paradigm-aspect-drift",
+          "name": "paradigm_aspect_drift",
+          "description": "Check aspect anchors for content drift — detects when code at anchored line ranges has changed since the last scan.",
+          "when": "During maintenance to find stale anchors, or after significant refactoring to verify aspect integrity.",
+          "example": "paradigm_aspect_drift({ aspectId: 'token-expiry-24h' })"
+        },
+        {
+          "id": "paradigm-aspect-confirm",
+          "name": "paradigm_aspect_confirm",
+          "description": "Confirm a search result to improve future search quality. Reinforces the query-to-aspect mapping in the learning system.",
+          "when": "After selecting a result from paradigm_aspect_search. This is how the search gets smarter over time.",
+          "example": "paradigm_aspect_confirm({ query: 'jwt expiry', aspectId: 'token-expiry-24h' })"
+        },
+        {
           "id": "paradigm-purpose-validate",
           "name": "paradigm_purpose_validate",
           "description": "Validate .purpose files and portal.yaml structural integrity. Checks for missing fields, invalid references, and formatting issues.",
@@ -485,6 +534,88 @@
       ]
     },
     {
+      "id": "aspect-categories",
+      "title": "Aspect Categories",
+      "cards": [
+        {
+          "id": "category-rule",
+          "name": "rule",
+          "description": "A mandatory pattern that must be followed across the codebase. Rules are non-negotiable constraints enforced by code. Inferred from descriptions containing 'must', 'always', 'never', 'required'.",
+          "examples": ["~no-console-log", "~audit-required", "~idempotent-payments"],
+          "when": "When a pattern must be followed without exception — if violating it would be a bug or compliance issue."
+        },
+        {
+          "id": "category-decision",
+          "name": "decision",
+          "description": "An architectural or design choice with documented rationale. Decisions capture the 'why' behind implementation choices. Inferred from descriptions containing 'decided', 'chosen', 'selected', 'opted'.",
+          "examples": ["~use-redis-for-sessions", "~jwt-signing-rs256", "~monorepo-structure"],
+          "when": "When a deliberate choice was made between alternatives and the rationale should be preserved for future reference."
+        },
+        {
+          "id": "category-constraint",
+          "name": "constraint",
+          "description": "A quantitative limit or boundary on system behavior. Constraints define the numeric or measurable boundaries of operations. Inferred from descriptions containing 'limit', 'maximum', 'minimum', 'cannot exceed'.",
+          "examples": ["~max-upload-10mb", "~rate-limit-100-per-minute", "~session-timeout-30m"],
+          "when": "When a measurable boundary exists — file size limits, rate limits, timeouts, quotas, or thresholds."
+        },
+        {
+          "id": "category-configuration",
+          "name": "configuration",
+          "description": "A configurable value or setting that controls system behavior. Configuration aspects document values that may change per environment. Inferred from descriptions containing 'configured', 'set to', 'defaults to', 'environment'.",
+          "examples": ["~default-page-size-25", "~cache-ttl-5m", "~feature-flag-new-checkout"],
+          "when": "When a value is environment-specific or tunable — defaults, feature flags, environment variables, or deployment settings."
+        },
+        {
+          "id": "category-invariant",
+          "name": "invariant",
+          "description": "A condition that must always hold true in the system. Invariants are guarantees about system state that should never be violated. Inferred from descriptions containing 'always true', 'never negative', 'invariant', 'guarantee'.",
+          "examples": ["~balance-never-negative", "~user-always-has-email", "~order-total-matches-items"],
+          "when": "When a system property must hold at all times — data integrity rules, mathematical invariants, or state consistency guarantees."
+        }
+      ]
+    },
+    {
+      "id": "aspect-edge-relations",
+      "title": "Aspect Edge Relations",
+      "cards": [
+        {
+          "id": "edge-enforced-by",
+          "name": "enforced-by",
+          "description": "Indicates that an aspect is enforced by another symbol — typically a component, middleware, or gate that implements the rule in code. The target symbol contains the enforcement logic.",
+          "examples": ["~audit-required --enforced-by--> #audit-middleware", "~rate-limited --enforced-by--> ^rate-limiter"],
+          "when": "When an aspect has a concrete enforcement mechanism in code. This is the most common edge type for rules and constraints."
+        },
+        {
+          "id": "edge-depends-on",
+          "name": "depends-on",
+          "description": "Indicates that an aspect depends on another aspect or symbol for its correct functioning. If the dependency changes, the dependent aspect may need updating.",
+          "examples": ["~token-expiry-24h --depends-on--> ~jwt-signing-rs256", "~cache-invalidation --depends-on--> #event-bus"],
+          "when": "When changing one aspect could break or invalidate another. The ripple analysis follows these edges to discover indirect impacts."
+        },
+        {
+          "id": "edge-contradicts",
+          "name": "contradicts",
+          "description": "Indicates that two aspects are in tension or direct conflict. Contradictions signal architectural tensions that need resolution or documented trade-offs.",
+          "examples": ["~cache-aggressively --contradicts--> ~always-fresh-data", "~minimal-logging --contradicts--> ~full-audit-trail"],
+          "when": "When two aspects cannot both be fully satisfied simultaneously. Documenting contradictions makes trade-offs visible rather than hidden."
+        },
+        {
+          "id": "edge-supersedes",
+          "name": "supersedes",
+          "description": "Indicates that an aspect replaces or overrides a previous version. The superseded aspect is still referenced for history but the superseding one is authoritative.",
+          "examples": ["~rate-limit-v2 --supersedes--> ~rate-limit-v1", "~auth-jwt --supersedes--> ~auth-session-cookie"],
+          "when": "When an aspect evolves and a newer version replaces the old one. Keeps the historical chain visible while directing users to the current version."
+        },
+        {
+          "id": "edge-related-to",
+          "name": "related-to",
+          "description": "The weakest relation — indicates a loose association between two symbols. Useful for discovery but not for impact analysis. Does not imply dependency or enforcement.",
+          "examples": ["~password-policy --related-to--> ~account-lockout", "~api-versioning --related-to--> ~deprecation-strategy"],
+          "when": "When two aspects are conceptually related but do not have a stronger structural relationship like enforcement or dependency."
+        }
+      ]
+    },
+    {
       "id": "configurable-limits",
       "title": "Configurable Limits",
       "cards": [
@@ -523,6 +654,12 @@
           "name": "checkpointMaxAgeMs",
           "description": "Maximum age of session checkpoints before they expire. Default: 604800000 (7 days).",
           "when": "Shorten for teams that don't want stale recovery data; lengthen for projects with infrequent sessions."
+        },
+        {
+          "id": "aspect-search-decay",
+          "name": "Search Weight Decay",
+          "description": "When a search result is confirmed, the selected aspect gets +1.0 weight while all other results for the same query decay by *0.95. This self-correcting mechanism prevents stale mappings.",
+          "when": "Automatic — happens on every paradigm_aspect_confirm call."
         }
       ]
     }

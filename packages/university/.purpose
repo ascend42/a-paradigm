@@ -48,7 +48,7 @@ components:
     file: ui/src/views/QuizView.tsx
 
   plsat-view:
-    description: Timed 50-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
+    description: Timed 86-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
     file: ui/src/views/PLSATView.tsx
 
   reference-view:
@@ -83,7 +83,7 @@ components:
     file: ui/src/components/QuestionCard.tsx
 
   plsat-timer:
-    description: Countdown timer component for PLSAT exam (45 minutes)
+    description: Countdown timer component for PLSAT exam (86 minutes)
     file: ui/src/components/Timer.tsx
 
   progress-ring:
@@ -97,6 +97,49 @@ components:
   academia-theme:
     description: CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents
     file: ui/src/styles/academia.css
+
+aspects:
+  ~plsat-pass-threshold-80pct:
+    description: "PLSAT pass threshold is 0.8 (80%); defined in content JSON and read by the server at runtime"
+    category: configuration
+    severity: high
+    tags: [plsat, certification]
+    anchors:
+      - src/server/routes/plsat.ts:50
+    applies-to:
+      - "#plsat-router"
+
+  ~plsat-fisher-yates-shuffle:
+    description: "v3.0 exam blocks are shuffled using Fisher-Yates algorithm; passage groups move as a unit to keep related questions together"
+    category: decision
+    severity: high
+    tags: [plsat, randomization]
+    anchors:
+      - src/server/routes/plsat.ts:77-83
+      - src/server/routes/plsat.ts:130
+    applies-to:
+      - "#plsat-router"
+
+  ~plsat-v3-variant-resolution:
+    description: "v3.0 items have multiple variants per slot; server picks one random variant per slot so each exam attempt is unique while covering the same topics"
+    category: decision
+    severity: high
+    tags: [plsat, variants]
+    anchors:
+      - src/server/routes/plsat.ts:72-74
+      - src/server/routes/plsat.ts:90-133
+    applies-to:
+      - "#plsat-router"
+
+  ~university-cors-wildcard:
+    description: "University server sets Access-Control-Allow-Origin: * for development cross-origin API access"
+    category: configuration
+    severity: low
+    tags: [cors, development]
+    anchors:
+      - src/server/index.ts:102-107
+    applies-to:
+      - "#university-server"
 
 signals:
   "!plsat-completed":
@@ -116,9 +159,9 @@ flows:
       - component: "#plsat-view"
         action: Display intro, rules, and name input
       - component: "#plsat-timer"
-        action: Start 45-minute countdown
+        action: Start 86-minute countdown
       - component: "#question-card"
-        action: Present 50 shuffled questions (with passage blocks for grouped questions)
+        action: Present 86 shuffled questions (with passage blocks for grouped questions)
       - component: "#plsat-view"
         action: Calculate score on submit or time-up
       - component: "#plsat-store"
