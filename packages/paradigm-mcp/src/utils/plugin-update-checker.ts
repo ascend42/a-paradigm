@@ -255,6 +255,7 @@ export function getPluginUpdateNotice(): string | null {
   lines.push('Updates available for installed Claude Code plugins:');
 
   const pullCmds: string[] = [];
+  const reinstallCmds: string[] = [];
   for (const r of updatable) {
     if (r.hasRemoteUpdate) {
       const versionInfo = r.installedVersion !== 'unknown'
@@ -262,21 +263,33 @@ export function getPluginUpdateNotice(): string | null {
         : 'newer commits available';
       lines.push(`  - ${r.plugin} (${r.repo}): ${versionInfo}`);
       pullCmds.push(`git -C ${r.marketplacePath} pull origin main`);
+      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
     } else if (r.hasCacheStale) {
-      lines.push(`  - ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (restart needed)`);
+      lines.push(`  - ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (reinstall needed)`);
+      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
     }
   }
 
+  lines.push('');
+  lines.push('Tell the user about these updates and suggest the following steps:');
+
   if (pullCmds.length > 0) {
     lines.push('');
-    lines.push('Tell the user about these updates and suggest running:');
+    lines.push('Step 1 — Pull latest from remote:');
     lines.push(`  ${pullCmds.join(' && \\\n  ')}`);
-    lines.push('');
-    lines.push('After updating, the user should restart their Claude Code session.');
-  } else {
-    lines.push('');
-    lines.push('Restart the session to apply cached updates.');
   }
+
+  if (reinstallCmds.length > 0) {
+    const stepNum = pullCmds.length > 0 ? 2 : 1;
+    lines.push('');
+    lines.push(`Step ${stepNum} — Reinstall to update the cached version:`);
+    for (const cmd of reinstallCmds) {
+      lines.push(`  ${cmd}`);
+    }
+    lines.push('');
+    lines.push(`Step ${stepNum + 1} — Restart the Claude Code session to load the new version.`);
+  }
+
   lines.push('---');
 
   return lines.join('\n');
