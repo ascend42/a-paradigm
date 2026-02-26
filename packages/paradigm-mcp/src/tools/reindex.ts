@@ -13,6 +13,8 @@ import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { toolCache } from '../utils/tool-cache.js';
+import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/aspect-graph.js';
+import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 
 // ============================================================================
 // Navigator constants (ported from packages/paradigm/src/commands/scan/navigator.ts)
@@ -115,6 +117,12 @@ export interface RebuildResult {
   symbolCount: number;
   breakdown: Record<string, number>;
   flowCount: number;
+  aspectGraphStats?: {
+    aspects: number;
+    anchors: number;
+    edges: number;
+    loreLinks: number;
+  };
 }
 
 export async function rebuildStaticFiles(
@@ -172,6 +180,31 @@ export async function rebuildStaticFiles(
     flowCount = Object.keys(flowIndex.flows).length;
   }
 
+  // 5. Build aspect-graph.db (SQLite graph of aspects, anchors, edges, lore)
+  let aspectGraphStats: RebuildResult['aspectGraphStats'];
+  try {
+    const db = await openAspectGraph(rootDir);
+    materializeAspects(db, aggregation.symbols);
+    const loreLinks = await materializeLoreLinks(db, rootDir);
+    const inferredEdges = await inferLoreEdges(db, rootDir);
+
+    // Query counts from the materialized tables
+    const aspectCount = db.exec('SELECT COUNT(*) FROM aspects')[0]?.values[0]?.[0] as number ?? 0;
+    const anchorCount = db.exec('SELECT COUNT(*) FROM anchors')[0]?.values[0]?.[0] as number ?? 0;
+    const edgeCount = db.exec('SELECT COUNT(*) FROM edges')[0]?.values[0]?.[0] as number ?? 0;
+
+    closeAspectGraph(db, rootDir);
+    filesWritten.push('.paradigm/aspect-graph.db');
+    aspectGraphStats = {
+      aspects: aspectCount,
+      anchors: anchorCount,
+      edges: edgeCount,
+      loreLinks,
+    };
+  } catch {
+    // Aspect graph build is non-fatal — log but don't block reindex
+  }
+
   // Build breakdown
   const breakdown: Record<string, number> = {};
   for (const sym of aggregation.symbols) {
@@ -184,6 +217,7 @@ export async function rebuildStaticFiles(
     symbolCount: aggregation.symbols.length,
     breakdown,
     flowCount,
+    aspectGraphStats,
   };
 }
 
