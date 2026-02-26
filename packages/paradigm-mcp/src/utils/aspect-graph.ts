@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { execSync } from 'child_process';
 import initSqlJs, { type Database, type SqlValue } from 'sql.js';
 import type { SymbolEntry, SymbolIndex } from '@a-company/premise-core';
 import type {
@@ -67,6 +68,7 @@ const SCHEMA_STATEMENTS = [
     end_line INTEGER NOT NULL,
     content_hash TEXT,
     normalized_hash TEXT,
+    materialized_at_commit TEXT,
     last_verified TEXT,
     drifted INTEGER DEFAULT 0
   )`,
@@ -232,10 +234,19 @@ export function closeAspectGraph(db: Database, rootDir?: string): void {
  *
  * @param db - The sql.js Database instance
  * @param symbols - All SymbolEntry objects from the aggregated index
+ * @param rootDir - Optional project root for git HEAD resolution (Layer 2 drift detection)
  */
-export function materializeAspects(db: Database, symbols: SymbolEntry[]): void {
+export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir?: string): void {
   const aspects = symbols.filter((s) => s.type === 'aspect');
   const now = new Date().toISOString();
+
+  // Record current git HEAD for Layer 2 drift detection
+  let headCommit: string | null = null;
+  try {
+    headCommit = execSync('git rev-parse HEAD', { cwd: rootDir, encoding: 'utf8' }).trim();
+  } catch {
+    // Not a git repo or git not available — skip Layer 2 support
+  }
 
   // Clear existing data (full rebuild)
   db.run('DELETE FROM anchors');
@@ -283,9 +294,9 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[]): void {
         const hashes = computeAnchorHash(anchor, null);
 
         db.run(
-          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, last_verified)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, now]
+          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now]
         );
       }
     }
@@ -649,12 +660,14 @@ export function getHeatmap(
  * @param db - The sql.js Database instance
  * @param rootDir - Absolute path to the project root directory
  * @param aspectId - Optional aspect ID to scope the check
+ * @param autoHeal - Auto-update anchors for high-confidence shifts (default: true)
  * @returns Array of drift results for each anchor
  */
 export function checkDrift(
   db: Database,
   rootDir: string,
-  aspectId?: string
+  aspectId?: string,
+  autoHeal: boolean = true,
 ): DriftResult[] {
   const anchorRows: AnchorRow[] = aspectId
     ? queryRows<AnchorRow>(db, 'SELECT * FROM anchors WHERE aspect_id = ?', [aspectId])
@@ -750,7 +763,121 @@ export function checkDrift(
         continue;
       }
 
-      // Real drift — content genuinely changed (future: Layer 2 git mapping, Layer 3 search)
+      // Layer 2: Git-aware line mapping
+      // If we have a materialization commit, check if lines just shifted
+      let resolvedByGit = false;
+      if (anchor.materialized_at_commit) {
+        const mapping = computeLineShift(
+          rootDir,
+          anchor.file_path,
+          anchor.materialized_at_commit,
+          anchor.start_line,
+          anchor.end_line,
+        );
+
+        if (mapping) {
+          // Lines shifted — read content at the new location and verify
+          const shiftedStartIdx = Math.max(0, mapping.currentStart - 1);
+          const shiftedEndIdx = Math.min(lines.length, mapping.currentEnd);
+          const shiftedContent = lines.slice(shiftedStartIdx, shiftedEndIdx).join('\n');
+          const shiftedExactHash = crypto.createHash('sha256').update(shiftedContent).digest('hex');
+
+          if (anchor.content_hash != null && shiftedExactHash === anchor.content_hash) {
+            // Content matches at the shifted location — auto-heal
+            const healed = autoHeal;
+
+            if (healed) {
+              // Update DB with new line numbers
+              db.run(
+                'UPDATE anchors SET start_line = ?, end_line = ?, drifted = 0 WHERE id = ?',
+                [mapping.currentStart, mapping.currentEnd, anchor.id]
+              );
+
+              // Look up the .purpose file that defines this aspect
+              const aspectRow = queryRows<{ defined_in: string }>(
+                db,
+                'SELECT defined_in FROM aspects WHERE id = ?',
+                [anchor.aspect_id]
+              );
+              if (aspectRow.length > 0) {
+                healAnchorInPurposeFile(
+                  rootDir,
+                  aspectRow[0].defined_in,
+                  anchor.file_path,
+                  anchor.start_line,
+                  anchor.end_line,
+                  mapping.currentStart,
+                  mapping.currentEnd,
+                );
+              }
+            }
+
+            results.push({
+              aspectId: anchor.aspect_id,
+              path: anchor.file_path,
+              startLine: healed ? mapping.currentStart : anchor.start_line,
+              endLine: healed ? mapping.currentEnd : anchor.end_line,
+              status: 'shifted',
+              resolvedBy: 'git-line-mapping',
+              exists: true,
+              drifted: false,
+              suggestedStart: mapping.currentStart,
+              suggestedEnd: mapping.currentEnd,
+              autoHealed: healed,
+            });
+            resolvedByGit = true;
+          } else {
+            // Lines shifted but content also changed — check normalized hash at shifted location
+            const shiftedNormalized = crypto.createHash('sha256').update(normalizeForHash(shiftedContent)).digest('hex');
+            if (anchor.normalized_hash != null && shiftedNormalized === anchor.normalized_hash) {
+              // Shifted + cosmetic change
+              if (autoHeal) {
+                const shiftedNewHash = crypto.createHash('sha256').update(shiftedContent).digest('hex');
+                db.run(
+                  'UPDATE anchors SET start_line = ?, end_line = ?, content_hash = ?, drifted = 0 WHERE id = ?',
+                  [mapping.currentStart, mapping.currentEnd, shiftedNewHash, anchor.id]
+                );
+
+                const aspectRow = queryRows<{ defined_in: string }>(
+                  db,
+                  'SELECT defined_in FROM aspects WHERE id = ?',
+                  [anchor.aspect_id]
+                );
+                if (aspectRow.length > 0) {
+                  healAnchorInPurposeFile(
+                    rootDir,
+                    aspectRow[0].defined_in,
+                    anchor.file_path,
+                    anchor.start_line,
+                    anchor.end_line,
+                    mapping.currentStart,
+                    mapping.currentEnd,
+                  );
+                }
+              }
+
+              results.push({
+                aspectId: anchor.aspect_id,
+                path: anchor.file_path,
+                startLine: autoHeal ? mapping.currentStart : anchor.start_line,
+                endLine: autoHeal ? mapping.currentEnd : anchor.end_line,
+                status: 'shifted',
+                resolvedBy: 'git-line-mapping',
+                exists: true,
+                drifted: false,
+                suggestedStart: mapping.currentStart,
+                suggestedEnd: mapping.currentEnd,
+                autoHealed: autoHeal,
+              });
+              resolvedByGit = true;
+            }
+          }
+        }
+      }
+
+      if (resolvedByGit) continue;
+
+      // Real drift — content genuinely changed (future: Layer 3 content search)
       db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
 
       results.push({
@@ -807,6 +934,140 @@ function resolveAnchorLines(anchor: CodeAnchor): { startLine: number; endLine: n
   }
 
   return { startLine: 1, endLine: 1 };
+}
+
+// ─── Layer 2: Git-aware line mapping ────────────────────────────────
+
+interface DiffHunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+}
+
+interface LineMapping {
+  originalStart: number;
+  originalEnd: number;
+  currentStart: number;
+  currentEnd: number;
+}
+
+/**
+ * Parse unified diff output into structured hunks.
+ * Handles the @@ -oldStart,oldCount +newStart,newCount @@ format.
+ */
+function parseUnifiedDiffHunks(diffOutput: string): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  const hunkPattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
+
+  let match: RegExpExecArray | null;
+  while ((match = hunkPattern.exec(diffOutput)) !== null) {
+    hunks.push({
+      oldStart: parseInt(match[1], 10),
+      oldCount: match[2] !== undefined ? parseInt(match[2], 10) : 1,
+      newStart: parseInt(match[3], 10),
+      newCount: match[4] !== undefined ? parseInt(match[4], 10) : 1,
+    });
+  }
+
+  return hunks;
+}
+
+/**
+ * Compute how an anchor's line range shifted based on git diff hunks.
+ * Returns null if a hunk overlaps the anchor (content was modified in-place).
+ */
+function computeLineShift(
+  rootDir: string,
+  filePath: string,
+  fromCommit: string,
+  originalStart: number,
+  originalEnd: number,
+): LineMapping | null {
+  let diff: string;
+  try {
+    diff = execSync(
+      `git diff ${fromCommit}..HEAD --unified=0 -- "${filePath}"`,
+      { cwd: rootDir, encoding: 'utf8', timeout: 5000 }
+    );
+  } catch {
+    return null; // git not available or file not tracked
+  }
+
+  if (!diff.trim()) {
+    // No changes to this file since commit — lines haven't shifted
+    return { originalStart, originalEnd, currentStart: originalStart, currentEnd: originalEnd };
+  }
+
+  const hunks = parseUnifiedDiffHunks(diff);
+  let offset = 0;
+
+  for (const hunk of hunks) {
+    const hunkOldEnd = hunk.oldStart + hunk.oldCount;
+
+    // Hunk is entirely before the anchor — accumulate offset
+    if (hunkOldEnd <= originalStart) {
+      offset += (hunk.newCount - hunk.oldCount);
+      continue;
+    }
+
+    // Hunk overlaps the anchor range — can't just shift, content was modified
+    if (hunk.oldStart < originalEnd) {
+      return null;
+    }
+
+    // Hunk is after the anchor — stop accumulating
+    break;
+  }
+
+  if (offset === 0) return null; // No shift needed
+
+  return {
+    originalStart,
+    originalEnd,
+    currentStart: originalStart + offset,
+    currentEnd: originalEnd + offset,
+  };
+}
+
+/**
+ * Update anchor line numbers in a .purpose file.
+ * Performs a surgical string replacement of the anchor reference.
+ */
+function healAnchorInPurposeFile(
+  rootDir: string,
+  purposeFilePath: string,
+  anchorFilePath: string,
+  oldStart: number,
+  oldEnd: number,
+  newStart: number,
+  newEnd: number,
+): boolean {
+  const absolutePurpose = path.isAbsolute(purposeFilePath)
+    ? purposeFilePath
+    : path.join(rootDir, purposeFilePath);
+
+  if (!fs.existsSync(absolutePurpose)) return false;
+
+  try {
+    const content = fs.readFileSync(absolutePurpose, 'utf8');
+
+    // Build the old anchor string: "file.ts:15-35" or "file.ts:15"
+    const oldAnchor = oldStart === oldEnd
+      ? `${anchorFilePath}:${oldStart}`
+      : `${anchorFilePath}:${oldStart}-${oldEnd}`;
+    const newAnchor = newStart === newEnd
+      ? `${anchorFilePath}:${newStart}`
+      : `${anchorFilePath}:${newStart}-${newEnd}`;
+
+    if (!content.includes(oldAnchor)) return false;
+
+    const updated = content.replace(oldAnchor, newAnchor);
+    fs.writeFileSync(absolutePurpose, updated, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

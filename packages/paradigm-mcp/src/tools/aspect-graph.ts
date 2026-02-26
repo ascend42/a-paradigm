@@ -155,13 +155,17 @@ export function getAspectGraphToolsList() {
     {
       name: 'paradigm_aspect_drift',
       description:
-        'Smart drift detection for code anchors. Layer 1: exact hash match. Layer 1b: normalized hash (ignores whitespace/formatting). Auto-heals cosmetic drift. ~200 tokens.',
+        'Smart drift detection for code anchors. Layer 1: normalized hash (ignores formatting). Layer 2: git-aware line mapping (detects shifts, auto-heals .purpose files). ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
           aspectId: {
             type: 'string',
             description: 'Optional: check a specific aspect. If omitted, checks all aspects.',
+          },
+          autoHeal: {
+            type: 'boolean',
+            description: 'Auto-update anchors for high-confidence shifts (default: true)',
           },
         },
       },
@@ -709,7 +713,8 @@ async function handleAspectDrift(
   args: Record<string, unknown>,
   ctx: ProjectContext,
 ): Promise<{ handled: boolean; text: string }> {
-  const { aspectId } = args as { aspectId?: string };
+  const { aspectId, autoHeal: autoHealArg } = args as { aspectId?: string; autoHeal?: boolean };
+  const autoHeal = autoHealArg !== false; // default true
 
   // Normalize: strip ~ prefix if provided
   const normalizedId = aspectId
@@ -720,22 +725,26 @@ async function handleAspectDrift(
   try {
     db = await openAspectGraph(ctx.rootDir);
 
-    const results = checkDrift(db, ctx.rootDir, normalizedId);
+    const results = checkDrift(db, ctx.rootDir, normalizedId, autoHeal);
 
     const cleanCount = results.filter((r) => r.status === 'clean').length;
     const cosmeticCount = results.filter((r) => r.status === 'cosmetic').length;
+    const shiftedCount = results.filter((r) => r.status === 'shifted').length;
     const modifiedCount = results.filter((r) => r.status === 'modified').length;
     const missingCount = results.filter((r) => r.status === 'missing').length;
 
-    const overallStatus = modifiedCount === 0 && missingCount === 0
-      ? (cosmeticCount > 0 ? 'clean-with-cosmetic-heals' : 'clean')
-      : 'drift-detected';
+    const hasIssues = modifiedCount > 0 || missingCount > 0;
+    const hasHeals = cosmeticCount > 0 || shiftedCount > 0;
+    const overallStatus = hasIssues
+      ? 'drift-detected'
+      : (hasHeals ? 'clean-with-heals' : 'clean');
 
     const response = {
       ...(normalizedId ? { aspectId: normalizedId } : { scope: 'all' }),
       totalAnchors: results.length,
       clean: cleanCount,
       cosmetic: cosmeticCount,
+      shifted: shiftedCount,
       modified: modifiedCount,
       missing: missingCount,
       status: overallStatus,
@@ -747,15 +756,24 @@ async function handleAspectDrift(
         status: r.status,
         resolvedBy: r.resolvedBy,
         exists: r.exists,
+        // Include shift details for shifted anchors
+        ...(r.status === 'shifted'
+          ? { suggestedStart: r.suggestedStart, suggestedEnd: r.suggestedEnd, autoHealed: r.autoHealed }
+          : {}),
         // Include current content only for modified anchors (truncated)
         ...(r.status === 'modified' && r.currentContent
           ? { currentContent: r.currentContent.slice(0, 500) }
           : {}),
       })),
-      ...(cosmeticCount > 0
-        ? { healed: `${cosmeticCount} anchor(s) had cosmetic-only changes (whitespace/formatting) — exact hashes auto-updated.` }
+      ...(cosmeticCount > 0 || shiftedCount > 0
+        ? {
+            healed: [
+              cosmeticCount > 0 ? `${cosmeticCount} cosmetic (whitespace/formatting — hashes updated)` : '',
+              shiftedCount > 0 ? `${shiftedCount} shifted (line numbers updated via git diff${autoHeal ? ' — .purpose files patched' : ''})` : '',
+            ].filter(Boolean).join(', '),
+          }
         : {}),
-      ...(modifiedCount > 0 || missingCount > 0
+      ...(hasIssues
         ? {
             suggestion: 'Review drifted anchors to ensure aspects still apply. Run `paradigm scan` to re-materialize after fixing.',
           }

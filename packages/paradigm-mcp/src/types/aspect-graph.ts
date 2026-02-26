@@ -143,6 +143,12 @@ export interface DriftResult {
   currentContent?: string;
   /** Similarity score for content-search layer (0.0-1.0) */
   similarity?: number;
+  /** Suggested new start line (for shifted anchors) */
+  suggestedStart?: number;
+  /** Suggested new end line (for shifted anchors) */
+  suggestedEnd?: number;
+  /** Whether the anchor was auto-healed */
+  autoHealed?: boolean;
 
   // ── Backwards compat (derived from status) ──
   /** @deprecated Use status !== 'clean' && status !== 'cosmetic' instead */
@@ -176,6 +182,7 @@ export interface AnchorRow {
   end_line: number;
   content_hash: string | null;
   normalized_hash: string | null;
+  materialized_at_commit: string | null;
   last_verified: string | null;
   drifted: number;
 }

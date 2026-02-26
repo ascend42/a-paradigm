@@ -184,7 +184,7 @@ export async function rebuildStaticFiles(
   let aspectGraphStats: RebuildResult['aspectGraphStats'];
   try {
     const db = await openAspectGraph(rootDir);
-    materializeAspects(db, aggregation.symbols);
+    materializeAspects(db, aggregation.symbols, rootDir);
     const loreLinks = await materializeLoreLinks(db, rootDir);
     const inferredEdges = await inferLoreEdges(db, rootDir);
 
