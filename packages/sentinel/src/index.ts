@@ -55,3 +55,6 @@ export { SentinelTransport, createSentinelTransport, enableSentinel } from './tr
 // Practice Events (Habits System)
 // Types are exported from ./types.js via `export * from './types.js'`
 // Storage methods are on SentinelStorage (recordPracticeEvent, getPracticeEvents, etc.)
+
+// Schema Registry
+export { PARADIGM_SCHEMA } from './schema/builtin-paradigm.js';

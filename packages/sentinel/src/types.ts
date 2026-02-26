@@ -829,3 +829,21 @@ export interface TraceView {
   startTime: string;
   endTime: string;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// RE-EXPORT SCHEMA TYPES
+// ═══════════════════════════════════════════════════════════════════
+
+export type {
+  EventSchemaDeclaration,
+  ScopeDeclaration,
+  EventTypeDeclaration,
+  EventFieldDeclaration,
+  CausalityDeclaration,
+  VisualizationHints,
+  GenericEvent,
+  GenericEventInput,
+  GenericEventQuery,
+  ScopeSummary,
+  StoredSchema,
+} from './schema/types.js';

@@ -3,12 +3,13 @@ import { DesignView } from './views/DesignView';
 import { IncidentsView } from './views/IncidentsView';
 import { LogsView } from './views/LogsView';
 import { FlowsView } from './views/FlowsView';
+import { EventsView } from './views/EventsView';
 import { useThemeStore } from './store/themeStore';
 
 // Declare the version injected by Vite
 declare const __PARADIGM_VERSION__: string;
 
-type ViewType = 'design' | 'incidents' | 'logs' | 'flows';
+type ViewType = 'design' | 'incidents' | 'logs' | 'flows' | 'events';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('design');
@@ -144,6 +145,17 @@ function App() {
             </svg>
             Flows
           </button>
+          <button
+            className={`view-tab ${currentView === 'events' ? 'active' : ''}`}
+            onClick={() => setCurrentView('events')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18"/>
+              <path d="M9 21V9"/>
+            </svg>
+            Events
+          </button>
         </div>
 
         <div className="view-tabs-right">
@@ -164,6 +176,7 @@ function App() {
         {currentView === 'logs' && <LogsView />}
         {currentView === 'incidents' && <IncidentsView />}
         {currentView === 'flows' && <FlowsView />}
+        {currentView === 'events' && <EventsView />}
       </main>
     </div>
   );

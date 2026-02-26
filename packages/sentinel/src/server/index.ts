@@ -19,12 +19,14 @@ import { createLogsRouter } from './routes/logs.js';
 import { createServicesRouter, createStateRouter } from './routes/services.js';
 import { createMetricsRouter } from './routes/metrics.js';
 import { createTracesRouter } from './routes/traces.js';
+import { createSchemasRouter } from './routes/schemas.js';
+import { createEventsRouter } from './routes/events.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import { createRateLimiter } from './middleware/rate-limit.js';
 import { SentinelStorage } from '../storage.js';
 import { loadServerConfig } from '../config.js';
 import { loadSymbolIndex } from './loaders/symbols.js';
-import type { LogEntry, SentinelServerConfig } from '../types.js';
+import type { LogEntry, GenericEvent, SentinelServerConfig } from '../types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +72,7 @@ export function createApp(options: ServerOptions & {
   serverConfig?: SentinelServerConfig;
   symbolIndex?: Array<{ symbol: string; type: string; filePath: string }>;
   onLogReceived?: (entry: LogEntry, validation?: { known: boolean; suggestion?: string }) => void;
+  onEventReceived?: (event: GenericEvent) => void;
 }): Express {
   const app = express();
 
@@ -125,6 +128,16 @@ export function createApp(options: ServerOptions & {
     }));
     app.use('/api/traces', rateLimiter, auth('write'), createTracesRouter({
       storage: options.storage,
+    }));
+
+    // Schema-driven observability routes
+    app.use('/api/schemas', rateLimiter, auth('write'), createSchemasRouter({
+      storage: options.storage,
+    }));
+    app.use('/api/events', rateLimiter, auth('write'), createEventsRouter({
+      storage: options.storage,
+      serverConfig: config,
+      onEventReceived: options.onEventReceived,
     }));
   }
 
@@ -211,12 +224,20 @@ export async function startServer(options: ServerOptions): Promise<void> {
     }
   }
 
+  /**
+   * Called when a generic event is received — broadcasts to WS subscribers
+   */
+  function onEventReceived(event: GenericEvent): void {
+    broadcast({ type: 'event', event });
+  }
+
   const app = createApp({
     ...options,
     storage,
     serverConfig,
     symbolIndex,
     onLogReceived,
+    onEventReceived,
   });
 
   log.component('sentinel-server').info('Starting server', { port: options.port });
@@ -259,6 +280,21 @@ export async function startServer(options: ServerOptions): Promise<void> {
             ws.send(JSON.stringify({
               jsonrpc: '2.0',
               result: { logs },
+              id: msg.id,
+            }));
+          } else if (msg.method === 'query_events') {
+            const events = storage.queryEvents(msg.params || {});
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              result: { events },
+              id: msg.id,
+            }));
+          } else if (msg.method === 'query_scopes') {
+            const { schemaId, ...rest } = msg.params || {};
+            const scopes = schemaId ? storage.getEventScopes(schemaId, rest) : [];
+            ws.send(JSON.stringify({
+              jsonrpc: '2.0',
+              result: { scopes },
               id: msg.id,
             }));
           }

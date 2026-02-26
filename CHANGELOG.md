@@ -5,7 +5,63 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.6.0] — 2026-02-25
+
+### Added
+
+#### Schema-Driven Sentinel — Application-Agnostic Observability (`@a-company/sentinel` 3.5.0 → 3.6.0)
+
+Sentinel is now a **schema-driven, application-agnostic observability platform**. Applications register their own event schemas (event types, temporal scopes, causal hierarchy), and Sentinel ingests, stores, queries, and visualizes any structured event data — zero knowledge of Paradigm symbols, game engines, or any domain required.
+
+- **Schema Registry** — `EventSchemaDeclaration` with scope declarations, event type definitions, causality tracking, and visualization hints
+- **SQLite v5 migration** — New `schemas` and `events` tables with 7 indexes (schema, type, scope, scope ordinal, session, timestamp, service)
+- **Storage methods** — `registerSchema()`, `getSchema()`, `listSchemas()`, `insertEventBatch()`, `queryEvents()`, `queryEventsByScope()`, `getEventScopes()`, `getEventCount()`, `pruneEvents()`
+- **Built-in Paradigm schema** — Existing log/metric/trace types registered as informational schema (`PARADIGM_SCHEMA`)
+
+#### Server API Routes (`@a-company/sentinel` 3.5.0 → 3.6.0)
+- `POST /api/schemas` — Register/update event schema (upsert by id)
+- `GET /api/schemas` — List all registered schemas
+- `GET /api/schemas/:id` — Get specific schema
+- `POST /api/events` — Batch event ingestion with schema validation
+- `GET /api/events` — Query events with filters (schema, type, category, scope, severity, time range, full-text search)
+- `GET /api/events/scopes` — Scope summaries with category breakdowns
+- `GET /api/events/scope/:value` — All events within a single scope value
+- **WebSocket broadcast** — `type: 'event'` messages for real-time streaming
+- **JSON-RPC handlers** — `query_events` and `query_scopes` over WebSocket
+
+#### Browser Transport — `@a-company/sentinel-web` 0.1.0 (NEW)
+- **Zero-dependency browser client** for schema-driven event ingestion
+- `SentinelWebClient` — sync `emit()`, ring buffer batching, periodic `fetch()` flush, `sendBeacon()` on `beforeunload`
+- `RingBuffer` — O(1) push/drain with configurable `drop-oldest`/`drop-newest` backpressure
+- `registerSchema()` for client-side schema registration
+- `crypto.randomUUID()` for ID generation (no uuid dependency)
+- Single retry on 5xx, `onDrop`/`onError` callbacks
+- ESM + CJS builds, <2KB target
+
+#### MCP Tools (`@a-company/paradigm-mcp` 3.5.0 → 3.6.0)
+- `paradigm_sentinel_schemas` — List/get registered event schemas
+- `paradigm_sentinel_events` — Query generic events by schema, type, scope, time, severity
+- `paradigm_sentinel_scopes` — Scope summaries with event counts and category breakdown
+
+#### Sentinel UI — Events View (`@a-company/sentinel` 3.5.0 → 3.6.0)
+- **Events tab** in Sentinel dashboard
+- Schema selector dropdown
+- Scope navigator (chip bar for sequential/independent scopes)
+- Event table with columns adapted from schema field declarations
+- Category filter chips with colors from `visualization.categoryColors`
+- High-frequency types hidden by default via `visualization.defaultExcluded`
+- Expandable event data rows
+- Real-time WebSocket updates (subscribes to `type: 'event'` messages)
+
+### Changed
+- `@a-company/sentinel`: 3.5.0 → 3.6.0
+- `@a-company/paradigm-mcp`: 3.5.0 → 3.6.0
+- `@a-company/paradigm`: 3.5.0 → 3.6.0
+- `@a-company/sentinel-web`: 0.1.0 (new package)
+
+---
+
+## [3.5.1] — 2026-02-25
 
 ### Fixed
 

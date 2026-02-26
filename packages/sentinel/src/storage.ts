@@ -45,8 +45,16 @@ import type {
   TraceSpanInput,
   TraceView,
 } from './types.js';
+import type {
+  EventSchemaDeclaration,
+  GenericEvent,
+  GenericEventInput,
+  GenericEventQuery,
+  ScopeSummary,
+  StoredSchema,
+} from './schema/types.js';
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 // Default confidence for new patterns
 const DEFAULT_CONFIDENCE: PatternConfidence = {
@@ -523,6 +531,58 @@ export class SentinelStorage {
 
       this.db.run(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '4')"
+      );
+      currentVersion = 4;
+    }
+
+    if (currentVersion < 5) {
+      // v4 → v5: Add schemas and events tables (schema-driven observability)
+      try {
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS schemas (
+            id TEXT PRIMARY KEY,
+            version TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            scope_json TEXT NOT NULL,
+            event_types_json TEXT NOT NULL,
+            causality_json TEXT,
+            visualization_json TEXT,
+            tags_json TEXT DEFAULT '[]',
+            registered_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS events (
+            id TEXT PRIMARY KEY,
+            schema_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            category TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            scope_value TEXT,
+            scope_ordinal INTEGER,
+            session_id TEXT,
+            service TEXT NOT NULL,
+            data_json TEXT,
+            severity TEXT DEFAULT 'info',
+            parent_event_id TEXT,
+            depth INTEGER DEFAULT 0
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_events_schema ON events(schema_id);
+          CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+          CREATE INDEX IF NOT EXISTS idx_events_scope ON events(schema_id, scope_value);
+          CREATE INDEX IF NOT EXISTS idx_events_scope_ord ON events(schema_id, scope_ordinal);
+          CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+          CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_events_service ON events(service);
+        `);
+      } catch {
+        // Tables might already exist
+      }
+
+      this.db.run(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '5')"
       );
     }
   }
@@ -2530,6 +2590,417 @@ export class SentinelStorage {
       status: (obj.status as TraceSpan['status']) || 'ok',
       tags: obj.tags_json ? JSON.parse(obj.tags_json as string) : {},
       logs: obj.log_ids_json ? JSON.parse(obj.log_ids_json as string) : [],
+    };
+  }
+
+  // ─── Schema Registry ─────────────────────────────────────────────
+
+  registerSchema(schema: EventSchemaDeclaration): StoredSchema {
+    this.initializeSync();
+    const now = new Date().toISOString();
+
+    this.db!.run(
+      `INSERT INTO schemas (
+        id, version, name, description, scope_json, event_types_json,
+        causality_json, visualization_json, tags_json, registered_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         version = excluded.version,
+         name = excluded.name,
+         description = excluded.description,
+         scope_json = excluded.scope_json,
+         event_types_json = excluded.event_types_json,
+         causality_json = excluded.causality_json,
+         visualization_json = excluded.visualization_json,
+         tags_json = excluded.tags_json,
+         updated_at = excluded.updated_at`,
+      [
+        schema.id,
+        schema.version,
+        schema.name,
+        schema.description || null,
+        JSON.stringify(schema.scope),
+        JSON.stringify(schema.eventTypes),
+        schema.causality ? JSON.stringify(schema.causality) : null,
+        schema.visualization ? JSON.stringify(schema.visualization) : null,
+        JSON.stringify(schema.tags || []),
+        now,
+        now,
+      ]
+    );
+
+    this.save();
+    return {
+      id: schema.id,
+      version: schema.version,
+      name: schema.name,
+      description: schema.description,
+      scope: schema.scope,
+      eventTypes: schema.eventTypes,
+      causality: schema.causality,
+      visualization: schema.visualization,
+      tags: schema.tags || [],
+      registeredAt: now,
+      updatedAt: now,
+    };
+  }
+
+  getSchema(id: string): StoredSchema | null {
+    this.initializeSync();
+    const result = this.db!.exec('SELECT * FROM schemas WHERE id = ?', [id]);
+
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return this.rowToSchema(result[0].columns, result[0].values[0]);
+  }
+
+  listSchemas(): StoredSchema[] {
+    this.initializeSync();
+    const result = this.db!.exec('SELECT * FROM schemas ORDER BY name ASC');
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToSchema(result[0].columns, row)
+    );
+  }
+
+  private rowToSchema(columns: string[], row: SqlValue[]): StoredSchema {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      id: obj.id as string,
+      version: obj.version as string,
+      name: obj.name as string,
+      description: (obj.description as string) || undefined,
+      scope: JSON.parse(obj.scope_json as string),
+      eventTypes: JSON.parse(obj.event_types_json as string),
+      causality: obj.causality_json ? JSON.parse(obj.causality_json as string) : undefined,
+      visualization: obj.visualization_json ? JSON.parse(obj.visualization_json as string) : undefined,
+      tags: JSON.parse((obj.tags_json as string) || '[]'),
+      registeredAt: obj.registered_at as string,
+      updatedAt: obj.updated_at as string,
+    };
+  }
+
+  // ─── Generic Events ────────────────────────────────────────────
+
+  insertEventBatch(
+    schemaId: string,
+    service: string,
+    inputs: GenericEventInput[]
+  ): { accepted: number; errors: string[] } {
+    this.initializeSync();
+
+    // Resolve categories from schema
+    const schema = this.getSchema(schemaId);
+    const typeMap = new Map<string, { category: string; severity: string }>();
+    if (schema) {
+      for (const et of schema.eventTypes) {
+        typeMap.set(et.type, {
+          category: et.category,
+          severity: et.severity || 'info',
+        });
+      }
+    }
+
+    let accepted = 0;
+    const errors: string[] = [];
+
+    for (const input of inputs) {
+      try {
+        const id = input.id || uuidv4();
+        const timestamp = input.timestamp || new Date().toISOString();
+        const resolved = typeMap.get(input.type);
+        const category = resolved?.category || 'unknown';
+        const severity = input.severity || resolved?.severity || 'info';
+        const scopeValue = input.scopeValue != null ? String(input.scopeValue) : null;
+        const scopeOrdinal = typeof input.scopeValue === 'number' ? input.scopeValue : null;
+
+        this.db!.run(
+          `INSERT INTO events (
+            id, schema_id, event_type, category, timestamp, scope_value,
+            scope_ordinal, session_id, service, data_json, severity,
+            parent_event_id, depth
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            schemaId,
+            input.type,
+            category,
+            timestamp,
+            scopeValue,
+            scopeOrdinal,
+            input.sessionId || null,
+            service,
+            input.data ? JSON.stringify(input.data) : null,
+            severity,
+            input.parentEventId || null,
+            input.depth ?? 0,
+          ]
+        );
+        accepted++;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    this.save();
+    return { accepted, errors };
+  }
+
+  queryEvents(options: GenericEventQuery = {}): GenericEvent[] {
+    this.initializeSync();
+    const { limit = 100, offset = 0 } = options;
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.schemaId) {
+      conditions.push('schema_id = ?');
+      params.push(options.schemaId);
+    }
+
+    if (options.eventType) {
+      conditions.push('event_type = ?');
+      params.push(options.eventType);
+    }
+
+    if (options.category) {
+      conditions.push('category = ?');
+      params.push(options.category);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.sessionId) {
+      conditions.push('session_id = ?');
+      params.push(options.sessionId);
+    }
+
+    if (options.scopeValue) {
+      conditions.push('scope_value = ?');
+      params.push(options.scopeValue);
+    }
+
+    if (options.scopeFrom) {
+      conditions.push('scope_value >= ?');
+      params.push(options.scopeFrom);
+    }
+
+    if (options.scopeTo) {
+      conditions.push('scope_value <= ?');
+      params.push(options.scopeTo);
+    }
+
+    if (options.severity) {
+      conditions.push('severity = ?');
+      params.push(options.severity);
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    if (options.search) {
+      conditions.push('data_json LIKE ?');
+      params.push(`%${options.search}%`);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT * FROM events ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToGenericEvent(result[0].columns, row)
+    );
+  }
+
+  queryEventsByScope(
+    schemaId: string,
+    scopeValue: string
+  ): GenericEvent[] {
+    this.initializeSync();
+
+    const result = this.db!.exec(
+      `SELECT * FROM events
+       WHERE schema_id = ? AND scope_value = ?
+       ORDER BY timestamp ASC`,
+      [schemaId, scopeValue]
+    );
+
+    if (result.length === 0) return [];
+    return result[0].values.map((row) =>
+      this.rowToGenericEvent(result[0].columns, row)
+    );
+  }
+
+  getEventScopes(
+    schemaId: string,
+    options: { limit?: number; offset?: number; sessionId?: string } = {}
+  ): ScopeSummary[] {
+    this.initializeSync();
+    const { limit = 100, offset = 0 } = options;
+    const conditions: string[] = ['schema_id = ?'];
+    const params: (string | number)[] = [schemaId];
+
+    if (options.sessionId) {
+      conditions.push('session_id = ?');
+      params.push(options.sessionId);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    const result = this.db!.exec(
+      `SELECT
+        scope_value,
+        MIN(scope_ordinal) as scope_ordinal,
+        COUNT(*) as event_count,
+        MIN(timestamp) as first_timestamp,
+        MAX(timestamp) as last_timestamp
+       FROM events
+       ${whereClause}
+       AND scope_value IS NOT NULL
+       GROUP BY scope_value
+       ORDER BY MIN(COALESCE(scope_ordinal, 0)) DESC, MIN(timestamp) DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    if (result.length === 0) return [];
+
+    // For each scope, get category counts
+    const scopes: ScopeSummary[] = [];
+    for (const row of result[0].values) {
+      const scopeValue = row[0] as string;
+      const scopeOrdinal = row[1] != null ? (row[1] as number) : undefined;
+      const eventCount = row[2] as number;
+      const firstTimestamp = row[3] as string;
+      const lastTimestamp = row[4] as string;
+
+      // Get category breakdown for this scope
+      const catResult = this.db!.exec(
+        `SELECT category, COUNT(*) as count FROM events
+         WHERE schema_id = ? AND scope_value = ?
+         GROUP BY category`,
+        [schemaId, scopeValue]
+      );
+
+      const categories: Record<string, number> = {};
+      if (catResult.length > 0) {
+        for (const catRow of catResult[0].values) {
+          categories[catRow[0] as string] = catRow[1] as number;
+        }
+      }
+
+      scopes.push({
+        scopeValue,
+        scopeOrdinal,
+        eventCount,
+        categories,
+        firstTimestamp,
+        lastTimestamp,
+      });
+    }
+
+    return scopes;
+  }
+
+  getEventCount(options: GenericEventQuery = {}): number {
+    this.initializeSync();
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.schemaId) {
+      conditions.push('schema_id = ?');
+      params.push(options.schemaId);
+    }
+
+    if (options.eventType) {
+      conditions.push('event_type = ?');
+      params.push(options.eventType);
+    }
+
+    if (options.service) {
+      conditions.push('service = ?');
+      params.push(options.service);
+    }
+
+    if (options.since) {
+      conditions.push('timestamp >= ?');
+      params.push(options.since);
+    }
+
+    if (options.until) {
+      conditions.push('timestamp <= ?');
+      params.push(options.until);
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = this.db!.exec(
+      `SELECT COUNT(*) as count FROM events ${whereClause}`,
+      params
+    );
+
+    if (result.length === 0 || result[0].values.length === 0) return 0;
+    return result[0].values[0][0] as number;
+  }
+
+  pruneEvents(maxCount: number): number {
+    this.initializeSync();
+    if (maxCount <= 0) return 0;
+
+    const currentCount = this.getEventCount();
+    if (currentCount <= maxCount) return 0;
+
+    const deleteCount = currentCount - maxCount;
+    this.db!.run(
+      `DELETE FROM events WHERE id IN (
+        SELECT id FROM events ORDER BY timestamp ASC LIMIT ?
+      )`,
+      [deleteCount]
+    );
+
+    this.save();
+    return deleteCount;
+  }
+
+  private rowToGenericEvent(columns: string[], row: SqlValue[]): GenericEvent {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+
+    return {
+      id: obj.id as string,
+      schemaId: obj.schema_id as string,
+      eventType: obj.event_type as string,
+      category: obj.category as string,
+      timestamp: obj.timestamp as string,
+      scopeValue: (obj.scope_value as string) || undefined,
+      scopeOrdinal: obj.scope_ordinal != null ? (obj.scope_ordinal as number) : undefined,
+      sessionId: (obj.session_id as string) || undefined,
+      service: obj.service as string,
+      data: obj.data_json ? JSON.parse(obj.data_json as string) : undefined,
+      severity: (obj.severity as GenericEvent['severity']) || 'info',
+      parentEventId: (obj.parent_event_id as string) || undefined,
+      depth: (obj.depth as number) || 0,
     };
   }
 

@@ -1,0 +1,26 @@
+description: Auto-generated purpose file for packages/university/ui
+components:
+  header:
+    description: Header component
+  progress-ring:
+    description: ProgressRing component
+  question-card:
+    description: QuestionCard component
+  seal:
+    description: Seal component
+  timer:
+    description: Timer component
+  certificate-view:
+    description: CertificateView component
+  course-view:
+    description: CourseView component
+  courses-view:
+    description: CoursesView component
+  home-view:
+    description: HomeView component
+  plsatview:
+    description: PLSATView component
+  quiz-view:
+    description: QuizView component
+  reference-view:
+    description: ReferenceView component

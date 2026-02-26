@@ -28,7 +28,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
-    "publish:all": "npm publish --workspace=@a-company/paradigm --workspace=@a-company/university --workspace=@a-company/sentinel --workspace=@a-company/purpose-core --workspace=@a-company/portal-core --workspace=@a-company/portal-sdk --workspace=@a-company/portal-manager --workspace=@a-company/portal-viewer --workspace=@a-company/premise-core --workspace=@a-company/probe-core",
+    "publish:all": "npm publish --workspace=@a-company/paradigm --workspace=@a-company/university --workspace=@a-company/sentinel --workspace=@a-company/sentinel-web --workspace=@a-company/purpose-core --workspace=@a-company/portal-core --workspace=@a-company/portal-sdk --workspace=@a-company/portal-manager --workspace=@a-company/portal-viewer --workspace=@a-company/premise-core --workspace=@a-company/probe-core",
     "test": "npm run test --workspace=@a-company/paradigm",
     "prepublishOnly": "node scripts/pre-publish-check.mjs"
   },

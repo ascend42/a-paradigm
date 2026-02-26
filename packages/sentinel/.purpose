@@ -128,6 +128,43 @@ description: |
   anchors:
     - ui/src/store/nodesStore.ts:1-420
 
+#SchemaRegistry:
+  description: Schema-driven event registry — applications register event schemas, Sentinel ingests/stores/queries any structured event data
+  tags: [feature, observability]
+  anchors:
+    - src/schema/types.ts:1-50
+    - src/storage.ts:2545-2620
+  signals:
+    - !schema-registered
+
+#EventsStore:
+  description: Generic event storage with scope-aware querying, causality tracking, and batch ingestion
+  tags: [feature, persistence]
+  anchors:
+    - src/storage.ts:2620-2850
+  endpoints:
+    - POST /api/events
+    - GET /api/events
+    - GET /api/events/scopes
+    - GET /api/events/scope/:value
+
+#EventsView:
+  description: Schema-adaptive event viewer with scope navigation, category filters, and real-time WebSocket updates
+  tags: [feature, ui]
+  anchors:
+    - ui/src/views/EventsView.tsx:1-300
+  components:
+    - '#SchemaSelector'
+    - '#ScopeNavigator'
+    - '#CategoryFilters'
+    - '#EventTable'
+
+#BuiltinParadigmSchema:
+  description: Built-in schema declaration for Paradigm's existing log/metric/trace types (informational)
+  tags: [feature, builtin]
+  anchors:
+    - src/schema/builtin-paradigm.ts:1-150
+
 # ============================================
 # Flows ($)
 # ============================================
@@ -249,14 +286,14 @@ $resolution-flow:
 
 # ── Storage Aspects ──────────────────────────────────────────────
 
-~schema-version-4:
-  description: SQLite schema is versioned at v4 with sequential migration support (v1->v2->v3->v4)
+~schema-version-5:
+  description: SQLite schema is versioned at v5 with sequential migration support (v1->v2->v3->v4->v5). v5 adds schemas and events tables for schema-driven observability.
   category: invariant
   severity: critical
   tags: [persistence, migration]
   anchors:
     - src/storage.ts:49-49
-    - src/storage.ts:377-527
+    - src/storage.ts:377-570
   applies-to:
     - "#IncidentStorage"
 

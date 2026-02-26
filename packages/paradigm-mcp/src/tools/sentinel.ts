@@ -425,6 +425,51 @@ export function getSentinelToolsList() {
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
     },
+    // ─── Schema-Driven Observability ──────────────────────────────
+    {
+      name: 'paradigm_sentinel_schemas',
+      description: 'List or get registered event schemas. Schemas define event types, scopes, causality, and visualization for application-agnostic observability. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Get a specific schema by ID. Omit to list all.' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_events',
+      description: 'Query generic events from any registered schema. Filters by schema, event type, category, scope, service, severity, time range. ~200-400 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          schemaId: { type: 'string', description: 'Filter by schema ID (e.g., "pretend-engine")' },
+          eventType: { type: 'string', description: 'Filter by event type (e.g., "rule:fire")' },
+          category: { type: 'string', description: 'Filter by category (e.g., "rules")' },
+          service: { type: 'string', description: 'Filter by service name' },
+          scopeValue: { type: 'string', description: 'Filter by scope value (e.g., frame number)' },
+          severity: { type: 'string', enum: ['debug', 'info', 'warn', 'error'], description: 'Filter by severity' },
+          since: { type: 'string', description: 'ISO timestamp — events after this time' },
+          search: { type: 'string', description: 'Full-text search in event data' },
+          limit: { type: 'number', description: 'Max results (default: 50)' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_sentinel_scopes',
+      description: 'Get scope summaries for a schema — e.g., frame list with event counts, request list with category breakdown. ~200 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          schemaId: { type: 'string', description: 'Schema ID (required)' },
+          sessionId: { type: 'string', description: 'Filter by session ID' },
+          limit: { type: 'number', description: 'Max scopes (default: 50)' },
+        },
+        required: ['schemaId'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
   ];
 }
 
@@ -1081,6 +1126,149 @@ export async function handleSentinelTool(
             startTime: t.startTime,
             endTime: t.endTime,
           })),
+        }, null, 2),
+      };
+    }
+
+    // ─── Schema-Driven Observability ──────────────────────────────
+    // Note: cast to any for new v3.6 methods until types are rebuilt
+
+    case 'paradigm_sentinel_schemas': {
+      const { id: schemaId } = args as { id?: string };
+
+      if (schemaId) {
+        const schema = (store as any).getSchema(schemaId);
+        if (!schema) {
+          return { handled: true, text: JSON.stringify({ error: `Schema "${schemaId}" not found` }) };
+        }
+        return { handled: true, text: JSON.stringify(schema, null, 2) };
+      }
+
+      const schemas = (store as any).listSchemas();
+      if (schemas.length === 0) {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            count: 0,
+            schemas: [],
+            tip: 'No event schemas registered yet. Applications register schemas via POST /api/schemas or SentinelWebClient.registerSchema().',
+          }, null, 2),
+        };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: schemas.length,
+          schemas: schemas.map((s: any) => ({
+            id: s.id,
+            version: s.version,
+            name: s.name,
+            description: s.description,
+            eventTypeCount: s.eventTypes.length,
+            scope: s.scope.label,
+            tags: s.tags,
+            registeredAt: s.registeredAt,
+          })),
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_events': {
+      const {
+        schemaId: evSchemaId,
+        eventType: evType,
+        category: evCategory,
+        service: evService,
+        scopeValue: evScope,
+        severity: evSeverity,
+        since: evSince,
+        search: evSearch,
+        limit: evLimit,
+      } = args as {
+        schemaId?: string;
+        eventType?: string;
+        category?: string;
+        service?: string;
+        scopeValue?: string;
+        severity?: string;
+        since?: string;
+        search?: string;
+        limit?: number;
+      };
+
+      const events = (store as any).queryEvents({
+        schemaId: evSchemaId,
+        eventType: evType,
+        category: evCategory,
+        service: evService,
+        scopeValue: evScope,
+        severity: evSeverity,
+        since: evSince,
+        search: evSearch,
+        limit: Math.min(evLimit || 50, 100),
+      });
+
+      if (events.length === 0) {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            count: 0,
+            events: [],
+            tip: 'No events found. Events are ingested via POST /api/events or SentinelWebClient.emit().',
+          }, null, 2),
+        };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: events.length,
+          events: events.map((e: any) => ({
+            id: e.id,
+            schemaId: e.schemaId,
+            eventType: e.eventType,
+            category: e.category,
+            timestamp: e.timestamp,
+            scopeValue: e.scopeValue,
+            service: e.service,
+            severity: e.severity,
+            data: e.data,
+            parentEventId: e.parentEventId,
+            depth: e.depth,
+          })),
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_sentinel_scopes': {
+      const { schemaId: scopeSchemaId, sessionId: scopeSession, limit: scopeLimit } = args as {
+        schemaId: string;
+        sessionId?: string;
+        limit?: number;
+      };
+
+      const scopes = (store as any).getEventScopes(scopeSchemaId, {
+        limit: Math.min(scopeLimit || 50, 200),
+        sessionId: scopeSession,
+      });
+
+      if (scopes.length === 0) {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            count: 0,
+            scopes: [],
+            tip: `No scopes found for schema "${scopeSchemaId}". Events with scope values are required.`,
+          }, null, 2),
+        };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          count: scopes.length,
+          scopes,
         }, null, 2),
       };
     }
