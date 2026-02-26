@@ -98,3 +98,168 @@ signals:
   budget-exceeded:
     description: Token or cost budget limit was reached
     tags: [team, warning]
+
+aspects:
+  ~solo-vs-faceted-modes:
+    description: Orchestrator supports two modes — solo (single generalist agent, uses opus) and faceted (multi-agent with role-specific prompts); default is faceted
+    category: decision
+    severity: medium
+    tags: [orchestration, modes]
+    anchors:
+      - orchestrator.ts:39-39
+      - orchestrator.ts:260-260
+      - orchestrator.ts:291-307
+    applies-to:
+      - "#orchestrator"
+
+  ~default-agent-model-assignments:
+    description: Default model tier per agent role — architect/security use opus, reviewer uses sonnet, builder/tester use haiku
+    category: configuration
+    severity: medium
+    tags: [orchestration, models]
+    anchors:
+      - orchestrator.ts:130-136
+      - agent-prompts.ts:298-305
+    applies-to:
+      - "#orchestrator"
+      - "#agent-prompts"
+
+  ~confidence-threshold-3-match:
+    description: Agent matcher confidence levels — high requires 3+ matches or multiple match types, medium requires 2, low is 1
+    category: rule
+    severity: low
+    tags: [classification, matching]
+    anchors:
+      - agent-matcher.ts:196-218
+    applies-to:
+      - "#agent-matcher"
+
+  ~fresh-context-principle:
+    description: Builder prompt enforces Fresh Context Principle — each builder task runs in separate clean context with no assumptions carried from prior tasks
+    category: invariant
+    severity: high
+    tags: [orchestration, prompts]
+    anchors:
+      - agent-prompts.ts:118-123
+    applies-to:
+      - "#agent-prompts"
+
+  ~reviewer-two-stage-minimum-3:
+    description: Reviewer prompt uses two-stage review (spec compliance then code quality) with Stage 1 blocking Stage 2; every review must produce at least 3 categorized findings
+    category: rule
+    severity: high
+    tags: [orchestration, prompts, review]
+    anchors:
+      - agent-prompts.ts:156-182
+    applies-to:
+      - "#agent-prompts"
+
+  ~model-discovery-order:
+    description: Model discovery follows a 3-tier fallback — API providers first, then remote manifest (cached 7 days), then hardcoded presets
+    category: decision
+    severity: medium
+    tags: [discovery, models]
+    anchors:
+      - model-discovery.ts:1-9
+      - model-discovery.ts:22-22
+      - model-discovery.ts:42-42
+      - model-discovery.ts:137-166
+    applies-to:
+      - "#model-discovery"
+
+  ~provider-cascade-order:
+    description: Provider cascade order is claude, claude-code-teams, claude-code, cursor-cli, claude-cli, manual — manual is always-available ultimate fallback
+    category: configuration
+    severity: high
+    tags: [providers, cascade]
+    anchors:
+      - provider-registry.ts:38-38
+      - provider-registry.ts:196-218
+      - provider-registry.ts:357-377
+    applies-to:
+      - "#provider-registry"
+      - "#agent-spawner"
+
+  ~task-classification-priority:
+    description: Task type classification priority is analysis > documentation > bugfix > refactor > feature (default); complexity scored from symbol count, word count, prefix diversity, gate/flow symbols, affected files
+    category: rule
+    severity: medium
+    tags: [classification, complexity]
+    anchors:
+      - task-classifier.ts:311-388
+      - task-classifier.ts:226-266
+    applies-to:
+      - "#task-classifier"
+
+  ~budget-defaults-500k-5usd-80pct:
+    description: Default budget limits are 500K tokens, $5.00 USD max cost, warning at 80% usage; enforced at global and per-agent levels
+    category: configuration
+    severity: high
+    tags: [budget, limits]
+    anchors:
+      - budget-tracker.ts:319-323
+      - budget-tracker.ts:89-163
+    applies-to:
+      - "#budget-tracker"
+
+  ~cost-estimation-per-million:
+    description: Model pricing is per-million tokens — opus $15/$75, sonnet $3/$15, haiku $0.25/$1.25 (input/output); cost estimation uses complexity multipliers (low 0.6x, medium 1.0x, high 1.5x)
+    category: configuration
+    severity: medium
+    tags: [cost, pricing]
+    anchors:
+      - cost-estimator.ts:64-79
+    applies-to:
+      - "#cost-estimator"
+
+  ~context-role-specific-includes:
+    description: Context builder uses role-specific include/exclude patterns — architect gets specs and .purpose files (excludes src), builder gets src and tests (excludes specs), security gets portal.yaml and auth directories
+    category: rule
+    severity: medium
+    tags: [context, roles]
+    anchors:
+      - context-builder.ts:95-183
+    applies-to:
+      - "#context-builder"
+
+  ~flow-mermaid-generation:
+    description: Flow validator generates Mermaid flowchart TD diagrams — gates as diamonds, actions as rectangles, signals as rounded rectangles; includes deny paths for gates and color-coded class definitions
+    category: rule
+    severity: low
+    tags: [flows, visualization]
+    anchors:
+      - flow-validator.ts:603-668
+    applies-to:
+      - "#flow-validator"
+
+  ~portal-language-agnostic-grep:
+    description: Portal compliance uses grep-based language-agnostic pattern matching to find gate references across ts/js/py/go files; searches for ^symbol patterns and function-based checks (checkGate, requireGate, @Gate)
+    category: decision
+    severity: medium
+    tags: [portal, compliance]
+    anchors:
+      - portal-compliance.ts:128-198
+    applies-to:
+      - "#portal-compliance"
+
+  ~audit-log-yaml-per-orchestration:
+    description: Audit logs are stored as YAML files in .paradigm/orchestrations/ with date-prefixed filenames; each file contains full agent details, token counts, costs, and artifacts
+    category: rule
+    severity: low
+    tags: [audit, logging]
+    anchors:
+      - audit-logger.ts:75-81
+      - audit-logger.ts:161-174
+    applies-to:
+      - "#audit-logger"
+
+  ~background-accept-reject-workflow:
+    description: Background orchestrations follow a pending/running/completed/accepted/rejected lifecycle; only completed orchestrations can be accepted or rejected, rejection can optionally clean up created files
+    category: rule
+    severity: medium
+    tags: [orchestration, background]
+    anchors:
+      - background-orchestrator.ts:21-21
+      - background-orchestrator.ts:190-233
+    applies-to:
+      - "#background-orchestrator"

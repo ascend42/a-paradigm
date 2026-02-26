@@ -240,3 +240,615 @@ $resolution-flow:
     2. Track resolution status
     3. Recalculate confidence score
     4. Emit !pattern-confidence-updated
+
+# ── Storage Aspects ──────────────────────────────────────────────
+
+~schema-version-4:
+  description: SQLite schema is versioned at v4 with sequential migration support (v1->v2->v3->v4)
+  category: invariant
+  severity: critical
+  tags: [persistence, migration]
+  anchors:
+    - src/storage.ts:49-49
+    - src/storage.ts:377-527
+  applies-to:
+    - "#IncidentStorage"
+
+~incident-id-format-inc-nnn:
+  description: Incident IDs use sequential format INC-NNN (zero-padded to 3 digits), derived from an in-memory counter
+  category: invariant
+  severity: high
+  tags: [persistence, identity]
+  anchors:
+    - src/storage.ts:293-294
+  applies-to:
+    - "#IncidentStorage"
+
+~default-pattern-confidence-50:
+  description: New patterns start with a default confidence score of 50, 0 matches, 0 resolved, 0 recurred
+  category: configuration
+  severity: medium
+  tags: [pattern-matching]
+  anchors:
+    - src/storage.ts:52-57
+  applies-to:
+    - "#IncidentStorage"
+    - "#PatternMatcher"
+
+~confidence-score-adjustment-rules:
+  description: Confidence score adjusts +2 on resolution (max 100), -5 on recurrence (min 10)
+  category: rule
+  severity: high
+  tags: [pattern-matching, scoring]
+  anchors:
+    - src/storage.ts:893-922
+  applies-to:
+    - "#IncidentStorage"
+    - "#PatternMatcher"
+
+~sqlite-write-after-mutation:
+  description: Every mutation (insert, update, delete) calls save() to persist the in-memory SQLite database to disk
+  category: invariant
+  severity: critical
+  tags: [persistence, durability]
+  anchors:
+    - src/storage.ts:277-282
+    - src/storage.ts:330-331
+  applies-to:
+    - "#IncidentStorage"
+
+~db-path-env-resolution:
+  description: Database path resolved via SENTINEL_DATA_DIR, then PARADIGM_DATA_DIR, then .paradigm/sentinel/sentinel.db
+  category: configuration
+  severity: medium
+  tags: [persistence, configuration]
+  anchors:
+    - src/storage.ts:71-78
+  applies-to:
+    - "#IncidentStorage"
+
+~log-pruning-oldest-first:
+  description: Log pruning deletes oldest entries first (ORDER BY timestamp ASC) when count exceeds maxLogs
+  category: rule
+  severity: medium
+  tags: [persistence, retention]
+  anchors:
+    - src/storage.ts:1970-1987
+  applies-to:
+    - "#IncidentStorage"
+
+~app-state-latest-wins:
+  description: App state uses UPSERT (latest-wins) per service+session composite key
+  category: decision
+  severity: medium
+  tags: [persistence, state]
+  anchors:
+    - src/storage.ts:209-217
+    - src/storage.ts:2077-2098
+  applies-to:
+    - "#IncidentStorage"
+
+~bidirectional-incident-linking:
+  description: Linking incidents creates references in both directions automatically
+  category: rule
+  severity: low
+  tags: [persistence, relationships]
+  anchors:
+    - src/storage.ts:689-712
+  applies-to:
+    - "#IncidentStorage"
+
+# ── Matcher Aspects ──────────────────────────────────────────────
+
+~match-score-cap-100:
+  description: Pattern match scores are capped at 100 with weighted categories — symbols max 50, error text max 25, missing signals max 25
+  category: constraint
+  severity: high
+  tags: [pattern-matching, scoring]
+  anchors:
+    - src/matcher.ts:114-153
+  applies-to:
+    - "#PatternMatcher"
+
+~min-match-score-30:
+  description: Default minimum match score threshold is 30; matches below this are discarded
+  category: configuration
+  severity: medium
+  tags: [pattern-matching, scoring]
+  anchors:
+    - src/matcher.ts:20-24
+  applies-to:
+    - "#PatternMatcher"
+
+~max-match-results-5:
+  description: Pattern matcher returns at most 5 results by default, sorted by confidence descending
+  category: configuration
+  severity: low
+  tags: [pattern-matching]
+  anchors:
+    - src/matcher.ts:20-24
+    - src/matcher.ts:72-76
+  applies-to:
+    - "#PatternMatcher"
+
+~confidence-boost-formula:
+  description: When boostConfidence is enabled, final confidence = score * (0.5 + 0.5 * patternConfidence/100)
+  category: rule
+  severity: medium
+  tags: [pattern-matching, scoring]
+  anchors:
+    - src/matcher.ts:53-58
+  applies-to:
+    - "#PatternMatcher"
+
+~wildcard-symbol-matching:
+  description: Symbol matching supports wildcards — prefix (foo*), suffix (*bar), interior (foo*bar), and universal (*)
+  category: rule
+  severity: medium
+  tags: [pattern-matching]
+  anchors:
+    - src/matcher.ts:206-233
+  applies-to:
+    - "#PatternMatcher"
+
+~symbol-score-exact-10-wildcard-5-array-7:
+  description: Symbol matching scoring — exact match = 10pts, wildcard match = 5pts, array-any match = 7pts
+  category: rule
+  severity: medium
+  tags: [pattern-matching, scoring]
+  anchors:
+    - src/matcher.ts:182-201
+  applies-to:
+    - "#PatternMatcher"
+
+~environment-filter-precheck:
+  description: Patterns with environment filters are skipped before scoring if incident environment does not match
+  category: rule
+  severity: medium
+  tags: [pattern-matching]
+  anchors:
+    - src/matcher.ts:44-48
+    - src/matcher.ts:313-325
+  applies-to:
+    - "#PatternMatcher"
+
+# ── Grouper Aspects ──────────────────────────────────────────────
+
+~similarity-threshold-0-6:
+  description: Default similarity threshold for incident grouping is 0.6 (60%)
+  category: configuration
+  severity: medium
+  tags: [grouping, clustering]
+  anchors:
+    - src/grouper.ts:14-15
+  applies-to:
+    - "#IncidentGrouper"
+
+~time-decay-half-life-14d:
+  description: Time-decay half-life for similarity scoring is 14 days — older incidents contribute exponentially less
+  category: configuration
+  severity: medium
+  tags: [grouping, clustering]
+  anchors:
+    - src/grouper.ts:18-18
+    - src/grouper.ts:244-250
+  applies-to:
+    - "#IncidentGrouper"
+
+~similarity-weights-with-stack:
+  description: Similarity weights vary by stack availability — with stacks (symbol 0.45, error 0.25, env 0.1, stack 0.2), without stacks (symbol 0.6, error 0.3, env 0.1)
+  category: rule
+  severity: medium
+  tags: [grouping, scoring]
+  anchors:
+    - src/grouper.ts:189-193
+  applies-to:
+    - "#IncidentGrouper"
+
+~stack-fingerprint-top-10-frames:
+  description: Stack trace fingerprinting normalizes and compares only the top 10 frames, stripping line numbers, column numbers, and absolute paths
+  category: rule
+  severity: low
+  tags: [grouping, clustering]
+  anchors:
+    - src/grouper.ts:258-270
+  applies-to:
+    - "#IncidentGrouper"
+
+~group-join-threshold-50pct:
+  description: An incident joins an existing group if it matches >= 50% of common symbols OR any common error pattern
+  category: rule
+  severity: medium
+  tags: [grouping]
+  anchors:
+    - src/grouper.ts:340-372
+  applies-to:
+    - "#IncidentGrouper"
+
+~common-error-pattern-60pct-majority:
+  description: Error words appearing in >= 60% of grouped incidents are extracted as common patterns (max 5 words)
+  category: rule
+  severity: low
+  tags: [grouping, text-analysis]
+  anchors:
+    - src/grouper.ts:444-451
+  applies-to:
+    - "#IncidentGrouper"
+
+~auto-group-min-size-3:
+  description: Automatic grouping (analyzeAndGroup) requires a minimum cluster size of 3 incidents by default
+  category: configuration
+  severity: low
+  tags: [grouping]
+  anchors:
+    - src/grouper.ts:124-125
+  applies-to:
+    - "#IncidentGrouper"
+
+# ── Suggester Aspects ────────────────────────────────────────────
+
+~pattern-candidate-min-occurrences-3:
+  description: Pattern candidate discovery requires at least 3 resolved incidents with the same symbol signature
+  category: configuration
+  severity: low
+  tags: [pattern-suggestion]
+  anchors:
+    - src/suggester.ts:101-101
+  applies-to:
+    - "#PatternSuggester"
+
+~priority-from-count-thresholds:
+  description: Auto-suggested pattern priority is derived from occurrence count — >=20 critical, >=10 high, >=5 medium, else low
+  category: rule
+  severity: low
+  tags: [pattern-suggestion, priority]
+  anchors:
+    - src/suggester.ts:551-558
+  applies-to:
+    - "#PatternSuggester"
+
+~strategy-inference-keyword-heuristics:
+  description: Resolution strategy is inferred from error message keywords using ordered heuristic rules (rollback, config-change, scale-up, retry, fallback, fix-data, escalate, investigate, fix-code)
+  category: decision
+  severity: medium
+  tags: [pattern-suggestion, resolution]
+  anchors:
+    - src/suggester.ts:497-546
+  applies-to:
+    - "#PatternSuggester"
+
+~duplicate-pattern-guard-2-symbol-match:
+  description: Pattern suggestion is skipped if an existing pattern already matches >= 2 symbols of the candidate incident
+  category: rule
+  severity: medium
+  tags: [pattern-suggestion]
+  anchors:
+    - src/suggester.ts:460-490
+  applies-to:
+    - "#PatternSuggester"
+
+# ── Server Aspects ───────────────────────────────────────────────
+
+~server-default-port-3838:
+  description: Sentinel server defaults to port 3838
+  category: configuration
+  severity: low
+  tags: [server, networking]
+  anchors:
+    - src/types.ts:780-780
+  applies-to:
+    - "#SentinelServer"
+
+~json-body-limit-5mb:
+  description: Express JSON body parser is configured with a 5MB limit
+  category: configuration
+  severity: medium
+  tags: [server, security]
+  anchors:
+    - src/server/index.ts:77-77
+  applies-to:
+    - "#SentinelServer"
+
+~cors-configurable-default-wildcard:
+  description: CORS origin is configurable via serverConfig.cors, defaulting to '*' (allow all)
+  category: configuration
+  severity: medium
+  tags: [server, security]
+  anchors:
+    - src/server/index.ts:79-94
+  applies-to:
+    - "#SentinelServer"
+
+~ws-max-subscribers-256:
+  description: WebSocket server enforces a maximum of 256 concurrent subscribers (configurable), rejecting excess with close code 1013
+  category: constraint
+  severity: high
+  tags: [server, websocket, resource-limit]
+  anchors:
+    - src/server/index.ts:232-235
+    - src/types.ts:783-783
+  applies-to:
+    - "#SentinelServer"
+
+~ws-jsonrpc-protocol:
+  description: WebSocket messages follow JSON-RPC 2.0 style with methods ping, subscribe, query_logs
+  category: decision
+  severity: medium
+  tags: [server, websocket, protocol]
+  anchors:
+    - src/server/index.ts:244-264
+  applies-to:
+    - "#SentinelServer"
+
+~error-log-auto-promote-to-incident:
+  description: Log entries with level 'error' are automatically promoted to incidents in the incident storage
+  category: rule
+  severity: high
+  tags: [server, observability]
+  anchors:
+    - src/server/routes/logs.ts:73-96
+    - src/server/routes/logs.ts:171-173
+  applies-to:
+    - "#SentinelServer"
+    - "#IncidentStorage"
+
+~log-prune-interval-100-inserts:
+  description: Log pruning runs every 100 inserts (configurable via pruneIntervalInserts) when maxLogs > 0
+  category: configuration
+  severity: medium
+  tags: [server, retention]
+  anchors:
+    - src/server/routes/logs.ts:182-186
+    - src/types.ts:784-784
+  applies-to:
+    - "#SentinelServer"
+
+~max-batch-size-500:
+  description: Server rejects batches exceeding maxBatchSize (default 500 entries) with HTTP 413
+  category: constraint
+  severity: high
+  tags: [server, rate-limiting]
+  anchors:
+    - src/server/routes/logs.ts:121-126
+    - src/types.ts:782-782
+  applies-to:
+    - "#SentinelServer"
+
+~max-logs-default-10000:
+  description: Maximum stored log entries defaults to 10000; oldest entries pruned first when exceeded
+  category: configuration
+  severity: medium
+  tags: [server, retention]
+  anchors:
+    - src/types.ts:781-781
+  applies-to:
+    - "#SentinelServer"
+    - "#IncidentStorage"
+
+# ── Auth Aspects ─────────────────────────────────────────────────
+
+~auth-permission-hierarchy:
+  description: Auth permissions follow a numeric hierarchy — read=1, write=2, admin=3; a token with higher permission satisfies lower requirements
+  category: rule
+  severity: high
+  tags: [security, auth]
+  anchors:
+    - src/server/middleware/auth.ts:50-53
+  applies-to:
+    - "#SentinelServer"
+
+~auth-disabled-passthrough:
+  description: When auth.enabled is false, all requests pass through without authentication checks
+  category: rule
+  severity: high
+  tags: [security, auth]
+  anchors:
+    - src/server/middleware/auth.ts:18-21
+  applies-to:
+    - "#SentinelServer"
+
+~auth-token-expiry-check:
+  description: Auth tokens are checked for expiry; expired tokens receive HTTP 401
+  category: rule
+  severity: high
+  tags: [security, auth]
+  anchors:
+    - src/server/middleware/auth.ts:43-47
+  applies-to:
+    - "#SentinelServer"
+
+# ── Rate Limiting Aspects ────────────────────────────────────────
+
+~rate-limit-sliding-window-60s:
+  description: Rate limiting uses in-memory sliding window counters with a 60-second window
+  category: decision
+  severity: medium
+  tags: [server, rate-limiting]
+  anchors:
+    - src/server/middleware/rate-limit.ts:18-18
+    - src/server/middleware/rate-limit.ts:20-27
+  applies-to:
+    - "#SentinelServer"
+
+~rate-limit-global-600rpm:
+  description: Global rate limit defaults to 600 requests per minute
+  category: configuration
+  severity: medium
+  tags: [server, rate-limiting]
+  anchors:
+    - src/types.ts:768-768
+  applies-to:
+    - "#SentinelServer"
+
+~rate-limit-sampling-drop:
+  description: When samplingRate < 1.0, requests are randomly dropped (HTTP 200 with sampled=true) before rate counting
+  category: rule
+  severity: medium
+  tags: [server, rate-limiting, sampling]
+  anchors:
+    - src/server/middleware/rate-limit.ts:45-49
+  applies-to:
+    - "#SentinelServer"
+
+# ── Client SDK Aspects ───────────────────────────────────────────
+
+~client-default-url-localhost-3838:
+  description: Client SDK defaults to http://localhost:3838 as the Sentinel server URL
+  category: configuration
+  severity: low
+  tags: [client, sdk]
+  anchors:
+    - src/client.ts:65-65
+  applies-to:
+    - "#SentinelClient"
+
+~client-batch-size-50:
+  description: Client auto-flushes when log or metric buffer reaches 50 entries (configurable)
+  category: configuration
+  severity: medium
+  tags: [client, sdk, batching]
+  anchors:
+    - src/client.ts:66-66
+    - src/client.ts:362-367
+  applies-to:
+    - "#SentinelClient"
+
+~client-flush-interval-5s:
+  description: Client runs periodic flush every 5000ms (configurable), timer is unref'd to not block Node.js shutdown
+  category: configuration
+  severity: medium
+  tags: [client, sdk, batching]
+  anchors:
+    - src/client.ts:67-67
+    - src/client.ts:112-122
+  applies-to:
+    - "#SentinelClient"
+
+~client-ring-buffer-max-1000:
+  description: Client ring buffer holds max 1000 entries (configurable); overflow drops oldest 10% and calls onDrop callback
+  category: constraint
+  severity: high
+  tags: [client, sdk, backpressure]
+  anchors:
+    - src/client.ts:68-68
+    - src/client.ts:352-368
+  applies-to:
+    - "#SentinelClient"
+
+~client-retry-exponential-backoff-3:
+  description: Client retries network errors and 5xx responses up to 3 times with exponential backoff (base 1000ms) plus 0-25% jitter; 4xx errors are never retried
+  category: rule
+  severity: high
+  tags: [client, sdk, resilience]
+  anchors:
+    - src/client.ts:69-70
+    - src/client.ts:448-516
+    - src/client.ts:527-532
+  applies-to:
+    - "#SentinelClient"
+
+~client-graceful-degradation:
+  description: Client degrades gracefully — if fetch is unavailable, returns undefined; registration is fire-and-forget; close swallows errors
+  category: decision
+  severity: high
+  tags: [client, sdk, resilience]
+  anchors:
+    - src/client.ts:451-454
+    - src/client.ts:346-349
+    - src/client.ts:299-304
+  applies-to:
+    - "#SentinelClient"
+
+~client-browser-beforeunload-flush:
+  description: Client registers a beforeunload handler in browser environments to flush buffered entries using sendBeacon before page unload
+  category: rule
+  severity: medium
+  tags: [client, sdk, browser]
+  anchors:
+    - src/client.ts:124-130
+    - src/client.ts:315-331
+  applies-to:
+    - "#SentinelClient"
+
+~client-failed-send-restore-to-buffer:
+  description: On send failure, unsent log/metric entries are restored to the front of the buffer (up to maxBufferSize), excess entries trigger onDrop
+  category: rule
+  severity: high
+  tags: [client, sdk, resilience]
+  anchors:
+    - src/client.ts:404-421
+    - src/client.ts:425-443
+  applies-to:
+    - "#SentinelClient"
+
+# ── Config Aspects ───────────────────────────────────────────────
+
+~config-resolution-order:
+  description: Server config resolution order — env vars override local .sentinel.yaml which overrides global ~/.paradigm/sentinel.yaml which overrides defaults
+  category: decision
+  severity: medium
+  tags: [configuration]
+  anchors:
+    - src/config.ts:236-261
+  applies-to:
+    - "#SentinelServer"
+
+# ── Symbol Validation Aspects ────────────────────────────────────
+
+~symbol-prefix-type-inference:
+  description: Symbol type is inferred from prefix — # component, ^ gate, ! signal, $ flow, ~ aspect, otherwise raw
+  category: rule
+  severity: medium
+  tags: [validation, symbols]
+  anchors:
+    - src/server/routes/logs.ts:28-35
+    - src/storage.ts:1787-1794
+  applies-to:
+    - "#SentinelServer"
+    - "#IncidentStorage"
+
+~symbol-validation-fuzzy-suggestion:
+  description: Unknown symbols receive fuzzy match suggestions using shared prefix length scoring with a > 0.5 threshold
+  category: rule
+  severity: low
+  tags: [validation, symbols]
+  anchors:
+    - src/server/routes/logs.ts:40-68
+  applies-to:
+    - "#SentinelServer"
+
+# ── Trace Aspects ────────────────────────────────────────────────
+
+~trace-query-limit-max-20:
+  description: Trace queries are hard-capped at 20 results regardless of requested limit
+  category: constraint
+  severity: low
+  tags: [tracing, resource-limit]
+  anchors:
+    - src/storage.ts:2493-2493
+  applies-to:
+    - "#IncidentStorage"
+
+# ── Type System Aspects ──────────────────────────────────────────
+
+~v1-symbol-fields-deprecated:
+  description: SymbolicContext fields feature, state, and integration are deprecated in v2; component with tags should be used instead
+  category: decision
+  severity: medium
+  tags: [types, migration]
+  anchors:
+    - src/types.ts:28-46
+    - src/types.ts:131-150
+  applies-to:
+    - "#PatternMatcher"
+    - "#IncidentGrouper"
+
+~resolution-strategy-10-options:
+  description: ResolutionStrategy is a closed union of 10 values — retry, fallback, fix-data, fix-code, rollback, config-change, scale-up, investigate, ignore, escalate
+  category: constraint
+  severity: medium
+  tags: [types, resolution]
+  anchors:
+    - src/types.ts:118-128
+  applies-to:
+    - "#PatternSuggester"

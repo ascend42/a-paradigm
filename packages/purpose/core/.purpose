@@ -61,6 +61,37 @@ signals:
     description: '!validation-failed: Validation found issues'
     category: purpose
     severity: warn
+aspects:
+  ~purpose-schema-passthrough:
+    description: PurposeItemSchema uses Zod passthrough() to allow extra fields (tags, location, uses, used-by, etc.) without validation errors
+    category: decision
+    severity: medium
+    tags: [schema, extensibility]
+    anchors:
+      - src/parser.ts:16-39
+    applies-to:
+      - "#zod-schemas"
+
+  ~purpose-file-depth-sort:
+    description: ".purpose files are sorted by directory depth (shallowest first) for correct parent-to-child aggregation"
+    category: rule
+    severity: high
+    tags: [aggregation, ordering]
+    anchors:
+      - src/aggregator.ts:120-126
+    applies-to:
+      - "#aggregator"
+
+  ~purpose-glob-ignore-patterns:
+    description: "findPurposeFiles ignores node_modules, dist, and .git directories"
+    category: configuration
+    severity: low
+    tags: [discovery, glob]
+    anchors:
+      - src/aggregator.ts:114-117
+    applies-to:
+      - "#aggregator"
+
 flows:
   purpose-parsing:
     description: Parse a .purpose file from raw YAML into validated structured data
