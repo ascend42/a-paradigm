@@ -42,7 +42,7 @@ Threaded narrative arcs for sprint-retro-style reflection. AI-generated with hum
 - Recovery preamble now includes open tasks and active assessment arcs
 - Breadcrumb extraction for all 11 new tools
 
-#### Documentation & Onboarding (`@a-company/paradigm` 3.6.0 → 3.7.0)
+#### Documentation & Onboarding (`@a-company/paradigm` 3.6.0 → 3.7.0, `@a-company/university` 3.5.0 → 3.7.0)
 
 - **CLAUDE.md** — Task/assessment tools added to MCP Workflow Protocol, Token Budget, and update rules
 - **README.md** — Tool count updated to 50+, key tools table and directory tree extended
