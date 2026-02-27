@@ -3,6 +3,7 @@
  *
  * Phase 1: CRUD + Validation + Coverage
  * Phase 2: Ripple integration + affected analysis
+ * Phase 3: Execution engine (run journeys + chains)
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
@@ -18,6 +19,11 @@ import {
   getPersonaCoverage,
   getAffectedPersonas,
 } from '../utils/personas-loader.js';
+import {
+  runPersona,
+  runChain,
+  validateInterpolation,
+} from '../utils/personas-runner.js';
 
 // ── Tool definitions ─────────────────────────────────────
 
@@ -241,6 +247,23 @@ export function getPersonaToolsList() {
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
     },
+    {
+      name: 'paradigm_persona_run',
+      description: 'Execute a persona journey or chain against a running server. Interpolates templates, sends requests step-by-step, validates responses. Supports dry-run mode. ~500 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          persona_id: { type: 'string', description: 'Run a single persona journey' },
+          chain_id: { type: 'string', description: 'Run a named chain (overrides persona_id)' },
+          base_url: { type: 'string', description: 'Server base URL (e.g., "http://localhost:3000")' },
+          dry_run: { type: 'boolean', description: 'Validate and interpolate without making requests (default: false)' },
+          stop_on_failure: { type: 'boolean', description: 'Stop on first failing step (default: true)' },
+          permutation: { type: 'string', description: 'Permutation ID from chain definition' },
+        },
+        required: ['base_url'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
   ];
 }
 
@@ -455,6 +478,58 @@ export async function handlePersonaTool(
       return {
         handled: true,
         text: JSON.stringify({ symbol, affected }, null, 2),
+      };
+    }
+
+    case 'paradigm_persona_run': {
+      const baseUrl = args.base_url as string;
+      const dryRun = (args.dry_run as boolean) ?? false;
+      const stopOnFailure = (args.stop_on_failure as boolean) ?? true;
+
+      if (args.chain_id) {
+        // Chain execution
+        const result = await runChain(ctx.rootDir, args.chain_id as string, {
+          baseUrl,
+          dryRun,
+          stopOnFailure,
+          permutation: args.permutation as string | undefined,
+        });
+
+        return { handled: true, text: JSON.stringify(result, null, 2) };
+      }
+
+      if (args.persona_id) {
+        // Single persona execution
+        // Validate interpolation first
+        const persona = await loadPersona(ctx.rootDir, args.persona_id as string);
+        if (!persona) {
+          return { handled: true, text: JSON.stringify({ error: `Persona ${args.persona_id} not found` }) };
+        }
+
+        const interpCheck = validateInterpolation(persona);
+        if (!interpCheck.valid && !dryRun) {
+          return {
+            handled: true,
+            text: JSON.stringify({
+              error: 'Template interpolation errors — fix before running',
+              errors: interpCheck.errors,
+              hint: 'Use dry_run: true to see interpolated values without executing requests',
+            }, null, 2),
+          };
+        }
+
+        const result = await runPersona(ctx.rootDir, args.persona_id as string, {
+          baseUrl,
+          dryRun,
+          stopOnFailure,
+        });
+
+        return { handled: true, text: JSON.stringify(result, null, 2) };
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({ error: 'Either persona_id or chain_id is required' }),
       };
     }
 
