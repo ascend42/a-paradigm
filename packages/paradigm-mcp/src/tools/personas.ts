@@ -16,6 +16,7 @@ import {
   addStep,
   removeStep,
   validatePersona,
+  validateAgainstSentinel,
   getPersonaCoverage,
   getAffectedPersonas,
 } from '../utils/personas-loader.js';
@@ -80,23 +81,30 @@ async function emitPersonaEvents(result: RunResult | ChainRunResult): Promise<vo
         type: 'persona.run.start',
         timestamp: new Date().toISOString(),
         scopeValue: r.persona,
-        data: { persona_id: r.persona, total_steps: r.steps.length },
+        data: { persona_id: r.persona, run_id: r.run_id, total_steps: r.steps.length },
       });
 
       for (const step of r.steps) {
+        // Use persona.step.complete for pass (matchable by validate), persona.step.fail for failures
+        const eventType = step.status === 'pass' ? 'persona.step.complete' : `persona.step.${step.status}`;
         events.push({
-          type: `persona.step.${step.status}`,
+          type: eventType,
           timestamp: new Date().toISOString(),
           scopeValue: r.persona,
           data: {
             persona_id: r.persona,
+            run_id: r.run_id,
             step_id: step.id,
             route: step.route,
             gates: step.gates,
+            gates_traversed: step.gates,
             status: step.response?.status,
+            body: step.response?.body,
+            signals_fired: [],  // populated by application-level events
             duration_ms: step.duration_ms,
             failure: step.failure,
             gate_that_blocked: step.gate_that_blocked,
+            produced_keys: step.produced ? Object.keys(step.produced) : [],
           },
         });
       }
@@ -107,6 +115,7 @@ async function emitPersonaEvents(result: RunResult | ChainRunResult): Promise<vo
         scopeValue: r.persona,
         data: {
           persona_id: r.persona,
+          run_id: r.run_id,
           status: r.status,
           total_steps: r.steps.length,
           passed: r.steps.filter(s => s.status === 'pass').length,
@@ -127,6 +136,7 @@ async function emitPersonaEvents(result: RunResult | ChainRunResult): Promise<vo
           scopeValue: pr.persona,
           data: {
             persona_id: pr.persona,
+            run_id: pr.run_id,
             chain_id: r.chain_id,
             status: pr.status,
             total_steps: pr.steps.length,
@@ -349,12 +359,16 @@ export function getPersonaToolsList() {
     },
     {
       name: 'paradigm_persona_validate',
-      description: 'Full persona validation — schema, cross-refs (gates in portal.yaml, flows defined, routes match), coverage gaps. ~300 tokens.',
+      description: 'Full persona validation — schema + cross-refs + Sentinel event matching with exact assertion results. Compares expected journey outcomes against actual Sentinel events. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
           persona_id: { type: 'string', description: 'Validate one persona. Omit for all.' },
           deep: { type: 'boolean', description: 'Include cross-reference and coverage analysis (default: false)' },
+          sentinel: { type: 'boolean', description: 'Compare against Sentinel events (default: true when available)' },
+          run_id: { type: 'string', description: 'Validate against a specific run. Omit for latest.' },
+          chain_id: { type: 'string', description: 'Validate against a specific chain execution.' },
+          environment: { type: 'string', description: 'Filter Sentinel events by environment (dev, staging, prod, ci).' },
         },
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
@@ -561,6 +575,12 @@ export async function handlePersonaTool(
 
     case 'paradigm_persona_validate': {
       const deep = (args.deep as boolean) ?? false;
+      const useSentinel = (args.sentinel as boolean) ?? true;
+      const sentinelOpts = {
+        run_id: args.run_id as string | undefined,
+        chain_id: args.chain_id as string | undefined,
+        environment: args.environment as string | undefined,
+      };
 
       if (args.persona_id) {
         const persona = await loadPersona(ctx.rootDir, args.persona_id as string);
@@ -569,13 +589,42 @@ export async function handlePersonaTool(
         }
 
         const result = await validatePersona(ctx.rootDir, persona, deep);
+
+        // Sentinel assertion matching
+        if (useSentinel) {
+          try {
+            const sentinelResult = await validateAgainstSentinel(persona, sentinelOpts);
+            result.sentinel_assertions = sentinelResult;
+            // If Sentinel assertions fail, overall validation fails
+            if (sentinelResult.summary.failed > 0 || sentinelResult.summary.unmatched > 0) {
+              result.valid = false;
+            }
+          } catch {
+            // Sentinel unavailable — skip
+          }
+        }
+
         return { handled: true, text: JSON.stringify(result, null, 2) };
       }
 
       // Validate all
       const personas = await loadPersonas(ctx.rootDir);
       const results = await Promise.all(
-        personas.map(p => validatePersona(ctx.rootDir, p, deep))
+        personas.map(async p => {
+          const result = await validatePersona(ctx.rootDir, p, deep);
+          if (useSentinel) {
+            try {
+              const sentinelResult = await validateAgainstSentinel(p, sentinelOpts);
+              result.sentinel_assertions = sentinelResult;
+              if (sentinelResult.summary.failed > 0 || sentinelResult.summary.unmatched > 0) {
+                result.valid = false;
+              }
+            } catch {
+              // Sentinel unavailable — skip
+            }
+          }
+          return result;
+        })
       );
 
       const valid = results.filter(r => r.valid).length;
@@ -587,7 +636,7 @@ export async function handlePersonaTool(
           total: results.length,
           valid,
           invalid,
-          results: results.filter(r => !r.valid || r.warnings.length > 0),
+          results: results.filter(r => !r.valid || r.warnings.length > 0 || r.sentinel_assertions),
         }, null, 2),
       };
     }

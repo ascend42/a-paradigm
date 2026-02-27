@@ -126,4 +126,37 @@ export interface PersonaValidationResult {
     gates: { covered: number; total: number; uncovered: string[] };
     flows: { covered: number; total: number; uncovered: string[] };
   };
+  sentinel_assertions?: SentinelAssertionResult;
+}
+
+// ── Sentinel Assertions ──────────────────────────────────
+
+export interface StepAssertion {
+  type: 'status' | 'body.has' | 'body.match' | 'signal' | 'gate';
+  field: string;
+  expected: unknown;
+  actual: unknown;
+  message: string;
+}
+
+export interface StepAssertionResult {
+  step_id: string;
+  matched: boolean;
+  passed?: boolean;
+  assertions: StepAssertion[];
+  message?: string;
+}
+
+export interface SentinelAssertionResult {
+  run_id?: string;
+  environment?: string;
+  steps: StepAssertionResult[];
+  summary: {
+    total_steps: number;
+    matched: number;
+    unmatched: number;
+    passed: number;
+    failed: number;
+    assertion_failures: number;
+  };
 }

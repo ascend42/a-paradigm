@@ -16,6 +16,16 @@ import type {
 } from '../types/personas.js';
 import { loadPersona } from './personas-loader.js';
 
+// ── Helpers ──────────────────────────────────────────────
+
+let runCounter = 0;
+
+function generateRunId(): string {
+  const date = new Date().toISOString().slice(0, 10);
+  runCounter++;
+  return `run_${date}_${String(runCounter).padStart(3, '0')}`;
+}
+
 // ── Types ────────────────────────────────────────────────
 
 export interface StepResult {
@@ -42,6 +52,7 @@ export interface StepResult {
 
 export interface RunResult {
   persona: string;
+  run_id: string;
   status: 'pass' | 'fail' | 'error';
   steps: StepResult[];
   spawns_triggered: string[];
@@ -345,6 +356,7 @@ export async function runPersona(
   if (!persona) {
     return {
       persona: personaId,
+      run_id: generateRunId(),
       status: 'error',
       steps: [],
       spawns_triggered: [],
@@ -437,6 +449,7 @@ export async function runPersonaObject(
 
   return {
     persona: persona.id,
+    run_id: generateRunId(),
     status: failedCount > 0 ? 'fail' : 'pass',
     steps,
     spawns_triggered: spawnsTriggered,

@@ -22,6 +22,9 @@ import type {
   PersonaValidationError,
   PersonaValidationWarning,
   PersonaValidationResult,
+  StepAssertion,
+  StepAssertionResult,
+  SentinelAssertionResult,
 } from '../types/personas.js';
 
 const PERSONAS_ROOT = '.paradigm/personas';
@@ -707,4 +710,225 @@ export async function getAffectedPersonas(
   }
 
   return results;
+}
+
+// ── Sentinel Assertion Engine ────────────────────────────
+
+interface SentinelEvent {
+  id: string;
+  event_type: string;
+  timestamp: string;
+  scope_value?: string;
+  data_json: string;
+}
+
+function deepGet(obj: unknown, path: string): unknown {
+  const parts = path.split(/[.\[\]]+/).filter(Boolean);
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function assertStep(
+  step: PersonaStep,
+  event: { status: number; body: unknown; gates_traversed?: string[]; signals_fired?: string[] },
+): StepAssertion[] {
+  const assertions: StepAssertion[] = [];
+
+  // Status assertion
+  if (event.status !== step.expect.status) {
+    assertions.push({
+      type: 'status',
+      field: 'status',
+      expected: step.expect.status,
+      actual: event.status,
+      message: `Step ${step.id}: status is ${event.status}, expected ${step.expect.status}`,
+    });
+  }
+
+  // body.has assertions
+  if (step.expect.body?.has) {
+    const body = event.body as Record<string, unknown> | null;
+    for (const key of step.expect.body.has) {
+      if (!body || typeof body !== 'object' || !(key in body)) {
+        assertions.push({
+          type: 'body.has',
+          field: key,
+          expected: true,
+          actual: false,
+          message: `Step ${step.id}: body missing key '${key}'`,
+        });
+      }
+    }
+  }
+
+  // body.match assertions
+  if (step.expect.body?.match) {
+    const body = event.body as Record<string, unknown> | null;
+    for (const [field, expected] of Object.entries(step.expect.body.match)) {
+      const actual = body ? deepGet(body, field) : undefined;
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        assertions.push({
+          type: 'body.match',
+          field,
+          expected,
+          actual: actual ?? null,
+          message: `Step ${step.id}: '${field}' is ${JSON.stringify(actual ?? null)}, expected ${JSON.stringify(expected)}`,
+        });
+      }
+    }
+  }
+
+  // Signal assertions
+  if (step.signals && step.signals.length > 0) {
+    const firedSignals = event.signals_fired || [];
+    for (const signal of step.signals) {
+      if (!firedSignals.includes(signal)) {
+        assertions.push({
+          type: 'signal',
+          field: 'signals_fired',
+          expected: signal,
+          actual: firedSignals,
+          message: `Step ${step.id}: signal '${signal}' was not fired`,
+        });
+      }
+    }
+  }
+
+  // Gate assertions
+  if (step.gates.length > 0 && event.gates_traversed) {
+    for (const gate of step.gates) {
+      if (!event.gates_traversed.includes(gate)) {
+        assertions.push({
+          type: 'gate',
+          field: 'gates_traversed',
+          expected: gate,
+          actual: event.gates_traversed,
+          message: `Step ${step.id}: gate '${gate}' was not traversed`,
+        });
+      }
+    }
+  }
+
+  return assertions;
+}
+
+export async function validateAgainstSentinel(
+  persona: Persona,
+  options: {
+    run_id?: string;
+    chain_id?: string;
+    environment?: string;
+  } = {},
+): Promise<SentinelAssertionResult> {
+  const steps: StepAssertionResult[] = [];
+
+  try {
+    const { SentinelStorage } = await import('@a-company/sentinel');
+    const storage = new SentinelStorage();
+
+    // Query Sentinel for step completion events for this persona
+    const events = (storage as { queryEvents?: (opts: Record<string, unknown>) => SentinelEvent[] }).queryEvents?.({
+      schemaId: 'paradigm-personas',
+      eventType: 'persona.step.complete',
+      scopeValue: persona.id,
+      limit: 500,
+    }) || [];
+
+    // Filter by run_id/chain_id/environment if specified
+    const filtered = events.filter((e: SentinelEvent) => {
+      const data = JSON.parse(e.data_json || '{}');
+      if (options.run_id && data.run_id !== options.run_id) return false;
+      if (options.chain_id && data.chain_id !== options.chain_id) return false;
+      if (options.environment && data.environment !== options.environment) return false;
+      return true;
+    });
+
+    // Also get failed events
+    const failEvents = (storage as { queryEvents?: (opts: Record<string, unknown>) => SentinelEvent[] }).queryEvents?.({
+      schemaId: 'paradigm-personas',
+      eventType: 'persona.step.fail',
+      scopeValue: persona.id,
+      limit: 500,
+    }) || [];
+
+    const filteredFails = failEvents.filter((e: SentinelEvent) => {
+      const data = JSON.parse(e.data_json || '{}');
+      if (options.run_id && data.run_id !== options.run_id) return false;
+      if (options.chain_id && data.chain_id !== options.chain_id) return false;
+      if (options.environment && data.environment !== options.environment) return false;
+      return true;
+    });
+
+    // Build event map by step_id (latest event per step wins)
+    const eventMap = new Map<string, Record<string, unknown>>();
+
+    for (const e of [...filtered, ...filteredFails]) {
+      const data = JSON.parse(e.data_json || '{}');
+      if (data.step_id) {
+        eventMap.set(data.step_id as string, data);
+      }
+    }
+
+    // Match each persona step to its Sentinel event
+    for (const step of persona.journey) {
+      const eventData = eventMap.get(step.id);
+
+      if (!eventData) {
+        steps.push({
+          step_id: step.id,
+          matched: false,
+          assertions: [],
+          message: `No Sentinel event found for step '${step.id}' — step was never exercised`,
+        });
+        continue;
+      }
+
+      const assertions = assertStep(step, {
+        status: eventData.status as number,
+        body: eventData.body,
+        gates_traversed: eventData.gates_traversed as string[] | undefined,
+        signals_fired: eventData.signals_fired as string[] | undefined,
+      });
+
+      steps.push({
+        step_id: step.id,
+        matched: true,
+        passed: assertions.length === 0,
+        assertions,
+      });
+    }
+  } catch {
+    // Sentinel unavailable — return empty results
+    for (const step of persona.journey) {
+      steps.push({
+        step_id: step.id,
+        matched: false,
+        assertions: [],
+        message: 'Sentinel unavailable — cannot validate events',
+      });
+    }
+  }
+
+  const matched = steps.filter(s => s.matched).length;
+  const passed = steps.filter(s => s.passed).length;
+  const failed = steps.filter(s => s.matched && !s.passed).length;
+  const totalAssertionFailures = steps.reduce((sum, s) => sum + s.assertions.length, 0);
+
+  return {
+    run_id: options.run_id,
+    environment: options.environment,
+    steps,
+    summary: {
+      total_steps: persona.journey.length,
+      matched,
+      unmatched: persona.journey.length - matched,
+      passed,
+      failed,
+      assertion_failures: totalAssertionFailures,
+    },
+  };
 }
