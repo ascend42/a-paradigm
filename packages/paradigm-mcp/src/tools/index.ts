@@ -42,6 +42,7 @@ import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugi
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
+import { getAffectedPersonas } from '../utils/personas-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
 
 /**
@@ -554,6 +555,20 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Add flow impact if present
           if (flowImpact) {
             response.affectedFlows = flowImpact;
+          }
+
+          // Check for affected personas
+          try {
+            const personasAffected = await getAffectedPersonas(ctx.rootDir, symbol);
+            if (personasAffected.length > 0) {
+              response.personas_affected = personasAffected;
+              // Upgrade impact if personas are affected
+              if (personasAffected.length > 2 && impact === 'low') {
+                response.impact = 'medium';
+              }
+            }
+          } catch {
+            // Persona check is non-fatal
           }
 
           const text = JSON.stringify(response, null, 2);
