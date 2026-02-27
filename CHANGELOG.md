@@ -5,6 +5,39 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] — 2026-02-26
+
+### Added
+
+#### Personas — Actor-Driven Journey Testing (`@a-company/paradigm-mcp` 3.8.0 → 3.9.0)
+
+Named test actors with traits, journeys, and spawn chains — turning portal/flow topology into executable, validated test specifications.
+
+**Phase 1 — Schema + CRUD + Validation:**
+- `.persona` file format with traits, trigger, fixtures, and ordered journey steps
+- 10 MCP tools: `persona_create`, `persona_get`, `persona_list`, `persona_update`, `persona_delete`, `persona_add_step`, `persona_remove_step`, `persona_validate`, `persona_coverage`, `persona_affected`
+- Full cross-reference validation: gates vs portal.yaml, routes vs portal.yaml, flows vs flow-index, spawn cycle detection
+- Coverage analysis: routes/gates/flows with and without persona coverage
+- Persona index auto-generated during `paradigm_reindex`
+
+**Phase 2 — Ripple Integration:**
+- `paradigm_ripple` now includes `personas_affected` showing which personas traverse a changed gate/flow/route
+- Spawn chain blocking: shows downstream personas that would break if a step fails
+
+**Phase 3 — Execution Engine:**
+- `paradigm_persona_run` executes journeys against a running server
+- Template interpolation: `{{fixtures.X}}`, `{{produces.X}}`, `{{context.X}}`, `{{env.X}}`
+- Step-by-step HTTP execution with expect assertions (status, body.has, body.match)
+- Produces extraction and carry-forward between steps
+- Spawn chain orchestration with topological ordering
+- Dry-run mode for validation without requests
+- Chain execution with permutation overrides
+
+**Phase 4 — Sentinel Integration:**
+- Schema `paradigm-personas` auto-registers on first run
+- Events emitted: `persona.run.start`, `persona.step.pass/fail/skip`, `persona.run.complete`, `persona.chain.complete`
+- Query with: `paradigm_sentinel_events({ schema: "paradigm-personas" })`
+
 ## [3.8.0] — 2026-02-26
 
 ### Added
