@@ -15,6 +15,7 @@ import { trackToolCall } from './context.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/aspect-graph.js';
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
+import { rebuildPersonaIndex } from '../utils/personas-loader.js';
 
 // ============================================================================
 // Navigator constants (ported from packages/paradigm/src/commands/scan/navigator.ts)
@@ -205,6 +206,18 @@ export async function rebuildStaticFiles(
     // Aspect graph build is non-fatal — log but don't block reindex
   }
 
+  // 6. Rebuild persona index
+  let personaCount = 0;
+  try {
+    const personaIndex = await rebuildPersonaIndex(rootDir);
+    personaCount = Object.keys(personaIndex.personas).length;
+    if (personaCount > 0) {
+      filesWritten.push('.paradigm/personas/index.yaml');
+    }
+  } catch {
+    // Persona index build is non-fatal
+  }
+
   // Build breakdown
   const breakdown: Record<string, number> = {};
   for (const sym of aggregation.symbols) {
@@ -218,6 +231,7 @@ export async function rebuildStaticFiles(
     breakdown,
     flowCount,
     aspectGraphStats,
+    personaCount,
   };
 }
 
