@@ -25,9 +25,9 @@ Portal (who CAN)  +  Flows (HOW)  +  Personas (WHO DOES, IN WHAT ORDER)
 .paradigm/
   personas/
     index.yaml                    # Auto-generated persona index
-    user-a.yaml                   # One file per persona
-    user-b.yaml
-    user-c.yaml
+    user-a.persona                # One file per persona
+    user-b.persona
+    user-c.persona
     chains/
       onboarding.yaml             # Named chain: ordered persona execution
 ```
@@ -39,7 +39,7 @@ Portal (who CAN)  +  Flows (HOW)  +  Personas (WHO DOES, IN WHAT ORDER)
 ## Persona Schema
 
 ```yaml
-# .paradigm/personas/user-a.yaml
+# .paradigm/personas/user-a.persona
 version: "1.0"
 id: user-a
 name: "Agency Owner (Annual Billing)"
@@ -679,7 +679,7 @@ paradigm persona graph                         # Spawn chain visualization
 
 The reindex process:
 
-1. Reads all `.paradigm/personas/*.yaml` files
+1. Reads all `.paradigm/personas/*.persona` files
 2. Validates schema (fast, no cross-ref)
 3. Builds the persona index (`index.yaml`):
    - Per-persona: gates used, flows referenced, routes hit, spawns
