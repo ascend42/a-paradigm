@@ -23,7 +23,140 @@ import {
   runPersona,
   runChain,
   validateInterpolation,
+  type RunResult,
+  type ChainRunResult,
 } from '../utils/personas-runner.js';
+
+// ── Sentinel integration ─────────────────────────────────
+
+const PERSONA_SCHEMA_ID = 'paradigm-personas';
+
+const PERSONA_SCHEMA = {
+  id: PERSONA_SCHEMA_ID,
+  version: '1.0',
+  name: 'Paradigm Personas',
+  description: 'Events from persona journey and chain execution',
+  scope: { key: 'persona_id', label: 'Persona' },
+  eventTypes: {
+    'persona.run.start': { category: 'lifecycle', severity: 'info' },
+    'persona.step.pass': { category: 'assertion', severity: 'info' },
+    'persona.step.fail': { category: 'assertion', severity: 'warning' },
+    'persona.step.skip': { category: 'lifecycle', severity: 'info' },
+    'persona.run.complete': { category: 'lifecycle', severity: 'info' },
+    'persona.chain.complete': { category: 'lifecycle', severity: 'info' },
+    'persona.coverage.report': { category: 'analysis', severity: 'info' },
+  },
+};
+
+let sentinelSchemaRegistered = false;
+
+async function emitPersonaEvents(result: RunResult | ChainRunResult): Promise<void> {
+  try {
+    const { SentinelStorage } = await import('@a-company/sentinel');
+    const storage = new SentinelStorage();
+
+    // Register schema once
+    if (!sentinelSchemaRegistered) {
+      try {
+        storage.registerSchema(PERSONA_SCHEMA as Parameters<typeof storage.registerSchema>[0]);
+        sentinelSchemaRegistered = true;
+      } catch {
+        // Schema may already exist
+        sentinelSchemaRegistered = true;
+      }
+    }
+
+    const events: Array<{
+      type: string;
+      timestamp: string;
+      scopeValue?: string;
+      data: Record<string, unknown>;
+    }> = [];
+
+    if ('persona' in result) {
+      // Single persona result
+      const r = result as RunResult;
+      events.push({
+        type: 'persona.run.start',
+        timestamp: new Date().toISOString(),
+        scopeValue: r.persona,
+        data: { persona_id: r.persona, total_steps: r.steps.length },
+      });
+
+      for (const step of r.steps) {
+        events.push({
+          type: `persona.step.${step.status}`,
+          timestamp: new Date().toISOString(),
+          scopeValue: r.persona,
+          data: {
+            persona_id: r.persona,
+            step_id: step.id,
+            route: step.route,
+            gates: step.gates,
+            status: step.response?.status,
+            duration_ms: step.duration_ms,
+            failure: step.failure,
+            gate_that_blocked: step.gate_that_blocked,
+          },
+        });
+      }
+
+      events.push({
+        type: 'persona.run.complete',
+        timestamp: new Date().toISOString(),
+        scopeValue: r.persona,
+        data: {
+          persona_id: r.persona,
+          status: r.status,
+          total_steps: r.steps.length,
+          passed: r.steps.filter(s => s.status === 'pass').length,
+          failed: r.steps.filter(s => s.status === 'fail').length,
+          skipped: r.steps.filter(s => s.status === 'skip').length,
+          duration_ms: r.duration_ms,
+          spawns_triggered: r.spawns_triggered,
+          spawns_blocked: r.spawns_blocked,
+        },
+      });
+    } else {
+      // Chain result
+      const r = result as ChainRunResult;
+      for (const pr of r.persona_results) {
+        events.push({
+          type: 'persona.run.complete',
+          timestamp: new Date().toISOString(),
+          scopeValue: pr.persona,
+          data: {
+            persona_id: pr.persona,
+            chain_id: r.chain_id,
+            status: pr.status,
+            total_steps: pr.steps.length,
+            passed: pr.steps.filter(s => s.status === 'pass').length,
+            failed: pr.steps.filter(s => s.status === 'fail').length,
+            duration_ms: pr.duration_ms,
+          },
+        });
+      }
+
+      events.push({
+        type: 'persona.chain.complete',
+        timestamp: new Date().toISOString(),
+        data: {
+          chain_id: r.chain_id,
+          status: r.status,
+          personas_run: r.persona_results.length,
+          personas_passed: r.persona_results.filter(p => p.status === 'pass').length,
+          duration_ms: r.duration_ms,
+        },
+      });
+    }
+
+    if (events.length > 0) {
+      storage.insertEventBatch(PERSONA_SCHEMA_ID, 'paradigm-personas', events);
+    }
+  } catch {
+    // Sentinel emission is non-fatal — silent fail
+  }
+}
 
 // ── Tool definitions ─────────────────────────────────────
 
@@ -495,6 +628,7 @@ export async function handlePersonaTool(
           permutation: args.permutation as string | undefined,
         });
 
+        if (!dryRun) await emitPersonaEvents(result);
         return { handled: true, text: JSON.stringify(result, null, 2) };
       }
 
@@ -524,6 +658,7 @@ export async function handlePersonaTool(
           stopOnFailure,
         });
 
+        if (!dryRun) await emitPersonaEvents(result);
         return { handled: true, text: JSON.stringify(result, null, 2) };
       }
 
