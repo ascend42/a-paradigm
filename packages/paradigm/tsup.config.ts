@@ -25,4 +25,16 @@ export default defineConfig([
     entry: { mcp: '../paradigm-mcp/src/index.ts' },
     dts: false,
   },
+  {
+    ...shared,
+    entry: { sentinel: '../sentinel/src/cli.ts' },
+    dts: false,
+    external: [...shared.external, 'simple-git', 'ws', 'sql.js'],
+  },
+  {
+    ...shared,
+    entry: { 'sentinel-mcp': '../sentinel/src/mcp.ts' },
+    dts: false,
+    external: [...shared.external, 'ws', 'sql.js'],
+  },
 ]);

@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.0] — 2026-03-01
+
+### Added
+
+#### Bundle Sentinel Binaries into Paradigm (`@a-company/paradigm` 3.12.0 → 3.13.0)
+
+`npm i -g @a-company/paradigm` now provides `sentinel` and `sentinel-mcp` binaries — no separate `@a-company/sentinel` install needed.
+
+- Added `sentinel` and `sentinel-mcp` tsup build entries (same cross-compile pattern as `paradigm-mcp`)
+- Added `sentinel` and `sentinel-mcp` bin entries to package.json
+- Added runtime dependencies: `simple-git`, `ws`, `uuid`
+- Fixed sentinel CLI hardcoded version (`0.2.0` → dynamic from package.json via `createRequire`)
+
 ## [3.12.0] — 2026-02-28
 
 ### Added

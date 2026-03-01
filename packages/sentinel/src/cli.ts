@@ -13,13 +13,17 @@
  */
 
 import { Command } from 'commander';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../package.json');
 
 const program = new Command();
 
 program
   .name('sentinel')
   .description('Semantic error monitoring — errors that speak your language')
-  .version('0.2.0');
+  .version(VERSION);
 
 // Default: launch dashboard
 program

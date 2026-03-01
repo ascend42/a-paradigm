@@ -1,13 +1,15 @@
 {
   "name": "@a-company/paradigm",
-  "version": "3.12.0",
+  "version": "3.13.0",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "paradigm": "./dist/index.js",
-    "paradigm-mcp": "./dist/mcp.js"
+    "paradigm-mcp": "./dist/mcp.js",
+    "sentinel": "./dist/sentinel.js",
+    "sentinel-mcp": "./dist/sentinel-mcp.js"
   },
   "files": [
     "dist",
@@ -35,7 +37,10 @@
     "open": "^10.0.3",
     "ora": "^8.0.1",
     "prompts": "^2.4.2",
+    "simple-git": "^3.22.0",
     "sql.js": "^1.10.3",
+    "uuid": "^9.0.0",
+    "ws": "^8.19.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
