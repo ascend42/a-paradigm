@@ -1,0 +1,57 @@
+id: L-2026-03-01-001
+type: milestone
+timestamp: '2026-03-01T22:38:05.698Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Bundle Sentinel binaries into Paradigm 3.13.0
+summary: Bundled sentinel and sentinel-mcp CLIs into @a-company/paradigm so a single `npm i -g @a-company/paradigm` provides all four binaries. Renamed the dashboard command to `defend`. Fixed UI asset serving — tsup only bundles JS, so static HTML/CSS/JS assets need an explicit copy step during build, matching the existing university-assets pattern.
+symbols_touched:
+  - '#sentinel'
+  - '#paradigm-cli'
+  - '#sentinel-mcp'
+files_modified:
+  - packages/paradigm/tsup.config.ts
+  - packages/paradigm/package.json
+  - packages/paradigm/src/index.ts
+  - packages/sentinel/src/cli.ts
+  - packages/sentinel/src/server/index.ts
+  - CHANGELOG.md
+lines_added: 21
+lines_removed: 8
+commit: eecd695
+decisions:
+  - id: D-defend-rename
+    decision: Rename sentinel 'dashboard' command to 'defend'
+    rationale: User preference — 'paradigm sentinel defend' is more distinctive and memorable than 'dashboard'
+  - id: D-ui-copy-pattern
+    decision: Copy sentinel UI assets into paradigm/dist/sentinel-ui/ during build
+    rationale: tsup only bundles JS modules. Static assets need explicit copy, same pattern as university-assets and lore-ui
+  - id: D-multi-path-resolution
+    decision: Use multi-candidate path array for UI asset discovery
+    rationale: __dirname shifts when code is bundled into a different package. Trying multiple paths (bundled, standalone server/, standalone flat) ensures it works in all contexts
+errors_encountered:
+  - description: Sentinel dashboard returned 'Cannot GET /' — UI assets not found
+    resolution: Added build:sentinel-assets script to copy ui/dist into paradigm/dist/sentinel-ui/ and updated path candidates
+    time_to_fix: 15min
+  - description: Global install didn't reflect new build artifacts
+    resolution: Re-ran npm link to establish symlink instead of stale copy from previous npm install -g
+    time_to_fix: 5min
+learnings:
+  - tsup only bundles JS — static UI assets need explicit copy steps in the build pipeline
+  - npm install -g creates a full copy, not a symlink — npm link is needed for local dev iteration
+  - __dirname shifts in bundled context — multi-candidate path arrays are the robust pattern
+  - Paradigm already had the copy-assets pattern (university, lore-ui) — check existing patterns first
+verification:
+  status: pass
+  details:
+    build: pass
+    sentinel_defend: pass
+    paradigm_sentinel_defend: pass
+    ui_served: pass
+tags:
+  - bundling
+  - dx
+  - build
+  - 3.13.0
