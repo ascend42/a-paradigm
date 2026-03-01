@@ -5,11 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.13.0] — 2026-03-01
+## [3.14.0] — 2026-03-01
 
 ### Added
 
-#### Bundle Sentinel Binaries into Paradigm (`@a-company/paradigm` 3.12.0 → 3.13.0)
+#### Bundle Sentinel Binaries into Paradigm (`@a-company/paradigm` 3.13.0 → 3.14.0, `@a-company/sentinel` 3.6.0 → 3.7.0)
 
 `npm i -g @a-company/paradigm` now provides `sentinel` and `sentinel-mcp` binaries — no separate `@a-company/sentinel` install needed.
 
