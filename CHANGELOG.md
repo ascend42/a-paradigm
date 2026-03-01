@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `sentinel` and `sentinel-mcp` bin entries to package.json
 - Added runtime dependencies: `simple-git`, `ws`, `uuid`
 - Fixed sentinel CLI hardcoded version (`0.2.0` → dynamic from package.json via `createRequire`)
+- Renamed `dashboard` command to `defend` (`sentinel defend`, `paradigm sentinel defend`)
 
 ## [3.12.0] — 2026-02-28
 
