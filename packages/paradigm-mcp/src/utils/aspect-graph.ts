@@ -938,14 +938,14 @@ function resolveAnchorLines(anchor: CodeAnchor): { startLine: number; endLine: n
 
 // ─── Layer 2: Git-aware line mapping ────────────────────────────────
 
-interface DiffHunk {
+export interface DiffHunk {
   oldStart: number;
   oldCount: number;
   newStart: number;
   newCount: number;
 }
 
-interface LineMapping {
+export interface LineMapping {
   originalStart: number;
   originalEnd: number;
   currentStart: number;
@@ -956,7 +956,7 @@ interface LineMapping {
  * Parse unified diff output into structured hunks.
  * Handles the @@ -oldStart,oldCount +newStart,newCount @@ format.
  */
-function parseUnifiedDiffHunks(diffOutput: string): DiffHunk[] {
+export function parseUnifiedDiffHunks(diffOutput: string): DiffHunk[] {
   const hunks: DiffHunk[] = [];
   const hunkPattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
 
@@ -977,7 +977,7 @@ function parseUnifiedDiffHunks(diffOutput: string): DiffHunk[] {
  * Compute how an anchor's line range shifted based on git diff hunks.
  * Returns null if a hunk overlaps the anchor (content was modified in-place).
  */
-function computeLineShift(
+export function computeLineShift(
   rootDir: string,
   filePath: string,
   fromCommit: string,
@@ -1034,7 +1034,7 @@ function computeLineShift(
  * Update anchor line numbers in a .purpose file.
  * Performs a surgical string replacement of the anchor reference.
  */
-function healAnchorInPurposeFile(
+export function healAnchorInPurposeFile(
   rootDir: string,
   purposeFilePath: string,
   anchorFilePath: string,

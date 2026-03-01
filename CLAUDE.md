@@ -576,6 +576,22 @@ automatically via `paradigm shift` or `paradigm hooks install`.
 | **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
 | **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
 
+The stop hook runs 11 compliance checks (shared via `paradigm-common.sh`):
+
+| Check | What it validates | Blocking? |
+|-------|-------------------|-----------|
+| 1 | Source files modified without .purpose updates (2+ files) | Yes |
+| 2 | Modified source directories missing .purpose files | Yes |
+| 3 | Route patterns added without portal.yaml | Yes |
+| 4 | Aspect anchor files that no longer exist | Yes |
+| 5 | Per-directory .purpose freshness | Yes |
+| 6 | Aspect coverage advisory | No (advisory) |
+| 7 | Lore entry expected for significant sessions (3+ files) | Yes |
+| 8 | Blocking habits not satisfied | Yes |
+| 9 | Purpose-required patterns from config.yaml | Yes |
+| 10 | Aspect drift detection (auto-heals shifts, blocks real drift) | Yes |
+| 11 | Portal gate implementation compliance (undeclared gates) | Yes |
+
 ### Plugin Version Compatibility
 
 When installing hooks via `paradigm hooks install`, the system checks `compatibleVersions` in the plugin's `hooks.json`. If the current paradigm version is outside the compatible range, a warning is displayed but installation proceeds.
@@ -597,6 +613,9 @@ When installing hooks via `paradigm hooks install`, the system checks `compatibl
 | Gate suggestions missing | Check that portal.yaml exists and defines gates |
 | "Flow index not found" | Run `paradigm scan` and add flows to .purpose files |
 | "Fixtures not found" | Create `.paradigm/fixtures.yaml` with test data |
+| Aspect anchors drifted | Run `paradigm drift check --auto-heal` to fix shifted anchors |
+| Undeclared gates in code | Run `paradigm portal check` to find and declare missing gates |
+| Purpose-required violation | Create `.purpose` files in directories matching config patterns |
 
 ## Maintaining Paradigm Files
 

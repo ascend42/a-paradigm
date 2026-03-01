@@ -251,6 +251,57 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
+  // Check purpose-required patterns from config.yaml
+  const configPath = path.join(paradigmDir, 'config.yaml');
+  if (fs.existsSync(configPath)) {
+    try {
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const { parse } = await import('yaml');
+      const config = parse(configContent);
+      const purposeRequired = config?.['purpose-required'] as Array<{ pattern?: string; depth?: number }> | undefined;
+
+      if (purposeRequired && Array.isArray(purposeRequired)) {
+        const missingDirs: string[] = [];
+
+        for (const entry of purposeRequired) {
+          if (!entry.pattern) continue;
+          // Expand glob pattern using simple directory listing
+          const { glob } = await import('glob');
+          const matches = await glob(entry.pattern, { cwd, nodir: false });
+
+          for (const match of matches) {
+            const fullPath = path.join(cwd, match);
+            try {
+              const stat = fs.statSync(fullPath);
+              if (stat.isDirectory() && !fs.existsSync(path.join(fullPath, '.purpose'))) {
+                missingDirs.push(match);
+              }
+            } catch {
+              // Skip inaccessible paths
+            }
+          }
+        }
+
+        if (missingDirs.length > 0) {
+          results.push({
+            name: 'Purpose-required',
+            status: 'warn',
+            message: `${missingDirs.length} director${missingDirs.length === 1 ? 'y' : 'ies'} missing .purpose: ${missingDirs.join(', ')}`,
+            fix: 'Create .purpose files with paradigm_purpose_init + paradigm_purpose_add_component',
+          });
+        } else {
+          results.push({
+            name: 'Purpose-required',
+            status: 'ok',
+            message: 'All required directories have .purpose files',
+          });
+        }
+      }
+    } catch {
+      // Config parse error already caught above
+    }
+  }
+
   // Check for clarification markers in .purpose files
   const clarificationMarkerRegex = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
   let clarificationCount = 0;
@@ -332,6 +383,23 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         message: `Invalid YAML: ${(e as Error).message}`,
         fix: 'Check YAML syntax in portal.yaml',
       });
+    }
+  }
+
+  // Check portal gate compliance (declared vs used)
+  if (fs.existsSync(portalPath)) {
+    try {
+      const { checkPortalCompliance, getComplianceSummary } = await import('../core/portal-compliance.js');
+      const complianceReport = await checkPortalCompliance(cwd);
+      const summary = getComplianceSummary(complianceReport);
+      results.push({
+        name: 'Portal compliance',
+        status: summary.status,
+        message: summary.message,
+        fix: summary.status !== 'ok' ? 'paradigm portal check' : undefined,
+      });
+    } catch {
+      // Skip if compliance check fails
     }
   }
 

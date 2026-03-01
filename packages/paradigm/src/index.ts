@@ -105,6 +105,15 @@ portalCmd
   });
 
 portalCmd
+  .command('check')
+  .description('Check portal gate implementation compliance (declared vs used)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { portalCheckCommand } = await import('./commands/portal-check.js');
+    await portalCheckCommand(options);
+  });
+
+portalCmd
   .command('test [path]')
   .description('Test portals and generate test files')
   .option('--generate', 'Generate test files from portal.yaml')
@@ -623,6 +632,22 @@ program
   .action(async () => {
     const { doctorCommand } = await import('./commands/doctor.js');
     await doctorCommand();
+  });
+
+// paradigm drift <subcommand>
+const driftCmd = program
+  .command('drift')
+  .description('Aspect anchor drift detection');
+
+driftCmd
+  .command('check')
+  .description('Check aspect anchors for drift and auto-heal shifted anchors')
+  .option('--json', 'Output as JSON')
+  .option('--auto-heal', 'Auto-heal shifted anchors (default: true)')
+  .option('--no-auto-heal', 'Disable auto-healing')
+  .action(async (options) => {
+    const { driftCheckCommand } = await import('./commands/drift.js');
+    await driftCheckCommand(options);
   });
 
 // paradigm global <subcommand>

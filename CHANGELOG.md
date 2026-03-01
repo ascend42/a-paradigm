@@ -5,6 +5,44 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.0] — 2026-02-28
+
+### Added
+
+#### Enforcement Gaps — Hook Unification + New Checks (`@a-company/paradigm` 3.10.0 → 3.11.0, `@a-company/paradigm-mcp` 3.10.0 → 3.11.0)
+
+Unified the duplicated Claude Code and Cursor stop hooks into a shared `paradigm-common.sh` library, and wired up three enforcement gaps that were configured but never checked.
+
+**Hook Unification:**
+- Extracted checks 1–8 (plus new 9–11) into `paradigm-common.sh` — single source of truth
+- Claude Code and Cursor stop hooks are now thin wrappers that source the common library
+- Platform-specific logic (CWD extraction, loop guard, followup JSON) stays in wrappers
+- `generate-hooks.mjs` copies `paradigm-common.sh` to both plugin directories
+- `paradigm hooks install` deploys `paradigm-common.sh` alongside stop scripts
+
+**Check 9 — Purpose-Required Enforcement:**
+- Validates `purpose-required` patterns from `.paradigm/config.yaml`
+- Directories matching configured globs (e.g., `src/*`, `packages/*`) must have `.purpose` files
+- `paradigm doctor` now reports purpose-required compliance
+
+**Check 10 — Smart Aspect Drift with Auto-Heal:**
+- New CLI command: `paradigm drift check [--json] [--auto-heal]`
+- Reads `.paradigm/aspect-graph.db` directly to detect drifted anchors
+- 3-layer detection: exact hash → normalized hash → git-aware line mapping
+- Auto-heals shifted anchors (updates both DB and `.purpose` files)
+- Stop hook calls `paradigm drift check` and reports genuinely drifted content as blocking
+
+**Check 11 — Portal Gate Implementation Compliance:**
+- New CLI command: `paradigm portal check [--json]`
+- Wraps existing `checkPortalCompliance()` for CLI access
+- Detects gates used in code but not declared in `portal.yaml` (blocking violation)
+- Detects gates declared but never referenced (warning in doctor)
+- `paradigm doctor` now reports portal gate compliance status
+
+**Exported Helpers (paradigm-mcp):**
+- `computeLineShift()`, `healAnchorInPurposeFile()`, `parseUnifiedDiffHunks()` now exported from `aspect-graph.ts`
+- `DiffHunk` and `LineMapping` interfaces now exported
+
 ## [3.10.0] — 2026-02-28
 
 ### Added

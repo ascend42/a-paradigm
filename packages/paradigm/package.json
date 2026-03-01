@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "3.10.0",
+  "version": "3.11.0",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,6 +35,7 @@
     "open": "^10.0.3",
     "ora": "^8.0.1",
     "prompts": "^2.4.2",
+    "sql.js": "^1.10.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
