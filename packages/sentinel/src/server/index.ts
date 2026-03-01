@@ -147,8 +147,14 @@ export function createApp(options: ServerOptions & {
   });
 
   // Serve static UI files in production
-  const uiDistPath = path.join(__dirname, '..', '..', 'ui', 'dist');
-  if (fs.existsSync(uiDistPath)) {
+  // Try multiple paths: standalone sentinel package, then bundled-into-paradigm
+  const uiCandidates = [
+    path.join(__dirname, '..', '..', 'ui', 'dist'),                    // standalone: sentinel/dist/ → sentinel/ui/dist
+    path.join(__dirname, '..', '..', 'sentinel', 'ui', 'dist'),        // bundled monorepo: paradigm/dist/ → sentinel/ui/dist
+    path.join(__dirname, '..', 'node_modules', '@a-company', 'sentinel', 'ui', 'dist'), // npm installed: paradigm/ → node_modules/@a-company/sentinel/ui/dist
+  ];
+  const uiDistPath = uiCandidates.find(p => fs.existsSync(p));
+  if (uiDistPath) {
     app.use(express.static(uiDistPath));
 
     // SPA fallback - serve index.html for non-API routes
