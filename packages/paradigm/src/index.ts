@@ -47,6 +47,8 @@ program
   .option('--verify', 'Run health checks after setup')
   .option('--ide <ide>', 'Target specific IDE instead of all')
   .option('--configure-models', 'Force model configuration prompts for team agents')
+  .option('--workspace <name>', 'Create or join a multi-project workspace with this name (creates ../.paradigm-workspace)')
+  .option('--workspace-path <path>', 'Custom workspace file location (default: ../.paradigm-workspace)')
   .action(async (options) => {
     const { shiftCommand } = await import('./commands/shift.js');
     await shiftCommand(options);

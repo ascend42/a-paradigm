@@ -19,6 +19,7 @@ import { copilotAdapter } from './copilot.js';
 import { windsurfAdapter } from './windsurf.js';
 import { claudeAdapter } from './claude.js';
 import { agentsAdapter } from './agents.js';
+import * as yaml from 'js-yaml';
 import { parseParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
 
 // Export types
@@ -179,11 +180,37 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     }
   }
   
+  // Load workspace info if configured
+  let workspace: ParadigmFiles['workspace'] = undefined;
+  const rawConfig = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+  const wsField = rawConfig.workspace;
+  if (typeof wsField === 'string') {
+    const wsPath = path.resolve(rootDir, wsField);
+    if (fs.existsSync(wsPath)) {
+      try {
+        const wsConfig = yaml.load(fs.readFileSync(wsPath, 'utf8')) as {
+          name: string;
+          members?: Array<{ name: string; path: string; role?: string; exports?: string[] }>;
+        };
+        const wsDir = path.dirname(wsPath);
+        const currentName = wsConfig.members?.find(
+          (m) => path.resolve(wsDir, m.path) === rootDir
+        )?.name || path.basename(rootDir);
+        workspace = {
+          name: wsConfig.name,
+          currentMember: currentName,
+          members: wsConfig.members || [],
+        };
+      } catch { /* non-fatal */ }
+    }
+  }
+
   return {
     config,
     specs,
     docs,
     projectName: path.basename(rootDir),
+    workspace,
   };
 }
 

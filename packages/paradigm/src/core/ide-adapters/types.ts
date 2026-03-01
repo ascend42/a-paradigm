@@ -33,6 +33,16 @@ export interface ParadigmFiles {
   specs: SpecFiles;
   docs: DocFiles;
   projectName: string;
+  workspace?: {
+    name: string;
+    currentMember: string;
+    members: Array<{
+      name: string;
+      path: string;
+      role?: string;
+      exports?: string[];
+    }>;
+  };
 }
 
 /**

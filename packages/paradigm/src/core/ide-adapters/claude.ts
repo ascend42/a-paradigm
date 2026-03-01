@@ -15,6 +15,7 @@ import {
   generateTerminalGuidance,
   generateCommitConvention,
   generateCheckpointProtocol,
+  generateWorkspaceSection,
 } from './base.js';
 
 export class ClaudeAdapter implements IDEAdapter {
@@ -374,6 +375,12 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('paradigm_orchestrate_inline({ task: "...", mode: "plan" })');
     sections.push('```');
     sections.push('');
+
+    // Workspace section (only if configured with sibling projects)
+    const workspaceSection = generateWorkspaceSection(files);
+    if (workspaceSection) {
+      sections.push(workspaceSection);
+    }
 
     // Flow-First Development section
     sections.push('## Flow-First Development');

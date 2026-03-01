@@ -5,6 +5,32 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.0] — 2026-02-28
+
+### Added
+
+#### Workspace DX — `--workspace` Flag + CLAUDE.md Injection (`@a-company/paradigm` 3.11.0 → 3.12.0)
+
+Simplified workspace setup from 4 commands across 3 directories to a single `paradigm shift --workspace "name"` from any member project.
+
+**`paradigm shift --workspace` Flag:**
+- `--workspace <name>`: Creates `../.paradigm-workspace` with the current project as first member, or joins an existing workspace
+- `--workspace-path <path>`: Override the default workspace file location
+- Automatically detects project role (api, client, shared, etc.) from directory name and dependencies
+- Updates local `.paradigm/config.yaml` with workspace link
+- Runs workspace reindex after scan (Step 3b) when workspace is configured
+- Shows workspace-specific next steps in summary (join sibling projects)
+- Idempotent: re-running from an already-joined project is a no-op
+
+**CLAUDE.md Workspace Section Injection:**
+- `ParadigmFiles` interface now includes optional `workspace` field
+- `loadParadigmFiles()` reads workspace config and populates member info
+- New `generateWorkspaceSection()` in base adapter renders: member table, cross-project tools reference, symbol prefix guidance
+- Claude adapter calls it after Multi-Agent Orchestration section — only emitted when workspace has sibling projects
+
+**Testing Document:**
+- Created `docs/testing/workspace-deus-test-plan.md` — structured test plan for Opus agents validating the end-to-end flow in deus-backend/deus-frontend
+
 ## [3.11.0] — 2026-02-28
 
 ### Added

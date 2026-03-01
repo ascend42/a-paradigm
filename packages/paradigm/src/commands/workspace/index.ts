@@ -295,7 +295,7 @@ function findWorkspaceFile(startDir: string): string | null {
 /**
  * Detect project role from directory name and contents
  */
-function detectProjectRole(name: string, dirPath: string): WorkspaceMember['role'] | undefined {
+export function detectProjectRole(name: string, dirPath: string): WorkspaceMember['role'] | undefined {
   const lowerName = name.toLowerCase();
 
   // Check directory name patterns

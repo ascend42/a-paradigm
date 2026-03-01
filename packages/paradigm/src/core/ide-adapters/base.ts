@@ -5,6 +5,7 @@
 
 import * as os from 'os';
 import type { ParadigmConfig } from '../paradigm-config.js';
+import type { ParadigmFiles } from './types.js';
 
 /**
  * Generate the header section
@@ -592,6 +593,47 @@ export function generateLlmsTxtSection(): string {
   lines.push('Regenerate with: `paradigm sync-llms`');
   lines.push('');
 
+  return lines.join('\n');
+}
+
+/**
+ * Generate workspace section for CLAUDE.md (only if workspace is configured)
+ */
+export function generateWorkspaceSection(files: ParadigmFiles): string {
+  if (!files.workspace) return '';
+  const ws = files.workspace;
+  const siblings = ws.members.filter(m => m.name !== ws.currentMember);
+  if (siblings.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push(`## Workspace: ${ws.name}`);
+  lines.push('');
+  lines.push('This project is part of a multi-project workspace.');
+  lines.push('');
+  lines.push('| Member | Role | Path |');
+  lines.push('|--------|------|------|');
+  for (const m of ws.members) {
+    const tag = m.name === ws.currentMember ? ' **(this project)**' : '';
+    lines.push(`| ${m.name}${tag} | ${m.role || '-'} | \`${m.path}\` |`);
+  }
+  lines.push('');
+  lines.push('### Cross-Project Tools');
+  lines.push('');
+  lines.push('Use `includeWorkspace: true` when:');
+  lines.push('- Modifying symbols consumed by sibling projects');
+  lines.push('- Adding API endpoints or gates that siblings depend on');
+  lines.push('- Investigating cross-project impact of changes');
+  lines.push('');
+  lines.push('| Tool | Workspace Parameter |');
+  lines.push('|------|-------------------|');
+  lines.push('| `paradigm_search` | `includeWorkspace: true` — search sibling indices |');
+  lines.push('| `paradigm_ripple` | `includeWorkspace: true` — cross-project impact |');
+  lines.push('| `paradigm_gates_for_route` | Automatic — learns from sibling portal.yaml |');
+  lines.push('| `paradigm_workspace_reindex` | Rebuild all member indices |');
+  lines.push('');
+  lines.push('Cross-project symbols are prefixed: ' +
+    siblings.map(s => `\`${s.name}/#symbol\``).join(', '));
+  lines.push('');
   return lines.join('\n');
 }
 

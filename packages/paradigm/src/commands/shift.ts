@@ -23,6 +23,7 @@ import { teamInitCommand } from './team/index.js';
 import { agentsConfigured } from './team/loader.js';
 import { hooksInstallCommand } from './hooks/index.js';
 import { detectDiscipline } from '../core/discipline.js';
+import { detectProjectRole } from './workspace/index.js';
 
 export interface ShiftOptions {
   force?: boolean;
@@ -31,6 +32,10 @@ export interface ShiftOptions {
   ide?: string;
   /** Force model configuration prompts during team init */
   configureModels?: boolean;
+  /** Create or join a multi-project workspace with this name */
+  workspace?: string;
+  /** Custom workspace file location (default: ../.paradigm-workspace) */
+  workspacePath?: string;
 }
 
 export async function shiftCommand(options: ShiftOptions = {}) {
@@ -106,10 +111,98 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
-  // Check for workspace file in parent directories
+  // Workspace: create-or-join (--workspace flag) or auto-detect
   {
     const configPath = path.join(paradigmDir, 'config.yaml');
-    if (fs.existsSync(configPath)) {
+    if (options.workspace && fs.existsSync(configPath)) {
+      // --workspace flag provided: create-or-join
+      const wsFilePath = options.workspacePath
+        ? path.resolve(cwd, options.workspacePath)
+        : path.join(path.dirname(cwd), '.paradigm-workspace');
+
+      if (fs.existsSync(wsFilePath)) {
+        // JOIN: load existing workspace, add self if not already a member
+        try {
+          const wsConfig = yaml.load(fs.readFileSync(wsFilePath, 'utf8')) as {
+            version: string;
+            name: string;
+            members: Array<{ name: string; path: string; role?: string }>;
+          };
+          const currentName = path.basename(cwd);
+          const wsDir = path.dirname(wsFilePath);
+          const relPath = './' + path.relative(wsDir, cwd);
+          const alreadyMember = wsConfig.members.some(
+            (m) => path.resolve(wsDir, m.path) === cwd
+          );
+
+          if (!alreadyMember) {
+            const role = detectProjectRole(currentName, cwd);
+            wsConfig.members.push({
+              name: currentName,
+              path: relPath,
+              ...(role && { role }),
+            });
+            fs.writeFileSync(
+              wsFilePath,
+              yaml.dump(wsConfig, { indent: 2, lineWidth: 120, noRefs: true, sortKeys: false, quotingType: '"' }),
+              'utf8'
+            );
+            console.log(chalk.green(`  ✓ Joined workspace: ${chalk.cyan(wsConfig.name)} (added as member)`));
+          } else {
+            console.log(chalk.green(`  ✓ Already a member of workspace: ${chalk.cyan(wsConfig.name)}`));
+          }
+        } catch (e) {
+          console.log(chalk.yellow(`  ⚠ Failed to join workspace: ${(e as Error).message}`));
+        }
+      } else {
+        // CREATE: new workspace file with self as first member
+        try {
+          const currentName = path.basename(cwd);
+          const wsDir = path.dirname(wsFilePath);
+          const relPath = './' + path.relative(wsDir, cwd);
+          const role = detectProjectRole(currentName, cwd);
+          const wsConfig = {
+            version: '1.0',
+            name: options.workspace,
+            members: [{ name: currentName, path: relPath, ...(role && { role }) }],
+          };
+          fs.mkdirSync(path.dirname(wsFilePath), { recursive: true });
+          fs.writeFileSync(
+            wsFilePath,
+            yaml.dump(wsConfig, { indent: 2, lineWidth: 120, noRefs: true, sortKeys: false, quotingType: '"' }),
+            'utf8'
+          );
+          console.log(chalk.green(`  ✓ Created workspace: ${chalk.cyan(options.workspace)} at ${chalk.gray(path.relative(cwd, wsFilePath))}`));
+        } catch (e) {
+          console.log(chalk.yellow(`  ⚠ Failed to create workspace: ${(e as Error).message}`));
+        }
+      }
+
+      // Update local config.yaml with workspace field
+      try {
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = yaml.load(configContent) as Record<string, unknown>;
+        const relWsPath = path.relative(cwd, wsFilePath);
+        if (config.workspace !== relWsPath) {
+          if (config.workspace) {
+            // Replace existing workspace field
+            const updated = configContent.replace(
+              /^workspace:\s*.*$/m,
+              `workspace: "${relWsPath}"`
+            );
+            fs.writeFileSync(configPath, updated, 'utf8');
+          } else {
+            // Append workspace field
+            const updated = configContent.trimEnd() + `\nworkspace: "${relWsPath}"\n`;
+            fs.writeFileSync(configPath, updated, 'utf8');
+          }
+          console.log(chalk.green(`  ✓ Linked workspace in config.yaml`));
+        }
+      } catch {
+        // Non-fatal
+      }
+    } else if (fs.existsSync(configPath)) {
+      // No --workspace flag: existing auto-detect behavior
       try {
         const configContent = fs.readFileSync(configPath, 'utf8');
         const config = yaml.load(configContent) as Record<string, unknown>;
@@ -169,6 +262,28 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   } else {
     spinner.succeed(chalk.gray('Step 3/6: Skipped scan (--quick mode)'));
+  }
+
+  // Step 3b: Workspace reindex (if workspace configured)
+  {
+    const configPath = path.join(paradigmDir, 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      try {
+        const configForWs = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+        if (configForWs.workspace) {
+          spinner.start('Step 3b/6: Reindexing workspace members...');
+          try {
+            const { workspaceReindexCommand } = await import('./workspace/index.js');
+            await workspaceReindexCommand({ quiet: true });
+            spinner.succeed(chalk.green('Workspace members reindexed'));
+          } catch (e) {
+            spinner.warn(chalk.yellow(`Workspace reindex: ${(e as Error).message}`));
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
   }
 
   // Ensure .paradigm/lore/ directory exists
@@ -253,6 +368,21 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.cursor/hooks/', desc: 'Cursor enforcement hooks', isDir: true, optional: true },
   ];
 
+  // Add workspace file if it was configured
+  const configPathForSummary = path.join(paradigmDir, 'config.yaml');
+  if (fs.existsSync(configPathForSummary)) {
+    try {
+      const cfg = yaml.load(fs.readFileSync(configPathForSummary, 'utf8')) as Record<string, unknown>;
+      if (typeof cfg.workspace === 'string') {
+        const wsAbsPath = path.resolve(cwd, cfg.workspace);
+        const wsRelPath = path.relative(cwd, wsAbsPath);
+        files.push({ path: wsRelPath, desc: 'Multi-project workspace', optional: true });
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
   for (const file of files) {
     const fullPath = path.join(cwd, file.path);
     if (fs.existsSync(fullPath)) {
@@ -274,10 +404,17 @@ export async function shiftCommand(options: ShiftOptions = {}) {
 
   console.log(chalk.white('  Next steps:'));
   console.log(chalk.gray('  ─────────────────────────────────────────────────'));
-  console.log(chalk.white('  1. ') + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
-  console.log(chalk.white('  2. ') + chalk.gray('Create ') + chalk.cyan('portal.yaml') + chalk.gray(' if you have authorization'));
-  console.log(chalk.white('  3. ') + chalk.gray('Add ') + chalk.cyan('.purpose') + chalk.gray(' files to feature directories'));
-  console.log(chalk.white('  4. ') + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
+
+  // Show workspace-specific next steps if configured
+  let nextStep = 1;
+  if (options.workspace) {
+    console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Run ') + chalk.cyan(`paradigm shift --workspace "${options.workspace}"`) + chalk.gray(' in sibling projects'));
+  }
+
+  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
+  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Create ') + chalk.cyan('portal.yaml') + chalk.gray(' if you have authorization'));
+  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Add ') + chalk.cyan('.purpose') + chalk.gray(' files to feature directories'));
+  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
   console.log('');
 
   tracker.success('Paradigm shift complete', { project: projectName });

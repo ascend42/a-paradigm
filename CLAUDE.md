@@ -395,6 +395,13 @@ Paradigm supports multi-project workspaces via `.paradigm-workspace` files.
 
 ### Setup
 
+1. In your first project: `paradigm shift --workspace "workspace-name"`
+2. In each additional project: `paradigm shift --workspace "workspace-name"`
+
+That's it — shift creates the workspace file, adds each project as a member,
+configures the local config.yaml link, and reindexes all members.
+
+**Manual alternative** (if needed):
 1. Create workspace: `paradigm workspace init` in the parent directory
 2. In each project's `.paradigm/config.yaml`, add: `workspace: "../.paradigm-workspace"`
 3. Run `paradigm workspace reindex` to build all indices
