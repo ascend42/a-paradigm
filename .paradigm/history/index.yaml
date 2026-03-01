@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-02-26T17:08:10.314Z'
+generated: '2026-03-01T02:45:38.661Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1994,12 +1994,25 @@ by_symbol:
       agent: []
   '#university':
     symbol: '#university'
-    total_changes: 7
-    last_modified: '2026-02-26T17:05:41Z'
+    total_changes: 8
+    last_modified: '2026-02-27T06:04:33Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_50
+      - id: h0082
+        ts: '2026-02-27T06:04:33Z'
+        type: implement
+        symbols:
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: f0c3606e9b523190ed9becf9504c6be95f4d240d
+        intent: feature
+        files:
+          - docs/specs/university-revamp.md
+        description: 'docs(#university): spec for philosophy-first revamp'
+      - &ref_52
         id: h0071
         ts: '2026-02-26T17:05:41Z'
         type: implement
@@ -2050,7 +2063,6 @@ by_symbol:
           - packages/university/src/content/plsat/v3.0.json
         description: 'chore(#release): bump paradigm 3.2.0, paradigm-mcp 3.2.0, sentinel 0.3.0, university 3.2.0'
       - *ref_24
-      - *ref_20
     contributors:
       human:
         - ascend
@@ -2599,12 +2611,47 @@ by_symbol:
       agent: []
   '#sentinel':
     symbol: '#sentinel'
-    total_changes: 4
-    last_modified: '2026-02-26T06:04:40Z'
+    total_changes: 6
+    last_modified: '2026-02-27T06:03:42Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_49
+      - &ref_53
+        id: h0081
+        ts: '2026-02-27T06:03:42Z'
+        type: implement
+        symbols:
+          - '#persona-runner'
+          - '#personas'
+          - '#sentinel'
+        author:
+          type: human
+          id: ascend
+        commit: fd9baa94ed15676f49c7d126dada42f42270c04b
+        intent: feature
+        files:
+          - docs/specs/personas.md
+          - packages/paradigm-mcp/src/tools/personas.ts
+          - packages/paradigm-mcp/src/types/personas.ts
+          - packages/paradigm-mcp/src/utils/personas-loader.ts
+          - packages/paradigm-mcp/src/utils/personas-runner.ts
+        description: 'feat(#personas): Sentinel assertion engine + philosophy reframe'
+      - &ref_54
+        id: h0079
+        ts: '2026-02-27T05:04:07Z'
+        type: implement
+        symbols:
+          - '#personas'
+          - '#sentinel'
+        author:
+          type: human
+          id: ascend
+        commit: 77da5c38d89847d649ab62247756312f72d9bfad
+        intent: feature
+        files:
+          - packages/paradigm-mcp/src/tools/personas.ts
+        description: 'feat(#personas): phase 4 — Sentinel event emission'
+      - &ref_51
         id: h0068
         ts: '2026-02-26T06:04:40Z'
         type: implement
@@ -2623,7 +2670,6 @@ by_symbol:
         description: 'feat(#sentinel): schema-driven observability — application-agnostic event platform'
       - *ref_23
       - *ref_25
-      - *ref_17
     contributors:
       human:
         - ascend
@@ -3000,11 +3046,52 @@ by_symbol:
       agent: []
   '#aspect-graph':
     symbol: '#aspect-graph'
-    total_changes: 5
-    last_modified: '2026-02-26T01:16:57Z'
+    total_changes: 7
+    last_modified: '2026-02-26T18:27:05Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_48
+        id: h0073
+        ts: '2026-02-26T18:27:05Z'
+        type: implement
+        symbols:
+          - '#aspect-graph'
+          - ~aspect-graph-derived-artifact
+        author:
+          type: human
+          id: ascend
+        commit: b8fc9ba7ea8ba93a60ae41af23751a2739ab343b
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/paradigm-mcp/src/tools/aspect-graph.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/types/aspect-graph.ts
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+        description: 'feat(#aspect-graph): smart drift detection phase 2 — git-aware line mapping'
+      - &ref_49
+        id: h0072
+        ts: '2026-02-26T18:21:06Z'
+        type: implement
+        symbols:
+          - '#aspect-graph'
+          - ~aspect-graph-derived-artifact
+          - ~three-tier-search
+        author:
+          type: human
+          id: ascend
+        commit: 0434dd456f47336e8e8259d401906766210a9437
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - docs/aspect-ripple-audit-guide.md
+          - docs/specs/smart-drift-detection.md
+          - packages/paradigm-mcp/src/tools/aspect-graph.ts
+          - packages/paradigm-mcp/src/types/aspect-graph.ts
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+        description: 'feat(#aspect-graph): smart drift detection phase 1 — normalized hashing'
       - id: h0063
         ts: '2026-02-26T01:16:57Z'
         type: implement
@@ -3041,7 +3128,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#aspect-graph): Phase 5+6 — polish, version bumps, changelog'
-      - &ref_45
+      - &ref_44
         id: h0061
         ts: '2026-02-26T00:45:47Z'
         type: implement
@@ -3060,28 +3147,19 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/index.ts
           - packages/paradigm-mcp/src/utils/aspect-suggest.ts
         description: 'feat(#aspect-graph): Phase 3+4 — MCP tools and auto-suggest engine'
-      - &ref_46
-        id: h0060
-        ts: '2026-02-26T00:40:39Z'
-        type: implement
-        symbols:
-          - '#aspect-graph'
-          - '#reindex'
-          - ~aspect-definition
-        author:
-          type: human
-          id: ascend
-        commit: d60d41154df8a05f9a5585763771299bfb114c6e
-        intent: feature
-        files:
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - packages/paradigm-mcp/src/tools/reindex.ts
-          - packages/premise/core/src/aggregator.ts
-          - packages/purpose/core/dist/index.d.ts
-          - packages/purpose/core/src/types.ts
-        description: 'feat(#aspect-graph): Phase 2 — materialization integration'
-      - &ref_44
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#aspect-lore-bridge':
+    symbol: '#aspect-lore-bridge'
+    total_changes: 2
+    last_modified: '2026-02-26T00:47:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_43
+      - &ref_45
         id: h0059
         ts: '2026-02-26T00:30:48Z'
         type: implement
@@ -3109,19 +3187,6 @@ by_symbol:
       human:
         - ascend
       agent: []
-  '#aspect-lore-bridge':
-    symbol: '#aspect-lore-bridge'
-    total_changes: 2
-    last_modified: '2026-02-26T00:47:30Z'
-    stability_score: 1
-    fragility: low
-    recent:
-      - *ref_43
-      - *ref_44
-    contributors:
-      human:
-        - ascend
-      agent: []
   '#aspect-search':
     symbol: '#aspect-search'
     total_changes: 3
@@ -3130,20 +3195,56 @@ by_symbol:
     fragility: low
     recent:
       - *ref_43
-      - *ref_45
       - *ref_44
+      - *ref_45
     contributors:
       human:
         - ascend
       agent: []
   '#reindex':
     symbol: '#reindex'
-    total_changes: 1
-    last_modified: '2026-02-26T00:40:39Z'
+    total_changes: 2
+    last_modified: '2026-02-27T04:59:39Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_46
+      - &ref_55
+        id: h0077
+        ts: '2026-02-27T04:59:39Z'
+        type: implement
+        symbols:
+          - '#personas'
+          - '#reindex'
+          - '#ripple'
+        author:
+          type: human
+          id: ascend
+        commit: d7fa7abc92dcc368022ef8d0ad2e732b1f6f011b
+        intent: feature
+        files:
+          - packages/paradigm-mcp/src/tools/index.ts
+        description: 'feat(#personas): phase 2 — ripple integration + reindex'
+      - &ref_46
+        id: h0060
+        ts: '2026-02-26T00:40:39Z'
+        type: implement
+        symbols:
+          - '#aspect-graph'
+          - '#reindex'
+          - ~aspect-definition
+        author:
+          type: human
+          id: ascend
+        commit: d60d41154df8a05f9a5585763771299bfb114c6e
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/premise/core/src/aggregator.ts
+          - packages/purpose/core/dist/index.d.ts
+          - packages/purpose/core/src/types.ts
+        description: 'feat(#aspect-graph): Phase 2 — materialization integration'
     contributors:
       human:
         - ascend
@@ -3168,7 +3269,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_43
-      - *ref_45
+      - *ref_44
     contributors:
       human:
         - ascend
@@ -3282,7 +3383,7 @@ by_symbol:
     recent:
       - *ref_33
       - *ref_47
-      - &ref_48
+      - &ref_50
         id: h0065
         ts: '2026-02-26T02:22:02Z'
         type: implement
@@ -3308,12 +3409,14 @@ by_symbol:
       agent: []
   ~aspect-graph-derived-artifact:
     symbol: ~aspect-graph-derived-artifact
-    total_changes: 1
-    last_modified: '2026-02-26T02:22:02Z'
+    total_changes: 3
+    last_modified: '2026-02-26T18:27:05Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_48
+      - *ref_49
+      - *ref_50
     contributors:
       human:
         - ascend
@@ -3361,7 +3464,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_49
+      - *ref_51
     contributors:
       human:
         - ascend
@@ -3373,7 +3476,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_49
+      - *ref_51
     contributors:
       human:
         - ascend
@@ -3385,7 +3488,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_49
+      - *ref_51
     contributors:
       human:
         - ascend
@@ -3397,7 +3500,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_49
+      - *ref_51
     contributors:
       human:
         - ascend
@@ -3409,7 +3512,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_50
+      - *ref_52
     contributors:
       human:
         - ascend
@@ -3421,7 +3524,335 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_50
+      - *ref_52
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~three-tier-search:
+    symbol: ~three-tier-search
+    total_changes: 1
+    last_modified: '2026-02-26T18:21:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_49
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#personas':
+    symbol: '#personas'
+    total_changes: 8
+    last_modified: '2026-02-27T06:03:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_53
+      - id: h0080
+        ts: '2026-02-27T05:04:41Z'
+        type: implement
+        symbols:
+          - '#personas'
+        author:
+          type: human
+          id: ascend
+        commit: fafd73d14f04c0463e558adab9829f823456df69
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'chore: bump paradigm + paradigm-mcp + plugin to 3.9.0 + changelog'
+      - *ref_54
+      - &ref_58
+        id: h0078
+        ts: '2026-02-27T05:02:05Z'
+        type: implement
+        symbols:
+          - '#persona-runner'
+          - '#personas'
+        author:
+          type: human
+          id: ascend
+        commit: 60331eced1e538e7266fe87351522586f1f07250
+        intent: feature
+        files:
+          - packages/paradigm-mcp/src/tools/personas.ts
+          - packages/paradigm-mcp/src/utils/personas-runner.ts
+        description: 'feat(#personas): phase 3 — execution engine'
+      - *ref_55
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^authenticated:
+    symbol: ^authenticated
+    total_changes: 1
+    last_modified: '2026-02-27T04:46:28Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_56
+        id: h0074
+        ts: '2026-02-27T04:46:28Z'
+        type: implement
+        symbols:
+          - '#personas'
+          - ^authenticated
+          - $persona-journey
+        author:
+          type: human
+          id: ascend
+        commit: d97e79604acb63866aa02a91037d7b64290e2293
+        intent: feature
+        files:
+          - docs/specs/personas.md
+        description: 'docs(#personas): add personas spec — actor-driven journey testing'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $persona-journey:
+    symbol: $persona-journey
+    total_changes: 1
+    last_modified: '2026-02-27T04:46:28Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_56
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#persona-loader':
+    symbol: '#persona-loader'
+    total_changes: 1
+    last_modified: '2026-02-27T04:58:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_57
+        id: h0076
+        ts: '2026-02-27T04:58:44Z'
+        type: implement
+        symbols:
+          - '#persona-loader'
+          - '#persona-tools'
+          - '#personas'
+        author:
+          type: human
+          id: ascend
+        commit: 5935d4dc274c90d51f4179da74c59d45f5f23a2b
+        intent: feature
+        files:
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/personas.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/types/index.ts
+          - packages/paradigm-mcp/src/types/personas.ts
+          - packages/paradigm-mcp/src/utils/personas-loader.ts
+        description: 'feat(#personas): phase 1 — schema, CRUD, validation, index'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#persona-tools':
+    symbol: '#persona-tools'
+    total_changes: 1
+    last_modified: '2026-02-27T04:58:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_57
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ripple':
+    symbol: '#ripple'
+    total_changes: 1
+    last_modified: '2026-02-27T04:59:39Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_55
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#persona-runner':
+    symbol: '#persona-runner'
+    total_changes: 2
+    last_modified: '2026-02-27T06:03:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_53
+      - *ref_58
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#index-loader':
+    symbol: '#index-loader'
+    total_changes: 1
+    last_modified: '2026-03-01T00:20:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_59
+        id: h0083
+        ts: '2026-03-01T00:20:54Z'
+        type: implement
+        symbols:
+          - '#index-loader'
+          - '#tool-handlers'
+          - '#workspace-loader'
+          - '#workspaces'
+        author:
+          type: human
+          id: ascend
+        commit: 40b7aff6839bcac604b92f3e6a8487942359ab07
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/navigate.ts
+          - packages/paradigm-mcp/src/types/index.ts
+          - packages/paradigm-mcp/src/utils/index-loader.ts
+          - packages/paradigm-mcp/src/utils/workspace-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/commands/workspace/index.ts
+          - packages/paradigm/src/core/paradigm-config.ts
+          - packages/paradigm/src/index.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#workspaces): multi-project workspace support'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#tool-handlers':
+    symbol: '#tool-handlers'
+    total_changes: 1
+    last_modified: '2026-03-01T00:20:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_59
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#workspace-loader':
+    symbol: '#workspace-loader'
+    total_changes: 1
+    last_modified: '2026-03-01T00:20:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_59
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#workspaces':
+    symbol: '#workspaces'
+    total_changes: 1
+    last_modified: '2026-03-01T00:20:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_59
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#drift-check':
+    symbol: '#drift-check'
+    total_changes: 1
+    last_modified: '2026-03-01T02:30:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_60
+        id: h0084
+        ts: '2026-03-01T02:30:59Z'
+        type: implement
+        symbols:
+          - '#drift-check'
+          - '#enforcement'
+          - '#paradigm-common'
+          - '#portal-check'
+        author:
+          type: human
+          id: ascend
+        commit: 9b910fe81e4a19b28e38e3d06afe78958e90e8be
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/doctor.ts
+          - packages/paradigm/src/commands/drift.ts
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+          - packages/paradigm/src/commands/portal-check.ts
+          - packages/paradigm/src/index.ts
+          - packages/paradigm/src/sql.js.d.ts
+          - plugins/paradigm-cursor/scripts/paradigm-common.sh
+          - plugins/paradigm-cursor/scripts/paradigm-stop.sh
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/scripts/paradigm-common.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'feat(#enforcement): hook unification + 3 new compliance checks'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#enforcement':
+    symbol: '#enforcement'
+    total_changes: 1
+    last_modified: '2026-03-01T02:30:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_60
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-common':
+    symbol: '#paradigm-common'
+    total_changes: 1
+    last_modified: '2026-03-01T02:30:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_60
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#portal-check':
+    symbol: '#portal-check'
+    total_changes: 1
+    last_modified: '2026-03-01T02:30:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_60
     contributors:
       human:
         - ascend
