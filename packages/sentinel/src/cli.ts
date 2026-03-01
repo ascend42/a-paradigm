@@ -4,7 +4,7 @@
  * Standalone command-line tool for semantic error monitoring.
  *
  * Usage:
- *   sentinel              Launch dashboard
+ *   sentinel defend        Launch dashboard
  *   sentinel init          Initialize in current project
  *   sentinel triage list   List incidents
  *   sentinel triage show   Show incident details
@@ -27,7 +27,7 @@ program
 
 // Default: launch dashboard
 program
-  .command('dashboard', { isDefault: true })
+  .command('defend', { isDefault: true })
   .description('Launch the Sentinel dashboard')
   .option('-p, --port <port>', 'Port number', '3838')
   .option('--no-open', "Don't open browser")

@@ -1600,9 +1600,13 @@ habitsCmd
     await habitsListCommand({});
   });
 
-// paradigm sentinel - Launch the unified codebase intelligence UI
-program
-  .command('sentinel [path]')
+// paradigm sentinel defend - Launch the unified codebase intelligence UI
+const sentinelCmd = program
+  .command('sentinel')
+  .description('Sentinel — semantic error monitoring');
+
+sentinelCmd
+  .command('defend [path]', { isDefault: true })
   .description('Launch the Sentinel UI - unified codebase intelligence visualizer')
   .option('-p, --port <port>', 'Port to run on', '3838')
   .option('--no-open', "Don't open browser automatically")
