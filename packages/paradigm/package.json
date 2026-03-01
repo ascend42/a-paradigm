@@ -17,7 +17,8 @@
     "lore-ui/dist"
   ],
   "scripts": {
-    "build": "node scripts/generate-hooks.mjs && tsup && npm run build:university-assets",
+    "build": "node scripts/generate-hooks.mjs && tsup && npm run build:sentinel-assets && npm run build:university-assets",
+    "build:sentinel-assets": "rm -rf dist/sentinel-ui && cp -r ../sentinel/ui/dist dist/sentinel-ui",
     "check:hooks": "node scripts/generate-hooks.mjs --check",
     "build:lore-ui": "cd lore-ui && npx vite build",
     "build:university-assets": "rm -rf dist/university-ui dist/university-content && cp -r ../university/ui/dist dist/university-ui && cp -r ../university/src/content dist/university-content",

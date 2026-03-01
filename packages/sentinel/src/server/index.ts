@@ -147,11 +147,11 @@ export function createApp(options: ServerOptions & {
   });
 
   // Serve static UI files in production
-  // Try multiple paths: standalone sentinel package, then bundled-into-paradigm
+  // Try multiple paths: bundled-into-paradigm first, then standalone sentinel
   const uiCandidates = [
-    path.join(__dirname, '..', '..', 'ui', 'dist'),                    // standalone: sentinel/dist/ → sentinel/ui/dist
-    path.join(__dirname, '..', '..', 'sentinel', 'ui', 'dist'),        // bundled monorepo: paradigm/dist/ → sentinel/ui/dist
-    path.join(__dirname, '..', 'node_modules', '@a-company', 'sentinel', 'ui', 'dist'), // npm installed: paradigm/ → node_modules/@a-company/sentinel/ui/dist
+    path.join(__dirname, 'sentinel-ui'),                               // bundled: paradigm/dist/sentinel-ui/ (copied during build)
+    path.join(__dirname, '..', '..', 'ui', 'dist'),                    // standalone: sentinel/dist/server/ → sentinel/ui/dist
+    path.join(__dirname, '..', 'ui', 'dist'),                          // standalone flat: sentinel/dist/ → sentinel/ui/dist
   ];
   const uiDistPath = uiCandidates.find(p => fs.existsSync(p));
   if (uiDistPath) {
