@@ -38,6 +38,8 @@ export interface ParadigmConfig {
   scan?: ScanSettings;
   logging?: LoggingConfig;
   limits?: LimitsConfig;
+  /** Relative path to .paradigm-workspace file for multi-project workspaces */
+  workspace?: string;
 }
 
 export interface LoggingConfig {

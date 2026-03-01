@@ -48,6 +48,7 @@ description: |
     - "#PurposePortalTools"
     - "#OrchestrationTools"
     - "#AspectGraphTools"
+    - "#WorkspaceLoader"
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
@@ -203,6 +204,14 @@ description: |
   tags: [performance]
   anchors:
     - src/utils/tool-cache.ts:1-69
+
+#WorkspaceLoader:
+  description: Multi-project workspace support. Loads .paradigm-workspace files, reads sibling scan-index.json, filters by exports, provides cross-project search/ripple helpers.
+  tags: [feature, workspace]
+  anchors:
+    - src/utils/workspace-loader.ts:1-430
+  components:
+    - "#IndexLoader"
 
 #AspectGraph:
   description: SQLite graph engine for the Aspect Graph system (v3.5). Provides materialization from SymbolEntry[], weighted BFS ripple traversal, heatmap tracking, and drift detection for code anchors. Database stored at .paradigm/aspect-graph.db.

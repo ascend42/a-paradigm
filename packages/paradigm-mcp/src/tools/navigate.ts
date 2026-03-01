@@ -15,6 +15,7 @@ import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/na
 import { loadNavigatorContext, navigate, getSkipPatterns } from '../utils/navigator-loader.js';
 import { getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
 import { toolCache } from '../utils/tool-cache.js';
+import { searchWorkspace } from '../utils/workspace-loader.js';
 
 /**
  * Navigate tool definition
@@ -173,6 +174,35 @@ export async function handleNavigateTool(
       ];
     } else if (result.paths.length > 5) {
       response.tip = response.tip || 'Many paths returned. Start with suggested_order for efficient exploration.';
+    }
+
+    // Workspace awareness: search siblings when relevant
+    if (ctx.workspace) {
+      if (input.intent === 'find' && input.target && result.paths.length === 0) {
+        // Fallback: symbol not found locally, search workspace siblings
+        const wsResults = searchWorkspace(ctx.workspace, input.target);
+        if (wsResults.length > 0) {
+          response.workspaceResults = wsResults.slice(0, 5).map(r => ({
+            symbol: r.symbol,
+            type: r.type,
+            description: r.description,
+            project: r.project,
+          }));
+          response.note = `Not found locally. Found in workspace siblings.`;
+          response.recovery = undefined;
+        }
+      } else if (input.intent === 'context' && input.task) {
+        // Include relevant sibling symbols for task context
+        const wsResults = searchWorkspace(ctx.workspace, input.task);
+        if (wsResults.length > 0) {
+          response.workspaceContext = wsResults.slice(0, 5).map(r => ({
+            symbol: r.symbol,
+            type: r.type,
+            description: r.description,
+            project: r.project,
+          }));
+        }
+      }
     }
 
     return JSON.stringify(response, null, 2);

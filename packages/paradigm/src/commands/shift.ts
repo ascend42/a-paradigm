@@ -106,6 +106,37 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Check for workspace file in parent directories
+  {
+    const configPath = path.join(paradigmDir, 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      try {
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const config = yaml.load(configContent) as Record<string, unknown>;
+        if (!config.workspace) {
+          // Search parent directories for .paradigm-workspace
+          let searchDir = path.dirname(cwd);
+          for (let i = 0; i < 3; i++) {
+            const wsCandidate = path.join(searchDir, '.paradigm-workspace');
+            if (fs.existsSync(wsCandidate)) {
+              const relPath = path.relative(cwd, wsCandidate);
+              // Add workspace field to config.yaml
+              const updated = configContent.trimEnd() + `\nworkspace: "${relPath}"\n`;
+              fs.writeFileSync(configPath, updated, 'utf8');
+              console.log(chalk.green(`  ✓ Found workspace: ${chalk.cyan(relPath)} (added to config.yaml)`));
+              break;
+            }
+            const parent = path.dirname(searchDir);
+            if (parent === searchDir) break;
+            searchDir = parent;
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
+
   // Step 2: Team init (if needed)
   // Always run interactive model configuration — it's a fun step in the setup process
   const teamConfigured = agentsConfigured(cwd);

@@ -576,6 +576,46 @@ pluginCmd
     await pluginCheckCommand({});
   });
 
+// paradigm workspace <subcommand>
+const workspaceCmd = program
+  .command('workspace')
+  .description('Multi-project workspace commands');
+
+workspaceCmd
+  .command('init')
+  .description('Create a .paradigm-workspace file from sibling projects')
+  .option('-n, --name <name>', 'Workspace name (default: directory name)')
+  .option('-f, --force', 'Overwrite existing workspace file')
+  .action(async (options) => {
+    const { workspaceInitCommand } = await import('./commands/workspace/index.js');
+    await workspaceInitCommand(options);
+  });
+
+workspaceCmd
+  .command('status')
+  .description('Show workspace member status and symbol counts')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { workspaceStatusCommand } = await import('./commands/workspace/index.js');
+    await workspaceStatusCommand(options);
+  });
+
+workspaceCmd
+  .command('reindex')
+  .description('Rebuild scan-index.json for all workspace members')
+  .option('-q, --quiet', 'Suppress progress output')
+  .action(async (options) => {
+    const { workspaceReindexCommand } = await import('./commands/workspace/index.js');
+    await workspaceReindexCommand(options);
+  });
+
+// Default workspace action (show status)
+workspaceCmd
+  .action(async () => {
+    const { workspaceStatusCommand } = await import('./commands/workspace/index.js');
+    await workspaceStatusCommand({});
+  });
+
 // paradigm doctor
 program
   .command('doctor')

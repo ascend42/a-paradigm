@@ -3,6 +3,7 @@
  */
 
 import * as os from 'os';
+import * as path from 'path';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   ListToolsRequestSchema,
@@ -44,6 +45,7 @@ import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
 import { getAffectedPersonas } from '../utils/personas-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
+import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -133,6 +135,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                   type: 'boolean',
                   description: 'Enable fuzzy matching for typos (default: true)',
                 },
+                includeWorkspace: {
+                  type: 'boolean',
+                  description: 'Also search sibling workspace projects (default: false). Requires workspace configured in config.yaml.',
+                },
               },
               required: ['query'],
             },
@@ -154,6 +160,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 depth: {
                   type: 'number',
                   description: 'How many levels of dependencies to analyze (default: 2, max: 5)',
+                },
+                includeWorkspace: {
+                  type: 'boolean',
+                  description: 'Also check sibling workspace projects for cross-project impact (default: false). Requires workspace configured in config.yaml.',
                 },
               },
               required: ['symbol'],
@@ -264,6 +274,19 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               destructiveHint: false,
             },
           },
+          // Workspace reindex tool
+          {
+            name: 'paradigm_workspace_reindex',
+            description: 'Rebuild scan-index.json for all workspace members. Requires workspace configured in config.yaml. Returns per-member symbol counts. ~200 tokens.',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+            },
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: true,
+            },
+          },
         ],
       };
     }
@@ -294,14 +317,15 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
       switch (name) {
         case 'paradigm_search': {
-          const { query, type, limit = 10, fuzzy = true } = args as {
+          const { query, type, limit = 10, fuzzy = true, includeWorkspace = false } = args as {
             query: string;
             type?: string;
             limit?: number;
             fuzzy?: boolean;
+            includeWorkspace?: boolean;
           };
 
-          const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}`;
+          const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}:${includeWorkspace}`;
           let results = await toolCache.getOrCompute(cacheKey, () => {
             let r = searchSymbols(ctx.index, query);
             if (type) {
@@ -352,6 +376,25 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }));
           }
 
+          // Include workspace results if requested
+          if (includeWorkspace && ctx.workspace) {
+            const workspaceResults = searchWorkspace(ctx.workspace, query);
+            const filtered = type
+              ? workspaceResults.filter(r => r.type === type)
+              : workspaceResults;
+
+            if (filtered.length > 0) {
+              response.workspaceResults = filtered.slice(0, limit).map(r => ({
+                symbol: r.symbol,
+                type: r.type,
+                description: r.description,
+                filePath: r.filePath,
+                project: r.project,
+              }));
+              response.workspaceCount = filtered.length;
+            }
+          }
+
           const text = JSON.stringify(response, null, 2);
 
           trackToolCall(text.length, name);
@@ -364,7 +407,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_ripple': {
-          const { symbol, depth = 2 } = args as { symbol: string; depth?: number };
+          const { symbol, depth = 2, includeWorkspace = false } = args as { symbol: string; depth?: number; includeWorkspace?: boolean };
           const entry = getSymbol(ctx.index, symbol);
 
           if (!entry) {
@@ -571,6 +614,31 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             // Persona check is non-fatal
           }
 
+          // Check for cross-project workspace impact
+          if (includeWorkspace && ctx.workspace) {
+            const wsRipple = rippleWorkspace(ctx.workspace, symbol);
+            if (wsRipple.length > 0) {
+              response.workspaceImpact = {
+                siblings: wsRipple.map(r => ({
+                  project: r.project,
+                  references: r.references.map(ref => ({
+                    symbol: ref.symbol,
+                    type: ref.type,
+                    description: ref.description,
+                  })),
+                })),
+              };
+              // Upgrade impact if cross-project references exist
+              const totalWsRefs = wsRipple.reduce((sum, r) => sum + r.references.length, 0);
+              if (totalWsRefs > 0 && impact === 'low') {
+                response.impact = 'medium';
+              }
+              if (totalWsRefs > 5) {
+                response.impact = 'high';
+              }
+            }
+          }
+
           const text = JSON.stringify(response, null, 2);
 
           trackToolCall(text.length, name);
@@ -733,7 +801,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const suggestions: Array<{ gate: string; reason: string; confidence: 'high' | 'medium' | 'low'; source?: string }> = [];
 
           // Learn from portal.yaml if available
-          const learnedPatterns: Array<{ route: string; gates: string[]; method?: string }> = [];
+          const learnedPatterns: Array<{ route: string; gates: string[]; method?: string; source?: string }> = [];
           if (ctx.gateConfig?.routes) {
             for (const [routePattern, routeConfig] of Object.entries(ctx.gateConfig.routes)) {
               if (routeConfig.gates) {
@@ -746,7 +814,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
-          // Find similar routes from portal.yaml and suggest their gates
+          // Learn from workspace sibling portal.yaml files
+          if (ctx.workspace) {
+            for (const [memberName, sibling] of ctx.workspace.siblingIndices) {
+              const siblingGateConfig = sibling.gateConfig as Record<string, unknown> | null;
+              if (siblingGateConfig?.routes) {
+                for (const [routePattern, routeConfig] of Object.entries(siblingGateConfig.routes as Record<string, unknown>)) {
+                  const rc = routeConfig as { gates?: string[]; method?: string } | string[];
+                  const gatesList = Array.isArray(rc) ? rc : rc?.gates;
+                  if (gatesList) {
+                    learnedPatterns.push({
+                      route: routePattern,
+                      gates: gatesList as string[],
+                      method: Array.isArray(rc) ? undefined : rc?.method,
+                      source: memberName,
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          // Find similar routes from portal.yaml (local + workspace siblings) and suggest their gates
           for (const pattern of learnedPatterns) {
             const similarity = calculateRouteSimilarity(route as string, pattern.route);
             if (similarity >= 0.6) {
@@ -755,11 +844,14 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 for (const gateName of pattern.gates) {
                   const gate = gates.find(g => g.symbol === gateName || g.symbol === `^${gateName}`);
                   if (gate && !suggestions.find(s => s.gate === gate.symbol)) {
+                    const patternSource = pattern.source
+                      ? `${pattern.source}/portal.yaml`
+                      : 'portal.yaml';
                     suggestions.push({
                       gate: gate.symbol,
                       reason: `Similar route "${pattern.route}" uses this gate`,
                       confidence: similarity >= 0.8 ? 'high' : 'medium',
-                      source: 'portal.yaml',
+                      source: patternSource,
                     });
                   }
                 }
@@ -933,6 +1025,49 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const pluginText = lines.join('\n');
           trackToolCall(pluginText.length, name);
           return { content: [{ type: 'text', text: pluginText }] };
+        }
+
+        case 'paradigm_workspace_reindex': {
+          if (!ctx.workspace) {
+            const noWsText = JSON.stringify({
+              error: 'No workspace configured',
+              suggestion: 'Add a "workspace" field to .paradigm/config.yaml pointing to your .paradigm-workspace file, then run `paradigm workspace init` to create one.',
+            }, null, 2);
+            trackToolCall(noWsText.length, name);
+            return { content: [{ type: 'text', text: noWsText }] };
+          }
+
+          const { rebuildStaticFiles } = await import('./reindex.js');
+          const memberResults: Array<{ name: string; symbolCount: number; status: string }> = [];
+
+          for (const member of ctx.workspace.config.members) {
+            const memberAbsPath = path.resolve(path.dirname(ctx.workspace.workspacePath), member.path);
+            try {
+              const result = await rebuildStaticFiles(memberAbsPath);
+              memberResults.push({
+                name: member.name,
+                symbolCount: result.symbolCount,
+                status: 'ok',
+              });
+            } catch (e) {
+              memberResults.push({
+                name: member.name,
+                symbolCount: 0,
+                status: `error: ${(e as Error).message}`,
+              });
+            }
+          }
+
+          const wsReindexText = JSON.stringify({
+            action: 'workspace_reindex',
+            workspace: ctx.workspace.config.name,
+            members: memberResults,
+            totalSymbols: memberResults.reduce((s, m) => s + m.symbolCount, 0),
+          }, null, 2);
+
+          trackToolCall(wsReindexText.length, name);
+          toolCache.clear();
+          return { content: [{ type: 'text', text: wsReindexText }] };
         }
 
         default: {

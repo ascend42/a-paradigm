@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -18,6 +19,7 @@ import { parseGateConfig, type ParsedGateConfig } from '@a-company/portal-core';
 import type { WisdomContext, HistoryContext } from '../types/index.js';
 import { loadWisdomContext } from './wisdom-loader.js';
 import { loadHistoryContext } from './history-loader.js';
+import { loadWorkspaceContext, type WorkspaceContext } from './workspace-loader.js';
 
 /** TTL for cached index (30 seconds) */
 const INDEX_CACHE_TTL_MS = 30 * 1000;
@@ -37,6 +39,8 @@ export interface ProjectContext {
   wisdom: WisdomContext | null;
   /** History context (implementation log, validation, fragility) */
   history: HistoryContext | null;
+  /** Workspace context for multi-project awareness (if workspace configured) */
+  workspace?: WorkspaceContext | null;
   /** Timestamp when context was loaded (for cache invalidation) */
   _loadedAt?: number;
 }
@@ -79,6 +83,21 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
     }
   }
 
+  // Try to load workspace config if present in .paradigm/config.yaml
+  let workspace: WorkspaceContext | null = null;
+  const configPath = path.join(absoluteRoot, '.paradigm', 'config.yaml');
+  if (fs.existsSync(configPath)) {
+    try {
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const config = yaml.load(configContent) as Record<string, unknown>;
+      if (config && typeof config.workspace === 'string') {
+        workspace = loadWorkspaceContext(absoluteRoot, config.workspace);
+      }
+    } catch {
+      // Config read failure is non-fatal for workspace loading
+    }
+  }
+
   return {
     rootDir: absoluteRoot,
     index,
@@ -87,6 +106,7 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
     projectName,
     wisdom: null, // Loaded lazily by wisdom-loader
     history: null, // Loaded lazily by history-loader
+    workspace,
     _loadedAt: Date.now(),
   };
 }

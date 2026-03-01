@@ -239,6 +239,9 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Recording reflections** | `paradigm_assessment_record` for arc-based insights |
 | **Reviewing progress** | `paradigm_assessment_search` across arcs by symbol/tag |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
+| **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
+| **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
+| **Reindex workspace** | `paradigm_workspace_reindex` to rebuild all members |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -260,6 +263,7 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_task_list` | ~200 | Checking open tasks |
 | `paradigm_assessment_record` | ~150 | Adding a reflection entry |
 | `paradigm_assessment_search` | ~200 | Cross-arc search |
+| `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |
@@ -384,6 +388,56 @@ See `.paradigm/specs/logger.md` for full specification.
 - When tracking work items, use `paradigm_task_create` (stored in `.paradigm/tasks/`)
 - When recording reflections/decisions, use `paradigm_assessment_record` (stored in `.paradigm/assessments/`)
 - Always update references when renaming symbols
+
+## Workspaces (Multi-Project)
+
+Paradigm supports multi-project workspaces via `.paradigm-workspace` files.
+
+### Setup
+
+1. Create workspace: `paradigm workspace init` in the parent directory
+2. In each project's `.paradigm/config.yaml`, add: `workspace: "../.paradigm-workspace"`
+3. Run `paradigm workspace reindex` to build all indices
+
+### .paradigm-workspace Format
+
+```yaml
+version: "1.0"
+name: my-workspace
+members:
+  - name: backend
+    path: ./backend
+    role: api
+    exports: ["#*-api", "^*"]  # Only expose API symbols and gates
+  - name: frontend
+    path: ./frontend
+    role: client
+```
+
+### Cross-Project MCP Tools
+
+| Tool | Workspace Parameter | Behavior |
+|------|-------------------|----------|
+| `paradigm_search` | `includeWorkspace: true` | Search sibling indices, results prefixed with `{member}/` |
+| `paradigm_ripple` | `includeWorkspace: true` | Adds `workspaceImpact` section with cross-project references |
+| `paradigm_navigate` | Automatic | Falls back to siblings when symbol not found locally |
+| `paradigm_gates_for_route` | Automatic | Learns gate patterns from sibling `portal.yaml` files |
+| `paradigm_workspace_reindex` | N/A | Reindex all workspace members |
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `paradigm workspace init` | Create `.paradigm-workspace` from sibling projects |
+| `paradigm workspace status` | Show member status and symbol counts |
+| `paradigm workspace reindex` | Rebuild indices for all members |
+
+### Key Design Rules
+
+- **`includeWorkspace` defaults to `false`** — workspace search is opt-in per query
+- **Read-only sibling access** — only reads `scan-index.json` + `portal.yaml`
+- **Namespace prefix** — `{memberName}/` only on cross-project symbols
+- **Graceful degradation** — missing files, indices, or YAML → warn and continue
 
 ## Multi-Agent Orchestration
 

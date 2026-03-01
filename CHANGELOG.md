@@ -5,6 +5,43 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] — 2026-02-28
+
+### Added
+
+#### Workspaces — Multi-Project Symbol Awareness (`@a-company/paradigm` 3.9.0 → 3.10.0, `@a-company/paradigm-mcp` 3.9.0 → 3.10.0)
+
+Cross-project symbol sharing via `.paradigm-workspace` files. Sibling projects can now see each other's symbols for ripple analysis, search, navigation, and gate awareness.
+
+**Phase 1 — File Format + Discovery:**
+- `.paradigm-workspace` YAML schema with version, name, and members (name, path, role, exports)
+- `workspace` field in `.paradigm/config.yaml` pointing to workspace file
+- Workspace loader reads sibling `scan-index.json` files (read-only)
+- Export filtering: members control visibility via glob patterns
+- Graceful degradation: missing files warn and continue
+
+**Phase 2 — Cross-Project Search + Ripple:**
+- `paradigm_search` gains `includeWorkspace` parameter — searches sibling indices with `{member}/` namespace prefix
+- `paradigm_ripple` gains `includeWorkspace` parameter — adds `workspaceImpact` section with cross-project references
+- Impact level auto-upgrades when cross-project references exist
+
+**Phase 3 — Navigation + Portal Awareness:**
+- `paradigm_navigate` with `find` intent falls back to workspace siblings when symbol not found locally
+- `paradigm_navigate` with `context` intent includes relevant sibling symbols
+- `paradigm_gates_for_route` learns gate patterns from sibling `portal.yaml` files
+
+**Phase 4 — CLI + Reindex:**
+- `paradigm workspace init` — discovers sibling projects, auto-detects roles, creates `.paradigm-workspace`
+- `paradigm workspace status` — shows member status, symbol counts, last indexed time
+- `paradigm workspace reindex` — runs `paradigm scan` in all member directories
+- `paradigm_workspace_reindex` MCP tool — reindex all members from AI assistant
+- `paradigm shift` auto-detects `.paradigm-workspace` in parent directories
+
+**Backward Compatibility:**
+- No `workspace` in config.yaml → all behavior identical to 3.9.0
+- `includeWorkspace` defaults to `false` — workspace search is opt-in per query
+- Missing workspace file, missing sibling index → warn and continue
+
 ## [3.9.0] — 2026-02-26
 
 ### Added
