@@ -39,8 +39,11 @@ out/
 # Paradigm ephemeral hook state
 **/.habits-blocking
 
+# Private docs (personal notes, keynotes, plans, case studies)
+/docs/private/
+
 # Generated docs site
-docs/site/
+/docs/site/
 
 # Rust build artifacts
 **/target/
@@ -142,9 +145,6 @@ $RECYCLE.BIN/
 
 # Private research
 /research/
-
-# Personal podcast content (local only)
-/docs/podcast/
 
 # Local planning and IDE settings
 /.plans/
