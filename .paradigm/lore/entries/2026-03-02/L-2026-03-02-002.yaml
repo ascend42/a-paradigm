@@ -1,0 +1,73 @@
+id: L-2026-03-02-002
+type: milestone
+timestamp: '2026-03-02T07:52:01.400Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Ship Protocols — repeatable implementation patterns for AI agents
+summary: 'Built the complete Protocols subsystem: 5 MCP tools (search, get, record, update, validate), protocol-loader with fuzzy search and freshness tracking, reindex/status/lore integration, 36 seed protocols covering all paradigm patterns, university content (PARA 301 lesson + 3 PLSAT questions), /protocol skill, and the spec. Also fixed the university UI version badge (was hardcoded to 0.1.0) and PLSAT question count mismatch (metadata said 90 but resolved count was 96). Recorded a reflective assessment on Paradigm''s evolution and future direction. Published as 3.16.1.'
+symbols_touched:
+  - '#protocols'
+  - '#protocol-loader'
+  - '#university'
+  - '#plsat'
+  - '#paradigm-mcp'
+  - '#reindex'
+  - '#lore'
+  - '#status'
+symbols_created:
+  - '#protocols'
+  - '#protocol-loader'
+files_created:
+  - packages/paradigm-mcp/src/utils/protocol-loader.ts
+  - packages/paradigm-mcp/src/tools/protocols.ts
+  - plugins/paradigm/skills/protocol/SKILL.md
+  - docs/specs/protocols.md
+  - .paradigm/protocols/add-mcp-tool.protocol
+  - .paradigm/protocols/add-skill.protocol
+  - .paradigm/protocols/add-spec.protocol
+  - .paradigm/protocols/add-cli-command.protocol
+  - .paradigm/protocols/record-lore.protocol
+  - .paradigm/protocols/update-changelog.protocol
+  - .paradigm/protocols/update-university-content.protocol
+files_modified:
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/tools/reindex.ts
+  - CLAUDE.md
+  - CHANGELOG.md
+  - packages/university/src/content/courses/para-301.json
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/ui/vite.config.ts
+lines_added: 2777
+lines_removed: 10
+commit: c604f19d
+decisions:
+  - id: D-protocol-extension
+    decision: Use .protocol file extension instead of .yaml for protocol files
+    rationale: Follows the .persona convention — semantic file extensions over generic ones, making protocol files immediately identifiable
+  - id: D-protocol-search-weights
+    decision: 'Fuzzy search with weighted scoring: triggers (3), tags (2), name/desc (1), notes (0.5)'
+    rationale: Trigger phrases are hand-crafted match targets so they deserve highest weight. Tags are curated. Name/desc are natural language. Notes are supplementary.
+  - id: D-freshness-model
+    decision: 'Three-state freshness: current, stale, broken'
+    rationale: Stale (exemplar modified since last_verified) is recoverable — the protocol likely still works. Broken (files missing) is not — the protocol cannot be followed. Current means validated.
+learnings:
+  - totalSlots in PLSAT JSON should reflect resolved question count (including passage sub-questions), not item array length
+  - Vite define values are build-time only — ui/dist must be rebuilt for changes to take effect, and prepublishOnly handles this during npm publish
+  - The university UI sub-package version (0.1.0) was never updated — reading parent package.json in vite.config.ts is the correct fix since the UI is an internal build artifact
+verification:
+  status: pass
+  details:
+    build: pass
+    json_validation: pass
+    version_badge: pass
+    plsat_count: pass
+tags:
+  - feature
+  - milestone
+  - protocols
+  - university
+  - bugfix
+  - release

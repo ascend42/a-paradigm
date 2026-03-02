@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-02T04:41:40.883Z'
+generated: '2026-03-02T07:49:50.002Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -252,7 +252,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_30
+      - &ref_28
         id: h0067
         ts: '2026-02-26T03:43:58Z'
         type: implement
@@ -288,7 +288,7 @@ by_symbol:
           - packages/purpose/core/.purpose
           - packages/sentinel/.purpose
         description: 'fix(#paradigm-mcp): paragon sweep — close all MCP tool gaps'
-      - &ref_21
+      - &ref_20
         id: h0038
         ts: '2026-02-23T18:47:21Z'
         type: implement
@@ -317,8 +317,7 @@ by_symbol:
           - packages/university/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#stop-hook): anchor path resolution + version bump to 3.1.2'
-      - &ref_23
-        id: h0033
+      - id: h0033
         ts: '2026-02-22T22:37:17Z'
         type: implement
         symbols:
@@ -566,7 +565,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_31
+      - &ref_29
         id: h0049
         ts: '2026-02-25T00:42:36Z'
         type: implement
@@ -1241,7 +1240,7 @@ by_symbol:
           - packages/paradigm/tsup.config.ts
           - packages/sentinel/src/cli.ts
         description: 'feat(#sentinel): bundle sentinel binaries into paradigm package'
-      - &ref_20
+      - &ref_27
         id: h0064
         ts: '2026-02-26T01:58:47Z'
         type: implement
@@ -1695,7 +1694,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_37
+      - &ref_35
         id: h0057
         ts: '2026-02-25T22:53:30Z'
         type: implement
@@ -1734,7 +1733,7 @@ by_symbol:
           - plugins/paradigm/skills/observe/SKILL.md
           - plugins/paradigm/skills/sentinel/SKILL.md
         description: 'feat(#sentinel-client): logger transport layer, SentinelTransport bridge, Rust tracing Layer, plugin updates'
-      - &ref_38
+      - &ref_36
         id: h0056
         ts: '2026-02-25T16:13:24Z'
         type: implement
@@ -1768,7 +1767,7 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs(#sentinel-server): add changelog for full observability platform'
-      - &ref_35
+      - &ref_33
         id: h0054
         ts: '2026-02-25T15:59:25Z'
         type: implement
@@ -1808,7 +1807,7 @@ by_symbol:
           - packages/sentinel/ui/src/views/FlowsView.tsx
           - packages/sentinel/ui/src/views/LogsView.tsx
         description: 'feat(#sentinel-server): full observability platform — metrics, traces, auth, rate limiting, dashboard UI, client SDKs'
-      - &ref_36
+      - &ref_34
         id: h0053
         ts: '2026-02-25T15:35:42Z'
         type: implement
@@ -1963,7 +1962,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_14
-      - &ref_25
+      - &ref_22
         id: h0045
         ts: '2026-02-24T00:17:42Z'
         type: implement
@@ -2076,11 +2075,66 @@ by_symbol:
       agent: []
   '#university':
     symbol: '#university'
-    total_changes: 8
-    last_modified: '2026-02-27T06:04:33Z'
+    total_changes: 11
+    last_modified: '2026-03-02T07:49:48Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0107
+        ts: '2026-03-02T07:49:48Z'
+        type: implement
+        symbols:
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: c604f19d62aadd11d537ee09a6c77cda07943407
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/university/package.json
+        description: 'fix(#university): bump for UI dist rebuild — version badge fix'
+      - &ref_48
+        id: h0105
+        ts: '2026-03-02T07:37:00Z'
+        type: implement
+        symbols:
+          - '#plsat'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: 4134585464a45228199228d7458615e464c7ff1a
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/ui/vite.config.ts
+        description: 'fix(#university): correct version badge and PLSAT question count'
+      - &ref_49
+        id: h0104
+        ts: '2026-03-02T07:29:49Z'
+        type: implement
+        symbols:
+          - '#plsat'
+          - '#protocols'
+          - '#university'
+        author:
+          type: human
+          id: ascend
+        commit: d3af844bb2c6bde676d77b52ed68d7819e4df4b2
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/protocols/update-university-content.protocol
+          - CHANGELOG.md
+          - packages/university/package.json
+          - packages/university/src/content/courses/para-301.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'feat(#university): add protocols lesson, PLSAT questions, and university content protocol'
       - id: h0082
         ts: '2026-02-27T06:04:33Z'
         type: implement
@@ -2094,7 +2148,7 @@ by_symbol:
         files:
           - docs/specs/university-revamp.md
         description: 'docs(#university): spec for philosophy-first revamp'
-      - &ref_49
+      - &ref_47
         id: h0071
         ts: '2026-02-26T17:05:41Z'
         type: implement
@@ -2121,9 +2175,31 @@ by_symbol:
           - packages/university/src/content/courses/para-501.json
           - packages/university/src/content/plsat/v3.0.json
         description: 'docs: complete 3.7.0 handoff — docs, university, changelog, version bump'
-      - *ref_20
-      - &ref_22
-        id: h0048
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm':
+    symbol: '#paradigm'
+    total_changes: 6
+    last_modified: '2026-03-02T07:38:19Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0106
+        ts: '2026-03-02T07:38:19Z'
+        type: implement
+        symbols:
+          - '#paradigm'
+        author:
+          type: human
+          id: ascend
+        commit: 860ffcc703ddaf0d88b1292f0311fce512e25263
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+        description: 'chore: record paradigm reflection assessment'
+      - id: h0048
         ts: '2026-02-25T00:26:40Z'
         type: implement
         symbols:
@@ -2144,21 +2220,8 @@ by_symbol:
           - packages/university/package.json
           - packages/university/src/content/plsat/v3.0.json
         description: 'chore(#release): bump paradigm 3.2.0, paradigm-mcp 3.2.0, sentinel 0.3.0, university 3.2.0'
-      - *ref_21
-    contributors:
-      human:
-        - ascend
-      agent: []
-  '#paradigm':
-    symbol: '#paradigm'
-    total_changes: 5
-    last_modified: '2026-02-25T00:26:40Z'
-    stability_score: 1
-    fragility: low
-    recent:
-      - *ref_22
       - *ref_14
-      - *ref_21
+      - *ref_20
       - id: h0034
         ts: '2026-02-22T22:39:23Z'
         type: implement
@@ -2173,7 +2236,6 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs(#paradigm): add 3.1.0 changelog entries'
-      - *ref_23
     contributors:
       human:
         - ascend
@@ -2185,7 +2247,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_24
+      - &ref_21
         id: h0035
         ts: '2026-02-23T16:33:27Z'
         type: implement
@@ -2227,7 +2289,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_24
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -2239,7 +2301,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_24
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -2251,7 +2313,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_24
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -2263,7 +2325,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_24
+      - *ref_21
     contributors:
       human:
         - ascend
@@ -2323,8 +2385,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_25
-      - &ref_28
+      - *ref_22
+      - &ref_25
         id: h0041
         ts: '2026-02-23T23:20:52Z'
         type: implement
@@ -2346,7 +2408,7 @@ by_symbol:
           - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
           - plugins/paradigm/scripts/paradigm-stop.sh
         description: 'fix(#stop-hook): dual anchor resolution + MCP write-time validation'
-      - &ref_26
+      - &ref_23
         id: h0040
         ts: '2026-02-23T21:49:43Z'
         type: implement
@@ -2378,7 +2440,7 @@ by_symbol:
           - plugins/paradigm/scripts/paradigm-precommit.sh
           - plugins/paradigm/scripts/paradigm-stop.sh
         description: 'refactor(#hooks): single source of truth for hook scripts + version bump to 3.1.3'
-      - *ref_21
+      - *ref_20
       - *ref_16
     contributors:
       human:
@@ -2391,7 +2453,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_32
+      - &ref_30
         id: h0050
         ts: '2026-02-25T02:54:52Z'
         type: implement
@@ -2428,8 +2490,8 @@ by_symbol:
           - plugins/paradigm-cursor/skills/scan/SKILL.md
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#cursor-hooks): sessionStart hook, followup_message loop, and Cursor plugin'
-      - *ref_26
-      - &ref_27
+      - *ref_23
+      - &ref_24
         id: h0039
         ts: '2026-02-23T21:34:59Z'
         type: implement
@@ -2472,7 +2534,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_14
-      - &ref_29
+      - &ref_26
         id: h0044
         ts: '2026-02-24T00:11:54Z'
         type: implement
@@ -2496,8 +2558,8 @@ by_symbol:
           - packages/paradigm/src/index.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#hooks): plugin-aware hook install + auto-update checker'
-      - *ref_26
-      - *ref_27
+      - *ref_23
+      - *ref_24
     contributors:
       human:
         - ascend
@@ -2509,7 +2571,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_28
+      - *ref_25
     contributors:
       human:
         - ascend
@@ -2521,7 +2583,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_28
+      - *ref_25
     contributors:
       human:
         - ascend
@@ -2625,7 +2687,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_29
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -2637,7 +2699,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_29
+      - *ref_26
     contributors:
       human:
         - ascend
@@ -2685,7 +2747,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
       - *ref_14
     contributors:
       human:
@@ -2819,7 +2881,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_30
+      - *ref_28
       - *ref_14
     contributors:
       human:
@@ -2844,7 +2906,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -2856,7 +2918,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -2868,7 +2930,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_33
+      - &ref_31
         id: h0051
         ts: '2026-02-25T03:01:11Z'
         type: implement
@@ -2884,7 +2946,7 @@ by_symbol:
           - README.md
           - plugins/paradigm-cursor/README.md
         description: 'docs(#cursor-plugin): document hooks, plugins, and plugin-vs-shift in README'
-      - *ref_32
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -2896,8 +2958,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_33
-      - *ref_32
+      - *ref_31
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -2909,7 +2971,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_32
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -2921,7 +2983,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_34
+      - &ref_32
         id: h0052
         ts: '2026-02-25T05:18:50Z'
         type: implement
@@ -2953,7 +3015,7 @@ by_symbol:
           - plugins/paradigm-cursor/scripts/paradigm-pretooluse.sh
           - plugins/paradigm-cursor/scripts/paradigm-stop.sh
         description: 'feat(#cursor-hooks): preToolUse + postToolUse hooks, stop loop guard'
-      - *ref_32
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -2965,7 +3027,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -2977,7 +3039,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -2989,7 +3051,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -3001,7 +3063,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -3013,8 +3075,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
-      - *ref_36
+      - *ref_33
+      - *ref_34
     contributors:
       human:
         - ascend
@@ -3026,8 +3088,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
-      - *ref_36
+      - *ref_33
+      - *ref_34
     contributors:
       human:
         - ascend
@@ -3039,7 +3101,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_36
+      - *ref_34
     contributors:
       human:
         - ascend
@@ -3051,7 +3113,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_39
+      - &ref_37
         id: h0058
         ts: '2026-02-25T23:37:48Z'
         type: implement
@@ -3066,8 +3128,8 @@ by_symbol:
         files:
           - docs/guides/sentinel-upgrade.md
         description: 'docs: per-project Sentinel upgrade guide'
-      - *ref_37
       - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3079,8 +3141,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
-      - *ref_35
+      - *ref_36
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3092,7 +3154,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3104,7 +3166,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3116,7 +3178,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3128,7 +3190,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -3140,7 +3202,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_37
+      - *ref_35
     contributors:
       human:
         - ascend
@@ -3152,8 +3214,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_39
       - *ref_37
+      - *ref_35
     contributors:
       human:
         - ascend
@@ -3165,7 +3227,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_45
+      - &ref_43
         id: h0073
         ts: '2026-02-26T18:27:05Z'
         type: implement
@@ -3184,7 +3246,7 @@ by_symbol:
           - packages/paradigm-mcp/src/types/aspect-graph.ts
           - packages/paradigm-mcp/src/utils/aspect-graph.ts
         description: 'feat(#aspect-graph): smart drift detection phase 2 — git-aware line mapping'
-      - &ref_46
+      - &ref_44
         id: h0072
         ts: '2026-02-26T18:21:06Z'
         type: implement
@@ -3219,7 +3281,7 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs: finalize changelog for 3.5.0 release'
-      - &ref_40
+      - &ref_38
         id: h0062
         ts: '2026-02-26T00:47:30Z'
         type: implement
@@ -3242,7 +3304,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#aspect-graph): Phase 5+6 — polish, version bumps, changelog'
-      - &ref_41
+      - &ref_39
         id: h0061
         ts: '2026-02-26T00:45:47Z'
         type: implement
@@ -3272,8 +3334,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_40
-      - &ref_42
+      - *ref_38
+      - &ref_40
         id: h0059
         ts: '2026-02-26T00:30:48Z'
         type: implement
@@ -3308,20 +3370,54 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_38
+      - *ref_39
       - *ref_40
-      - *ref_41
-      - *ref_42
     contributors:
       human:
         - ascend
       agent: []
   '#reindex':
     symbol: '#reindex'
-    total_changes: 2
-    last_modified: '2026-02-27T04:59:39Z'
+    total_changes: 3
+    last_modified: '2026-03-02T06:59:50Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_61
+        id: h0100
+        ts: '2026-03-02T06:59:50Z'
+        type: implement
+        symbols:
+          - '#lore-tools'
+          - '#protocol-loader'
+          - '#protocol-tools'
+          - '#reindex'
+        author:
+          type: human
+          id: ascend
+        commit: e5cfd5ac0873b8c657fa16b5041f4c77e8cd4272
+        intent: feature
+        files:
+          - .paradigm/protocols/add-cli-command.yaml
+          - .paradigm/protocols/add-mcp-tool.yaml
+          - .paradigm/protocols/add-skill.yaml
+          - .paradigm/protocols/add-spec.yaml
+          - .paradigm/protocols/record-lore.yaml
+          - .paradigm/protocols/update-changelog.yaml
+          - CHANGELOG.md
+          - CLAUDE.md
+          - docs/specs/protocols.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/lore.ts
+          - packages/paradigm-mcp/src/tools/protocols.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/utils/protocol-loader.ts
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/skills/protocol/SKILL.md
+        description: 'feat(#protocols): add protocols — repeatable implementation patterns with exact references'
       - &ref_50
         id: h0077
         ts: '2026-02-27T04:59:39Z'
@@ -3338,7 +3434,7 @@ by_symbol:
         files:
           - packages/paradigm-mcp/src/tools/index.ts
         description: 'feat(#personas): phase 2 — ripple integration + reindex'
-      - &ref_43
+      - &ref_41
         id: h0060
         ts: '2026-02-26T00:40:39Z'
         type: implement
@@ -3370,7 +3466,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_43
+      - *ref_41
     contributors:
       human:
         - ascend
@@ -3382,8 +3478,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_40
-      - *ref_41
+      - *ref_38
+      - *ref_39
     contributors:
       human:
         - ascend
@@ -3395,7 +3491,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3407,7 +3503,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3419,7 +3515,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3431,7 +3527,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3443,7 +3539,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3455,7 +3551,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3467,7 +3563,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_44
+      - &ref_42
         id: h0066
         ts: '2026-02-26T02:32:00Z'
         type: implement
@@ -3483,7 +3579,7 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs: changelog for aspect audit, university content, parser fix'
-      - *ref_20
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -3495,9 +3591,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_30
-      - *ref_44
-      - &ref_47
+      - *ref_28
+      - *ref_42
+      - &ref_45
         id: h0065
         ts: '2026-02-26T02:22:02Z'
         type: implement
@@ -3528,9 +3624,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_43
+      - *ref_44
       - *ref_45
-      - *ref_46
-      - *ref_47
     contributors:
       human:
         - ascend
@@ -3542,7 +3638,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_44
+      - *ref_42
     contributors:
       human:
         - ascend
@@ -3554,7 +3650,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_30
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -3566,7 +3662,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_30
+      - *ref_28
     contributors:
       human:
         - ascend
@@ -3578,7 +3674,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_48
+      - &ref_46
         id: h0068
         ts: '2026-02-26T06:04:40Z'
         type: implement
@@ -3606,7 +3702,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_48
+      - *ref_46
     contributors:
       human:
         - ascend
@@ -3618,7 +3714,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_48
+      - *ref_46
     contributors:
       human:
         - ascend
@@ -3630,7 +3726,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_48
+      - *ref_46
     contributors:
       human:
         - ascend
@@ -3642,19 +3738,21 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_49
+      - *ref_47
     contributors:
       human:
         - ascend
       agent: []
   '#plsat':
     symbol: '#plsat'
-    total_changes: 1
-    last_modified: '2026-02-26T17:05:41Z'
+    total_changes: 3
+    last_modified: '2026-03-02T07:37:00Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_48
       - *ref_49
+      - *ref_47
     contributors:
       human:
         - ascend
@@ -3666,7 +3764,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_46
+      - *ref_44
     contributors:
       human:
         - ascend
@@ -4057,6 +4155,138 @@ by_symbol:
       - *ref_60
       - *ref_58
       - *ref_59
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-tools':
+    symbol: '#lore-tools'
+    total_changes: 1
+    last_modified: '2026-03-02T06:59:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_61
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#protocol-loader':
+    symbol: '#protocol-loader'
+    total_changes: 2
+    last_modified: '2026-03-02T07:06:33Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_62
+        id: h0101
+        ts: '2026-03-02T07:06:33Z'
+        type: implement
+        symbols:
+          - '#protocol-loader'
+          - '#protocols'
+        author:
+          type: human
+          id: ascend
+        commit: 11273e2c11009de128c970bd1a5e3d8b59ddc411
+        intent: refactor
+        files:
+          - .paradigm/protocols/add-cli-command.protocol
+          - .paradigm/protocols/add-cli-command.yaml
+          - .paradigm/protocols/add-mcp-tool.protocol
+          - .paradigm/protocols/add-mcp-tool.yaml
+          - .paradigm/protocols/add-skill.protocol
+          - .paradigm/protocols/add-skill.yaml
+          - .paradigm/protocols/add-spec.protocol
+          - .paradigm/protocols/add-spec.yaml
+          - .paradigm/protocols/record-lore.protocol
+          - .paradigm/protocols/record-lore.yaml
+          - .paradigm/protocols/update-changelog.protocol
+          - .paradigm/protocols/update-changelog.yaml
+          - CHANGELOG.md
+          - docs/specs/protocols.md
+          - packages/paradigm-mcp/src/utils/protocol-loader.ts
+        description: 'refactor(#protocols): use .protocol file extension instead of .yaml'
+      - *ref_61
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#protocol-tools':
+    symbol: '#protocol-tools'
+    total_changes: 1
+    last_modified: '2026-03-02T06:59:50Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_61
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#protocols':
+    symbol: '#protocols'
+    total_changes: 4
+    last_modified: '2026-03-02T07:29:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_49
+      - id: h0103
+        ts: '2026-03-02T07:15:31Z'
+        type: implement
+        symbols:
+          - '#protocols'
+        author:
+          type: human
+          id: ascend
+        commit: ebb2f71f901433971a61ead09bf8c64ab95c4346
+        intent: feature
+        files:
+          - CHANGELOG.md
+        description: 'docs: update changelog with full protocol catalog (35 protocols across 10 categories)'
+      - id: h0102
+        ts: '2026-03-02T07:13:15Z'
+        type: implement
+        symbols:
+          - '#protocols'
+        author:
+          type: human
+          id: ascend
+        commit: 3d0c5689af82d83d013ed351463b454b1c474393
+        intent: feature
+        files:
+          - .paradigm/protocols/add-agent-provider.protocol
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-command-with-file-output.protocol
+          - .paradigm/protocols/add-command-with-prompts.protocol
+          - .paradigm/protocols/add-command-with-subcommands.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-ide-adapter.protocol
+          - .paradigm/protocols/add-integration-test.protocol
+          - .paradigm/protocols/add-mcp-resource.protocol
+          - .paradigm/protocols/add-mcp-tool-with-status.protocol
+          - .paradigm/protocols/add-paradigm-type.protocol
+          - .paradigm/protocols/add-plsat-question.protocol
+          - .paradigm/protocols/add-portal-gate.protocol
+          - .paradigm/protocols/add-portal-route-with-gates.protocol
+          - .paradigm/protocols/add-sentinel-adapter.protocol
+          - .paradigm/protocols/add-sentinel-event-schema.protocol
+          - .paradigm/protocols/add-sentinel-mcp-integration.protocol
+          - .paradigm/protocols/add-sentinel-server-route.protocol
+          - .paradigm/protocols/add-team-subcommand.protocol
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/add-tool-with-sentinel-schema.protocol
+          - .paradigm/protocols/add-tool-with-workspace-support.protocol
+          - .paradigm/protocols/add-unit-test.protocol
+          - .paradigm/protocols/add-university-course.protocol
+          - .paradigm/protocols/add-university-quiz.protocol
+          - .paradigm/protocols/add-upgrade-guide.protocol
+          - .paradigm/protocols/add-wisdom-entry.protocol
+          - .paradigm/protocols/add-workspace-subcommand.protocol
+        description: 'feat(#protocols): seed 29 additional protocols covering all paradigm patterns'
+      - *ref_62
     contributors:
       human:
         - ascend
