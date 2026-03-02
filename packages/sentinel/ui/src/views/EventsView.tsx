@@ -18,12 +18,12 @@ function useResizableColumns(defaults: number[]) {
     dragging.current = { idx, startX: e.clientX, startW: widths[idx] };
 
     const onMouseMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = ev.clientX - dragging.current.startX;
-      const newW = Math.max(40, dragging.current.startW + delta);
+      const d = dragging.current;
+      if (!d) return;
+      const newW = Math.max(40, d.startW + (ev.clientX - d.startX));
       setWidths((prev) => {
         const next = [...prev];
-        next[dragging.current!.idx] = newW;
+        next[d.idx] = newW;
         return next;
       });
     };
