@@ -1,0 +1,56 @@
+id: L-2026-03-02-001
+type: agent-session
+timestamp: '2026-03-02T03:50:48.402Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Overhaul Sentinel dashboard UX for Logs and Events views
+summary: 'Implemented 4 major UX improvements to the Sentinel dashboard: full YYYY-MM-DD HH:MM:SS timestamps (locale-independent manual formatting), Expand All/Collapse All with expanded row message unwrapping, merged Level+Category columns in EventsView, and right-click exclusion filters with dismissible chips. Switched both views from flexbox to CSS grid layout and added draggable column resize handles. Fixed auto-scroll direction (top instead of bottom for newest-first ordering). Required 3 follow-up bugfix commits for grid column count, null ref in resize handler, and timestamp locale issues.'
+symbols_touched:
+  - '#sentinel'
+  - '#logs-view'
+  - '#events-view'
+files_modified:
+  - packages/sentinel/ui/src/views/LogsView.tsx
+  - packages/sentinel/ui/src/views/EventsView.tsx
+  - packages/sentinel/ui/src/store/logsStore.ts
+  - packages/sentinel/ui/src/store/eventsStore.ts
+  - packages/sentinel/ui/src/styles/index.css
+  - CHANGELOG.md
+lines_added: 628
+lines_removed: 57
+commit: cba7972
+decisions:
+  - id: manual-timestamp
+    decision: Use manual date formatting instead of toLocaleTimeString
+    rationale: toLocaleTimeString with fractionalSecondDigits produced inconsistent output across browsers/systems, showing only fractional seconds on macOS Safari
+  - id: grid-layout
+    decision: Switch LogsView from flexbox to CSS grid matching EventsView
+    rationale: CSS grid enables consistent column sizing between header and rows, plus resizable columns via CSS custom properties
+  - id: expand-visual
+    decision: Expanded rows unwrap message text via CSS class rather than only showing data payload
+    rationale: Most log entries have long messages but no separate data field — expansion must have visible effect regardless of data presence
+errors_encountered:
+  - description: Grid template produced 4 columns instead of 5 — message column wrapped under timestamp
+    resolution: Changed gridTemplate to append ' 1fr' after all px widths instead of replacing last width
+  - description: Null ref crash when resizing columns (dragging.current read inside setWidths callback)
+    resolution: Captured ref into local const before the guard check so it stays stable through the callback
+  - description: toLocaleTimeString showing only fractional seconds (084, 117) instead of full HH:MM:SS
+    resolution: Replaced with manual padStart-based formatting that is locale-independent
+learnings:
+  - toLocaleTimeString with fractionalSecondDigits is unreliable cross-platform — prefer manual formatting for log timestamps
+  - When using useRef inside a setState callback, always capture the ref value in a local variable before entering the callback to avoid null dereference races
+  - CSS grid column count must exactly match the number of direct children — conditional React children (like log-duration) must be nested inside a grid cell, not as siblings
+verification:
+  status: pass
+  details:
+    ui_build: pass
+    sentinel_core_build: pass
+    paradigm_build: pass
+    manual_test: pass
+tags:
+  - feature
+  - ux
+  - sentinel
+  - dashboard
