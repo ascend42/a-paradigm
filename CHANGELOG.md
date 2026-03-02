@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Overhauled the Logs and Events views in the Sentinel dashboard for better usability.
 
-- **Full timestamps**: Both views now show `YYYY-MM-DD HH:MM:SS.mmm` instead of time-of-day only
-- **Expand All / Collapse All**: Toolbar toggle to bulk-expand all row payloads — individual row clicks still work independently
+- **Full timestamps**: Both views now show `YYYY-MM-DD HH:MM:SS` (locale-independent manual formatting)
+- **Expand All / Collapse All**: Toolbar toggle to bulk-expand all rows — expanded rows unwrap truncated message text and show data payloads
+- **Resizable columns**: Drag column header borders to resize Time, Level, Symbol, Service, Type columns
 - **Merged Level + Category** (EventsView): Removed redundant Category column; category now appears as a colored `[category]` badge inline in the Type cell (hidden when "unknown")
 - **Exclusion filters**: Right-click any row to exclude by symbol, symbol type, message, or service — active exclusions appear as dismissible chips below the toolbar with a "Clear all" link
-- Widened time columns (100px → 180px) to fit full timestamps
+- Both views switched to CSS grid layout with shared column widths between header and rows
+- Auto-scroll now stays at top (newest entries) instead of jumping to bottom
 - EventsView grid reduced from 6 columns to 5
 
 ### Added
