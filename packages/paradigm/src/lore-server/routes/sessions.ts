@@ -150,7 +150,9 @@ function deriveSessionsFromEntries(entries: LoreEntry[], breadcrumbs: SessionBre
 function groupToSession(group: LoreEntry[]): DerivedSession {
   const allSymbols = new Set<string>();
   for (const entry of group) {
-    for (const sym of entry.symbols_touched) allSymbols.add(sym);
+    if (entry.symbols_touched) {
+      for (const sym of entry.symbols_touched) allSymbols.add(sym);
+    }
     if (entry.symbols_created) {
       for (const sym of entry.symbols_created) allSymbols.add(sym);
     }

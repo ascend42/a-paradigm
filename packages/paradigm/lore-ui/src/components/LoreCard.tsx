@@ -36,7 +36,7 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
         <div className="lore-card-title">{entry.title}</div>
         <div className="lore-card-summary">{entry.summary}</div>
 
-        {entry.symbols_touched.length > 0 && (
+        {entry.symbols_touched?.length > 0 && (
           <div className="lore-card-symbols">
             {entry.symbols_touched.slice(0, 5).map(s => (
               <SymbolTag key={s} symbol={s} />
