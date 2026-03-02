@@ -39,6 +39,7 @@ import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.j
 import { getTasksToolsList, handleTasksTool } from './tasks.js';
 import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { getPersonaToolsList, handlePersonaTool } from './personas.js';
+import { getProtocolsToolsList, handleProtocolsTool } from './protocols.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -46,6 +47,7 @@ import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
 import { getAffectedPersonas } from '../utils/personas-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
+import { loadProtocolIndex } from '../utils/protocol-loader.js';
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -261,6 +263,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Assessment loop tools
           ...getAssessmentToolsList(),
           ...getPersonaToolsList(),
+          // Protocol tools
+          ...getProtocolsToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -741,7 +745,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_status': {
-          const text = await toolCache.getOrCompute('status', () => {
+          const text = await toolCache.getOrCompute('status', async () => {
             const counts = getSymbolCounts(ctx.index);
             const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
@@ -757,6 +761,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const isWindows = platform === 'win32';
             const shell = isWindows ? 'PowerShell/CMD' : (platform === 'darwin' ? 'zsh/bash' : 'bash');
 
+            // Load protocol health (non-fatal)
+            let protocols: { total: number; current: number; stale: number; broken: number } | undefined;
+            try {
+              const protocolIndex = await loadProtocolIndex(ctx.rootDir);
+              if (protocolIndex && protocolIndex.health.total > 0) {
+                protocols = protocolIndex.health;
+              }
+            } catch {
+              // Protocol health is optional
+            }
+
             return JSON.stringify({
               project: ctx.projectName,
               symbolSystem: 'v2',
@@ -771,6 +786,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               examples,
               hasPortalYaml: ctx.gateConfig !== null,
               purposeFiles: ctx.aggregation.purposeFiles.length,
+              ...(protocols ? { protocols } : {}),
               note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification',
               environment: {
                 os: platform,
@@ -1251,6 +1267,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try persona tools
           if (name.startsWith('paradigm_persona_')) {
             const result = await handlePersonaTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try protocol tools
+          if (name.startsWith('paradigm_protocol_')) {
+            const result = await handleProtocolsTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

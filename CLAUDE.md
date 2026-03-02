@@ -73,10 +73,18 @@ Use these prefixes in documentation and commits:
 
 ## Before Implementing (Every Task)
 
+0. **Check for a protocol first** → Call `paradigm_protocol_search` with your task description. If a matching protocol exists, follow its steps — skip exploration.
 1. **Is this task complex?** (3+ files, security + implementation, multiple features)
    → Call `paradigm_orchestrate_inline` with mode="plan" BEFORE writing code
 2. **Does it affect existing symbols?** → Call `paradigm_ripple`
 3. **Does it add API endpoints?** → Call `paradigm_gates_for_route`
+
+## After Completing Repeatable Work
+
+If you created new files following existing patterns, record a protocol:
+1. Call `paradigm_protocol_record` with the steps you followed
+2. Include trigger phrases, tags, exemplar, and step details
+3. Future agents will find this protocol instead of re-discovering the pattern
 
 ## Portal Protocol (Authorization)
 
@@ -226,6 +234,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 
 | Before doing this... | Call this tool |
 |---------------------|----------------|
+| **Implementing a common pattern** | `paradigm_protocol_search` for existing protocol |
+| **Completed repeatable work** | `paradigm_protocol_record` to capture the pattern |
 | Modifying a symbol | `paradigm_ripple` with the symbol |
 | Understanding code | `paradigm_navigate` with explore intent |
 | Checking dependencies | `paradigm_related` for connections |
@@ -264,6 +274,9 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_assessment_record` | ~150 | Adding a reflection entry |
 | `paradigm_assessment_search` | ~200 | Cross-arc search |
 | `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
+| `paradigm_protocol_search` | ~200 | Search for matching protocol |
+| `paradigm_protocol_record` | ~100 | Record a new protocol |
+| `paradigm_protocol_validate` | ~200 | Validate protocol references |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |

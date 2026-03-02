@@ -20,6 +20,7 @@ import {
 } from '../utils/lore-loader.js';
 import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
+import { detectProtocolSuggestion } from '../utils/protocol-loader.js';
 
 /**
  * Get list of lore tools with safety annotations
@@ -407,6 +408,20 @@ export async function handleLoreTool(
       const id = await recordLoreEntry(ctx.rootDir, entry);
       getSessionTracker().setLastLoreEntryId(id);
 
+      // Detect protocol-worthy session
+      let protocol_suggestion: ReturnType<typeof detectProtocolSuggestion> = null;
+      try {
+        if (files_created && files_created.length >= 2) {
+          protocol_suggestion = detectProtocolSuggestion(
+            ctx.rootDir,
+            files_created,
+            files_modified || [],
+          );
+        }
+      } catch {
+        // Protocol suggestion is optional
+      }
+
       return {
         handled: true,
         text: JSON.stringify({
@@ -415,6 +430,7 @@ export async function handleLoreTool(
           type,
           title,
           message: 'Lore entry recorded successfully',
+          ...(protocol_suggestion ? { protocol_suggestion } : {}),
         }),
       };
     }

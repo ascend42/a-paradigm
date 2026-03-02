@@ -16,6 +16,7 @@ import { toolCache } from '../utils/tool-cache.js';
 import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/aspect-graph.js';
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 import { rebuildPersonaIndex } from '../utils/personas-loader.js';
+import { rebuildProtocolIndex } from '../utils/protocol-loader.js';
 
 // ============================================================================
 // Navigator constants (ported from packages/paradigm/src/commands/scan/navigator.ts)
@@ -124,6 +125,12 @@ export interface RebuildResult {
     edges: number;
     loreLinks: number;
   };
+  protocolHealth?: {
+    total: number;
+    current: number;
+    stale: number;
+    broken: number;
+  };
 }
 
 export async function rebuildStaticFiles(
@@ -218,6 +225,18 @@ export async function rebuildStaticFiles(
     // Persona index build is non-fatal
   }
 
+  // 7. Rebuild protocol index
+  let protocolHealth: RebuildResult['protocolHealth'];
+  try {
+    const protocolIndex = await rebuildProtocolIndex(rootDir);
+    if (protocolIndex.health.total > 0) {
+      protocolHealth = protocolIndex.health;
+      filesWritten.push('.paradigm/protocols/index.yaml');
+    }
+  } catch {
+    // Protocol index build is non-fatal
+  }
+
   // Build breakdown
   const breakdown: Record<string, number> = {};
   for (const sym of aggregation.symbols) {
@@ -232,6 +251,7 @@ export async function rebuildStaticFiles(
     flowCount,
     aspectGraphStats,
     personaCount,
+    protocolHealth,
   };
 }
 

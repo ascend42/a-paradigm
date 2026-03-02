@@ -1,0 +1,30 @@
+id: P-add-skill
+name: "Add a new skill"
+description: "Create a new Claude Code plugin skill with SKILL.md"
+
+trigger:
+  - "add skill"
+  - "new skill"
+  - "create skill"
+  - "add slash command"
+  - "new prompt"
+tags: [skill, plugin, claude-code]
+
+symbols: ["#protocol-skill", "#lore-skill"]
+
+exemplar: "plugins/paradigm/skills/lore/SKILL.md"
+
+steps:
+  - action: create
+    target: "plugins/paradigm/skills/{name}/SKILL.md"
+    template_from: "plugins/paradigm/skills/lore/SKILL.md"
+    notes: "YAML frontmatter with name + description, then markdown instructions. Description is what triggers the skill."
+
+  - action: verify
+    notes: "Ensure the skill name and description match a user-triggerable phrase. The skill auto-registers from the directory structure."
+
+recorded_from: "L-2026-03-01-protocols-impl"
+recorded_at: "2026-03-01T10:00:00Z"
+last_verified: "2026-03-01T10:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

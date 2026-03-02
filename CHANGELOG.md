@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0] — 2026-03-01
+
+### Added
+
+#### Protocols — Repeatable Implementation Patterns (`@a-company/paradigm-mcp` 3.11.0 → 3.12.0, `@a-company/paradigm` 3.14.1 → 3.15.0)
+
+Protocols capture step-by-step implementation patterns with exact file references, learned from completed work. Agents search protocols before exploring — saving 100-200k tokens per task when a matching pattern exists.
+
+- **5 new MCP tools**: `paradigm_protocol_search` (fuzzy match by task description), `paradigm_protocol_get`, `paradigm_protocol_record`, `paradigm_protocol_update`, `paradigm_protocol_validate`
+- **Fuzzy search**: Tokenizes task descriptions, scores against trigger phrases (weight 3), tags (weight 2), name/description (weight 1), step notes (weight 0.5)
+- **Freshness tracking**: Protocols auto-validated during `paradigm_reindex` — missing files → broken, modified exemplar → stale, all valid → current
+- **Status integration**: `paradigm_status` includes protocol health (total/current/stale/broken)
+- **Lore integration**: `paradigm_lore_record` detects "protocol-worthy" sessions (2+ new files following existing patterns) and returns a `protocol_suggestion` draft
+- **`/protocol` skill**: Search or record protocols via slash command
+- **6 seed protocols** for paradigm itself: add-mcp-tool, add-skill, add-spec, record-lore, update-changelog, add-cli-command
+- Storage: `.paradigm/protocols/` with one YAML file per protocol and auto-generated `index.yaml`
+- Spec: `docs/specs/protocols.md`
+
 ## [3.14.1] — 2026-03-01
 
 ### Fixed

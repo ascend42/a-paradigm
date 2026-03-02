@@ -1,0 +1,45 @@
+id: P-update-changelog
+name: "Update changelog and version"
+description: "Update CHANGELOG.md with new entry and bump version numbers in relevant packages"
+
+trigger:
+  - "update changelog"
+  - "bump version"
+  - "new release"
+  - "version bump"
+  - "changelog entry"
+tags: [release, changelog, versioning]
+
+symbols: []
+
+exemplar: "CHANGELOG.md"
+
+steps:
+  - action: modify
+    target: "CHANGELOG.md"
+    reference: "after the latest version heading"
+    notes: "Add new version heading [X.Y.Z] — YYYY-MM-DD with Added/Changed/Fixed sections. No [Unreleased] on main."
+
+  - action: modify
+    target: "packages/paradigm/package.json"
+    reference: "version field"
+    notes: "@a-company/paradigm always bumps on every release"
+
+  - action: modify
+    target: "packages/paradigm-mcp/package.json"
+    reference: "version field"
+    notes: "Bump when CLI or MCP tools change"
+
+  - action: modify
+    target: "plugins/paradigm/.claude-plugin/plugin.json"
+    reference: "version field"
+    notes: "Keep in sync with paradigm version"
+
+  - action: verify
+    notes: "Ensure version numbers are consistent across all bumped packages"
+
+recorded_from: "L-2026-03-01-protocols-impl"
+recorded_at: "2026-03-01T10:00:00Z"
+last_verified: "2026-03-01T10:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

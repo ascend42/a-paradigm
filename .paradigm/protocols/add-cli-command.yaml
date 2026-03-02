@@ -1,0 +1,34 @@
+id: P-add-cli-command
+name: "Add a new CLI command"
+description: "Create a new paradigm CLI command with subcommands"
+
+trigger:
+  - "add command"
+  - "new cli command"
+  - "create command"
+  - "add subcommand"
+tags: [cli, command, backend]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/commands/workspace/index.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/commands/{name}/index.ts"
+    template_from: "packages/paradigm/src/commands/workspace/index.ts"
+    notes: "Commander-style command with .command(), .description(), .action(). Export a function that registers the command."
+
+  - action: modify
+    target: "packages/paradigm/src/index.ts"
+    reference: "command registration section"
+    notes: "Import and register the new command"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js {name} --help"
+
+recorded_from: "L-2026-03-01-protocols-impl"
+recorded_at: "2026-03-01T10:00:00Z"
+last_verified: "2026-03-01T10:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current
