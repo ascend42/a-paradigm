@@ -85,7 +85,7 @@ export function createLoreRouter(projectDir: string): Router {
     }
     if (symbol) {
       entries = entries.filter(e =>
-        e.symbols_touched.includes(symbol as string) ||
+        e.symbols_touched?.includes(symbol as string) ||
         e.symbols_created?.includes(symbol as string)
       );
     }
@@ -145,8 +145,10 @@ export function createLoreRouter(projectDir: string): Router {
     const symbolCounts: Record<string, number> = {};
 
     for (const entry of entries) {
-      for (const sym of entry.symbols_touched) {
-        symbolCounts[sym] = (symbolCounts[sym] || 0) + 1;
+      if (entry.symbols_touched) {
+        for (const sym of entry.symbols_touched) {
+          symbolCounts[sym] = (symbolCounts[sym] || 0) + 1;
+        }
       }
       if (entry.symbols_created) {
         for (const sym of entry.symbols_created) {

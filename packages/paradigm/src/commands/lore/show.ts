@@ -45,7 +45,7 @@ export async function loreShowCommand(id: string, options: Record<string, unknow
   console.log();
 
   // Symbols
-  if (entry.symbols_touched.length > 0) {
+  if (entry.symbols_touched?.length > 0) {
     console.log(chalk.gray('  Symbols touched:'));
     console.log(`  ${entry.symbols_touched.map(s => chalk.cyan(s)).join('  ')}`);
     console.log();

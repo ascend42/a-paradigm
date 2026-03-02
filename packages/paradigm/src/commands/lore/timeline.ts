@@ -30,7 +30,7 @@ export async function loreTimelineCommand(options: {
   // Compute hot symbols
   const symbolCounts = new Map<string, number>();
   for (const entry of entries) {
-    for (const sym of entry.symbols_touched) {
+    for (const sym of entry.symbols_touched || []) {
       symbolCounts.set(sym, (symbolCounts.get(sym) || 0) + 1);
     }
   }
@@ -60,7 +60,7 @@ export async function loreTimelineCommand(options: {
         type: e.type,
         title: e.title,
         author: e.author.id,
-        symbols: e.symbols_touched,
+        symbols: e.symbols_touched || [],
       }));
     }
 
@@ -96,7 +96,7 @@ export async function loreTimelineCommand(options: {
       const authorIcon = entry.author.type === 'agent' ? '🤖' : '👤';
 
       console.log(`    ${chalk.gray(time)} ${colorFn(entry.type.padEnd(14))} ${chalk.white(entry.title)}`);
-      console.log(`           ${authorIcon} ${chalk.gray(entry.author.id)}  ${entry.symbols_touched.slice(0, 4).map(s => chalk.cyan(s)).join(' ')}`);
+      console.log(`           ${authorIcon} ${chalk.gray(entry.author.id)}  ${(entry.symbols_touched || []).slice(0, 4).map(s => chalk.cyan(s)).join(' ')}`);
     }
     console.log();
   }

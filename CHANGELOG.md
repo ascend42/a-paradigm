@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.2] — 2026-03-02
+
+### Fixed
+
+- **Full null-safety pass for `symbols_touched` across all lore code** (`@a-company/paradigm` 3.17.1 → 3.17.2): YAML-loaded lore entries may omit `symbols_touched` despite the TypeScript type marking it required — added defensive null checks across 10 files:
+  - **Server routes**: `lore.ts` symbol filter and `/symbols` aggregation
+  - **Frontend**: `DetailPanel.tsx`, `LoreCard.tsx`, `SessionView.tsx`, `loreStore.ts` search
+  - **CLI commands**: `lore list`, `lore show`, `lore timeline`, `lore delete`
+  - **Core**: `filter.ts` symbol filter and full-text search
+
 ## [3.17.1] — 2026-03-02
 
 ### Fixed

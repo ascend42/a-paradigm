@@ -209,7 +209,7 @@ export const useLoreStore = create<LoreState>((set, get) => ({
         entries = entries.filter((e: LoreEntry) =>
           e.title.toLowerCase().includes(q) ||
           e.summary.toLowerCase().includes(q) ||
-          e.symbols_touched.some((s: string) => s.toLowerCase().includes(q))
+          e.symbols_touched?.some((s: string) => s.toLowerCase().includes(q))
         );
       }
 

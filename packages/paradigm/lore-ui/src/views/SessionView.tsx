@@ -31,7 +31,7 @@ function SessionSidebarItem({ session, active, onClick }: { session: Session; ac
       </div>
       <div className="session-sidebar-stats">
         <span className="sidebar-item-count">{session.entryCount} entries</span>
-        {session.symbolsTouched.length > 0 && (
+        {session.symbolsTouched?.length > 0 && (
           <span className="sidebar-item-count">{session.symbolsTouched.length} symbols</span>
         )}
       </div>
@@ -61,7 +61,7 @@ function SessionDetail({ session }: { session: Session }) {
         </div>
       </div>
 
-      {session.symbolsTouched.length > 0 && (
+      {session.symbolsTouched?.length > 0 && (
         <div className="session-detail-section">
           <h3>Symbols Touched</h3>
           <div className="session-symbols">

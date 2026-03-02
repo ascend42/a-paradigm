@@ -64,7 +64,7 @@ export function DetailPanel() {
           </div>
 
           {/* Symbols */}
-          {entry.symbols_touched.length > 0 && (
+          {entry.symbols_touched?.length > 0 && (
             <div className="detail-section">
               <h3>Symbols Touched</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

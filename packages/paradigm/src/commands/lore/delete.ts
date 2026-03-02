@@ -16,7 +16,7 @@ export async function loreDeleteCommand(id: string, options: { yes?: boolean; dr
     console.log(chalk.cyan(`\n  [dry-run] Would delete lore entry:`));
     console.log(chalk.white(`    ${entry.id} - ${entry.title}`));
     console.log(chalk.gray(`    Type: ${entry.type} | Author: ${entry.author.id} | ${entry.timestamp}`));
-    console.log(chalk.gray(`    Symbols: ${entry.symbols_touched.join(', ')}`));
+    console.log(chalk.gray(`    Symbols: ${(entry.symbols_touched || []).join(', ')}`));
     console.log(chalk.cyan(`\n  [dry-run] No changes made.\n`));
     return;
   }
@@ -25,7 +25,7 @@ export async function loreDeleteCommand(id: string, options: { yes?: boolean; dr
     console.log(chalk.yellow(`\n  Will delete lore entry:`));
     console.log(chalk.white(`    ${entry.id} - ${entry.title}`));
     console.log(chalk.gray(`    Type: ${entry.type} | Author: ${entry.author.id} | ${entry.timestamp}`));
-    console.log(chalk.gray(`    Symbols: ${entry.symbols_touched.join(', ')}`));
+    console.log(chalk.gray(`    Symbols: ${(entry.symbols_touched || []).join(', ')}`));
     console.log(chalk.gray(`\n  Use --yes to confirm deletion.\n`));
     return;
   }

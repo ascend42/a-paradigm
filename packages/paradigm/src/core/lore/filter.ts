@@ -20,7 +20,7 @@ export function applyLoreFilter(entries: LoreEntry[], filter: LoreFilter): LoreE
 
   if (filter.symbol) {
     result = result.filter(e =>
-      e.symbols_touched.includes(filter.symbol!) ||
+      e.symbols_touched?.includes(filter.symbol!) ||
       e.symbols_created?.includes(filter.symbol!)
     );
   }
@@ -80,7 +80,7 @@ export function searchLoreEntries(entries: LoreEntry[], query: string): LoreEntr
   return entries.filter(e =>
     e.title.toLowerCase().includes(lower) ||
     e.summary.toLowerCase().includes(lower) ||
-    e.symbols_touched.some(s => s.toLowerCase().includes(lower)) ||
+    e.symbols_touched?.some(s => s.toLowerCase().includes(lower)) ||
     e.tags?.some(t => t.toLowerCase().includes(lower))
   );
 }
