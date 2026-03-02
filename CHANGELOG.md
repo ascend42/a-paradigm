@@ -5,6 +5,13 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.14.1] — 2026-03-01
+
+### Fixed
+
+- **PLSAT 500 error** (`@a-company/university` 3.7.0 → 3.7.1): `resolveV3()` didn't handle `variant-group` item type in v3.0 exam JSON — 6 items fell into the passage branch, crashing on undefined `item.questions`. Now treats `variant-group` identically to `standalone`.
+- Added try-catch around PLSAT version route handler for proper error responses instead of bare 500s
+
 ## [3.14.0] — 2026-03-01
 
 ### Changed

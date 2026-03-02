@@ -41,7 +41,14 @@ interface V3PassageItem {
   questions: V3PassageQuestion[];
 }
 
-type V3Item = V3StandaloneItem | V3PassageItem;
+interface V3VariantGroupItem {
+  type: 'variant-group';
+  slot: string;
+  course: string;
+  variants: V3Variant[];
+}
+
+type V3Item = V3StandaloneItem | V3PassageItem | V3VariantGroupItem;
 
 interface V3Exam {
   version: string;
@@ -95,7 +102,7 @@ function resolveV3(data: V3Exam): { questions: ClientQuestion[]; passages: Recor
   const blocks: ClientQuestion[][] = [];
 
   for (const item of data.items) {
-    if (item.type === 'standalone') {
+    if (item.type === 'standalone' || item.type === 'variant-group') {
       const v = pickVariant(item.variants);
       blocks.push([{
         id: v.id,
@@ -136,7 +143,7 @@ function resolveV3(data: V3Exam): { questions: ClientQuestion[]; passages: Recor
 function countV3Questions(data: V3Exam): number {
   let count = 0;
   for (const item of data.items) {
-    if (item.type === 'standalone') {
+    if (item.type === 'standalone' || item.type === 'variant-group') {
       count += 1;
     } else {
       count += item.questions.length;
@@ -179,34 +186,39 @@ export function createPlsatRouter(contentDir: string): Router {
 
   // GET /api/plsat/:version - Get full exam for a specific version
   router.get('/:version', (req: Request, res: Response) => {
-    const examFile = path.join(contentDir, 'plsat', `v${req.params.version}.json`);
-    if (!fs.existsSync(examFile)) {
-      return res.status(404).json({ error: `PLSAT version '${req.params.version}' not found` });
-    }
+    try {
+      const examFile = path.join(contentDir, 'plsat', `v${req.params.version}.json`);
+      if (!fs.existsSync(examFile)) {
+        return res.status(404).json({ error: `PLSAT version '${req.params.version}' not found` });
+      }
 
-    const data = JSON.parse(fs.readFileSync(examFile, 'utf-8'));
+      const data = JSON.parse(fs.readFileSync(examFile, 'utf-8'));
 
-    // v3.0+ path: resolve variants + flatten passages
-    if (data.items) {
-      const { questions, passages } = resolveV3(data as V3Exam);
+      // v3.0+ path: resolve variants + flatten passages
+      if (data.items) {
+        const { questions, passages } = resolveV3(data as V3Exam);
+        return res.json({
+          version: data.version,
+          frameworkVersion: data.frameworkVersion,
+          timeLimit: data.timeLimit,
+          passThreshold: data.passThreshold,
+          title: data.title,
+          description: data.description,
+          questions,
+          ...(Object.keys(passages).length > 0 ? { passages } : {}),
+        });
+      }
+
+      // Legacy v2.0 path: shuffle questions
+      const shuffled = [...data.questions].sort(() => Math.random() - 0.5);
       return res.json({
-        version: data.version,
-        frameworkVersion: data.frameworkVersion,
-        timeLimit: data.timeLimit,
-        passThreshold: data.passThreshold,
-        title: data.title,
-        description: data.description,
-        questions,
-        ...(Object.keys(passages).length > 0 ? { passages } : {}),
+        ...data,
+        questions: shuffled,
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Internal error';
+      return res.status(500).json({ error: `Failed to load PLSAT exam: ${msg}` });
     }
-
-    // Legacy v2.0 path: shuffle questions
-    const shuffled = [...data.questions].sort(() => Math.random() - 0.5);
-    return res.json({
-      ...data,
-      questions: shuffled,
-    });
   });
 
   return router;
