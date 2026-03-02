@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-02T07:52:19.824Z'
+generated: '2026-03-02T08:07:05.831Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -4305,6 +4305,41 @@ by_symbol:
           - .paradigm/protocols/add-workspace-subcommand.protocol
         description: 'feat(#protocols): seed 29 additional protocols covering all paradigm patterns'
       - *ref_63
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lore-viewer':
+    symbol: '#lore-viewer'
+    total_changes: 1
+    last_modified: '2026-03-02T08:07:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0109
+        ts: '2026-03-02T08:07:04Z'
+        type: implement
+        symbols:
+          - '#lore-viewer'
+        author:
+          type: human
+          id: ascend
+        commit: 33302c4056f946d5a0076c1dbd894c37cfe15d8c
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/paradigm/lore-ui/src/App.tsx
+          - packages/paradigm/lore-ui/src/components/LoreCard.tsx
+          - packages/paradigm/lore-ui/src/components/ViewSwitcher.tsx
+          - packages/paradigm/lore-ui/src/store/loreStore.ts
+          - packages/paradigm/lore-ui/src/styles/cards.css
+          - packages/paradigm/lore-ui/src/styles/index.css
+          - packages/paradigm/lore-ui/src/styles/thread.css
+          - packages/paradigm/lore-ui/src/views/ThreadView.tsx
+          - packages/paradigm/package.json
+        description: 'feat(#lore-viewer): add light mode toggle and author-based column layout'
     contributors:
       human:
         - ascend

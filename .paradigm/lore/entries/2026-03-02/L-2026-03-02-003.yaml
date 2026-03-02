@@ -1,0 +1,66 @@
+id: L-2026-03-02-003
+type: agent-session
+timestamp: '2026-03-02T08:08:31.962Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Ship protocols, university content, lore viewer UX, and paradigm reflection
+summary: 'Marathon session: built the complete Protocols subsystem (5 MCP tools, 36 seed protocols, loader, search, freshness tracking), added university content (PARA 301 protocols lesson, 3 PLSAT questions), fixed university version badge and PLSAT question count mismatch, recorded a reflective assessment on Paradigm''s evolution, then added light mode toggle and author-based column layout to the lore viewer. Published 3.15.0 through 3.17.0.'
+symbols_touched:
+  - '#protocols'
+  - '#protocol-loader'
+  - '#university'
+  - '#plsat'
+  - '#lore-viewer'
+  - '#paradigm-mcp'
+  - '#reindex'
+  - '#lore'
+  - '#status'
+symbols_created:
+  - '#protocols'
+  - '#protocol-loader'
+files_created:
+  - packages/paradigm-mcp/src/utils/protocol-loader.ts
+  - packages/paradigm-mcp/src/tools/protocols.ts
+  - plugins/paradigm/skills/protocol/SKILL.md
+  - docs/specs/protocols.md
+  - .paradigm/protocols/update-university-content.protocol
+files_modified:
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/tools/reindex.ts
+  - CLAUDE.md
+  - CHANGELOG.md
+  - packages/university/src/content/courses/para-301.json
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/ui/vite.config.ts
+  - packages/paradigm/lore-ui/src/App.tsx
+  - packages/paradigm/lore-ui/src/components/ViewSwitcher.tsx
+  - packages/paradigm/lore-ui/src/components/LoreCard.tsx
+  - packages/paradigm/lore-ui/src/views/ThreadView.tsx
+  - packages/paradigm/lore-ui/src/store/loreStore.ts
+  - packages/paradigm/lore-ui/src/styles/index.css
+  - packages/paradigm/lore-ui/src/styles/thread.css
+  - packages/paradigm/lore-ui/src/styles/cards.css
+lines_added: 3100
+lines_removed: 83
+commit: 33302c40
+learnings:
+  - PLSAT totalSlots should reflect resolved question count including passage sub-questions, not item array length
+  - Vite define values are build-time only — ui/dist must be rebuilt for npm publish to include changes
+  - Lore viewer two-column layout is more useful when user-selectable rather than hardcoded to human/agent split
+verification:
+  status: pass
+  details:
+    build: pass
+    lore_server: pass
+    light_mode: pass
+    author_columns: pass
+tags:
+  - feature
+  - university
+  - lore-viewer
+  - bugfix
+  - release
+  - protocols
