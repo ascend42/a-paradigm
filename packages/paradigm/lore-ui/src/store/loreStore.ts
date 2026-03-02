@@ -82,6 +82,8 @@ interface LoreState {
   selectedSessionId: string | null;
   loading: boolean;
   projectName: string;
+  theme: 'dark' | 'light';
+  leftAuthors: string[];
 
   setView: (view: ViewMode) => void;
   setFilter: (filter: Partial<LoreFilter>) => void;
@@ -90,11 +92,29 @@ interface LoreState {
   selectSymbol: (symbol: string | null) => void;
   selectAuthor: (author: string | null) => void;
   selectSession: (id: string | null) => void;
+  toggleTheme: () => void;
+  toggleLeftAuthor: (authorId: string) => void;
   fetchEntries: () => Promise<void>;
   fetchSymbols: () => Promise<void>;
   fetchAuthors: () => Promise<void>;
   fetchSessions: () => Promise<void>;
   fetchAll: () => Promise<void>;
+}
+
+function getInitialTheme(): 'dark' | 'light' {
+  try {
+    const saved = localStorage.getItem('paradigm-lore-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {}
+  return 'dark';
+}
+
+function getInitialLeftAuthors(): string[] {
+  try {
+    const saved = localStorage.getItem('paradigm-lore-left-authors');
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return [];
 }
 
 export const useLoreStore = create<LoreState>((set, get) => ({
@@ -110,6 +130,8 @@ export const useLoreStore = create<LoreState>((set, get) => ({
   selectedSessionId: null,
   loading: false,
   projectName: '',
+  theme: getInitialTheme(),
+  leftAuthors: getInitialLeftAuthors(),
 
   setView: (view) => set({ view }),
 
@@ -126,6 +148,22 @@ export const useLoreStore = create<LoreState>((set, get) => ({
   selectEntry: (id) => set({ selectedEntryId: id }),
   selectSymbol: (symbol) => set({ selectedSymbol: symbol }),
   selectAuthor: (author) => set({ selectedAuthor: author }),
+
+  toggleTheme: () => {
+    const next = get().theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('paradigm-lore-theme', next); } catch {}
+    set({ theme: next });
+  },
+
+  toggleLeftAuthor: (authorId) => {
+    const current = get().leftAuthors;
+    const next = current.includes(authorId)
+      ? current.filter(a => a !== authorId)
+      : [...current, authorId];
+    try { localStorage.setItem('paradigm-lore-left-authors', JSON.stringify(next)); } catch {}
+    set({ leftAuthors: next });
+  },
 
   selectSession: async (id) => {
     set({ selectedSessionId: id });

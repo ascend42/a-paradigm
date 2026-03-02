@@ -13,9 +13,11 @@ export default function App() {
   const entries = useLoreStore(s => s.entries);
   const projectName = useLoreStore(s => s.projectName);
   const authors = useLoreStore(s => s.authors);
+  const theme = useLoreStore(s => s.theme);
   const fetchAll = useLoreStore(s => s.fetchAll);
 
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
     fetchAll();
   }, []);
 

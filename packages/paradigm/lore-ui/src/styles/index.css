@@ -33,6 +33,36 @@
   --spine-width: 2px;
 }
 
+[data-theme="light"] {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f3f5;
+  --bg-panel: #ffffff;
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #495057;
+  --text-muted: #868e96;
+
+  --border: #dee2e6;
+  --border-hover: #adb5bd;
+
+  --color-component: #0c8599;
+  --color-gate: #2b8a3e;
+  --color-flow: #e67700;
+  --color-signal: #c2255c;
+  --color-aspect: #6741d9;
+
+  --color-agent-session: #5c7cfa;
+  --color-human-note: #20c997;
+  --color-decision: #e67700;
+  --color-review: #9775fa;
+  --color-incident: #fa5252;
+  --color-milestone: #339af0;
+
+  --spine-color: #dee2e6;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -109,12 +139,37 @@ body {
 }
 
 /* View Switcher */
+.view-switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .view-switcher {
   display: flex;
   gap: 2px;
   background: var(--bg-primary);
   border-radius: 6px;
   padding: 2px;
+}
+
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
 }
 
 .view-tab {

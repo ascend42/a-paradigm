@@ -44,9 +44,17 @@
   color: var(--color-human-note);
 }
 
+[data-theme="light"] .author-badge.human {
+  background: rgba(32, 201, 151, 0.12);
+}
+
 .author-badge.agent {
   background: rgba(129, 140, 248, 0.1);
   color: var(--color-agent-session);
+}
+
+[data-theme="light"] .author-badge.agent {
+  background: rgba(92, 124, 250, 0.12);
 }
 
 .lore-card-type {
@@ -148,6 +156,10 @@
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .detail-backdrop {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .detail-panel {

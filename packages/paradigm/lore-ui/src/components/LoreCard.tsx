@@ -9,7 +9,12 @@ function formatTime(ts: string): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function LoreCard({ entry }: { entry: LoreEntry }) {
+interface LoreCardProps {
+  entry: LoreEntry;
+  side?: 'left' | 'right';
+}
+
+export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
   const selectEntry = useLoreStore(s => s.selectEntry);
   const isHuman = entry.author.type === 'human';
 
@@ -17,7 +22,7 @@ export function LoreCard({ entry }: { entry: LoreEntry }) {
   const loc = (entry.lines_added || 0) + (entry.lines_removed || 0);
 
   return (
-    <div className={`lore-card-row ${isHuman ? 'human' : 'agent'}`}>
+    <div className={`lore-card-row ${side} ${isHuman ? 'human' : 'agent'}`}>
       <div className="lore-card" onClick={() => selectEntry(entry.id)}>
         <div className="lore-card-header">
           <div className="lore-card-author">

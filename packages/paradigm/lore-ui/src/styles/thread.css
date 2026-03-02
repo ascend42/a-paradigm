@@ -6,6 +6,11 @@
   padding: 24px 16px;
 }
 
+/* Single column mode (no left authors selected) */
+.thread-view.single-column {
+  max-width: 600px;
+}
+
 /* Timeline Spine */
 .timeline-spine {
   position: absolute;
@@ -24,26 +29,63 @@
   z-index: 10;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 0 4px;
   margin-bottom: 8px;
-  pointer-events: none;
 }
 
-.column-label {
+.column-label-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.column-label-group.left {
+  max-width: 48%;
+}
+
+.column-label-group.right {
+  max-width: 48%;
+}
+
+.column-label-text {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  color: var(--text-muted);
   padding: 3px 10px;
   border-radius: 3px;
   background: var(--bg-secondary);
+  white-space: nowrap;
 }
 
-.column-label.human {
-  color: var(--color-human-note);
+.column-author-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.column-label.agent {
+.column-author-pill {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.column-author-pill:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.column-author-pill.active {
+  background: rgba(129, 140, 248, 0.15);
+  border-color: var(--color-agent-session);
   color: var(--color-agent-session);
 }
 
@@ -89,7 +131,7 @@
   background: rgba(129, 140, 248, 0.1);
 }
 
-/* Lore Card */
+/* Lore Card Row — Two-column layout */
 .lore-card-row {
   display: flex;
   align-items: flex-start;
@@ -97,17 +139,23 @@
   position: relative;
 }
 
-.lore-card-row.human {
+.lore-card-row.left {
   justify-content: flex-start;
   padding-right: 52%;
 }
 
-.lore-card-row.agent {
+.lore-card-row.right {
   justify-content: flex-end;
   padding-left: 52%;
 }
 
-/* Connector dot - color-coded */
+/* Single-column mode: all cards are full-width on the right */
+.single-column .lore-card-row.right {
+  justify-content: flex-start;
+  padding-left: 0;
+}
+
+/* Connector dot - color-coded by author type */
 .lore-card-row::before {
   content: '';
   position: absolute;
@@ -122,6 +170,10 @@
   z-index: 2;
 }
 
+.single-column .lore-card-row::before {
+  display: none;
+}
+
 .lore-card-row.human::before {
   background: var(--color-human-note);
 }
@@ -131,24 +183,36 @@
 }
 
 /* Connector arms - color-coded */
-.lore-card-row.human::after,
-.lore-card-row.agent::after {
+.lore-card-row.left::after,
+.lore-card-row.right::after {
   content: '';
   position: absolute;
   top: 19px;
   height: 1px;
 }
 
-.lore-card-row.human::after {
+.single-column .lore-card-row::after {
+  display: none;
+}
+
+.lore-card-row.left::after {
   left: calc(100% - 52% + 8px);
   right: 50%;
   background: var(--color-human-note);
   opacity: 0.4;
 }
 
-.lore-card-row.agent::after {
+.lore-card-row.left.agent::after {
+  background: var(--color-agent-session);
+}
+
+.lore-card-row.right::after {
   left: 50%;
   right: calc(100% - 52% + 8px);
   background: var(--color-agent-session);
   opacity: 0.4;
+}
+
+.lore-card-row.right.human::after {
+  background: var(--color-human-note);
 }

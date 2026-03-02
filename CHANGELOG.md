@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.0] — 2026-03-02
+
+### Added
+
+#### Lore Viewer UX (`@a-company/paradigm` 3.16.1 → 3.17.0)
+
+- **Light mode toggle**: Sun/moon button to the right of the view switcher segmented control. Theme persists to localStorage.
+- **Author-based column layout**: Timeline entries now appear on the right by default. Click an author pill to move their entries to the left column, creating a side-by-side conversation view. Click `×` to remove them. When no authors are selected for the left, entries display in a single-column layout. Selection persists to localStorage.
+- Replaced hardcoded human-left/agent-right split — any author (human or agent) can be placed on either side
+
 ## [3.16.1] — 2026-03-01
 
 ### Fixed
