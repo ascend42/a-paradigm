@@ -2,8 +2,50 @@
  * Logs View - Real-time structured log viewer with WebSocket streaming
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import { useLogsStore, type LogEntry } from '../store/logsStore';
+
+function useResizableColumns(defaults: number[]) {
+  const [widths, setWidths] = useState(defaults);
+  const dragging = useRef<{ idx: number; startX: number; startW: number } | null>(null);
+
+  const onMouseDown = useCallback((idx: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = { idx, startX: e.clientX, startW: widths[idx] };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = ev.clientX - dragging.current.startX;
+      const newW = Math.max(40, dragging.current.startW + delta);
+      setWidths((prev) => {
+        const next = [...prev];
+        next[dragging.current!.idx] = newW;
+        return next;
+      });
+    };
+
+    const onMouseUp = () => {
+      dragging.current = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [widths]);
+
+  const gridTemplate = widths.map((w, i) => i === widths.length - 1 ? '1fr' : `${w}px`).join(' ');
+  return { widths, gridTemplate, onMouseDown };
+}
+
+function ResizeHandle({ idx, onMouseDown }: { idx: number; onMouseDown: (idx: number, e: React.MouseEvent) => void }) {
+  return (
+    <span
+      className="col-resize-handle"
+      onMouseDown={(e) => onMouseDown(idx, e)}
+    />
+  );
+}
 
 interface ContextMenuState {
   x: number;
@@ -29,9 +71,8 @@ const SYMBOL_COLORS: Record<string, string> = {
 
 function formatTimestamp(ts: string): string {
   const d = new Date(ts);
-  const date = d.toISOString().slice(0, 10);
-  const time = d.toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-  return `${date} ${time}`;
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function LogRow({ entry, isExpanded, onToggle, onContextMenu }: {
@@ -43,7 +84,11 @@ function LogRow({ entry, isExpanded, onToggle, onContextMenu }: {
   const symbolColor = SYMBOL_COLORS[entry.symbolType] || SYMBOL_COLORS.raw;
 
   return (
-    <div className={`log-row log-row--${entry.level}`} onClick={onToggle} onContextMenu={onContextMenu}>
+    <div
+      className={`log-row log-row--${entry.level}${isExpanded ? ' log-row--expanded' : ''}`}
+      onClick={onToggle}
+      onContextMenu={onContextMenu}
+    >
       <span className="log-time">{formatTimestamp(entry.timestamp)}</span>
       <span className="log-level" style={{ color: LEVEL_COLORS[entry.level] }}>
         {entry.level.toUpperCase().padEnd(5)}
@@ -96,11 +141,12 @@ export function LogsView() {
   } = useLogsStore();
 
   const logs = getFilteredLogs();
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsTopRef = useRef<HTMLDivElement>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [expandAll, setExpandAll] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const { gridTemplate, onMouseDown: onColResize } = useResizableColumns([180, 50, 160, 100]);
 
   const hasExclusions = excludedSymbols.size > 0 || excludedSymbolTypes.size > 0 ||
     excludedMessages.size > 0 || excludedServices.size > 0;
@@ -136,7 +182,6 @@ export function LogsView() {
       setExpandedIds(new Set());
       setExpandAll(false);
     } else {
-      setExpandedIds(new Set(logs.filter((l) => l.data).map((l) => l.id)));
       setExpandAll(true);
     }
   };
@@ -149,10 +194,10 @@ export function LogsView() {
     return () => disconnectWebSocket();
   }, [loadLogs, loadServices, connectWebSocket, disconnectWebSocket]);
 
-  // Auto-scroll when new logs arrive
+  // Auto-scroll to top when new logs arrive (newest are prepended)
   useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && logsTopRef.current) {
+      logsTopRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs.length, autoScroll]);
 
@@ -296,16 +341,17 @@ export function LogsView() {
       )}
 
       {/* Log Table */}
-      <div className="logs-table">
+      <div className="logs-table" style={{ '--log-cols': gridTemplate } as CSSProperties}>
         <div className="logs-header">
-          <span className="log-time">Time</span>
-          <span className="log-level">Level</span>
-          <span className="log-symbol">Symbol</span>
-          <span className="log-service">Service</span>
+          <span className="log-time">Time<ResizeHandle idx={0} onMouseDown={onColResize} /></span>
+          <span className="log-level">Level<ResizeHandle idx={1} onMouseDown={onColResize} /></span>
+          <span className="log-symbol">Symbol<ResizeHandle idx={2} onMouseDown={onColResize} /></span>
+          <span className="log-service">Service<ResizeHandle idx={3} onMouseDown={onColResize} /></span>
           <span className="log-message">Message</span>
         </div>
 
         <div className="logs-body">
+          <div ref={logsTopRef} />
           {logs.length === 0 ? (
             <div className="logs-empty">
               <p>No logs yet.</p>
@@ -324,7 +370,6 @@ export function LogsView() {
               />
             ))
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
     </div>

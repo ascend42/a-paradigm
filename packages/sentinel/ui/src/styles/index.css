@@ -2201,7 +2201,9 @@ body {
 }
 
 .logs-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--log-cols, 180px 50px 160px 100px 1fr);
+  gap: 8px;
   padding: 6px 16px;
   border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.1));
   background: var(--panel-bg);
@@ -2236,12 +2238,13 @@ body {
 
 /* Log Row */
 .log-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--log-cols, 180px 50px 160px 100px 1fr);
+  gap: 8px;
   padding: 4px 16px;
   border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.04));
   cursor: pointer;
   transition: background var(--transition-fast);
-  flex-wrap: wrap;
   align-items: baseline;
 }
 
@@ -2262,21 +2265,16 @@ body {
 }
 
 .log-time {
-  width: 180px;
-  flex-shrink: 0;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .log-level {
-  width: 50px;
-  flex-shrink: 0;
   font-weight: 600;
   font-size: 11px;
 }
 
 .log-symbol {
-  width: 160px;
-  flex-shrink: 0;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2284,8 +2282,6 @@ body {
 }
 
 .log-service {
-  width: 100px;
-  flex-shrink: 0;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2293,7 +2289,6 @@ body {
 }
 
 .log-message {
-  flex: 1;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2301,15 +2296,31 @@ body {
 }
 
 .log-duration {
-  width: 70px;
-  flex-shrink: 0;
   text-align: right;
   color: var(--text-muted);
   font-size: 11px;
 }
 
+/* Expanded log row — message wraps, data payload visible */
+.log-row--expanded {
+  background: var(--hover-bg, rgba(99, 102, 241, 0.03));
+}
+
+.log-row--expanded .log-message {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+}
+
+.log-row--expanded .log-symbol,
+.log-row--expanded .log-service {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+}
+
 .log-data {
-  width: 100%;
+  grid-column: 1 / -1;
   margin-top: 6px;
   padding: 8px 12px;
   background: var(--input-bg);
@@ -2853,7 +2864,7 @@ body {
 
 .events-table-header {
   display: grid;
-  grid-template-columns: 180px 50px 1fr 100px 80px;
+  grid-template-columns: var(--evt-cols, 180px 50px 200px 100px 1fr);
   gap: 8px;
   padding: 6px 16px;
   font-weight: 600;
@@ -2907,7 +2918,7 @@ body {
 
 .event-row {
   display: grid;
-  grid-template-columns: 180px 50px 1fr 100px 80px;
+  grid-template-columns: var(--evt-cols, 180px 50px 200px 100px 1fr);
   gap: 8px;
   padding: 4px 16px;
   cursor: pointer;
@@ -2925,6 +2936,22 @@ body {
 
 .event-row--warn {
   background: rgba(245, 158, 11, 0.03);
+}
+
+.event-row--expanded {
+  background: var(--hover-bg, rgba(99, 102, 241, 0.03));
+}
+
+.event-row--expanded .event-type {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+}
+
+.event-row--expanded .event-service {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
 }
 
 .event-time {
@@ -2979,6 +3006,31 @@ body {
 .event-data pre {
   margin: 0;
   color: var(--text-secondary);
+}
+
+/* ============================================
+   Resizable Column Handle
+   ============================================ */
+
+.logs-header > span,
+.events-table-header > span {
+  position: relative;
+}
+
+.col-resize-handle {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.col-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.3;
+  border-radius: 2px;
 }
 
 /* ============================================

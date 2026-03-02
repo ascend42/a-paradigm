@@ -5,9 +5,51 @@
  * scope configuration, visualization hints, and causality declarations.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import { useEventsStore, type GenericEvent } from '../store/eventsStore';
 import { useSchemasStore, type StoredSchema } from '../store/schemasStore';
+
+function useResizableColumns(defaults: number[]) {
+  const [widths, setWidths] = useState(defaults);
+  const dragging = useRef<{ idx: number; startX: number; startW: number } | null>(null);
+
+  const onMouseDown = useCallback((idx: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = { idx, startX: e.clientX, startW: widths[idx] };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = ev.clientX - dragging.current.startX;
+      const newW = Math.max(40, dragging.current.startW + delta);
+      setWidths((prev) => {
+        const next = [...prev];
+        next[dragging.current!.idx] = newW;
+        return next;
+      });
+    };
+
+    const onMouseUp = () => {
+      dragging.current = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [widths]);
+
+  const gridTemplate = widths.map((w, i) => i === widths.length - 1 ? '1fr' : `${w}px`).join(' ');
+  return { widths, gridTemplate, onMouseDown };
+}
+
+function ResizeHandle({ idx, onMouseDown }: { idx: number; onMouseDown: (idx: number, e: React.MouseEvent) => void }) {
+  return (
+    <span
+      className="col-resize-handle"
+      onMouseDown={(e) => onMouseDown(idx, e)}
+    />
+  );
+}
 
 interface EventContextMenuState {
   x: number;
@@ -35,9 +77,8 @@ const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
 
 function formatTimestamp(ts: string): string {
   const d = new Date(ts);
-  const date = d.toISOString().slice(0, 10);
-  const time = d.toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-  return `${date} ${time}`;
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function getCategoryColor(category: string, schema?: StoredSchema): string {
@@ -191,7 +232,11 @@ function EventRow({
   const catColor = getCategoryColor(event.category, schema);
 
   return (
-    <div className={`event-row event-row--${event.severity || 'info'}`} onClick={onToggle} onContextMenu={onContextMenu}>
+    <div
+      className={`event-row event-row--${event.severity || 'info'}${isExpanded ? ' event-row--expanded' : ''}`}
+      onClick={onToggle}
+      onContextMenu={onContextMenu}
+    >
       <span className="event-time">{formatTimestamp(event.timestamp)}</span>
       <span className="event-severity" style={{ color: SEVERITY_COLORS[event.severity || 'info'] }}>
         {(event.severity || 'info').toUpperCase().padEnd(5)}
@@ -225,6 +270,7 @@ function EventTable({ schema }: { schema: StoredSchema }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [expandAll, setExpandAll] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { gridTemplate, onMouseDown: onColResize } = useResizableColumns([180, 50, 200, 100]);
 
   const toggleRow = (id: string) => {
     setExpandedIds((prev) => {
@@ -268,7 +314,6 @@ function EventTable({ schema }: { schema: StoredSchema }) {
       setExpandedIds(new Set());
       setExpandAll(false);
     } else {
-      setExpandedIds(new Set(filtered.filter((e) => e.data).map((e) => e.id)));
       setExpandAll(true);
     }
   };
@@ -285,7 +330,7 @@ function EventTable({ schema }: { schema: StoredSchema }) {
   }
 
   return (
-    <div className="events-table" ref={containerRef}>
+    <div className="events-table" ref={containerRef} style={{ '--evt-cols': gridTemplate } as CSSProperties}>
       <div className="events-table-actions">
         <span className="events-count">{filtered.length} events</span>
         <button
@@ -331,10 +376,10 @@ function EventTable({ schema }: { schema: StoredSchema }) {
       )}
 
       <div className="events-table-header">
-        <span className="event-time">Time</span>
-        <span className="event-severity">Level</span>
-        <span className="event-type">Type</span>
-        <span className="event-service">Service</span>
+        <span className="event-time">Time<ResizeHandle idx={0} onMouseDown={onColResize} /></span>
+        <span className="event-severity">Level<ResizeHandle idx={1} onMouseDown={onColResize} /></span>
+        <span className="event-type">Type<ResizeHandle idx={2} onMouseDown={onColResize} /></span>
+        <span className="event-service">Service<ResizeHandle idx={3} onMouseDown={onColResize} /></span>
         <span className="event-scope">Scope</span>
       </div>
       <div className="events-table-body">
