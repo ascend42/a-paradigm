@@ -32,8 +32,10 @@ export async function loreShowCommand(id: string, options: Record<string, unknow
   console.log();
 
   // Author
-  const authorIcon = entry.author.type === 'agent' ? '🤖' : '👤';
-  console.log(`  ${authorIcon} ${chalk.white(entry.author.id)}${entry.author.model ? chalk.gray(` (${entry.author.model})`) : ''}`);
+  console.log(`  👤 ${chalk.white(entry.author)}`);
+  if (entry.agent) {
+    console.log(`  🤖 ${chalk.gray(entry.agent.model)}${entry.agent.provider ? chalk.gray(` (${entry.agent.provider})`) : ''}`);
+  }
   if (entry.duration_minutes) {
     console.log(`  ⏱  ${entry.duration_minutes} minutes`);
   }

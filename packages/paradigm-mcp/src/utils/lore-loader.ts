@@ -6,7 +6,8 @@
  *     timeline.yaml          # index metadata
  *     entries/
  *       2026-02-21/
- *         L-2026-02-21-001.yaml
+ *         L-2026-02-21-001.yaml         (legacy)
+ *         L-2026-03-02-ascend-143025-001.lore  (new)
  */
 
 import * as fs from 'fs';
@@ -38,10 +39,10 @@ export interface LoreEntry {
   type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
   timestamp: string;
   duration_minutes?: number;
-  author: {
-    type: 'human' | 'agent';
-    id: string;
-    model?: string;
+  author: string;
+  agent?: {
+    provider: string;
+    model: string;
   };
   title: string;
   summary: string;
@@ -78,6 +79,8 @@ export interface LoreEntry {
 
 export interface LoreFilter {
   author?: string;
+  hasAgent?: boolean;
+  /** @deprecated Use hasAgent instead */
   authorType?: 'human' | 'agent';
   symbol?: string;
   dateFrom?: string;
@@ -95,6 +98,111 @@ export interface LoreTimeline {
   entries: number;
   last_updated: string;
   authors: string[];
+}
+
+// ────────────────────────────────────────────────────────
+// Normalization (inlined from core to avoid cross-package dep)
+// ────────────────────────────────────────────────────────
+
+interface OldAuthorBlock {
+  type: 'human' | 'agent';
+  id: string;
+  model?: string;
+}
+
+function inferProvider(model: string): string {
+  const lower = model.toLowerCase();
+  if (lower.includes('claude') || lower.includes('anthropic')) return 'anthropic';
+  if (lower.includes('gpt') || lower.includes('openai') || lower.includes('o1') || lower.includes('o3')) return 'openai';
+  if (lower.includes('gemini') || lower.includes('google') || lower.includes('palm')) return 'google';
+  if (lower.includes('llama') || lower.includes('meta')) return 'meta';
+  if (lower.includes('mistral') || lower.includes('mixtral')) return 'mistral';
+  if (lower.includes('deepseek')) return 'deepseek';
+  if (lower.includes('cohere') || lower.includes('command')) return 'cohere';
+  return 'unknown';
+}
+
+function normalizeLoreEntry(raw: Record<string, unknown>): LoreEntry {
+  const entry = raw as Record<string, unknown>;
+  const author = entry.author;
+
+  if (typeof author === 'string') {
+    return raw as unknown as LoreEntry;
+  }
+
+  if (author && typeof author === 'object' && !Array.isArray(author)) {
+    const old = author as OldAuthorBlock;
+    if (old.type === 'agent') {
+      entry.author = 'unknown';
+      entry.agent = {
+        provider: old.model ? inferProvider(old.model) : inferProvider(old.id),
+        model: old.model || old.id,
+      };
+    } else {
+      entry.author = old.id || 'unknown';
+    }
+    delete entry.assistedBy;
+  }
+
+  return entry as unknown as LoreEntry;
+}
+
+// ────────────────────────────────────────────────────────
+// Author resolution (inlined from core)
+// ────────────────────────────────────────────────────────
+
+import { execSync } from 'child_process';
+import * as os from 'os';
+
+function sanitizeAuthor(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 20) || 'unknown';
+}
+
+function resolveAuthor(): string {
+  const envAuthor = process.env.PARADIGM_AUTHOR;
+  if (envAuthor) return sanitizeAuthor(envAuthor);
+
+  try {
+    const gitName = execSync('git config user.name', { encoding: 'utf-8', timeout: 3000 }).trim();
+    if (gitName) return sanitizeAuthor(gitName);
+  } catch {
+    // git not available
+  }
+
+  try {
+    const username = os.userInfo().username;
+    if (username) return sanitizeAuthor(username);
+  } catch {
+    // userInfo can fail
+  }
+
+  return 'unknown';
+}
+
+// ────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────
+
+/** Matches both .yaml and .lore lore entry files */
+function isLoreFile(filename: string): boolean {
+  return filename.endsWith('.yaml') || filename.endsWith('.lore');
+}
+
+/**
+ * Resolve the file path for a lore entry ID, trying .lore first then .yaml.
+ */
+function resolveEntryPath(rootDir: string, dateStr: string, entryId: string): string | null {
+  const dirPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
+  const lorePath = path.join(dirPath, `${entryId}.lore`);
+  if (fs.existsSync(lorePath)) return lorePath;
+  const yamlPath = path.join(dirPath, `${entryId}.yaml`);
+  if (fs.existsSync(yamlPath)) return yamlPath;
+  return null;
 }
 
 // ────────────────────────────────────────────────────────
@@ -127,14 +235,14 @@ export async function loadLoreEntries(rootDir: string, filter?: LoreFilter): Pro
 
     const dirPath = path.join(entriesPath, dateDir);
     const files = fs.readdirSync(dirPath)
-      .filter(f => f.endsWith('.yaml'))
+      .filter(isLoreFile)
       .sort();
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        entries.push(entry);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        entries.push(normalizeLoreEntry(raw));
       } catch {
         // Skip malformed files
       }
@@ -151,11 +259,12 @@ export async function loadLoreEntry(rootDir: string, entryId: string): Promise<L
   const dateMatch = entryId.match(/^L-(\d{4}-\d{2}-\d{2})-/);
   if (dateMatch) {
     const dateStr = dateMatch[1];
-    const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-    if (fs.existsSync(entryPath)) {
+    const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+    if (entryPath) {
       try {
         const content = fs.readFileSync(entryPath, 'utf8');
-        return yaml.load(content) as LoreEntry;
+        const raw = yaml.load(content) as Record<string, unknown>;
+        return normalizeLoreEntry(raw);
       } catch {
         return null;
       }
@@ -201,11 +310,16 @@ export async function recordLoreEntry(rootDir: string, entry: LoreEntry): Promis
     fs.mkdirSync(datePath, { recursive: true });
   }
 
-  if (!entry.id) {
-    entry.id = generateLoreId(rootDir, dateStr);
+  // Resolve author if not set
+  if (!entry.author) {
+    entry.author = resolveAuthor();
   }
 
-  const entryPath = path.join(datePath, `${entry.id}.yaml`);
+  if (!entry.id) {
+    entry.id = generateLoreId(rootDir, dateStr, entry.author, entry.timestamp);
+  }
+
+  const entryPath = path.join(datePath, `${entry.id}.lore`);
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
 
   // Rebuild timeline
@@ -226,9 +340,9 @@ export async function addLoreReview(
   if (!entry) return false;
 
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
 
-  if (!fs.existsSync(entryPath)) return false;
+  if (!entryPath) return false;
 
   entry.review = review;
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
@@ -256,13 +370,14 @@ export async function rebuildTimeline(rootDir: string): Promise<void> {
 
   for (const dateDir of dateDirs) {
     const dirPath = path.join(entriesPath, dateDir);
-    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(dirPath).filter(isLoreFile);
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        authors.add(entry.author.id);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        const entry = normalizeLoreEntry(raw);
+        authors.add(entry.author);
         entryCount++;
         if (!lastUpdated || entry.timestamp > lastUpdated) {
           lastUpdated = entry.timestamp;
@@ -306,16 +421,12 @@ export async function rebuildTimeline(rootDir: string): Promise<void> {
 // Legacy migration
 // ────────────────────────────────────────────────────────
 
-/**
- * Migrate old-format lore entries (root-level YAML without date partitioning)
- * to v2 schema in dated directories. Runs automatically on rebuild/load.
- */
 function migrateLegacyEntries(rootDir: string): number {
   const entriesPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR);
   if (!fs.existsSync(entriesPath)) return 0;
 
   const rootFiles = fs.readdirSync(entriesPath)
-    .filter(f => f.endsWith('.yaml') && !f.startsWith('.'));
+    .filter(f => isLoreFile(f) && !f.startsWith('.'));
 
   let migrated = 0;
   for (const file of rootFiles) {
@@ -327,10 +438,10 @@ function migrateLegacyEntries(rootDir: string): number {
       const content = fs.readFileSync(filePath, 'utf8');
       const raw = yaml.load(content) as Record<string, unknown>;
 
-      // Skip if already v2 format (has author block)
+      // Skip if already v2 format
       if (raw.author && typeof raw.author === 'object') continue;
+      if (typeof raw.author === 'string' && raw.timestamp) continue;
 
-      // Extract date — old format uses `date: "2026-02-21"`
       const dateStr = typeof raw.date === 'string'
         ? raw.date.slice(0, 10)
         : new Date().toISOString().slice(0, 10);
@@ -340,16 +451,15 @@ function migrateLegacyEntries(rootDir: string): number {
         fs.mkdirSync(datePath, { recursive: true });
       }
 
-      // Generate ID
-      const id = generateLoreId(rootDir, dateStr);
+      const author = resolveAuthor();
+      const timestamp = `${dateStr}T00:00:00.000Z`;
+      const id = generateLoreId(rootDir, dateStr, author, timestamp);
 
-      // Map old type to v2 type
       const oldType = String(raw.type || 'agent-session');
       const v2Type = ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'].includes(oldType)
         ? oldType
         : 'agent-session';
 
-      // Convert test_results to verification
       let verification: Record<string, unknown> | undefined;
       if (raw.test_results && typeof raw.test_results === 'object') {
         const tr = raw.test_results as Record<string, number>;
@@ -362,9 +472,10 @@ function migrateLegacyEntries(rootDir: string): number {
       const v2Entry: LoreEntry = {
         id,
         type: v2Type as LoreEntry['type'],
-        timestamp: `${dateStr}T00:00:00.000Z`,
-        author: { type: 'agent', id: 'unknown' },
-        title: String(raw.title || file.replace('.yaml', '')),
+        timestamp,
+        author: 'unknown',
+        agent: { provider: 'unknown', model: 'unknown' },
+        title: String(raw.title || file.replace(/\.(yaml|lore)$/, '')),
         summary: String(raw.summary || ''),
         symbols_touched: Array.isArray(raw.symbols_touched) ? raw.symbols_touched : [],
         files_modified: Array.isArray(raw.files_modified) ? raw.files_modified : undefined,
@@ -373,7 +484,7 @@ function migrateLegacyEntries(rootDir: string): number {
       };
 
       fs.writeFileSync(
-        path.join(datePath, `${id}.yaml`),
+        path.join(datePath, `${id}.lore`),
         yaml.dump(v2Entry, { lineWidth: -1, noRefs: true })
       );
       fs.unlinkSync(filePath);
@@ -397,8 +508,8 @@ export async function updateLoreEntry(
   if (!entry) return false;
 
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-  if (!fs.existsSync(entryPath)) return false;
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+  if (!entryPath) return false;
 
   // Merge provided fields
   if (partial.title !== undefined) entry.title = partial.title;
@@ -431,14 +542,14 @@ export async function deleteLoreEntry(rootDir: string, entryId: string): Promise
   if (!entry) return false;
 
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-  if (!fs.existsSync(entryPath)) return false;
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+  if (!entryPath) return false;
 
   fs.unlinkSync(entryPath);
 
   // Clean up empty date directory
   const dateDir = path.dirname(entryPath);
-  const remaining = fs.readdirSync(dateDir).filter(f => f.endsWith('.yaml'));
+  const remaining = fs.readdirSync(dateDir).filter(isLoreFile);
   if (remaining.length === 0) {
     fs.rmdirSync(dateDir);
   }
@@ -455,10 +566,17 @@ function applyFilter(entries: LoreEntry[], filter: LoreFilter): LoreEntry[] {
   let result = entries;
 
   if (filter.author) {
-    result = result.filter(e => e.author.id === filter.author);
+    result = result.filter(e => e.author === filter.author);
   }
-  if (filter.authorType) {
-    result = result.filter(e => e.author.type === filter.authorType);
+  if (filter.hasAgent !== undefined) {
+    result = result.filter(e =>
+      filter.hasAgent ? e.agent != null : e.agent == null
+    );
+  } else if (filter.authorType) {
+    // Deprecated: map old authorType to hasAgent
+    result = result.filter(e =>
+      filter.authorType === 'agent' ? e.agent != null : e.agent == null
+    );
   }
   if (filter.symbol) {
     result = result.filter(e =>
@@ -492,20 +610,28 @@ function applyFilter(entries: LoreEntry[], filter: LoreFilter): LoreEntry[] {
   return result;
 }
 
-function generateLoreId(rootDir: string, dateStr: string): string {
+function generateLoreId(rootDir: string, dateStr: string, author: string, timestamp: string): string {
+  const sanitized = sanitizeAuthor(author);
+  const ts = new Date(timestamp);
+  const hh = String(ts.getUTCHours()).padStart(2, '0');
+  const mm = String(ts.getUTCMinutes()).padStart(2, '0');
+  const ss = String(ts.getUTCSeconds()).padStart(2, '0');
+  const timeStr = `${hh}${mm}${ss}`;
+  const prefix = `L-${dateStr}-${sanitized}-${timeStr}`;
+
   const datePath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
 
   if (!fs.existsSync(datePath)) {
-    return `L-${dateStr}-001`;
+    return `${prefix}-001`;
   }
 
   const existing = fs.readdirSync(datePath)
-    .filter(f => f.startsWith('L-') && f.endsWith('.yaml'))
+    .filter(f => f.startsWith(prefix) && isLoreFile(f))
     .map(f => {
-      const match = f.match(/L-\d{4}-\d{2}-\d{2}-(\d+)\.yaml/);
+      const match = f.match(/-(\d{3})\.(yaml|lore)$/);
       return match ? parseInt(match[1], 10) : 0;
     });
 
   const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
-  return `L-${dateStr}-${String(next).padStart(3, '0')}`;
+  return `${prefix}-${String(next).padStart(3, '0')}`;
 }

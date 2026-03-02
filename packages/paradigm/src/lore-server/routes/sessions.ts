@@ -16,7 +16,8 @@ interface LoreEntry {
   id: string;
   type: string;
   timestamp: string;
-  author: { type: string; id: string; model?: string };
+  author: string;
+  agent?: { provider: string; model: string };
   title: string;
   summary: string;
   symbols_touched: string[];
@@ -35,13 +36,39 @@ interface SessionBreadcrumb {
 export interface DerivedSession {
   id: string;
   date: string;
-  author: { type: string; id: string };
+  author: { name: string; hasAgent: boolean };
   startTime: string;
   endTime: string;
   entryCount: number;
   symbolsTouched: string[];
   entryIds: string[];
   breadcrumbs?: SessionBreadcrumb[];
+}
+
+/** Matches both .yaml and .lore lore entry files */
+function isLoreFile(filename: string): boolean {
+  return filename.endsWith('.yaml') || filename.endsWith('.lore');
+}
+
+/** Normalize old author format to new string format */
+function normalizeEntry(raw: Record<string, unknown>): LoreEntry {
+  const author = raw.author;
+  if (typeof author === 'object' && author && !Array.isArray(author)) {
+    const old = author as { type?: string; id?: string; model?: string };
+    if (old.type === 'agent') {
+      raw.author = 'unknown';
+      const model = old.model || old.id || 'unknown';
+      const lower = model.toLowerCase();
+      let provider = 'unknown';
+      if (lower.includes('claude') || lower.includes('anthropic')) provider = 'anthropic';
+      else if (lower.includes('gpt') || lower.includes('openai')) provider = 'openai';
+      raw.agent = { provider, model };
+    } else {
+      raw.author = old.id || 'unknown';
+    }
+    delete raw.assistedBy;
+  }
+  return raw as unknown as LoreEntry;
 }
 
 function loadAllEntries(projectDir: string): LoreEntry[] {
@@ -61,14 +88,14 @@ function loadAllEntries(projectDir: string): LoreEntry[] {
   for (const dateDir of dateDirs) {
     const dirPath = path.join(entriesPath, dateDir);
     const files = fs.readdirSync(dirPath)
-      .filter(f => f.endsWith('.yaml'))
+      .filter(isLoreFile)
       .sort();
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        entries.push(entry);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        entries.push(normalizeEntry(raw));
       } catch {
         // Skip malformed
       }
@@ -123,7 +150,7 @@ function deriveSessionsFromEntries(entries: LoreEntry[], breadcrumbs: SessionBre
     const prev = sorted[i - 1];
     const curr = sorted[i];
     const gap = new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime();
-    const sameAuthor = curr.author.id === prev.author.id;
+    const sameAuthor = curr.author === prev.author;
 
     if (gap <= SESSION_GAP_MS && sameAuthor) {
       currentGroup.push(curr);
@@ -149,6 +176,7 @@ function deriveSessionsFromEntries(entries: LoreEntry[], breadcrumbs: SessionBre
 
 function groupToSession(group: LoreEntry[]): DerivedSession {
   const allSymbols = new Set<string>();
+  let hasAgent = false;
   for (const entry of group) {
     if (entry.symbols_touched) {
       for (const sym of entry.symbols_touched) allSymbols.add(sym);
@@ -156,6 +184,7 @@ function groupToSession(group: LoreEntry[]): DerivedSession {
     if (entry.symbols_created) {
       for (const sym of entry.symbols_created) allSymbols.add(sym);
     }
+    if (entry.agent) hasAgent = true;
   }
 
   const startTime = group[0].timestamp;
@@ -163,9 +192,9 @@ function groupToSession(group: LoreEntry[]): DerivedSession {
   const date = startTime.slice(0, 10);
 
   return {
-    id: `session-${date}-${group[0].author.id}-${group[0].id.slice(0, 8)}`,
+    id: `session-${date}-${group[0].author}-${group[0].id.slice(0, 8)}`,
     date,
-    author: { type: group[0].author.type, id: group[0].author.id },
+    author: { name: group[0].author, hasAgent },
     startTime,
     endTime,
     entryCount: group.length,

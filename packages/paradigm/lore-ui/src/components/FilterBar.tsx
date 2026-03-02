@@ -5,10 +5,10 @@ const ENTRY_TYPES = [
   '', 'agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone',
 ];
 
-const AUTHOR_TYPES = [
-  { value: undefined as 'human' | 'agent' | undefined, label: 'All' },
-  { value: 'human' as const, label: 'Human' },
-  { value: 'agent' as const, label: 'Agent' },
+const AGENT_FILTER_OPTIONS = [
+  { value: undefined as boolean | undefined, label: 'All' },
+  { value: false as const, label: 'Human Only' },
+  { value: true as const, label: 'AI-Assisted' },
 ];
 
 export function FilterBar() {
@@ -46,15 +46,15 @@ export function FilterBar() {
 
   return (
     <div className="filter-bar">
-      {/* Author type toggle */}
+      {/* Agent filter toggle */}
       <div className="author-type-toggle">
-        {AUTHOR_TYPES.map(at => (
+        {AGENT_FILTER_OPTIONS.map(opt => (
           <button
-            key={at.label}
-            className={`author-type-pill ${filter.authorType === at.value ? 'active' : ''} ${at.value || 'all'}`}
-            onClick={() => setFilter({ authorType: at.value })}
+            key={opt.label}
+            className={`author-type-pill ${filter.hasAgent === opt.value ? 'active' : ''} ${opt.value === undefined ? 'all' : opt.value ? 'agent' : 'human'}`}
+            onClick={() => setFilter({ hasAgent: opt.value })}
           >
-            {at.label}
+            {opt.label}
           </button>
         ))}
       </div>
@@ -67,7 +67,7 @@ export function FilterBar() {
         <option value="">All authors</option>
         {authors.map(a => (
           <option key={a.id} value={a.id}>
-            {a.type === 'agent' ? '\uD83E\uDD16' : '\uD83D\uDC64'} {a.id}
+            {a.hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {a.id}
           </option>
         ))}
       </select>

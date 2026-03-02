@@ -11,11 +11,18 @@ export function applyLoreFilter(entries: LoreEntry[], filter: LoreFilter): LoreE
   let result = entries;
 
   if (filter.author) {
-    result = result.filter(e => e.author.id === filter.author);
+    result = result.filter(e => e.author === filter.author);
   }
 
-  if (filter.authorType) {
-    result = result.filter(e => e.author.type === filter.authorType);
+  if (filter.hasAgent !== undefined) {
+    result = result.filter(e =>
+      filter.hasAgent ? e.agent != null : e.agent == null
+    );
+  } else if (filter.authorType) {
+    // Deprecated: map old authorType to hasAgent
+    result = result.filter(e =>
+      filter.authorType === 'agent' ? e.agent != null : e.agent == null
+    );
   }
 
   if (filter.symbol) {

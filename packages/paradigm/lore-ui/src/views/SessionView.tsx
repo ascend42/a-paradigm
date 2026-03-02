@@ -17,12 +17,12 @@ function formatDuration(start: string, end: string): string {
 }
 
 function SessionSidebarItem({ session, active, onClick }: { session: Session; active: boolean; onClick: () => void }) {
-  const isAgent = session.author.type === 'agent';
+  const hasAgent = session.author.hasAgent;
   return (
     <div className={`sidebar-item session-sidebar-item ${active ? 'active' : ''}`} onClick={onClick}>
       <div className="session-sidebar-info">
-        <span className={`session-author-badge ${session.author.type}`}>
-          {isAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {session.author.id}
+        <span className={`session-author-badge ${hasAgent ? 'agent' : 'human'}`}>
+          {hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {session.author.name}
         </span>
         <div className="session-sidebar-meta">
           {formatTime(session.startTime)}
@@ -49,8 +49,8 @@ function SessionDetail({ session }: { session: Session }) {
     <div className="session-detail">
       <div className="session-detail-header">
         <h2>
-          <span className={`session-author-badge ${session.author.type}`}>
-            {session.author.type === 'agent' ? '\uD83E\uDD16' : '\uD83D\uDC64'} {session.author.id}
+          <span className={`session-author-badge ${session.author.hasAgent ? 'agent' : 'human'}`}>
+            {session.author.hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {session.author.name}
           </span>
         </h2>
         <div className="session-detail-meta">

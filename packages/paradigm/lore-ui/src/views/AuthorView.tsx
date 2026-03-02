@@ -31,7 +31,7 @@ export function AuthorView() {
           >
             <div>
               <span className="sidebar-item-name">
-                {a.type === 'agent' ? '\uD83E\uDD16' : '\uD83D\uDC64'} {a.id}
+                {a.hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {a.id}
               </span>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                 Last active: {new Date(a.lastActive).toLocaleDateString()}

@@ -21,6 +21,30 @@ import {
 import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
 import { detectProtocolSuggestion } from '../utils/protocol-loader.js';
+import { execSync } from 'child_process';
+import * as os from 'os';
+
+/** Resolve the human author for MCP-recorded entries */
+function resolveAuthorForMcp(): string {
+  const envAuthor = process.env.PARADIGM_AUTHOR;
+  if (envAuthor) return sanitize(envAuthor);
+
+  try {
+    const gitName = execSync('git config user.name', { encoding: 'utf-8', timeout: 3000 }).trim();
+    if (gitName) return sanitize(gitName);
+  } catch {}
+
+  try {
+    const username = os.userInfo().username;
+    if (username) return sanitize(username);
+  } catch {}
+
+  return 'unknown';
+}
+
+function sanitize(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'unknown';
+}
 
 /**
  * Get list of lore tools with safety annotations
@@ -40,12 +64,16 @@ export function getLoreToolsList() {
           },
           author: {
             type: 'string',
-            description: 'Filter by author ID (e.g., "ascend", "claude-opus-4")',
+            description: 'Filter by author (human user name, e.g., "ascend")',
+          },
+          hasAgent: {
+            type: 'boolean',
+            description: 'Filter by AI assistance: true = AI-assisted entries, false = human-only',
           },
           authorType: {
             type: 'string',
             enum: ['human', 'agent'],
-            description: 'Filter by author type',
+            description: '(Deprecated, use hasAgent) Filter by old author type',
           },
           type: {
             type: 'string',
@@ -211,7 +239,7 @@ export function getLoreToolsList() {
         properties: {
           id: {
             type: 'string',
-            description: 'Lore entry ID (e.g., "L-2026-02-23-001")',
+            description: 'Lore entry ID (e.g., "L-2026-02-23-001" or "L-2026-03-02-ascend-143025-001")',
           },
         },
         required: ['id'],
@@ -323,6 +351,7 @@ export async function handleLoreTool(
     case 'paradigm_lore_search': {
       const filter: LoreFilter = {
         author: args.author as string | undefined,
+        hasAgent: args.hasAgent as boolean | undefined,
         authorType: args.authorType as LoreFilter['authorType'],
         symbol: args.symbol as string | undefined,
         dateFrom: args.dateFrom as string | undefined,
@@ -387,7 +416,8 @@ export async function handleLoreTool(
         type,
         timestamp: new Date().toISOString(),
         duration_minutes,
-        author: { type: 'agent', id: 'claude', model: 'claude-opus-4-6' },
+        author: resolveAuthorForMcp(),
+        agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
         title,
         summary,
         symbols_touched,
@@ -454,13 +484,14 @@ export async function handleLoreTool(
         .map(([symbol, count]) => ({ symbol, count }));
 
       // Compute author activity
-      const authorActivity: Record<string, { count: number; lastActive: string; type: string }> = {};
+      const authorActivity: Record<string, { count: number; lastActive: string; hasAgent: boolean }> = {};
       for (const entry of entries) {
-        const aid = entry.author.id;
+        const aid = entry.author;
         if (!authorActivity[aid]) {
-          authorActivity[aid] = { count: 0, lastActive: entry.timestamp, type: entry.author.type };
+          authorActivity[aid] = { count: 0, lastActive: entry.timestamp, hasAgent: entry.agent != null };
         }
         authorActivity[aid].count++;
+        if (entry.agent) authorActivity[aid].hasAgent = true;
         if (entry.timestamp > authorActivity[aid].lastActive) {
           authorActivity[aid].lastActive = entry.timestamp;
         }
@@ -474,7 +505,7 @@ export async function handleLoreTool(
           hotSymbols,
           authors: Object.entries(authorActivity).map(([id, info]) => ({
             id,
-            type: info.type,
+            hasAgent: info.hasAgent,
             entries: info.count,
             lastActive: info.lastActive,
           })),
@@ -564,6 +595,7 @@ function summarizeEntry(entry: LoreEntry) {
     title: entry.title,
     summary: entry.summary,
     author: entry.author,
+    agent: entry.agent,
     timestamp: entry.timestamp,
     duration_minutes: entry.duration_minutes,
     symbols_touched: entry.symbols_touched,

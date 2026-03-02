@@ -18,23 +18,19 @@ export interface LoreError {
 }
 
 export interface LoreEntry {
-  id: string; // "L-2026-02-21-001"
+  id: string; // "L-2026-03-02-ascend-143025-001"
   type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
   timestamp: string; // ISO 8601
+
   duration_minutes?: number;
 
-  // Who
-  author: {
-    type: 'human' | 'agent';
-    id: string; // "ascend", "claude-opus-4", etc.
-    model?: string; // "claude-opus-4-6" (agents only)
-  };
+  // Who — always the human user
+  author: string; // "ascend", "matt", etc.
 
-  // Co-authorship
-  assistedBy?: {
-    type: 'agent' | 'tool' | 'human';
-    id: string;
-    role?: string;
+  // AI assistance (optional)
+  agent?: {
+    provider: string; // "anthropic", "openai", etc.
+    model: string; // "claude-opus-4-6"
   };
 
   // What
@@ -72,12 +68,23 @@ export interface LoreEntry {
     reviewed_at: string; // ISO 8601
   };
 
+  // Habit compliance (auto-attached)
+  habit_compliance?: {
+    rate: number;
+    followed: number;
+    skipped: number;
+    partial: number;
+    weakAreas?: string[];
+  };
+
   // Tags for filtering
   tags?: string[]; // ["phase-1", "sentinel", "sdk"]
 }
 
 export interface LoreFilter {
   author?: string;
+  hasAgent?: boolean;
+  /** @deprecated Use hasAgent instead */
   authorType?: 'human' | 'agent';
   symbol?: string;
   dateFrom?: string;

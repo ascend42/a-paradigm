@@ -16,18 +16,18 @@ interface LoreCardProps {
 
 export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
   const selectEntry = useLoreStore(s => s.selectEntry);
-  const isHuman = entry.author.type === 'human';
+  const hasAgent = entry.agent != null;
 
   const fileCount = (entry.files_created?.length || 0) + (entry.files_modified?.length || 0);
   const loc = (entry.lines_added || 0) + (entry.lines_removed || 0);
 
   return (
-    <div className={`lore-card-row ${side} ${isHuman ? 'human' : 'agent'}`}>
+    <div className={`lore-card-row ${side} ${hasAgent ? 'agent' : 'human'}`}>
       <div className="lore-card" onClick={() => selectEntry(entry.id)}>
         <div className="lore-card-header">
           <div className="lore-card-author">
-            <span className={`author-badge ${entry.author.type}`}>
-              {isHuman ? '\uD83D\uDC64' : '\uD83E\uDD16'} {entry.author.id}
+            <span className={`author-badge ${hasAgent ? 'agent' : 'human'}`}>
+              {hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {entry.author}
             </span>
           </div>
           <span className={`lore-card-type ${entry.type}`}>{entry.type}</span>

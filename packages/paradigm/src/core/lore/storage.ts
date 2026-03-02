@@ -6,8 +6,8 @@
  *     timeline.yaml          # index metadata
  *     entries/
  *       2026-02-21/
- *         L-2026-02-21-001.yaml
- *         L-2026-02-21-002.yaml
+ *         L-2026-02-21-001.yaml         (legacy)
+ *         L-2026-03-02-ascend-143025-001.lore  (new)
  */
 
 import * as fs from 'fs';
@@ -15,10 +15,31 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { LoreEntry, LoreFilter, LoreTimeline } from './types.js';
 import { applyLoreFilter } from './filter.js';
+import { normalizeLoreEntry } from './normalize.js';
+import { resolveAuthor, sanitizeAuthor } from './resolve-author.js';
 
 const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
 const TIMELINE_FILE = 'timeline.yaml';
+
+/** Matches both .yaml and .lore lore entry files */
+function isLoreFile(filename: string): boolean {
+  return filename.endsWith('.yaml') || filename.endsWith('.lore');
+}
+
+/**
+ * Resolve the file path for a lore entry ID, trying .lore first then .yaml.
+ */
+function resolveEntryPath(rootDir: string, dateStr: string, entryId: string): string | null {
+  const dirPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
+  // Try .lore first (new format)
+  const lorePath = path.join(dirPath, `${entryId}.lore`);
+  if (fs.existsSync(lorePath)) return lorePath;
+  // Fall back to .yaml (legacy)
+  const yamlPath = path.join(dirPath, `${entryId}.yaml`);
+  if (fs.existsSync(yamlPath)) return yamlPath;
+  return null;
+}
 
 /** Options for recording lore */
 export interface RecordLoreOptions {
@@ -137,13 +158,18 @@ export async function recordLore(
     fs.mkdirSync(datePath, { recursive: true });
   }
 
-  // Generate ID if not provided
-  if (!entry.id) {
-    entry.id = generateLoreId(rootDir, dateStr);
+  // Resolve author if not set
+  if (!entry.author) {
+    entry.author = resolveAuthor();
   }
 
-  // Write entry YAML
-  const entryPath = path.join(datePath, `${entry.id}.yaml`);
+  // Generate ID if not provided
+  if (!entry.id) {
+    entry.id = generateLoreId(rootDir, dateStr, entry.author, entry.timestamp);
+  }
+
+  // Write entry as .lore
+  const entryPath = path.join(datePath, `${entry.id}.lore`);
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
 
   // Rebuild timeline index
@@ -224,14 +250,14 @@ export async function loadLoreEntries(rootDir: string, filter?: LoreFilter): Pro
 
     const dirPath = path.join(entriesPath, dateDir);
     const files = fs.readdirSync(dirPath)
-      .filter(f => f.endsWith('.yaml'))
+      .filter(isLoreFile)
       .sort();
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        entries.push(entry);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        entries.push(normalizeLoreEntry(raw));
       } catch {
         // Skip malformed files
       }
@@ -282,13 +308,14 @@ export async function rebuildTimeline(rootDir: string): Promise<void> {
 
   for (const dateDir of dateDirs) {
     const dirPath = path.join(entriesPath, dateDir);
-    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(dirPath).filter(isLoreFile);
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        authors.add(entry.author.id);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        const entry = normalizeLoreEntry(raw);
+        authors.add(entry.author);
         entryCount++;
         if (!lastUpdated || entry.timestamp > lastUpdated) {
           lastUpdated = entry.timestamp;
@@ -347,9 +374,9 @@ export async function addReview(
 
   // Find the file
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
 
-  if (!fs.existsSync(entryPath)) {
+  if (!entryPath) {
     return false;
   }
 
@@ -364,15 +391,16 @@ export async function addReview(
  * Load a single entry by ID
  */
 export async function loadLoreEntry(rootDir: string, entryId: string): Promise<LoreEntry | null> {
-  // Extract date from ID: "L-2026-02-21-001" -> "2026-02-21"
+  // Extract date from ID: "L-2026-02-21-001" or "L-2026-03-02-ascend-143025-001"
   const dateMatch = entryId.match(/^L-(\d{4}-\d{2}-\d{2})-/);
   if (dateMatch) {
     const dateStr = dateMatch[1];
-    const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-    if (fs.existsSync(entryPath)) {
+    const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+    if (entryPath) {
       try {
         const content = fs.readFileSync(entryPath, 'utf8');
-        return yaml.load(content) as LoreEntry;
+        const raw = yaml.load(content) as Record<string, unknown>;
+        return normalizeLoreEntry(raw);
       } catch {
         return null;
       }
@@ -396,8 +424,8 @@ export async function updateLoreEntry(
   if (!entry) return false;
 
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-  if (!fs.existsSync(entryPath)) return false;
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+  if (!entryPath) return false;
 
   // Merge provided fields
   if (partial.title !== undefined) entry.title = partial.title;
@@ -430,14 +458,14 @@ export async function deleteLoreEntry(rootDir: string, entryId: string): Promise
   if (!entry) return false;
 
   const dateStr = entry.timestamp.slice(0, 10);
-  const entryPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
-  if (!fs.existsSync(entryPath)) return false;
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+  if (!entryPath) return false;
 
   fs.unlinkSync(entryPath);
 
   // Clean up empty date directory
   const dateDir = path.dirname(entryPath);
-  const remaining = fs.readdirSync(dateDir).filter(f => f.endsWith('.yaml'));
+  const remaining = fs.readdirSync(dateDir).filter(isLoreFile);
   if (remaining.length === 0) {
     fs.rmdirSync(dateDir);
   }
@@ -455,7 +483,7 @@ function migrateLegacyEntries(rootDir: string): number {
   if (!fs.existsSync(entriesPath)) return 0;
 
   const rootFiles = fs.readdirSync(entriesPath)
-    .filter(f => f.endsWith('.yaml') && !f.startsWith('.'));
+    .filter(f => isLoreFile(f) && !f.startsWith('.'));
 
   let migrated = 0;
   for (const file of rootFiles) {
@@ -467,8 +495,10 @@ function migrateLegacyEntries(rootDir: string): number {
       const content = fs.readFileSync(filePath, 'utf8');
       const raw = yaml.load(content) as Record<string, unknown>;
 
-      // Skip if already v2 format (has author block)
+      // Skip if already v2 format (has author block as object — old style)
+      // or author as string (new style) — these should be in date dirs
       if (raw.author && typeof raw.author === 'object') continue;
+      if (typeof raw.author === 'string' && raw.timestamp) continue;
 
       // Extract date — old format uses `date: "2026-02-21"`
       const dateStr = typeof raw.date === 'string'
@@ -480,7 +510,9 @@ function migrateLegacyEntries(rootDir: string): number {
         fs.mkdirSync(datePath, { recursive: true });
       }
 
-      const id = generateLoreId(rootDir, dateStr);
+      const author = resolveAuthor();
+      const timestamp = `${dateStr}T00:00:00.000Z`;
+      const id = generateLoreId(rootDir, dateStr, author, timestamp);
 
       // Map old type to v2 type
       const oldType = String(raw.type || 'agent-session');
@@ -501,9 +533,10 @@ function migrateLegacyEntries(rootDir: string): number {
       const v2Entry: LoreEntry = {
         id,
         type: v2Type as LoreEntry['type'],
-        timestamp: `${dateStr}T00:00:00.000Z`,
-        author: { type: 'agent', id: 'unknown' },
-        title: String(raw.title || file.replace('.yaml', '')),
+        timestamp,
+        author: 'unknown',
+        agent: { provider: 'unknown', model: 'unknown' },
+        title: String(raw.title || file.replace(/\.(yaml|lore)$/, '')),
         summary: String(raw.summary || ''),
         symbols_touched: Array.isArray(raw.symbols_touched) ? raw.symbols_touched : [],
         files_modified: Array.isArray(raw.files_modified) ? raw.files_modified : undefined,
@@ -512,7 +545,7 @@ function migrateLegacyEntries(rootDir: string): number {
       };
 
       fs.writeFileSync(
-        path.join(datePath, `${id}.yaml`),
+        path.join(datePath, `${id}.lore`),
         yaml.dump(v2Entry, { lineWidth: -1, noRefs: true })
       );
       fs.unlinkSync(filePath);
@@ -525,22 +558,32 @@ function migrateLegacyEntries(rootDir: string): number {
 }
 
 /**
- * Generate a unique lore entry ID for a given date
+ * Generate a unique lore entry ID for a given date.
+ * New format: L-{date}-{author}-{HHMMSS}-{counter}
  */
-function generateLoreId(rootDir: string, dateStr: string): string {
+export function generateLoreId(rootDir: string, dateStr: string, author: string, timestamp: string): string {
+  const sanitized = sanitizeAuthor(author);
+  const ts = new Date(timestamp);
+  const hh = String(ts.getUTCHours()).padStart(2, '0');
+  const mm = String(ts.getUTCMinutes()).padStart(2, '0');
+  const ss = String(ts.getUTCSeconds()).padStart(2, '0');
+  const timeStr = `${hh}${mm}${ss}`;
+  const prefix = `L-${dateStr}-${sanitized}-${timeStr}`;
+
   const datePath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
 
   if (!fs.existsSync(datePath)) {
-    return `L-${dateStr}-001`;
+    return `${prefix}-001`;
   }
 
+  // Count existing entries with the same prefix
   const existing = fs.readdirSync(datePath)
-    .filter(f => f.startsWith('L-') && f.endsWith('.yaml'))
+    .filter(f => f.startsWith(prefix) && isLoreFile(f))
     .map(f => {
-      const match = f.match(/L-\d{4}-\d{2}-\d{2}-(\d+)\.yaml/);
+      const match = f.match(/-(\d{3})\.(yaml|lore)$/);
       return match ? parseInt(match[1], 10) : 0;
     });
 
   const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
-  return `L-${dateStr}-${String(next).padStart(3, '0')}`;
+  return `${prefix}-${String(next).padStart(3, '0')}`;
 }

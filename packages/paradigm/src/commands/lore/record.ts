@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { recordLore, type LoreEntry } from '../../core/lore/index.js';
+import { recordLore, resolveAuthor, type LoreEntry } from '../../core/lore/index.js';
 
 export async function loreRecordCommand(options: Record<string, unknown>): Promise<void> {
   const rootDir = process.cwd();
@@ -9,10 +9,7 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     type: (options.type as LoreEntry['type']) || 'human-note',
     timestamp: new Date().toISOString(),
     duration_minutes: options.duration ? parseInt(options.duration as string, 10) : undefined,
-    author: {
-      type: 'human',
-      id: options.author as string || 'unknown',
-    },
+    author: (options.author as string) || resolveAuthor(),
     title: options.title as string || 'Untitled',
     summary: options.summary as string || '',
     symbols_touched: options.symbols ? (options.symbols as string).split(',').map(s => s.trim()) : [],

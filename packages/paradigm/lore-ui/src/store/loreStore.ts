@@ -5,7 +5,8 @@ export interface LoreEntry {
   type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
   timestamp: string;
   duration_minutes?: number;
-  author: { type: 'human' | 'agent'; id: string; model?: string };
+  author: string;
+  agent?: { provider: string; model: string };
   title: string;
   summary: string;
   symbols_touched: string[];
@@ -25,6 +26,8 @@ export interface LoreEntry {
 
 export interface LoreFilter {
   author?: string;
+  hasAgent?: boolean;
+  /** @deprecated Use hasAgent instead */
   authorType?: 'human' | 'agent';
   symbol?: string;
   type?: string;
@@ -44,7 +47,7 @@ interface SymbolInfo {
 
 interface AuthorInfo {
   id: string;
-  type: string;
+  hasAgent: boolean;
   count: number;
   lastActive: string;
 }
@@ -52,7 +55,7 @@ interface AuthorInfo {
 export interface Session {
   id: string;
   date: string;
-  author: { type: string; id: string };
+  author: { name: string; hasAgent: boolean };
   startTime: string;
   endTime: string;
   entryCount: number;
@@ -189,7 +192,8 @@ export const useLoreStore = create<LoreState>((set, get) => ({
       const f = get().filter;
       const params = new URLSearchParams();
       if (f.author) params.set('author', f.author);
-      if (f.authorType) params.set('authorType', f.authorType);
+      if (f.hasAgent !== undefined) params.set('hasAgent', String(f.hasAgent));
+      else if (f.authorType) params.set('authorType', f.authorType);
       if (f.symbol) params.set('symbol', f.symbol);
       if (f.type) params.set('type', f.type);
       if (f.dateFrom) params.set('from', f.dateFrom);

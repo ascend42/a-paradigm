@@ -70,8 +70,8 @@ export function ThreadView() {
         )}
       </div>
       {Array.from(grouped.entries()).map(([date, dayEntries]) => {
-        const leftCount = dayEntries.filter(e => isLeft(e.author.id)).length;
-        const rightCount = dayEntries.filter(e => !isLeft(e.author.id)).length;
+        const leftCount = dayEntries.filter(e => isLeft(e.author)).length;
+        const rightCount = dayEntries.filter(e => !isLeft(e.author)).length;
 
         return (
           <React.Fragment key={date}>
@@ -84,7 +84,7 @@ export function ThreadView() {
               <LoreCard
                 key={entry.id}
                 entry={entry}
-                side={hasLeftAuthors ? (isLeft(entry.author.id) ? 'left' : 'right') : 'right'}
+                side={hasLeftAuthors ? (isLeft(entry.author) ? 'left' : 'right') : 'right'}
               />
             ))}
           </React.Fragment>

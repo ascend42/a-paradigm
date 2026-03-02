@@ -15,7 +15,8 @@ interface LoreEntry {
   type: string;
   timestamp: string;
   duration_minutes?: number;
-  author: { type: string; id: string; model?: string };
+  author: string;
+  agent?: { provider: string; model: string };
   title: string;
   summary: string;
   symbols_touched: string[];
@@ -31,6 +32,42 @@ interface LoreEntry {
   verification?: { status: string; details?: Record<string, string> };
   review?: { reviewer: string; completeness: number; quality: number; notes?: string; reviewed_at: string };
   tags?: string[];
+}
+
+/** Matches both .yaml and .lore lore entry files */
+function isLoreFile(filename: string): boolean {
+  return filename.endsWith('.yaml') || filename.endsWith('.lore');
+}
+
+/** Normalize old author format to new string format */
+function normalizeEntry(raw: Record<string, unknown>): LoreEntry {
+  const author = raw.author;
+  if (typeof author === 'object' && author && !Array.isArray(author)) {
+    const old = author as { type?: string; id?: string; model?: string };
+    if (old.type === 'agent') {
+      raw.author = 'unknown';
+      const model = old.model || old.id || 'unknown';
+      const lower = model.toLowerCase();
+      let provider = 'unknown';
+      if (lower.includes('claude') || lower.includes('anthropic')) provider = 'anthropic';
+      else if (lower.includes('gpt') || lower.includes('openai')) provider = 'openai';
+      raw.agent = { provider, model };
+    } else {
+      raw.author = old.id || 'unknown';
+    }
+    delete raw.assistedBy;
+  }
+  return raw as unknown as LoreEntry;
+}
+
+/** Resolve the file path for a lore entry ID, trying .lore first then .yaml */
+function resolveEntryPath(projectDir: string, dateStr: string, entryId: string): string | null {
+  const dirPath = path.join(projectDir, LORE_DIR, ENTRIES_DIR, dateStr);
+  const lorePath = path.join(dirPath, `${entryId}.lore`);
+  if (fs.existsSync(lorePath)) return lorePath;
+  const yamlPath = path.join(dirPath, `${entryId}.yaml`);
+  if (fs.existsSync(yamlPath)) return yamlPath;
+  return null;
 }
 
 function loadAllEntries(projectDir: string): LoreEntry[] {
@@ -50,14 +87,14 @@ function loadAllEntries(projectDir: string): LoreEntry[] {
   for (const dateDir of dateDirs) {
     const dirPath = path.join(entriesPath, dateDir);
     const files = fs.readdirSync(dirPath)
-      .filter(f => f.endsWith('.yaml'))
+      .filter(isLoreFile)
       .sort();
 
     for (const file of files) {
       try {
         const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const entry = yaml.load(content) as LoreEntry;
-        entries.push(entry);
+        const raw = yaml.load(content) as Record<string, unknown>;
+        entries.push(normalizeEntry(raw));
       } catch {
         // Skip malformed
       }
@@ -75,13 +112,20 @@ export function createLoreRouter(projectDir: string): Router {
     let entries = loadAllEntries(projectDir);
 
     // Apply filters
-    const { author, authorType, symbol, type, from, to, tags, hasReview, limit, offset } = req.query;
+    const { author, authorType, hasAgent, symbol, type, from, to, tags, hasReview, limit, offset } = req.query;
 
     if (author) {
-      entries = entries.filter(e => e.author.id === author);
+      entries = entries.filter(e => e.author === author);
     }
-    if (authorType) {
-      entries = entries.filter(e => e.author.type === authorType);
+    if (hasAgent !== undefined) {
+      entries = entries.filter(e =>
+        hasAgent === 'true' ? e.agent != null : e.agent == null
+      );
+    } else if (authorType) {
+      // Deprecated: map old authorType to hasAgent logic
+      entries = entries.filter(e =>
+        authorType === 'agent' ? e.agent != null : e.agent == null
+      );
     }
     if (symbol) {
       entries = entries.filter(e =>
@@ -167,14 +211,15 @@ export function createLoreRouter(projectDir: string): Router {
   // GET /api/lore/authors - Authors with entry counts
   router.get('/authors', (_req: Request, res: Response) => {
     const entries = loadAllEntries(projectDir);
-    const authorMap: Record<string, { type: string; count: number; lastActive: string }> = {};
+    const authorMap: Record<string, { hasAgent: boolean; count: number; lastActive: string }> = {};
 
     for (const entry of entries) {
-      const aid = entry.author.id;
+      const aid = entry.author;
       if (!authorMap[aid]) {
-        authorMap[aid] = { type: entry.author.type, count: 0, lastActive: entry.timestamp };
+        authorMap[aid] = { hasAgent: entry.agent != null, count: 0, lastActive: entry.timestamp };
       }
       authorMap[aid].count++;
+      if (entry.agent != null) authorMap[aid].hasAgent = true;
       if (entry.timestamp > authorMap[aid].lastActive) {
         authorMap[aid].lastActive = entry.timestamp;
       }
@@ -212,9 +257,9 @@ export function createLoreRouter(projectDir: string): Router {
     }
 
     const dateStr = entry.timestamp.slice(0, 10);
-    const entryPath = path.join(projectDir, LORE_DIR, ENTRIES_DIR, dateStr, `${entryId}.yaml`);
+    const entryPath = resolveEntryPath(projectDir, dateStr, entryId);
 
-    if (!fs.existsSync(entryPath)) {
+    if (!entryPath) {
       res.status(404).json({ error: 'Entry file not found' });
       return;
     }

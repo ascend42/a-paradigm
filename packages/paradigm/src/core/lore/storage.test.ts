@@ -18,7 +18,8 @@ function makeLoreEntry(overrides: Partial<LoreEntry> = {}): LoreEntry {
     id: '',
     type: 'agent-session',
     timestamp: '2026-02-21T10:00:00Z',
-    author: { type: 'agent', id: 'claude-opus-4' },
+    author: 'test-user',
+    agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
     title: 'Test entry',
     summary: 'A test lore entry',
     symbols_touched: ['#test-component'],
@@ -27,7 +28,7 @@ function makeLoreEntry(overrides: Partial<LoreEntry> = {}): LoreEntry {
 }
 
 describe('recordLore', () => {
-  it('creates dated dir and YAML file', async () => {
+  it('creates dated dir and .lore file', async () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
 
@@ -37,23 +38,28 @@ describe('recordLore', () => {
     const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
     expect(fs.existsSync(dateDir)).toBe(true);
 
-    const files = fs.readdirSync(dateDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(dateDir).filter(f => f.endsWith('.lore'));
     expect(files.length).toBe(1);
 
     const content = yaml.load(fs.readFileSync(path.join(dateDir, files[0]), 'utf8')) as LoreEntry;
     expect(content.title).toBe('Test entry');
+    expect(content.author).toBe('test-user');
   });
 
-  it('auto-generates sequential IDs', async () => {
+  it('auto-generates IDs with new format', async () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
 
     await recordLore(rootDir, makeLoreEntry({ timestamp: '2026-02-21T10:00:00Z' }));
-    await recordLore(rootDir, makeLoreEntry({ timestamp: '2026-02-21T11:00:00Z' }));
+    await recordLore(rootDir, makeLoreEntry({ timestamp: '2026-02-21T10:00:00Z' }));
 
     const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
-    const files = fs.readdirSync(dateDir).filter(f => f.endsWith('.yaml')).sort();
-    expect(files).toEqual(['L-2026-02-21-001.yaml', 'L-2026-02-21-002.yaml']);
+    const files = fs.readdirSync(dateDir).filter(f => f.endsWith('.lore')).sort();
+    expect(files.length).toBe(2);
+
+    // New format: L-{date}-{author}-{HHMMSS}-{counter}.lore
+    expect(files[0]).toMatch(/^L-2026-02-21-test-user-100000-001\.lore$/);
+    expect(files[1]).toMatch(/^L-2026-02-21-test-user-100000-002\.lore$/);
   });
 
   it('uses provided ID', async () => {
@@ -64,7 +70,7 @@ describe('recordLore', () => {
 
     const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
     const files = fs.readdirSync(dateDir);
-    expect(files).toContain('L-2026-02-21-custom.yaml');
+    expect(files).toContain('L-2026-02-21-custom.lore');
   });
 
   it('rebuilds timeline after write', async () => {
@@ -99,8 +105,6 @@ describe('loadLoreEntries', () => {
 
     const entries = await loadLoreEntries(rootDir);
     expect(entries.length).toBe(2);
-    // Without filter, entries are loaded newest date dirs first but files are sorted within dir
-    // The second entry is in a newer date dir so it appears first
     expect(entries[0].title).toBe('New');
     expect(entries[1].title).toBe('Old');
   });
@@ -111,16 +115,61 @@ describe('loadLoreEntries', () => {
 
     await recordLore(rootDir, makeLoreEntry({
       timestamp: '2026-02-21T10:00:00Z',
-      author: { type: 'agent', id: 'claude' },
+      author: 'claude',
+      agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
     }));
     await recordLore(rootDir, makeLoreEntry({
       timestamp: '2026-02-21T11:00:00Z',
-      author: { type: 'human', id: 'ascend' },
+      author: 'ascend',
+      agent: undefined,
     }));
 
     const entries = await loadLoreEntries(rootDir, { author: 'ascend' });
     expect(entries.length).toBe(1);
-    expect(entries[0].author.id).toBe('ascend');
+    expect(entries[0].author).toBe('ascend');
+  });
+
+  it('loads both .yaml and .lore files', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+
+    // Write a .lore file
+    await recordLore(rootDir, makeLoreEntry({ timestamp: '2026-02-21T10:00:00Z', title: 'New format' }));
+
+    // Write a legacy .yaml file
+    const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
+    const legacyEntry = makeLoreEntry({ id: 'L-2026-02-21-legacy', timestamp: '2026-02-21T09:00:00Z', title: 'Legacy format' });
+    fs.writeFileSync(path.join(dateDir, 'L-2026-02-21-legacy.yaml'), yaml.dump(legacyEntry));
+
+    const entries = await loadLoreEntries(rootDir);
+    expect(entries.length).toBe(2);
+    const titles = entries.map(e => e.title);
+    expect(titles).toContain('New format');
+    expect(titles).toContain('Legacy format');
+  });
+
+  it('normalizes old author format on load', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+
+    // Write an old-format entry directly
+    const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
+    fs.mkdirSync(dateDir, { recursive: true });
+    const oldEntry = {
+      id: 'L-2026-02-21-old',
+      type: 'agent-session',
+      timestamp: '2026-02-21T10:00:00Z',
+      author: { type: 'agent', id: 'claude', model: 'claude-opus-4-6' },
+      title: 'Old format entry',
+      summary: 'Test',
+      symbols_touched: ['#test'],
+    };
+    fs.writeFileSync(path.join(dateDir, 'L-2026-02-21-old.yaml'), yaml.dump(oldEntry));
+
+    const entries = await loadLoreEntries(rootDir);
+    expect(entries.length).toBe(1);
+    expect(entries[0].author).toBe('unknown'); // Agent entries normalize to 'unknown' human
+    expect(entries[0].agent).toEqual({ provider: 'anthropic', model: 'claude-opus-4-6' });
   });
 
   it('prunes date dirs outside range', async () => {
@@ -141,12 +190,12 @@ describe('loadLoreEntries', () => {
 
     await recordLore(rootDir, makeLoreEntry({ timestamp: '2026-02-21T10:00:00Z' }));
 
-    // Write a malformed file
-    const badPath = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21', 'bad.yaml');
+    // Write a malformed file with .lore extension
+    const badPath = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21', 'bad.lore');
     fs.writeFileSync(badPath, '{{{{ invalid yaml', 'utf8');
 
     const entries = await loadLoreEntries(rootDir);
-    expect(entries.length).toBe(1); // Only the valid entry
+    expect(entries.length).toBe(1);
   });
 });
 
@@ -196,11 +245,11 @@ describe('rebuildTimeline', () => {
 
     await recordLore(rootDir, makeLoreEntry({
       timestamp: '2026-02-21T10:00:00Z',
-      author: { type: 'agent', id: 'claude' },
+      author: 'claude',
     }));
     await recordLore(rootDir, makeLoreEntry({
       timestamp: '2026-02-21T11:00:00Z',
-      author: { type: 'human', id: 'ascend' },
+      author: 'ascend',
     }));
 
     const timeline = await loadLoreTimeline(rootDir);
@@ -226,7 +275,6 @@ describe('rebuildTimeline', () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
 
-    // Create empty entries dir
     fs.mkdirSync(path.join(rootDir, '.paradigm', 'lore', 'entries'), { recursive: true });
 
     await rebuildTimeline(rootDir);
@@ -252,15 +300,29 @@ describe('loadLoreEntry', () => {
     expect(entry!.title).toBe('Direct load');
   });
 
+  it('loads legacy .yaml entries by ID', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+
+    // Write a legacy .yaml entry
+    const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
+    fs.mkdirSync(dateDir, { recursive: true });
+    const entry = makeLoreEntry({ id: 'L-2026-02-21-legacy', timestamp: '2026-02-21T10:00:00Z', title: 'Legacy' });
+    fs.writeFileSync(path.join(dateDir, 'L-2026-02-21-legacy.yaml'), yaml.dump(entry));
+
+    const loaded = await loadLoreEntry(rootDir, 'L-2026-02-21-legacy');
+    expect(loaded).not.toBeNull();
+    expect(loaded!.title).toBe('Legacy');
+  });
+
   it('falls back to scan for non-standard ID', async () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
 
-    // Write an entry with a non-standard ID
     const dateDir = path.join(rootDir, '.paradigm', 'lore', 'entries', '2026-02-21');
     fs.mkdirSync(dateDir, { recursive: true });
     const entry = makeLoreEntry({ id: 'custom-id', timestamp: '2026-02-21T10:00:00Z', title: 'Custom' });
-    fs.writeFileSync(path.join(dateDir, 'custom-id.yaml'), yaml.dump(entry), 'utf8');
+    fs.writeFileSync(path.join(dateDir, 'custom-id.lore'), yaml.dump(entry), 'utf8');
 
     const loaded = await loadLoreEntry(rootDir, 'custom-id');
     expect(loaded).not.toBeNull();

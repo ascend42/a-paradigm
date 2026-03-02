@@ -40,14 +40,15 @@ export async function loreTimelineCommand(options: {
     .map(([symbol, count]) => ({ symbol, count }));
 
   // Compute author activity
-  const authorActivity = new Map<string, { count: number; type: string; lastActive: string }>();
+  const authorActivity = new Map<string, { count: number; hasAgent: boolean; lastActive: string }>();
   for (const entry of entries) {
-    const aid = entry.author.id;
+    const aid = entry.author;
     const existing = authorActivity.get(aid);
     if (!existing) {
-      authorActivity.set(aid, { count: 1, type: entry.author.type, lastActive: entry.timestamp });
+      authorActivity.set(aid, { count: 1, hasAgent: entry.agent != null, lastActive: entry.timestamp });
     } else {
       existing.count++;
+      if (entry.agent) existing.hasAgent = true;
       if (entry.timestamp > existing.lastActive) existing.lastActive = entry.timestamp;
     }
   }
@@ -59,7 +60,7 @@ export async function loreTimelineCommand(options: {
         id: e.id,
         type: e.type,
         title: e.title,
-        author: e.author.id,
+        author: e.author,
         symbols: e.symbols_touched || [],
       }));
     }
@@ -69,7 +70,7 @@ export async function loreTimelineCommand(options: {
       byDate: grouped,
       hotSymbols,
       authors: Array.from(authorActivity.entries()).map(([id, info]) => ({
-        id, type: info.type, entries: info.count, lastActive: info.lastActive,
+        id, hasAgent: info.hasAgent, entries: info.count, lastActive: info.lastActive,
       })),
     }, null, 2));
     return;
@@ -93,10 +94,10 @@ export async function loreTimelineCommand(options: {
     for (const entry of dayEntries) {
       const colorFn = typeColor[entry.type] || chalk.white;
       const time = entry.timestamp.slice(11, 16);
-      const authorIcon = entry.author.type === 'agent' ? '🤖' : '👤';
+      const authorIcon = entry.agent ? '🤖' : '👤';
 
       console.log(`    ${chalk.gray(time)} ${colorFn(entry.type.padEnd(14))} ${chalk.white(entry.title)}`);
-      console.log(`           ${authorIcon} ${chalk.gray(entry.author.id)}  ${(entry.symbols_touched || []).slice(0, 4).map(s => chalk.cyan(s)).join(' ')}`);
+      console.log(`           ${authorIcon} ${chalk.gray(entry.author)}  ${(entry.symbols_touched || []).slice(0, 4).map(s => chalk.cyan(s)).join(' ')}`);
     }
     console.log();
   }
@@ -115,7 +116,7 @@ export async function loreTimelineCommand(options: {
   if (authorActivity.size > 0) {
     console.log(chalk.white('  Active Authors:'));
     for (const [id, info] of authorActivity) {
-      const icon = info.type === 'agent' ? '🤖' : '👤';
+      const icon = info.hasAgent ? '🤖' : '👤';
       console.log(`    ${icon} ${chalk.white(id)} - ${info.count} entries`);
     }
     console.log();

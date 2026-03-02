@@ -43,7 +43,11 @@ export function DetailPanel() {
             <h3>Details</h3>
             <dl className="detail-meta">
               <dt>Author</dt>
-              <dd>{entry.author.type === 'agent' ? '\uD83E\uDD16' : '\uD83D\uDC64'} {entry.author.id}{entry.author.model ? ` (${entry.author.model})` : ''}</dd>
+              <dd>{'\uD83D\uDC64'} {entry.author}</dd>
+              {entry.agent && <>
+                <dt>AI Agent</dt>
+                <dd>{'\uD83E\uDD16'} {entry.agent.model}{entry.agent.provider ? ` (${entry.agent.provider})` : ''}</dd>
+              </>}
               <dt>Time</dt>
               <dd>{new Date(entry.timestamp).toLocaleString()}</dd>
               {entry.duration_minutes && <>

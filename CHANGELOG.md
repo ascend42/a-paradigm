@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.18.0] — 2026-03-02
+
+### Changed
+
+#### Lore Schema Refactor: Author/Agent Split (`@a-company/paradigm` 3.17.2 → 3.18.0, `@a-company/paradigm-mcp` 3.13.0 → 3.14.0)
+
+Separates the human author from AI agent metadata across the entire lore system. Previously `author` was an object with a `type` discriminator — now it's always a string identifying the human user, with a separate optional `agent` field for AI info.
+
+- **Schema**: `author` is now a plain string (the human user); `agent?: { provider, model }` is a new optional field; `assistedBy` removed
+- **File naming**: New entries use `.lore` extension with author+time IDs (`L-2026-03-02-ascend-143025-001.lore`) to prevent multi-user conflicts
+- **Backward compatible**: Old `.yaml` entries with `author: { type, id, model }` are normalized transparently on read via `normalizeLoreEntry()`
+- **Author resolution**: `resolveAuthor()` chain: `PARADIGM_AUTHOR` env → `git config user.name` → `os.userInfo().username` → `'unknown'`
+- **Provider inference**: `inferProvider()` maps model names to providers (claude→anthropic, gpt→openai, gemini→google, etc.)
+- **Filter changes**: `hasAgent` boolean replaces `authorType` enum; deprecated `authorType` still accepted for backward compat
+- **MCP tools**: `paradigm_lore_search` gains `hasAgent` param; `paradigm_lore_record` auto-resolves human author and sets agent metadata
+- **Lore Viewer**: Author shown as human user everywhere; agent displayed separately when present; filter pills updated to "All / Human Only / AI-Assisted"
+- **CLI**: All lore commands (`list`, `show`, `timeline`, `delete`, `record`) updated for new schema
+- **New files**: `normalize.ts` (entry normalization + provider inference), `resolve-author.ts` (human author detection)
+- **Tests**: 59 tests passing across `normalize.test.ts`, `filter.test.ts`, `storage.test.ts`
+
 ## [3.17.2] — 2026-03-02
 
 ### Fixed

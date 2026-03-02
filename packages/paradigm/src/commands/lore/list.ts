@@ -43,7 +43,7 @@ export async function loreListCommand(options: Record<string, unknown>): Promise
     const date = new Date(entry.timestamp);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const authorIcon = entry.author.type === 'agent' ? '🤖' : '👤';
+    const authorIcon = entry.agent ? '🤖' : '👤';
     const verifyIcon = entry.verification?.status === 'pass' ? chalk.green('✓')
       : entry.verification?.status === 'fail' ? chalk.red('✗')
       : entry.verification?.status === 'partial' ? chalk.yellow('⚠')
@@ -51,7 +51,7 @@ export async function loreListCommand(options: Record<string, unknown>): Promise
     const reviewStr = entry.review ? chalk.yellow('★'.repeat(entry.review.quality) + '☆'.repeat(5 - entry.review.quality)) : '';
 
     console.log(`  ${chalk.gray(entry.id)} ${colorFn(entry.type.padEnd(14))} ${verifyIcon} ${chalk.white(entry.title)}`);
-    console.log(`  ${chalk.gray(dateStr + ' ' + timeStr)}  ${authorIcon} ${chalk.gray(entry.author.id)}  ${(entry.symbols_touched || []).map(s => chalk.cyan(s)).join(' ')} ${reviewStr}`);
+    console.log(`  ${chalk.gray(dateStr + ' ' + timeStr)}  ${authorIcon} ${chalk.gray(entry.author)}  ${(entry.symbols_touched || []).map(s => chalk.cyan(s)).join(' ')} ${reviewStr}`);
     console.log();
   }
 }

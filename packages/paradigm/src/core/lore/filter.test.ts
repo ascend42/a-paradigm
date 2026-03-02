@@ -7,7 +7,8 @@ function makeLoreEntry(overrides: Partial<LoreEntry> = {}): LoreEntry {
     id: 'L-2026-02-21-001',
     type: 'agent-session',
     timestamp: '2026-02-21T10:00:00Z',
-    author: { type: 'agent', id: 'claude-opus-4' },
+    author: 'claude-opus-4',
+    agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
     title: 'Test entry',
     summary: 'A test lore entry',
     symbols_touched: ['#test-component'],
@@ -20,7 +21,8 @@ describe('applyLoreFilter', () => {
     makeLoreEntry({
       id: 'L-2026-02-21-001',
       timestamp: '2026-02-21T10:00:00Z',
-      author: { type: 'agent', id: 'claude' },
+      author: 'ascend',
+      agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
       type: 'agent-session',
       symbols_touched: ['#auth'],
       symbols_created: ['#login-form'],
@@ -30,7 +32,8 @@ describe('applyLoreFilter', () => {
     makeLoreEntry({
       id: 'L-2026-02-20-001',
       timestamp: '2026-02-20T10:00:00Z',
-      author: { type: 'human', id: 'ascend' },
+      author: 'ascend',
+      agent: undefined, // Human-only entry
       type: 'decision',
       symbols_touched: ['#payment'],
       tags: ['architecture'],
@@ -38,7 +41,8 @@ describe('applyLoreFilter', () => {
     makeLoreEntry({
       id: 'L-2026-02-19-001',
       timestamp: '2026-02-19T10:00:00Z',
-      author: { type: 'agent', id: 'claude' },
+      author: 'matt',
+      agent: { provider: 'anthropic', model: 'claude-opus-4-6' },
       type: 'milestone',
       symbols_touched: ['#sentinel-sdk'],
       tags: ['phase-1'],
@@ -53,14 +57,35 @@ describe('applyLoreFilter', () => {
 
   it('filters by author', () => {
     const result = applyLoreFilter(entries, { author: 'ascend' });
-    expect(result.length).toBe(1);
-    expect(result[0].author.id).toBe('ascend');
+    expect(result.length).toBe(2);
+    result.forEach(e => expect(e.author).toBe('ascend'));
   });
 
-  it('filters by authorType', () => {
-    const result = applyLoreFilter(entries, { authorType: 'agent' });
+  it('filters by hasAgent true', () => {
+    const result = applyLoreFilter(entries, { hasAgent: true });
     expect(result.length).toBe(2);
-    result.forEach(e => expect(e.author.type).toBe('agent'));
+    result.forEach(e => expect(e.agent).not.toBeUndefined());
+  });
+
+  it('filters by hasAgent false', () => {
+    const result = applyLoreFilter(entries, { hasAgent: false });
+    expect(result.length).toBe(1);
+    expect(result[0].agent).toBeUndefined();
+  });
+
+  it('supports deprecated authorType filter', () => {
+    const agentResult = applyLoreFilter(entries, { authorType: 'agent' });
+    expect(agentResult.length).toBe(2);
+
+    const humanResult = applyLoreFilter(entries, { authorType: 'human' });
+    expect(humanResult.length).toBe(1);
+  });
+
+  it('hasAgent takes precedence over authorType', () => {
+    // When both are provided, hasAgent wins
+    const result = applyLoreFilter(entries, { hasAgent: false, authorType: 'agent' });
+    expect(result.length).toBe(1);
+    expect(result[0].agent).toBeUndefined();
   });
 
   it('filters by symbol (touched + created)', () => {
@@ -125,12 +150,12 @@ describe('applyLoreFilter', () => {
 
   it('composes AND filters', () => {
     const result = applyLoreFilter(entries, {
-      authorType: 'agent',
+      hasAgent: true,
       tags: ['phase-1'],
     });
     expect(result.length).toBe(2);
     result.forEach(e => {
-      expect(e.author.type).toBe('agent');
+      expect(e.agent).not.toBeUndefined();
       expect(e.tags).toContain('phase-1');
     });
   });
