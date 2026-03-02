@@ -20,7 +20,7 @@ Protocols capture step-by-step implementation patterns with exact file reference
 - **Lore integration**: `paradigm_lore_record` detects "protocol-worthy" sessions (2+ new files following existing patterns) and returns a `protocol_suggestion` draft
 - **`/protocol` skill**: Search or record protocols via slash command
 - **6 seed protocols** for paradigm itself: add-mcp-tool, add-skill, add-spec, record-lore, update-changelog, add-cli-command
-- Storage: `.paradigm/protocols/` with one YAML file per protocol and auto-generated `index.yaml`
+- Storage: `.paradigm/protocols/` with `.protocol` extension per file and auto-generated `index.yaml`
 - Spec: `docs/specs/protocols.md`
 
 ## [3.14.1] — 2026-03-01
