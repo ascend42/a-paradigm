@@ -38,7 +38,7 @@ function useResizableColumns(defaults: number[]) {
     window.addEventListener('mouseup', onMouseUp);
   }, [widths]);
 
-  const gridTemplate = widths.map((w, i) => i === widths.length - 1 ? '1fr' : `${w}px`).join(' ');
+  const gridTemplate = widths.map((w) => `${w}px`).join(' ') + ' 1fr';
   return { widths, gridTemplate, onMouseDown };
 }
 

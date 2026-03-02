@@ -34,7 +34,7 @@ function useResizableColumns(defaults: number[]) {
     window.addEventListener('mouseup', onMouseUp);
   }, [widths]);
 
-  const gridTemplate = widths.map((w, i) => i === widths.length - 1 ? '1fr' : `${w}px`).join(' ');
+  const gridTemplate = widths.map((w) => `${w}px`).join(' ') + ' 1fr';
   return { widths, gridTemplate, onMouseDown };
 }
 
@@ -97,10 +97,12 @@ function LogRow({ entry, isExpanded, onToggle, onContextMenu }: {
         {entry.symbol}
       </span>
       <span className="log-service">{entry.service}</span>
-      <span className="log-message">{entry.message}</span>
-      {entry.durationMs !== undefined && (
-        <span className="log-duration">{entry.durationMs.toFixed(1)}ms</span>
-      )}
+      <span className="log-message">
+        {entry.message}
+        {entry.durationMs !== undefined && (
+          <span className="log-duration">{entry.durationMs.toFixed(1)}ms</span>
+        )}
+      </span>
 
       {isExpanded && entry.data && (
         <div className="log-data" onClick={(e) => e.stopPropagation()}>
