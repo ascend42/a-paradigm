@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **3 PLSAT questions** (slots 094-096): protocol search workflow, recording patterns, freshness/staleness/broken status
 - **Updated operational loop**: PARA 301 "Operational Excellence" capstone now includes protocol search in the Discover phase and protocol recording in the Capture Knowledge phase
 - **New protocol**: `update-university-content.protocol` — general protocol for adding lessons, quizzes, and PLSAT questions
-- PLSAT totalSlots updated from 90 → 93, description updated to match
+- PLSAT totalSlots updated to 99 (correctly counts passage sub-questions), description updated to match
+
+### Fixed
+
+- **University UI version badge**: Showed "v0.1.0" instead of the actual package version — `vite.config.ts` now reads from parent `package.json` instead of falling back to the UI sub-package's hardcoded version
+- **PLSAT question count mismatch**: Exam rules showed 96 questions but metadata said 90 — `totalSlots` and description now reflect the actual resolved count (99) including passage sub-questions
 
 #### Protocols — Repeatable Implementation Patterns (`@a-company/paradigm-mcp` 3.11.0 → 3.12.0, `@a-company/paradigm` 3.14.1 → 3.15.0)
 

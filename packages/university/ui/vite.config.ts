@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { readFileSync } from 'fs';
+
+const parentPkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'));
 
 export default defineConfig({
   plugins: [react()],
@@ -25,6 +28,6 @@ export default defineConfig({
     sourcemap: true,
   },
   define: {
-    __PARADIGM_VERSION__: JSON.stringify(process.env.npm_package_version || '0.1.0'),
+    __PARADIGM_VERSION__: JSON.stringify(parentPkg.version),
   },
 });
