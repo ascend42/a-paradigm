@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { execSync } from 'child_process';
 import type { LoreEntry, LoreFilter, LoreTimeline } from './types.js';
 import { applyLoreFilter } from './filter.js';
 import { normalizeLoreEntry } from './normalize.js';
@@ -39,6 +40,21 @@ function resolveEntryPath(rootDir: string, dateStr: string, entryId: string): st
   const yamlPath = path.join(dirPath, `${entryId}.yaml`);
   if (fs.existsSync(yamlPath)) return yamlPath;
   return null;
+}
+
+/**
+ * Capture git context (ref, branch, dirty) from the working directory.
+ * Returns undefined if not in a git repo or git is unavailable.
+ */
+export function captureGitContext(cwd: string): LoreEntry['git_context'] | undefined {
+  try {
+    const ref = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const status = execSync('git status --porcelain', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return { ref, branch, dirty: status.length > 0 };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Options for recording lore */
@@ -161,6 +177,11 @@ export async function recordLore(
   // Resolve author if not set
   if (!entry.author) {
     entry.author = resolveAuthor();
+  }
+
+  // Auto-capture git context if not already provided
+  if (!entry.git_context) {
+    entry.git_context = captureGitContext(rootDir);
   }
 
   // Generate ID if not provided

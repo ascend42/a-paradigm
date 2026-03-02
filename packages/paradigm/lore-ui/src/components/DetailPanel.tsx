@@ -185,6 +185,36 @@ export function DetailPanel() {
             </div>
           )}
 
+          {/* Git Context */}
+          {entry.git_context && (
+            <div className="detail-section">
+              <h3>Git Context</h3>
+              <dl className="detail-meta">
+                <dt>Commit</dt>
+                <dd style={{ fontFamily: 'monospace', fontSize: 12 }}>{entry.git_context.ref.slice(0, 8)}</dd>
+                <dt>Branch</dt>
+                <dd>{entry.git_context.branch}</dd>
+                <dt>Working tree</dt>
+                <dd>{entry.git_context.dirty ? 'Dirty (uncommitted changes)' : 'Clean'}</dd>
+              </dl>
+            </div>
+          )}
+
+          {/* Meta */}
+          {entry.meta && Object.keys(entry.meta).length > 0 && (
+            <div className="detail-section">
+              <h3>Metadata</h3>
+              <dl className="detail-meta">
+                {Object.entries(entry.meta).map(([k, v]) => (
+                  <React.Fragment key={k}>
+                    <dt>{k}</dt>
+                    <dd>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            </div>
+          )}
+
           {/* Tags */}
           {entry.tags && entry.tags.length > 0 && (
             <div className="detail-section">

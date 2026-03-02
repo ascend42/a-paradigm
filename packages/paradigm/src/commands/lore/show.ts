@@ -144,6 +144,23 @@ export async function loreShowCommand(id: string, options: Record<string, unknow
     console.log(`  Commit: ${chalk.gray(entry.commit)}`);
   }
 
+  // Git context
+  if (entry.git_context) {
+    const gc = entry.git_context;
+    console.log(chalk.gray('  Git context:'));
+    console.log(`    ${chalk.gray(gc.ref.slice(0, 8))} on ${chalk.cyan(gc.branch)}${gc.dirty ? chalk.yellow(' (dirty)') : ''}`);
+    console.log();
+  }
+
+  // Meta
+  if (entry.meta && Object.keys(entry.meta).length > 0) {
+    console.log(chalk.gray('  Metadata:'));
+    for (const [k, v] of Object.entries(entry.meta)) {
+      console.log(`    ${chalk.white(k)}: ${chalk.gray(String(v))}`);
+    }
+    console.log();
+  }
+
   // Tags
   if (entry.tags && entry.tags.length > 0) {
     console.log(`  Tags: ${entry.tags.map(t => chalk.gray(`[${t}]`)).join(' ')}`);

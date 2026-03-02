@@ -1,0 +1,74 @@
+id: L-2026-03-02-004
+type: agent-session
+timestamp: '2026-03-02T22:49:09.399Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: 'Refactor lore schema: author/agent split, .lore extension, git context, and custom metadata'
+summary: 'Separated the lore author field from a type-discriminated object into a plain string (always the human user) plus an optional agent field for AI metadata. New entries use .lore extension with author+time filenames (L-{date}-{author}-{HHMMSS}-{counter}.lore) to prevent multi-user conflicts. Added automatic git_context capture (ref, branch, dirty) on every lore entry, and a meta field for project-defined key-value metadata. Old .yaml entries with the object author format are normalized transparently on read. Also discussed the broader vision: lore as the connective tissue for all agent work — meeting notes, plan tracking, deliberation records, and a habit-driven protocol where agents proactively ask to save plans as lore.'
+symbols_touched:
+  - '#lore'
+  - '#lore-viewer'
+  - '#lore-server'
+files_created:
+  - packages/paradigm/src/core/lore/normalize.ts
+  - packages/paradigm/src/core/lore/normalize.test.ts
+  - packages/paradigm/src/core/lore/resolve-author.ts
+files_modified:
+  - packages/paradigm/src/core/lore/types.ts
+  - packages/paradigm/src/core/lore/storage.ts
+  - packages/paradigm/src/core/lore/filter.ts
+  - packages/paradigm/src/core/lore/index.ts
+  - packages/paradigm-mcp/src/utils/lore-loader.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm/src/lore-server/routes/lore.ts
+  - packages/paradigm/src/lore-server/routes/sessions.ts
+  - packages/paradigm/lore-ui/src/store/loreStore.ts
+  - packages/paradigm/lore-ui/src/components/DetailPanel.tsx
+  - packages/paradigm/lore-ui/src/components/FilterBar.tsx
+  - packages/paradigm/lore-ui/src/components/LoreCard.tsx
+  - packages/paradigm/lore-ui/src/views/AuthorView.tsx
+  - packages/paradigm/lore-ui/src/views/SessionView.tsx
+  - packages/paradigm/lore-ui/src/views/ThreadView.tsx
+  - packages/paradigm/src/commands/lore/record.ts
+  - packages/paradigm/src/commands/lore/list.ts
+  - packages/paradigm/src/commands/lore/show.ts
+  - packages/paradigm/src/commands/lore/timeline.ts
+  - packages/paradigm/src/commands/lore/delete.ts
+  - packages/paradigm/src/core/lore/filter.test.ts
+  - packages/paradigm/src/core/lore/storage.test.ts
+lines_added: 891
+lines_removed: 211
+commit: e68934c1
+decisions:
+  - id: author-string
+    decision: Make author a plain string instead of a typed object
+    rationale: There is always a human user behind every session — even AI-assisted ones. The old {type, id, model} format conflated identity with tooling. A string author + optional agent field properly models reality.
+  - id: lore-extension
+    decision: Adopt .lore as the canonical file extension
+    rationale: Gives lore entries their own file identity instead of being generic .yaml. Backward compatible — old .yaml files still load.
+  - id: author-keyed-filenames
+    decision: Include author and HHMMSS in lore filenames
+    rationale: The old sequential counter (L-2026-03-02-001) caused conflicts when multiple users recorded lore on the same day. Author+time scoping eliminates this.
+  - id: git-context-auto-capture
+    decision: Auto-capture git ref, branch, and dirty status on every lore entry
+    rationale: Answers 'what did the codebase look like when this decision was made?' — enables point-in-time context for auditing and team continuity.
+  - id: meta-field-open-ended
+    decision: Add an open-ended meta field rather than prescribing specific metadata keys
+    rationale: Projects have wildly different needs (sprint numbers, meeting types, experiment IDs). Paradigm provides the mechanism, projects define the vocabulary.
+learnings:
+  - The identity model must be correct before building higher-order features on top of it — the author/agent split was prerequisite for proper plan tracking and deliberation records
+  - Agent behavior habits (like 'ask to save lore after planning') should be project-level opt-in via habits.yaml, not baked into the framework for everyone
+  - Old entries should always be normalized on read rather than requiring migration — defensive normalization at load boundaries keeps the system backward compatible forever
+verification:
+  status: pass
+  details:
+    tests: pass
+    build: pass
+    lore-ui-build: pass
+tags:
+  - schema-refactor
+  - lore-evolution
+  - backward-compatible
+  - multi-user

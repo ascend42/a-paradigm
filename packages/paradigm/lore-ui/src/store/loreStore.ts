@@ -22,6 +22,8 @@ export interface LoreEntry {
   verification?: { status: string; details?: Record<string, string> };
   review?: { reviewer: string; completeness: number; quality: number; notes?: string; reviewed_at: string };
   tags?: string[];
+  meta?: Record<string, unknown>;
+  git_context?: { ref: string; branch: string; dirty: boolean };
 }
 
 export interface LoreFilter {

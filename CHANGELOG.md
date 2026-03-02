@@ -25,6 +25,14 @@ Separates the human author from AI agent metadata across the entire lore system.
 - **New files**: `normalize.ts` (entry normalization + provider inference), `resolve-author.ts` (human author detection)
 - **Tests**: 59 tests passing across `normalize.test.ts`, `filter.test.ts`, `storage.test.ts`
 
+### Added
+
+- **Git context on lore entries**: Every lore entry now auto-captures `git_context: { ref, branch, dirty }` at write time — answers "what did the codebase look like when this was recorded?"
+- **Custom metadata field**: `meta: Record<string, unknown>` on lore entries for project-defined key-value pairs (sprint numbers, meeting types, experiment IDs, etc.)
+- **`--meta` CLI flag**: `paradigm lore record --meta '{"sprint": 12}'` attaches project metadata via CLI
+- **`meta` MCP param**: `paradigm_lore_record` accepts `meta` for agent-driven metadata attachment
+- **Viewer display**: DetailPanel shows git context (commit, branch, dirty status) and metadata key-value pairs
+
 ## [3.17.2] — 2026-03-02
 
 ### Fixed

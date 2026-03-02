@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { execSync } from 'child_process';
 
 const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
@@ -75,6 +76,12 @@ export interface LoreEntry {
     weakAreas?: string[];
   };
   tags?: string[];
+  meta?: Record<string, unknown>;
+  git_context?: {
+    ref: string;
+    branch: string;
+    dirty: boolean;
+  };
 }
 
 export interface LoreFilter {
@@ -295,6 +302,21 @@ export async function loadLoreTimeline(rootDir: string): Promise<LoreTimeline | 
 }
 
 // ────────────────────────────────────────────────────────
+// Git context
+// ────────────────────────────────────────────────────────
+
+function captureGitContext(cwd: string): LoreEntry['git_context'] | undefined {
+  try {
+    const ref = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const status = execSync('git status --porcelain', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return { ref, branch, dirty: status.length > 0 };
+  } catch {
+    return undefined;
+  }
+}
+
+// ────────────────────────────────────────────────────────
 // Write operations
 // ────────────────────────────────────────────────────────
 
@@ -313,6 +335,11 @@ export async function recordLoreEntry(rootDir: string, entry: LoreEntry): Promis
   // Resolve author if not set
   if (!entry.author) {
     entry.author = resolveAuthor();
+  }
+
+  // Auto-capture git context if not already provided
+  if (!entry.git_context) {
+    entry.git_context = captureGitContext(rootDir);
   }
 
   if (!entry.id) {

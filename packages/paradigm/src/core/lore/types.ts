@@ -79,6 +79,16 @@ export interface LoreEntry {
 
   // Tags for filtering
   tags?: string[]; // ["phase-1", "sentinel", "sdk"]
+
+  // Project-defined metadata (open-ended key-value pairs)
+  meta?: Record<string, unknown>;
+
+  // Git snapshot at time of recording
+  git_context?: {
+    ref: string; // commit SHA
+    branch: string;
+    dirty: boolean; // uncommitted changes present
+  };
 }
 
 export interface LoreFilter {

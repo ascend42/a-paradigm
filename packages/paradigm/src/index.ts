@@ -1425,6 +1425,7 @@ loreCmd
   .option('--commit <hash>', 'Git commit hash')
   .option('--learnings <items>', 'Comma-separated learnings')
   .option('--duration <minutes>', 'Duration in minutes')
+  .option('--meta <json>', 'Project-defined metadata as JSON (e.g., \'{"sprint": 12}\')')
   .action(async (options) => {
     const { loreRecordCommand } = await import('./commands/lore/record.js');
     await loreRecordCommand(options);

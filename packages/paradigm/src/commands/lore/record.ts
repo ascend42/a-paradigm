@@ -18,6 +18,8 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     commit: options.commit as string || undefined,
     learnings: options.learnings ? (options.learnings as string).split(',').map(l => l.trim()) : undefined,
     tags: options.tags ? (options.tags as string).split(',').map(t => t.trim()) : undefined,
+    meta: options.meta ? JSON.parse(options.meta as string) : undefined,
+    // git_context is auto-captured by recordLore
   };
 
   await recordLore(rootDir, entry);

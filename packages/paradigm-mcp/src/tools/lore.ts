@@ -204,6 +204,10 @@ export function getLoreToolsList() {
             items: { type: 'string' },
             description: 'Tags for categorization',
           },
+          meta: {
+            type: 'object',
+            description: 'Project-defined metadata (open-ended key-value pairs, e.g., { meeting_type: "design-review", sprint: 12 })',
+          },
         },
         required: ['type', 'title', 'summary', 'symbols_touched'],
       },
@@ -383,8 +387,8 @@ export async function handleLoreTool(
         symbols_created, files_created, files_modified,
         lines_added, lines_removed, commit, duration_minutes,
         decisions, errors_encountered, learnings,
-        verification, tags,
-      } = args as Partial<LoreEntry> & {
+        verification, tags, meta,
+      } = args as Partial<LoreEntry> & { meta?: Record<string, unknown> } & {
         type: LoreEntry['type'];
         title: string;
         summary: string;
@@ -432,6 +436,7 @@ export async function handleLoreTool(
         learnings,
         verification,
         tags,
+        meta: meta || undefined,
         habit_compliance,
       };
 
