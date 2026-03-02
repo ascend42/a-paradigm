@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.1] — 2026-03-01
+
+### Fixed
+
+- **University UI version badge** (`@a-company/university` 3.9.0 → 3.9.1): Rebuild UI dist so the `vite.config.ts` fix from 3.16.0 is included in the published package — version badge now shows `v3.9.1` instead of `v0.1.0`
+
 ## [3.16.0] — 2026-03-01
 
 ### Added
