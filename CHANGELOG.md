@@ -5,11 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.15.0] — 2026-03-01
+## [3.16.0] — 2026-03-01
 
 ### Added
 
-#### Protocols University Content (`@a-company/university` 3.7.1 → 3.8.0)
+#### Protocols University Content (`@a-company/university` 3.7.1 → 3.9.0)
 
 - **PARA 301 lesson**: "Protocols — Repeatable Patterns" — covers protocol storage, step types, searching, recording, freshness tracking, and the protocol workflow
 - **3 PLSAT questions** (slots 094-096): protocol search workflow, recording patterns, freshness/staleness/broken status
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **University UI version badge**: Showed "v0.1.0" instead of the actual package version — `vite.config.ts` now reads from parent `package.json` instead of falling back to the UI sub-package's hardcoded version
 - **PLSAT question count mismatch**: Exam rules showed 96 questions but metadata said 90 — `totalSlots` and description now reflect the actual resolved count (99) including passage sub-questions
 
-#### Protocols — Repeatable Implementation Patterns (`@a-company/paradigm-mcp` 3.11.0 → 3.12.0, `@a-company/paradigm` 3.14.1 → 3.15.0)
+#### Protocols — Repeatable Implementation Patterns (`@a-company/paradigm-mcp` 3.11.0 → 3.13.0, `@a-company/paradigm` 3.14.1 → 3.16.0)
 
 Protocols capture step-by-step implementation patterns with exact file references, learned from completed work. Agents search protocols before exploring — saving 100-200k tokens per task when a matching pattern exists.
 
