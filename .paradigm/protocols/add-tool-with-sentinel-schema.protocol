@@ -1,0 +1,33 @@
+id: P-add-tool-with-sentinel-schema
+name: "Add an MCP tool for Sentinel data"
+description: "Create an MCP tool that queries Sentinel event storage via its schema system"
+
+trigger:
+  - "sentinel tool"
+  - "sentinel mcp"
+  - "query sentinel"
+tags: [mcp, tools, sentinel]
+
+symbols: ["#sentinel-tools"]
+
+exemplar: "packages/paradigm-mcp/src/tools/sentinel.ts"
+
+steps:
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/sentinel.ts"
+    reference: "getSentinelToolsList() array"
+    notes: "Add new tool definition with name, description, inputSchema, annotations"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/sentinel.ts"
+    reference: "handleSentinelTool() switch"
+    notes: "Add case for the new tool name. Sentinel tools share a single handler file."
+
+  - action: verify
+    notes: "Run: cd packages/paradigm-mcp && npm run build"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

@@ -1,0 +1,29 @@
+id: P-add-unit-test
+name: "Add a unit test"
+description: "Create a vitest unit test file with temp project fixtures and isolated test setup"
+
+trigger:
+  - "add test"
+  - "unit test"
+  - "new test"
+  - "write test"
+tags: [test, vitest, unit]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/core/ide-adapters/adapters.test.ts"
+
+steps:
+  - action: create
+    target: "packages/{pkg}/src/{path}.test.ts"
+    template_from: "packages/paradigm/src/core/ide-adapters/adapters.test.ts"
+    notes: "Import from vitest: describe, it, expect. Use beforeEach/afterEach for setup/teardown. Create temp directories for file-based tests."
+
+  - action: verify
+    notes: "Run: cd packages/{pkg} && npx vitest run {path}.test.ts"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

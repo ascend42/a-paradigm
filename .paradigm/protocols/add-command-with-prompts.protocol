@@ -1,0 +1,34 @@
+id: P-add-command-with-prompts
+name: "Add a CLI command with interactive prompts"
+description: "Create a CLI command using ora spinners and chalk for interactive UX"
+
+trigger:
+  - "interactive command"
+  - "command with prompts"
+  - "add interactive cli"
+  - "ora spinner"
+tags: [cli, command, interactive, ux]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/commands/lint.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/commands/{name}.ts"
+    template_from: "packages/paradigm/src/commands/lint.ts"
+    notes: "Import chalk from 'chalk' and ora from 'ora'. Use ora('message').start() for spinners, spinner.succeed()/fail() for results."
+
+  - action: modify
+    target: "packages/paradigm/src/index.ts"
+    reference: "command registration section"
+    notes: "Import and register the command"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js {name}"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

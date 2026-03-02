@@ -1,0 +1,33 @@
+id: P-add-team-subcommand
+name: "Add a team subcommand"
+description: "Add a subcommand under paradigm team for agent orchestration"
+
+trigger:
+  - "team subcommand"
+  - "team command"
+  - "add to team"
+tags: [cli, command, team, orchestration]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/commands/team/spawn.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/commands/team/{name}.ts"
+    template_from: "packages/paradigm/src/commands/team/spawn.ts"
+    notes: "Export a function that takes the parent command and adds .command(). May use providers from src/core/providers/."
+
+  - action: modify
+    target: "packages/paradigm/src/commands/team/index.ts"
+    reference: "subcommand imports and registration"
+    notes: "Import the new subcommand function and call it with the team parent command"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js team {name} --help"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

@@ -1,0 +1,53 @@
+id: P-add-tool-with-reindex-integration
+name: "Add an MCP tool with reindex integration"
+description: "Create an MCP tool that coordinates with paradigm_reindex — materializes data during reindex and clears cache"
+
+trigger:
+  - "tool with reindex"
+  - "reindex integration"
+  - "index rebuild"
+tags: [mcp, tools, reindex]
+
+symbols: ["#reindex"]
+
+exemplar: "packages/paradigm-mcp/src/tools/reindex.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm-mcp/src/utils/{name}-loader.ts"
+    template_from: "packages/paradigm-mcp/src/utils/protocol-loader.ts"
+    notes: "Must export a rebuildXxxIndex(rootDir) function that reindex.ts can call"
+
+  - action: create
+    target: "packages/paradigm-mcp/src/tools/{name}.ts"
+    template_from: "packages/paradigm-mcp/src/tools/protocols.ts"
+    notes: "Standard tool pattern"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "imports and dispatch"
+    notes: "Register tools as usual"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/reindex.ts"
+    reference: "import section"
+    notes: "Import rebuildXxxIndex from the loader"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/reindex.ts"
+    reference: "after persona rebuild step (step 6)"
+    notes: "Add numbered step calling rebuildXxxIndex(), wrap in try/catch (non-fatal), push to filesWritten"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/reindex.ts"
+    reference: "RebuildResult interface"
+    notes: "Add optional field for the new index stats"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm-mcp && npm run build"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

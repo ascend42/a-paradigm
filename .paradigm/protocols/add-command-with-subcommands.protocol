@@ -1,0 +1,39 @@
+id: P-add-command-with-subcommands
+name: "Add a CLI command with subcommands"
+description: "Create a top-level paradigm command with multiple subcommands in a directory"
+
+trigger:
+  - "command with subcommands"
+  - "command group"
+  - "add command group"
+  - "nested commands"
+tags: [cli, command, subcommands]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/commands/team/index.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/commands/{name}/index.ts"
+    template_from: "packages/paradigm/src/commands/team/index.ts"
+    notes: "Export function that registers the parent command and all subcommands with Commander/yargs"
+
+  - action: create
+    target: "packages/paradigm/src/commands/{name}/{subcommand}.ts"
+    template_from: "packages/paradigm/src/commands/team/spawn.ts"
+    notes: "One file per subcommand. Export a function that takes the parent command and adds .command()"
+
+  - action: modify
+    target: "packages/paradigm/src/index.ts"
+    reference: "command registration section"
+    notes: "Import and register the new command group"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js {name} --help"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

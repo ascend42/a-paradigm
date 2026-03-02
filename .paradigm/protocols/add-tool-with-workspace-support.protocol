@@ -1,0 +1,44 @@
+id: P-add-tool-with-workspace-support
+name: "Add a workspace-aware MCP tool"
+description: "Create an MCP tool that queries across sibling projects via includeWorkspace param"
+
+trigger:
+  - "workspace support"
+  - "workspace-aware tool"
+  - "cross-project tool"
+  - "includeWorkspace"
+tags: [mcp, tools, workspace]
+
+symbols: ["#workspace-loader"]
+
+exemplar: "packages/paradigm-mcp/src/utils/workspace-loader.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm-mcp/src/tools/{name}.ts"
+    template_from: "packages/paradigm-mcp/src/tools/protocols.ts"
+    notes: "Add includeWorkspace boolean param to inputSchema. Default false."
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/utils/workspace-loader.ts"
+    reference: "exported query functions"
+    notes: "Add a workspace query function (e.g., xxxWorkspace) that iterates ctx.workspace.siblingIndices"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "imports and dispatch"
+    notes: "Register tools, import workspace query function"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/{name}.ts"
+    reference: "handler for includeWorkspace"
+    notes: "When includeWorkspace=true and ctx.workspace exists, call workspace query function. Prefix cross-project results with {memberName}/."
+
+  - action: verify
+    notes: "Test with and without workspace configured. Graceful degradation when no workspace."
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

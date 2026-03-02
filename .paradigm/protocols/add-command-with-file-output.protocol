@@ -1,0 +1,33 @@
+id: P-add-command-with-file-output
+name: "Add a CLI command that writes files"
+description: "Create a CLI command that generates and writes output files with safety checks"
+
+trigger:
+  - "command writes files"
+  - "file generation command"
+  - "generate files command"
+tags: [cli, command, file-output]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/commands/sync.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/commands/{name}.ts"
+    template_from: "packages/paradigm/src/commands/sync.ts"
+    notes: "Use fs.existsSync() before writing, warn on overwrite, use yaml.dump() for YAML output. Use chalk for colored output."
+
+  - action: modify
+    target: "packages/paradigm/src/index.ts"
+    reference: "command registration section"
+    notes: "Import and register the command"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js {name} --dry-run (if applicable)"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

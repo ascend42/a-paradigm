@@ -1,0 +1,39 @@
+id: P-add-ide-adapter
+name: "Add an IDE adapter"
+description: "Create an IDE-specific adapter for generating instruction files from .paradigm/ config"
+
+trigger:
+  - "ide adapter"
+  - "new ide"
+  - "add ide support"
+  - "instruction file generator"
+tags: [ide, adapter, sync]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/core/ide-adapters/cursor.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/core/ide-adapters/{name}.ts"
+    template_from: "packages/paradigm/src/core/ide-adapters/cursor.ts"
+    notes: "Extend base adapter. Override detect() and generate() methods. Use shared helpers from base.ts for section generation."
+
+  - action: modify
+    target: "packages/paradigm/src/core/ide-adapters/base.ts"
+    reference: "if shared helpers needed"
+    notes: "Add any reusable generation functions that multiple adapters could use"
+
+  - action: modify
+    target: "packages/paradigm/src/commands/sync.ts"
+    reference: "adapter registration"
+    notes: "Import and register the new adapter in the sync command's adapter list"
+
+  - action: verify
+    notes: "Run: paradigm sync — verify the new IDE's instruction file is generated correctly"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

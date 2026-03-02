@@ -1,0 +1,41 @@
+id: P-add-portal-gate
+name: "Add a portal gate"
+description: "Add an authorization gate (^symbol) to portal.yaml with description, check expression, and prizes"
+
+trigger:
+  - "add gate"
+  - "new gate"
+  - "portal gate"
+  - "authorization gate"
+tags: [portal, auth, gate]
+
+symbols: []
+
+exemplar: "portal.yaml"
+
+steps:
+  - action: modify
+    target: "portal.yaml"
+    reference: "gates section"
+    notes: |
+      Add gate with required fields:
+        {name}:
+          description: "What this gate checks"
+          type: role|ownership|network|custom
+          location: "where the check happens"
+          check: "expression (e.g., req.user.role === 'admin')"
+          prizes: []
+
+  - action: modify
+    target: "portal.yaml"
+    reference: "routes section"
+    notes: "Add the gate to relevant routes: 'METHOD /path': [^existing-gate, ^{name}]"
+
+  - action: verify
+    notes: "Run: paradigm portal check — verify gate is declared and referenced. Implement the actual check in middleware/code."
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

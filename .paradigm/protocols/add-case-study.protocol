@@ -1,0 +1,35 @@
+id: P-add-case-study
+name: "Add a case study"
+description: "Document a real project's journey with Paradigm — problem, solution, lessons, metrics"
+
+trigger:
+  - "case study"
+  - "project journey"
+  - "document experience"
+tags: [docs, case-study, retrospective]
+
+symbols: []
+
+exemplar: "docs/private/"
+
+steps:
+  - action: create
+    target: "docs/private/case-studies/{name}.md"
+    notes: |
+      Structure:
+        # {Project Name} — Case Study
+        ## Problem (what needed solving)
+        ## Approach (how Paradigm was applied)
+        ## Key Decisions (with rationale)
+        ## Results (metrics, outcomes)
+        ## Lessons Learned (what worked, what didn't)
+        ## Protocols Discovered (patterns worth capturing)
+
+  - action: verify
+    notes: "Ensure lessons are actionable and could inform future protocols or wisdom entries"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

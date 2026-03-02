@@ -1,0 +1,38 @@
+id: P-add-sentinel-server-route
+name: "Add a Sentinel server API route"
+description: "Add an Express router to the Sentinel server for a new resource"
+
+trigger:
+  - "sentinel route"
+  - "sentinel api"
+  - "sentinel endpoint"
+tags: [sentinel, api, routes]
+
+symbols: []
+
+exemplar: "packages/sentinel/src/server/routes/schemas.ts"
+
+steps:
+  - action: create
+    target: "packages/sentinel/src/server/routes/{name}.ts"
+    template_from: "packages/sentinel/src/server/routes/schemas.ts"
+    notes: "Export an Express Router. Define GET/POST/PUT/DELETE handlers. Use storage layer for persistence."
+
+  - action: modify
+    target: "packages/sentinel/src/server/index.ts"
+    reference: "router registration (app.use)"
+    notes: "Import the new router and register with app.use('/api/{name}', router)"
+
+  - action: modify
+    target: "portal.yaml"
+    reference: "routes section"
+    notes: "Add gate enforcement for the new routes if auth is required"
+
+  - action: verify
+    notes: "Run sentinel server, test endpoints with curl or the Sentinel UI"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

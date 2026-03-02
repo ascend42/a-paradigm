@@ -1,0 +1,53 @@
+id: P-add-mcp-tool-with-status
+name: "Add an MCP tool with status integration"
+description: "Create an MCP tool that also surfaces data in paradigm_status output"
+
+trigger:
+  - "add tool with status"
+  - "tool that shows in status"
+  - "status integration"
+tags: [mcp, tools, status]
+
+symbols: ["#protocol-tools"]
+
+exemplar: "packages/paradigm-mcp/src/tools/protocols.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm-mcp/src/utils/{name}-loader.ts"
+    template_from: "packages/paradigm-mcp/src/utils/protocol-loader.ts"
+    notes: "Types, CRUD, any index/health summary function that status can call"
+
+  - action: create
+    target: "packages/paradigm-mcp/src/tools/{name}.ts"
+    template_from: "packages/paradigm-mcp/src/tools/protocols.ts"
+    notes: "getXxxToolsList() + handleXxxTool(). Include a health/summary function the status tool can import."
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "imports section"
+    notes: "Import getXxxToolsList, handleXxxTool, and the health/summary loader function"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "tools array spread"
+    notes: "Add ...getXxxToolsList()"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "dispatch section"
+    notes: "Add startsWith handler block"
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/index.ts"
+    reference: "paradigm_status case"
+    notes: "Import and call the health/summary function, add result to status JSON output"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm-mcp && npm run build"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

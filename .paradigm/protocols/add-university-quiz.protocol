@@ -1,0 +1,32 @@
+id: P-add-university-quiz
+name: "Add a University quiz"
+description: "Create a quiz for a course lesson with questions, options, and feedback"
+
+trigger:
+  - "add quiz"
+  - "new quiz"
+  - "lesson quiz"
+tags: [university, quiz, assessment]
+
+symbols: []
+
+exemplar: "packages/university/src/content/courses/"
+
+steps:
+  - action: modify
+    target: "packages/university/src/content/courses/{course-id}.json"
+    reference: "lesson quiz field"
+    notes: |
+      Add quiz object to a lesson:
+        quiz: {
+          questions: [{ id, text, options: [{ id, text }], correctOption, explanation }]
+        }
+
+  - action: verify
+    notes: "Run university server, navigate to the lesson, verify quiz renders with scoring and feedback"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

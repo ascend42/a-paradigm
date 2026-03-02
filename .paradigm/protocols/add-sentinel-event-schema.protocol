@@ -1,0 +1,34 @@
+id: P-add-sentinel-event-schema
+name: "Add a Sentinel event schema"
+description: "Register a new event schema with Sentinel declaring scope, event types, fields, and causality"
+
+trigger:
+  - "sentinel schema"
+  - "event schema"
+  - "add schema"
+  - "register schema"
+tags: [sentinel, schema, events]
+
+symbols: []
+
+exemplar: "packages/sentinel/src/schema/builtin-paradigm.ts"
+
+steps:
+  - action: create
+    target: "packages/sentinel/src/schema/{name}.ts"
+    template_from: "packages/sentinel/src/schema/builtin-paradigm.ts"
+    notes: "Export an EventSchemaDeclaration with scope, eventTypes, causality, and visualization hints. Types defined in packages/sentinel/src/schema/types.ts."
+
+  - action: modify
+    target: "packages/sentinel/src/schema/types.ts"
+    reference: "if new field types needed"
+    notes: "Add any new EventTypeDeclaration field types or ScopeDeclaration extensions"
+
+  - action: verify
+    notes: "Register schema via POST /api/schemas or import as builtin seed. Check it appears in Sentinel UI schema list."
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

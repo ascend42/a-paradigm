@@ -1,0 +1,49 @@
+id: P-add-wisdom-entry
+name: "Add a wisdom entry"
+description: "Record an antipattern or architectural decision in .paradigm/wisdom/"
+
+trigger:
+  - "add wisdom"
+  - "record antipattern"
+  - "add decision"
+  - "wisdom entry"
+tags: [wisdom, antipattern, decision]
+
+symbols: []
+
+exemplar: ".paradigm/wisdom/antipatterns.yaml"
+
+steps:
+  - action: modify
+    target: ".paradigm/wisdom/antipatterns.yaml"
+    reference: "entries array"
+    notes: |
+      For antipatterns, add to the YAML array:
+        - id: AP-{number}
+          symbols: ["#affected-symbol"]
+          description: "What NOT to do"
+          reason: "Why it's bad"
+          alternative: "What to do instead"
+          added: "YYYY-MM-DD"
+
+  - action: create
+    target: ".paradigm/wisdom/decisions/{id}.yaml"
+    notes: |
+      For architectural decisions, create a new file:
+        id: D-{number}
+        title: "Decision title"
+        date: "YYYY-MM-DD"
+        status: accepted|superseded
+        context: "Why this decision was needed"
+        decision: "What was decided"
+        consequences: ["positive and negative effects"]
+        symbols: ["#affected-symbol"]
+
+  - action: verify
+    notes: "Call paradigm_wisdom_context to verify the entry is discoverable"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

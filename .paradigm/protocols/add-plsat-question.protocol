@@ -1,0 +1,32 @@
+id: P-add-plsat-question
+name: "Add a PLSAT exam question"
+description: "Add a question to the Paradigm Literacy Self-Assessment Test certification exam"
+
+trigger:
+  - "plsat question"
+  - "add exam question"
+  - "certification question"
+tags: [university, plsat, certification, assessment]
+
+symbols: []
+
+exemplar: "packages/university/src/content/plsat/"
+
+steps:
+  - action: modify
+    target: "packages/university/src/content/plsat/{version}.json"
+    reference: "questions array"
+    notes: |
+      Add question object:
+        { id, type (standalone|variant-group), case/scenario text,
+          options: [{ id, text }], correctOption, explanation,
+          difficulty (1-5), tags (coverage areas) }
+
+  - action: verify
+    notes: "Run university server, take PLSAT exam, verify new question appears and scoring is correct"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

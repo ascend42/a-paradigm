@@ -1,0 +1,33 @@
+id: P-add-sentinel-mcp-integration
+name: "Add Sentinel MCP tools"
+description: "Bridge Sentinel SDK data to MCP by adding paradigm_sentinel_* tools"
+
+trigger:
+  - "sentinel mcp tool"
+  - "sentinel integration"
+  - "bridge sentinel to mcp"
+tags: [mcp, sentinel, tools, integration]
+
+symbols: ["#sentinel-tools"]
+
+exemplar: "packages/paradigm-mcp/src/tools/sentinel.ts"
+
+steps:
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/sentinel.ts"
+    reference: "getSentinelToolsList() array"
+    notes: "Add tool definition. Sentinel tools all live in one file — do not create a separate file."
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/tools/sentinel.ts"
+    reference: "handleSentinelTool() switch"
+    notes: "Add case for the new tool. Query Sentinel storage or server API."
+
+  - action: verify
+    notes: "Run: cd packages/paradigm-mcp && npm run build. Test tool with a running Sentinel instance."
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

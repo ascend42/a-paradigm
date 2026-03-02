@@ -1,0 +1,34 @@
+id: P-add-agent-provider
+name: "Add an agent provider"
+description: "Create a new provider for spawning AI agents in team orchestration"
+
+trigger:
+  - "agent provider"
+  - "new provider"
+  - "add provider"
+  - "spawn provider"
+tags: [team, provider, orchestration, agent]
+
+symbols: []
+
+exemplar: "packages/paradigm/src/core/providers/claude-code.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm/src/core/providers/{name}.ts"
+    template_from: "packages/paradigm/src/core/providers/claude-code.ts"
+    notes: "Implement the Provider interface: detect(), spawn(), getCapabilities(). Handle subprocess communication."
+
+  - action: modify
+    target: "packages/paradigm/src/core/providers/index.ts"
+    reference: "provider registry"
+    notes: "Import and add to the provider cascade array. Providers are tried in priority order."
+
+  - action: verify
+    notes: "Run: paradigm team providers — verify new provider appears. Test: paradigm team spawn --provider {name}"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

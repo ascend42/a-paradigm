@@ -1,0 +1,34 @@
+id: P-add-paradigm-type
+name: "Add a TypeScript type definition"
+description: "Create a new type file in paradigm-mcp/src/types/ for shared data structures"
+
+trigger:
+  - "add type"
+  - "new types"
+  - "type definition"
+  - "add interface"
+tags: [types, typescript]
+
+symbols: []
+
+exemplar: "packages/paradigm-mcp/src/types/personas.ts"
+
+steps:
+  - action: create
+    target: "packages/paradigm-mcp/src/types/{name}.ts"
+    template_from: "packages/paradigm-mcp/src/types/personas.ts"
+    notes: "Export interfaces and types. Use JSDoc comments on each field. Types are often duplicated in the loader to avoid cross-package deps — the types/ file is for public API."
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/types/index.ts"
+    reference: "end of file"
+    notes: "Add: export * from './{name}.js';"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm-mcp && npm run build"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

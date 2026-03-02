@@ -1,0 +1,43 @@
+id: P-add-hook-script
+name: "Add a Claude Code hook script"
+description: "Create a hook script (Stop, PreToolUse, or PostToolUse) for paradigm compliance enforcement"
+
+trigger:
+  - "add hook"
+  - "new hook"
+  - "hook script"
+  - "enforcement hook"
+tags: [hooks, enforcement, plugin]
+
+symbols: []
+
+exemplar: "plugins/paradigm/scripts/paradigm-stop.sh"
+
+steps:
+  - action: create
+    target: "plugins/paradigm/scripts/{name}.sh"
+    template_from: "plugins/paradigm/scripts/paradigm-postwrite.sh"
+    notes: "Shell script. Source paradigm-common.sh for shared functions. Use exit 0 for pass, exit 1 for block. Output messages to stderr."
+
+  - action: modify
+    target: "plugins/paradigm/hooks/hooks.json"
+    reference: "hooks array"
+    notes: |
+      Add hook entry:
+        { "type": "Stop|PreToolUse|PostToolUse",
+          "matcher": "tool pattern or *",
+          "command": "bash plugins/paradigm/scripts/{name}.sh" }
+
+  - action: modify
+    target: "plugins/paradigm/scripts/paradigm-common.sh"
+    reference: "shared functions"
+    notes: "Add any reusable validation functions the new hook needs"
+
+  - action: verify
+    notes: "Test: trigger the hook condition and verify it blocks/advises correctly"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

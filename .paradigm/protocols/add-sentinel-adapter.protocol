@@ -1,0 +1,33 @@
+id: P-add-sentinel-adapter
+name: "Add a Sentinel framework adapter"
+description: "Create a framework-specific error capture adapter for Sentinel (Express, Fastify, Hono pattern)"
+
+trigger:
+  - "sentinel adapter"
+  - "framework adapter"
+  - "error capture middleware"
+tags: [sentinel, adapter, middleware]
+
+symbols: []
+
+exemplar: "packages/sentinel/src/adapters/express.ts"
+
+steps:
+  - action: create
+    target: "packages/sentinel/src/adapters/{name}.ts"
+    template_from: "packages/sentinel/src/adapters/express.ts"
+    notes: "Wrap framework error handler to emit Sentinel events. Map routes to symbols. Handle both sync and async errors."
+
+  - action: modify
+    target: "packages/sentinel/src/index.ts"
+    reference: "adapter exports"
+    notes: "Export the new adapter from the package entry point"
+
+  - action: verify
+    notes: "Test with the target framework — trigger an error and verify Sentinel captures it with correct symbol mapping"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

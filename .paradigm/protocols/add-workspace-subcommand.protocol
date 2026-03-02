@@ -1,0 +1,33 @@
+id: P-add-workspace-subcommand
+name: "Add a workspace subcommand"
+description: "Add a subcommand under paradigm workspace (init, status, reindex pattern)"
+
+trigger:
+  - "workspace subcommand"
+  - "workspace command"
+  - "add to workspace"
+tags: [cli, command, workspace]
+
+symbols: ["#workspace-loader"]
+
+exemplar: "packages/paradigm/src/commands/workspace/index.ts"
+
+steps:
+  - action: modify
+    target: "packages/paradigm/src/commands/workspace/index.ts"
+    reference: "subcommand registration"
+    notes: "Add new .command() call with name, description, options, and action handler. Follow workspaceInitCommand/workspaceStatusCommand/workspaceReindexCommand pattern."
+
+  - action: modify
+    target: "packages/paradigm-mcp/src/utils/workspace-loader.ts"
+    reference: "end of file"
+    notes: "Add utility functions if the subcommand needs workspace data operations"
+
+  - action: verify
+    notes: "Run: cd packages/paradigm && npm run build && node dist/index.js workspace {name} --help"
+
+recorded_from: "L-2026-03-01-protocols-audit"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current
