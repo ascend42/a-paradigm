@@ -1,0 +1,55 @@
+id: P-update-university-content
+name: "Update University content"
+description: "Add or modify lessons, quizzes, and PLSAT questions in Paradigm University"
+
+trigger:
+  - "update university"
+  - "add lesson"
+  - "add university lesson"
+  - "update course content"
+  - "add plsat"
+  - "university content"
+tags: [university, course, lesson, plsat, content]
+
+symbols: []
+
+exemplar: "packages/university/src/content/courses/para-301.json"
+
+steps:
+  - action: modify
+    target: "packages/university/src/content/courses/{course-id}.json"
+    reference: "lessons array (insert before capstone/review lesson)"
+    notes: |
+      Add lesson object:
+        { id: "kebab-case-id", title: "Lesson Title",
+          content: "## Title\n\nMarkdown content with code examples...",
+          keyConcepts: ["concept-1", "concept-2", ...],
+          quiz: [{ id: "q1", question: "...", choices: { A, B, C, D, E }, correct: "B", explanation: "..." }] }
+      Quizzes should have 3-5 questions with A-E choices and explanations.
+      Place new lessons logically in the curriculum — capstone/review lessons stay last.
+
+  - action: modify
+    target: "packages/university/src/content/plsat/{version}.json"
+    reference: "items array (append after last slot)"
+    notes: |
+      Add 2-4 PLSAT items per new topic:
+        { type: "standalone"|"variant-group", slot: "slot-XXX", course: "{course-id}",
+          variants: [{ id: "plsat-XXX", scenario: "...", question: "...",
+                       choices: { A, B, C, D, E }, correct: "C", explanation: "..." }] }
+      Increment totalSlots to match the new count.
+      Variant groups allow 2+ angles on the same topic.
+      Use consecutive slot numbers after the current highest.
+
+  - action: modify
+    target: "packages/university/package.json"
+    reference: "version field"
+    notes: "Bump version if content changes warrant a university package release"
+
+  - action: verify
+    notes: "Validate JSON syntax. Check that lesson IDs are unique within the course. Check that slot/plsat IDs are unique in PLSAT."
+
+recorded_from: "L-2026-03-01-protocols-university"
+recorded_at: "2026-03-01T12:00:00Z"
+last_verified: "2026-03-01T12:00:00Z"
+verified_by: "claude-opus-4-6"
+status: current

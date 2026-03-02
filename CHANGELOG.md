@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Protocols University Content (`@a-company/university` 3.7.1 → 3.8.0)
+
+- **PARA 301 lesson**: "Protocols — Repeatable Patterns" — covers protocol storage, step types, searching, recording, freshness tracking, and the protocol workflow
+- **3 PLSAT questions** (slots 094-096): protocol search workflow, recording patterns, freshness/staleness/broken status
+- **Updated operational loop**: PARA 301 "Operational Excellence" capstone now includes protocol search in the Discover phase and protocol recording in the Capture Knowledge phase
+- **New protocol**: `update-university-content.protocol` — general protocol for adding lessons, quizzes, and PLSAT questions
+- PLSAT totalSlots updated from 90 → 93, description updated to match
+
 #### Protocols — Repeatable Implementation Patterns (`@a-company/paradigm-mcp` 3.11.0 → 3.12.0, `@a-company/paradigm` 3.14.1 → 3.15.0)
 
 Protocols capture step-by-step implementation patterns with exact file references, learned from completed work. Agents search protocols before exploring — saving 100-200k tokens per task when a matching pattern exists.
@@ -19,7 +27,7 @@ Protocols capture step-by-step implementation patterns with exact file reference
 - **Status integration**: `paradigm_status` includes protocol health (total/current/stale/broken)
 - **Lore integration**: `paradigm_lore_record` detects "protocol-worthy" sessions (2+ new files following existing patterns) and returns a `protocol_suggestion` draft
 - **`/protocol` skill**: Search or record protocols via slash command
-- **35 seed protocols** covering all paradigm patterns:
+- **36 seed protocols** covering all paradigm patterns:
   - MCP/Tools (5): add-mcp-tool, add-mcp-tool-with-status, add-tool-with-reindex-integration, add-tool-with-workspace-support, add-tool-with-sentinel-schema
   - CLI (6): add-cli-command, add-command-with-subcommands, add-command-with-prompts, add-command-with-file-output, add-workspace-subcommand, add-team-subcommand
   - Sentinel (4): add-sentinel-event-schema, add-sentinel-server-route, add-sentinel-adapter, add-sentinel-mcp-integration
@@ -29,7 +37,7 @@ Protocols capture step-by-step implementation patterns with exact file reference
   - Data (4): add-paradigm-type, add-aspect-with-anchors, add-wisdom-entry, add-spec
   - Testing (2): add-unit-test, add-integration-test
   - Docs (2): add-upgrade-guide, add-case-study
-  - Infra (5): add-skill, add-mcp-resource, add-hook-script, record-lore, update-changelog
+  - Infra (6): add-skill, add-mcp-resource, add-hook-script, record-lore, update-changelog, update-university-content
 - Storage: `.paradigm/protocols/` with `.protocol` extension per file and auto-generated `index.yaml`
 - Spec: `docs/specs/protocols.md`
 

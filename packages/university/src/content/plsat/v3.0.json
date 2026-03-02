@@ -2,10 +2,10 @@
   "version": "3.0",
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
-  "totalSlots": 90,
+  "totalSlots": 93,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
-  "description": "90 questions. 90 minutes. 80% to pass. Good luck, scholar.",
+  "description": "93 questions. 90 minutes. 80% to pass. Good luck, scholar.",
   "items": [
     {
       "type": "standalone",
@@ -2277,6 +2277,111 @@
           },
           "correct": "C",
           "explanation": "Paradigm's three-layer knowledge model is: Commits (raw facts \u2014 what code changed, captured by git), Lore (session events \u2014 what happened during a work session and why, captured by the post-commit hook into `.paradigm/history/`), and Assessments (synthesized insight \u2014 what the team learned across multiple sessions, recorded into `.paradigm/assessments/`). Each layer adds interpretation: commits are mechanical diffs, lore adds narrative context, and assessments distill patterns and decisions. All three layers persist and remain valuable \u2014 none replaces or supersedes the others."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-094",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-094",
+          "scenario": "You receive a task: \"Add a new Settings page to the application.\" The project has a `.paradigm/protocols/` directory with several `.protocol` files. You know that previous agents added similar pages (Logs, Events, Dashboard) following the same pattern each time.",
+          "question": "What should you do FIRST before exploring the codebase?",
+          "choices": {
+            "A": "Read every existing page component to understand the pattern",
+            "B": "Call `paradigm_protocol_search` with your task description to check for a matching protocol",
+            "C": "Call `paradigm_lore_record` to document that you are starting the task",
+            "D": "Call `paradigm_protocol_record` to create a new protocol for the Settings page",
+            "E": "Read the `.paradigm/protocols/index.yaml` file directly to scan for relevant entries"
+          },
+          "correct": "B",
+          "explanation": "paradigm_protocol_search is the agent's first stop before exploring the codebase. It takes a natural language task description and returns matching protocols with steps, exemplar files, and freshness info — typically saving thousands of exploration tokens. Reading existing pages (A) is exactly the expensive exploration that protocols prevent. Recording lore (C) is done after work, not before. Recording a protocol (D) is done after completing repeatable work. Reading index.yaml directly (E) bypasses the fuzzy search that matches task descriptions to protocols."
+        },
+        {
+          "id": "plsat-094b",
+          "scenario": "An agent needs to add a new API endpoint to the project. The project has 15 recorded protocols covering common tasks. The agent calls `paradigm_protocol_search({ task: \"add a new API endpoint\" })` and gets back a protocol with 4 steps: create route file, add handler, register route, verify with build.",
+          "question": "What should the agent do next?",
+          "choices": {
+            "A": "Ignore the protocol and explore the codebase to find its own approach",
+            "B": "Call `paradigm_protocol_get` with the protocol ID to get full details, then follow the steps using the exemplar as reference",
+            "C": "Call `paradigm_protocol_record` to save the protocol it just found",
+            "D": "Run `paradigm_reindex` to make sure the protocol is up to date",
+            "E": "Call `paradigm_protocol_validate` to check all protocols before proceeding"
+          },
+          "correct": "B",
+          "explanation": "After finding a matching protocol via search, the next step is paradigm_protocol_get to retrieve full details (including the exemplar file path and detailed step notes), then follow the steps. The exemplar is the canonical file to study for the pattern. Ignoring the protocol (A) wastes the lookup. Recording (C) is for new protocols. Reindex (D) and full validation (E) are maintenance operations, not implementation steps."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-095",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-095",
+          "scenario": "An agent just finished adding a new Sentinel event schema — the third such schema added to the project this month. Each time, the agent followed the same steps: create a schema file, register it in the schema index, add a migration, and verify. No protocol exists for this task yet.",
+          "question": "What should the agent do regarding protocols?",
+          "choices": {
+            "A": "Nothing — protocols are only created by project maintainers, not agents",
+            "B": "Call `paradigm_protocol_record` to capture the repeatable pattern it just followed",
+            "C": "Edit an existing protocol to add the schema steps as a sub-procedure",
+            "D": "Wait for `paradigm_reindex` to auto-generate a protocol from git history",
+            "E": "File an issue asking a human to write the protocol later"
+          },
+          "correct": "B",
+          "explanation": "Protocols are captured AFTER completing work, by the agent that did the work. When an agent completes a repeatable task and no protocol existed, it should call paradigm_protocol_record with the steps it followed, trigger phrases, tags, and an exemplar file. This ensures the next agent that receives a similar task can skip exploration entirely. Reindex (D) validates existing protocols but does not auto-generate new ones from git history."
+        },
+        {
+          "id": "plsat-095b",
+          "scenario": "After recording lore for a session where the agent created two new view components following the existing LogsView pattern, the `paradigm_lore_record` response includes a `protocol_suggestion` field with a draft protocol.",
+          "question": "What triggered this protocol suggestion?",
+          "choices": {
+            "A": "The agent explicitly asked for protocol suggestions in the lore_record call",
+            "B": "The lore system detected that the session created new files following existing patterns in the same directory",
+            "C": "All lore entries automatically include protocol suggestions",
+            "D": "The protocol suggestion was cached from a previous session",
+            "E": "The lore system runs paradigm_protocol_search on every lore entry"
+          },
+          "correct": "B",
+          "explanation": "When paradigm_lore_record is called, it runs a detection heuristic: if the session created 2+ new files in a directory that already has similar files, or modified the same 'registration' files that existing protocols touch, it includes a protocol_suggestion in the response. This nudges agents to capture repeatable patterns without manual intervention. Not all lore entries trigger suggestions (C) — only those with detectable repeatable patterns."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-096",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-096",
+          "scenario": "During `paradigm_reindex`, the system validates all protocols. Protocol P-add-view references `ui/src/views/LogsView.tsx` as its exemplar. The file still exists but was significantly refactored two weeks after the protocol was last verified.",
+          "question": "What status will the reindex assign to this protocol?",
+          "choices": {
+            "A": "`current` — the file still exists, so the protocol is valid",
+            "B": "`stale` — the exemplar has been modified since the protocol was last verified",
+            "C": "`broken` — any change to a referenced file invalidates the protocol",
+            "D": "`deprecated` — protocols older than 30 days are automatically deprecated",
+            "E": "`unknown` — reindex cannot determine status without running the protocol"
+          },
+          "correct": "B",
+          "explanation": "During reindex validation, a protocol is marked 'stale' when its exemplar or referenced files have been modified since last_verified. The file still exists (so it is not 'broken'), but the protocol's steps might no longer match the current code pattern. A 'broken' status (C) is reserved for when referenced files are missing entirely. Stale protocols still work but should be reviewed and refreshed after successful use via paradigm_protocol_update with refresh: true."
+        },
+        {
+          "id": "plsat-096b",
+          "scenario": "An agent calls `paradigm_protocol_validate({ id: \"P-add-api-route\" })`. The protocol's step 2 references the file `src/routes/index.ts`, but that file was deleted during a recent refactoring.",
+          "question": "What status will the validation assign?",
+          "choices": {
+            "A": "`stale` — a referenced file has changed",
+            "B": "`current` — the protocol itself is still syntactically valid",
+            "C": "`broken` — a referenced file no longer exists",
+            "D": "`warning` — the file might be temporarily missing",
+            "E": "`archived` — protocols with missing references are auto-archived"
+          },
+          "correct": "C",
+          "explanation": "A 'broken' status means one or more files referenced by the protocol (targets, exemplars, or template_from) no longer exist. This is more severe than 'stale' (where files exist but have been modified). A broken protocol cannot be reliably followed until its references are updated to point to existing files via paradigm_protocol_update."
         }
       ]
     }
