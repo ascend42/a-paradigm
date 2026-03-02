@@ -54,6 +54,12 @@ interface LogsState {
   symbolFilter: string | null;
   searchQuery: string;
 
+  // Exclusion filters
+  excludedSymbols: Set<string>;
+  excludedSymbolTypes: Set<string>;
+  excludedMessages: Set<string>;
+  excludedServices: Set<string>;
+
   // Actions
   loadLogs: () => Promise<void>;
   loadServices: () => Promise<void>;
@@ -64,6 +70,11 @@ interface LogsState {
   setSymbolFilter: (symbol: string | null) => void;
   setSearchQuery: (query: string) => void;
   clearLogs: () => void;
+  toggleExcludedSymbol: (symbol: string) => void;
+  toggleExcludedSymbolType: (type: string) => void;
+  toggleExcludedMessage: (message: string) => void;
+  toggleExcludedService: (service: string) => void;
+  clearAllExclusions: () => void;
 
   // Computed
   getFilteredLogs: () => LogEntry[];
@@ -82,6 +93,11 @@ export const useLogsStore = create<LogsState>((set, get) => ({
   serviceFilter: null,
   symbolFilter: null,
   searchQuery: '',
+
+  excludedSymbols: new Set<string>(),
+  excludedSymbolTypes: new Set<string>(),
+  excludedMessages: new Set<string>(),
+  excludedServices: new Set<string>(),
 
   loadLogs: async () => {
     set({ isLoading: true, error: null });
@@ -173,6 +189,33 @@ export const useLogsStore = create<LogsState>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   clearLogs: () => set({ logs: [], flowEvents: [] }),
 
+  toggleExcludedSymbol: (symbol) => {
+    const s = new Set(get().excludedSymbols);
+    s.has(symbol) ? s.delete(symbol) : s.add(symbol);
+    set({ excludedSymbols: s });
+  },
+  toggleExcludedSymbolType: (type) => {
+    const s = new Set(get().excludedSymbolTypes);
+    s.has(type) ? s.delete(type) : s.add(type);
+    set({ excludedSymbolTypes: s });
+  },
+  toggleExcludedMessage: (message) => {
+    const s = new Set(get().excludedMessages);
+    s.has(message) ? s.delete(message) : s.add(message);
+    set({ excludedMessages: s });
+  },
+  toggleExcludedService: (service) => {
+    const s = new Set(get().excludedServices);
+    s.has(service) ? s.delete(service) : s.add(service);
+    set({ excludedServices: s });
+  },
+  clearAllExclusions: () => set({
+    excludedSymbols: new Set(),
+    excludedSymbolTypes: new Set(),
+    excludedMessages: new Set(),
+    excludedServices: new Set(),
+  }),
+
   getFilteredLogs: () => {
     const state = get();
     let filtered = state.logs;
@@ -194,6 +237,20 @@ export const useLogsStore = create<LogsState>((set, get) => ({
       filtered = filtered.filter(
         (l) => l.message.toLowerCase().includes(q) || l.symbol.toLowerCase().includes(q)
       );
+    }
+
+    // Apply exclusion filters
+    if (state.excludedSymbols.size > 0) {
+      filtered = filtered.filter((l) => !state.excludedSymbols.has(l.symbol));
+    }
+    if (state.excludedSymbolTypes.size > 0) {
+      filtered = filtered.filter((l) => !state.excludedSymbolTypes.has(l.symbolType));
+    }
+    if (state.excludedMessages.size > 0) {
+      filtered = filtered.filter((l) => !state.excludedMessages.has(l.message));
+    }
+    if (state.excludedServices.size > 0) {
+      filtered = filtered.filter((l) => !state.excludedServices.has(l.service));
     }
 
     return filtered;

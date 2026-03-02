@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.14.0] — 2026-03-01
 
+### Changed
+
+#### Sentinel Dashboard UX Improvements (`@a-company/sentinel`)
+
+Overhauled the Logs and Events views in the Sentinel dashboard for better usability.
+
+- **Full timestamps**: Both views now show `YYYY-MM-DD HH:MM:SS.mmm` instead of time-of-day only
+- **Expand All / Collapse All**: Toolbar toggle to bulk-expand all row payloads — individual row clicks still work independently
+- **Merged Level + Category** (EventsView): Removed redundant Category column; category now appears as a colored `[category]` badge inline in the Type cell (hidden when "unknown")
+- **Exclusion filters**: Right-click any row to exclude by symbol, symbol type, message, or service — active exclusions appear as dismissible chips below the toolbar with a "Clear all" link
+- Widened time columns (100px → 180px) to fit full timestamps
+- EventsView grid reduced from 6 columns to 5
+
 ### Added
 
 #### Bundle Sentinel Binaries into Paradigm (`@a-company/paradigm` 3.13.0 → 3.14.0, `@a-company/sentinel` 3.6.0 → 3.7.0)

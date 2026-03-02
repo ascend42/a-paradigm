@@ -5,9 +5,15 @@
  * scope configuration, visualization hints, and causality declarations.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEventsStore, type GenericEvent } from '../store/eventsStore';
 import { useSchemasStore, type StoredSchema } from '../store/schemasStore';
+
+interface EventContextMenuState {
+  x: number;
+  y: number;
+  event: GenericEvent;
+}
 
 const SEVERITY_COLORS: Record<string, string> = {
   debug: '#94a3b8',
@@ -29,7 +35,9 @@ const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
 
 function formatTimestamp(ts: string): string {
   const d = new Date(ts);
-  return d.toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
+  const date = d.toISOString().slice(0, 10);
+  const time = d.toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
+  return `${date} ${time}`;
 }
 
 function getCategoryColor(category: string, schema?: StoredSchema): string {
@@ -172,24 +180,28 @@ function EventRow({
   schema,
   isExpanded,
   onToggle,
+  onContextMenu,
 }: {
   event: GenericEvent;
   schema: StoredSchema;
   isExpanded: boolean;
   onToggle: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const catColor = getCategoryColor(event.category, schema);
 
   return (
-    <div className={`event-row event-row--${event.severity || 'info'}`} onClick={onToggle}>
+    <div className={`event-row event-row--${event.severity || 'info'}`} onClick={onToggle} onContextMenu={onContextMenu}>
       <span className="event-time">{formatTimestamp(event.timestamp)}</span>
       <span className="event-severity" style={{ color: SEVERITY_COLORS[event.severity || 'info'] }}>
         {(event.severity || 'info').toUpperCase().padEnd(5)}
       </span>
-      <span className="event-category" style={{ color: catColor }}>
-        {event.category}
+      <span className="event-type">
+        {event.category && event.category !== 'unknown' && (
+          <span className="event-category-badge" style={{ color: catColor }}>[{event.category}]</span>
+        )}{' '}
+        {event.eventType}
       </span>
-      <span className="event-type">{event.eventType}</span>
       <span className="event-service">{event.service}</span>
       {event.scopeValue && <span className="event-scope">{event.scopeValue}</span>}
       {event.depth != null && event.depth > 0 && (
@@ -209,16 +221,57 @@ function EventRow({
 // ─── Event Table ──────────────────────────────────────────────
 
 function EventTable({ schema }: { schema: StoredSchema }) {
-  const { events, excludedTypes, categoryFilter, loading } = useEventsStore();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { events, excludedTypes, excludedServices, categoryFilter, loading, toggleExcludedType, toggleExcludedService, clearAllExclusions } = useEventsStore();
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandAll, setExpandAll] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleRow = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setExpandAll(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   // Filter events
   const filtered = events.filter((e) => {
     if (excludedTypes.has(e.eventType)) return false;
+    if (excludedServices.has(e.service)) return false;
     if (categoryFilter && e.category !== categoryFilter) return false;
     return true;
   });
+
+  const hasExclusions = excludedTypes.size > 0 || excludedServices.size > 0;
+  const [contextMenu, setContextMenu] = useState<EventContextMenuState | null>(null);
+
+  const handleRowContextMenu = useCallback((e: React.MouseEvent, event: GenericEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, event });
+  }, []);
+
+  // Close context menu on click anywhere
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [contextMenu]);
+
+  const handleExpandAll = () => {
+    if (expandAll) {
+      setExpandedIds(new Set());
+      setExpandAll(false);
+    } else {
+      setExpandedIds(new Set(filtered.filter((e) => e.data).map((e) => e.id)));
+      setExpandAll(true);
+    }
+  };
 
   if (loading) return <div className="events-loading">Loading events...</div>;
 
@@ -233,10 +286,53 @@ function EventTable({ schema }: { schema: StoredSchema }) {
 
   return (
     <div className="events-table" ref={containerRef}>
+      <div className="events-table-actions">
+        <span className="events-count">{filtered.length} events</span>
+        <button
+          className={`events-expand-btn ${expandAll ? 'active' : ''}`}
+          onClick={handleExpandAll}
+          title={expandAll ? 'Collapse all payloads' : 'Expand all payloads'}
+        >
+          {expandAll ? 'Collapse All' : 'Expand All'}
+        </button>
+      </div>
+
+      {/* Exclusion Chips */}
+      {hasExclusions && (
+        <div className="exclusion-bar">
+          {[...excludedTypes].map((t) => (
+            <span key={`type-${t}`} className="exclusion-chip">
+              type: {t} <button onClick={() => toggleExcludedType(t)}>&times;</button>
+            </span>
+          ))}
+          {[...excludedServices].map((s) => (
+            <span key={`svc-${s}`} className="exclusion-chip">
+              service: {s} <button onClick={() => toggleExcludedService(s)}>&times;</button>
+            </span>
+          ))}
+          <button className="exclusion-clear" onClick={clearAllExclusions}>Clear all</button>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={() => { toggleExcludedType(contextMenu.event.eventType); setContextMenu(null); }}>
+            Exclude type "{contextMenu.event.eventType}"
+          </button>
+          <button onClick={() => { toggleExcludedService(contextMenu.event.service); setContextMenu(null); }}>
+            Exclude service "{contextMenu.event.service}"
+          </button>
+        </div>
+      )}
+
       <div className="events-table-header">
         <span className="event-time">Time</span>
         <span className="event-severity">Level</span>
-        <span className="event-category">Category</span>
         <span className="event-type">Type</span>
         <span className="event-service">Service</span>
         <span className="event-scope">Scope</span>
@@ -247,8 +343,9 @@ function EventTable({ schema }: { schema: StoredSchema }) {
             key={event.id}
             event={event}
             schema={schema}
-            isExpanded={expandedId === event.id}
-            onToggle={() => setExpandedId(expandedId === event.id ? null : event.id)}
+            isExpanded={expandAll || expandedIds.has(event.id)}
+            onToggle={() => toggleRow(event.id)}
+            onContextMenu={(e) => handleRowContextMenu(e, event)}
           />
         ))}
       </div>

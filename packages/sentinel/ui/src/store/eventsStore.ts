@@ -34,6 +34,7 @@ interface EventsState {
   scopes: ScopeSummary[];
   selectedScope: string | null;
   excludedTypes: Set<string>;
+  excludedServices: Set<string>;
   categoryFilter: string | null;
   loading: boolean;
   error: string | null;
@@ -44,6 +45,8 @@ interface EventsState {
   fetchScopeEvents: (schemaId: string, scopeValue: string) => Promise<void>;
   selectScope: (scopeValue: string | null) => void;
   toggleExcludedType: (type: string) => void;
+  toggleExcludedService: (service: string) => void;
+  clearAllExclusions: () => void;
   setCategoryFilter: (category: string | null) => void;
   addRealtimeEvent: (event: GenericEvent) => void;
 }
@@ -53,6 +56,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   scopes: [],
   selectedScope: null,
   excludedTypes: new Set<string>(),
+  excludedServices: new Set<string>(),
   categoryFilter: null,
   loading: false,
   error: null,
@@ -115,6 +119,17 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     }
     set({ excludedTypes: excluded });
   },
+
+  toggleExcludedService: (service) => {
+    const s = new Set(get().excludedServices);
+    s.has(service) ? s.delete(service) : s.add(service);
+    set({ excludedServices: s });
+  },
+
+  clearAllExclusions: () => set({
+    excludedTypes: new Set(),
+    excludedServices: new Set(),
+  }),
 
   setCategoryFilter: (category) => set({ categoryFilter: category }),
 
