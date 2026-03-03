@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.20.0] — 2026-03-03
+
+### Added
+
+<!-- impact: runtime -->
+- **New package: `@a-company/paradigm-runtime` v0.1.0** — Runtime contracts for Paradigm Studio. Graph schema types, runtime API operation types (query/write/traverse/computed), forward-only migration engine with diff generator and history tracking, version fingerprinting for cross-component compatibility checking. Sub-path exports: `/schema`, `/migration`, `/logger`, `/telemetry`
+
+<!-- impact: logger -->
+- **Logger API stability annotations** (`@a-company/paradigm-logger` 3.5.0 → 3.5.1): Added `@public @stable` JSDoc annotations to all exported types in `packages/logger/src/types.ts`. Created `packages/logger/API.md` documenting the public contract
+
+<!-- impact: dev-only -->
+- **Changelog impact tags**: Established convention for `<!-- impact: runtime|logger|schema|sentinel|dev-only|migration -->` HTML comments on changelog entries for programmatic parsing by Studio platform
+
+### Changed
+
+<!-- impact: dev-only -->
+- **Root monorepo scripts** (`@a-company/paradigm` 3.19.4 → 3.20.0): Added `@a-company/paradigm-runtime` to `build:packages` (after sentinel) and `publish:all` scripts
+
 ## [3.19.4] — 2026-03-02
 
 ### Fixed

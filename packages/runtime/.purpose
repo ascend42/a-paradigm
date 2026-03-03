@@ -1,0 +1,67 @@
+version: 2.0.0
+description: |
+  Paradigm Runtime — contracts that Studio-generated apps compile against.
+  Defines graph schema format, runtime API operation types, forward-only
+  migration engine, and version fingerprinting. No storage layer — the
+  runtime server in a-animus wraps these with DB-specific persistence.
+
+components:
+  paradigm-runtime:
+    description: Main barrel export — runtime API types, version fingerprinting
+    path: src/index.ts
+    tags: [runtime, contracts]
+
+  graph-schema:
+    description: Graph schema type definitions — entities, relationships, pattern engines, memory
+    path: src/schema/types.ts
+    tags: [schema, types]
+
+  schema-validation:
+    description: Validates graph schemas for structural correctness (duplicate entities, broken refs)
+    path: src/schema/validation.ts
+    tags: [schema, validation]
+
+  runtime-api-types:
+    description: Runtime API v1 operation types — query, write, traverse, computed
+    path: src/types.ts
+    tags: [api, types]
+
+  migration-engine:
+    description: Forward-only migration engine — transforms GraphSchema in memory
+    path: src/migration/engine.ts
+    tags: [migration, engine]
+
+  migration-diff:
+    description: Schema diff generator — compares two schemas, produces SchemaDiff with safety classification
+    path: src/migration/diff.ts
+    tags: [migration, diff]
+
+  migration-history:
+    description: Migration history tracking — records applied migrations, finds pending
+    path: src/migration/history.ts
+    tags: [migration, history]
+
+  version-fingerprint:
+    description: Version fingerprinting — tracks compatibility across runtime, logger, sentinel, schema
+    path: src/version.ts
+    tags: [versioning, compatibility]
+
+  logger-reexport:
+    description: Shielding re-export of @a-company/paradigm-logger
+    path: src/logger.ts
+    tags: [logger, reexport]
+
+  telemetry-reexport:
+    description: Shielding re-export of @a-company/sentinel transport
+    path: src/telemetry.ts
+    tags: [telemetry, reexport]
+
+flows:
+  $schema-migration:
+    description: Schema migration flow — diff schemas, generate migration, validate, apply
+    steps:
+      - "#migration-diff diffSchemas()"
+      - "#migration-diff diffToMigration()"
+      - "#migration-engine validateMigration()"
+      - "#migration-engine applyMigration()"
+      - "#migration-history recordMigration()"

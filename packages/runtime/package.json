@@ -1,0 +1,78 @@
+{
+  "name": "@a-company/paradigm-runtime",
+  "version": "0.1.0",
+  "description": "Runtime contracts for Paradigm Studio — graph schema, migrations, version fingerprinting",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    },
+    "./migration": {
+      "types": "./dist/migration/index.d.ts",
+      "import": "./dist/migration/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.ts",
+      "import": "./dist/telemetry.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@a-company/paradigm-logger": ">=3.5.0",
+    "@a-company/sentinel": ">=3.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@a-company/paradigm-logger": {
+      "optional": true
+    },
+    "@a-company/sentinel": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/runtime"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "runtime",
+    "graph-schema",
+    "migration",
+    "studio"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
