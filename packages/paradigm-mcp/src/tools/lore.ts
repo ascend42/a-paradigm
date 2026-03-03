@@ -77,8 +77,16 @@ export function getLoreToolsList() {
           },
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'],
+            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'Filter by entry type',
+          },
+          tag: {
+            type: 'string',
+            description: 'Filter by tag prefix (e.g., "arc:lore-evolution" for arc entries)',
+          },
+          hasBody: {
+            type: 'boolean',
+            description: 'Filter for entries with/without long-form body content',
           },
           dateFrom: {
             type: 'string',
@@ -121,7 +129,7 @@ export function getLoreToolsList() {
         properties: {
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'],
+            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'Entry type',
           },
           title: {
@@ -208,8 +216,27 @@ export function getLoreToolsList() {
             type: 'object',
             description: 'Project-defined metadata (open-ended key-value pairs, e.g., { meeting_type: "design-review", sprint: 12 })',
           },
+          body: {
+            type: 'string',
+            description: 'Long-form content (detailed retrospective notes, decision rationale, etc.)',
+          },
+          linked_lore: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Cross-references to other lore entry IDs',
+          },
+          linked_tasks: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'References to paradigm task IDs',
+          },
+          linked_commits: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Git commit SHAs related to this entry',
+          },
         },
-        required: ['type', 'title', 'summary', 'symbols_touched'],
+        required: ['title', 'summary', 'symbols_touched'],
       },
       annotations: {
         readOnlyHint: false,
@@ -268,7 +295,7 @@ export function getLoreToolsList() {
           summary: { type: 'string', description: 'New summary' },
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'],
+            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'New entry type',
           },
           symbols_touched: {
@@ -361,6 +388,8 @@ export async function handleLoreTool(
         dateFrom: args.dateFrom as string | undefined,
         dateTo: args.dateTo as string | undefined,
         type: args.type as LoreFilter['type'],
+        tag: args.tag as string | undefined,
+        hasBody: args.hasBody as boolean | undefined,
         tags: args.tags as string[] | undefined,
         hasReview: args.hasReview as boolean | undefined,
         limit: (args.limit as number) || 20,
@@ -388,8 +417,8 @@ export async function handleLoreTool(
         lines_added, lines_removed, commit, duration_minutes,
         decisions, errors_encountered, learnings,
         verification, tags, meta,
+        body, linked_lore, linked_tasks, linked_commits,
       } = args as Partial<LoreEntry> & { meta?: Record<string, unknown> } & {
-        type: LoreEntry['type'];
         title: string;
         summary: string;
         symbols_touched: string[];
@@ -417,7 +446,7 @@ export async function handleLoreTool(
 
       const entry: LoreEntry = {
         id: '', // Will be generated
-        type,
+        type: type || 'agent-session',
         timestamp: new Date().toISOString(),
         duration_minutes,
         author: resolveAuthorForMcp(),
@@ -438,6 +467,10 @@ export async function handleLoreTool(
         tags,
         meta: meta || undefined,
         habit_compliance,
+        body,
+        linked_lore,
+        linked_tasks,
+        linked_commits,
       };
 
       const id = await recordLoreEntry(ctx.rootDir, entry);

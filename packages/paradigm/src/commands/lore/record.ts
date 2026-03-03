@@ -19,6 +19,9 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     learnings: options.learnings ? (options.learnings as string).split(',').map(l => l.trim()) : undefined,
     tags: options.tags ? (options.tags as string).split(',').map(t => t.trim()) : undefined,
     meta: options.meta ? JSON.parse(options.meta as string) : undefined,
+    body: options.body as string || undefined,
+    linked_lore: options.linkLore ? (options.linkLore as string).split(',').map(l => l.trim()) : undefined,
+    linked_commits: options.linkCommits ? (options.linkCommits as string).split(',').map(c => c.trim()) : undefined,
     // git_context is auto-captured by recordLore
   };
 

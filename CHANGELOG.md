@@ -5,6 +5,34 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.19.0] — 2026-03-02
+
+### Changed
+
+#### Assessment Consolidation into Lore (`@a-company/paradigm` 3.18.0 → 3.19.0, `@a-company/paradigm-mcp` 3.14.0 → 3.15.0)
+
+Assessments are now part of the lore system. Arcs become `arc:{name}` tags, assessment types (`retro`, `insight`, `decision`, `milestone`) become regular lore entry types. Six assessment MCP tools are deprecated as thin wrappers forwarding to lore.
+
+- **Schema**: `LoreEntry` gains `body`, `linked_lore`, `linked_tasks`, `linked_commits` fields; `type` is now optional (defaults to `agent-session`); new types `retro` and `insight`
+- **Filters**: `tag` prefix filter and `hasBody` boolean filter on lore search (MCP, CLI, viewer)
+- **Deprecated tools**: `paradigm_assessment_record/list/get/search/arc_create/arc_close` — all forward to lore with `arc:*` tags; descriptions prefixed `[DEPRECATED]`
+- **Session recovery**: `paradigm_context_check` breadcrumbs and recovery now search lore for `arc:*` tags instead of loading assessment directories
+- **Task hints**: `paradigm_task_done` references lore instead of assessments
+
+### Added
+
+- **`paradigm lore migrate-assessments`** CLI command: converts `.paradigm/assessments/` entries to lore with `arc:{arc_id}` and `assessment:{type}` tags; renames originals to `.migrated`; supports `--dry-run`
+- **`paradigm lore retag`** CLI command: bulk add/remove tags on matching lore entries with `--add`, `--remove`, and standard filter options (`--type`, `--symbol`, `--author`, `--from`, `--to`, `--tags`)
+- **CLI enhancements**: `paradigm lore record` gains `--body`, `--link-lore`, `--link-commits` options; `paradigm lore show` displays body, linked entries, and new type colors
+- **Lore Viewer**: body display (preformatted), linked entries (clickable IDs), arc tag badges (blue styling), tag dropdown filter populated from `/api/lore/tags`, `retro`/`insight` in type filter
+- **Server**: `GET /api/lore/tags` endpoint returns unique tags with counts; existing list endpoint accepts `tag` and `hasBody` query params
+
+#### University Content & PLSAT Layout (`@a-company/university` 3.9.1 → 3.10.0)
+
+- **PARA-501 rewrite**: "Assessment Loops" lesson → "Lore as Unified Project Memory" — teaches tag-driven classification, arc tags, body field, and linking between entries
+- **PLSAT v3.0**: Questions plsat-091/092/093 updated from assessment model to unified lore model
+- **PLSAT two-column layout**: `QuestionCard` gains `splitLayout` prop — CSS Grid with question on left, choices on right; responsive stacking at 768px
+
 ## [3.18.0] — 2026-03-02
 
 ### Changed

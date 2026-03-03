@@ -750,26 +750,35 @@ export async function buildRecoveryPreamble(rootDir: string): Promise<string | n
     // Tasks not initialized yet — skip
   }
 
-  // Surface active assessment arcs related to recovered symbols
+  // Surface recent lore entries with arc tags (assessment arcs unified into lore)
   try {
-    const { loadArcs } = await import('../utils/assessment-loader.js');
-    const activeArcs = await loadArcs(rootDir, 'active');
-    if (activeArcs.length > 0) {
+    const { loadLoreEntries } = await import('../utils/lore-loader.js');
+    const arcEntries = await loadLoreEntries(rootDir, { limit: 10 });
+    const entriesWithArcs = arcEntries.filter(e => e.tags?.some(t => t.startsWith('arc:')));
+
+    if (entriesWithArcs.length > 0) {
+      // Group by arc tag
+      const arcGroups = new Map<string, number>();
+      for (const e of entriesWithArcs) {
+        const arcTag = e.tags?.find(t => t.startsWith('arc:')) || '';
+        arcGroups.set(arcTag, (arcGroups.get(arcTag) || 0) + 1);
+      }
+
       const checkpointSymbols = checkpoint?.symbolsTouched || [];
       const relevantArcs = checkpointSymbols.length > 0
-        ? activeArcs.filter(arc => arc.symbols.some(s => checkpointSymbols.includes(s)))
-        : activeArcs.slice(0, 3);
+        ? entriesWithArcs.filter(e => e.symbols_touched?.some(s => checkpointSymbols.includes(s)))
+        : entriesWithArcs.slice(0, 3);
 
-      if (relevantArcs.length > 0) {
+      if (relevantArcs.length > 0 || arcGroups.size > 0) {
         lines.push('');
-        lines.push('Active assessment arcs:');
-        for (const arc of relevantArcs) {
-          lines.push(`  ${arc.id}: ${arc.name} (${arc.entry_count} entries)`);
+        lines.push('Active lore arcs:');
+        for (const [arcTag, count] of arcGroups) {
+          lines.push(`  ${arcTag} (${count} entries)`);
         }
       }
     }
   } catch {
-    // Assessments not initialized yet — skip
+    // Lore not initialized yet — skip
   }
 
   lines.push('');

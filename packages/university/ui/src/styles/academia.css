@@ -830,6 +830,42 @@ pre code {
   border-color: var(--error);
 }
 
+/* --- Split Layout (PLSAT two-column question/answer) --- */
+.question-split-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  min-height: 0;
+}
+
+.question-split-layout .question-content,
+.question-split-layout .answer-choices {
+  overflow-y: auto;
+  max-height: 60vh;
+  padding-right: 0.5rem;
+}
+
+.question-split-layout .question-content {
+  border-right: 1px solid var(--parchment-dark);
+  padding-right: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .question-split-layout {
+    grid-template-columns: 1fr;
+  }
+  .question-split-layout .question-content {
+    border-right: none;
+    padding-right: 0;
+    border-bottom: 1px solid var(--parchment-dark);
+    padding-bottom: 1rem;
+    max-height: none;
+  }
+  .question-split-layout .answer-choices {
+    max-height: none;
+  }
+}
+
 /* --- Passage Block (PLSAT passage-based questions) --- */
 .passage-block {
   background: var(--cream);

@@ -1390,7 +1390,7 @@ loreCmd
   .alias('ls')
   .description('List recent lore entries')
   .option('--author <author>', 'Filter by author')
-  .option('--type <type>', 'Filter by type: agent-session, human-note, decision, review, incident, milestone')
+  .option('--type <type>', 'Filter by type: agent-session, human-note, decision, review, incident, milestone, retro, insight')
   .option('--symbol <symbol>', 'Filter by symbol')
   .option('--tags <tags>', 'Filter by tags (comma-separated)')
   .option('--from <date>', 'Filter from date (ISO format, e.g., 2026-02-20)')
@@ -1414,7 +1414,7 @@ loreCmd
 loreCmd
   .command('record')
   .description('Record a new lore entry (human note, milestone, etc.)')
-  .option('--type <type>', 'Entry type: human-note, decision, milestone', 'human-note')
+  .option('--type <type>', 'Entry type: human-note, decision, milestone, retro, insight', 'human-note')
   .option('--author <author>', 'Author name')
   .option('--title <title>', 'Entry title')
   .option('--summary <summary>', 'Entry summary')
@@ -1426,6 +1426,9 @@ loreCmd
   .option('--learnings <items>', 'Comma-separated learnings')
   .option('--duration <minutes>', 'Duration in minutes')
   .option('--meta <json>', 'Project-defined metadata as JSON (e.g., \'{"sprint": 12}\')')
+  .option('--body <text>', 'Long-form content (detailed notes, rationale, etc.)')
+  .option('--link-lore <ids>', 'Comma-separated lore entry IDs to link')
+  .option('--link-commits <shas>', 'Comma-separated git commit SHAs to link')
   .action(async (options) => {
     const { loreRecordCommand } = await import('./commands/lore/record.js');
     await loreRecordCommand(options);
@@ -1465,6 +1468,32 @@ loreCmd
   .action(async (id, options) => {
     const { loreDeleteCommand } = await import('./commands/lore/delete.js');
     await loreDeleteCommand(id, options);
+  });
+
+loreCmd
+  .command('migrate-assessments')
+  .description('Migrate assessment entries to lore with arc: tags')
+  .option('--dry-run', 'Show what would be migrated without making changes')
+  .action(async (options) => {
+    const { loreMigrateAssessmentsCommand } = await import('./commands/lore/migrate-assessments.js');
+    await loreMigrateAssessmentsCommand(options);
+  });
+
+loreCmd
+  .command('retag')
+  .description('Add or remove tags from matching lore entries')
+  .option('--add <tag>', 'Tag to add')
+  .option('--remove <tag>', 'Tag to remove')
+  .option('--type <type>', 'Filter by entry type')
+  .option('--symbol <symbol>', 'Filter by symbol')
+  .option('--author <author>', 'Filter by author')
+  .option('--from <date>', 'Filter from date')
+  .option('--to <date>', 'Filter to date')
+  .option('--tags <tags>', 'Filter by existing tags (comma-separated)')
+  .option('--dry-run', 'Show what would change without making changes')
+  .action(async (options) => {
+    const { loreRetagCommand } = await import('./commands/lore/retag.js');
+    await loreRetagCommand(options);
   });
 
 loreCmd

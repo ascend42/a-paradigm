@@ -17,9 +17,11 @@ export interface LoreError {
   time_to_fix?: string; // "5 minutes"
 }
 
+export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
+
 export interface LoreEntry {
   id: string; // "L-2026-03-02-ascend-143025-001"
-  type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
+  type?: LoreType;
   timestamp: string; // ISO 8601
 
   duration_minutes?: number;
@@ -77,8 +79,16 @@ export interface LoreEntry {
     weakAreas?: string[];
   };
 
+  // Long-form content (from assessment body)
+  body?: string;
+
+  // Cross-references
+  linked_lore?: string[];     // Other lore entry IDs
+  linked_tasks?: string[];    // Paradigm task IDs
+  linked_commits?: string[];  // Git commit SHAs
+
   // Tags for filtering
-  tags?: string[]; // ["phase-1", "sentinel", "sdk"]
+  tags?: string[]; // ["phase-1", "sentinel", "sdk", "arc:lore-evolution"]
 
   // Project-defined metadata (open-ended key-value pairs)
   meta?: Record<string, unknown>;
@@ -99,7 +109,9 @@ export interface LoreFilter {
   symbol?: string;
   dateFrom?: string;
   dateTo?: string;
-  type?: LoreEntry['type'];
+  type?: LoreType;
+  tag?: string; // Filter by tag prefix (e.g., "arc:lore-evolution")
+  hasBody?: boolean;
   tags?: string[];
   hasReview?: boolean;
   minCompleteness?: number;

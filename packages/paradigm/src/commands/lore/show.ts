@@ -24,11 +24,18 @@ export async function loreShowCommand(id: string, options: Record<string, unknow
     'milestone': chalk.hex('#60a5fa'),
   };
 
-  const colorFn = typeColor[entry.type] || chalk.white;
+  const typeColors: Record<string, (s: string) => string> = {
+    ...typeColor,
+    'retro': chalk.hex('#fb923c'),
+    'insight': chalk.hex('#a78bfa'),
+  };
+
+  const entryType = entry.type || 'agent-session';
+  const colorFn = typeColors[entryType] || chalk.white;
 
   console.log();
   console.log(chalk.white.bold(`  ${entry.title}`));
-  console.log(chalk.gray(`  ${entry.id} · ${colorFn(entry.type)} · ${entry.timestamp}`));
+  console.log(chalk.gray(`  ${entry.id} · ${colorFn(entryType)} · ${entry.timestamp}`));
   console.log();
 
   // Author
@@ -45,6 +52,40 @@ export async function loreShowCommand(id: string, options: Record<string, unknow
   console.log(chalk.gray('  Summary:'));
   console.log(`  ${entry.summary}`);
   console.log();
+
+  // Body
+  if (entry.body) {
+    console.log(chalk.gray('  Body:'));
+    for (const line of entry.body.split('\n')) {
+      console.log(`    ${line}`);
+    }
+    console.log();
+  }
+
+  // Linked entries
+  if (entry.linked_lore && entry.linked_lore.length > 0) {
+    console.log(chalk.gray('  Linked lore:'));
+    for (const id of entry.linked_lore) {
+      console.log(`    ${chalk.cyan(id)}`);
+    }
+    console.log();
+  }
+
+  if (entry.linked_tasks && entry.linked_tasks.length > 0) {
+    console.log(chalk.gray('  Linked tasks:'));
+    for (const id of entry.linked_tasks) {
+      console.log(`    ${chalk.yellow(id)}`);
+    }
+    console.log();
+  }
+
+  if (entry.linked_commits && entry.linked_commits.length > 0) {
+    console.log(chalk.gray('  Linked commits:'));
+    for (const sha of entry.linked_commits) {
+      console.log(`    ${chalk.gray(sha)}`);
+    }
+    console.log();
+  }
 
   // Symbols
   if (entry.symbols_touched?.length > 0) {

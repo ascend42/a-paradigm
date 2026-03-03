@@ -67,6 +67,58 @@ export function DetailPanel() {
             <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{entry.summary}</p>
           </div>
 
+          {/* Body */}
+          {entry.body && (
+            <div className="detail-section">
+              <h3>Body</h3>
+              <pre style={{
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                background: 'var(--bg-primary)',
+                padding: 12,
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                maxHeight: 300,
+                overflowY: 'auto',
+              }}>{entry.body}</pre>
+            </div>
+          )}
+
+          {/* Linked Entries */}
+          {(entry.linked_lore?.length || entry.linked_tasks?.length || entry.linked_commits?.length) ? (
+            <div className="detail-section">
+              <h3>Linked</h3>
+              <dl className="detail-meta">
+                {entry.linked_lore && entry.linked_lore.length > 0 && <>
+                  <dt>Lore</dt>
+                  <dd>{entry.linked_lore.map(id => (
+                    <span key={id} onClick={() => selectEntry(id)} style={{
+                      cursor: 'pointer',
+                      color: 'var(--color-component)',
+                      textDecoration: 'underline',
+                      marginRight: 8,
+                      fontSize: 12,
+                    }}>{id}</span>
+                  ))}</dd>
+                </>}
+                {entry.linked_tasks && entry.linked_tasks.length > 0 && <>
+                  <dt>Tasks</dt>
+                  <dd>{entry.linked_tasks.map(id => (
+                    <span key={id} style={{ fontFamily: 'monospace', fontSize: 12, marginRight: 8 }}>{id}</span>
+                  ))}</dd>
+                </>}
+                {entry.linked_commits && entry.linked_commits.length > 0 && <>
+                  <dt>Commits</dt>
+                  <dd>{entry.linked_commits.map(sha => (
+                    <span key={sha} style={{ fontFamily: 'monospace', fontSize: 12, marginRight: 8 }}>{sha.slice(0, 8)}</span>
+                  ))}</dd>
+                </>}
+              </dl>
+            </div>
+          ) : null}
+
           {/* Symbols */}
           {entry.symbols_touched?.length > 0 && (
             <div className="detail-section">
@@ -220,16 +272,19 @@ export function DetailPanel() {
             <div className="detail-section">
               <h3>Tags</h3>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {entry.tags.map(t => (
-                  <span key={t} style={{
-                    padding: '2px 8px',
-                    background: 'var(--bg-primary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    fontSize: 11,
-                    color: 'var(--text-secondary)',
-                  }}>{t}</span>
-                ))}
+                {entry.tags.map(t => {
+                  const isArc = t.startsWith('arc:');
+                  return (
+                    <span key={t} style={{
+                      padding: '2px 8px',
+                      background: isArc ? 'var(--color-flow-bg, rgba(96, 165, 250, 0.15))' : 'var(--bg-primary)',
+                      border: `1px solid ${isArc ? 'var(--color-flow, #60a5fa)' : 'var(--border)'}`,
+                      borderRadius: 12,
+                      fontSize: 11,
+                      color: isArc ? 'var(--color-flow, #60a5fa)' : 'var(--text-secondary)',
+                    }}>{isArc ? '\u21BB ' : ''}{t}</span>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLoreStore } from '../store/loreStore';
 
 const ENTRY_TYPES = [
-  '', 'agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone',
+  '', 'agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight',
 ];
 
 const AGENT_FILTER_OPTIONS = [
@@ -22,6 +22,7 @@ export function FilterBar() {
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
   const symbolInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [availableTags, setAvailableTags] = useState<Array<{ tag: string; count: number }>>([]);
 
   const hasActiveFilters = Object.values(filter).some(v => v !== undefined && v !== '' && (Array.isArray(v) ? v.length > 0 : true));
 
@@ -29,6 +30,14 @@ export function FilterBar() {
   const filteredSymbols = symbolQuery
     ? symbols.filter(s => s.symbol.toLowerCase().includes(symbolQuery.toLowerCase())).slice(0, 10)
     : symbols.slice(0, 10);
+
+  // Fetch available tags
+  useEffect(() => {
+    fetch('/api/lore/tags')
+      .then(r => r.json())
+      .then(data => setAvailableTags(data.tags || []))
+      .catch(() => {});
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -82,6 +91,21 @@ export function FilterBar() {
           <option key={t} value={t}>{t}</option>
         ))}
       </select>
+
+      {/* Tag filter */}
+      {availableTags.length > 0 && (
+        <select
+          value={filter.tag || ''}
+          onChange={e => setFilter({ tag: e.target.value || undefined })}
+        >
+          <option value="">All tags</option>
+          {availableTags.map(t => (
+            <option key={t.tag} value={t.tag}>
+              {t.tag} ({t.count})
+            </option>
+          ))}
+        </select>
+      )}
 
       {/* Symbol autocomplete */}
       <div className="symbol-autocomplete-wrapper">

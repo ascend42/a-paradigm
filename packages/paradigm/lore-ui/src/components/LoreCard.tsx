@@ -30,11 +30,23 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
               {hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {entry.author}
             </span>
           </div>
-          <span className={`lore-card-type ${entry.type}`}>{entry.type}</span>
+          <span className={`lore-card-type ${entry.type || 'agent-session'}`}>{entry.type || 'agent-session'}</span>
         </div>
 
         <div className="lore-card-title">{entry.title}</div>
         <div className="lore-card-summary">{entry.summary}</div>
+
+        {entry.body && (
+          <div style={{
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            marginTop: 4,
+            fontStyle: 'italic',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>{entry.body.slice(0, 100)}{entry.body.length > 100 ? '...' : ''}</div>
+        )}
 
         {entry.symbols_touched?.length > 0 && (
           <div className="lore-card-symbols">
@@ -44,6 +56,22 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
             {entry.symbols_touched.length > 5 && (
               <span className="symbol-tag component">+{entry.symbols_touched.length - 5}</span>
             )}
+          </div>
+        )}
+
+        {/* Arc tags */}
+        {entry.tags?.some(t => t.startsWith('arc:')) && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+            {entry.tags.filter(t => t.startsWith('arc:')).map(t => (
+              <span key={t} style={{
+                padding: '1px 6px',
+                background: 'rgba(96, 165, 250, 0.15)',
+                border: '1px solid rgba(96, 165, 250, 0.3)',
+                borderRadius: 10,
+                fontSize: 10,
+                color: '#60a5fa',
+              }}>{'\u21BB'} {t}</span>
+            ))}
           </div>
         )}
 

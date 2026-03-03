@@ -35,9 +35,11 @@ export interface LoreError {
   time_to_fix?: string;
 }
 
+export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
+
 export interface LoreEntry {
   id: string;
-  type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
+  type?: LoreType;
   timestamp: string;
   duration_minutes?: number;
   author: string;
@@ -75,6 +77,10 @@ export interface LoreEntry {
     partial: number;
     weakAreas?: string[];
   };
+  body?: string;
+  linked_lore?: string[];
+  linked_tasks?: string[];
+  linked_commits?: string[];
   tags?: string[];
   meta?: Record<string, unknown>;
   git_context?: {
@@ -92,7 +98,9 @@ export interface LoreFilter {
   symbol?: string;
   dateFrom?: string;
   dateTo?: string;
-  type?: LoreEntry['type'];
+  type?: LoreType;
+  tag?: string;
+  hasBody?: boolean;
   tags?: string[];
   hasReview?: boolean;
   limit?: number;
@@ -132,6 +140,11 @@ function inferProvider(model: string): string {
 function normalizeLoreEntry(raw: Record<string, unknown>): LoreEntry {
   const entry = raw as Record<string, unknown>;
   const author = entry.author;
+
+  // Default type if not set
+  if (!entry.type) {
+    entry.type = 'agent-session';
+  }
 
   if (typeof author === 'string') {
     return raw as unknown as LoreEntry;
@@ -555,6 +568,10 @@ export async function updateLoreEntry(
   if (partial.learnings !== undefined) entry.learnings = partial.learnings;
   if (partial.verification !== undefined) entry.verification = partial.verification;
   if (partial.tags !== undefined) entry.tags = partial.tags;
+  if (partial.body !== undefined) entry.body = partial.body;
+  if (partial.linked_lore !== undefined) entry.linked_lore = partial.linked_lore;
+  if (partial.linked_tasks !== undefined) entry.linked_tasks = partial.linked_tasks;
+  if (partial.linked_commits !== undefined) entry.linked_commits = partial.linked_commits;
 
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
   await rebuildTimeline(rootDir);
@@ -622,8 +639,21 @@ function applyFilter(entries: LoreEntry[], filter: LoreFilter): LoreEntry[] {
   if (filter.type) {
     result = result.filter(e => e.type === filter.type);
   }
+  if (filter.tag) {
+    const prefix = filter.tag;
+    result = result.filter(e =>
+      e.tags?.some(t => t === prefix || t.startsWith(prefix + ':') || (prefix.includes(':') && t === prefix))
+    );
+  }
+
   if (filter.tags && filter.tags.length > 0) {
     result = result.filter(e => filter.tags!.some(tag => e.tags?.includes(tag)));
+  }
+
+  if (filter.hasBody !== undefined) {
+    result = result.filter(e =>
+      filter.hasBody ? (e.body != null && e.body.length > 0) : (!e.body || e.body.length === 0)
+    );
   }
   if (filter.hasReview !== undefined) {
     result = result.filter(e => filter.hasReview ? e.review != null : e.review == null);

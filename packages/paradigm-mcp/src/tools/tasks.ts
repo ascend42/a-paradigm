@@ -49,8 +49,8 @@ export function getTasksToolsList() {
           priority: { type: 'string', enum: ['high', 'medium', 'low'] },
           status: { type: 'string', enum: ['open', 'done', 'shelved'] },
           tags: { type: 'array', items: { type: 'string' }, description: 'Replace tags' },
-          related_lore: { type: 'array', items: { type: 'string' } },
-          related_assessments: { type: 'array', items: { type: 'string' } },
+          related_lore: { type: 'array', items: { type: 'string' }, description: 'Related lore entry IDs (includes former assessment entries)' },
+          related_assessments: { type: 'array', items: { type: 'string' }, description: '(Deprecated — use related_lore) Alias for related_lore' },
         },
         required: ['id'],
       },
@@ -156,7 +156,7 @@ export async function handleTasksTool(
         text: JSON.stringify({
           completed: id,
           task,
-          hint: 'Consider updating related assessment arcs if this was a significant milestone.',
+          hint: 'Consider recording a lore entry with arc:* tags if this was a significant milestone.',
         }, null, 2),
       };
     }

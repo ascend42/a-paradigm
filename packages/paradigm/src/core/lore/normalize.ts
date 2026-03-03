@@ -37,6 +37,11 @@ export function normalizeLoreEntry(raw: Record<string, unknown>): LoreEntry {
   const entry = raw as Record<string, unknown>;
   const author = entry.author;
 
+  // Default type if not set
+  if (!entry.type) {
+    entry.type = 'agent-session';
+  }
+
   // Already in new format (author is a string)
   if (typeof author === 'string') {
     return raw as unknown as LoreEntry;

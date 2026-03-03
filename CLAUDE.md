@@ -246,8 +246,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
 | **Tracking work items** | `paradigm_task_create` / `paradigm_task_list` for persistent tasks |
-| **Recording reflections** | `paradigm_assessment_record` for arc-based insights |
-| **Reviewing progress** | `paradigm_assessment_search` across arcs by symbol/tag |
+| **Recording reflections** | `paradigm_lore_record` with `arc:*` tags for thematic grouping |
+| **Reviewing progress** | `paradigm_lore_search` with tag filter for `arc:*` entries |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
 | **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
 | **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
@@ -271,8 +271,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_gates_for_route` | ~150 | Adding API endpoints |
 | `paradigm_task_create` | ~100 | Creating a work item |
 | `paradigm_task_list` | ~200 | Checking open tasks |
-| `paradigm_assessment_record` | ~150 | Adding a reflection entry |
-| `paradigm_assessment_search` | ~200 | Cross-arc search |
+| `paradigm_lore_record` | ~150 | Adding a lore entry (reflections, decisions, arcs) |
+| `paradigm_lore_search` | ~200 | Search lore by tag, symbol, or type |
 | `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
 | `paradigm_protocol_search` | ~200 | Search for matching protocol |
 | `paradigm_protocol_record` | ~100 | Record a new protocol |
@@ -399,7 +399,7 @@ See `.paradigm/specs/logger.md` for full specification.
 - When adding cross-cutting rules, create ~aspect with required anchors
 - When exploring ideas, add [idea] tag to the symbol
 - When tracking work items, use `paradigm_task_create` (stored in `.paradigm/tasks/`)
-- When recording reflections/decisions, use `paradigm_assessment_record` (stored in `.paradigm/assessments/`)
+- When recording reflections/decisions, use `paradigm_lore_record` with appropriate tags (stored in `.paradigm/lore/`)
 - Always update references when renaming symbols
 
 ## Workspaces (Multi-Project)

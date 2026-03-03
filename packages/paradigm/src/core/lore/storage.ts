@@ -465,6 +465,10 @@ export async function updateLoreEntry(
   if (partial.learnings !== undefined) entry.learnings = partial.learnings;
   if (partial.verification !== undefined) entry.verification = partial.verification;
   if (partial.tags !== undefined) entry.tags = partial.tags;
+  if (partial.body !== undefined) entry.body = partial.body;
+  if (partial.linked_lore !== undefined) entry.linked_lore = partial.linked_lore;
+  if (partial.linked_tasks !== undefined) entry.linked_tasks = partial.linked_tasks;
+  if (partial.linked_commits !== undefined) entry.linked_commits = partial.linked_commits;
 
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
   await rebuildTimeline(rootDir);

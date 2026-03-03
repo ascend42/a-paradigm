@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 
+export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
+
 export interface LoreEntry {
   id: string;
-  type: 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone';
+  type?: LoreType;
   timestamp: string;
   duration_minutes?: number;
   author: string;
@@ -21,6 +23,10 @@ export interface LoreEntry {
   learnings?: string[];
   verification?: { status: string; details?: Record<string, string> };
   review?: { reviewer: string; completeness: number; quality: number; notes?: string; reviewed_at: string };
+  body?: string;
+  linked_lore?: string[];
+  linked_tasks?: string[];
+  linked_commits?: string[];
   tags?: string[];
   meta?: Record<string, unknown>;
   git_context?: { ref: string; branch: string; dirty: boolean };
@@ -33,10 +39,12 @@ export interface LoreFilter {
   authorType?: 'human' | 'agent';
   symbol?: string;
   type?: string;
+  tag?: string; // Filter by tag prefix (e.g., "arc:lore-evolution")
   dateFrom?: string;
   dateTo?: string;
   tags?: string[];
   hasReview?: boolean;
+  hasBody?: boolean;
   search?: string;
 }
 
@@ -200,8 +208,10 @@ export const useLoreStore = create<LoreState>((set, get) => ({
       if (f.type) params.set('type', f.type);
       if (f.dateFrom) params.set('from', f.dateFrom);
       if (f.dateTo) params.set('to', f.dateTo);
+      if (f.tag) params.set('tag', f.tag);
       if (f.tags?.length) params.set('tags', f.tags.join(','));
       if (f.hasReview !== undefined) params.set('hasReview', String(f.hasReview));
+      if (f.hasBody !== undefined) params.set('hasBody', String(f.hasBody));
       params.set('limit', '200');
 
       const res = await fetch(`/api/lore?${params}`);

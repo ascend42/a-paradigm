@@ -12,7 +12,7 @@ const ENTRIES_DIR = 'entries';
 
 interface LoreEntry {
   id: string;
-  type: string;
+  type?: string;
   timestamp: string;
   duration_minutes?: number;
   author: string;
@@ -31,6 +31,10 @@ interface LoreEntry {
   learnings?: string[];
   verification?: { status: string; details?: Record<string, string> };
   review?: { reviewer: string; completeness: number; quality: number; notes?: string; reviewed_at: string };
+  body?: string;
+  linked_lore?: string[];
+  linked_tasks?: string[];
+  linked_commits?: string[];
   tags?: string[];
   meta?: Record<string, unknown>;
   git_context?: { ref: string; branch: string; dirty: boolean };
@@ -114,7 +118,7 @@ export function createLoreRouter(projectDir: string): Router {
     let entries = loadAllEntries(projectDir);
 
     // Apply filters
-    const { author, authorType, hasAgent, symbol, type, from, to, tags, hasReview, limit, offset } = req.query;
+    const { author, authorType, hasAgent, symbol, type, tag, from, to, tags, hasReview, hasBody, limit, offset } = req.query;
 
     if (author) {
       entries = entries.filter(e => e.author === author);
@@ -137,6 +141,17 @@ export function createLoreRouter(projectDir: string): Router {
     }
     if (type) {
       entries = entries.filter(e => e.type === type);
+    }
+    if (tag) {
+      const prefix = tag as string;
+      entries = entries.filter(e =>
+        e.tags?.some(t => t === prefix || t.startsWith(prefix + ':') || (prefix.includes(':') && t === prefix))
+      );
+    }
+    if (hasBody === 'true') {
+      entries = entries.filter(e => e.body != null && e.body.length > 0);
+    } else if (hasBody === 'false') {
+      entries = entries.filter(e => !e.body || e.body.length === 0);
     }
     if (from) {
       const fromDate = new Date(from as string).getTime();
@@ -208,6 +223,26 @@ export function createLoreRouter(projectDir: string): Router {
       .sort((a, b) => b.count - a.count);
 
     res.json({ symbols });
+  });
+
+  // GET /api/lore/tags - Tags with entry counts
+  router.get('/tags', (_req: Request, res: Response) => {
+    const entries = loadAllEntries(projectDir);
+    const tagCounts: Record<string, number> = {};
+
+    for (const entry of entries) {
+      if (entry.tags) {
+        for (const tag of entry.tags) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      }
+    }
+
+    const tags = Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({ tags });
   });
 
   // GET /api/lore/authors - Authors with entry counts

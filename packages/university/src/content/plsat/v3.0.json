@@ -2224,17 +2224,17 @@
       "variants": [
         {
           "id": "plsat-091",
-          "scenario": "An agent finishes a debugging session and wants to record the root cause and resolution as a lasting insight. The team already has an assessment arc called `arc-auth-hardening` tracking authentication improvements. The agent calls `paradigm_assessment_record` with `type: \"insight\"`, `arc_id: \"arc-auth-hardening\"`, and a summary of the fix. Three entries already exist across all arcs today (2026-04-02).",
-          "question": "What entry ID is assigned, and where is the file stored?",
+          "scenario": "An agent finishes a debugging session and wants to record the root cause and resolution as a lasting insight, grouped under the `arc:auth-hardening` arc. The agent calls `paradigm_lore_record` with `type: \"insight\"`, `tags: [\"arc:auth-hardening\", \"assessment:insight\"]`, a summary, and a body with the detailed analysis. The author is `ascend` and the timestamp is `2026-04-02T16:30:00Z`.",
+          "question": "Where is the entry stored, and how does the arc grouping work?",
           "choices": {
-            "A": "A-2026-04-02-001 stored in `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-001.yaml` \u2014 entry IDs are sequential per arc.",
-            "B": "A-2026-04-02-004 stored in `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-004.yaml` \u2014 entry IDs are globally unique across all arcs.",
-            "C": "I-2026-04-02-004 stored in `.paradigm/assessments/insights/I-2026-04-02-004.yaml` \u2014 insights have their own prefix and directory.",
-            "D": "A-auth-hardening-004 stored in `.paradigm/assessments/entries/A-auth-hardening-004.yaml` \u2014 entry IDs embed the arc name.",
-            "E": "A-2026-04-02-004 stored in `.paradigm/assessments/entries/2026-04-02/A-2026-04-02-004.yaml` \u2014 entries are grouped by date, not arc."
+            "A": "Stored in `.paradigm/assessments/arcs/arc-auth-hardening/entries/` \u2014 arcs have their own storage directories.",
+            "B": "Stored in `.paradigm/lore/entries/2026-04-02/` as a `.lore` file \u2014 arcs are just tag prefixes, not separate storage.",
+            "C": "Stored in `.paradigm/lore/arcs/auth-hardening/` \u2014 arc entries get their own subdirectory.",
+            "D": "Stored in `.paradigm/lore/entries/` root directory \u2014 no date partitioning for arc entries.",
+            "E": "Stored in both `.paradigm/lore/` and `.paradigm/assessments/` \u2014 the system maintains backward compatibility."
           },
           "correct": "B",
-          "explanation": "Assessment entry IDs follow the format A-YYYY-MM-DD-NNN where NNN is globally unique across ALL arcs \u2014 the ID generator scans every arc's entries directory to determine the next sequence number. Since three entries already exist today, this one gets A-2026-04-02-004. The file is stored under the arc's own entries directory at `.paradigm/assessments/arcs/arc-auth-hardening/entries/A-2026-04-02-004.yaml`. This global uniqueness guarantees that an entry ID alone is sufficient to locate any assessment entry without knowing which arc it belongs to."
+          "explanation": "All lore entries are stored in `.paradigm/lore/entries/{date}/` as `.lore` files, regardless of their tags. Arcs are simply tag prefixes (e.g., `arc:auth-hardening`) \u2014 they require no separate directory structure or management. To find all entries in an arc, use `paradigm_lore_search` with `tag: \"arc:auth-hardening\"`. This unified storage eliminates the complexity of a separate assessment system while preserving full arc-based organization through tags."
         }
       ]
     },
@@ -2245,17 +2245,17 @@
       "variants": [
         {
           "id": "plsat-092",
-          "scenario": "A developer asks their agent to record a retrospective about a failed deployment. The agent calls `paradigm_assessment_record` with `type: \"retro\"`, `arc_name: \"Q1 Platform Stability\"`, but does NOT provide an `arc_id`. No arc for platform stability exists yet.",
-          "question": "What happens when `arc_name` is provided without an `arc_id` to `paradigm_assessment_record`?",
+          "scenario": "A developer wants to record retrospectives about a failed deployment. They have no prior entries tagged with `arc:platform-stability`. The agent calls `paradigm_lore_record` with `type: \"retro\"`, `tags: [\"arc:platform-stability\", \"assessment:retro\"]`, a title, summary, and body describing the failure and lessons learned.",
+          "question": "What happens when you use a new arc tag that no prior entries have?",
           "choices": {
-            "A": "The call fails with an error \u2014 `arc_id` is always required when recording an entry.",
-            "B": "The entry is recorded as an orphan in `.paradigm/assessments/unassigned/`.",
-            "C": "The tool auto-creates a new arc (deriving an arc_id like `arc-q1-platform-stability` from the name) and records the entry inside it.",
-            "D": "The tool searches existing arcs by name and fails if no exact match is found.",
-            "E": "The entry is recorded with a temporary arc_id that must be manually linked later."
+            "A": "The call fails \u2014 arcs must be explicitly created before tagging entries.",
+            "B": "The entry is recorded normally \u2014 arcs are just tag prefixes, no creation step needed. The arc exists as soon as an entry has the tag.",
+            "C": "The system auto-creates a `.paradigm/lore/arcs/platform-stability/` directory to track the arc.",
+            "D": "The entry is recorded but flagged as orphaned until an arc is formally registered.",
+            "E": "The tag is rejected because it does not match an existing arc in the arc registry."
           },
-          "correct": "C",
-          "explanation": "When `arc_name` is provided without an `arc_id`, `paradigm_assessment_record` auto-creates the arc. The arc_id is derived by converting the name to kebab-case and prefixing with `arc-` (validated against `/^arc-[a-z0-9-]+$/`). This creates the arc directory structure at `.paradigm/assessments/arcs/arc-q1-platform-stability/` with an `arc.yaml` and the entry in its `entries/` subdirectory. This convenience behavior reduces friction \u2014 agents can record assessments without a separate arc creation step."
+          "correct": "B",
+          "explanation": "Arcs in the unified lore system are simply tag prefixes \u2014 no explicit creation needed. The first entry tagged with `arc:platform-stability` effectively creates that arc. To find all entries in this arc later, use `paradigm_lore_search` with `tag: \"arc:platform-stability\"`. To close the arc, add `arc-closed` and `arc-status:complete` tags to its entries. This tag-based approach eliminates the overhead of managing separate arc directories and YAML files."
         }
       ]
     },
@@ -2266,17 +2266,17 @@
       "variants": [
         {
           "id": "plsat-093",
-          "scenario": "Your project has been running for six months. The codebase has 200+ commits (raw facts in git), 45 lore entries (session-level events captured by the post-commit hook), and 12 assessment entries across 3 arcs (synthesized insights from retrospectives and decisions). A new team member asks how these three layers relate to each other.",
-          "question": "Which statement BEST describes Paradigm's three-layer knowledge model?",
+          "scenario": "Your project has been running for six months. The codebase has 200+ commits in git and 57 lore entries: 45 are `agent-session` type (automatic session records), 8 have `arc:*` tags (retrospectives and insights grouped into thematic arcs), and 4 are `decision` type (architectural decisions). A new team member asks how lore's different entry types and tags work together.",
+          "question": "Which statement BEST describes Paradigm's unified lore model?",
           "choices": {
-            "A": "Commits, lore, and assessments are independent systems \u2014 they share no data and serve different audiences.",
-            "B": "Lore replaces commit messages with richer context, and assessments replace lore when insights are finalized.",
-            "C": "Commits capture raw facts (what changed), lore captures session-level events (what happened and why), and assessments synthesize cross-session insights (what we learned) \u2014 each layer builds on the one below it.",
-            "D": "Assessments are the authoritative layer \u2014 commits and lore are temporary and should be pruned once assessments exist.",
-            "E": "Lore and assessments are both subsets of the commit history, just filtered by different criteria."
+            "A": "Lore entries are all the same \u2014 tags are purely cosmetic and do not affect searching or organization.",
+            "B": "Lore is the single project memory system. Entry types classify the nature of knowledge (session, retro, insight, decision), while tags like `arc:*` group related entries into themes \u2014 both are filterable via `paradigm_lore_search`.",
+            "C": "Session entries and reflection entries are stored in separate directories, with tags used only for cross-referencing between them.",
+            "D": "The `arc:*` tags are managed by a separate arc subsystem that must be initialized before use.",
+            "E": "Entry types are deprecated \u2014 tags alone drive all classification in the new model."
           },
-          "correct": "C",
-          "explanation": "Paradigm's three-layer knowledge model is: Commits (raw facts \u2014 what code changed, captured by git), Lore (session events \u2014 what happened during a work session and why, captured by the post-commit hook into `.paradigm/history/`), and Assessments (synthesized insight \u2014 what the team learned across multiple sessions, recorded into `.paradigm/assessments/`). Each layer adds interpretation: commits are mechanical diffs, lore adds narrative context, and assessments distill patterns and decisions. All three layers persist and remain valuable \u2014 none replaces or supersedes the others."
+          "correct": "B",
+          "explanation": "Paradigm's unified lore model uses one system with two classification axes: entry `type` classifies the nature of the knowledge (agent-session for automated records, retro for retrospectives, insight for patterns, decision for choices, etc.), while tags provide flexible grouping (arc:* for thematic arcs, assessment:* for reflection type, plus arbitrary project tags). Both are searchable via `paradigm_lore_search` \u2014 you can filter by type, tag prefix, symbol, author, and date range. All entries live in the same `.paradigm/lore/entries/` directory structure regardless of type or tags."
         }
       ]
     },

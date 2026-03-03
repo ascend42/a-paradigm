@@ -15,6 +15,8 @@ interface QuestionCardProps {
   showResult?: boolean;
   /** Fires in uncontrolled (quiz) mode after user picks an answer */
   onAnswered?: (letter: string) => void;
+  /** If true, render as two-column layout (question left, choices right) */
+  splitLayout?: boolean;
 }
 
 export function QuestionCard({
@@ -28,6 +30,7 @@ export function QuestionCard({
   onSelect,
   showResult: controlledShowResult,
   onAnswered,
+  splitLayout,
 }: QuestionCardProps) {
   // Uncontrolled mode for course quizzes
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
@@ -51,8 +54,8 @@ export function QuestionCard({
   const isCorrect = selected === correct;
   const letters = Object.keys(choices).sort();
 
-  return (
-    <div className="question-card">
+  const questionContent = (
+    <>
       <div className="question-number">Question {number}</div>
 
       {scenario && (
@@ -63,27 +66,59 @@ export function QuestionCard({
       )}
 
       <div className="question-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(question) }} />
+    </>
+  );
 
-      <div className="choices">
-        {letters.map((letter) => {
-          let className = 'choice-btn';
-          if (selected === letter) className += ' selected';
-          if (showResult && letter === correct) className += ' correct';
-          if (showResult && selected === letter && letter !== correct) className += ' incorrect';
+  const choicesContent = (
+    <div className="choices">
+      {letters.map((letter) => {
+        let className = 'choice-btn';
+        if (selected === letter) className += ' selected';
+        if (showResult && letter === correct) className += ' correct';
+        if (showResult && selected === letter && letter !== correct) className += ' incorrect';
 
-          return (
-            <button
-              key={letter}
-              className={className}
-              onClick={() => handleSelect(letter)}
-              disabled={showResult && !isControlled}
-            >
-              <span className="choice-letter">{letter}.</span>
-              <span dangerouslySetInnerHTML={{ __html: renderMarkdown(choices[letter]) }} />
-            </button>
-          );
-        })}
+        return (
+          <button
+            key={letter}
+            className={className}
+            onClick={() => handleSelect(letter)}
+            disabled={showResult && !isControlled}
+          >
+            <span className="choice-letter">{letter}.</span>
+            <span dangerouslySetInnerHTML={{ __html: renderMarkdown(choices[letter]) }} />
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (splitLayout) {
+    return (
+      <div className="question-card">
+        <div className="question-split-layout">
+          <div className="question-content">
+            {questionContent}
+          </div>
+          <div className="answer-choices">
+            {choicesContent}
+          </div>
+        </div>
+
+        {showResult && (
+          <div className={`explanation ${isCorrect ? '' : 'wrong'}`}>
+            <strong>{isCorrect ? 'Correct!' : `Incorrect. The answer is ${correct}.`}</strong>
+            <br />
+            <span dangerouslySetInnerHTML={{ __html: renderMarkdown(explanation) }} />
+          </div>
+        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="question-card">
+      {questionContent}
+      {choicesContent}
 
       {showResult && (
         <div className={`explanation ${isCorrect ? '' : 'wrong'}`}>

@@ -46,9 +46,22 @@ export function applyLoreFilter(entries: LoreEntry[], filter: LoreFilter): LoreE
     result = result.filter(e => e.type === filter.type);
   }
 
+  if (filter.tag) {
+    const prefix = filter.tag;
+    result = result.filter(e =>
+      e.tags?.some(t => t === prefix || t.startsWith(prefix + ':') || (prefix.includes(':') && t === prefix))
+    );
+  }
+
   if (filter.tags && filter.tags.length > 0) {
     result = result.filter(e =>
       filter.tags!.some(tag => e.tags?.includes(tag))
+    );
+  }
+
+  if (filter.hasBody !== undefined) {
+    result = result.filter(e =>
+      filter.hasBody ? (e.body != null && e.body.length > 0) : (!e.body || e.body.length === 0)
     );
   }
 

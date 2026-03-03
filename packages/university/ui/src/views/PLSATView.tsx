@@ -206,6 +206,7 @@ export function PLSATView() {
             selectedAnswer={answers[q.id]}
             onSelect={(letter) => setAnswers((prev) => ({ ...prev, [q.id]: letter }))}
             showResult={false}
+            splitLayout={true}
           />
         </div>
 
@@ -322,6 +323,7 @@ export function PLSATView() {
                 selectedAnswer={answers[q.id]}
                 onSelect={() => {}}
                 showResult={true}
+                splitLayout={true}
               />
             </div>
           );
