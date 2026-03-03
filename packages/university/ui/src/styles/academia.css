@@ -785,6 +785,12 @@ pre code {
   text-align: left;
   font-size: 0.9375rem;
   width: 100%;
+  overflow: hidden;
+}
+
+.choice-btn pre {
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .choice-btn:hover:not(:disabled) {
@@ -934,6 +940,11 @@ pre code {
   max-width: var(--max-content);
   margin: 0 auto;
   padding: var(--space-2xl);
+}
+
+/* Widen container when showing split-layout questions */
+.plsat-container:has(.question-split-layout) {
+  max-width: 1200px;
 }
 
 .plsat-intro {

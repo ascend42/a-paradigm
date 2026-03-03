@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.19.2] — 2026-03-02
+
+### Fixed
+
+- **PLSAT split layout too narrow** (`@a-company/paradigm` 3.19.1 → 3.19.2, `@a-company/university` 3.10.1 → 3.10.2): Widen PLSAT container to 1200px when split-layout questions are active; add horizontal scrolling to code blocks inside answer choices to prevent clipping
+
 ## [3.19.1] — 2026-03-02
 
 ### Fixed
