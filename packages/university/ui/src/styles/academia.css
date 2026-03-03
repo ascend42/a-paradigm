@@ -849,6 +849,7 @@ pre code {
   overflow-y: auto;
   max-height: 60vh;
   padding-right: 0.5rem;
+  min-width: 0;
 }
 
 .question-split-layout .question-content {
@@ -937,14 +938,9 @@ pre code {
 
 /* --- PLSAT View --- */
 .plsat-container {
-  max-width: var(--max-content);
+  max-width: 1400px;
   margin: 0 auto;
-  padding: var(--space-2xl);
-}
-
-/* Widen container when showing split-layout questions */
-.plsat-container:has(.question-split-layout) {
-  max-width: 1200px;
+  padding: var(--space-2xl) var(--space-xl);
 }
 
 .plsat-intro {

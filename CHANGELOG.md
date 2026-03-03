@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.19.3] — 2026-03-02
+
+### Fixed
+
+- **PLSAT container still too narrow** (`@a-company/paradigm` 3.19.2 → 3.19.3, `@a-company/university` 3.10.2 → 3.10.3): Widen PLSAT container to 1400px unconditionally (was 1200px via `:has()`); add `min-width: 0` on grid columns to prevent code block overflow
+
 ## [3.19.2] — 2026-03-02
 
 ### Fixed
