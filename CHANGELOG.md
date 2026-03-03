@@ -27,7 +27,7 @@ Assessments are now part of the lore system. Arcs become `arc:{name}` tags, asse
 - **Lore Viewer**: body display (preformatted), linked entries (clickable IDs), arc tag badges (blue styling), tag dropdown filter populated from `/api/lore/tags`, `retro`/`insight` in type filter
 - **Server**: `GET /api/lore/tags` endpoint returns unique tags with counts; existing list endpoint accepts `tag` and `hasBody` query params
 
-#### University Content & PLSAT Layout (`@a-company/university` 3.9.1 → 3.10.0)
+#### University Content & PLSAT Layout (`@a-company/university` 3.10.0 → 3.10.1)
 
 - **PARA-501 rewrite**: "Assessment Loops" lesson → "Lore as Unified Project Memory" — teaches tag-driven classification, arc tags, body field, and linking between entries
 - **PLSAT v3.0**: Questions plsat-091/092/093 updated from assessment model to unified lore model
