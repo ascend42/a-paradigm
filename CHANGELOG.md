@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.19.4] — 2026-03-02
+
+### Fixed
+
+- **PLSAT scroll bounce and code block clipping** (`@a-company/paradigm` 3.19.3 → 3.19.4, `@a-company/university` 3.10.3 → 3.10.4): Remove nested scroll containers (no more bounce); remove `overflow: hidden` from choice buttons so code blocks scroll horizontally; widen answer column to `1.5fr`
+
 ## [3.19.3] — 2026-03-02
 
 ### Fixed

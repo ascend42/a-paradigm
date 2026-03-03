@@ -785,12 +785,10 @@ pre code {
   text-align: left;
   font-size: 0.9375rem;
   width: 100%;
-  overflow: hidden;
 }
 
 .choice-btn pre {
   overflow-x: auto;
-  max-width: 100%;
 }
 
 .choice-btn:hover:not(:disabled) {
@@ -839,16 +837,12 @@ pre code {
 /* --- Split Layout (PLSAT two-column question/answer) --- */
 .question-split-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.5fr;
   gap: 1.5rem;
-  min-height: 0;
 }
 
 .question-split-layout .question-content,
 .question-split-layout .answer-choices {
-  overflow-y: auto;
-  max-height: 60vh;
-  padding-right: 0.5rem;
   min-width: 0;
 }
 
@@ -866,10 +860,6 @@ pre code {
     padding-right: 0;
     border-bottom: 1px solid var(--parchment-dark);
     padding-bottom: 1rem;
-    max-height: none;
-  }
-  .question-split-layout .answer-choices {
-    max-height: none;
   }
 }
 
