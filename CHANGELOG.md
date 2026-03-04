@@ -5,11 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.21.0] — 2026-03-04
+## [3.22.0] — 2026-03-04
 
 ### Added
 
-- **Habits CRUD MCP tools** (`@a-company/paradigm-mcp` 3.15.0 → 3.16.0): Three new MCP tools — `paradigm_habits_add`, `paradigm_habits_edit`, `paradigm_habits_remove` — for programmatic habit management with full validation. Agents can now create, update, and delete custom habits without raw-editing YAML
+- **Habits CRUD MCP tools** (`@a-company/paradigm-mcp` 3.16.0 → 3.17.0): Three new MCP tools — `paradigm_habits_add`, `paradigm_habits_edit`, `paradigm_habits_remove` — for programmatic habit management with full validation. Agents can now create, update, and delete custom habits without raw-editing YAML
 - **Individual `.habit` file format**: Custom habits can now live as individual `.paradigm/habits/{id}.habit` YAML files (or global `~/.paradigm/habits/`), following the same pattern as `.protocol`, `.lore`, and `.persona` files. Coexists with existing `habits.yaml` — no migration needed
 - **Habit validation**: `validateHabitDefinition()` validates required fields, kebab-case IDs, enum values, and check type/param consistency
 - **5-step habit merge order**: Both MCP and CLI loaders now load habits from: seeds → global yaml → global .habit files → project yaml → project .habit files
