@@ -234,6 +234,11 @@ export interface PracticeProfile {
 // PRACTICE CONTEXT TYPES (proactive warnings)
 // ═══════════════════════════════════════════════════════════════════
 
+export interface HabitValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
 export interface PracticeWarning {
   habitId: string;
   habitName: string;

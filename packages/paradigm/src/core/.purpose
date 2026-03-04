@@ -263,3 +263,11 @@ aspects:
       - background-orchestrator.ts:190-233
     applies-to:
       - "#background-orchestrator"
+
+  habits-loader:
+    description: Habits engine — 5-step merge loader (seeds → global yaml → global .habit → project yaml → project .habit), validation, and individual .habit file support
+    path: habits/loader.ts
+
+  habits-types:
+    description: Habit type definitions — HabitDefinition, HabitCheck, HabitCategory, HabitTrigger, HabitSeverity, check type enums
+    path: habits/types.ts

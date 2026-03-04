@@ -49,6 +49,7 @@ description: |
     - "#OrchestrationTools"
     - "#AspectGraphTools"
     - "#WorkspaceLoader"
+    - "#HabitsTools"
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
@@ -120,6 +121,13 @@ description: |
   components:
     - "#ToolCache"
     - "#AspectGraph"
+
+#HabitsTools:
+  description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation
+  tags: [mcp, habits]
+  anchors:
+    - src/tools/habits.ts:1-500
+    - src/utils/habits-loader.ts:1-400
 
 #AspectGraphTools:
   description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm

@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import { execSync } from 'child_process';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
@@ -18,8 +19,14 @@ import {
   loadHabits,
   evaluateHabits,
   buildEvaluationContext,
+  validateHabitDefinition,
+  saveHabit,
+  removeHabit,
+  isSeedHabit,
+  invalidateHabitsCache,
   type HabitTrigger,
   type HabitCategory,
+  type HabitDefinition,
   type EvaluationResult,
 } from '../utils/habits-loader.js';
 import {
@@ -148,6 +155,122 @@ export function getHabitsToolsList() {
         destructiveHint: false,
       },
     },
+    {
+      name: 'paradigm_habits_add',
+      description:
+        'Create a new custom habit as an individual .habit file. Validates all fields and checks for ID collisions with seed habits. Use scope "global" for ~/.paradigm/habits/ or "project" (default) for .paradigm/habits/. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Unique habit ID in kebab-case (e.g. "check-changelog")' },
+          name: { type: 'string', description: 'Human-readable habit name' },
+          description: { type: 'string', description: 'What this habit checks and why' },
+          category: {
+            type: 'string',
+            enum: ['discovery', 'verification', 'testing', 'documentation', 'collaboration', 'security'],
+            description: 'Habit category',
+          },
+          trigger: {
+            type: 'string',
+            enum: ['preflight', 'postflight', 'on-commit', 'on-stop'],
+            description: 'When the habit is evaluated',
+          },
+          severity: {
+            type: 'string',
+            enum: ['advisory', 'warn', 'block'],
+            description: 'How strictly to enforce (block prevents session completion)',
+          },
+          check: {
+            type: 'object',
+            description: 'Check definition with type and params',
+            properties: {
+              type: {
+                type: 'string',
+                enum: [
+                  'tool-called', 'file-exists', 'file-modified', 'lore-recorded',
+                  'symbols-registered', 'gates-declared', 'tests-exist', 'git-clean',
+                  'commit-message-format', 'flow-coverage', 'context-checked', 'aspect-anchored',
+                ],
+              },
+              params: { type: 'object', description: 'Check-specific parameters (tools[], patterns[], etc.)' },
+            },
+            required: ['type', 'params'],
+          },
+          enabled: { type: 'boolean', description: 'Whether the habit is active (default: true)' },
+          platforms: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Platforms this habit applies to (e.g. ["claude", "cursor"]). Omit for all.',
+          },
+          scope: {
+            type: 'string',
+            enum: ['project', 'global'],
+            description: 'Where to save: "project" (default) or "global" (~/.paradigm/habits/)',
+          },
+        },
+        required: ['id', 'name', 'description', 'category', 'trigger', 'severity', 'check'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_habits_edit',
+      description:
+        'Update fields on an existing custom .habit file. Cannot edit seed habits — use overrides in habits.yaml instead. Merges provided fields with existing definition and re-validates. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'ID of the habit to edit' },
+          name: { type: 'string', description: 'Updated name' },
+          description: { type: 'string', description: 'Updated description' },
+          category: {
+            type: 'string',
+            enum: ['discovery', 'verification', 'testing', 'documentation', 'collaboration', 'security'],
+          },
+          trigger: {
+            type: 'string',
+            enum: ['preflight', 'postflight', 'on-commit', 'on-stop'],
+          },
+          severity: {
+            type: 'string',
+            enum: ['advisory', 'warn', 'block'],
+          },
+          check: {
+            type: 'object',
+            properties: {
+              type: { type: 'string' },
+              params: { type: 'object' },
+            },
+            required: ['type', 'params'],
+          },
+          enabled: { type: 'boolean' },
+          platforms: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_habits_remove',
+      description:
+        'Delete a custom .habit file. Cannot remove seed habits — use overrides to disable them instead. Searches both project and global habit directories. ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'ID of the habit to remove' },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+      },
+    },
   ];
 }
 
@@ -181,6 +304,24 @@ export async function handleHabitsTool(
 
     case 'paradigm_practice_context': {
       const result = await handlePracticeContext(args, ctx);
+      trackToolCall(result.length, name);
+      return { text: result, handled: true };
+    }
+
+    case 'paradigm_habits_add': {
+      const result = handleHabitsAdd(args, ctx);
+      trackToolCall(result.length, name);
+      return { text: result, handled: true };
+    }
+
+    case 'paradigm_habits_edit': {
+      const result = handleHabitsEdit(args, ctx);
+      trackToolCall(result.length, name);
+      return { text: result, handled: true };
+    }
+
+    case 'paradigm_habits_remove': {
+      const result = handleHabitsRemove(args, ctx);
       trackToolCall(result.length, name);
       return { text: result, handled: true };
     }
@@ -416,6 +557,180 @@ function buildRecommendations(evaluation: EvaluationResult): string[] {
   }
 
   return [...new Set(recs)];
+}
+
+// ============================================================================
+// paradigm_habits_add
+// ============================================================================
+
+function handleHabitsAdd(
+  args: Record<string, unknown>,
+  ctx: ProjectContext
+): string {
+  const id = args.id as string;
+  const scope = (args.scope as 'project' | 'global') || 'project';
+
+  // Check for seed habit collision
+  if (isSeedHabit(id)) {
+    return JSON.stringify({
+      error: true,
+      message: `Cannot create habit "${id}" — it collides with a seed habit. Choose a different ID or use overrides in habits.yaml to customize the seed habit.`,
+    }, null, 2);
+  }
+
+  // Check if a .habit file already exists
+  const existingHabits = loadHabits(ctx.rootDir);
+  const existing = existingHabits.find(h => h.id === id);
+  if (existing) {
+    return JSON.stringify({
+      error: true,
+      message: `Habit "${id}" already exists. Use paradigm_habits_edit to update it, or choose a different ID.`,
+    }, null, 2);
+  }
+
+  // Build the habit definition
+  const habit: HabitDefinition = {
+    id,
+    name: args.name as string,
+    description: args.description as string,
+    category: args.category as HabitDefinition['category'],
+    trigger: args.trigger as HabitDefinition['trigger'],
+    severity: args.severity as HabitDefinition['severity'],
+    check: args.check as HabitDefinition['check'],
+    enabled: args.enabled !== undefined ? (args.enabled as boolean) : true,
+  };
+  if (args.platforms) habit.platforms = args.platforms as string[];
+
+  // Validate
+  const validation = validateHabitDefinition(habit);
+  if (!validation.valid) {
+    return JSON.stringify({
+      error: true,
+      message: 'Validation failed',
+      errors: validation.errors,
+    }, null, 2);
+  }
+
+  // Save
+  const filePath = saveHabit(ctx.rootDir, habit, scope);
+
+  return JSON.stringify({
+    created: true,
+    id: habit.id,
+    filePath,
+    scope,
+    message: `Habit "${habit.name}" created at ${filePath}`,
+  }, null, 2);
+}
+
+// ============================================================================
+// paradigm_habits_edit
+// ============================================================================
+
+function handleHabitsEdit(
+  args: Record<string, unknown>,
+  ctx: ProjectContext
+): string {
+  const id = args.id as string;
+
+  // Refuse to edit seed habits
+  if (isSeedHabit(id)) {
+    return JSON.stringify({
+      error: true,
+      message: `Cannot edit "${id}" — it is a seed habit. To customize it, add an override in .paradigm/habits.yaml under the "overrides:" key.`,
+    }, null, 2);
+  }
+
+  // Find the existing .habit file
+  const projectPath = path.join(ctx.rootDir, '.paradigm', 'habits', `${id}.habit`);
+  const home = process.env.HOME || process.env.USERPROFILE || '~';
+  const globalPath = path.join(home, '.paradigm', 'habits', `${id}.habit`);
+
+  let filePath: string | null = null;
+  let scope: 'project' | 'global' = 'project';
+
+  if (fs.existsSync(projectPath)) {
+    filePath = projectPath;
+    scope = 'project';
+  } else if (fs.existsSync(globalPath)) {
+    filePath = globalPath;
+    scope = 'global';
+  }
+
+  if (!filePath) {
+    return JSON.stringify({
+      error: true,
+      message: `No .habit file found for "${id}". It may be defined in habits.yaml — edit that file directly.`,
+    }, null, 2);
+  }
+
+  // Load existing
+  let existing: HabitDefinition;
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    existing = yaml.load(content) as HabitDefinition;
+  } catch {
+    return JSON.stringify({
+      error: true,
+      message: `Failed to read ${filePath}`,
+    }, null, 2);
+  }
+
+  // Merge provided fields
+  const updated: HabitDefinition = { ...existing };
+  if (args.name !== undefined) updated.name = args.name as string;
+  if (args.description !== undefined) updated.description = args.description as string;
+  if (args.category !== undefined) updated.category = args.category as HabitDefinition['category'];
+  if (args.trigger !== undefined) updated.trigger = args.trigger as HabitDefinition['trigger'];
+  if (args.severity !== undefined) updated.severity = args.severity as HabitDefinition['severity'];
+  if (args.check !== undefined) updated.check = args.check as HabitDefinition['check'];
+  if (args.enabled !== undefined) updated.enabled = args.enabled as boolean;
+  if (args.platforms !== undefined) updated.platforms = args.platforms as string[];
+
+  // Re-validate
+  const validation = validateHabitDefinition(updated);
+  if (!validation.valid) {
+    return JSON.stringify({
+      error: true,
+      message: 'Validation failed after merge',
+      errors: validation.errors,
+    }, null, 2);
+  }
+
+  // Save back
+  saveHabit(ctx.rootDir, updated, scope);
+
+  return JSON.stringify({
+    updated: true,
+    id: updated.id,
+    filePath,
+    message: `Habit "${updated.name}" updated`,
+  }, null, 2);
+}
+
+// ============================================================================
+// paradigm_habits_remove
+// ============================================================================
+
+function handleHabitsRemove(
+  args: Record<string, unknown>,
+  ctx: ProjectContext
+): string {
+  const id = args.id as string;
+  const result = removeHabit(ctx.rootDir, id);
+
+  if (result.removed) {
+    return JSON.stringify({
+      removed: true,
+      id,
+      message: `Habit "${id}" removed`,
+    }, null, 2);
+  }
+
+  return JSON.stringify({
+    error: true,
+    message: result.reason,
+  }, null, 2);
 }
 
 // ============================================================================

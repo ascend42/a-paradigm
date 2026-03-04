@@ -1515,6 +1515,32 @@ loreCmd
     await loreServeCommand(undefined, options);
   });
 
+// paradigm graph — interactive symbol graph (with subcommands)
+const graphCmd = program
+  .command('graph')
+  .description('Interactive symbol relationship graph')
+  .argument('[path]', 'Project directory', undefined)
+  .option('-p, --port <port>', 'Port to run on', '3841')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (path, options) => {
+    const { graphCommand } = await import('./commands/graph.js');
+    await graphCommand(path, options);
+  });
+
+graphCmd
+  .command('generate')
+  .description('Generate GraphState JSON from symbols (for agents / piping)')
+  .argument('[path]', 'Project directory', undefined)
+  .option('-s, --symbols <list>', 'Comma-separated symbol names to include')
+  .option('-g, --group <spec...>', 'Group spec: "Label:#sym1,#sym2" (repeatable)')
+  .option('-l, --link <spec...>', 'Link spec: "Source>Target:label" (repeatable)')
+  .option('-n, --name <name>', 'Graph name', 'Generated Graph')
+  .option('-o, --output <file>', 'Write to file instead of stdout')
+  .action(async (path, options) => {
+    const { graphGenerateCommand } = await import('./commands/graph.js');
+    await graphGenerateCommand(path, options);
+  });
+
 // paradigm habits <command>
 const habitsCmd = program
   .command('habits')

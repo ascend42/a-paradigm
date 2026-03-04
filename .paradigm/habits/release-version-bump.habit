@@ -1,0 +1,18 @@
+id: release-version-bump
+name: Bump Package Versions
+description: >-
+  Ensure package versions are bumped before session ends. Versioning rules:
+  @a-company/paradigm — always bumps on every release.
+  @a-company/paradigm-mcp — bumps when CLI or MCP tools change.
+  @a-company/sentinel — bumps only on sentinel changes.
+  @a-company/university — bumps only on university content changes.
+  Lore packages — bump only on lore changes.
+category: verification
+trigger: on-stop
+severity: block
+check:
+  type: file-modified
+  params:
+    patterns:
+      - "package.json"
+enabled: true

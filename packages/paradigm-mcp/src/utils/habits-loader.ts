@@ -35,7 +35,11 @@ export type HabitCheckType =
   | 'symbols-registered'
   | 'gates-declared'
   | 'tests-exist'
-  | 'git-clean';
+  | 'git-clean'
+  | 'commit-message-format'
+  | 'flow-coverage'
+  | 'context-checked'
+  | 'aspect-anchored';
 
 export interface HabitCheck {
   type: HabitCheckType;
@@ -44,6 +48,10 @@ export interface HabitCheck {
     patterns?: string[];
     minSymbols?: number;
     requireRoutes?: boolean;
+    messagePatterns?: string[];
+    minSteps?: number;
+    contextTools?: string[];
+    checkAnchors?: boolean;
   };
 }
 
@@ -63,6 +71,11 @@ export interface HabitDefinition {
 export interface HabitOverride {
   severity?: HabitSeverity;
   enabled?: boolean;
+}
+
+export interface HabitValidationResult {
+  valid: boolean;
+  errors: string[];
 }
 
 export interface HabitsConfig {
@@ -238,18 +251,33 @@ export function loadHabits(rootDir: string): HabitDefinition[] {
 
 function loadHabitsFresh(rootDir: string): HabitDefinition[] {
   const habitsById = new Map<string, HabitDefinition>();
+
+  // 1. Seed habits (embedded)
   for (const seed of SEED_HABITS) {
     habitsById.set(seed.id, { ...seed });
   }
 
-  // Load global habits
   const home = process.env.HOME || process.env.USERPROFILE || '~';
+
+  // 2. Global habits.yaml
   const globalConfig = loadHabitsYaml(path.join(home, '.paradigm', 'habits.yaml'));
   if (globalConfig) mergeHabits(habitsById, globalConfig);
 
-  // Load project habits
+  // 3. Global .habit files
+  const globalHabitFiles = loadHabitFiles(path.join(home, '.paradigm', 'habits'));
+  for (const habit of globalHabitFiles) {
+    habitsById.set(habit.id, habit);
+  }
+
+  // 4. Project habits.yaml
   const projectConfig = loadHabitsYaml(path.join(rootDir, '.paradigm', 'habits.yaml'));
   if (projectConfig) mergeHabits(habitsById, projectConfig);
+
+  // 5. Project .habit files
+  const projectHabitFiles = loadHabitFiles(path.join(rootDir, '.paradigm', 'habits'));
+  for (const habit of projectHabitFiles) {
+    habitsById.set(habit.id, habit);
+  }
 
   return Array.from(habitsById.values());
 }
@@ -287,6 +315,168 @@ export function getHabitsByTrigger(habits: HabitDefinition[], trigger: HabitTrig
 
 export function invalidateHabitsCache(rootDir: string): void {
   habitsCache.delete(path.resolve(rootDir));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// .HABIT FILE LOADING
+// ═══════════════════════════════════════════════════════════════════
+
+function loadHabitFiles(dir: string): HabitDefinition[] {
+  if (!fs.existsSync(dir)) return [];
+  try {
+    const files = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.habit'))
+      .sort();
+    const habits: HabitDefinition[] = [];
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(dir, file), 'utf8');
+        const habit = yaml.load(content) as HabitDefinition;
+        if (habit?.id && habit?.name) {
+          habits.push(habit);
+        }
+      } catch {
+        // Skip malformed files
+      }
+    }
+    return habits;
+  } catch {
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════════════════════════
+
+const VALID_CATEGORIES: HabitCategory[] = [
+  'discovery', 'verification', 'testing', 'documentation', 'collaboration', 'security',
+];
+
+const VALID_TRIGGERS: HabitTrigger[] = [
+  'preflight', 'postflight', 'on-commit', 'on-stop',
+];
+
+const VALID_SEVERITIES: HabitSeverity[] = ['advisory', 'warn', 'block'];
+
+const VALID_CHECK_TYPES: HabitCheckType[] = [
+  'tool-called', 'file-exists', 'file-modified', 'lore-recorded',
+  'symbols-registered', 'gates-declared', 'tests-exist', 'git-clean',
+  'commit-message-format', 'flow-coverage', 'context-checked', 'aspect-anchored',
+];
+
+const KEBAB_CASE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export function validateHabitDefinition(habit: Partial<HabitDefinition>): HabitValidationResult {
+  const errors: string[] = [];
+
+  // Required fields
+  if (!habit.id) errors.push('Missing required field: id');
+  if (!habit.name) errors.push('Missing required field: name');
+  if (!habit.description) errors.push('Missing required field: description');
+  if (!habit.category) errors.push('Missing required field: category');
+  if (!habit.trigger) errors.push('Missing required field: trigger');
+  if (!habit.severity) errors.push('Missing required field: severity');
+  if (!habit.check) errors.push('Missing required field: check');
+  if (habit.enabled === undefined || habit.enabled === null) errors.push('Missing required field: enabled');
+
+  // ID format
+  if (habit.id && !KEBAB_CASE_RE.test(habit.id)) {
+    errors.push(`Invalid id format: "${habit.id}" — must be kebab-case (lowercase, hyphens only)`);
+  }
+
+  // Enum validation
+  if (habit.category && !VALID_CATEGORIES.includes(habit.category)) {
+    errors.push(`Invalid category: "${habit.category}" — must be one of: ${VALID_CATEGORIES.join(', ')}`);
+  }
+  if (habit.trigger && !VALID_TRIGGERS.includes(habit.trigger)) {
+    errors.push(`Invalid trigger: "${habit.trigger}" — must be one of: ${VALID_TRIGGERS.join(', ')}`);
+  }
+  if (habit.severity && !VALID_SEVERITIES.includes(habit.severity)) {
+    errors.push(`Invalid severity: "${habit.severity}" — must be one of: ${VALID_SEVERITIES.join(', ')}`);
+  }
+
+  // Check type + param consistency
+  if (habit.check) {
+    if (!VALID_CHECK_TYPES.includes(habit.check.type)) {
+      errors.push(`Invalid check.type: "${habit.check.type}" — must be one of: ${VALID_CHECK_TYPES.join(', ')}`);
+    }
+    const params = habit.check.params || {};
+    switch (habit.check.type) {
+      case 'tool-called':
+        if (!params.tools || !Array.isArray(params.tools) || params.tools.length === 0) {
+          errors.push('check.type "tool-called" requires check.params.tools[] (non-empty array)');
+        }
+        break;
+      case 'file-exists':
+      case 'file-modified':
+        if (!params.patterns || !Array.isArray(params.patterns) || params.patterns.length === 0) {
+          errors.push(`check.type "${habit.check.type}" requires check.params.patterns[] (non-empty array)`);
+        }
+        break;
+      case 'commit-message-format':
+        if (!params.messagePatterns || !Array.isArray(params.messagePatterns) || params.messagePatterns.length === 0) {
+          errors.push('check.type "commit-message-format" requires check.params.messagePatterns[] (non-empty array)');
+        }
+        break;
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WRITE OPERATIONS
+// ═══════════════════════════════════════════════════════════════════
+
+const SEED_HABIT_IDS = new Set(SEED_HABITS.map(h => h.id));
+
+export function isSeedHabit(id: string): boolean {
+  return SEED_HABIT_IDS.has(id);
+}
+
+export function saveHabit(rootDir: string, habit: HabitDefinition, scope: 'project' | 'global' = 'project'): string {
+  const baseDir = scope === 'global'
+    ? path.join(process.env.HOME || process.env.USERPROFILE || '~', '.paradigm', 'habits')
+    : path.join(rootDir, '.paradigm', 'habits');
+
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
+  }
+
+  const filePath = path.join(baseDir, `${habit.id}.habit`);
+  const content = yaml.dump(habit, { lineWidth: 120, noRefs: true });
+  fs.writeFileSync(filePath, content, 'utf8');
+
+  // Invalidate cache so next load picks up the change
+  invalidateHabitsCache(rootDir);
+
+  return filePath;
+}
+
+export function removeHabit(rootDir: string, id: string): { removed: boolean; reason?: string } {
+  if (isSeedHabit(id)) {
+    return { removed: false, reason: `"${id}" is a seed habit and cannot be removed. Use overrides in habits.yaml to disable it.` };
+  }
+
+  // Check project habits dir
+  const projectPath = path.join(rootDir, '.paradigm', 'habits', `${id}.habit`);
+  if (fs.existsSync(projectPath)) {
+    fs.unlinkSync(projectPath);
+    invalidateHabitsCache(rootDir);
+    return { removed: true };
+  }
+
+  // Check global habits dir
+  const home = process.env.HOME || process.env.USERPROFILE || '~';
+  const globalPath = path.join(home, '.paradigm', 'habits', `${id}.habit`);
+  if (fs.existsSync(globalPath)) {
+    fs.unlinkSync(globalPath);
+    invalidateHabitsCache(rootDir);
+    return { removed: true };
+  }
+
+  return { removed: false, reason: `No .habit file found for "${id}". It may be defined in habits.yaml — edit that file directly.` };
 }
 
 // ═══════════════════════════════════════════════════════════════════

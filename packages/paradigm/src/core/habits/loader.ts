@@ -77,31 +77,67 @@ export function loadHabits(rootDir: string): HabitDefinition[] {
  * Load habits without caching
  */
 function loadHabitsFresh(rootDir: string): HabitDefinition[] {
-  // Start with seed habits
   const habitsById = new Map<string, HabitDefinition>();
+
+  // 1. Seed habits (embedded JSON)
   for (const seed of SEED_HABITS) {
     habitsById.set(seed.id, { ...seed });
   }
 
-  // Load global habits (~/.paradigm/habits.yaml)
-  const globalHabitsPath = path.join(
-    process.env.HOME || process.env.USERPROFILE || '~',
-    '.paradigm',
-    'habits.yaml'
-  );
-  const globalConfig = loadHabitsYaml(globalHabitsPath);
+  const home = process.env.HOME || process.env.USERPROFILE || '~';
+
+  // 2. Global habits.yaml
+  const globalConfig = loadHabitsYaml(path.join(home, '.paradigm', 'habits.yaml'));
   if (globalConfig) {
     mergeHabits(habitsById, globalConfig);
   }
 
-  // Load project habits (.paradigm/habits.yaml)
-  const projectHabitsPath = path.join(rootDir, '.paradigm', 'habits.yaml');
-  const projectConfig = loadHabitsYaml(projectHabitsPath);
+  // 3. Global .habit files
+  const globalHabitFiles = loadHabitFiles(path.join(home, '.paradigm', 'habits'));
+  for (const habit of globalHabitFiles) {
+    habitsById.set(habit.id, habit);
+  }
+
+  // 4. Project habits.yaml
+  const projectConfig = loadHabitsYaml(path.join(rootDir, '.paradigm', 'habits.yaml'));
   if (projectConfig) {
     mergeHabits(habitsById, projectConfig);
   }
 
+  // 5. Project .habit files
+  const projectHabitFiles = loadHabitFiles(path.join(rootDir, '.paradigm', 'habits'));
+  for (const habit of projectHabitFiles) {
+    habitsById.set(habit.id, habit);
+  }
+
   return Array.from(habitsById.values());
+}
+
+/**
+ * Load individual .habit files from a directory
+ */
+function loadHabitFiles(dir: string): HabitDefinition[] {
+  if (!fs.existsSync(dir)) return [];
+  try {
+    const files = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.habit'))
+      .sort();
+    const habits: HabitDefinition[] = [];
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(dir, file), 'utf8');
+        const habit = yaml.load(content) as HabitDefinition;
+        if (habit?.id && habit?.name) {
+          habits.push(habit);
+        }
+      } catch {
+        // Skip malformed files
+      }
+    }
+    return habits;
+  } catch {
+    return [];
+  }
 }
 
 /**

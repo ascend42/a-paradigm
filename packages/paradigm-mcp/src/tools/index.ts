@@ -40,6 +40,7 @@ import { getTasksToolsList, handleTasksTool } from './tasks.js';
 import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { getPersonaToolsList, handlePersonaTool } from './personas.js';
 import { getProtocolsToolsList, handleProtocolsTool } from './protocols.js';
+import { getGraphToolsList, handleGraphTool } from './graph.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -265,6 +266,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPersonaToolsList(),
           // Protocol tools
           ...getProtocolsToolsList(),
+          // Graph generation tool
+          ...getGraphToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1278,6 +1281,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try protocol tools
           if (name.startsWith('paradigm_protocol_')) {
             const result = await handleProtocolsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try graph tool
+          if (name === 'paradigm_graph_generate') {
+            const result = await handleGraphTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {
