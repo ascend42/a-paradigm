@@ -1,5 +1,24 @@
 version: '1.0'
-habits: []
+habits:
+  - id: sync-plugin-version
+    name: Sync Claude Plugin Version
+    description: >-
+      When packages/paradigm/package.json is modified, plugins/paradigm/.claude-plugin/plugin.json
+      must also be updated to match the new version. The plugin version must always match the
+      paradigm CLI version.
+    category: verification
+    trigger: on-stop
+    severity: block
+    check:
+      type: file-modified
+      params:
+        patterns:
+          - plugins/paradigm/.claude-plugin/plugin.json
+    enabled: true
+    platforms:
+      - claude
+      - cursor
+      - cli
 overrides:
   verify-before-done:
     severity: warn
