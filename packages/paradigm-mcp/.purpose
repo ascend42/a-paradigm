@@ -50,6 +50,7 @@ description: |
     - "#AspectGraphTools"
     - "#WorkspaceLoader"
     - "#HabitsTools"
+    - "#GraphTools"
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
@@ -121,6 +122,12 @@ description: |
   components:
     - "#ToolCache"
     - "#AspectGraph"
+
+#GraphTools:
+  description: Graph Generate MCP tool — produces GraphState JSON for the Symbol Graph UI from scan-index data with auto-positioned nodes and group layout
+  tags: [mcp, visualization]
+  anchors:
+    - src/tools/graph.ts:1-300
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation

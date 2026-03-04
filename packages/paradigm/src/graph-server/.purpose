@@ -1,0 +1,15 @@
+version: 2.0.0
+description: |
+  Express server for the Symbol Graph UI. Serves the built React app
+  and provides API endpoints for reading symbol data from scan-index.json.
+
+components:
+  graph-server:
+    description: Express server serving graph UI static files and symbol API routes
+    path: index.ts
+    tags: [feature, server]
+
+  symbols-route:
+    description: API route returning symbol data from scan-index for the graph UI
+    path: routes/symbols.ts
+    tags: [api]

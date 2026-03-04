@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Habit validation**: `validateHabitDefinition()` validates required fields, kebab-case IDs, enum values, and check type/param consistency
 - **5-step habit merge order**: Both MCP and CLI loaders now load habits from: seeds → global yaml → global .habit files → project yaml → project .habit files
 - **Release version-bump habit**: New blocking on-stop habit (`release-version-bump.habit`) enforces package version bumps before session ends, with per-package versioning rules
+- **Symbol Graph UI** (`paradigm graph`): Interactive React + xyflow canvas for visualizing symbol relationships. Includes drag-and-drop nodes, grouping, save/load, PNG/JSON export, and real-time symbol data from a local Express server
+- **Graph Generate MCP tool** (`paradigm_graph_generate`): Produces GraphState JSON for the Symbol Graph UI from scan-index data with auto-positioned nodes and group layout
 
 ## [3.20.2] — 2026-03-04
 

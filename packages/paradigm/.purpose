@@ -64,6 +64,11 @@ features:
     components:
       - '#constellation-handler'
       - '#graph-builder'
+  graph-command:
+    description: Launch interactive Symbol Graph UI with local Express server
+    components:
+      - '#graph-server'
+      - '#graph-ui'
   ripple-command:
     description: Analyze change impact upstream/downstream for a symbol
     components:

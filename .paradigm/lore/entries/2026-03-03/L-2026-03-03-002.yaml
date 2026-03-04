@@ -1,0 +1,25 @@
+id: L-2026-03-03-002
+type: human-note
+timestamp: '2026-03-03T20:45:53.280Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Where Paradigm is going — reflections from the runtime session
+summary: 'Paradigm started as a way to give AI agents structured context about codebases — symbols, gates, flows, purpose files. With the runtime package, it''s becoming something else: the schema language that applications are built from. The trajectory is clear. Paradigm defines how apps think (graph schemas, memory, patterns), Studio generates them, Sentinel watches them, and the logger gives everything a common nervous system. What''s interesting is how naturally each piece composed. The logger became the stable API surface. Sentinel became the telemetry layer. The runtime became the contract layer. None of these were planned from the start — they emerged from the constraints of each previous step.'
+symbols_touched:
+  - '#paradigm-runtime'
+  - '#paradigm-logger'
+  - '#sentinel'
+learnings:
+  - 'Paradigm''s evolution: context system → developer tools → platform contracts → app generation substrate. Each layer made the next one possible.'
+  - The five symbols (#, $, ^, !, ~) are holding up remarkably well as the abstraction vocabulary scales from docs to runtime schemas to generated apps. Components, flows, gates, signals, aspects map directly to graph entities, traversals, auth gates, events, and cross-cutting pattern engines.
+  - The re-export shielding pattern (runtime wraps logger, runtime wraps sentinel) is how you build a platform without coupling — each layer can evolve independently while presenting a stable surface to the layer above.
+  - 'Forward-only migrations with safety classification is a bet that simplicity beats reversibility. The DX win is huge: safe ops auto-apply, cautious ops warn, dangerous ops require confirmation. Studio can map this directly to UI.'
+  - Version fingerprinting solves the 'which version of what generated this app' problem before it becomes a problem. Every generated app carries a receipt of exactly what produced it. When something breaks, you diff fingerprints instead of guessing.
+  - 'The decision to keep the runtime package public reflects something important: Paradigm''s value isn''t in locking people in, it''s in the graph-schema-as-contract pattern itself. If someone builds their own Studio equivalent against these types, that validates the abstraction.'
+tags:
+  - arc:studio-foundation
+  - arc:platform-evolution
+  - arc:paradigm-vision
+  - reflection

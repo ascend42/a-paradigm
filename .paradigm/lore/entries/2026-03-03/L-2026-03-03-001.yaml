@@ -1,0 +1,96 @@
+id: L-2026-03-03-001
+type: milestone
+timestamp: '2026-03-03T20:45:35.333Z'
+author:
+  type: agent
+  id: claude
+  model: claude-opus-4-6
+title: Paradigm Runtime Foundation — the bridge to Studio
+summary: Created @a-company/paradigm-runtime v0.1.0, the contracts package that Paradigm Studio (a-animus) generated apps compile against. This is the first package in the paradigm ecosystem that exists purely for a downstream consumer — everything before this was self-contained tooling. The runtime defines graph schema types, a forward-only migration engine, runtime API operation types, and version fingerprinting. It deliberately has no storage layer; that's Studio's job. This marks the moment Paradigm stopped being a developer tools CLI and started becoming a platform.
+symbols_touched:
+  - '#paradigm-runtime'
+  - '#graph-schema'
+  - '#schema-validation'
+  - '#migration-engine'
+  - '#migration-diff'
+  - '#migration-history'
+  - '#version-fingerprint'
+  - $schema-migration
+symbols_created:
+  - '#paradigm-runtime'
+  - '#graph-schema'
+  - '#schema-validation'
+  - '#runtime-api-types'
+  - '#migration-engine'
+  - '#migration-diff'
+  - '#migration-history'
+  - '#version-fingerprint'
+  - '#logger-reexport'
+  - '#telemetry-reexport'
+files_created:
+  - packages/runtime/package.json
+  - packages/runtime/tsconfig.json
+  - packages/runtime/tsup.config.ts
+  - packages/runtime/.purpose
+  - packages/runtime/src/index.ts
+  - packages/runtime/src/types.ts
+  - packages/runtime/src/version.ts
+  - packages/runtime/src/logger.ts
+  - packages/runtime/src/telemetry.ts
+  - packages/runtime/src/schema/index.ts
+  - packages/runtime/src/schema/types.ts
+  - packages/runtime/src/schema/validation.ts
+  - packages/runtime/src/migration/index.ts
+  - packages/runtime/src/migration/types.ts
+  - packages/runtime/src/migration/engine.ts
+  - packages/runtime/src/migration/diff.ts
+  - packages/runtime/src/migration/history.ts
+  - packages/logger/API.md
+files_modified:
+  - package.json
+  - packages/paradigm/package.json
+  - packages/logger/package.json
+  - packages/logger/src/types.ts
+  - CHANGELOG.md
+lines_added: 1754
+lines_removed: 7
+commit: fcbc9a4f
+decisions:
+  - id: types-first
+    decision: Runtime package defines contracts only — no server, no storage, no DB
+    rationale: Studio owns the runtime server. This package is what generated apps compile against. Keeping it types-first means the contract is clean and the implementation boundary between paradigm and studio is sharp.
+  - id: sub-path-exports
+    decision: 'Five sub-path exports: root, /schema, /migration, /logger, /telemetry'
+    rationale: Tree-shaking. An app that only needs schema types shouldn't pull the migration engine. Each sub-path is an independent concern.
+  - id: forward-only-migrations
+    decision: No rollback support in the migration engine
+    rationale: Rollback in graph schemas is deceptively complex — relationships, pattern engines, memory config all have cascade effects. Forward-only with dry-run and safety classification is safer and simpler.
+  - id: logger-reexport
+    decision: Re-export logger types through runtime rather than direct dependency
+    rationale: Shielding layer. If paradigm-logger reorganizes internals, Studio apps only need a runtime patch, not a cascading update across every generated app.
+  - id: v0-1-0
+    decision: Start at v0.1.0, not 1.0.0
+    rationale: Signals pre-1.0 contract. Studio is still being built. The types will evolve as we discover what the generation pipeline actually needs. 1.0.0 comes when Studio launches.
+  - id: public-package
+    decision: Publish as public on npm, not restricted
+    rationale: Consistent with the rest of the paradigm ecosystem. People building their own graph-based apps might find the schema types and migration engine useful independently of Studio.
+learnings:
+  - The paradigm ecosystem is crossing from 'tools for developers' to 'platform for generated apps' — this is a fundamentally different design surface
+  - Sub-path exports in tsup require a multi-entry config but the DX is worth it — consumers get exactly the slice they need
+  - Peer dependencies with optional:true is the right pattern for re-export shielding layers — the runtime package doesn't force logger/sentinel installation
+  - Schema format version should be decoupled from package version — structural format changes and feature additions have different cadences
+  - The migration engine's safety classification (safe/cautious/dangerous) maps naturally to UX — Studio can auto-apply safe ops and prompt for dangerous ones
+verification:
+  status: pass
+  details:
+    build: pass
+    typecheck: pass
+    full-monorepo-build: pass
+    publish: pass
+tags:
+  - arc:studio-foundation
+  - arc:platform-evolution
+  - runtime
+  - schema
+  - migration
+  - milestone
