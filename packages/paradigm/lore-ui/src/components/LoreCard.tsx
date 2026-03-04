@@ -27,7 +27,7 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
         <div className="lore-card-header">
           <div className="lore-card-author">
             <span className={`author-badge ${hasAgent ? 'agent' : 'human'}`}>
-              {hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {entry.author}
+              {hasAgent ? '\uD83E\uDD16' : '\uD83D\uDC64'} {typeof entry.author === 'string' ? entry.author : 'unknown'}
             </span>
           </div>
           <span className={`lore-card-type ${entry.type || 'agent-session'}`}>{entry.type || 'agent-session'}</span>

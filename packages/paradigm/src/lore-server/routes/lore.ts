@@ -51,7 +51,7 @@ function normalizeEntry(raw: Record<string, unknown>): LoreEntry {
   if (typeof author === 'object' && author && !Array.isArray(author)) {
     const old = author as { type?: string; id?: string; model?: string };
     if (old.type === 'agent') {
-      raw.author = 'unknown';
+      raw.author = old.id || 'unknown';
       const model = old.model || old.id || 'unknown';
       const lower = model.toLowerCase();
       let provider = 'unknown';
@@ -62,6 +62,15 @@ function normalizeEntry(raw: Record<string, unknown>): LoreEntry {
       raw.author = old.id || 'unknown';
     }
     delete raw.assistedBy;
+  } else if (typeof author !== 'string') {
+    raw.author = 'unknown';
+  }
+  // Ensure array fields are arrays
+  if (raw.symbols_touched && !Array.isArray(raw.symbols_touched)) {
+    raw.symbols_touched = [String(raw.symbols_touched)];
+  }
+  if (raw.symbols_created && !Array.isArray(raw.symbols_created)) {
+    raw.symbols_created = [String(raw.symbols_created)];
   }
   return raw as unknown as LoreEntry;
 }

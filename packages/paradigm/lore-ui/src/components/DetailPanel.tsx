@@ -43,7 +43,7 @@ export function DetailPanel() {
             <h3>Details</h3>
             <dl className="detail-meta">
               <dt>Author</dt>
-              <dd>{'\uD83D\uDC64'} {entry.author}</dd>
+              <dd>{'\uD83D\uDC64'} {typeof entry.author === 'string' ? entry.author : 'unknown'}</dd>
               {entry.agent && <>
                 <dt>AI Agent</dt>
                 <dd>{'\uD83E\uDD16'} {entry.agent.model}{entry.agent.provider ? ` (${entry.agent.provider})` : ''}</dd>
