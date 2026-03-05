@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 
 import { createSymbolsRouter } from './routes/symbols.js';
+import { createGraphsRouter } from './routes/graphs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,7 @@ export function createGraphApp(options: GraphServerOptions): Express {
 
   // API routes
   app.use('/api/symbols', createSymbolsRouter(options.projectDir));
+  app.use('/api/graphs', createGraphsRouter(options.projectDir));
 
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {

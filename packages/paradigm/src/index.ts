@@ -1529,16 +1529,15 @@ const graphCmd = program
 
 graphCmd
   .command('generate')
-  .description('Generate GraphState JSON from symbols (for agents / piping)')
+  .description('Generate a named graph file in .paradigm/graphs/')
+  .argument('<name>', 'Graph name (used as filename: {name}.graph.json)')
   .argument('[path]', 'Project directory', undefined)
   .option('-s, --symbols <list>', 'Comma-separated symbol names to include')
   .option('-g, --group <spec...>', 'Group spec: "Label:#sym1,#sym2" (repeatable)')
   .option('-l, --link <spec...>', 'Link spec: "Source>Target:label" (repeatable)')
-  .option('-n, --name <name>', 'Graph name', 'Generated Graph')
-  .option('-o, --output <file>', 'Write to file instead of stdout')
-  .action(async (path, options) => {
+  .action(async (name, path, options) => {
     const { graphGenerateCommand } = await import('./commands/graph.js');
-    await graphGenerateCommand(path, options);
+    await graphGenerateCommand(name, path, options);
   });
 
 // paradigm habits <command>

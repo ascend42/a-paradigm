@@ -2,6 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGraphStore } from '../store/graphStore';
 import type { GraphState } from '../types';
 
+interface SavedGraph {
+  slug: string;
+  file: string;
+  name: string;
+  nodes: number;
+  edges: number;
+  size: number;
+  modified: string;
+}
+
 export default function LoadDialog() {
   const loadDialogOpen = useGraphStore((s) => s.loadDialogOpen);
   const setLoadDialogOpen = useGraphStore((s) => s.setLoadDialogOpen);
@@ -10,6 +20,8 @@ export default function LoadDialog() {
   const [jsonText, setJsonText] = useState('');
   const [status, setStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
   const [parsed, setParsed] = useState<GraphState | null>(null);
+  const [savedGraphs, setSavedGraphs] = useState<SavedGraph[]>([]);
+  const [loadingGraphs, setLoadingGraphs] = useState(false);
 
   const reset = useCallback(() => {
     setJsonText('');
@@ -21,6 +33,31 @@ export default function LoadDialog() {
     setLoadDialogOpen(false);
     reset();
   }, [setLoadDialogOpen, reset]);
+
+  // Fetch saved graphs when dialog opens
+  useEffect(() => {
+    if (!loadDialogOpen) return;
+    setLoadingGraphs(true);
+    fetch('/api/graphs')
+      .then((res) => res.json())
+      .then((data) => setSavedGraphs(data.graphs || []))
+      .catch(() => setSavedGraphs([]))
+      .finally(() => setLoadingGraphs(false));
+  }, [loadDialogOpen]);
+
+  const handleLoadSaved = useCallback(
+    async (slug: string) => {
+      try {
+        const res = await fetch(`/api/graphs/${slug}`);
+        const state: GraphState = await res.json();
+        importFromFile(state);
+        handleClose();
+      } catch {
+        setStatus({ type: 'error', message: `Failed to load graph "${slug}".` });
+      }
+    },
+    [importFromFile, handleClose]
+  );
 
   const handleValidate = useCallback(() => {
     try {
@@ -79,6 +116,16 @@ export default function LoadDialog() {
 
   if (!loadDialogOpen) return null;
 
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  function formatDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
   return (
     <div className="export-overlay" onClick={handleClose}>
       <div className="export-dialog load-dialog" onClick={(e) => e.stopPropagation()}>
@@ -89,6 +136,37 @@ export default function LoadDialog() {
           </button>
         </div>
         <div className="load-dialog__body">
+          {/* Saved graphs section */}
+          {(savedGraphs.length > 0 || loadingGraphs) && (
+            <div className="load-dialog__section">
+              <label className="load-dialog__label">Saved Graphs</label>
+              {loadingGraphs ? (
+                <div className="load-dialog__loading">Loading...</div>
+              ) : (
+                <div className="load-dialog__graph-list">
+                  {savedGraphs.map((g) => (
+                    <button
+                      key={g.slug}
+                      className="load-dialog__graph-item"
+                      onClick={() => handleLoadSaved(g.slug)}
+                    >
+                      <span className="load-dialog__graph-name">{g.name}</span>
+                      <span className="load-dialog__graph-meta">
+                        {g.nodes} nodes, {g.edges} edges &middot; {formatSize(g.size)} &middot; {formatDate(g.modified)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {savedGraphs.length > 0 && (
+            <div className="load-dialog__divider">
+              <span>or</span>
+            </div>
+          )}
+
           <div className="load-dialog__section">
             <label className="load-dialog__label">Upload File</label>
             <button
@@ -119,7 +197,7 @@ export default function LoadDialog() {
                 setParsed(null);
               }}
               placeholder='Paste GraphState JSON here...'
-              rows={12}
+              rows={8}
             />
           </div>
           {status && (

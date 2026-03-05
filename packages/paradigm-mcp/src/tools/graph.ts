@@ -10,6 +10,8 @@ import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 
+const GRAPHS_DIR = '.paradigm/graphs';
+
 // ============================================================================
 // Types (mirror graph-ui/src/types.ts for output compatibility)
 // ============================================================================
@@ -90,10 +92,14 @@ export function getGraphToolsList() {
     {
       name: 'paradigm_graph_generate',
       description:
-        'Generate a GraphState JSON document for the Paradigm Symbol Graph UI. Accepts optional symbols (filter), groups (clustering), and links (edges between groups). Returns valid GraphState ready to load. ~200 tokens.',
+        'Generate a named GraphState JSON file for the Paradigm Symbol Graph UI. Writes to .paradigm/graphs/{name}.graph.json. View saved graphs with `paradigm graph` CLI. Returns a summary with node/edge counts and file path. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
+          name: {
+            type: 'string',
+            description: 'Graph name (kebab-case). Used as filename: {name}.graph.json. E.g. "auth-flow", "full-project", "checkout-subsystem".',
+          },
           symbols: {
             type: 'array',
             items: { type: 'string' },
@@ -129,14 +135,11 @@ export function getGraphToolsList() {
             },
             description: 'Edges between groups (by label name).',
           },
-          name: {
-            type: 'string',
-            description: 'Graph name (default: "Generated Graph").',
-          },
         },
+        required: ['name'],
       },
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
       },
     },
@@ -157,17 +160,36 @@ export async function handleGraphTool(
   }
 
   try {
+    const graphName = (args.name as string) || 'untitled';
+    const slug = graphName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
     const result = buildGraphState(
       ctx.rootDir,
       args.symbols as string[] | undefined,
       args.groups as GroupInput[] | undefined,
       args.links as LinkInput[] | undefined,
-      (args.name as string) || 'Generated Graph',
+      graphName,
     );
 
-    const text = JSON.stringify(result, null, 2);
-    trackToolCall(text.length, name);
-    return { handled: true, text };
+    const json = JSON.stringify(result, null, 2);
+
+    // Always write to .paradigm/graphs/{slug}.graph.json
+    const graphsDir = path.join(ctx.rootDir, GRAPHS_DIR);
+    if (!fs.existsSync(graphsDir)) fs.mkdirSync(graphsDir, { recursive: true });
+    const outPath = path.join(graphsDir, `${slug}.graph.json`);
+    fs.writeFileSync(outPath, json, 'utf8');
+
+    const summary = JSON.stringify({
+      file: outPath,
+      name: graphName,
+      slug,
+      nodes: result.nodes.length,
+      edges: result.edges.length,
+      size: `${(json.length / 1024).toFixed(1)} KB`,
+      hint: `Graph saved. Run \`paradigm graph\` to view in browser.`,
+    }, null, 2);
+    trackToolCall(summary.length, name);
+    return { handled: true, text: summary };
   } catch (err) {
     const text = JSON.stringify({ error: (err as Error).message }, null, 2);
     trackToolCall(text.length, name);

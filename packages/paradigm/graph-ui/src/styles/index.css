@@ -519,6 +519,52 @@ body {
   border: 1px solid rgba(134, 239, 172, 0.2);
 }
 
+.load-dialog__loading {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+.load-dialog__graph-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.load-dialog__graph-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.load-dialog__graph-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.3);
+}
+
+.load-dialog__graph-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+.load-dialog__graph-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
 /* === Scrollbar === */
 
 ::-webkit-scrollbar {

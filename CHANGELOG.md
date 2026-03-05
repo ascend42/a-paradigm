@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.0] — 2026-03-04
+
+### Changed
+
+- **Graph Generate writes to named files** (`@a-company/paradigm` 3.22.0 → 3.23.0, `@a-company/paradigm-mcp` 3.17.0 → 3.18.0): `paradigm_graph_generate` MCP tool now requires a `name` parameter and always writes to `.paradigm/graphs/{name}.graph.json`, returning a lightweight summary instead of the full JSON. Fixes token overflow on large projects (192K+ chars). CLI `paradigm graph generate` takes name as a required positional arg
+- **Graph server serves saved graphs**: New `/api/graphs` and `/api/graphs/:slug` endpoints list and serve saved `.graph.json` files from `.paradigm/graphs/`
+- **Load Dialog shows saved graphs**: Graph UI Load Dialog now fetches and displays saved graphs with metadata (name, node/edge counts, size, date) for one-click loading
+
 ## [3.22.0] — 2026-03-04
 
 ### Added

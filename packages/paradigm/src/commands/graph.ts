@@ -43,12 +43,12 @@ export async function graphCommand(path: string | undefined, options: GraphOptio
 // Graph Generate — CLI subcommand
 // ============================================================================
 
+const GRAPHS_DIR = '.paradigm/graphs';
+
 interface GraphGenerateOptions {
   symbols?: string;
   group?: string[];
   link?: string[];
-  name?: string;
-  output?: string;
 }
 
 interface SymbolData {
@@ -154,10 +154,12 @@ function cliBuildGraphState(
 }
 
 export async function graphGenerateCommand(
+  name: string,
   path: string | undefined,
   options: GraphGenerateOptions,
 ): Promise<void> {
   const projectDir = path || process.cwd();
+  const slug = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
   try {
     const symbolFilter = options.symbols
@@ -185,16 +187,17 @@ export async function graphGenerateCommand(
       return { source, target: colonIdx === -1 ? rest : rest.slice(0, colonIdx), label: colonIdx === -1 ? undefined : rest.slice(colonIdx + 1) };
     });
 
-    const state = cliBuildGraphState(projectDir, symbolFilter, groups, links, options.name || 'Generated Graph');
+    const state = cliBuildGraphState(projectDir, symbolFilter, groups, links, name);
     const json = JSON.stringify(state, null, 2);
 
-    if (options.output) {
-      fs.writeFileSync(options.output, json, 'utf8');
-      console.log(chalk.green(`Graph written to ${options.output}`));
-      console.log(chalk.gray(`${state.nodes.length} nodes, ${state.edges.length} edges`));
-    } else {
-      process.stdout.write(json + '\n');
-    }
+    const graphsDir = pathMod.join(projectDir, GRAPHS_DIR);
+    if (!fs.existsSync(graphsDir)) fs.mkdirSync(graphsDir, { recursive: true });
+    const outPath = pathMod.join(graphsDir, `${slug}.graph.json`);
+    fs.writeFileSync(outPath, json, 'utf8');
+
+    console.log(chalk.green(`Graph saved to ${outPath}`));
+    console.log(chalk.gray(`${state.nodes.length} nodes, ${state.edges.length} edges, ${(json.length / 1024).toFixed(1)} KB`));
+    console.log(chalk.gray(`\nView: paradigm graph`));
   } catch (error) {
     console.error(chalk.red('Failed to generate graph:'), (error as Error).message);
     process.exit(1);
