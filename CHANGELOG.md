@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.24.0] — 2026-03-05
+
+### Added
+
+- **Skills v2 upgrade** (plugin 3.23.1 → 3.24.0): All 13 plugin skills upgraded to Claude Code Skills v2 format with full YAML frontmatter
+  - **Forked context** (`context: fork`) on 8 skills — preflight, postflight, sentinel, doctor, observe, ripple, review, handoff run in isolated subagents, keeping the main conversation clean
+  - **Agent routing** — analysis skills route to `paradigm:architect`, compliance skills to `paradigm:reviewer`, data-fetching to `Explore`
+  - **Shell injection** (`!`command``) on 5 skills — git status, diffs, config checks pre-loaded before the prompt starts, saving 2-4 MCP round-trips per invocation
+  - **Tool restrictions** (`allowed-tools`) on all 13 skills — read-only analysis skills can't accidentally write files
+  - **Manual-only** (`disable-model-invocation`) on init, shift, scan — prevents unintended auto-triggering
+  - **Argument hints** (`argument-hint`) on 5 skills for autocomplete UX
+- **3 new skills**: `/paradigm:ripple` (forked impact analysis), `/paradigm:review` (forked compliance review), `/paradigm:handoff` (forked session handoff)
+- **Skills v2 design spec** at `docs/specs/skills-v2-upgrade.md` — full migration plan, token savings analysis, risk matrix, and long-term vision
+
 ## [3.23.1] — 2026-03-05
 
 ### Fixed
