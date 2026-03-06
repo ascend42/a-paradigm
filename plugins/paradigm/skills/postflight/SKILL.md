@@ -1,6 +1,9 @@
 ---
 name: postflight
 description: Run post-task compliance checks after finishing implementation. Use when done with a task, when the user says "postflight", "am I done", "check my work", or proactively before ending a session where source files were modified.
+context: fork
+agent: paradigm:reviewer
+allowed-tools: Read, Grep, Glob
 ---
 
 # Post-Task Compliance Check
@@ -10,17 +13,11 @@ paradigm files are properly updated after implementation work.
 
 ## Step 1: Gather What Changed
 
-Run via Bash to see all uncommitted changes:
+Uncommitted changes:
+!`git diff --name-only HEAD 2>/dev/null`
 
-```bash
-git diff --name-only HEAD 2>/dev/null
-```
-
-Also check staged changes:
-
-```bash
-git diff --name-only --cached 2>/dev/null
-```
+Staged changes:
+!`git diff --name-only --cached 2>/dev/null`
 
 Categorize the modified files:
 - **Source files**: `.ts`, `.js`, `.py`, `.rs`, `.go`, `.tsx`, `.jsx`, etc.

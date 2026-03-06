@@ -1,6 +1,8 @@
 ---
 name: shift
 description: Full one-command Paradigm setup — initializes everything, scans symbols, installs hooks, generates CLAUDE.md, and runs doctor. Use when a user wants complete setup in one step, says "paradigm shift", "set up everything", or "full paradigm setup".
+disable-model-invocation: true
+allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
 # Paradigm Shift — Full Setup

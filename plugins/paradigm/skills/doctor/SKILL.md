@@ -1,12 +1,22 @@
 ---
 name: doctor
 description: Run a comprehensive health check on the Paradigm setup. Use when something seems wrong, after major changes, or when the user says "check paradigm health", "paradigm doctor", or "is paradigm set up correctly".
+context: fork
+agent: paradigm:reviewer
+allowed-tools: Read, Grep, Glob
 ---
 
 # Paradigm Health Check
 
 You are running a comprehensive health check on the project's Paradigm setup.
 Check everything systematically and report findings with clear fix actions.
+
+## Quick Context
+
+Config exists: !`test -f .paradigm/config.yaml && echo "yes" || echo "no — not initialized"`
+Portal exists: !`test -f portal.yaml && echo "yes" || echo "no"`
+Scan index: !`test -f .paradigm/scan-index.json && echo "yes ($(wc -c < .paradigm/scan-index.json | tr -d ' ') bytes)" || echo "no — needs scan"`
+Lore directory: !`test -d .paradigm/lore/entries && echo "yes ($(ls .paradigm/lore/entries/ 2>/dev/null | wc -l | tr -d ' ') date dirs)" || echo "no"`
 
 ## Step 1: Project Overview
 

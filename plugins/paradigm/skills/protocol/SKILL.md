@@ -1,6 +1,8 @@
 ---
 name: protocol
 description: Search for or record a repeatable implementation protocol. Use when the user says "check protocol", "record protocol", "any protocol for this", or before starting implementation of a common pattern.
+allowed-tools: Read, Grep, Glob
+argument-hint: "[task description or protocol name]"
 ---
 
 # Protocol — Repeatable Implementation Patterns

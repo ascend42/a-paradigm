@@ -1,6 +1,8 @@
 ---
 name: scan
 description: Rebuild the Paradigm symbol index after file changes. Use when symbols seem out of date, after creating or moving files, or when search results are stale.
+disable-model-invocation: true
+allowed-tools: Read, Glob
 ---
 
 # Rebuild Symbol Index

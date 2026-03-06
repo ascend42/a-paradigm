@@ -1,6 +1,8 @@
 ---
 name: lore
 description: Record a lore entry for the current session. Use when the user says "record lore", "log what we did", "save session history", or proactively at the end of a significant work session (3+ files modified).
+allowed-tools: Bash(git *), Read, Grep, Glob
+argument-hint: "[optional title]"
 ---
 
 # Record Lore Entry
@@ -11,18 +13,17 @@ the stop hook will block if significant work happened without a lore entry.
 
 ## Step 1: Gather Session Context
 
-Collect information about what was done in this session:
+Collect information about what was done in this session.
 
-1. **Git changes**: Run via Bash:
-   ```bash
-   git diff --stat HEAD
-   ```
-   This shows which files were modified and how many lines changed.
+Git changes:
+!`git diff --stat HEAD 2>/dev/null`
 
-2. **Recent commits** (if any were made this session): Run via Bash:
-   ```bash
-   git log --oneline -10
-   ```
+Recent commits:
+!`git log --oneline -10 2>/dev/null`
+
+If the user provided a title via arguments, use it: $ARGUMENTS
+
+The git data above is pre-loaded — no need to run those commands again.
 
 3. **Symbols touched**: Think about which Paradigm symbols (#, $, ^, !, ~) were
    involved in the work. If unsure, call `paradigm_search` with keywords from
