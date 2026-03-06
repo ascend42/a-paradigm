@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.1] — 2026-03-05
+
+### Fixed
+
+- **Plugin version detection uses semver sort** (`@a-company/paradigm` 3.23.0 → 3.23.1, `@a-company/paradigm-mcp` 3.18.0 → 3.18.1): Plugin update checker used alphabetical `.sort()` on cache directory names, causing `3.9.0` to rank above `3.23.0` (since `"9" > "2"` in string comparison). Every project reported stale 3.9.0 as the installed version. Replaced with numeric semver comparator in both `plugin-update-checker.ts` (MCP) and `plugin/check.ts` (CLI)
+
 ## [3.23.0] — 2026-03-04
 
 ### Changed

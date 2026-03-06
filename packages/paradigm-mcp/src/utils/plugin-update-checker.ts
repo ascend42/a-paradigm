@@ -148,7 +148,15 @@ function discoverPlugins(): DiscoveredPlugin[] {
         try {
           const versions = fs.readdirSync(pluginCacheDir)
             .filter(d => fs.statSync(path.join(pluginCacheDir, d)).isDirectory())
-            .sort()
+            .sort((a, b) => {
+              // Semver-aware sort: compare major.minor.patch numerically
+              const pa = a.split('.').map(Number);
+              const pb = b.split('.').map(Number);
+              for (let i = 0; i < 3; i++) {
+                if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+              }
+              return 0;
+            })
             .reverse();
 
           if (versions.length > 0) {
