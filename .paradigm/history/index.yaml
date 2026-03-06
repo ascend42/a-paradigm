@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-05T01:27:33.905Z'
+generated: '2026-03-06T02:09:36.122Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -2861,11 +2861,31 @@ by_symbol:
       agent: []
   '#plugin-check':
     symbol: '#plugin-check'
-    total_changes: 1
-    last_modified: '2026-02-24T00:11:54Z'
+    total_changes: 2
+    last_modified: '2026-03-06T02:04:11Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0128
+        ts: '2026-03-06T02:04:11Z'
+        type: implement
+        symbols:
+          - '#plugin-check'
+        author:
+          type: human
+          id: ascend
+        commit: c076b7091fad2b2e37f6e3f71d03c5105b02ab3e
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/utils/plugin-update-checker.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/plugin/check.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'fix(#plugin-check): use semver sort for plugin version detection'
       - *ref_31
     contributors:
       human:
