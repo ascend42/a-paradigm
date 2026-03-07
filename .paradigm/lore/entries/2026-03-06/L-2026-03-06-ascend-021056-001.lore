@@ -1,0 +1,93 @@
+id: L-2026-03-06-ascend-021056-001
+type: insight
+timestamp: '2026-03-06T02:10:56.911Z'
+duration_minutes: 45
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills v2 Upgrade — Strategic Analysis & Cross-Study with Ruflo
+summary: 'Conducted cross-study of Paradigm vs Ruflo (ruvnet/ruflo), identifying Paradigm''s structured transparency as a fundamental architectural advantage over ML-based orchestration. Discovered Claude Code Skills v2 capabilities (SKILL.md format, context: fork, agent routing, shell injection, hot reload, monorepo discovery) that represent a major upgrade opportunity for Paradigm''s plugin skills. Fixed semver sort bug in plugin version detection (3.23.1). Planning branch for full skills v2 migration.'
+symbols_touched:
+  - '#plugin-check'
+  - '#paradigm-skills'
+symbols_created:
+  - '#skills-v2-upgrade'
+files_created:
+  - docs/private/cross-study-paradigm-vs-ruflo.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/plugin-update-checker.ts
+  - packages/paradigm/src/commands/plugin/check.ts
+  - docs/private/cross-study-paradigm-vs-ruflo.md
+decisions:
+  - id: D-skills-v2-branch
+    decision: Create dedicated branch for skills v2 migration rather than iterating on main
+    rationale: Skills v2 is a significant structural change to the plugin — needs design exploration, testing across projects, and may require multiple iterations before merging
+  - id: D-transparency-over-magic
+    decision: Paradigm's architectural identity is structured transparency — any ML/vector features should be additive, never replace the human-readable foundation
+    rationale: Cross-study with Ruflo showed that opaque learned intelligence has fundamentally worse failure modes than structured YAML. Paradigm's debugging loop (read → edit → done) is a core differentiator
+learnings:
+  - Alphabetical sort does not handle semver — '3.9.0' > '3.23.0' in string comparison
+  - Claude Code Skills v2 supports context:fork, agent routing, shell injection, hot reload — far beyond current paradigm skill format
+  - Paradigm's human-readable YAML structure is not a limitation — it's a fundamental architectural advantage over ML-based alternatives
+  - The /batch bundled skill can decompose work into 5-30 units across git worktrees — Paradigm could leverage this for multi-package operations
+verification:
+  status: pass
+  details:
+    build: pass
+    semver_sort: pass
+    npm_publish: pass
+tags:
+  - arc:skills-v2-upgrade
+  - arc:cross-study
+  - strategic
+  - plugin
+  - skills
+body: |-
+  ## Cross-Study: Paradigm vs Ruflo
+
+  Key finding: Paradigm and Ruflo operate at different layers — Paradigm is the *knowledge layer* (structured context, symbols, compliance), Ruflo is the *execution layer* (agent swarms, neural routing, vector memory). They are complementary, not competitive.
+
+  Critical insight from discussion: Paradigm's raw YAML files and human-readable structure is a fundamental advantage. When ML-based systems like Ruflo's SONA routing or vector embeddings go stale after architectural shifts, the recovery path is expensive mass reads. Paradigm's worst case is "stale YAML" — open a file, edit it, done. Ruflo's worst case is "stale neural weights" — opaque, expensive to debug.
+
+  ## Skills v2 Discovery
+
+  Claude Code 2.1.0 introduced a significantly more powerful skills system:
+
+  ### New Capabilities Available
+  - **SKILL.md format** — directory-based skills with YAML frontmatter
+  - **`context: fork`** — run skills in isolated subagent contexts
+  - **`agent` field** — route to Explore, Plan, custom agent types
+  - **`!`command`` injection** — shell preprocessing before prompt delivery
+  - **Supporting files** — templates, examples, scripts alongside SKILL.md
+  - **`$ARGUMENTS[N]`** — positional argument access
+  - **`${CLAUDE_SKILL_DIR}`** — reference bundled scripts
+  - **Hot reload** — edit during session without restart
+  - **Monorepo discovery** — nested `.claude/skills/` in subdirectories
+  - **`allowed-tools`** — per-skill tool restrictions
+  - **`model`** — per-skill model override
+  - **`hooks`** — skill-scoped lifecycle hooks
+
+  ### Paradigm Upgrade Opportunities
+  1. Migrate all paradigm:* skills from current format to SKILL.md directories
+  2. Use `context: fork` for heavy operations (preflight, postflight, sentinel)
+  3. Use `!` injection to preload paradigm_status output before prompts
+  4. Bundle supporting files (templates, checklists) with each skill
+  5. Add monorepo support — nested skills per package
+  6. Use `allowed-tools` to restrict skills appropriately (review = read-only)
+  7. Skill-scoped hooks for paradigm-specific lifecycle events
+
+  ### Bundled Skills Reference
+  - `/simplify` — 3 parallel review agents
+  - `/batch` — decompose into 5-30 units in git worktrees
+  - `/debug` — session debug log analysis
+  - `/claude-api` — SDK reference loading
+
+  ## Bug Fix (3.23.1)
+  Plugin version detection used alphabetical `.sort()` on cache directories, causing "3.9.0" to rank above "3.23.0". Fixed with numeric semver comparator in both MCP and CLI codepaths.
+linked_commits:
+  - c076b709
+git_context:
+  ref: c076b7091fad2b2e37f6e3f71d03c5105b02ab3e
+  branch: main
+  dirty: true

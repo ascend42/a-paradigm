@@ -1,6 +1,10 @@
 ---
 name: preflight
 description: Run pre-task compliance checks before starting implementation. Use when starting a new task, when the user says "preflight", "before I start", "what should I check", or proactively before complex tasks that affect 3+ files.
+context: fork
+agent: paradigm:architect
+allowed-tools: Read, Grep, Glob
+argument-hint: "[task description]"
 ---
 
 # Pre-Task Compliance Check
@@ -8,12 +12,19 @@ description: Run pre-task compliance checks before starting implementation. Use 
 You are running Paradigm's pre-flight compliance check to ensure the task is
 properly scoped and all dependencies are understood before writing code.
 
+## Project Context
+
+Current git state:
+!`git status --short 2>/dev/null | head -20`
+
+Portal exists: !`test -f portal.yaml && echo "yes — gates defined" || echo "no portal.yaml"`
+
 ## Step 1: Identify the Task
 
 If the user provided a task description, use it directly.
-If not, ask: "What task are you about to work on?"
+If not, the task description is: $ARGUMENTS
 
-Use `$ARGUMENTS` if provided — this is the task description.
+If no arguments were provided, summarize based on the project context above.
 
 ## Step 2: Run Pre-flight
 

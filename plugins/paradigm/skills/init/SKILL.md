@@ -1,6 +1,8 @@
 ---
 name: init
 description: Initialize Paradigm in the current project. Use when a user says "set up paradigm", "initialize paradigm", "add paradigm to this project", or when you detect a project has no .paradigm/ directory.
+disable-model-invocation: true
+allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
 # Initialize Paradigm
