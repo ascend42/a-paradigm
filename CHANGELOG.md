@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.3] — 2026-03-07
+
+### Fixed
+
+- **Skill shell injection compatibility** (`@a-company/paradigm` 3.23.2 → 3.23.3, plugin 3.24.0 → 3.24.1): Shell injections (`!` commands) in 3 skills used `&&`/`||` chaining and pipe operators which Claude Code's permission checker rejects as multi-operation commands
+  - `doctor`: 4 injections using `test -f && echo || echo` and subshells → simplified to `ls` commands
+  - `preflight`: 1 injection using `test -f && echo || echo` → `ls`, 1 using `git status | head` → removed pipe
+  - `ripple`: 1 injection using `test -f && echo || echo` → `ls`
+  - `handoff`: 1 injection using `git status | head` → removed pipe
+
 ## [3.23.2] — 2026-03-07
 
 ### Fixed

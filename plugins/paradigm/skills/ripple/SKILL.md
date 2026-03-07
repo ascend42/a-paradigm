@@ -15,7 +15,7 @@ updating before they start modifying code.
 
 ## Symbol to Analyze
 
-!`test -f .paradigm/scan-index.json && echo "Index available" || echo "WARNING: No scan index — run /paradigm:scan first"`
+!`ls -l .paradigm/scan-index.json 2>/dev/null`
 
 Analyze this symbol: $ARGUMENTS
 

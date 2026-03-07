@@ -13,10 +13,10 @@ Check everything systematically and report findings with clear fix actions.
 
 ## Quick Context
 
-Config exists: !`test -f .paradigm/config.yaml && echo "yes" || echo "no — not initialized"`
-Portal exists: !`test -f portal.yaml && echo "yes" || echo "no"`
-Scan index: !`test -f .paradigm/scan-index.json && echo "yes ($(wc -c < .paradigm/scan-index.json | tr -d ' ') bytes)" || echo "no — needs scan"`
-Lore directory: !`test -d .paradigm/lore/entries && echo "yes ($(ls .paradigm/lore/entries/ 2>/dev/null | wc -l | tr -d ' ') date dirs)" || echo "no"`
+Config exists: !`ls .paradigm/config.yaml 2>/dev/null`
+Portal exists: !`ls portal.yaml 2>/dev/null`
+Scan index: !`ls -l .paradigm/scan-index.json 2>/dev/null`
+Lore entries: !`ls .paradigm/lore/entries/ 2>/dev/null`
 
 ## Step 1: Project Overview
 

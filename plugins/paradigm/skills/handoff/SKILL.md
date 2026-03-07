@@ -14,7 +14,7 @@ continue this work without losing context.
 ## Current State
 
 Git status:
-!`git status --short 2>/dev/null | head -30`
+!`git status --short 2>/dev/null`
 
 Recent commits:
 !`git log --oneline -10 2>/dev/null`

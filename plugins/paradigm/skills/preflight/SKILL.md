@@ -15,9 +15,9 @@ properly scoped and all dependencies are understood before writing code.
 ## Project Context
 
 Current git state:
-!`git status --short 2>/dev/null | head -20`
+!`git status --short 2>/dev/null`
 
-Portal exists: !`test -f portal.yaml && echo "yes — gates defined" || echo "no portal.yaml"`
+Portal exists: !`ls portal.yaml 2>/dev/null`
 
 ## Step 1: Identify the Task
 
