@@ -5,16 +5,16 @@ description: |
 features:
   symbol-aggregation:
     description: '@symbol-aggregation: Aggregate symbols from all sources'
+    aspects:
+      - ~yaml-config-loading
+      - ~zod-validated
+    flows:
+      - $symbol-aggregation
     signals:
       - '!aggregation-complete'
     components:
       - '#aggregator'
       - '#source-loader'
-    flows:
-      - $symbol-aggregation
-    aspects:
-      - "~yaml-config-loading"
-      - "~zod-validated"
   symbol-indexing:
     description: '@symbol-indexing: Build searchable symbol index'
     states:
@@ -50,46 +50,49 @@ signals:
     severity: info
 aspects:
   ~symbol-blocklist-framework-aliases:
-    description: "$lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON"
-    category: rule
-    severity: medium
-    tags: [symbol-extraction, false-positives]
+    description: $lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON
+    tags:
+      - symbol-extraction
+      - false-positives
     anchors:
       - src/aggregator.ts:364-367
     applies-to:
-      - "#aggregator"
-
+      - '#aggregator'
   ~symbol-ref-pattern-letter-guard:
-    description: "Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)"
-    category: rule
-    severity: medium
-    tags: [symbol-extraction, regex]
+    description: Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)
+    tags:
+      - symbol-extraction
+      - regex
     anchors:
       - src/aggregator.ts:382-383
     applies-to:
-      - "#aggregator"
-
+      - '#aggregator'
   ~anchor-parse-formats:
-    description: "Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30"
-    category: decision
-    severity: low
-    tags: [anchors, parsing]
+    description: 'Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30'
+    tags:
+      - anchors
+      - parsing
     anchors:
       - src/aggregator.ts:335-358
     applies-to:
-      - "#aggregator"
-
+      - '#aggregator'
 flows:
   symbol-aggregation:
     description: Aggregate all symbols from .purpose and portal.yaml files into a unified index
     signals:
       - '!aggregation-complete'
+    components:
+      - '#aggregator'
+      - '#source-loader'
+      - '#symbol-index'
+      - '#reference-tracker'
+      - '#graph-builder'
     steps:
       - component: '#aggregator'
         action: Find all .purpose files via glob
       - component: '#source-loader'
         action: Parse each file with yaml + Zod validation
-      - component: '#symbol-extractor'
+      - component: '#aggregator'
         action: Extract components, gates, signals, flows, aspects
       - component: '#symbol-index'
         action: Build searchable in-memory index

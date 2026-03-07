@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.2] — 2026-03-07
+
+### Fixed
+
+- **Purpose file validation cleanup** (`@a-company/paradigm` 3.23.1 → 3.23.2): Fixed 6 validation issues across 3 `.purpose` files
+  - `packages/paradigm/src/core/.purpose`: Aspects `habits-loader` and `habits-types` missing `~` prefix and required anchors — replaced with proper `~habits-loader` and `~habits-types` aspects with code anchors
+  - `packages/sentinel-web/.purpose`: Converted from non-standard array-style format to map-style; added missing `name` field on `$event-ingestion` flow
+  - `packages/premise/core/.purpose`: Flow `$symbol-aggregation` referenced undefined `#symbol-extractor` — changed to `#aggregator` which contains the extraction logic
+
 ## [3.24.0] — 2026-03-05
 
 ### Added

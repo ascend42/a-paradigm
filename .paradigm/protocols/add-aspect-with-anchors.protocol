@@ -1,22 +1,21 @@
 id: P-add-aspect-with-anchors
-name: "Add an aspect with code anchors"
-description: "Add a cross-cutting concern (~aspect) with required code anchors pointing to real source locations"
-
+name: Add an aspect with code anchors
+description: Add a cross-cutting concern (~aspect) with required code anchors pointing to real source locations
 trigger:
-  - "add aspect"
-  - "new aspect"
-  - "cross-cutting rule"
-  - "enforcement aspect"
-tags: [aspect, enforcement, cross-cutting]
-
+  - add aspect
+  - new aspect
+  - cross-cutting rule
+  - enforcement aspect
+tags:
+  - aspect
+  - enforcement
+  - cross-cutting
 symbols: []
-
-exemplar: "packages/paradigm/.purpose"
-
+exemplar: packages/paradigm/.purpose
 steps:
   - action: modify
-    target: "{directory}/.purpose"
-    reference: "aspects section"
+    target: '{directory}/.purpose'
+    reference: aspects section
     notes: |
       Add aspect definition:
         ~{name}:
@@ -28,12 +27,10 @@ steps:
             - src/path/to/file.ts:LINE-LINE
           applies-to:
             - "#affected-component"
-
   - action: verify
-    notes: "Anchors MUST point to existing code locations. Run paradigm drift check to verify anchors are valid. Aspect without anchors will fail validation."
-
-recorded_from: "L-2026-03-01-protocols-audit"
-recorded_at: "2026-03-01T12:00:00Z"
-last_verified: "2026-03-01T12:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: Anchors MUST point to existing code locations. Run paradigm drift check to verify anchors are valid. Aspect without anchors will fail validation.
+recorded_from: L-2026-03-01-protocols-audit
+recorded_at: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-01T12:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

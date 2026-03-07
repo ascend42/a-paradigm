@@ -1,32 +1,29 @@
 id: P-add-university-course
-name: "Add a University course"
-description: "Create a new course for Paradigm University with lessons, quizzes, and metadata"
-
+name: Add a University course
+description: Create a new course for Paradigm University with lessons, quizzes, and metadata
 trigger:
-  - "add course"
-  - "new course"
-  - "university course"
-  - "learning content"
-tags: [university, course, learning]
-
+  - add course
+  - new course
+  - university course
+  - learning content
+tags:
+  - university
+  - course
+  - learning
 symbols: []
-
-exemplar: "packages/university/src/content/courses/"
-
+exemplar: packages/university/src/content/courses/
 steps:
   - action: create
-    target: "packages/university/src/content/courses/{id}.json"
+    target: packages/university/src/content/courses/{id}.json
     notes: |
       JSON structure with:
         id, title, description, difficulty (beginner|intermediate|advanced),
         prerequisites (course IDs), objectives (string[]),
         lessons (array of { id, title, content (markdown), quiz? })
-
   - action: verify
-    notes: "Run university server, navigate to the course, verify lessons render and quizzes work"
-
-recorded_from: "L-2026-03-01-protocols-audit"
-recorded_at: "2026-03-01T12:00:00Z"
-last_verified: "2026-03-01T12:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: Run university server, navigate to the course, verify lessons render and quizzes work
+recorded_from: L-2026-03-01-protocols-audit
+recorded_at: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-01T12:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

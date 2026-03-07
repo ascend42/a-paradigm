@@ -1,0 +1,129 @@
+id: L-2026-03-07-ascend-215536-001
+type: milestone
+timestamp: '2026-03-07T21:55:36.129Z'
+duration_minutes: 60
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills v2 upgrade — full implementation on branch
+summary: Upgraded all 10 existing Paradigm plugin skills to Claude Code Skills v2 format and added 3 new skills (ripple, review, handoff). 8 skills now run in forked subagent contexts with agent routing (paradigm:architect for analysis, paradigm:reviewer for compliance, Explore for data fetching). 5 skills use shell injection to pre-load git/config data before the prompt starts. All 13 skills have tool restrictions. Also fixed a semver sort bug in plugin version detection (3.23.1) that caused every project to report 3.9.0 as the installed version.
+symbols_touched:
+  - '#paradigm-skills'
+  - '#plugin-check'
+  - '#skills-v2-upgrade'
+symbols_created:
+  - '#skills-v2-upgrade'
+files_created:
+  - docs/specs/skills-v2-upgrade.md
+  - docs/private/cross-study-paradigm-vs-ruflo.md
+  - plugins/paradigm/skills/ripple/SKILL.md
+  - plugins/paradigm/skills/review/SKILL.md
+  - plugins/paradigm/skills/handoff/SKILL.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/plugin-update-checker.ts
+  - packages/paradigm/src/commands/plugin/check.ts
+  - plugins/paradigm/skills/preflight/SKILL.md
+  - plugins/paradigm/skills/postflight/SKILL.md
+  - plugins/paradigm/skills/sentinel/SKILL.md
+  - plugins/paradigm/skills/doctor/SKILL.md
+  - plugins/paradigm/skills/observe/SKILL.md
+  - plugins/paradigm/skills/lore/SKILL.md
+  - plugins/paradigm/skills/init/SKILL.md
+  - plugins/paradigm/skills/shift/SKILL.md
+  - plugins/paradigm/skills/scan/SKILL.md
+  - plugins/paradigm/skills/protocol/SKILL.md
+  - CHANGELOG.md
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - packages/paradigm/package.json
+  - packages/paradigm-mcp/package.json
+decisions:
+  - id: D-fork-heavy-skills
+    decision: Fork 8 skills (preflight, postflight, sentinel, doctor, observe, ripple, review, handoff) to run in isolated subagents
+    rationale: Heavy skills consume 3-7K tokens in the main conversation. Forking keeps history clean and lets the skill do its multi-step work without cluttering context. Skills that need conversation history (lore, protocol) stay inline.
+  - id: D-agent-routing-map
+    decision: Route analysis skills to paradigm:architect, compliance skills to paradigm:reviewer, data-fetching to Explore
+    rationale: 'Paradigm already defines these agent types. Natural mapping: architects analyze impact, reviewers check compliance, Explore fetches data. No new agent types needed.'
+  - id: D-manual-only-setup
+    decision: Set disable-model-invocation on init, shift, and scan
+    rationale: These are explicit user actions that create files or rebuild state. Auto-triggering could be destructive or confusing. User should consciously choose to run them.
+  - id: D-graceful-degradation
+    decision: Ship v2 frontmatter knowing older Claude Code versions ignore unknown fields
+    rationale: No breaking change. Skills work as v1 on older versions, gain v2 features on newer versions. Zero migration burden for users.
+errors_encountered:
+  - description: Plugin version detection returned 3.9.0 instead of 3.23.0 due to alphabetical sort of cache directory names
+    resolution: Replaced .sort() with numeric semver comparator splitting on dots and comparing as integers
+    time_to_fix: 10 minutes
+learnings:
+  - Alphabetical sort does not handle semver — always use numeric comparison for version strings
+  - Claude Code Skills v2 supports context:fork, agent routing, shell injection, allowed-tools, hooks — far beyond basic name+description
+  - Shell injection (!`command`) is preprocessing, not Claude execution — output replaces the placeholder before the prompt is sent
+  - Paradigm's existing agent types (architect, builder, reviewer, tester, security) map naturally to Skills v2 agent routing
+  - 'The cross-study insight applies here: structured transparency (YAML frontmatter) over learned intelligence (neural routing) for skill dispatch'
+verification:
+  status: pass
+  details:
+    build: pass
+    semver_sort_test: pass
+    npm_publish: pass
+    skill_frontmatter_valid: pass
+tags:
+  - arc:skills-v2-upgrade
+  - milestone
+  - plugin
+  - skills
+  - bugfix
+body: |-
+  ## Session Overview
+
+  This session covered three distinct pieces of work:
+
+  ### 1. Cross-Study: Paradigm vs Ruflo
+  Conducted a comprehensive comparative analysis of Paradigm and Ruflo (ruvnet/ruflo). Key finding: they operate at different layers — Paradigm is the knowledge layer (structured context, symbols, compliance), Ruflo is the execution layer (agent swarms, neural routing, vector memory). Paradigm's human-readable YAML structure is a fundamental architectural advantage: when things go stale, you edit a file. Ruflo's ML-based systems require expensive retraining with opaque failure modes. Saved to docs/private/cross-study-paradigm-vs-ruflo.md (gitignored).
+
+  ### 2. Bug Fix: Plugin Version Detection (3.23.1)
+  Discovered that `plugin-update-checker.ts` and `plugin/check.ts` used alphabetical `.sort()` on cache directory names. With versions like [3.6.0, 3.9.0, 3.11.0, 3.23.0], reversed alphabetical puts "3.9.0" first because "9" > "2" in string comparison. Every project falsely reported 3.9.0 as installed. Fixed with numeric semver comparator. Cleaned up 7 stale cache dirs and the cached check state. Published to npm as 3.23.1.
+
+  ### 3. Skills v2 Upgrade (3.24.0, on branch)
+  The cross-study led to discovering Claude Code Skills v2 (shipped in 2.1.0). Researched the full spec via official docs. Wrote a comprehensive design spec at docs/specs/skills-v2-upgrade.md covering all 5 phases of migration.
+
+  Implemented Phases 1-3 and 5 in one commit:
+
+  **Phase 1 — Frontmatter enrichment:**
+  - `allowed-tools` on all 13 skills
+  - `disable-model-invocation` on init, shift, scan
+  - `argument-hint` on 6 skills
+
+  **Phase 2 — Shell injection:**
+  - preflight: git status, portal.yaml check
+  - postflight: git diff --name-only (uncommitted + staged)
+  - lore: git diff --stat, git log --oneline
+  - doctor: config.yaml, scan-index.json, portal.yaml, lore dir checks
+
+  **Phase 3 — Forked context + agent routing:**
+  - preflight → fork with paradigm:architect
+  - postflight → fork with paradigm:reviewer
+  - sentinel → fork with paradigm:reviewer
+  - doctor → fork with paradigm:reviewer
+  - observe → fork with Explore
+
+  **Phase 5 — New skills:**
+  - /paradigm:ripple — forked impact analysis (paradigm:architect)
+  - /paradigm:review — forked compliance review (paradigm:reviewer)
+  - /paradigm:handoff — forked session handoff (Explore)
+
+  Phase 4 (supporting files — templates, examples) deferred to next iteration.
+
+  ### Architectural Insight
+  Claude Code's Skills v2 IS the execution layer that the cross-study identified as Paradigm's complement. Rather than building our own neural router (like Ruflo), we declare routing in YAML frontmatter and let Claude Code handle execution. This is the structured transparency principle in action: the routing decisions are human-readable, deterministic, and fixable by editing a file.
+linked_lore:
+  - L-2026-03-06-ascend-021056-001
+linked_commits:
+  - c076b709
+  - 90d57800
+  - 2691a86f
+  - b1cb28f1
+git_context:
+  ref: b1cb28f13e5a1889a255b6d9aae61b36b7a0fd4c
+  branch: skills-v2-upgrade
+  dirty: true

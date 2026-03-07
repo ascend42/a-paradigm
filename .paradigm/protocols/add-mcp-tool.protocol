@@ -1,53 +1,47 @@
 id: P-add-mcp-tool
-name: "Add a new MCP tool"
-description: "Create a new MCP tool with its loader, register in index.ts, and wire up dispatch"
-
+name: Add a new MCP tool
+description: Create a new MCP tool with its loader, register in index.ts, and wire up dispatch
 trigger:
-  - "add tool"
-  - "new mcp tool"
-  - "create tool"
-  - "add mcp tool"
-  - "new paradigm tool"
-tags: [mcp, tools, backend]
-
-symbols: ["#protocol-tools", "#lore-tools"]
-
-exemplar: "packages/paradigm-mcp/src/tools/lore.ts"
-
+  - add tool
+  - new mcp tool
+  - create tool
+  - add mcp tool
+  - new paradigm tool
+tags:
+  - mcp
+  - tools
+  - backend
+symbols:
+  - '#protocol-tools'
+  - '#lore-tools'
+exemplar: packages/paradigm-mcp/src/tools/lore.ts
 steps:
   - action: create
-    target: "packages/paradigm-mcp/src/utils/{name}-loader.ts"
-    template_from: "packages/paradigm-mcp/src/utils/lore-loader.ts"
-    notes: "Define types, CRUD functions, directory constants. Types duplicated in loader to avoid cross-package deps."
-
+    target: packages/paradigm-mcp/src/utils/{name}-loader.ts
+    template_from: packages/paradigm-mcp/src/utils/lore-loader.ts
+    notes: Define types, CRUD functions, directory constants. Types duplicated in loader to avoid cross-package deps.
   - action: create
-    target: "packages/paradigm-mcp/src/tools/{name}.ts"
-    template_from: "packages/paradigm-mcp/src/tools/lore.ts"
-    notes: "Export getXxxToolsList() and handleXxxTool(). Each tool has name, description, inputSchema, annotations. Handler is a switch statement returning { text, handled }."
-
+    target: packages/paradigm-mcp/src/tools/{name}.ts
+    template_from: packages/paradigm-mcp/src/tools/lore.ts
+    notes: Export getXxxToolsList() and handleXxxTool(). Each tool has name, description, inputSchema, annotations. Handler is a switch statement returning { text, handled }.
   - action: modify
-    target: "packages/paradigm-mcp/src/tools/index.ts"
-    reference: "imports section (line ~42)"
-    notes: "Add: import { getXxxToolsList, handleXxxTool } from './xxx.js';"
-
+    target: packages/paradigm-mcp/src/tools/index.ts
+    reference: imports section (line ~42)
+    notes: 'Add: import { getXxxToolsList, handleXxxTool } from ''./xxx.js'';'
   - action: modify
-    target: "packages/paradigm-mcp/src/tools/index.ts"
-    reference: "tools array spread (near ...getPersonaToolsList())"
-    notes: "Add: ...getXxxToolsList(),"
-
+    target: packages/paradigm-mcp/src/tools/index.ts
+    reference: tools array spread (near ...getPersonaToolsList())
+    notes: 'Add: ...getXxxToolsList(),'
   - action: modify
-    target: "packages/paradigm-mcp/src/tools/index.ts"
-    reference: "dispatch section (before 'Try reindex tool')"
-    notes: "Add startsWith handler block: if (name.startsWith('paradigm_xxx_')) { ... }"
-
+    target: packages/paradigm-mcp/src/tools/index.ts
+    reference: dispatch section (before 'Try reindex tool')
+    notes: 'Add startsWith handler block: if (name.startsWith(''paradigm_xxx_'')) { ... }'
   - action: verify
-    notes: "Run: cd packages/paradigm-mcp && npm run build"
-
+    notes: 'Run: cd packages/paradigm-mcp && npm run build'
   - action: verify
-    notes: "Run: cd packages/paradigm && npm run build"
-
-recorded_from: "L-2026-03-01-protocols-impl"
-recorded_at: "2026-03-01T10:00:00Z"
-last_verified: "2026-03-01T10:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: 'Run: cd packages/paradigm && npm run build'
+recorded_from: L-2026-03-01-protocols-impl
+recorded_at: '2026-03-01T10:00:00Z'
+last_verified: '2026-03-01T10:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

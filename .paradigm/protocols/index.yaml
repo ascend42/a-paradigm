@@ -1,0 +1,476 @@
+version: '1.0'
+generated: '2026-03-07T22:08:09.580Z'
+protocols:
+  - id: P-add-agent-provider
+    name: Add an agent provider
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - agent provider
+      - new provider
+      - add provider
+      - spawn provider
+    tags:
+      - team
+      - provider
+      - orchestration
+      - agent
+  - id: P-add-aspect-with-anchors
+    name: Add an aspect with code anchors
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add aspect
+      - new aspect
+      - cross-cutting rule
+      - enforcement aspect
+    tags:
+      - aspect
+      - enforcement
+      - cross-cutting
+  - id: P-add-case-study
+    name: Add a case study
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - case study
+      - project journey
+      - document experience
+    tags:
+      - docs
+      - case-study
+      - retrospective
+  - id: P-add-cli-command
+    name: Add a new CLI command
+    status: current
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - add command
+      - new cli command
+      - create command
+      - add subcommand
+    tags:
+      - cli
+      - command
+      - backend
+  - id: P-add-command-with-file-output
+    name: Add a CLI command that writes files
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - command writes files
+      - file generation command
+      - generate files command
+    tags:
+      - cli
+      - command
+      - file-output
+  - id: P-add-command-with-prompts
+    name: Add a CLI command with interactive prompts
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - interactive command
+      - command with prompts
+      - add interactive cli
+      - ora spinner
+    tags:
+      - cli
+      - command
+      - interactive
+      - ux
+  - id: P-add-command-with-subcommands
+    name: Add a CLI command with subcommands
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - command with subcommands
+      - command group
+      - add command group
+      - nested commands
+    tags:
+      - cli
+      - command
+      - subcommands
+  - id: P-add-hook-script
+    name: Add a Claude Code hook script
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add hook
+      - new hook
+      - hook script
+      - enforcement hook
+    tags:
+      - hooks
+      - enforcement
+      - plugin
+  - id: P-add-ide-adapter
+    name: Add an IDE adapter
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - ide adapter
+      - new ide
+      - add ide support
+      - instruction file generator
+    tags:
+      - ide
+      - adapter
+      - sync
+  - id: P-add-integration-test
+    name: Add an integration test
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - integration test
+      - e2e test
+      - end to end test
+    tags:
+      - test
+      - integration
+      - e2e
+  - id: P-add-mcp-resource
+    name: Add an MCP resource
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - mcp resource
+      - add resource
+      - paradigm uri
+      - on-demand content
+    tags:
+      - mcp
+      - resource
+      - content
+  - id: P-add-mcp-tool-with-status
+    name: Add an MCP tool with status integration
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add tool with status
+      - tool that shows in status
+      - status integration
+    tags:
+      - mcp
+      - tools
+      - status
+  - id: P-add-mcp-tool
+    name: Add a new MCP tool
+    status: stale
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - add tool
+      - new mcp tool
+      - create tool
+      - add mcp tool
+      - new paradigm tool
+    tags:
+      - mcp
+      - tools
+      - backend
+  - id: P-add-paradigm-type
+    name: Add a TypeScript type definition
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add type
+      - new types
+      - type definition
+      - add interface
+    tags:
+      - types
+      - typescript
+  - id: P-add-plsat-question
+    name: Add a PLSAT exam question
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - plsat question
+      - add exam question
+      - certification question
+    tags:
+      - university
+      - plsat
+      - certification
+      - assessment
+  - id: P-add-portal-gate
+    name: Add a portal gate
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add gate
+      - new gate
+      - portal gate
+      - authorization gate
+    tags:
+      - portal
+      - auth
+      - gate
+  - id: P-add-portal-route-with-gates
+    name: Add a protected API route with gates
+    status: broken
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - protected route
+      - add route with auth
+      - gated endpoint
+      - secure route
+    tags:
+      - portal
+      - auth
+      - routes
+      - api
+  - id: P-add-sentinel-adapter
+    name: Add a Sentinel framework adapter
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - sentinel adapter
+      - framework adapter
+      - error capture middleware
+    tags:
+      - sentinel
+      - adapter
+      - middleware
+  - id: P-add-sentinel-event-schema
+    name: Add a Sentinel event schema
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - sentinel schema
+      - event schema
+      - add schema
+      - register schema
+    tags:
+      - sentinel
+      - schema
+      - events
+  - id: P-add-sentinel-mcp-integration
+    name: Add Sentinel MCP tools
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - sentinel mcp tool
+      - sentinel integration
+      - bridge sentinel to mcp
+    tags:
+      - mcp
+      - sentinel
+      - tools
+      - integration
+  - id: P-add-sentinel-server-route
+    name: Add a Sentinel server API route
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - sentinel route
+      - sentinel api
+      - sentinel endpoint
+    tags:
+      - sentinel
+      - api
+      - routes
+  - id: P-add-skill
+    name: Add a new skill
+    status: stale
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - add skill
+      - new skill
+      - create skill
+      - add slash command
+      - new prompt
+    tags:
+      - skill
+      - plugin
+      - claude-code
+  - id: P-add-spec
+    name: Add a new spec
+    status: stale
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - add spec
+      - new spec
+      - write spec
+      - feature spec
+      - design doc
+    tags:
+      - docs
+      - spec
+      - planning
+  - id: P-add-team-subcommand
+    name: Add a team subcommand
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - team subcommand
+      - team command
+      - add to team
+    tags:
+      - cli
+      - command
+      - team
+      - orchestration
+  - id: P-add-tool-with-reindex-integration
+    name: Add an MCP tool with reindex integration
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - tool with reindex
+      - reindex integration
+      - index rebuild
+    tags:
+      - mcp
+      - tools
+      - reindex
+  - id: P-add-tool-with-sentinel-schema
+    name: Add an MCP tool for Sentinel data
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - sentinel tool
+      - sentinel mcp
+      - query sentinel
+    tags:
+      - mcp
+      - tools
+      - sentinel
+  - id: P-add-tool-with-workspace-support
+    name: Add a workspace-aware MCP tool
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - workspace support
+      - workspace-aware tool
+      - cross-project tool
+      - includeWorkspace
+    tags:
+      - mcp
+      - tools
+      - workspace
+  - id: P-add-unit-test
+    name: Add a unit test
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add test
+      - unit test
+      - new test
+      - write test
+    tags:
+      - test
+      - vitest
+      - unit
+  - id: P-add-university-course
+    name: Add a University course
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add course
+      - new course
+      - university course
+      - learning content
+    tags:
+      - university
+      - course
+      - learning
+  - id: P-add-university-quiz
+    name: Add a University quiz
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add quiz
+      - new quiz
+      - lesson quiz
+    tags:
+      - university
+      - quiz
+      - assessment
+  - id: P-add-upgrade-guide
+    name: Add an upgrade guide
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - upgrade guide
+      - migration guide
+      - breaking changes doc
+    tags:
+      - docs
+      - guide
+      - migration
+      - upgrade
+  - id: P-add-wisdom-entry
+    name: Add a wisdom entry
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - add wisdom
+      - record antipattern
+      - add decision
+      - wisdom entry
+    tags:
+      - wisdom
+      - antipattern
+      - decision
+  - id: P-add-workspace-subcommand
+    name: Add a workspace subcommand
+    status: current
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - workspace subcommand
+      - workspace command
+      - add to workspace
+    tags:
+      - cli
+      - command
+      - workspace
+  - id: P-record-lore
+    name: Record a lore entry
+    status: stale
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - record lore
+      - log session
+      - save history
+      - lore entry
+    tags:
+      - lore
+      - session
+      - history
+  - id: P-update-changelog
+    name: Update changelog and version
+    status: stale
+    last_verified: '2026-03-01T10:00:00Z'
+    trigger:
+      - update changelog
+      - bump version
+      - new release
+      - version bump
+      - changelog entry
+    tags:
+      - release
+      - changelog
+      - versioning
+  - id: P-update-university-content
+    name: Update University content
+    status: stale
+    last_verified: '2026-03-01T12:00:00Z'
+    trigger:
+      - update university
+      - add lesson
+      - add university lesson
+      - update course content
+      - add plsat
+      - university content
+    tags:
+      - university
+      - course
+      - lesson
+      - plsat
+      - content
+health:
+  total: 36
+  current: 21
+  stale: 14
+  broken: 1

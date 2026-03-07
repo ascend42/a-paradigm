@@ -1,43 +1,38 @@
 id: P-add-portal-route-with-gates
-name: "Add a protected API route with gates"
-description: "Add an API route to portal.yaml with gate enforcement and implement the gate checks"
-
+name: Add a protected API route with gates
+description: Add an API route to portal.yaml with gate enforcement and implement the gate checks
 trigger:
-  - "protected route"
-  - "add route with auth"
-  - "gated endpoint"
-  - "secure route"
-tags: [portal, auth, routes, api]
-
+  - protected route
+  - add route with auth
+  - gated endpoint
+  - secure route
+tags:
+  - portal
+  - auth
+  - routes
+  - api
 symbols: []
-
-exemplar: "portal.yaml"
-
+exemplar: portal.yaml
 steps:
   - action: run
-    command: "paradigm_gates_for_route"
-    notes: "Call MCP tool with the route path and method to get gate suggestions"
-
+    command: paradigm_gates_for_route
+    notes: Call MCP tool with the route path and method to get gate suggestions
   - action: modify
-    target: "portal.yaml"
-    reference: "routes section"
-    notes: "Add: 'METHOD /api/{resource}': [^gate1, ^gate2]"
-
+    target: portal.yaml
+    reference: routes section
+    notes: 'Add: ''METHOD /api/{resource}'': [^gate1, ^gate2]'
   - action: modify
-    target: "portal.yaml"
-    reference: "gates section"
-    notes: "Add any new gates that don't exist yet (with description, type, check, prizes)"
-
+    target: portal.yaml
+    reference: gates section
+    notes: Add any new gates that don't exist yet (with description, type, check, prizes)
   - action: modify
-    target: "src/middleware/auth.ts"
-    reference: "gate implementation"
-    notes: "Implement the actual gate checks. Return 403 for unauthorized access."
-
+    target: src/middleware/auth.ts
+    reference: gate implementation
+    notes: Implement the actual gate checks. Return 403 for unauthorized access.
   - action: verify
-    notes: "Test: unauthorized request returns 403. Run paradigm portal check for compliance."
-
-recorded_from: "L-2026-03-01-protocols-audit"
-recorded_at: "2026-03-01T12:00:00Z"
-last_verified: "2026-03-01T12:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: 'Test: unauthorized request returns 403. Run paradigm portal check for compliance.'
+recorded_from: L-2026-03-01-protocols-audit
+recorded_at: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-01T12:00:00Z'
+verified_by: claude-opus-4-6
+status: broken

@@ -1,30 +1,27 @@
 id: P-add-spec
-name: "Add a new spec"
-description: "Write a feature specification document in docs/specs/"
-
+name: Add a new spec
+description: Write a feature specification document in docs/specs/
 trigger:
-  - "add spec"
-  - "new spec"
-  - "write spec"
-  - "feature spec"
-  - "design doc"
-tags: [docs, spec, planning]
-
+  - add spec
+  - new spec
+  - write spec
+  - feature spec
+  - design doc
+tags:
+  - docs
+  - spec
+  - planning
 symbols: []
-
-exemplar: "docs/specs/protocols.md"
-
+exemplar: docs/specs/protocols.md
 steps:
   - action: create
-    target: "docs/specs/{name}.md"
-    template_from: "docs/specs/protocols.md"
-    notes: "H1 title, Problem section, Storage/Schema, MCP Tools table, Implementation phases, Verification steps"
-
+    target: docs/specs/{name}.md
+    template_from: docs/specs/protocols.md
+    notes: H1 title, Problem section, Storage/Schema, MCP Tools table, Implementation phases, Verification steps
   - action: verify
-    notes: "Ensure spec covers: problem, schema, tools, phases, verification"
-
-recorded_from: "L-2026-03-01-protocols-impl"
-recorded_at: "2026-03-01T10:00:00Z"
-last_verified: "2026-03-01T10:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: 'Ensure spec covers: problem, schema, tools, phases, verification'
+recorded_from: L-2026-03-01-protocols-impl
+recorded_at: '2026-03-01T10:00:00Z'
+last_verified: '2026-03-01T10:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

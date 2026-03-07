@@ -1,36 +1,34 @@
-purpose: Zero-dependency browser client for Sentinel schema-driven observability
-version: 0.1.0
-
+version: 1.0.0
+description: Zero-dependency browser client for Sentinel schema-driven observability
 components:
-  - id: "#sentinel-web-client"
-    description: "Browser SDK for emitting events to Sentinel via HTTP"
-    tags: [feature, browser, sdk]
-  - id: "#ring-buffer"
-    description: "Fixed-size circular buffer for event batching with backpressure"
-    tags: [feature, data-structure]
-
+  sentinel-web-client:
+    description: Browser SDK for emitting events to Sentinel via HTTP
+  ring-buffer:
+    description: Fixed-size circular buffer for event batching with backpressure
 signals:
-  - id: "!events-flushed"
-    description: "Emitted when buffered events are sent to Sentinel server"
-  - id: "!events-dropped"
-    description: "Emitted when events are dropped due to buffer overflow"
-
+  events-flushed:
+    description: Emitted when buffered events are sent to Sentinel server
+    emitters:
+      - '#sentinel-web-client'
+  events-dropped:
+    description: Emitted when events are dropped due to buffer overflow
+    emitters:
+      - '#ring-buffer'
 flows:
-  - id: "$event-ingestion"
-    description: "emit() → buffer → periodic flush → POST /api/events"
+  event-ingestion:
+    description: emit() → buffer → periodic flush → POST /api/events
+    signals:
+      - '!events-flushed'
+      - '!events-dropped'
+    components:
+      - '#sentinel-web-client'
+      - '#ring-buffer'
     steps:
-      - "#sentinel-web-client emit()"
-      - "#ring-buffer push"
-      - "setInterval flush"
-      - "POST /api/events"
-      - "!events-flushed"
-
-dependencies:
-  - "@a-company/sentinel (server-side)"
-
-notes: |
-  This package has zero runtime dependencies. It uses:
-  - crypto.randomUUID() for ID generation
-  - navigator.sendBeacon() for beforeunload flush
-  - fetch() for HTTP transport
-  Self-contained types — does not import from @a-company/sentinel.
+      - component: '#sentinel-web-client'
+        action: emit() call from application code
+      - component: '#ring-buffer'
+        action: push event into circular buffer
+      - component: '#sentinel-web-client'
+        action: setInterval flush to server
+      - component: '#sentinel-web-client'
+        action: POST /api/events
