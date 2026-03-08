@@ -1,0 +1,11 @@
+version: 2.0.0
+description: |
+  Garbage collection sweeps — proactive entropy detection and cleanup.
+  9 checks find orphaned symbols, stale purpose files, phantom gates,
+  dead signals, broken flows, lore rot, tag orphans, aspect drift, and
+  coverage decay. Auto-fix is ON by default.
+components:
+  sweep-handler:
+    description: Main sweep command with 9 entropy checks, report formatting, and auto-fix
+    file: index.ts
+    tags: [feature, maintenance, entropy-detection]

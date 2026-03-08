@@ -1,0 +1,24 @@
+version: 2.0.0
+description: |
+  CLI commands for the spec pipeline — a gated workflow with 5 stages
+  (specify, plan, task, implement, validate) and configurable gate modes
+  (auto, manual, sentinel). Supports templates for common workflows.
+components:
+  pipeline-start:
+    description: Create a new pipeline from a template or custom gate config
+    path: index.ts
+  pipeline-status:
+    description: Show pipeline status — current stage, progress, gate config
+    path: index.ts
+  pipeline-advance:
+    description: Advance pipeline past the current gate
+    path: index.ts
+  pipeline-configure:
+    description: Change gate modes on an active pipeline
+    path: index.ts
+  pipeline-abort:
+    description: Cancel and archive an active pipeline
+    path: index.ts
+  pipeline-list:
+    description: List all active pipelines with progress
+    path: index.ts

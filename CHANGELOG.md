@@ -5,6 +5,49 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.24.0] — 2026-03-08
+
+### Added
+
+- **Auto-graph on scan** (1.3): `paradigm scan` now auto-generates `.paradigm/graphs/auto.graph.json` after every index rebuild. Configurable via `graph.auto-generate` in config.yaml (default: true). Symbol graph UI always shows current data with zero manual effort.
+
+- **Doctor context audit** (1.2): `paradigm doctor --context` runs 7 new AI instruction file quality checks:
+  - `stale-references` — dead file/dir paths in CLAUDE.md, .cursorrules, AGENTS.md (Error)
+  - `convention-contradictions` — conflicting naming/style directives (Warning)
+  - `undocumented-stack` — major deps not mentioned in instruction files (Advisory)
+  - `purpose-coverage` — percentage of source dirs with .purpose coverage (Warning <80%)
+  - `orphaned-symbols` — symbols with zero cross-references (Advisory)
+  - `stale-portal` — portal routes with no matching implementation file (Error)
+  - `instruction-vagueness` — vague language like "try to", "maybe", "if possible" (Advisory)
+
+- **Garbage collection sweeps** (2.2): `paradigm sweep` with 9 entropy checks and auto-fix:
+  - Orphaned symbols, stale purpose, phantom gates, dead signals, broken flows, lore rot, tag orphans, aspect semantic drift, coverage decay
+  - Fix ON by default (`--dry` for report only)
+  - Auto-records lore entry tagged `arc:sweep` after every run
+  - Strict thresholds: 14-day staleness, 90% coverage minimum
+
+- **Adaptive heat map** (2.3): Query-to-symbol relevance learning with 3 new MCP tools:
+  - `paradigm_heatmap_query` — find historically relevant symbols for keywords
+  - `paradigm_heatmap_record` — record/correct keyword-symbol associations (positive/negative signals)
+  - `paradigm_heatmap_stats` — view heat map statistics and top associations
+  - Confidence decay (5% per 30 days without reinforcement)
+  - Static tier classification (hot/warm/cold) added to scan index entries
+
+- **Spec pipeline** (3.2): Gated 5-stage workflow with 7 new MCP tools + CLI:
+  - Stages: specify → plan → task → implement → validate
+  - 3 gate modes: auto (pass-through), manual (human approval), sentinel (automated checks)
+  - 4 built-in templates: add-feature, bug-fix, security-change, refactor
+  - CLI: `paradigm pipeline start|status|advance|configure|abort|list`
+  - MCP: `paradigm_pipeline_start|status|advance|configure|escalate|abort|list`
+  - Pipeline state persisted as YAML in `.paradigm/pipeline/`
+  - Completed pipelines archived to `.paradigm/pipeline/completed/`
+
+### Changed
+
+- `@a-company/paradigm` 3.23.4 → 3.24.0
+- `@a-company/paradigm-mcp` 3.18.1 → 3.19.0 (10 new MCP tools)
+- Doctor command refactored from single file to `commands/doctor/` directory
+
 ## [3.23.4] — 2026-03-08
 
 ### Added

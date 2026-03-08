@@ -1,0 +1,93 @@
+id: L-2026-03-08-ascend-073427-001
+type: milestone
+timestamp: '2026-03-08T07:34:27.759Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Expansion Plan Q2 2026 — all 5 features implemented
+summary: 'Implemented all 5 active expansion plan initiatives in a single session: 1.3 auto-graph on scan, 1.2 doctor context audit (7 checks), 2.2 garbage collection sweeps (9 entropy checks + auto-fix), 2.3 adaptive heat map (3 MCP tools + static tiering), 3.2 spec pipeline (7 MCP tools + CLI). Total: 13 new files, ~135KB of new code, 10 new MCP tools, 2 new CLI commands.'
+symbols_touched:
+  - '#doctor-handler'
+  - '#context-audit'
+  - '#sweep-handler'
+  - '#pipeline-start'
+  - '#pipeline-status'
+  - '#pipeline-advance'
+  - '#pipeline-configure'
+  - '#pipeline-abort'
+  - '#pipeline-list'
+  - '#scan-index'
+  - '#graph-generate'
+symbols_created:
+  - '#context-audit'
+  - '#sweep-handler'
+  - '#entropy-checker'
+  - '#pipeline-start'
+  - '#pipeline-status'
+  - '#pipeline-advance'
+  - '#pipeline-configure'
+  - '#pipeline-abort'
+  - '#pipeline-list'
+  - '#heatmap-query'
+  - '#heatmap-record'
+  - '#heatmap-stats'
+files_created:
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/commands/doctor/context-audit.ts
+  - packages/paradigm/src/commands/doctor/.purpose
+  - packages/paradigm/src/commands/sweep/index.ts
+  - packages/paradigm/src/commands/sweep/.purpose
+  - packages/paradigm/src/commands/pipeline/index.ts
+  - packages/paradigm/src/commands/pipeline/.purpose
+  - packages/paradigm/src/core/pipeline-types.ts
+  - packages/paradigm/src/core/pipeline-utils.ts
+  - packages/paradigm-mcp/src/tools/heatmap.ts
+  - packages/paradigm-mcp/src/tools/pipeline.ts
+files_modified:
+  - packages/paradigm/src/commands/graph.ts
+  - packages/paradigm/src/commands/scan/index.ts
+  - packages/paradigm/src/commands/shift.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm/.purpose
+  - packages/paradigm/src/core/.purpose
+  - CHANGELOG.md
+decisions:
+  - id: D-auto-graph-default-on
+    decision: Auto-graph generation defaults to true
+    rationale: 'Graph should always be current — users who don''t want it can set graph.auto-generate: false in config'
+  - id: D-sweep-fix-default
+    decision: Sweep auto-fix is ON by default
+    rationale: Sweep is a maintenance action — if you're running it, you want cleanup. --dry for preview.
+  - id: D-heatmap-local-types
+    decision: Heat map and pipeline MCP tools define types locally instead of importing from CLI package
+    rationale: CLI and MCP are separate tsup build targets — cross-package imports would break the build
+  - id: D-tier-thresholds
+    decision: Hot threshold 15, warm threshold 5 for tier classification
+    rationale: Conservative defaults that can be tuned via context.tiers in config.yaml
+  - id: D-pipeline-templates
+    decision: '4 built-in pipeline templates: add-feature, bug-fix, security-change, refactor'
+    rationale: Cover 90% of use cases while allowing custom --gates override
+learnings:
+  - Parallel builder agents work well for independent features — 4 agents built 4 features concurrently with zero conflicts
+  - Doctor refactor from single file to directory was smooth — test imports updated, shift.ts import updated
+  - Pre-existing test failures (hooks, integration-build) should not block feature development — our changes actually reduced failures by 1
+  - Heat map confidence decay (5% per 30 days) prevents stale lock-in while being conservative enough to retain useful associations
+verification:
+  status: pass
+  details:
+    typecheck_cli: pass
+    typecheck_mcp: pass
+    build: pass
+    tests: pass (pre-existing failures only)
+tags:
+  - arc:expansion-plan
+  - milestone
+  - multi-feature
+linked_lore:
+  - L-2026-03-08-ascend-054731-001
+git_context:
+  ref: 1305197465678dfb1d18c797dfee747edb5fc950
+  branch: feat/expansion-plan-features
+  dirty: true

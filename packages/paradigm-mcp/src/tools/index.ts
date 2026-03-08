@@ -41,6 +41,8 @@ import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { getPersonaToolsList, handlePersonaTool } from './personas.js';
 import { getProtocolsToolsList, handleProtocolsTool } from './protocols.js';
 import { getGraphToolsList, handleGraphTool } from './graph.js';
+import { getHeatmapToolsList, handleHeatmapTool } from './heatmap.js';
+import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -268,6 +270,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getProtocolsToolsList(),
           // Graph generation tool
           ...getGraphToolsList(),
+          // Heat map tools
+          ...getHeatmapToolsList(),
+          // Pipeline tools
+          ...getPipelineToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1292,6 +1298,27 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try graph tool
           if (name === 'paradigm_graph_generate') {
             const result = await handleGraphTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try heat map tools
+          if (name.startsWith('paradigm_heatmap_')) {
+            const result = await handleHeatmapTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try pipeline tools
+          if (name.startsWith('paradigm_pipeline_')) {
+            const result = await handlePipelineTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

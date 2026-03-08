@@ -32,10 +32,11 @@ features:
     components:
       - '#upgrade-handler'
   doctor-command:
-    description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files.
+    description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files, and context audit checks for AI instruction file quality.
     components:
       - '#doctor-handler'
       - '#health-checker'
+      - '#context-audit'
   scan-command:
     description: Generate navigator.yaml and scan index for codebase exploration
     components:
@@ -266,6 +267,22 @@ features:
     description: Interactive tutorial with curriculum state tracking
     components:
       - '#tutorial-handler'
+  sweep-command:
+    description: Entropy detection and cleanup — 9 checks for orphaned symbols, stale purpose, phantom gates, dead signals, broken flows, lore rot, tag orphans, aspect drift, coverage decay. Auto-fix by default.
+    components:
+      - '#sweep-handler'
+      - '#entropy-checker'
+    signals:
+      - '!sweep-completed'
+  pipeline-command:
+    description: Spec pipeline — structured feature workflow with 5 stages (specify, plan, task, implement, validate) and configurable gate modes (auto, manual, sentinel). 4 built-in templates.
+    components:
+      - '#pipeline-start'
+      - '#pipeline-status'
+      - '#pipeline-advance'
+      - '#pipeline-configure'
+      - '#pipeline-abort'
+      - '#pipeline-list'
 components:
   init-handler:
     description: Handles paradigm init command logic
@@ -394,6 +411,12 @@ components:
     description: Real-time portal visualization dashboard
   global-clean-handler:
     description: Scans and removes old files from ~/.paradigm/ subdirectories with configurable age threshold
+  sweep-handler:
+    description: Runs 9 entropy checks across the project and auto-fixes issues
+    file: src/commands/sweep/index.ts
+  entropy-checker:
+    description: Individual check functions for each entropy category (orphaned, stale, phantom, dead, broken, lore-rot, tag-orphan, semantic-drift, coverage-decay)
+    file: src/commands/sweep/index.ts
 signals:
   init-success:
     description: Paradigm initialized successfully
@@ -415,6 +438,8 @@ signals:
     description: Multi-agent orchestration started
   orchestration-completed:
     description: Multi-agent orchestration completed
+  sweep-completed:
+    description: Entropy sweep completed with results summary
 flows:
   ide-sync-flow:
     description: Sync .paradigm/ configuration to IDE-specific instruction files

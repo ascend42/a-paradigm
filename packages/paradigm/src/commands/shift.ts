@@ -18,7 +18,7 @@ import { log } from '../utils/logger.js';
 import { initCommand } from './init.js';
 import { indexCommand } from './scan/index.js';
 import { syncCommand } from './sync.js';
-import { doctorCommand } from './doctor.js';
+import { doctorCommand } from './doctor/index.js';
 import { teamInitCommand } from './team/index.js';
 import { agentsConfigured } from './team/loader.js';
 import { hooksInstallCommand } from './hooks/index.js';

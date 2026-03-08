@@ -15,6 +15,7 @@ import {
 } from '@a-company/probe-core';
 import { parseHorizonConfig } from '../../core/legacy-config.js';
 import { generateNavigator } from './navigator.js';
+import { cliBuildGraphState } from '../graph.js';
 
 interface IndexOptions {
   output?: string;
@@ -53,6 +54,8 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
 
   // Load paradigm config if exists (for custom settings)
   let scanConfig: { visualTagMappings?: Record<string, string[]>; screens?: Record<string, unknown> } | undefined;
+  let graphConfig: { 'auto-generate'?: boolean } | undefined;
+  let tierConfig: { 'hot-threshold'?: number; 'warm-threshold'?: number } | undefined;
 
   // Try both .paradigm (file) and .paradigm/config.yaml (directory)
   const configPaths = [
@@ -65,8 +68,12 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
       try {
         const content = fs.readFileSync(configPath, 'utf8');
         const config = parseHorizonConfig(content);
+        const typedConfig = config as unknown as Record<string, unknown>;
         // Extract scan config if present
-        scanConfig = (config as unknown as { scan?: typeof scanConfig }).scan;
+        scanConfig = typedConfig.scan as typeof scanConfig;
+        graphConfig = typedConfig.graph as typeof graphConfig;
+        const contextConfig = typedConfig.context as Record<string, unknown> | undefined;
+        tierConfig = contextConfig?.tiers as typeof tierConfig;
         break;
       } catch {
         // Ignore config errors, use defaults
@@ -123,6 +130,9 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     }
   );
 
+  // Classify symbol tiers
+  classifyTiers(index, { hot: tierConfig?.['hot-threshold'], warm: tierConfig?.['warm-threshold'] });
+
   // Write index
   try {
     fs.writeFileSync(outputPath, serializeScanIndex(index), 'utf8');
@@ -146,6 +156,25 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     }
   }
 
+  // Auto-generate symbol graph (configurable via graph.auto-generate in config.yaml)
+  const autoGenerate = graphConfig?.['auto-generate'] !== false; // default: true
+  if (autoGenerate) {
+    try {
+      const graphState = cliBuildGraphState(rootDir);
+      const graphsDir = path.join(rootDir, '.paradigm', 'graphs');
+      if (!fs.existsSync(graphsDir)) fs.mkdirSync(graphsDir, { recursive: true });
+      const graphPath = path.join(graphsDir, 'auto.graph.json');
+      fs.writeFileSync(graphPath, JSON.stringify(graphState, null, 2), 'utf8');
+      if (!options.quiet) {
+        spinner.succeed(chalk.green(`Symbol graph updated (${graphState.nodes.length} nodes)`));
+      }
+    } catch {
+      if (!options.quiet) {
+        spinner.warn(chalk.yellow('Could not auto-generate symbol graph'));
+      }
+    }
+  }
+
   // Summary
   if (!options.quiet) {
     console.log(chalk.gray(`\n  Output: ${outputPath}`));
@@ -161,6 +190,48 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   }
 
   return index;
+}
+
+/**
+ * Classify scan index entries into hot/warm/cold tiers based on cross-reference density.
+ * Mutates the index entries in place, adding a `tier` property to each symbol.
+ */
+function classifyTiers(index: ScanIndex, config?: { hot?: number; warm?: number }): void {
+  const hotThreshold = config?.hot ?? 15;
+  const warmThreshold = config?.warm ?? 5;
+
+  // Count cross-references for each symbol
+  const refCounts = new Map<string, number>();
+  const allSections = ['components', 'flows', 'gates', 'signals', 'aspects', 'features', 'state'] as const;
+
+  // First pass: collect all references
+  for (const section of allSections) {
+    const entries = (index as unknown as Record<string, Record<string, Record<string, unknown>>>)[section];
+    if (!entries) continue;
+    for (const [, entry] of Object.entries(entries)) {
+      const refs = entry.related as string[] | undefined;
+      if (refs) {
+        for (const ref of refs) {
+          const stripped = ref.replace(/^[#$^!~]/, '');
+          refCounts.set(stripped, (refCounts.get(stripped) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  // Second pass: assign tiers
+  for (const section of allSections) {
+    const entries = (index as unknown as Record<string, Record<string, Record<string, unknown>>>)[section];
+    if (!entries) continue;
+    for (const [id, entry] of Object.entries(entries)) {
+      const refs = refCounts.get(id) || 0;
+      const visualTags = (entry.visualTags as unknown[] | undefined) || [];
+      const centrality = visualTags.length; // rough proxy
+      const score = refs * 3 + centrality;
+
+      entry.tier = score > hotThreshold ? 'hot' : score > warmThreshold ? 'warm' : 'cold';
+    }
+  }
 }
 
 /**

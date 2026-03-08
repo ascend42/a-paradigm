@@ -4,6 +4,14 @@ description: |
   Contains agent management, budget tracking, IDE adapters, provider registry,
   and all internal logic that powers the CLI commands.
 components:
+  pipeline-types:
+    description: Spec pipeline type definitions — 5 stages, 3 gate modes, pipeline state, templates
+    tags: [pipeline, types]
+    path: pipeline-types.ts
+  pipeline-utils:
+    description: Pipeline YAML utilities — load, save, list, create, archive pipeline state files
+    tags: [pipeline, utilities]
+    path: pipeline-utils.ts
   orchestrator:
     description: Multi-agent task conductor supporting solo and faceted modes
     aspects:
