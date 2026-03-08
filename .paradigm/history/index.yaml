@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-07T22:14:24.236Z'
+generated: '2026-03-08T05:55:10.877Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -4977,6 +4977,103 @@ by_symbol:
           - plugins/paradigm/skills/preflight/SKILL.md
           - plugins/paradigm/skills/ripple/SKILL.md
         description: 'fix(#paradigm-skills): remove multi-op shell injections from skills — bump to 3.23.3'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-core':
+    symbol: '#paradigm-core'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_72
+        id: h0131
+        ts: '2026-03-08T05:55:06Z'
+        type: implement
+        symbols:
+          - '#paradigm-core'
+          - '#paradigm-doctor'
+          - '#paradigm-heat-map'
+          - '#paradigm-pipeline'
+          - '#paradigm-sweep'
+          - '#paradigm-sync'
+        author:
+          type: human
+          id: ascend
+        commit: 83bf220fbf4cc339f9d8d4e032ccf1a825edaef3
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-07/L-2026-03-07-ascend-222941-001.lore
+          - .paradigm/lore/entries/2026-03-08/L-2026-03-08-ascend-054731-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/personas/index.yaml
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+        description: 'docs(#paradigm-core): cross-study landscape scan + expansion plan audit — bump to 3.23.4'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-doctor':
+    symbol: '#paradigm-doctor'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_72
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-heat-map':
+    symbol: '#paradigm-heat-map'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_72
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-pipeline':
+    symbol: '#paradigm-pipeline'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_72
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-sweep':
+    symbol: '#paradigm-sweep'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_72
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-sync':
+    symbol: '#paradigm-sync'
+    total_changes: 1
+    last_modified: '2026-03-08T05:55:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_72
     contributors:
       human:
         - ascend

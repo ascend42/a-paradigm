@@ -47,6 +47,6 @@ steps:
     notes: Validate JSON syntax. Check that lesson IDs are unique within the course. Check that slot/plsat IDs are unique in PLSAT.
 recorded_from: L-2026-03-01-protocols-university
 recorded_at: '2026-03-01T12:00:00Z'
-last_verified: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-08T06:07:50.959Z'
 verified_by: claude-opus-4-6
 status: stale

@@ -22,6 +22,6 @@ steps:
     notes: 'Ensure spec covers: problem, schema, tools, phases, verification'
 recorded_from: L-2026-03-01-protocols-impl
 recorded_at: '2026-03-01T10:00:00Z'
-last_verified: '2026-03-01T10:00:00Z'
+last_verified: '2026-03-08T06:07:47.594Z'
 verified_by: claude-opus-4-6
 status: stale
