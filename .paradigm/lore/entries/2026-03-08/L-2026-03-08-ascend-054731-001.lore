@@ -1,0 +1,96 @@
+id: L-2026-03-08-ascend-054731-001
+type: review
+timestamp: '2026-03-08T05:47:31.745Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Expansion Plan Item-by-Item Audit — Complete Review
+summary: Completed item-by-item audit of all 9 expansion plan initiatives from the competitive landscape analysis. 2 items struck (already shipped as paradigm sync), 2 deferred (external MCP integration needs refinement, dashboard folded into Sentinel Product), 5 active initiatives reviewed and expanded. Created capabilities-inventory.md to prevent proposing existing features. Created sentinel-product-plan.md as separate commercial product document.
+symbols_touched:
+  - '#paradigm-sync'
+  - '#paradigm-doctor'
+  - '#paradigm-sweep'
+  - '#paradigm-heat-map'
+  - '#paradigm-pipeline'
+files_created:
+  - docs/private/capabilities-inventory.md
+  - docs/private/sentinel-product-plan.md
+files_modified:
+  - docs/private/expansion-plan-2026-q2.md
+decisions:
+  - id: D-strike-1.1-2.1
+    decision: Strike items 1.1 (AGENTS.md export) and 2.1 (cross-tool config export) from plan
+    rationale: Both already fully shipped as paradigm sync IDE adapters. Created capabilities-inventory.md to prevent this class of oversight.
+  - id: D-defer-2.4
+    decision: Defer item 2.4 (external MCP integration) until demand materializes
+    rationale: Good idea but needs refinement. No immediate user demand. Revisit later.
+  - id: D-defer-3.1
+    decision: Fold item 3.1 (governance dashboard) into separate Sentinel Product plan
+    rationale: Dashboard is a commercial product concern, not a free CLI feature. Created sentinel-product-plan.md with 4 product tiers.
+  - id: D-sweep-fix-default
+    decision: Make sweep --fix the default behavior with strict thresholds (14 days staleness, 90% coverage)
+    rationale: Anything that runs via CLI at no cost is a must. Be as stringent and forthcoming as possible by default.
+  - id: D-heat-map-adaptive
+    decision: Expand 2.3 with adaptive heat map where agents detect and maintain query-symbol relevance
+    rationale: 3-layer detection (automatic breadcrumbs, explicit agent recording, agent corrections) creates a flywheel where agents are both consumers and maintainers of relevance knowledge.
+  - id: D-pipeline-gates
+    decision: Make pipeline gates configurable with 3 modes (auto/manual/sentinel) at 3 levels
+    rationale: User wants governance decided beforehand per feature type, not blocking on every step. Agents need reasoning to select appropriate governance.
+  - id: D-pipeline-mcp
+    decision: Add 7 MCP tools for pipeline management so agents have full autonomy
+    rationale: Agents need proper tools to manage pipelines — start, advance, configure, escalate, abort, resume, status.
+  - id: D-governance-spec-10
+    decision: Expand governance spec outline from 8 to 10 items (add Adaptive Context and Development Pipeline)
+    rationale: Heat map and pipeline are core governance capabilities that belong in the public spec.
+learnings:
+  - Always check capabilities-inventory.md before proposing new features to avoid re-proposing shipped work
+  - 'CLI-at-no-cost philosophy: anything that can run locally for free is a 100% must'
+  - Default to maximum stringency — users can relax, but starting lenient means drift
+  - Configurable gate modes (auto/manual/sentinel) resolve the tension between automation and human oversight
+  - Agents should have enough reasoning to select governance levels OR know to ask — never be passive executors
+  - Separate commercial product planning (Sentinel) from open-source expansion to keep concerns clean
+  - The governance spec for public publication should include ALL pillars including new ones (heat map, pipeline)
+tags:
+  - arc:cross-study
+  - arc:expansion-plan
+  - strategic
+  - review
+  - competitive-analysis
+body: |-
+  ## Full Audit Summary
+
+  ### Items Struck (Already Shipped)
+  - **1.1 AGENTS.md Export** — `paradigm sync agents-md` already generates this
+  - **2.1 Cross-Tool Config Export** — `paradigm sync` has 5 adapters (Claude, Cursor, Copilot, Windsurf, AGENTS.md)
+
+  ### Items Reviewed and Approved
+  - **1.2 Doctor Context Audit** — adds context quality scoring to existing doctor command
+  - **1.3 Auto-Graph on Scan** — always re-indexes graph during scan, 2-hour effort
+
+  ### Items Reviewed and Expanded
+  - **2.2 Garbage Collection Sweeps** — expanded with --fix as default, 9 entropy checks, strict thresholds (14 days/90%), annotative auto-fixes, automatic lore recording
+  - **2.3 Tiered Context + Adaptive Heat Map** — massively expanded with 3-layer adaptive heat map (automatic breadcrumbs, explicit recording, agent corrections), 4 MCP tools, decay/boost mechanics, query-symbol relevance learning
+  - **3.2 Spec Pipeline** — expanded with configurable gate modes (auto/manual/sentinel), 3 config levels (project defaults, pipeline templates, per-pipeline override), 7 MCP tools, agent reasoning for template selection, mid-flight adjustment, escalation protocol
+  - **3.3 Universal Governance** — spec outline expanded from 8 to 10 items (added Adaptive Context and Development Pipeline)
+
+  ### Items Deferred
+  - **2.4 External MCP Integration** — needs refinement, no immediate demand
+  - **3.1 Governance Dashboard** — folded into Sentinel Product plan (separate document)
+
+  ### New Documents Created
+  - `docs/private/capabilities-inventory.md` — 25 capability domains, 95 MCP tools, 24+ CLI commands
+  - `docs/private/sentinel-product-plan.md` — 4 tiers (Team Dashboard, Alerting & CI, Team Analytics, Enterprise)
+
+  ### Active Release Cadence (5 releases)
+  v3.25.0 → Personas P5 + auto-graph (1.3)
+  v3.26.0 → Doctor context audit (1.2)
+  v3.27.0 → Sweep (2.2)
+  v3.28.0 → Heat map (2.3)
+  v3.29.0 → Pipeline (3.2)
+linked_lore:
+  - L-2026-03-07-ascend-222941-001
+git_context:
+  ref: 1476b55c50217af4fa6b1fbc6971fa9dc5cb79f0
+  branch: main
+  dirty: true

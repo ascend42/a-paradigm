@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.4] — 2026-03-08
+
+### Added
+
+- **Cross-study and expansion planning lore** (`@a-company/paradigm` 3.23.3 → 3.23.4): Recorded strategic planning sessions as lore entries
+  - `L-2026-03-07-ascend-222941-001`: Deep landscape scan of 15 paradigm-adjacent frameworks across 5 competitive tiers (Packmind, Kiro, Spec Kit, Harness Engineering, Codified Context, AAIF, Augment Code, Sourcegraph, and more)
+  - `L-2026-03-08-ascend-054731-001`: Item-by-item audit of 9 expansion plan initiatives — 2 struck (already shipped), 2 deferred, 5 active with expanded scope
+  - Personas index auto-generated during reindex
+  - History index updated with recent implementation events
+
 ## [3.23.3] — 2026-03-07
 
 ### Fixed

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-06T02:09:36.122Z'
+generated: '2026-03-07T22:14:24.236Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -4846,6 +4846,137 @@ by_symbol:
     fragility: low
     recent:
       - *ref_70
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#aggregator':
+    symbol: '#aggregator'
+    total_changes: 1
+    last_modified: '2026-03-07T22:09:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_71
+        id: h0129
+        ts: '2026-03-07T22:09:45Z'
+        type: implement
+        symbols:
+          - '#aggregator'
+          - ~habits-loader
+          - ~habits-types
+          - $event-ingestion
+          - $symbol-aggregation
+        author:
+          type: human
+          id: ascend
+        commit: 086f6a603a3b855d12f20381dc1692c4b2a072a5
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/lore/entries/2026-03-07/L-2026-03-07-ascend-215536-001.lore
+          - .paradigm/navigator.yaml
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-mcp-tool-with-status.protocol
+          - .paradigm/protocols/add-mcp-tool.protocol
+          - .paradigm/protocols/add-plsat-question.protocol
+          - .paradigm/protocols/add-portal-route-with-gates.protocol
+          - .paradigm/protocols/add-skill.protocol
+          - .paradigm/protocols/add-spec.protocol
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/add-university-course.protocol
+          - .paradigm/protocols/add-university-quiz.protocol
+          - .paradigm/protocols/index.yaml
+          - .paradigm/protocols/record-lore.protocol
+          - .paradigm/protocols/update-changelog.protocol
+          - .paradigm/protocols/update-university-content.protocol
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/src/core/.purpose
+          - packages/premise/core/.purpose
+          - packages/sentinel-web/.purpose
+        description: 'fix(#paradigm): clean up 6 .purpose validation issues — bump to 3.23.2'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~habits-loader:
+    symbol: ~habits-loader
+    total_changes: 1
+    last_modified: '2026-03-07T22:09:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_71
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~habits-types:
+    symbol: ~habits-types
+    total_changes: 1
+    last_modified: '2026-03-07T22:09:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_71
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $event-ingestion:
+    symbol: $event-ingestion
+    total_changes: 1
+    last_modified: '2026-03-07T22:09:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_71
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symbol-aggregation:
+    symbol: $symbol-aggregation
+    total_changes: 1
+    last_modified: '2026-03-07T22:09:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_71
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-skills':
+    symbol: '#paradigm-skills'
+    total_changes: 1
+    last_modified: '2026-03-07T22:14:19Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0130
+        ts: '2026-03-07T22:14:19Z'
+        type: implement
+        symbols:
+          - '#paradigm-skills'
+        author:
+          type: human
+          id: ascend
+        commit: 1476b55c50217af4fa6b1fbc6971fa9dc5cb79f0
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/skills/doctor/SKILL.md
+          - plugins/paradigm/skills/handoff/SKILL.md
+          - plugins/paradigm/skills/preflight/SKILL.md
+          - plugins/paradigm/skills/ripple/SKILL.md
+        description: 'fix(#paradigm-skills): remove multi-op shell injections from skills — bump to 3.23.3'
     contributors:
       human:
         - ascend
