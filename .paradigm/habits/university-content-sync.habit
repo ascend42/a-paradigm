@@ -1,0 +1,17 @@
+id: university-content-sync
+name: University content stays in sync with Paradigm features
+description: >-
+  When modifying Paradigm features, check if university lessons or PLSAT questions need updating. Lessons and question
+  groups are mapped to concept symbols via .purpose files in packages/university/src/content/courses/.purpose and
+  packages/university/src/content/plsat/.purpose. Run paradigm_ripple on affected symbols to find impacted course
+  content.
+category: documentation
+trigger: postflight
+severity: warn
+check:
+  type: file-modified
+  params:
+    patterns:
+      - packages/university/src/content/courses/.purpose
+      - packages/university/src/content/plsat/.purpose
+enabled: true

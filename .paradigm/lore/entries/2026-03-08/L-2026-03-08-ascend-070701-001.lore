@@ -1,0 +1,43 @@
+id: L-2026-03-08-ascend-070701-001
+type: milestone
+timestamp: '2026-03-08T07:07:01.790Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: University content mapped to Paradigm concept symbols
+summary: Created .purpose files for university course content (49 lessons across 5 courses) and PLSAT exam content (20 question groups), mapping each to the Paradigm concept symbols they teach or test. Added university-content-sync habit to warn at postflight when modified features have university content that may need updating. Ripple analysis now surfaces affected lessons and PLSAT questions when any mapped concept changes.
+symbols_touched:
+  - '#university-courses'
+  - '#plsat-v3'
+  - '#plsat-v2'
+files_created:
+  - packages/university/src/content/courses/.purpose
+  - packages/university/src/content/plsat/.purpose
+  - .paradigm/habits/university-content-sync.habit
+decisions:
+  - id: D-lesson-as-component
+    decision: Map each university lesson as a component in .purpose with references to concept symbols
+    rationale: 'Makes ripple analysis work natively — changing #lore-system shows which lessons and PLSAT groups are affected without any custom tooling.'
+  - id: D-plsat-by-concept-group
+    decision: Group PLSAT questions by concept rather than individual slots
+    rationale: 99 individual slot entries would be unwieldy. Grouping by concept (symbol-system, portal-protocol, etc.) provides useful granularity without bloat.
+  - id: D-habit-warn-not-block
+    decision: Set university-content-sync habit to warn severity, not block
+    rationale: Not every feature change requires university updates. Warn surfaces the connection; blocking would create false positives.
+learnings:
+  - 'Component references in .purpose files must quote # symbols to avoid YAML comment parsing'
+  - Ripple fallback grep search catches .purpose references even for concept symbols not in the main index
+  - Reindex after adding .purpose files causes 3 university-related protocols to go stale (exemplar dirs changed)
+tags:
+  - arc:expansion-plan
+  - university
+  - ripple
+  - documentation
+  - milestone
+linked_lore:
+  - L-2026-03-08-ascend-054731-001
+git_context:
+  ref: bda52ea7e78b44554d5cc242ecbc5558caadcf3b
+  branch: docs/cross-study-expansion-plan-lore
+  dirty: true

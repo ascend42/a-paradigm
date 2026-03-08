@@ -26,13 +26,11 @@ steps:
     reference: gates section
     notes: Add any new gates that don't exist yet (with description, type, check, prizes)
   - action: modify
-    target: src/middleware/auth.ts
-    reference: gate implementation
-    notes: Implement the actual gate checks. Return 403 for unauthorized access.
+    notes: Implement the gate checks in the project's middleware or route handler. Location varies by project — check existing gate implementations or auth middleware. Return 403 for unauthorized access.
   - action: verify
     notes: 'Test: unauthorized request returns 403. Run paradigm portal check for compliance.'
 recorded_from: L-2026-03-01-protocols-audit
 recorded_at: '2026-03-01T12:00:00Z'
-last_verified: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-08T06:07:36.543Z'
 verified_by: claude-opus-4-6
-status: broken
+status: current

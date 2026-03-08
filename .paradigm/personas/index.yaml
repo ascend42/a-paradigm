@@ -1,0 +1,12 @@
+version: '1.0'
+generated: '2026-03-08T07:02:12.013Z'
+personas: {}
+chains: {}
+gate_coverage: {}
+route_coverage: {}
+uncovered_routes:
+  - GET /api/courses
+  - GET /api/courses/:id
+  - GET /api/courses/:id/lessons/:lessonId
+  - GET /api/plsat
+  - GET /api/plsat/:version

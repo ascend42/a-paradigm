@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-07T22:08:09.580Z'
+generated: '2026-03-08T07:02:12.014Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -17,8 +17,8 @@ protocols:
       - agent
   - id: P-add-aspect-with-anchors
     name: Add an aspect with code anchors
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:43.418Z'
     trigger:
       - add aspect
       - new aspect
@@ -30,8 +30,8 @@ protocols:
       - cross-cutting
   - id: P-add-case-study
     name: Add a case study
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:43.924Z'
     trigger:
       - case study
       - project journey
@@ -94,8 +94,8 @@ protocols:
       - subcommands
   - id: P-add-hook-script
     name: Add a Claude Code hook script
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:44.807Z'
     trigger:
       - add hook
       - new hook
@@ -145,8 +145,8 @@ protocols:
       - content
   - id: P-add-mcp-tool-with-status
     name: Add an MCP tool with status integration
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:45.268Z'
     trigger:
       - add tool with status
       - tool that shows in status
@@ -157,8 +157,8 @@ protocols:
       - status
   - id: P-add-mcp-tool
     name: Add a new MCP tool
-    status: stale
-    last_verified: '2026-03-01T10:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:45.738Z'
     trigger:
       - add tool
       - new mcp tool
@@ -184,7 +184,7 @@ protocols:
   - id: P-add-plsat-question
     name: Add a PLSAT exam question
     status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    last_verified: '2026-03-08T06:07:46.642Z'
     trigger:
       - plsat question
       - add exam question
@@ -209,8 +209,8 @@ protocols:
       - gate
   - id: P-add-portal-route-with-gates
     name: Add a protected API route with gates
-    status: broken
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:36.543Z'
     trigger:
       - protected route
       - add route with auth
@@ -273,8 +273,8 @@ protocols:
       - routes
   - id: P-add-skill
     name: Add a new skill
-    status: stale
-    last_verified: '2026-03-01T10:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:47.140Z'
     trigger:
       - add skill
       - new skill
@@ -287,8 +287,8 @@ protocols:
       - claude-code
   - id: P-add-spec
     name: Add a new spec
-    status: stale
-    last_verified: '2026-03-01T10:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:47.594Z'
     trigger:
       - add spec
       - new spec
@@ -314,8 +314,8 @@ protocols:
       - orchestration
   - id: P-add-tool-with-reindex-integration
     name: Add an MCP tool with reindex integration
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:48.485Z'
     trigger:
       - tool with reindex
       - reindex integration
@@ -365,7 +365,7 @@ protocols:
   - id: P-add-university-course
     name: Add a University course
     status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    last_verified: '2026-03-08T06:07:48.967Z'
     trigger:
       - add course
       - new course
@@ -378,7 +378,7 @@ protocols:
   - id: P-add-university-quiz
     name: Add a University quiz
     status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    last_verified: '2026-03-08T06:07:49.366Z'
     trigger:
       - add quiz
       - new quiz
@@ -427,8 +427,8 @@ protocols:
       - workspace
   - id: P-record-lore
     name: Record a lore entry
-    status: stale
-    last_verified: '2026-03-01T10:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:50.262Z'
     trigger:
       - record lore
       - log session
@@ -440,8 +440,8 @@ protocols:
       - history
   - id: P-update-changelog
     name: Update changelog and version
-    status: stale
-    last_verified: '2026-03-01T10:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:50.707Z'
     trigger:
       - update changelog
       - bump version
@@ -454,8 +454,8 @@ protocols:
       - versioning
   - id: P-update-university-content
     name: Update University content
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-08T06:07:50.959Z'
     trigger:
       - update university
       - add lesson
@@ -471,6 +471,6 @@ protocols:
       - content
 health:
   total: 36
-  current: 21
-  stale: 14
-  broken: 1
+  current: 33
+  stale: 3
+  broken: 0
