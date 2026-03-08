@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { doctorCommand } from './doctor.js';
+import { doctorCommand } from './doctor/index.js';
 import { createTempProject } from '../test-utils.js';
 
 let cleanup: (() => void) | undefined;
@@ -21,9 +21,12 @@ describe('doctorCommand', () => {
       withScanIndex: true,
     });
     cleanup = c;
-    // Doctor checks for prompts dir and .premise file
+    // Doctor checks for prompts dir, .premise file, and hooks
     fs.mkdirSync(path.join(rootDir, '.paradigm', 'prompts'), { recursive: true });
     fs.writeFileSync(path.join(rootDir, '.premise'), '', 'utf8');
+    // Create hooks so the hooks check passes
+    fs.mkdirSync(path.join(rootDir, 'plugins', 'paradigm'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'plugins', 'paradigm', 'hooks.json'), '{}', 'utf8');
     const result = await doctorCommand({ quiet: true, rootDir });
     expect(result).toBe(true);
   });
@@ -97,9 +100,12 @@ describe('doctorCommand', () => {
     const { rootDir, cleanup: c } = createTempProject();
     cleanup = c;
     await doctorCommand({ quiet: true, rootDir });
-    // Doctor's own output is suppressed; only the logger may emit an info line
+    // Doctor's own output is suppressed; only the logger may emit info lines
     const doctorCalls = consoleSpy.mock.calls.filter(
-      (args) => !String(args[0]).includes('[doctor]'),
+      (args) => {
+        const str = String(args[0]);
+        return !str.includes('[doctor]') && !str.includes('[doctor:');
+      },
     );
     expect(doctorCalls).toHaveLength(0);
   });

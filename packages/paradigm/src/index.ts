@@ -631,9 +631,22 @@ workspaceCmd
 program
   .command('doctor')
   .description('Health check - validate Paradigm setup')
-  .action(async () => {
-    const { doctorCommand } = await import('./commands/doctor.js');
-    await doctorCommand();
+  .option('--context', 'Run only context audit checks (CLAUDE.md quality)')
+  .action(async (options) => {
+    const { doctorCommand } = await import('./commands/doctor/index.js');
+    await doctorCommand(options);
+  });
+
+// paradigm sweep
+program
+  .command('sweep')
+  .description('Entropy detection and cleanup — find orphaned symbols, stale purpose files, phantom gates')
+  .option('--dry', 'Report only, no fixes applied')
+  .option('--skip-fix', 'Same as --dry')
+  .option('-q, --quiet', 'Minimal output')
+  .action(async (options) => {
+    const { sweepCommand } = await import('./commands/sweep/index.js');
+    await sweepCommand(options);
   });
 
 // paradigm drift <subcommand>
@@ -1679,6 +1692,71 @@ program
   .action(async (options) => {
     const { universityCommand } = await import('./commands/university.js');
     await universityCommand(undefined, options);
+  });
+
+// paradigm pipeline <command>
+const pipelineCmd = program
+  .command('pipeline')
+  .description('Spec pipeline — structured feature workflow with configurable gates');
+
+pipelineCmd
+  .command('start <description>')
+  .description('Create a new pipeline for a feature')
+  .option('--template <template>', 'Pipeline template (add-feature, bug-fix, security-change, refactor)', 'add-feature')
+  .option('--gates <gates>', 'Custom gate modes: specify,plan,task,implement,validate')
+  .action(async (description, options) => {
+    const { pipelineStartCommand } = await import('./commands/pipeline/index.js');
+    await pipelineStartCommand(description, options);
+  });
+
+pipelineCmd
+  .command('status [feature]')
+  .description('Show pipeline status')
+  .action(async (feature) => {
+    const { pipelineStatusCommand } = await import('./commands/pipeline/index.js');
+    await pipelineStatusCommand(feature);
+  });
+
+pipelineCmd
+  .command('advance <feature>')
+  .description('Advance pipeline past current gate')
+  .action(async (feature) => {
+    const { pipelineAdvanceCommand } = await import('./commands/pipeline/index.js');
+    await pipelineAdvanceCommand(feature);
+  });
+
+pipelineCmd
+  .command('configure <feature>')
+  .description('Change gate mode on active pipeline')
+  .requiredOption('--stage <stage>', 'Stage to configure')
+  .requiredOption('--gate <gate>', 'New gate mode (auto, manual, sentinel)')
+  .option('--reason <reason>', 'Reason for change')
+  .action(async (feature, options) => {
+    const { pipelineConfigureCommand } = await import('./commands/pipeline/index.js');
+    await pipelineConfigureCommand(feature, options);
+  });
+
+pipelineCmd
+  .command('abort <feature>')
+  .description('Cancel a pipeline')
+  .action(async (feature) => {
+    const { pipelineAbortCommand } = await import('./commands/pipeline/index.js');
+    await pipelineAbortCommand(feature);
+  });
+
+pipelineCmd
+  .command('list')
+  .description('List all active pipelines')
+  .action(async () => {
+    const { pipelineListCommand } = await import('./commands/pipeline/index.js');
+    await pipelineListCommand();
+  });
+
+// Default pipeline action (list)
+pipelineCmd
+  .action(async () => {
+    const { pipelineListCommand } = await import('./commands/pipeline/index.js');
+    await pipelineListCommand();
   });
 
 // Parse and run

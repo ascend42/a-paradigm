@@ -94,7 +94,7 @@ function resolveSymbol(name: string, all: SymbolData[]): SymbolData | undefined 
   return all.find((s) => s.id === stripped || s.name === stripped || s.id === name || s.name === name);
 }
 
-function cliBuildGraphState(
+export function cliBuildGraphState(
   projectDir: string,
   symbolFilter?: string[],
   groups?: GroupInput[],

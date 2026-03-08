@@ -1,0 +1,17 @@
+version: 2.0.0
+description: |
+  #doctor-command - Health check and diagnostics for Paradigm setup.
+  Includes core setup validation and context audit checks for AI instruction file quality.
+components:
+  doctor-handler:
+    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits
+    file: index.ts
+  context-audit:
+    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+    file: context-audit.ts
+    tags: [feature, context-quality]
+features:
+  context-audit-checks:
+    description: Context audit with 7 checks — stale-references, convention-contradictions, undocumented-stack, purpose-coverage, orphaned-symbols, stale-portal, instruction-vagueness
+    components:
+      - '#context-audit'

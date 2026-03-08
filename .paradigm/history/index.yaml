@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-08T07:03:14.207Z'
+generated: '2026-03-08T07:07:39.716Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -2232,12 +2232,47 @@ by_symbol:
       agent: []
   '#plsat-v3':
     symbol: '#plsat-v3'
-    total_changes: 2
-    last_modified: '2026-03-08T07:03:10Z'
+    total_changes: 3
+    last_modified: '2026-03-08T07:07:36Z'
     stability_score: 1
     fragility: low
     recent:
       - &ref_73
+        id: h0134
+        ts: '2026-03-08T07:07:36Z'
+        type: implement
+        symbols:
+          - '#plsat-v2'
+          - '#plsat-v3'
+          - '#university-courses'
+        author:
+          type: human
+          id: ascend
+        commit: 1305197465678dfb1d18c797dfee747edb5fc950
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-08/L-2026-03-08-ascend-070701-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-mcp-tool-with-status.protocol
+          - .paradigm/protocols/add-mcp-tool.protocol
+          - .paradigm/protocols/add-plsat-question.protocol
+          - .paradigm/protocols/add-portal-route-with-gates.protocol
+          - .paradigm/protocols/add-skill.protocol
+          - .paradigm/protocols/add-spec.protocol
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/add-university-course.protocol
+          - .paradigm/protocols/add-university-quiz.protocol
+          - .paradigm/protocols/record-lore.protocol
+          - .paradigm/protocols/update-changelog.protocol
+          - .paradigm/protocols/update-university-content.protocol
+          - packages/university/package.json
+        description: 'docs(#university-courses): record lore + bump university to 3.10.5 + refresh protocols'
+      - &ref_74
         id: h0133
         ts: '2026-03-08T07:03:10Z'
         type: implement
@@ -5145,24 +5180,26 @@ by_symbol:
       agent: []
   '#plsat-v2':
     symbol: '#plsat-v2'
-    total_changes: 1
-    last_modified: '2026-03-08T07:03:10Z'
+    total_changes: 2
+    last_modified: '2026-03-08T07:07:36Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_73
+      - *ref_74
     contributors:
       human:
         - ascend
       agent: []
   '#university-courses':
     symbol: '#university-courses'
-    total_changes: 1
-    last_modified: '2026-03-08T07:03:10Z'
+    total_changes: 2
+    last_modified: '2026-03-08T07:07:36Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_73
+      - *ref_74
     contributors:
       human:
         - ascend
