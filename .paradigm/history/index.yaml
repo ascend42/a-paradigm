@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-08T06:08:41.022Z'
+generated: '2026-03-08T07:03:14.207Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -2232,11 +2232,36 @@ by_symbol:
       agent: []
   '#plsat-v3':
     symbol: '#plsat-v3'
-    total_changes: 1
-    last_modified: '2026-02-22T22:28:41Z'
+    total_changes: 2
+    last_modified: '2026-03-08T07:03:10Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_73
+        id: h0133
+        ts: '2026-03-08T07:03:10Z'
+        type: implement
+        symbols:
+          - '#plsat-v2'
+          - '#plsat-v3'
+          - '#university-courses'
+        author:
+          type: human
+          id: ascend
+        commit: bda52ea7e78b44554d5cc242ecbc5558caadcf3b
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/habits/university-content-sync.habit
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - packages/university/src/content/courses/.purpose
+          - packages/university/src/content/plsat/.purpose
+        description: 'feat(#university-courses): map 49 lessons + PLSAT questions to paradigm concept symbols'
       - *ref_20
     contributors:
       human:
@@ -5114,6 +5139,30 @@ by_symbol:
           - .paradigm/protocols/update-changelog.protocol
           - .paradigm/protocols/update-university-content.protocol
         description: 'fix(#paradigm-protocols): fix broken protocol + re-verify 14 stale protocols'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#plsat-v2':
+    symbol: '#plsat-v2'
+    total_changes: 1
+    last_modified: '2026-03-08T07:03:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_73
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-courses':
+    symbol: '#university-courses'
+    total_changes: 1
+    last_modified: '2026-03-08T07:03:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_73
     contributors:
       human:
         - ascend
