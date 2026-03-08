@@ -1,0 +1,307 @@
+name: university-courses
+description: Course content for Paradigm University — 5 courses, 49 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
+
+components:
+  # PARA 101: Foundations (8 lessons)
+
+  para-101-welcome:
+    description: "Welcome to Paradigm — three pillars, why structured context matters"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#symbol-system", "#purpose-files", "#mcp-tools", "#paradigm-logger"]
+
+  para-101-five-symbols:
+    description: "The Five Symbols — #component, $flow, ^gate, !signal, ~aspect"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#symbol-system"]
+
+  para-101-purpose-files:
+    description: "Purpose Files — YAML format, required fields, directory-level docs"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#purpose-files"]
+
+  para-101-tags-and-classification:
+    description: "Tags and Classification — tag bank, core tags, custom tags, AI suggestions"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#tag-system"]
+
+  para-101-paradigm-logger:
+    description: "Paradigm Logger — symbol-typed logging, directory-to-symbol mapping"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#paradigm-logger", "#symbol-system"]
+
+  para-101-project-structure:
+    description: "Project Structure — .paradigm/ directory, config.yaml, navigator.yaml"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#scan-index", "#navigation"]
+
+  para-101-portal-yaml:
+    description: "Portal YAML — gates, routes, authorization topology"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#portal-protocol"]
+
+  para-101-first-steps:
+    description: "First Steps — paradigm init, paradigm shift, setting up a project"
+    file: para-101.json
+    tags: [course-content, para-101]
+    references: ["#symbol-system", "#purpose-files", "#scan-index"]
+
+  # PARA 201: Architecture (11 lessons)
+
+  para-201-flows-deep-dive:
+    description: "Flows Deep Dive — $flow definitions, step types, validation"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#flow-validation", "#symbol-system"]
+
+  para-201-gates-deep-dive:
+    description: "Gates Deep Dive — ^gate chaining, portal.yaml routes, enforcement"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#portal-protocol", "#enforcement-hooks"]
+
+  para-201-aspects-and-anchors:
+    description: "Aspects and Anchors — ~aspect definitions, anchor format, why anchors are required"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#aspect-anchoring"]
+
+  para-201-aspect-graph:
+    description: "Aspect Graph — symbol relationships, graph visualization"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#symbol-graph", "#aspect-anchoring"]
+
+  para-201-portal-protocol:
+    description: "Portal Protocol — full authorization model, gate patterns, route declarations"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#portal-protocol"]
+
+  para-201-disciplines:
+    description: "Disciplines — web, backend, fullstack, api, cli, ml, monorepo symbol mappings"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#symbol-system"]
+
+  para-201-symbol-naming:
+    description: "Symbol Naming — kebab-case, PascalCase, conventions"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#symbol-system"]
+
+  para-201-component-patterns:
+    description: "Component Patterns — service, handler, model, utility patterns"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#symbol-system", "#purpose-files"]
+
+  para-201-signal-patterns:
+    description: "Signal Patterns — event naming, emitters, side effects"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#symbol-system"]
+
+  para-201-cross-cutting-concerns:
+    description: "Cross-Cutting Concerns — aspects across components, enforcement strategies"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#aspect-anchoring"]
+
+  para-201-architecture-review:
+    description: "Architecture Review — comprehensive review of PARA 201 concepts"
+    file: para-201.json
+    tags: [course-content, para-201]
+    references: ["#flow-validation", "#portal-protocol", "#aspect-anchoring", "#symbol-system"]
+
+  # PARA 301: Operations (11 lessons)
+
+  para-301-history-system:
+    description: "History System — implementation history, event tracking"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#lore-system"]
+
+  para-301-fragility-tracking:
+    description: "Fragility Tracking — stability scores, fragility warnings"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#ripple-analysis"]
+
+  para-301-wisdom-system:
+    description: "Wisdom System — antipatterns, decisions, expert guidance"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#wisdom-system"]
+
+  para-301-ripple-analysis:
+    description: "Ripple Analysis — impact checking, workspace-aware ripple"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#ripple-analysis"]
+
+  para-301-doctor-and-validation:
+    description: "Doctor and Validation — health checks, paradigm doctor, paradigm lint"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#navigation"]
+
+  para-301-navigation-system:
+    description: "Navigation System — paradigm_navigate, find/explore/context intents"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#navigation", "#scan-index"]
+
+  para-301-sentinel-observability:
+    description: "Sentinel Observability — incidents, patterns, logs, traces"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#sentinel"]
+
+  para-301-sync-and-maintenance:
+    description: "Sync and Maintenance — paradigm sync, IDE adapters, cross-tool export"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#paradigm-sync"]
+
+  para-301-context-management:
+    description: "Context Management — token budgets, MCP vs file reads, session stats"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#session-continuity", "#mcp-tools"]
+
+  para-301-protocols:
+    description: "Protocols — repeatable patterns, protocol search/record/validate"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#protocol-system"]
+
+  para-301-operations-review:
+    description: "Operations Review — comprehensive review of PARA 301 concepts"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#lore-system", "#wisdom-system", "#ripple-analysis", "#navigation", "#sentinel", "#protocol-system"]
+
+  # PARA 401: Orchestration (9 lessons)
+
+  para-401-mcp-tools-overview:
+    description: "MCP Tools Overview — 95 tools, token budgets, query vs file read"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#mcp-tools"]
+
+  para-401-multi-agent-coordination:
+    description: "Multi-Agent Coordination — team spawn, agent types, providers"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration"]
+
+  para-401-agent-roles:
+    description: "Agent Roles — architect, builder, reviewer, tester, security"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration"]
+
+  para-401-provider-cascade:
+    description: "Provider Cascade — auto, claude, claude-code, cursor-cli, manual"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration"]
+
+  para-401-orchestration-workflow:
+    description: "Orchestration Workflow — orchestrate_inline, plan vs execute modes"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration", "#pm-governance"]
+
+  para-401-pm-governance:
+    description: "PM Governance — preflight, postflight, compliance checks"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#pm-governance"]
+
+  para-401-commit-conventions:
+    description: "Commit Conventions — symbol trailers, type(#symbol) format"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#symbol-system"]
+
+  para-401-mastery-review:
+    description: "Mastery Review — comprehensive review of PARA 401 concepts"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#mcp-tools", "#orchestration", "#pm-governance"]
+
+  para-401-agent-interop:
+    description: "Agent Interoperability — AGENTS.md, Skills v2, cross-tool compat"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration", "#mcp-tools", "#paradigm-sync"]
+
+  # PARA 501: Advanced Systems (10 lessons)
+
+  para-501-lore-system:
+    description: "Lore System — entries, types, arcs, linked entries, timeline"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#lore-system"]
+
+  para-501-sentinel-deep-dive:
+    description: "Sentinel Deep Dive — incidents, patterns, triage, services, schemas"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#sentinel"]
+
+  para-501-aspect-graph-internals:
+    description: "Aspect Graph Internals — BFS traversal, aspect neighborhoods"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#aspect-anchoring", "#symbol-graph"]
+
+  para-501-habits-practice:
+    description: "Habits and Practice — behavioral discipline, blocking habits, compliance"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#habits-system"]
+
+  para-501-session-intelligence:
+    description: "Session Intelligence — checkpoints, recovery, handoff, context monitoring"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#session-continuity"]
+
+  para-501-hook-enforcement:
+    description: "Hook Enforcement — 11 stop hook checks, pre-commit, post-write hooks"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#enforcement-hooks"]
+
+  para-501-advanced-workflows:
+    description: "Advanced Workflows — flow-first development, multi-agent patterns"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#flow-validation", "#orchestration"]
+
+  para-501-aspect-graph-advanced:
+    description: "Aspect Graph Advanced — graph generation, interactive visualization"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#aspect-anchoring", "#symbol-graph"]
+
+  para-501-task-management:
+    description: "Task Management — paradigm_task_create, task lifecycle"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#mcp-tools"]
+
+  para-501-assessment-loops:
+    description: "Lore as Unified Project Memory — arcs as tags, deprecated assessment tools"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#lore-system"]

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-08T05:55:10.877Z'
+generated: '2026-03-08T06:08:41.022Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -5074,6 +5074,46 @@ by_symbol:
     fragility: low
     recent:
       - *ref_72
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-protocols':
+    symbol: '#paradigm-protocols'
+    total_changes: 1
+    last_modified: '2026-03-08T06:08:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0132
+        ts: '2026-03-08T06:08:38Z'
+        type: implement
+        symbols:
+          - '#paradigm-protocols'
+        author:
+          type: human
+          id: ascend
+        commit: cf11e420ed618ef9251f4e4c8f20b6f86803cf7b
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-mcp-tool-with-status.protocol
+          - .paradigm/protocols/add-mcp-tool.protocol
+          - .paradigm/protocols/add-plsat-question.protocol
+          - .paradigm/protocols/add-portal-route-with-gates.protocol
+          - .paradigm/protocols/add-skill.protocol
+          - .paradigm/protocols/add-spec.protocol
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/add-university-course.protocol
+          - .paradigm/protocols/add-university-quiz.protocol
+          - .paradigm/protocols/record-lore.protocol
+          - .paradigm/protocols/update-changelog.protocol
+          - .paradigm/protocols/update-university-content.protocol
+        description: 'fix(#paradigm-protocols): fix broken protocol + re-verify 14 stale protocols'
     contributors:
       human:
         - ascend
