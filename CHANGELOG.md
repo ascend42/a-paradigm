@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.24.1] — 2026-03-08
+
+### Fixed
+
+- **Config template duplicate YAML keys**: `paradigm init` / `paradigm shift` generated `config.yaml` files with duplicate mapping keys in `symbol-mapping` when applying discipline-specific settings. The regex replacing the template section stopped at blank lines between category groups, leaving leftover template entries that duplicated the discipline entries. This caused `js-yaml` to throw a `duplicated mapping key` error, which silently broke workspace loading (the `workspace:` field was never read).
+
 ## [3.24.0] — 2026-03-08
 
 ### Added
