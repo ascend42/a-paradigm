@@ -742,7 +742,7 @@ function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
     .join('\n');
 
   content = content.replace(
-    /  symbol-mapping:\n(?:    .*\n)*/,
+    /  symbol-mapping:\n(?:(?:    .*| *)\n)*/,
     `  symbol-mapping:\n${mappingLines}\n`
   );
 
