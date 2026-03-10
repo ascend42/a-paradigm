@@ -1722,6 +1722,17 @@ sentinelCmd
     await sentinelCommand(path, options);
   });
 
+// paradigm conductor - Launch the multimodal mission control overlay
+program
+  .command('conductor')
+  .description('Launch Paradigm Conductor — multimodal mission control for Claude Code sessions')
+  .option('--build', 'Force rebuild the native binary')
+  .option('-v, --verbose', 'Show build output')
+  .action(async (options) => {
+    const { conductorCommand } = await import('./commands/conductor.js');
+    await conductorCommand(options);
+  });
+
 // paradigm university - Launch the Paradigm University learning platform
 program
   .command('university')

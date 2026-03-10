@@ -5,6 +5,25 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.26.0] — 2026-03-10
+
+### Added
+
+- **Paradigm Conductor** — Native macOS Swift/SwiftUI multimodal mission control for Claude Code sessions. Voice-to-buffer, hand gesture editing, gaze-targeted dispatch with Paradigm context enrichment. Launched via `paradigm conductor`.
+  - **S0 — Foundation**: `#conductor-app` NSPanel floating overlay, `#conductor-panel` always-on-top window, `#permissions-onboarding` Camera/Mic/Accessibility flow, menu bar icon, 7 platform abstraction protocols (`VoiceInputProvider`, `GestureInputProvider`, `GazeTrackingProvider`, `ClaudeCodeDetectorProtocol`, `WindowArrangerProtocol`, `DispatchTargetProtocol`, `ContextEnricherProtocol`)
+  - **S1 — Buffer + Window Detection**: `#text-buffer` BufferEngine with undo/redo/cursor, `#window-detector` AXUIElement + CGWindowListCopyWindowInfo polling, `#dispatch-target` AX text injection with clipboard fallback, `#buffer-view` and `#instance-list-view` SwiftUI views
+  - **S2 — Voice Input**: `#whisper-voice-provider` WhisperKit speech-to-text (CoreML, Apple Silicon), `#audio-capture` AVCaptureSession microphone pipeline, push-to-talk mode
+  - **S3 — Hand Gestures**: `#vision-gesture-provider` Apple Vision VNDetectHumanHandPoseRequest at 15fps, `#gesture-classifier` joint positions → actions (swipe, pinch, fist, open palm, two-finger tap), `#gesture-state-machine` debounce/cooldowns, `#gesture-hud` visual feedback
+  - **S4 — Gaze Tracking**: `#mediapipe-gaze-provider` MediaPipe FaceMesh via Python subprocess, `#gaze-calibration` 5-point affine mapping, `#kalman-filter` 2D coordinate smoothing, `#gaze-router` dwell selection targeting
+  - **S5 — Context Enrichment**: `#paradigm-mcp-client` stdio JSON-RPC to paradigm-mcp, `#git-monitor` polling git diff, `#context-enricher` assembles Paradigm + git context, `#sentinel-ws-client` WebSocket for real-time events
+  - **S6 — Window Management**: `#window-arranger` 4 tiling layouts (focused, side-by-side, 3-up, grid), `#status-tracker` idle/processing/finished detection, `#notification-bubble` per-instance status overlay, `#agent-count-badge`
+  - **S7 — Polish**: `#settings-panel` preferences (hotkeys, gestures, enrichment, camera), `#hotkey-manager` global CGEvent tap registration
+  - 27 components, 5 flows, 6 gates, 10 signals, 4 aspects (~local-only, ~zero-cost, ~platform-abstracted, ~resource-conscious)
+  - 51 Swift source files, 753KB arm64 release binary, macOS 14+
+  - 9 unit tests for BufferEngine
+
+- **`paradigm conductor` CLI command**: Build-and-launch command for the Conductor native binary from `packages/conductor/`
+
 ## [3.25.2] — 2026-03-10
 
 ### Added
