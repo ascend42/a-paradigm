@@ -1,8 +1,5 @@
 import chalk from 'chalk';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'js-yaml';
-import { loadLoreEntries, updateLoreEntry, type LoreFilter, type LoreEntry } from '../../core/lore/index.js';
+import { loadLoreEntries, updateLoreEntry, type LoreFilter } from '../../core/lore/index.js';
 
 export async function loreRetagCommand(options: Record<string, unknown>): Promise<void> {
   const rootDir = process.cwd();

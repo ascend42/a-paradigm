@@ -93,8 +93,8 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
       if (config && typeof config.workspace === 'string') {
         workspace = loadWorkspaceContext(absoluteRoot, config.workspace);
       }
-    } catch {
-      // Config read failure is non-fatal for workspace loading
+    } catch (e) {
+      console.error(`[paradigm] Warning: Failed to load workspace config: ${(e as Error).message}`);
     }
   }
 

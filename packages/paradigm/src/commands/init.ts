@@ -18,7 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand } from './scan/index.js';
-import { detectDiscipline, getDisciplineConfig, detectStack, getStackConfig } from '../core/discipline.js';
+import { detectDiscipline, getDisciplineConfig, detectStack, getStackConfig, STACK_PRESETS } from '../core/discipline.js';
 
 // ============================================
 // Types
@@ -74,45 +74,19 @@ function countLines(filePath: string): number {
 }
 
 /**
- * Detect project type from package.json or other indicators
+ * Detect project type for display purposes.
+ * Uses stack presets first (precise), falls back to discipline name.
  */
 function detectProjectType(rootDir: string): string | undefined {
-  const packageJsonPath = path.join(rootDir, 'package.json');
-  
-  if (fs.existsSync(packageJsonPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-      
-      if (deps['next']) return 'Next.js';
-      if (deps['nuxt']) return 'Nuxt';
-      if (deps['@angular/core']) return 'Angular';
-      if (deps['vue']) return 'Vue';
-      if (deps['svelte']) return 'Svelte';
-      if (deps['express']) return 'Express';
-      if (deps['fastify']) return 'Fastify';
-      if (deps['react'] && !deps['next']) return 'React';
-      if (deps['typescript']) return 'TypeScript';
-      return 'Node.js';
-    } catch {
-      return undefined;
-    }
+  const stackId = detectStack(rootDir);
+  if (stackId && STACK_PRESETS[stackId]) {
+    return STACK_PRESETS[stackId].name;
   }
-  
-  // Python detection
-  if (fs.existsSync(path.join(rootDir, 'requirements.txt')) ||
-      fs.existsSync(path.join(rootDir, 'pyproject.toml'))) {
-    if (fs.existsSync(path.join(rootDir, 'manage.py'))) return 'Django';
-    if (fs.existsSync(path.join(rootDir, 'app.py'))) return 'Flask';
-    return 'Python';
+
+  const discipline = detectDiscipline(rootDir);
+  if (discipline !== 'backend') {
+    return discipline.charAt(0).toUpperCase() + discipline.slice(1);
   }
-  
-  // Go detection
-  if (fs.existsSync(path.join(rootDir, 'go.mod'))) return 'Go';
-  
-  // Rust detection
-  if (fs.existsSync(path.join(rootDir, 'Cargo.toml'))) return 'Rust';
-  
   return undefined;
 }
 
@@ -811,7 +785,7 @@ function createMinimalStructure(paradigmDir: string, projectName: string): void 
   fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
   fs.mkdirSync(path.join(paradigmDir, 'docs'), { recursive: true });
   fs.mkdirSync(path.join(paradigmDir, 'tasks'), { recursive: true });
-  fs.mkdirSync(path.join(paradigmDir, 'assessments'), { recursive: true });
+  fs.mkdirSync(path.join(paradigmDir, 'lore'), { recursive: true });
   // Note: prompts/ not created - served via MCP resources
 
   const minimalConfig = `# Paradigm Configuration
@@ -821,48 +795,49 @@ project: "${projectName}"
 agent-guidelines:
   overview: |
     This project uses Paradigm for structured AI-assisted development.
+    All context, symbols, and specifications live in the .paradigm/ directory.
   how-to-use:
-    - Check .paradigm/specs/ for philosophy and patterns
-    - Use symbol prefixes: @feature #component ^gate !signal %state $flow
-    - Run \`paradigm beacon\` for quick context
-    - Run \`paradigm ripple @symbol\` before making changes
+    - "Check .paradigm/specs/ for philosophy and patterns before making changes"
+    - "Reference symbols using prefixes: #component ^gate !signal $flow ~aspect"
+    - "Use the Paradigm logger instead of raw console.log/print statements"
+    - "Check .paradigm/docs/ for command reference and troubleshooting"
+  update-rules:
+    - "When adding a feature, create/update the nearest .purpose file"
+    - "When adding authorization, update portal.yaml"
+    - "Always update references when renaming symbols"
 
 symbol-system:
-  "@":
-    name: Feature
-    description: User-facing capabilities
-    examples: ["@login", "@checkout"]
   "#":
     name: Component
-    description: Reusable code units
-    examples: ["#Button", "#api-client"]
-  "^":
-    name: Portal
-    description: Authorization gates
-    examples: ["^authenticated", "^admin-only"]
-  "!":
-    name: Signal
-    description: Events and side effects
-    examples: ["!login-success", "!payment-failed"]
-  "%":
-    name: State
-    description: Application state
-    examples: ["%user.authenticated", "%cart.items"]
+    description: Any documented code unit (feature, service, module, integration)
+    examples: ["#checkout", "#login-handler", "#Button", "#stripe-client"]
   "$":
     name: Flow
-    description: Multi-step processes
-    examples: ["$checkout-flow", "$onboarding"]
+    description: Multi-step processes or user journeys
+    examples: ["$checkout-flow", "$onboarding", "$auth-flow"]
+  "^":
+    name: Gate
+    description: Access control points and authorization rules
+    examples: ["^authenticated", "^admin-only", "^rate-limited"]
+  "!":
+    name: Signal
+    description: Events emitted for side effects
+    examples: ["!login-success", "!payment-failed", "!rate-limited"]
+  "~":
+    name: Aspect
+    description: Cross-cutting rules with required code anchors
+    examples: ["~audit-required", "~rate-limited", "~cached"]
 
 logging:
   enforce: true
   default-level: debug
 
-scan:
-  enabled: true
-
 conventions:
-  - Use kebab-case for symbol IDs
-  - ALWAYS use Paradigm logger, NEVER raw console.log/print
+  - "Use kebab-case for all symbol IDs (feature-name, not featureName)"
+  - "Document flows when logic spans 3+ components"
+  - "Reference related items using symbol prefixes (# $ ^ ! ~)"
+  - "Update .purpose files when changing feature behavior"
+  - "ALWAYS use Paradigm logger, NEVER raw console.log/print"
 `;
 
   fs.writeFileSync(path.join(paradigmDir, 'config.yaml'), minimalConfig, 'utf8');

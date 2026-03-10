@@ -108,8 +108,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
             }
           }
         }
-      } catch {
-        // Non-fatal — continue shift
+      } catch (e) {
+        log.operation('shift').debug('Discipline detection failed', { error: (e as Error).message });
       }
     }
   }
@@ -201,8 +201,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
           }
           console.log(chalk.green(`  ✓ Linked workspace in config.yaml`));
         }
-      } catch {
-        // Non-fatal
+      } catch (e) {
+        log.operation('shift').debug('Workspace config link failed', { error: (e as Error).message });
       }
     } else if (fs.existsSync(configPath)) {
       // No --workspace flag: existing auto-detect behavior
@@ -227,8 +227,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
             searchDir = parent;
           }
         }
-      } catch {
-        // Non-fatal
+      } catch (e) {
+        log.operation('shift').debug('Workspace auto-detect failed', { error: (e as Error).message });
       }
     }
   }
@@ -283,8 +283,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
             spinner.warn(chalk.yellow(`Workspace reindex: ${(e as Error).message}`));
           }
         }
-      } catch {
-        // Non-fatal
+      } catch (e) {
+        log.operation('shift').debug('Workspace config read failed', { error: (e as Error).message });
       }
     }
   }
@@ -306,7 +306,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       try {
         await syncCommand(ide, { quiet: true, force: true });
         syncResults.push(ide);
-      } catch {
+      } catch (e) {
         // Some IDEs may not be configured, that's fine
       }
     }
@@ -381,8 +381,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
         const wsRelPath = path.relative(cwd, wsAbsPath);
         files.push({ path: wsRelPath, desc: 'Multi-project workspace', optional: true });
       }
-    } catch {
-      // Non-fatal
+    } catch (e) {
+      log.operation('shift').debug('Summary config read failed', { error: (e as Error).message });
     }
   }
 

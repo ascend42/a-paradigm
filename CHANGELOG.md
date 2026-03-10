@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.25.1] — 2026-03-10
+
+### Fixed
+
+- **Zero TypeScript errors**: Resolved all 9 pre-existing TS compilation errors in lore commands (`timeline.ts`, `list.ts`, `retag.ts`) — `entry.type` now defaults to `'note'` when undefined, removed unused imports.
+
+- **v1 symbols in fallback config**: `createMinimalStructure` (used when templates are missing) was still generating v1 symbol system (`@feature`, `%state`, `^portal`) instead of v2 (`#component`, `$flow`, `^gate`, `!signal`, `~aspect`).
+
+- **Dead `assessments/` directory**: Init no longer creates `.paradigm/assessments/` — assessments were consolidated into lore in 3.19.0. Now creates `.paradigm/lore/` instead.
+
+- **React Native discipline detection**: Moved React Native/Expo check before the generic UI deps check in `detectDiscipline()`. Previously, a React Native project with `react` in deps would be incorrectly detected as `web` instead of `mobile`.
+
+- **Silent error swallowing**: Replaced ~8 empty `catch {}` blocks in `shift.ts` and `index-loader.ts` with debug-level log statements. The workspace loading path in `index-loader.ts` now emits a visible warning on YAML parse failure (the root cause of the workspace bug fixed in 3.24.1).
+
+- **Duplicate `detectProjectType`**: Replaced the parallel detection function in `init.ts` with one that uses stack presets, eliminating a duplicated detection path.
+
 ## [3.25.0] — 2026-03-10
 
 ### Added

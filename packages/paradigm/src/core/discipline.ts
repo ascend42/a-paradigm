@@ -79,6 +79,11 @@ export function detectDiscipline(rootDir: string): Discipline {
       return 'library';
     }
 
+    // React Native / Expo → mobile (BEFORE generic UI check, since RN has `react` in deps)
+    if (hasDep('react-native') || hasDep('expo')) {
+      return 'mobile';
+    }
+
     // SSR frameworks → fullstack
     if (hasDep('next') || hasDep('nuxt') || hasDep('@sveltejs/kit') || hasDep('remix') || hasDep('@remix-run/node') || hasDep('astro')) {
       return 'fullstack';
@@ -97,11 +102,6 @@ export function detectDiscipline(rootDir: string): Discipline {
     // Both UI + server deps
     if (hasUIDeps(deps) && hasServerDeps(deps)) {
       return 'fullstack';
-    }
-
-    // React Native / Expo → mobile
-    if (hasDep('react-native') || hasDep('expo')) {
-      return 'mobile';
     }
 
     // ML/Data in JS (rare but possible)

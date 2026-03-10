@@ -39,7 +39,8 @@ export async function loreListCommand(options: Record<string, unknown>): Promise
   };
 
   for (const entry of entries) {
-    const colorFn = typeColor[entry.type] || chalk.white;
+    const entryType = entry.type || 'note';
+    const colorFn = typeColor[entryType] || chalk.white;
     const date = new Date(entry.timestamp);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -50,7 +51,7 @@ export async function loreListCommand(options: Record<string, unknown>): Promise
       : chalk.gray('·');
     const reviewStr = entry.review ? chalk.yellow('★'.repeat(entry.review.quality) + '☆'.repeat(5 - entry.review.quality)) : '';
 
-    console.log(`  ${chalk.gray(entry.id)} ${colorFn(entry.type.padEnd(14))} ${verifyIcon} ${chalk.white(entry.title)}`);
+    console.log(`  ${chalk.gray(entry.id)} ${colorFn(entryType.padEnd(14))} ${verifyIcon} ${chalk.white(entry.title)}`);
     console.log(`  ${chalk.gray(dateStr + ' ' + timeStr)}  ${authorIcon} ${chalk.gray(entry.author)}  ${(entry.symbols_touched || []).map(s => chalk.cyan(s)).join(' ')} ${reviewStr}`);
     console.log();
   }

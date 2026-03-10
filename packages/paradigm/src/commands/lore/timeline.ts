@@ -58,7 +58,7 @@ export async function loreTimelineCommand(options: {
     for (const [date, dayEntries] of byDate) {
       grouped[date] = dayEntries.map(e => ({
         id: e.id,
-        type: e.type,
+        type: e.type || 'note',
         title: e.title,
         author: e.author,
         symbols: e.symbols_touched || [],
@@ -92,11 +92,12 @@ export async function loreTimelineCommand(options: {
     console.log(chalk.white.bold(`  ${date}`) + chalk.gray(` (${dayEntries.length} entries)`));
 
     for (const entry of dayEntries) {
-      const colorFn = typeColor[entry.type] || chalk.white;
+      const entryType = entry.type || 'note';
+      const colorFn = typeColor[entryType] || chalk.white;
       const time = entry.timestamp.slice(11, 16);
       const authorIcon = entry.agent ? '🤖' : '👤';
 
-      console.log(`    ${chalk.gray(time)} ${colorFn(entry.type.padEnd(14))} ${chalk.white(entry.title)}`);
+      console.log(`    ${chalk.gray(time)} ${colorFn(entryType.padEnd(14))} ${chalk.white(entry.title)}`);
       console.log(`           ${authorIcon} ${chalk.gray(entry.author)}  ${(entry.symbols_touched || []).slice(0, 4).map(s => chalk.cyan(s)).join(' ')}`);
     }
     console.log();
