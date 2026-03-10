@@ -1,11 +1,10 @@
 // WhisperVoiceProvider.swift — #whisper-voice-provider
 // WhisperKit-based speech-to-text implementation.
 // Uses CoreML on Apple Silicon for local, offline transcription.
-//
-// NOTE: WhisperKit dependency will be added in Package.swift when ready.
-// For now this provides the structure and will use a placeholder transcription path.
 
+import AVFoundation
 import Foundation
+@preconcurrency import WhisperKit
 
 /// macOS voice input provider using WhisperKit for local speech recognition.
 @MainActor
@@ -21,14 +20,13 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     // MARK: - Private
 
     private let audioCapture = AudioCapture()
+    private var whisperKit: WhisperKit?
     private var transcriptionContinuation: AsyncStream<TranscriptionResult>.Continuation?
-    private var audioBuffers: [Data] = []
+    private var audioSamples: [Float] = []
+    private var recordingStartTime: Date?
 
-    /// Path where WhisperKit models are stored.
-    private var modelDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Conductor/WhisperModels", isDirectory: true)
-    }
+    /// WhisperKit model variant to use (small.en is a good balance of speed/quality).
+    private let modelVariant = "base.en"
 
     // MARK: - VoiceInputProvider
 
@@ -46,28 +44,39 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     }
 
     func downloadModel(progress: @escaping (Double) -> Void) async throws {
-        ConductorLog.component("whisper-voice-provider").info("Checking WhisperKit model...")
+        let variant = self.modelVariant
+        ConductorLog.component("whisper-voice-provider").info("Initializing WhisperKit with model \(variant)...")
 
-        // Check if model already exists
-        let modelPath = modelDirectory.appendingPathComponent("small.en")
-        if FileManager.default.fileExists(atPath: modelPath.path) {
+        do {
+            let kit = try await WhisperKit(
+                model: variant,
+                verbose: false,
+                logLevel: .error,
+                download: true,
+                useBackgroundDownloadSession: false
+            )
+
+            // Observe download progress via WhisperKit's progress property
+            let observation = kit.progress.observe(\.fractionCompleted) { progressObj, _ in
+                Task { @MainActor in
+                    progress(progressObj.fractionCompleted)
+                }
+            }
+
+            // Wait for models to be ready
+            try await kit.loadModels()
+            observation.invalidate()
+
+            self.whisperKit = kit
             isModelReady = true
             progress(1.0)
-            ConductorLog.gate("model-downloaded").info("Model already available")
-            return
+
+            ConductorLog.gate("model-downloaded").info("WhisperKit model \(variant) ready")
+        } catch {
+            ConductorLog.component("whisper-voice-provider")
+                .error("WhisperKit setup failed: \(error.localizedDescription)")
+            throw error
         }
-
-        // Create model directory
-        try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
-
-        // TODO: Integrate WhisperKit model download when dependency is added
-        // For now, mark as ready — actual download will use WhisperKit.download()
-        ConductorLog.component("whisper-voice-provider")
-            .info("WhisperKit integration pending — model download stubbed")
-
-        progress(1.0)
-        isModelReady = true
-        ConductorLog.gate("model-downloaded").info("Model ready")
     }
 
     // MARK: - InputProvider
@@ -80,8 +89,18 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
         }
 
         try audioCapture.setup()
-        isActive = true
 
+        // Wire audio buffer callback to accumulate float samples
+        audioCapture.onAudioBuffer = { [weak self] sampleBuffer in
+            let floats = Self.extractFloatSamples(from: sampleBuffer)
+            Task { @MainActor [weak self] in
+                if self?.isRecording == true {
+                    self?.audioSamples.append(contentsOf: floats)
+                }
+            }
+        }
+
+        isActive = true
         ConductorLog.component("whisper-voice-provider").info("Voice provider started")
     }
 
@@ -97,7 +116,8 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     /// Begin recording (for push-to-talk mode).
     func beginRecording() {
         guard isActive else { return }
-        audioBuffers.removeAll()
+        audioSamples.removeAll()
+        recordingStartTime = .now
         audioCapture.start()
         isRecording = true
     }
@@ -116,14 +136,95 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     // MARK: - Transcription
 
     private func transcribeBufferedAudio() async {
-        // TODO: Feed audio buffers to WhisperKit for transcription
-        // For now, emit a placeholder result
-        ConductorLog.component("whisper-voice-provider")
-            .info("Transcription pending WhisperKit integration")
+        guard let kit = whisperKit else {
+            ConductorLog.component("whisper-voice-provider")
+                .error("Cannot transcribe — WhisperKit not initialized")
+            return
+        }
 
-        // When WhisperKit is integrated:
-        // let result = try await whisperKit.transcribe(audioBuffers)
-        // transcriptionContinuation?.yield(TranscriptionResult(text: result.text, isFinal: true))
-        // ConductorLog.signal("transcription-ready").info("Transcription complete")
+        let samples = audioSamples
+        let startTime = recordingStartTime ?? .now
+        audioSamples.removeAll()
+
+        guard !samples.isEmpty else {
+            ConductorLog.component("whisper-voice-provider").info("No audio samples to transcribe")
+            return
+        }
+
+        let audioDuration = TimeInterval(samples.count) / 16000.0
+        ConductorLog.component("whisper-voice-provider")
+            .info("Transcribing \(String(format: "%.1f", audioDuration))s of audio...")
+
+        do {
+            let wkResults = try await kit.transcribe(audioArray: samples)
+
+            let text = wkResults.compactMap { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+
+            guard !text.isEmpty else {
+                ConductorLog.component("whisper-voice-provider").info("Transcription returned empty text")
+                return
+            }
+
+            // Compute average confidence from segments
+            let allSegments = wkResults.flatMap { $0.segments }
+            let avgConfidence: Double = allSegments.isEmpty ? 1.0 :
+                Double(allSegments.map { 1.0 - Double($0.noSpeechProb) }.reduce(0, +)) / Double(allSegments.count)
+
+            let result = TranscriptionResult(
+                text: text,
+                isFinal: true,
+                confidence: avgConfidence,
+                audioDuration: audioDuration,
+                timestamp: startTime
+            )
+
+            transcriptionContinuation?.yield(result)
+            ConductorLog.signal("transcription-ready")
+                .info("Transcribed: \"\(text.prefix(80))\" (confidence: \(String(format: "%.2f", avgConfidence)))")
+        } catch {
+            ConductorLog.component("whisper-voice-provider")
+                .error("Transcription failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Audio Conversion
+
+    /// Convert a CMSampleBuffer from AVCaptureSession into 16kHz mono Float samples for WhisperKit.
+    private static func extractFloatSamples(from sampleBuffer: CMSampleBuffer) -> [Float] {
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
+            return []
+        }
+
+        var length = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        let status = CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+
+        guard status == kCMBlockBufferNoErr, let data = dataPointer else {
+            return []
+        }
+
+        // Get the audio format to determine sample rate and format
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee else {
+            return []
+        }
+
+        let sampleCount = length / MemoryLayout<Int16>.size
+
+        // Convert Int16 PCM to Float (common capture format)
+        if asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
+            // Already float samples
+            let floatCount = length / MemoryLayout<Float>.size
+            let floatBuffer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
+            return Array(UnsafeBufferPointer(start: floatBuffer, count: floatCount))
+        } else {
+            // Int16 PCM → Float normalized to [-1.0, 1.0]
+            let int16Buffer = UnsafeRawPointer(data).bindMemory(to: Int16.self, capacity: sampleCount)
+            return (0..<sampleCount).map { Float(int16Buffer[$0]) / Float(Int16.max) }
+        }
+
+        // Note: WhisperKit internally handles resampling to 16kHz if needed,
+        // but AVCaptureSession with .high preset typically captures at 48kHz.
+        // WhisperKit's AudioProcessor handles the conversion.
     }
 }

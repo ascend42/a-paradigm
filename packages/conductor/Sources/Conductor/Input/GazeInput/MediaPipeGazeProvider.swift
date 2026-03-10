@@ -37,24 +37,24 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
     }
 
     func calibrate() async throws {
+        guard isActive else { throw GazeError.notActive }
+
         ConductorLog.component("gaze-calibration").info("Starting 5-point calibration")
 
-        // Calibration requires showing 5 points on screen and collecting gaze data.
-        // The user looks at each point while we capture iris positions.
-        // This mapping is then used to convert iris → screen coordinates.
-
-        guard isActive else {
-            throw GazeError.notActive
+        // Run the calibration overlay, feeding it the live gaze stream
+        guard let points = await CalibrationWindowController.run(gazeStream: gazePointStream) else {
+            ConductorLog.component("gaze-calibration").info("Calibration cancelled")
+            return
         }
 
-        // TODO: Show calibration UI overlay with 5 target points
-        // For each point: wait for dwell → collect samples → compute mapping
-
-        // For now, use a simple identity calibration
+        // Feed collected points into the calibration model
         calibrationData.reset()
-        isCalibrated = true
+        for point in points {
+            calibrationData.addCalibrationPoint(iris: point.iris, screen: point.screen)
+        }
 
-        ConductorLog.gate("gaze-calibrated").info("Calibration complete")
+        isCalibrated = true
+        ConductorLog.gate("gaze-calibrated").info("Calibration complete with \(points.count) points")
     }
 
     // MARK: - InputProvider

@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.28.0] — 2026-03-10
+
+### Added
+
+- **WhisperKit integration**: `#whisper-voice-provider` now uses real WhisperKit 0.16.0 (CoreML, Apple Silicon) for local speech-to-text. Model auto-downloads on first use (`base.en`), CMSampleBuffer→Float conversion, confidence scoring from segment data. Replaces the previous stub implementation.
+
+- **Gaze calibration UI**: Fullscreen 5-point calibration overlay (`GazeCalibrationView`, `CalibrationWindowController`). Pulsating cyan targets with clockwise dwell-fill animation, 2-second dwell per point, ESC to cancel, iris sample averaging from live gaze stream. Wired to `MediaPipeGazeProvider.calibrate()` and the Settings "Recalibrate..." button via NotificationCenter.
+
+- **MCP auto-registration with Conductor**: `paradigm-mcp` now auto-registers the session with Conductor on startup — writes `~/.conductor/sessions/{pid}.json` automatically. Process exit cleanup via `SIGTERM`/`exit` handlers. No user action required; `/conduct` still works for adding labels or re-registering.
+
+### Fixed
+
+- **`paradigm conductor` CLI path resolution**: Command now works when run from inside `packages/conductor/` or any subdirectory of the monorepo, not just the root. Added cwd-is-conductor detection and upward walk from cwd.
+
+### Changed
+
+- **Conductor tools refactored**: `detectTerminalBundleId()` and `detectGitBranch()` moved from `conductor.ts` to `conductor-loader.ts` as shared helpers for both manual registration and auto-registration.
+
 ## [3.27.0] — 2026-03-10
 
 ### Added

@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execSync } from 'child_process';
 
 const CONDUCTOR_DIR = path.join(os.homedir(), '.conductor');
 const SESSIONS_DIR = path.join(CONDUCTOR_DIR, 'sessions');
@@ -132,5 +133,105 @@ function isProcessAlive(pid: number): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+// ────────────────────────────────────────────────────────
+// Detection Helpers
+// ────────────────────────────────────────────────────────
+
+/**
+ * Try to detect the terminal app's bundle ID from the process hierarchy.
+ * Uses AppleScript to query System Events for the frontmost application.
+ */
+export function detectTerminalBundleId(): string | undefined {
+  try {
+    const script = `
+      tell application "System Events"
+        set frontApp to first application process whose frontmost is true
+        return bundle identifier of frontApp
+      end tell
+    `;
+    const result = execSync(`osascript -e '${script}'`, {
+      encoding: 'utf-8',
+      timeout: 3000,
+    }).trim();
+    return result || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Detect the current git branch for a given working directory.
+ */
+export function detectGitBranch(cwd: string): string | undefined {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 3000,
+    }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// ────────────────────────────────────────────────────────
+// Auto-Registration
+// ────────────────────────────────────────────────────────
+
+/**
+ * Auto-register this MCP session with Conductor on startup.
+ * Also registers a process exit handler to clean up.
+ *
+ * This is fire-and-forget: it never throws and never blocks startup.
+ * Safe to call even if Conductor isn't installed — it just writes a file
+ * that Conductor may or may not be watching.
+ */
+export function autoRegisterWithConductor(projectDir: string): void {
+  try {
+    const pid = process.pid;
+    const terminal = detectTerminalBundleId();
+    const branch = detectGitBranch(projectDir);
+
+    // Try to get parent PID
+    let parentPid: number | undefined;
+    try {
+      const ppid = execSync(`ps -o ppid= -p ${pid}`, {
+        encoding: 'utf-8',
+        timeout: 3000,
+      }).trim();
+      parentPid = parseInt(ppid, 10);
+      if (isNaN(parentPid)) parentPid = undefined;
+    } catch {}
+
+    registerConductorSession({
+      pid,
+      parentPid,
+      projectDir,
+      terminal,
+      branch,
+    });
+
+    // Register cleanup handlers
+    const cleanup = () => {
+      try {
+        unregisterConductorSession(pid);
+      } catch {
+        // Best-effort cleanup — ignore errors
+      }
+    };
+
+    process.on('exit', cleanup);
+    process.on('SIGTERM', () => {
+      cleanup();
+      process.exit(0);
+    });
+
+    console.error(`[paradigm-mcp] Auto-registered with Conductor (PID ${pid})`);
+  } catch {
+    // Best-effort — never block startup
+    console.error('[paradigm-mcp] Auto-registration with Conductor skipped (non-fatal)');
   }
 }

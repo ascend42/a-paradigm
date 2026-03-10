@@ -14,6 +14,8 @@ import {
   unregisterConductorSession,
   listConductorSessions,
   cleanStaleSessions,
+  detectTerminalBundleId,
+  detectGitBranch,
 } from '../utils/conductor-loader.js';
 
 /**
@@ -100,23 +102,13 @@ export async function handleConductorTool(
   switch (name) {
     case 'paradigm_conductor_register': {
       const pid = process.pid;
-      const projectDir = ctx.projectRoot;
+      const projectDir = ctx.rootDir;
 
-      // Try to detect terminal
-      let terminal = args.terminal as string | undefined;
-      if (!terminal) {
-        terminal = detectTerminalBundleId();
-      }
+      // Try to detect terminal (use provided value or auto-detect)
+      const terminal = (args.terminal as string | undefined) || detectTerminalBundleId();
 
       // Try to detect branch
-      let branch: string | undefined;
-      try {
-        branch = execSync('git rev-parse --abbrev-ref HEAD', {
-          cwd: projectDir,
-          encoding: 'utf-8',
-          timeout: 3000,
-        }).trim();
-      } catch {}
+      const branch = detectGitBranch(projectDir);
 
       // Try to get parent PID
       let parentPid: number | undefined;
@@ -210,24 +202,3 @@ export async function handleConductorTool(
   }
 }
 
-/**
- * Try to detect the terminal app's bundle ID from the process hierarchy.
- */
-function detectTerminalBundleId(): string | undefined {
-  try {
-    // Walk up the process tree to find a known terminal
-    const script = `
-      tell application "System Events"
-        set frontApp to first application process whose frontmost is true
-        return bundle identifier of frontApp
-      end tell
-    `;
-    const result = execSync(`osascript -e '${script}'`, {
-      encoding: 'utf-8',
-      timeout: 3000,
-    }).trim();
-    return result || undefined;
-  } catch {
-    return undefined;
-  }
-}

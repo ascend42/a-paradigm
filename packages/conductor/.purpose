@@ -78,7 +78,7 @@ context:
     - Sources/Conductor/UI/Views/InstanceListView.swift:1
 
 #whisper-voice-provider:
-  description: WhisperKit speech-to-text implementation
+  description: WhisperKit speech-to-text — real CoreML transcription via WhisperKit 0.16.0
   tags: [voice, whisperkit, coreml]
   anchors:
     - Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift:1
@@ -120,10 +120,12 @@ context:
     - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
 
 #gaze-calibration:
-  description: 5-point calibration flow
-  tags: [gaze, calibration]
+  description: 5-point calibration — math, fullscreen overlay UI, and window controller
+  tags: [gaze, calibration, ui]
   anchors:
     - Sources/Conductor/Input/GazeInput/GazeCalibration.swift:1
+    - Sources/Conductor/UI/Views/GazeCalibrationView.swift:1
+    - Sources/Conductor/UI/CalibrationWindowController.swift:1
 
 #kalman-filter:
   description: Gaze coordinate smoothing
@@ -212,9 +214,10 @@ flows:
       - "#gesture-state-machine"
       - "#text-buffer"
   gaze-target:
-    description: Camera to MediaPipe to Iris to Screen point to Window match to Target
+    description: Camera to MediaPipe to Iris to Calibration to Screen point to Window match to Target
     steps:
       - "#mediapipe-gaze-provider"
+      - "#gaze-calibration"
       - "#kalman-filter"
       - "#gaze-router"
       - "#window-detector"
@@ -227,7 +230,7 @@ flows:
       - "#context-enricher"
       - "#dispatch-target"
   session-registration:
-    description: /conduct or MCP tool to JSON file to SessionFileWatcher to merged instance list
+    description: Auto-register on MCP startup (or /conduct) to JSON file to SessionFileWatcher to merged instance list
     signals:
       - "!session-registered"
       - "!session-unregistered"
@@ -291,6 +294,9 @@ signals:
     description: Sub-agent count changed for an instance
   layout-applied:
     description: Window tiling layout applied
+  calibration-complete:
+    description: Gaze calibration 5-point collection finished
+    emitters: ["#gaze-calibration"]
   session-registered:
     description: Claude Code session registered via /conduct or paradigm_conductor_register MCP tool
     emitters: ["#session-file-watcher"]

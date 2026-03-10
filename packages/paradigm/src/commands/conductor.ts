@@ -92,5 +92,23 @@ function findConductorDir(): string | null {
     return cwdCandidate;
   }
 
+  // Check if cwd itself is the conductor directory
+  if (fs.existsSync(path.join(process.cwd(), 'Package.swift'))) {
+    const basename = path.basename(process.cwd());
+    if (basename === 'conductor') {
+      return process.cwd();
+    }
+  }
+
+  // Walk up from cwd to find monorepo root
+  let cwdDir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    cwdDir = path.dirname(cwdDir);
+    const candidate = path.join(cwdDir, 'packages', 'conductor');
+    if (fs.existsSync(path.join(candidate, 'Package.swift'))) {
+      return candidate;
+    }
+  }
+
   return null;
 }

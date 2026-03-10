@@ -107,7 +107,7 @@ struct SettingsPanelView: View {
                     }
 
                     Button("Recalibrate…") {
-                        // TODO: Trigger calibration flow
+                        NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
                     }
                 }
             }
@@ -139,4 +139,11 @@ struct SettingsPanelView: View {
             }
         }
     }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    /// Posted by SettingsPanelView to request gaze recalibration.
+    static let conductorRecalibrate = Notification.Name("com.a-company.conductor.recalibrate")
 }

@@ -131,11 +131,11 @@ description: |
     - src/tools/graph.ts:1-300
 
 #ConductorTools:
-  description: Conductor session registration MCP tools — register/unregister/list Claude Code sessions for the Conductor overlay
-  tags: [mcp, conductor]
+  description: Conductor session management — auto-registers on MCP startup, manual register/unregister/list tools, process exit cleanup
+  tags: [mcp, conductor, auto-registration]
   anchors:
     - src/tools/conductor.ts:1-200
-    - src/utils/conductor-loader.ts:1-120
+    - src/utils/conductor-loader.ts:1-240
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation

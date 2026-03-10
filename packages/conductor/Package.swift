@@ -12,13 +12,14 @@ let package = Package(
         .executable(name: "conductor", targets: ["Conductor"])
     ],
     dependencies: [
-        // WhisperKit will be added in Sprint 2
-        // .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.16.0"),
     ],
     targets: [
         .executableTarget(
             name: "Conductor",
-            dependencies: [],
+            dependencies: [
+                .product(name: "WhisperKit", package: "WhisperKit"),
+            ],
             path: "Sources/Conductor",
             resources: [
                 .copy("../../Resources")

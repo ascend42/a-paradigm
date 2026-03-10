@@ -26,6 +26,7 @@ import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
 import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
+import { autoRegisterWithConductor } from './utils/conductor-loader.js';
 
 // Get project directory from args or use cwd
 const projectDir = process.argv[2] || process.cwd();
@@ -72,6 +73,9 @@ async function main() {
     console.error(`[paradigm-mcp] Error loading project:`, error);
     process.exit(1);
   }
+
+  // Auto-register with Conductor (fire-and-forget, never blocks startup)
+  autoRegisterWithConductor(projectDir);
 
   // Create MCP server
   const server = new Server(
