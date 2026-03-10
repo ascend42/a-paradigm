@@ -1,28 +1,25 @@
 id: P-add-integration-test
-name: "Add an integration test"
-description: "Create a multi-package integration test that tests CLI behavior end-to-end"
-
+name: Add an integration test
+description: Create a multi-package integration test that tests CLI behavior end-to-end
 trigger:
-  - "integration test"
-  - "e2e test"
-  - "end to end test"
-tags: [test, integration, e2e]
-
+  - integration test
+  - e2e test
+  - end to end test
+tags:
+  - test
+  - integration
+  - e2e
 symbols: []
-
-exemplar: "packages/paradigm/src/commands/doctor.test.ts"
-
+exemplar: packages/paradigm/src/commands/doctor.test.ts
 steps:
   - action: create
-    target: "packages/paradigm/src/{path}.test.ts"
-    template_from: "packages/paradigm/src/commands/doctor.test.ts"
-    notes: "Use createTempProject() fixture for isolated test directories. Spawn CLI subprocesses with execSync/spawn. Assert on stdout, file outputs, and exit codes."
-
+    target: packages/paradigm/src/{path}.test.ts
+    template_from: packages/paradigm/src/commands/doctor.test.ts
+    notes: Use createTempProject() fixture for isolated test directories. Spawn CLI subprocesses with execSync/spawn. Assert on stdout, file outputs, and exit codes.
   - action: verify
-    notes: "Run: cd packages/paradigm && npx vitest run {path}.test.ts"
-
-recorded_from: "L-2026-03-01-protocols-audit"
-recorded_at: "2026-03-01T12:00:00Z"
-last_verified: "2026-03-01T12:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: 'Run: cd packages/paradigm && npx vitest run {path}.test.ts'
+recorded_from: L-2026-03-01-protocols-audit
+recorded_at: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-01T12:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

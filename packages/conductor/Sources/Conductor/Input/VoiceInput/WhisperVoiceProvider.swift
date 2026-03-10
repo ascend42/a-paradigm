@@ -25,8 +25,10 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     private var audioSamples: [Float] = []
     private var recordingStartTime: Date?
 
-    /// WhisperKit model variant to use (small.en is a good balance of speed/quality).
-    private let modelVariant = "base.en"
+    /// WhisperKit model variant, configurable via Settings/Setup.
+    var modelVariant: String {
+        UserDefaults.standard.string(forKey: "whisperModel") ?? "tiny.en"
+    }
 
     // MARK: - VoiceInputProvider
 
@@ -45,38 +47,47 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
 
     func downloadModel(progress: @escaping (Double) -> Void) async throws {
         let variant = self.modelVariant
-        ConductorLog.component("whisper-voice-provider").info("Initializing WhisperKit with model \(variant)...")
+        ConductorLog.component("whisper-voice-provider").info("Downloading WhisperKit model \(variant)...")
 
         do {
-            let kit = try await WhisperKit(
-                model: variant,
-                verbose: false,
-                logLevel: .error,
-                download: true,
-                useBackgroundDownloadSession: false
+            // Phase 1: Download model files only (no compilation/loading)
+            progress(0.05)
+            _ = try await WhisperKit.download(
+                variant: variant,
+                progressCallback: { progressObj in
+                    Task { @MainActor in
+                        progress(max(0.05, progressObj.fractionCompleted))
+                    }
+                }
             )
 
-            // Observe download progress via WhisperKit's progress property
-            let observation = kit.progress.observe(\.fractionCompleted) { progressObj, _ in
-                Task { @MainActor in
-                    progress(progressObj.fractionCompleted)
-                }
-            }
-
-            // Wait for models to be ready
-            try await kit.loadModels()
-            observation.invalidate()
-
-            self.whisperKit = kit
+            // Mark as downloaded — actual WhisperKit init happens lazily on first transcription
             isModelReady = true
             progress(1.0)
-
-            ConductorLog.gate("model-downloaded").info("WhisperKit model \(variant) ready")
+            ConductorLog.gate("model-downloaded").info("WhisperKit model \(variant) downloaded")
         } catch {
             ConductorLog.component("whisper-voice-provider")
-                .error("WhisperKit setup failed: \(error.localizedDescription)")
+                .error("WhisperKit download failed: \(error.localizedDescription)")
             throw error
         }
+    }
+
+    /// Ensure WhisperKit is initialized (called lazily before first transcription).
+    private func ensureLoaded() async throws {
+        guard whisperKit == nil else { return }
+        let variant = self.modelVariant
+
+        ConductorLog.component("whisper-voice-provider").info("Loading WhisperKit \(variant)...")
+        let kit = try await WhisperKit(
+            model: variant,
+            verbose: false,
+            logLevel: .error,
+            prewarm: false,
+            load: true,
+            download: false // Already downloaded
+        )
+        self.whisperKit = kit
+        ConductorLog.component("whisper-voice-provider").info("WhisperKit loaded and ready")
     }
 
     // MARK: - InputProvider
@@ -136,6 +147,15 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     // MARK: - Transcription
 
     private func transcribeBufferedAudio() async {
+        // Lazy-load WhisperKit on first transcription
+        do {
+            try await ensureLoaded()
+        } catch {
+            ConductorLog.component("whisper-voice-provider")
+                .error("Failed to load WhisperKit: \(error.localizedDescription)")
+            return
+        }
+
         guard let kit = whisperKit else {
             ConductorLog.component("whisper-voice-provider")
                 .error("Cannot transcribe — WhisperKit not initialized")

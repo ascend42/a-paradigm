@@ -8,6 +8,8 @@ struct MainOverlayView: View {
     @State var showOnboarding: Bool
     let permissionStatus: PermissionStatus
 
+    @AppStorage("setupComplete") private var setupComplete: Bool = false
+
     @StateObject private var buffer = BufferEngine()
     @StateObject private var detector = ClaudeCodeDetector()
     @StateObject private var sessionWatcher = SessionFileWatcher()
@@ -47,9 +49,16 @@ struct MainOverlayView: View {
                     status: permissionStatus,
                     onDismiss: {
                         showOnboarding = false
-                        startDetection()
+                        if setupComplete {
+                            startDetection()
+                        }
                     }
                 )
+            } else if !setupComplete {
+                SetupWizardView(onComplete: {
+                    setupComplete = true
+                    startDetection()
+                })
             } else {
                 // Main content area
                 mainContent
@@ -59,13 +68,18 @@ struct MainOverlayView: View {
         .frame(minHeight: 300, idealHeight: 550)
         .background(.ultraThinMaterial)
         .onAppear {
-            if !showOnboarding {
+            if !showOnboarding && setupComplete {
                 startDetection()
             }
         }
         .onDisappear {
             detector.stopPolling()
             sessionWatcher.stopWatching()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .conductorRunSetup)) { _ in
+            detector.stopPolling()
+            sessionWatcher.stopWatching()
+            setupComplete = false
         }
     }
 
@@ -77,6 +91,9 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
+            Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Spacer()
             statusIndicator
         }

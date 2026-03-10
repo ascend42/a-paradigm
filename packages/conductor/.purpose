@@ -1,5 +1,5 @@
 purpose: Paradigm Conductor — multimodal mission control for Claude Code sessions
-version: 0.2.0
+version: 0.2.1
 description: Voice-to-buffer, gesture editing, gaze-targeted dispatch with Paradigm context enrichment. Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command.
 context:
   - Native macOS Swift/SwiftUI app
@@ -181,6 +181,18 @@ context:
   anchors:
     - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
 
+#setup-wizard:
+  description: Multi-step setup wizard — feature selection, dependency checking, model picker, gaze calibration
+  tags: [ui, setup, onboarding]
+  anchors:
+    - Sources/Conductor/UI/Views/SetupWizardView.swift:1
+
+#dependency-checker:
+  description: Checks Python 3, MediaPipe/OpenCV, and downloads WhisperKit models during setup
+  tags: [setup, dependencies]
+  anchors:
+    - Sources/Conductor/Utils/DependencyChecker.swift:1
+
 #settings-panel:
   description: "Preferences: hotkeys, gestures, enrichment"
   tags: [ui, settings, preferences]
@@ -238,6 +250,13 @@ flows:
       - "#session-file-watcher"
       - "#window-detector"
       - "#instance-list-view"
+  setup-flow:
+    description: Feature selection to dependency checks to model download to gaze calibration to ready
+    steps:
+      - "#setup-wizard"
+      - "#dependency-checker"
+      - "#whisper-voice-provider"
+      - "#gaze-calibration"
   window-tiling:
     description: User hotkey to Layout selection to AX setFrame per window
     steps:

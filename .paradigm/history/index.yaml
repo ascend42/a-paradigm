@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-10T17:55:26.053Z'
+generated: '2026-03-10T22:59:07.528Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -2288,11 +2288,40 @@ by_symbol:
       agent: []
   '#plsat-v3':
     symbol: '#plsat-v3'
-    total_changes: 3
-    last_modified: '2026-03-08T07:07:36Z'
+    total_changes: 4
+    last_modified: '2026-03-10T18:08:41Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_76
+        id: h0139
+        ts: '2026-03-10T18:08:41Z'
+        type: implement
+        symbols:
+          - '#paradigm-docs'
+          - '#plsat-v3'
+          - '#stack-presets'
+          - '#university-courses'
+        author:
+          type: human
+          id: ascend
+        commit: 0c26ba763a518d309cedd2af9e9a512b7a1e324f
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .purpose
+          - CHANGELOG.md
+          - README.md
+          - llms.txt
+          - packages/paradigm/package.json
+          - packages/university/package.json
+          - packages/university/src/content/courses/.purpose
+          - packages/university/src/content/courses/para-101.json
+          - packages/university/src/content/courses/para-201.json
+          - packages/university/src/content/plsat/.purpose
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'feat(#paradigm-docs): llms.txt, README AI discoverability, university stack preset content — bump to 3.25.2'
       - &ref_74
         id: h0134
         ts: '2026-03-08T07:07:36Z'
@@ -4053,7 +4082,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_76
+      - &ref_77
         id: h0138
         ts: '2026-03-10T17:55:20Z'
         type: implement
@@ -4079,7 +4108,7 @@ by_symbol:
           - packages/paradigm/src/commands/shift.ts
           - packages/paradigm/src/core/discipline.ts
         description: 'fix(#paradigm-core): 6 QoL fixes — zero TS errors, v2 symbols, detection order — bump to 3.25.1'
-      - &ref_77
+      - &ref_78
         id: h0137
         ts: '2026-03-10T17:39:25Z'
         type: implement
@@ -4101,7 +4130,7 @@ by_symbol:
           - packages/paradigm/src/index.ts
           - packages/paradigm/templates/paradigm/config.yaml
         description: 'feat(#paradigm-init): add 16 stack presets for cold-start configuration — bump to 3.25.0'
-      - &ref_78
+      - &ref_79
         id: h0136
         ts: '2026-03-09T03:43:02Z'
         type: implement
@@ -5315,11 +5344,12 @@ by_symbol:
       agent: []
   '#university-courses':
     symbol: '#university-courses'
-    total_changes: 2
-    last_modified: '2026-03-08T07:07:36Z'
+    total_changes: 3
+    last_modified: '2026-03-10T18:08:41Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_76
       - *ref_74
       - *ref_75
     contributors:
@@ -5465,9 +5495,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_76
       - *ref_77
       - *ref_78
+      - *ref_79
     contributors:
       human:
         - ascend
@@ -5479,8 +5509,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_76
       - *ref_77
+      - *ref_78
     contributors:
       human:
         - ascend
@@ -5492,7 +5522,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_76
+      - *ref_77
     contributors:
       human:
         - ascend
@@ -5504,7 +5534,248 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_77
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-docs':
+    symbol: '#paradigm-docs'
+    total_changes: 1
+    last_modified: '2026-03-10T18:08:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
       - *ref_76
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#stack-presets':
+    symbol: '#stack-presets'
+    total_changes: 1
+    last_modified: '2026-03-10T18:08:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_76
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!session-registered':
+    symbol: '!session-registered'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_80
+        id: h0141
+        ts: '2026-03-10T22:24:53Z'
+        type: implement
+        symbols:
+          - '!session-registered'
+          - '!session-unregistered'
+          - '#conductor-app'
+          - '#ConductorTools'
+          - '#instance-list-view'
+          - '#session-file-watcher'
+          - '#window-detector'
+          - $session-registration
+        author:
+          type: human
+          id: ascend
+        commit: 2b8db786f1cb7c9d76c9b2f532ca648dd5097d48
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/UI/Views/InstanceListView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/WindowManager/ClaudeCodeDetector.swift
+          - packages/conductor/Sources/Conductor/WindowManager/SessionFileWatcher.swift
+          - packages/conductor/TESTING.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/conductor.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/utils/conductor-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/conductor.ts
+          - plugins/paradigm/skills/conduct/SKILL.md
+        description: 'feat(#conductor-app): /conduct skill + MCP session registration + AX detector rewrite — bump to 3.27.0'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!session-unregistered':
+    symbol: '!session-unregistered'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#conductor-app':
+    symbol: '#conductor-app'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ConductorTools':
+    symbol: '#ConductorTools'
+    total_changes: 2
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_81
+        id: h0142
+        ts: '2026-03-10T22:59:02Z'
+        type: implement
+        symbols:
+          - '!calibration-complete'
+          - '!transcription-ready'
+          - '#ConductorTools'
+          - '#gaze-calibration'
+          - '#whisper-voice-provider'
+          - $session-registration
+        author:
+          type: human
+          id: ascend
+        commit: 7d274adad3e6fdb36f0e7f7bdeda87f94a7e5b10
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Package.resolved
+          - packages/conductor/Package.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/UI/CalibrationWindowController.swift
+          - packages/conductor/Sources/Conductor/UI/Views/GazeCalibrationView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/index.ts
+          - packages/paradigm-mcp/src/tools/conductor.ts
+          - packages/paradigm-mcp/src/utils/conductor-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/conductor.ts
+        description: 'feat(#conductor-app): WhisperKit integration, gaze calibration UI, MCP auto-registration — bump to 3.28.0'
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#instance-list-view':
+    symbol: '#instance-list-view'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-file-watcher':
+    symbol: '#session-file-watcher'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#window-detector':
+    symbol: '#window-detector'
+    total_changes: 1
+    last_modified: '2026-03-10T22:24:53Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $session-registration:
+    symbol: $session-registration
+    total_changes: 2
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+      - *ref_80
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!calibration-complete':
+    symbol: '!calibration-complete'
+    total_changes: 1
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!transcription-ready':
+    symbol: '!transcription-ready'
+    total_changes: 1
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gaze-calibration':
+    symbol: '#gaze-calibration'
+    total_changes: 1
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#whisper-voice-provider':
+    symbol: '#whisper-voice-provider'
+    total_changes: 1
+    last_modified: '2026-03-10T22:59:02Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
     contributors:
       human:
         - ascend

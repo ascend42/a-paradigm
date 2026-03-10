@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **WhisperKit integration**: `#whisper-voice-provider` now uses real WhisperKit 0.16.0 (CoreML, Apple Silicon) for local speech-to-text. Model auto-downloads on first use (`base.en`), CMSampleBuffer→Float conversion, confidence scoring from segment data. Replaces the previous stub implementation.
+- **WhisperKit integration**: `#whisper-voice-provider` now uses real WhisperKit 0.16.0 (CoreML, Apple Silicon) for local speech-to-text. Download-only during setup, lazy CoreML compilation on first transcription. CMSampleBuffer→Float conversion, confidence scoring from segment data.
+
+- **Setup wizard** (`#setup-wizard`, `#dependency-checker`): Multi-step onboarding flow — feature selection (voice/gestures/gaze toggles), WhisperKit model picker (tiny.en/base.en/small.en), dependency verification (Python 3, MediaPipe/OpenCV), download progress with percentage, retry for failed checks, gaze calibration step, ready summary. Inserted between permissions onboarding and main content. Re-runnable from Settings.
+
+- **Conductor version display**: Header bar now shows version number (e.g., "Conductor v0.2.0") from `CFBundleShortVersionString`.
 
 - **Gaze calibration UI**: Fullscreen 5-point calibration overlay (`GazeCalibrationView`, `CalibrationWindowController`). Pulsating cyan targets with clockwise dwell-fill animation, 2-second dwell per point, ESC to cancel, iris sample averaging from live gaze stream. Wired to `MediaPipeGazeProvider.calibrate()` and the Settings "Recalibrate..." button via NotificationCenter.
 

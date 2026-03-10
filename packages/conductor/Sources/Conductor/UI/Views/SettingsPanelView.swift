@@ -41,6 +41,13 @@ struct SettingsPanelView: View {
                 }
             }
 
+            Section("Setup") {
+                Button("Run Setup Wizard Again\u{2026}") {
+                    UserDefaults.standard.set(false, forKey: "setupComplete")
+                    NotificationCenter.default.post(name: .conductorRunSetup, object: nil)
+                }
+            }
+
             Section("Hotkeys") {
                 LabeledContent("Toggle Panel") {
                     Text("Cmd+Shift+C")
@@ -146,4 +153,7 @@ struct SettingsPanelView: View {
 extension Notification.Name {
     /// Posted by SettingsPanelView to request gaze recalibration.
     static let conductorRecalibrate = Notification.Name("com.a-company.conductor.recalibrate")
+
+    /// Posted by SettingsPanelView to re-run the setup wizard.
+    static let conductorRunSetup = Notification.Name("com.a-company.conductor.runSetup")
 }
