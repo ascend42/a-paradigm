@@ -8,8 +8,12 @@
 import { execSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { log } from '../utils/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface ConductorOptions {
   build?: boolean;

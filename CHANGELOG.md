@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.27.0] — 2026-03-10
+
+### Added
+
+- **`/conduct` skill**: Register any Claude Code session with Paradigm Conductor from within the terminal. Writes a registration file to `~/.conductor/sessions/{pid}.json` that Conductor picks up instantly. Includes project dir, branch, terminal app, and optional label.
+
+- **Conductor MCP tools** (`paradigm_conductor_register`, `paradigm_conductor_unregister`, `paradigm_conductor_list`): Programmatic session registration for Conductor. Auto-detects terminal bundle ID, git branch, and parent PID. Stale session cleanup (dead PIDs) built in.
+
+- **Conductor `#session-file-watcher`**: Swift `SessionFileWatcher` watches `~/.conductor/sessions/` via dispatch source + 5s poll fallback. Merges file-registered sessions with AX-detected instances in the overlay, with deduplication by PID and project directory. Auto-cleans stale registrations.
+
+- **`$session-registration` flow**: New flow covering `/conduct` → JSON file → `SessionFileWatcher` → merged instance list. Signals: `!session-registered`, `!session-unregistered`.
+
+### Changed
+
+- **`InstanceListView`**: Now accepts a merged instance array (AX + file-registered) instead of reading directly from `ClaudeCodeDetector`. Empty state suggests `/conduct` instead of generic "open Claude Code" message.
+
+- **Conductor `.purpose` file**: Rewritten from YAML list format (`id:` fields) to standard Paradigm key format (`#Name:`) for proper indexing. All 30 components, 6 flows, 6 gates, 12 signals, and 4 aspects now index correctly.
+
 ## [3.26.0] — 2026-03-10
 
 ### Added

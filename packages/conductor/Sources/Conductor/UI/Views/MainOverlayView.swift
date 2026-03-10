@@ -10,9 +10,30 @@ struct MainOverlayView: View {
 
     @StateObject private var buffer = BufferEngine()
     @StateObject private var detector = ClaudeCodeDetector()
+    @StateObject private var sessionWatcher = SessionFileWatcher()
     @StateObject private var gazeRouter = GazeRouter()
 
     private let dispatchTarget = AXDispatchTarget()
+
+    /// Merged instances from AX detection + file-registered sessions.
+    private var allInstances: [ClaudeCodeInstance] {
+        var merged = detector.instances
+
+        // Add file-registered instances that aren't already detected via AX
+        for regInstance in sessionWatcher.registeredInstances {
+            // Deduplicate by project directory match or PID match
+            let isDuplicate = merged.contains { existing in
+                existing.processID == regInstance.processID ||
+                (existing.projectDirectory != nil &&
+                 existing.projectDirectory == regInstance.projectDirectory)
+            }
+            if !isDuplicate {
+                merged.append(regInstance)
+            }
+        }
+
+        return merged
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,6 +65,7 @@ struct MainOverlayView: View {
         }
         .onDisappear {
             detector.stopPolling()
+            sessionWatcher.stopWatching()
         }
     }
 
@@ -77,13 +99,13 @@ struct MainOverlayView: View {
         if !permissionStatus.coreGranted {
             return "Setup needed"
         }
-        if detector.instances.isEmpty {
+        if allInstances.isEmpty {
             return "No targets"
         }
         if gazeRouter.currentTarget != nil {
             return "Ready"
         }
-        return "\(detector.instances.count) found"
+        return "\(allInstances.count) found"
     }
 
     // MARK: - Main Content
@@ -99,9 +121,9 @@ struct MainOverlayView: View {
 
             Divider()
 
-            // Instance list
+            // Instance list (merged: AX-detected + file-registered)
             InstanceListView(
-                detector: detector,
+                instances: allInstances,
                 gazeRouter: gazeRouter
             )
 
@@ -114,6 +136,7 @@ struct MainOverlayView: View {
 
     private func startDetection() {
         detector.startPolling(interval: 2.0)
+        sessionWatcher.startWatching()
     }
 
     private func dispatchBuffer() {

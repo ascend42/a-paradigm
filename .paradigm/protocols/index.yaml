@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-08T07:02:12.014Z'
+generated: '2026-03-10T22:19:33.352Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -17,7 +17,7 @@ protocols:
       - agent
   - id: P-add-aspect-with-anchors
     name: Add an aspect with code anchors
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:43.418Z'
     trigger:
       - add aspect
@@ -30,7 +30,7 @@ protocols:
       - cross-cutting
   - id: P-add-case-study
     name: Add a case study
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:43.924Z'
     trigger:
       - case study
@@ -94,7 +94,7 @@ protocols:
       - subcommands
   - id: P-add-hook-script
     name: Add a Claude Code hook script
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:44.807Z'
     trigger:
       - add hook
@@ -120,7 +120,7 @@ protocols:
       - sync
   - id: P-add-integration-test
     name: Add an integration test
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - integration test
@@ -184,7 +184,7 @@ protocols:
   - id: P-add-plsat-question
     name: Add a PLSAT exam question
     status: stale
-    last_verified: '2026-03-08T06:07:46.642Z'
+    last_verified: '2026-03-08T07:07:21.965Z'
     trigger:
       - plsat question
       - add exam question
@@ -365,7 +365,7 @@ protocols:
   - id: P-add-university-course
     name: Add a University course
     status: stale
-    last_verified: '2026-03-08T06:07:48.967Z'
+    last_verified: '2026-03-08T07:07:22.410Z'
     trigger:
       - add course
       - new course
@@ -378,7 +378,7 @@ protocols:
   - id: P-add-university-quiz
     name: Add a University quiz
     status: stale
-    last_verified: '2026-03-08T06:07:49.366Z'
+    last_verified: '2026-03-08T07:07:22.768Z'
     trigger:
       - add quiz
       - new quiz
@@ -425,6 +425,21 @@ protocols:
       - cli
       - command
       - workspace
+  - id: P-cross-study
+    name: Cross Study
+    status: current
+    last_verified: '2026-03-10T17:06:25.324Z'
+    trigger:
+      - cross study
+      - competitive analysis
+      - research projects
+      - evaluate tools
+      - compare with paradigm
+    tags:
+      - research
+      - strategy
+      - competitive-analysis
+      - private
   - id: P-record-lore
     name: Record a lore entry
     status: current
@@ -440,7 +455,7 @@ protocols:
       - history
   - id: P-update-changelog
     name: Update changelog and version
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:50.707Z'
     trigger:
       - update changelog
@@ -470,7 +485,7 @@ protocols:
       - plsat
       - content
 health:
-  total: 36
-  current: 33
-  stale: 3
+  total: 37
+  current: 29
+  stale: 8
   broken: 0

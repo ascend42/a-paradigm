@@ -1,11 +1,13 @@
 // ClaudeCodeDetector.swift — #window-detector
-// AXUIElement + CGWindowListCopyWindowInfo implementation for detecting Claude Code instances.
+// Accessibility API-based Claude Code instance discovery.
+// Uses AXUIElement to enumerate terminal windows and read titles.
+// CGWindowListCopyWindowInfo is unreliable on modern macOS without Screen Recording permission.
 
 import AppKit
 import ApplicationServices
 
 /// macOS implementation of Claude Code instance detection.
-/// Polls running windows to find terminals running Claude Code.
+/// Uses Accessibility API to enumerate terminal windows and match Claude Code sessions.
 @MainActor
 final class ClaudeCodeDetector: ObservableObject, ClaudeCodeDetectorProtocol {
     /// Currently detected instances.
@@ -24,13 +26,12 @@ final class ClaudeCodeDetector: ObservableObject, ClaudeCodeDetectorProtocol {
         "com.mitchellh.ghostty",
         "net.kovidgoyal.kitty",
         "io.alacritty",
+        "com.todesktop.230313mzl4w4u92",  // Cursor terminal
     ]
 
-    /// Title patterns that indicate Claude Code is running.
+    /// Title patterns that indicate Claude Code is running (case-insensitive).
     private static let claudeCodePatterns: [String] = [
         "claude",
-        "Claude Code",
-        "claude-code",
         "anthropic",
     ]
 
@@ -45,52 +46,58 @@ final class ClaudeCodeDetector: ObservableObject, ClaudeCodeDetectorProtocol {
     }
 
     func detectInstances() -> [ClaudeCodeInstance] {
-        // This performs a synchronous scan — called from the protocol
         var detected: [ClaudeCodeInstance] = []
 
-        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
-            return detected
-        }
+        // Strategy: enumerate running terminal apps via NSWorkspace,
+        // then use AXUIElement to read each window's title.
+        let runningApps = NSWorkspace.shared.runningApplications
 
-        for window in windowList {
-            guard let windowID = window[kCGWindowNumber as String] as? CGWindowID,
-                  let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
-                  let ownerName = window[kCGWindowOwnerName as String] as? String,
-                  let boundsDict = window[kCGWindowBounds as String] as? [String: CGFloat],
-                  let title = window[kCGWindowName as String] as? String else {
-                continue
-            }
+        for app in runningApps {
+            guard let bundleID = app.bundleIdentifier else { continue }
 
-            // Check if this is a terminal window
-            let bundleID = NSRunningApplication(processIdentifier: ownerPID)?.bundleIdentifier ?? ""
+            // Check if this is a known terminal
             let isTerminal = Self.terminalBundleIDs.contains(bundleID) ||
-                             ownerName.lowercased().contains("terminal")
+                             app.localizedName?.lowercased().contains("terminal") == true
 
             guard isTerminal else { continue }
 
-            // Check if the title suggests Claude Code
-            let lowerTitle = title.lowercased()
-            let isClaudeCode = Self.claudeCodePatterns.contains { lowerTitle.contains($0.lowercased()) }
+            // Use AXUIElement to get this app's windows
+            let axApp = AXUIElementCreateApplication(app.processIdentifier)
+            var windowsRef: AnyObject?
+            let result = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
 
-            guard isClaudeCode else { continue }
+            guard result == .success, let windows = windowsRef as? [AXUIElement] else {
+                continue
+            }
 
-            let frame = CGRect(
-                x: boundsDict["X"] ?? 0,
-                y: boundsDict["Y"] ?? 0,
-                width: boundsDict["Width"] ?? 800,
-                height: boundsDict["Height"] ?? 600
-            )
+            for (index, window) in windows.enumerated() {
+                // Read window title via AX
+                var titleRef: AnyObject?
+                AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
+                let title = titleRef as? String ?? ""
 
-            let instance = ClaudeCodeInstance(
-                id: "cc-\(windowID)",
-                windowID: windowID,
-                processID: ownerPID,
-                title: title,
-                projectDirectory: extractProjectDir(from: title),
-                frame: frame
-            )
+                // Read window position and size via AX
+                let frame = axWindowFrame(window)
 
-            detected.append(instance)
+                // Check if this window is running Claude Code
+                let lowerTitle = title.lowercased()
+                let isClaudeCode = Self.claudeCodePatterns.contains { lowerTitle.contains($0) }
+
+                guard isClaudeCode else { continue }
+
+                let instanceID = "cc-\(app.processIdentifier)-\(index)"
+
+                let instance = ClaudeCodeInstance(
+                    id: instanceID,
+                    windowID: CGWindowID(app.processIdentifier),
+                    processID: app.processIdentifier,
+                    title: title.isEmpty ? (app.localizedName ?? bundleID) : title,
+                    projectDirectory: extractProjectDir(from: title),
+                    frame: frame
+                )
+
+                detected.append(instance)
+            }
         }
 
         return detected
@@ -136,13 +143,28 @@ final class ClaudeCodeDetector: ObservableObject, ClaudeCodeDetectorProtocol {
         instanceContinuation?.yield(detected)
     }
 
+    /// Read a window's frame via AXUIElement position + size attributes.
+    private func axWindowFrame(_ window: AXUIElement) -> CGRect {
+        var posRef: AnyObject?
+        var sizeRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posRef)
+        AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeRef)
+
+        var position = CGPoint.zero
+        var size = CGSize(width: 800, height: 600)
+
+        if let posValue = posRef {
+            AXValueGetValue(posValue as! AXValue, .cgPoint, &position)
+        }
+        if let sizeValue = sizeRef {
+            AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        }
+
+        return CGRect(origin: position, size: size)
+    }
+
     /// Try to extract the project directory from a terminal window title.
-    /// Many terminals show the cwd in the title (e.g., "~/Projects/my-app — claude").
     private func extractProjectDir(from title: String) -> String? {
-        // Common patterns:
-        // "user@host:~/path — claude"
-        // "~/path (claude)"
-        // "/Users/name/path"
         let components = title.components(separatedBy: CharacterSet(charactersIn: "—–-:|"))
         for component in components {
             let trimmed = component.trimmingCharacters(in: .whitespaces)

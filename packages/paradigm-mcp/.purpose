@@ -51,6 +51,7 @@ description: |
     - "#WorkspaceLoader"
     - "#HabitsTools"
     - "#GraphTools"
+    - "#ConductorTools"
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
@@ -128,6 +129,13 @@ description: |
   tags: [mcp, visualization]
   anchors:
     - src/tools/graph.ts:1-300
+
+#ConductorTools:
+  description: Conductor session registration MCP tools — register/unregister/list Claude Code sessions for the Conductor overlay
+  tags: [mcp, conductor]
+  anchors:
+    - src/tools/conductor.ts:1-200
+    - src/utils/conductor-loader.ts:1-120
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation

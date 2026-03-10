@@ -1,295 +1,334 @@
 purpose: Paradigm Conductor — multimodal mission control for Claude Code sessions
-version: 0.1.0
-description: >-
-  Voice-to-buffer, gesture editing, gaze-targeted dispatch with
-  Paradigm context enrichment. Native macOS Swift/SwiftUI app
-  launched via paradigm conductor CLI command.
+version: 0.2.0
+description: Voice-to-buffer, gesture editing, gaze-targeted dispatch with Paradigm context enrichment. Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
   - 7 platform abstraction protocols for future Windows port
   - All ML inference runs locally — zero cloud, zero cost
 
-components:
-  # Sprint 0 — Foundation
-  - id: "#conductor-app"
-    description: Main app entry point, lifecycle, menu bar
-    path: Sources/Conductor/App/
-    tags: [app, lifecycle, macos]
+# ============================================
+# Components (#)
+# ============================================
 
-  - id: "#conductor-panel"
-    description: NSPanel floating overlay window — always-on-top, draggable, transparent
-    path: Sources/Conductor/App/ConductorPanel.swift
-    tags: [ui, overlay, macos]
+#conductor-app:
+  description: Main app entry point, lifecycle, menu bar
+  tags: [app, lifecycle, macos]
+  anchors:
+    - Sources/Conductor/App/:1
 
-  - id: "#permissions-onboarding"
-    description: Camera/Mic/Accessibility permission request flow
-    path: Sources/Conductor/App/PermissionsManager.swift
-    tags: [permissions, onboarding, macos]
+#conductor-panel:
+  description: NSPanel floating overlay window — always-on-top, draggable, transparent
+  tags: [ui, overlay, macos]
+  anchors:
+    - Sources/Conductor/App/ConductorPanel.swift:1
 
-  # Sprint 1 — Buffer + Window Detection + Manual Send
-  - id: "#text-buffer"
-    description: Staged text buffer with cursor, undo/redo — convergence point for all inputs
-    path: Sources/Conductor/Buffer/BufferEngine.swift
-    tags: [buffer, editing]
+#permissions-onboarding:
+  description: Camera/Mic/Accessibility permission request flow
+  tags: [permissions, onboarding, macos]
+  anchors:
+    - Sources/Conductor/App/PermissionsManager.swift:1
 
-  - id: "#cursor-navigation"
-    description: Character/word/line boundary cursor movement
-    path: Sources/Conductor/Buffer/BufferEngine.swift
-    tags: [buffer, navigation]
+#text-buffer:
+  description: Staged text buffer with cursor, undo/redo — convergence point for all inputs
+  tags: [buffer, editing]
+  anchors:
+    - Sources/Conductor/Buffer/BufferEngine.swift:1
 
-  - id: "#window-detector"
-    description: AXUIElement-based Claude Code instance discovery
-    path: Sources/Conductor/WindowManager/ClaudeCodeDetector.swift
-    tags: [window, detection, macos]
+#cursor-navigation:
+  description: Character/word/line boundary cursor movement
+  tags: [buffer, navigation]
+  anchors:
+    - Sources/Conductor/Buffer/BufferEngine.swift:1
 
-  - id: "#keyboard-input"
-    description: NSTextField keyboard input handler
-    path: Sources/Conductor/Input/KeyboardInput/KeyboardInputHandler.swift
-    tags: [input, keyboard]
+#window-detector:
+  description: AXUIElement-based Claude Code instance discovery
+  tags: [window, detection, macos]
+  anchors:
+    - Sources/Conductor/WindowManager/ClaudeCodeDetector.swift:1
 
-  - id: "#dispatch-target"
-    description: AX text injection to targeted CC window
-    path: Sources/Conductor/Dispatch/AXDispatchTarget.swift
-    tags: [dispatch, accessibility, macos]
+#session-file-watcher:
+  description: Watches ~/.conductor/sessions/ for registration files from /conduct or paradigm_conductor_register
+  tags: [window, detection, file-watcher, registration]
+  anchors:
+    - Sources/Conductor/WindowManager/SessionFileWatcher.swift:1
 
-  - id: "#buffer-view"
-    description: SwiftUI text buffer display with cursor
-    path: Sources/Conductor/UI/Views/BufferView.swift
-    tags: [ui, buffer]
+#keyboard-input:
+  description: NSTextField keyboard input handler
+  tags: [input, keyboard]
+  anchors:
+    - Sources/Conductor/Input/KeyboardInput/KeyboardInputHandler.swift:1
 
-  - id: "#instance-list-view"
-    description: SwiftUI list of detected CC instances
-    path: Sources/Conductor/UI/Views/InstanceListView.swift
-    tags: [ui, instances]
+#dispatch-target:
+  description: AX text injection to targeted CC window
+  tags: [dispatch, accessibility, macos]
+  anchors:
+    - Sources/Conductor/Dispatch/AXDispatchTarget.swift:1
 
-  # Sprint 2 — Voice Input
-  - id: "#whisper-voice-provider"
-    description: WhisperKit speech-to-text implementation
-    path: Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
-    tags: [voice, whisperkit, coreml]
+#buffer-view:
+  description: SwiftUI text buffer display with cursor
+  tags: [ui, buffer]
+  anchors:
+    - Sources/Conductor/UI/Views/BufferView.swift:1
 
-  - id: "#audio-capture"
-    description: AVCaptureSession microphone pipeline
-    path: Sources/Conductor/Input/VoiceInput/AudioCapture.swift
-    tags: [voice, audio, avfoundation]
+#instance-list-view:
+  description: SwiftUI list of detected CC instances
+  tags: [ui, instances]
+  anchors:
+    - Sources/Conductor/UI/Views/InstanceListView.swift:1
 
-  # Sprint 3 — Hand Gestures
-  - id: "#vision-gesture-provider"
-    description: Apple Vision hand pose detection
-    path: Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift
-    tags: [gesture, vision, neural-engine]
+#whisper-voice-provider:
+  description: WhisperKit speech-to-text implementation
+  tags: [voice, whisperkit, coreml]
+  anchors:
+    - Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift:1
 
-  - id: "#gesture-classifier"
-    description: Joint positions → GestureAction mapping
-    path: Sources/Conductor/Input/GestureInput/GestureClassifier.swift
-    tags: [gesture, classification]
+#audio-capture:
+  description: AVCaptureSession microphone pipeline
+  tags: [voice, audio, avfoundation]
+  anchors:
+    - Sources/Conductor/Input/VoiceInput/AudioCapture.swift:1
 
-  - id: "#gesture-state-machine"
-    description: Debounce, cooldowns, state transitions
-    path: Sources/Conductor/Input/GestureInput/GestureStateMachine.swift
-    tags: [gesture, state-machine]
+#vision-gesture-provider:
+  description: Apple Vision hand pose detection
+  tags: [gesture, vision, neural-engine]
+  anchors:
+    - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift:1
 
-  - id: "#gesture-hud"
-    description: Hand state + gesture feedback overlay
-    path: Sources/Conductor/UI/Views/GestureHUDView.swift
-    tags: [ui, gesture, feedback]
+#gesture-classifier:
+  description: Joint positions to GestureAction mapping
+  tags: [gesture, classification]
+  anchors:
+    - Sources/Conductor/Input/GestureInput/GestureClassifier.swift:1
 
-  # Sprint 4 — Gaze Tracking
-  - id: "#mediapipe-gaze-provider"
-    description: MediaPipe FaceMesh gaze estimation
-    path: Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
-    tags: [gaze, mediapipe, python]
+#gesture-state-machine:
+  description: Debounce, cooldowns, state transitions
+  tags: [gesture, state-machine]
+  anchors:
+    - Sources/Conductor/Input/GestureInput/GestureStateMachine.swift:1
 
-  - id: "#gaze-calibration"
-    description: 5-point calibration flow
-    path: Sources/Conductor/Input/GazeInput/GazeCalibration.swift
-    tags: [gaze, calibration]
+#gesture-hud:
+  description: Hand state + gesture feedback overlay
+  tags: [ui, gesture, feedback]
+  anchors:
+    - Sources/Conductor/UI/Views/GestureHUDView.swift:1
 
-  - id: "#kalman-filter"
-    description: Gaze coordinate smoothing
-    path: Sources/Conductor/Input/GazeInput/KalmanFilter.swift
-    tags: [gaze, filter, math]
+#mediapipe-gaze-provider:
+  description: MediaPipe FaceMesh gaze estimation
+  tags: [gaze, mediapipe, python]
+  anchors:
+    - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
 
-  - id: "#gaze-router"
-    description: Gaze point → target window mapping
-    path: Sources/Conductor/Dispatch/GazeRouter.swift
-    tags: [gaze, dispatch, targeting]
+#gaze-calibration:
+  description: 5-point calibration flow
+  tags: [gaze, calibration]
+  anchors:
+    - Sources/Conductor/Input/GazeInput/GazeCalibration.swift:1
 
-  # Sprint 5 — Context Enrichment
-  - id: "#paradigm-mcp-client"
-    description: Spawn paradigm-mcp, call tools via stdio JSON-RPC
-    path: Sources/Conductor/Integration/ParadigmMCPClient.swift
-    tags: [integration, mcp, json-rpc]
+#kalman-filter:
+  description: Gaze coordinate smoothing
+  tags: [gaze, filter, math]
+  anchors:
+    - Sources/Conductor/Input/GazeInput/KalmanFilter.swift:1
 
-  - id: "#git-monitor"
-    description: Poll git diff for project context
-    path: Sources/Conductor/Integration/GitMonitor.swift
-    tags: [integration, git]
+#gaze-router:
+  description: Gaze point to target window mapping
+  tags: [gaze, dispatch, targeting]
+  anchors:
+    - Sources/Conductor/Dispatch/GazeRouter.swift:1
 
-  - id: "#context-enricher"
-    description: Assemble Paradigm + git context for dispatch
-    path: Sources/Conductor/Dispatch/ContextEnricher.swift
-    tags: [dispatch, context, enrichment]
+#paradigm-mcp-client:
+  description: Spawn paradigm-mcp, call tools via stdio JSON-RPC
+  tags: [integration, mcp, json-rpc]
+  anchors:
+    - Sources/Conductor/Integration/ParadigmMCPClient.swift:1
 
-  - id: "#sentinel-ws-client"
-    description: WebSocket client for Sentinel events
-    path: Sources/Conductor/Integration/SentinelWSClient.swift
-    tags: [integration, sentinel, websocket]
+#git-monitor:
+  description: Poll git diff for project context
+  tags: [integration, git]
+  anchors:
+    - Sources/Conductor/Integration/GitMonitor.swift:1
 
-  # Sprint 6 — Window Management + Status
-  - id: "#window-arranger"
-    description: Tile/snap/layout CC windows
-    path: Sources/Conductor/WindowManager/WindowArranger.swift
-    tags: [window, layout, tiling]
+#context-enricher:
+  description: Assemble Paradigm + git context for dispatch
+  tags: [dispatch, context, enrichment]
+  anchors:
+    - Sources/Conductor/Dispatch/ContextEnricher.swift:1
 
-  - id: "#status-tracker"
-    description: Poll CC windows for idle/processing/finished
-    path: Sources/Conductor/WindowManager/StatusTracker.swift
-    tags: [window, status, monitoring]
+#sentinel-ws-client:
+  description: WebSocket client for Sentinel events
+  tags: [integration, sentinel, websocket]
+  anchors:
+    - Sources/Conductor/Integration/SentinelWSClient.swift:1
 
-  - id: "#notification-bubble"
-    description: Per-instance status bubble overlay
-    path: Sources/Conductor/UI/Views/NotificationBubbleView.swift
-    tags: [ui, notification, status]
+#window-arranger:
+  description: Tile/snap/layout CC windows
+  tags: [window, layout, tiling]
+  anchors:
+    - Sources/Conductor/WindowManager/WindowArranger.swift:1
 
-  # Sprint 7 — Polish & Distribution
-  - id: "#settings-panel"
-    description: "Preferences: hotkeys, gestures, enrichment"
-    path: Sources/Conductor/UI/Views/SettingsPanelView.swift
-    tags: [ui, settings, preferences]
+#status-tracker:
+  description: Poll CC windows for idle/processing/finished
+  tags: [window, status, monitoring]
+  anchors:
+    - Sources/Conductor/WindowManager/StatusTracker.swift:1
 
-  - id: "#hotkey-manager"
-    description: Global hotkey registration
-    path: Sources/Conductor/Utils/HotKeyManager.swift
-    tags: [input, hotkeys, cgevent]
+#notification-bubble:
+  description: Per-instance status bubble overlay
+  tags: [ui, notification, status]
+  anchors:
+    - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
+
+#settings-panel:
+  description: "Preferences: hotkeys, gestures, enrichment"
+  tags: [ui, settings, preferences]
+  anchors:
+    - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
+
+#hotkey-manager:
+  description: Global hotkey registration
+  tags: [input, hotkeys, cgevent]
+  anchors:
+    - Sources/Conductor/Utils/HotKeyManager.swift:1
+
+# ============================================
+# Flows ($)
+# ============================================
 
 flows:
-  - id: "$voice-to-dispatch"
-    description: "Mic → WhisperKit → Buffer → Edit → Enrich → Dispatch"
+  voice-to-dispatch:
+    description: Mic to WhisperKit to Buffer to Edit to Enrich to Dispatch
     steps:
       - "#audio-capture"
       - "#whisper-voice-provider"
       - "#text-buffer"
       - "#context-enricher"
       - "#dispatch-target"
-
-  - id: "$gesture-edit"
-    description: "Camera → Vision → Classify → Buffer edit action"
+  gesture-edit:
+    description: Camera to Vision to Classify to Buffer edit action
     steps:
       - "#vision-gesture-provider"
       - "#gesture-classifier"
       - "#gesture-state-machine"
       - "#text-buffer"
-
-  - id: "$gaze-target"
-    description: "Camera → MediaPipe → Iris → Screen point → Window match → Target"
+  gaze-target:
+    description: Camera to MediaPipe to Iris to Screen point to Window match to Target
     steps:
       - "#mediapipe-gaze-provider"
       - "#kalman-filter"
       - "#gaze-router"
       - "#window-detector"
-
-  - id: "$context-enrichment"
-    description: "Buffer flush → MCP status + search + history → Git diff → Enriched payload"
+  context-enrichment:
+    description: Buffer flush to MCP status + search + history to Git diff to Enriched payload
     steps:
       - "#text-buffer"
       - "#paradigm-mcp-client"
       - "#git-monitor"
       - "#context-enricher"
       - "#dispatch-target"
-
-  - id: "$window-tiling"
-    description: "User hotkey → Layout selection → AX setFrame per window"
+  session-registration:
+    description: /conduct or MCP tool to JSON file to SessionFileWatcher to merged instance list
+    signals:
+      - "!session-registered"
+      - "!session-unregistered"
+    components:
+      - "#session-file-watcher"
+      - "#window-detector"
+      - "#instance-list-view"
+  window-tiling:
+    description: User hotkey to Layout selection to AX setFrame per window
     steps:
       - "#hotkey-manager"
       - "#window-arranger"
       - "#window-detector"
 
+# ============================================
+# Gates (^)
+# ============================================
+
 gates:
-  - id: "^camera-permission"
+  camera-permission:
     description: Camera access granted via macOS permissions
     check: "AVCaptureDevice.authorizationStatus(for: .video) == .authorized"
-
-  - id: "^microphone-permission"
+  microphone-permission:
     description: Microphone access granted via macOS permissions
     check: "AVCaptureDevice.authorizationStatus(for: .audio) == .authorized"
-
-  - id: "^accessibility-permission"
+  accessibility-permission:
     description: Accessibility API access granted (required for window management)
     check: "AXIsProcessTrusted()"
-
-  - id: "^model-downloaded"
+  model-downloaded:
     description: WhisperKit model downloaded and ready
     check: "FileManager.default.fileExists(atPath: modelPath)"
-
-  - id: "^gaze-calibrated"
+  gaze-calibrated:
     description: Gaze tracking calibration completed
     check: "calibrationData.hasCalibration"
-
-  - id: "^mcp-available"
+  mcp-available:
     description: paradigm-mcp reachable for context enrichment
     check: "mcpClient.isConnected"
 
+# ============================================
+# Signals (!)
+# ============================================
+
 signals:
-  - id: "!buffer-dispatched"
+  buffer-dispatched:
     description: Text buffer sent to a targeted CC window
-  - id: "!instance-detected"
+  instance-detected:
     description: New Claude Code instance discovered
-  - id: "!instance-lost"
+  instance-lost:
     description: Claude Code instance closed/disappeared
-  - id: "!transcription-ready"
+  transcription-ready:
     description: Voice transcription finalized in buffer
-  - id: "!gesture-recognized"
+  gesture-recognized:
     description: Hand gesture classified and applied
-  - id: "!gaze-target-changed"
+  gaze-target-changed:
     description: Gaze shifted to a different CC window
-  - id: "!context-enriched"
+  context-enriched:
     description: Paradigm context attached to dispatch
-  - id: "!status-changed"
-    description: CC instance status changed (idle→processing→finished)
-  - id: "!agent-count-changed"
+  status-changed:
+    description: CC instance status changed (idle to processing to finished)
+  agent-count-changed:
     description: Sub-agent count changed for an instance
-  - id: "!layout-applied"
+  layout-applied:
     description: Window tiling layout applied
+  session-registered:
+    description: Claude Code session registered via /conduct or paradigm_conductor_register MCP tool
+    emitters: ["#session-file-watcher"]
+  session-unregistered:
+    description: Claude Code session unregistered from Conductor
+    emitters: ["#session-file-watcher"]
 
-aspects:
-  - id: "~local-only"
-    description: All ML inference and camera processing runs locally — no cloud services
-    anchors:
-      - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
-      - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
-      - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
+# ============================================
+# Aspects (~)
+# ============================================
 
-  - id: "~zero-cost"
-    description: No paid APIs, no subscriptions, no usage fees — all open-source ML models
-    anchors:
-      - Package.swift:1
+~local-only:
+  description: All ML inference and camera processing runs locally — no cloud services
+  anchors:
+    - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
+    - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
+    - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
 
-  - id: "~platform-abstracted"
-    description: 7 protocols isolate platform-specific code for future Windows portability
-    anchors:
-      - Sources/Conductor/Input/InputProvider.swift:1
-      - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
-      - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
-      - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
-      - Sources/Conductor/WindowManager/ClaudeCodeDetectorProtocol.swift:1
-      - Sources/Conductor/WindowManager/WindowArrangerProtocol.swift:1
-      - Sources/Conductor/Dispatch/DispatchTargetProtocol.swift:1
+~zero-cost:
+  description: No paid APIs, no subscriptions, no usage fees — all open-source ML models
+  anchors:
+    - Package.swift:1
 
-  - id: "~resource-conscious"
-    description: CPU/RAM budgets enforced, auto-throttle under load
-    anchors:
-      - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
+~platform-abstracted:
+  description: 7 protocols isolate platform-specific code for future Windows portability
+  anchors:
+    - Sources/Conductor/Input/InputProvider.swift:1
+    - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
+    - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
+    - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
+    - Sources/Conductor/WindowManager/ClaudeCodeDetectorProtocol.swift:1
+    - Sources/Conductor/WindowManager/WindowArrangerProtocol.swift:1
+    - Sources/Conductor/Dispatch/DispatchTargetProtocol.swift:1
 
-protocols:
-  voice_input: Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift
-  gesture_input: Sources/Conductor/Input/GestureInput/GestureInputProvider.swift
-  gaze_tracking: Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift
-  window_detector: Sources/Conductor/WindowManager/ClaudeCodeDetectorProtocol.swift
-  window_arranger: Sources/Conductor/WindowManager/WindowArrangerProtocol.swift
-  dispatch_target: Sources/Conductor/Dispatch/DispatchTargetProtocol.swift
-  context_enricher: Sources/Conductor/Dispatch/ContextEnricherProtocol.swift
+~resource-conscious:
+  description: CPU/RAM budgets enforced, auto-throttle under load
+  anchors:
+    - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
 
 tags:
   - conductor

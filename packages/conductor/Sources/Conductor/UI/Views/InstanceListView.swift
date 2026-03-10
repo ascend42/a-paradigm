@@ -4,7 +4,8 @@
 import SwiftUI
 
 struct InstanceListView: View {
-    @ObservedObject var detector: ClaudeCodeDetector
+    /// Merged instances from all detection sources.
+    var instances: [ClaudeCodeInstance]
     @ObservedObject var gazeRouter: GazeRouter
 
     var body: some View {
@@ -16,17 +17,17 @@ struct InstanceListView: View {
 
                 Spacer()
 
-                Text("\(detector.instances.count)")
+                Text("\(instances.count)")
                     .font(.caption)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(detector.instances.isEmpty ? Color.gray.opacity(0.2) : Color.green.opacity(0.2))
+                            .fill(instances.isEmpty ? Color.gray.opacity(0.2) : Color.green.opacity(0.2))
                     )
             }
 
-            if detector.instances.isEmpty {
+            if instances.isEmpty {
                 emptyState
             } else {
                 instanceList
@@ -44,7 +45,7 @@ struct InstanceListView: View {
             Text("No Claude Code sessions detected")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-            Text("Open Claude Code in a terminal window")
+            Text("Run /conduct in Claude Code to register")
                 .font(.caption2)
                 .foregroundStyle(.quaternary)
         }
@@ -57,7 +58,7 @@ struct InstanceListView: View {
     private var instanceList: some View {
         ScrollView {
             LazyVStack(spacing: 4) {
-                ForEach(detector.instances) { instance in
+                ForEach(instances) { instance in
                     instanceRow(instance)
                 }
             }
