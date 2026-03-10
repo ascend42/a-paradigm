@@ -47,10 +47,10 @@ components:
     references: ["#portal-protocol"]
 
   para-101-first-steps:
-    description: "First Steps — paradigm init, paradigm shift, setting up a project"
+    description: "First Steps — paradigm init, paradigm shift, stack auto-detection, cold start for existing projects"
     file: para-101.json
     tags: [course-content, para-101]
-    references: ["#symbol-system", "#purpose-files", "#scan-index"]
+    references: ["#symbol-system", "#purpose-files", "#scan-index", "#stack-presets", "#cold-start"]
 
   # PARA 201: Architecture (11 lessons)
 
@@ -85,10 +85,10 @@ components:
     references: ["#portal-protocol"]
 
   para-201-disciplines:
-    description: "Disciplines — web, backend, fullstack, api, cli, ml, monorepo symbol mappings"
+    description: "Disciplines and Stack Presets — 14 disciplines, 16 stack presets, auto-detection, framework-specific config"
     file: para-201.json
     tags: [course-content, para-201]
-    references: ["#symbol-system"]
+    references: ["#symbol-system", "#stack-presets", "#disciplines"]
 
   para-201-symbol-naming:
     description: "Symbol Naming — kebab-case, PascalCase, conventions"

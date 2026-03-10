@@ -1,0 +1,59 @@
+# Paradigm
+
+> Paradigm is a meta-framework for AI-native software development. It provides structured context, authorization topology, and on-demand intelligence to codebases — enabling AI agents (Claude, Cursor, Copilot, etc.) to navigate and modify projects with 8.5x fewer tokens and 88% lower cost than reading raw source files. It is language-agnostic, framework-agnostic, and works with any AI tool that supports MCP (Model Context Protocol).
+
+Paradigm is NOT a code framework — it does not generate boilerplate, impose a runtime, or ship components. It is a metadata layer that sits alongside your existing code and makes it intelligible to AI agents and human developers alike.
+
+Key concepts:
+- **Five symbols** (`#` Component, `$` Flow, `^` Gate, `!` Signal, `~` Aspect) create a shared vocabulary between code, developers, and AI
+- **`.purpose` files** are YAML metadata files placed in source directories that declare what components, flows, gates, signals, and aspects exist there
+- **`portal.yaml`** defines authorization topology — which gates protect which operations — as a specification separate from implementation
+- **MCP server** with 50+ tools lets AI agents query context on-demand (~100 tokens per query vs ~2000 for reading files)
+- **Disciplines** auto-detect your stack (web, backend, mobile, ML, game, etc.) and configure symbol mappings accordingly
+- **Stack presets** (16 framework-specific configs: Next.js, FastAPI, SwiftUI, Flutter, etc.) layer on top of disciplines for precise scan patterns
+- **Enforcement hooks** for Claude Code and Cursor ensure compliance — they block sessions that modify code without updating `.purpose` files
+
+Install: `curl -fsSL https://a-company.org/paradigm/install.sh | bash`
+Initialize: `paradigm init` (auto-detects discipline and stack)
+MCP setup: `paradigm mcp setup --client all`
+
+## Getting Started
+
+- [README](https://github.com/ascend42/a-paradigm/blob/main/README.md): Full overview, installation, quick start, and architecture
+- [Quick Start Guide](https://github.com/ascend42/a-paradigm/blob/main/docs/guides/quick-start.md): Step-by-step setup walkthrough
+- [MCP Setup Guide](https://github.com/ascend42/a-paradigm/blob/main/docs/guides/mcp-setup.md): Configure MCP for Claude Code, Cursor, Claude Desktop
+
+## Core Concepts
+
+- [Symbol System](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md): The five symbols (#, $, ^, !, ~) and how they work
+- [Purpose Files](https://github.com/ascend42/a-paradigm/blob/main/packages/purpose-core/README.md): YAML metadata format for directory-level documentation
+- [Portal Protocol](https://github.com/ascend42/a-paradigm/blob/main/packages/portal-core/README.md): Authorization topology and gate definitions
+- [Disciplines](https://github.com/ascend42/a-paradigm/blob/main/packages/paradigm/src/core/discipline.ts): 14 domain-specific symbol mappings with auto-detection
+
+## Commands
+
+- [paradigm init](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/init.md): Initialize Paradigm with smart detection
+- [paradigm sync](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/sync.md): Generate IDE instruction files
+- [paradigm scan](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/scan.md): Build symbol index and navigator
+- [paradigm ripple](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/ripple.md): Impact analysis before changes
+- [paradigm beacon](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/beacon.md): AI quick-start orientation
+
+## Packages
+
+- [@a-company/paradigm](https://github.com/ascend42/a-paradigm/tree/main/packages/paradigm): Unified CLI for all Paradigm tools
+- [@a-company/paradigm-mcp](https://github.com/ascend42/a-paradigm/tree/main/packages/paradigm-mcp): MCP server with 50+ tools for AI agents
+- [@a-company/sentinel](https://github.com/ascend42/a-paradigm/tree/main/packages/sentinel): Symbol-correlated incident tracking and observability
+- [@a-company/university](https://github.com/ascend42/a-paradigm/tree/main/packages/university): Interactive courses and PLSAT certification
+
+## Advanced
+
+- [Multi-Agent Orchestration](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#multi-agent): Coordinate architect, builder, reviewer, tester, security agents
+- [Workspaces](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#workspaces): Multi-project symbol awareness
+- [Enforcement Hooks](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#hooks): Claude Code and Cursor compliance hooks
+- [Changelog](https://github.com/ascend42/a-paradigm/blob/main/CHANGELOG.md): Full version history
+
+## Optional
+
+- [Agentic Efficiency Study](https://github.com/ascend42/a-paradigm/blob/main/.paradigm/docs/agentic-efficiency-study.md): Benchmark comparing Paradigm vs traditional docs
+- [Contributing](https://github.com/ascend42/a-paradigm/blob/main/CONTRIBUTING.md): Development setup and guidelines
+- [Distribution Strategy](https://github.com/ascend42/a-paradigm/blob/main/docs/DISTRIBUTION.md): Roadmap for npm, JSR, and website

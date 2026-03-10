@@ -2384,6 +2384,111 @@
           "explanation": "A 'broken' status means one or more files referenced by the protocol (targets, exemplars, or template_from) no longer exist. This is more severe than 'stale' (where files exist but have been modified). A broken protocol cannot be reliably followed until its references are updated to point to existing files via paradigm_protocol_update."
         }
       ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-097",
+      "course": "para-201",
+      "variants": [
+        {
+          "id": "plsat-097",
+          "scenario": "You run `paradigm init` on an existing Next.js project. The output shows `discipline: fullstack` and `stack: nextjs`. Your colleague asks what the difference is between a discipline and a stack preset.",
+          "question": "Which statement BEST describes the relationship between disciplines and stack presets?",
+          "choices": {
+            "A": "They are the same thing — 'discipline' is the old name and 'stack preset' is the new name",
+            "B": "Disciplines define domain-level symbol mappings (web, backend, mobile), while stack presets layer framework-specific configuration (Next.js, FastAPI, SwiftUI) on top of the discipline",
+            "C": "Stack presets replace disciplines entirely — once a preset is detected, the discipline is ignored",
+            "D": "Disciplines are for code organization and stack presets are for deployment configuration",
+            "E": "Stack presets are only used for auto-scan patterns, while disciplines control everything else"
+          },
+          "correct": "B",
+          "explanation": "Disciplines and stack presets are a two-layer system. The discipline (e.g., 'fullstack') defines broad symbol mappings for the development domain. The stack preset (e.g., 'nextjs') adds framework-specific refinements: scan hints for Next.js patterns like app/ routes and server components, purpose-required paths, and additional symbol mappings. The preset extends the discipline — it does not replace it."
+        },
+        {
+          "id": "plsat-097b",
+          "scenario": "A team is setting up Paradigm on a Flutter mobile app. They run `paradigm init` and see `discipline: mobile` with `stack: flutter`. They want to see what other stack presets are available for mobile projects.",
+          "question": "Which command shows available stack presets filtered by discipline?",
+          "choices": {
+            "A": "`paradigm disciplines --list`",
+            "B": "`paradigm presets --discipline mobile`",
+            "C": "`paradigm init --show-stacks`",
+            "D": "`paradigm config --list-presets`",
+            "E": "`paradigm scan --detect-stack`"
+          },
+          "correct": "B",
+          "explanation": "The `paradigm presets` command lists all available stack presets. The `--discipline` flag filters to show only presets for a specific discipline. For mobile, this would show flutter, swift-ios, kotlin-android, and react-native presets."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-098",
+      "course": "para-301",
+      "variants": [
+        {
+          "id": "plsat-098",
+          "scenario": "You join a large existing project with 200+ source files and no Paradigm setup. Running `paradigm init` creates the `.paradigm/` directory, but no `.purpose` files exist yet. A colleague suggests running `paradigm scan auto` to bootstrap the project.",
+          "question": "What does `paradigm scan auto` do?",
+          "choices": {
+            "A": "It reads all source files line-by-line and creates comprehensive documentation for every function",
+            "B": "It uses regex-based heuristics to detect components, routes, auth patterns, and signals in your codebase, then generates draft `.purpose` files with detected symbols",
+            "C": "It copies `.purpose` templates from a global registry and places them in every directory",
+            "D": "It connects to an AI service to analyze your code and generate documentation",
+            "E": "It deletes all existing `.purpose` files and starts fresh"
+          },
+          "correct": "B",
+          "explanation": "paradigm scan auto uses pattern-based detection to find components (exported classes/functions), routes (HTTP method patterns like app.get/router.post), auth patterns (JWT, session checks, middleware), and signals (event emitters). It produces draft .purpose files with detected symbols and confidence levels. The detection is local and regex-based — it does not call external services or read every line. Stack presets enhance the scan with framework-specific patterns."
+        },
+        {
+          "id": "plsat-098b",
+          "scenario": "After running `paradigm scan auto` on a FastAPI project, the auto-scan detects several route handlers in `src/routes/users.py` and marks them with `confidence: high`. It also finds some utility functions and marks them `confidence: medium`.",
+          "question": "What do the confidence levels on auto-detected symbols indicate?",
+          "choices": {
+            "A": "How important the symbol is to the project — high means critical, medium means optional",
+            "B": "How certain the scanner is that the detected pattern actually represents that symbol type — high means strong pattern match, medium means heuristic match",
+            "C": "How many lines of code the detected symbol contains — more lines means higher confidence",
+            "D": "How recently the file was modified — recently modified files get higher confidence",
+            "E": "How many other symbols reference this one — more references means higher confidence"
+          },
+          "correct": "B",
+          "explanation": "Confidence levels reflect the scanner's certainty about the detection. A route handler matching `@app.get('/users')` is a strong, unambiguous pattern match (high confidence). A utility function detected from an exported function that doesn't match any specific pattern is a heuristic match (medium confidence). Low confidence detections are more speculative. Users should review auto-generated .purpose files, especially medium and low confidence entries."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-099",
+      "course": "para-101",
+      "variants": [
+        {
+          "id": "plsat-099",
+          "scenario": "A developer is tasked with adding Paradigm to a mature React Native project that has been in development for two years. The project has 150+ components, navigation stacks, Redux state management, and several API integration files. The developer is worried about the setup effort.",
+          "question": "What is the recommended approach for adding Paradigm to a large existing project?",
+          "choices": {
+            "A": "Document every single component on day one — comprehensive coverage is required before Paradigm is useful",
+            "B": "Start with `paradigm init` (which auto-detects discipline and stack), then create one `.purpose` file for the most critical module, and expand incrementally",
+            "C": "Rewrite the project structure to match Paradigm's expected directory layout",
+            "D": "Wait until starting a new project — Paradigm cannot be added to existing codebases",
+            "E": "Run `paradigm scan auto` and commit all generated files without review"
+          },
+          "correct": "B",
+          "explanation": "Paradigm is designed for incremental adoption. Start with `paradigm init` which auto-detects your discipline (mobile) and stack preset (react-native), configuring symbol mappings and scan patterns for your framework. Then create one .purpose file for your most important module. You can optionally run `paradigm scan auto` to bootstrap additional .purpose files, but always review auto-generated content. A common pitfall is trying to document everything on day one — start small and expand as the project grows."
+        },
+        {
+          "id": "plsat-099b",
+          "scenario": "A team runs `paradigm init` on their Django project. The init command auto-detects `discipline: fullstack` and `stack: django`. The team then runs `paradigm scan auto` which generates draft `.purpose` files for `views/`, `models/`, and `urls/` directories.",
+          "question": "Why did the auto-scan know to look in `views/`, `models/`, and `urls/` directories?",
+          "choices": {
+            "A": "These are hardcoded directories that every Paradigm scan checks regardless of discipline",
+            "B": "The django stack preset provides scan hints with Django-specific component patterns, route patterns, and directory structures",
+            "C": "The scan randomly explores all directories and happened to find code there",
+            "D": "The team manually configured these directories in config.yaml before scanning",
+            "E": "Django is a special case with its own dedicated scanner module in Paradigm"
+          },
+          "correct": "B",
+          "explanation": "Stack presets include scan hints — framework-specific patterns that tell the auto-scanner where to look and what patterns to match. The django preset knows that views.py files contain route handlers, models.py files contain data models, and urls.py files define URL routing. This is why stack presets solve the cold-start problem: they bring framework knowledge that makes auto-scanning productive for existing projects."
+        }
+      ]
     }
   ]
 }

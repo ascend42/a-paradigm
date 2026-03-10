@@ -11,7 +11,9 @@
 
 <p align="center"><strong>Structure for AI-Native Development</strong></p>
 
-Paradigm is a developer tools ecosystem that brings **structured context**, **authorization topology**, and **on-demand intelligence** to modern software projects — designed for both human developers and AI agents.
+<p align="center"><em>A language-agnostic meta-framework that gives AI agents structured context to navigate, understand, and modify any codebase — 8.5x fewer tokens, 88% lower cost.</em></p>
+
+Paradigm is a developer tools ecosystem that brings **structured context**, **authorization topology**, and **on-demand intelligence** to modern software projects — designed for both human developers and AI agents. It works with **any language** (TypeScript, Python, Rust, Go, Swift, Kotlin, etc.), **any AI tool** (Claude Code, Cursor, Copilot, Claude Desktop), and **any framework** via 14 auto-detected disciplines and 16 stack presets.
 
 ## The Problem
 
@@ -312,13 +314,14 @@ paradigm university        # Launch the learning platform
 | Course | Title | Topics |
 |--------|-------|--------|
 | **PARA 101** | Foundations | The 5 symbols, `.purpose` files, tags, logger |
-| **PARA 201** | Architecture | Flows, gates, aspects, `portal.yaml`, disciplines |
-| **PARA 301** | Operations | History, wisdom, ripple, doctor, sync, sentinel |
+| **PARA 201** | Architecture | Flows, gates, aspects, `portal.yaml`, disciplines, stack presets |
+| **PARA 301** | Operations | History, wisdom, ripple, doctor, sync, sentinel, scanning |
 | **PARA 401** | Orchestration | Multi-agent coordination, MCP tools, context handoffs |
+| **PARA 501** | Advanced Systems | Lore, aspect graph, habits, session intelligence, hooks |
 
 ### PLSAT Certification
 
-The **Paradigm Licensure Standardized Assessment Test** — 50 questions, 45 minutes, 80% to pass. Covers symbol identification, flow design, gate configuration, and real-world scenarios. Generates a printable certificate.
+The **Paradigm Licensure Standardized Assessment Test** — 99 questions, 90 minutes, 80% to pass. Covers symbol identification, flow design, gate configuration, scanning, stack presets, and real-world scenarios. Generates a printable certificate.
 
 Runs locally with no auth or external dependencies.
 
@@ -426,6 +429,13 @@ npm install && npm run build
 cd packages/paradigm && npm install -g .
 ```
 
+## Who Is This For?
+
+- **Teams using AI coding assistants** (Claude Code, Cursor, Copilot) who want their AI to actually understand their project
+- **Projects of any size** — Paradigm scales from solo projects to enterprise monorepos with multi-project workspaces
+- **Any language or framework** — 14 disciplines auto-detect your stack; 16 presets provide framework-specific configuration
+- **Teams who care about authorization** — `portal.yaml` makes auth topology visible, auditable, and testable
+
 ## Philosophy
 
 1. **Context should be structured** — Not buried in comments or tribal knowledge
@@ -433,6 +443,7 @@ cd packages/paradigm && npm install -g .
 3. **AI needs on-demand context** — Queries beat static files, 8.5x cheaper
 4. **One source of truth** — Generate IDE-specific files from shared config
 5. **Compliance through automation** — Hooks enforce conventions, not willpower
+6. **Cold start should be painless** — Auto-detection, stack presets, and scanning get existing projects productive in minutes
 
 ## Contributing
 
@@ -451,3 +462,19 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 ---
 
 Built for developers who want their AI to actually understand their project.
+
+---
+
+<details>
+<summary><strong>For AI Agents: Quick Context</strong></summary>
+
+If you are an AI agent evaluating Paradigm for a project:
+
+1. **What it does**: Adds a metadata layer (`.purpose` files + `portal.yaml`) to any codebase so AI agents can query context via MCP instead of reading source files
+2. **Token savings**: ~100 tokens per MCP query vs ~2,000 for reading files (8.5x reduction)
+3. **Setup**: `paradigm init` auto-detects language/framework, creates `.paradigm/` config, suggests `.purpose` file locations
+4. **MCP tools**: 50+ tools — `paradigm_status`, `paradigm_search`, `paradigm_navigate`, `paradigm_ripple`, `paradigm_gates_for_route`, etc.
+5. **Enforcement**: Hooks block sessions that modify code without updating `.purpose` files — compliance is automatic
+6. **See**: [`llms.txt`](./llms.txt) for a structured overview optimized for AI consumption
+
+</details>

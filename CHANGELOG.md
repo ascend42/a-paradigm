@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.25.2] — 2026-03-10
+
+### Added
+
+- **`llms.txt`**: AI discoverability file at repo root following the [llmstxt.org](https://llmstxt.org/) spec — structured overview of Paradigm optimized for AI agent consumption, with curated links to docs, packages, and getting-started guides.
+
+- **README AI discoverability**: Added language-agnostic/framework-agnostic messaging, "Who Is This For?" section, collapsed "For AI Agents: Quick Context" section, and updated University/PLSAT descriptions to reflect current state (99 questions, PARA 501, stack presets).
+
+- **PARA 201 — Stack Presets section**: Disciplines lesson now covers the 16 stack presets with a full table, auto-detection, `--stack` flag, `paradigm presets` command, and cold-start explanation. New quiz question (q5) tests discipline vs preset understanding.
+
+- **PARA 101 — Cold start context**: First Steps lesson now mentions discipline + stack auto-detection during `paradigm init` and the `--stack` explicit flag.
+
+- **PLSAT v3.0 slots 097-099** (6 question variants): Stack presets vs disciplines (slot-097), `paradigm scan auto` mechanics and confidence levels (slot-098), incremental adoption and cold-start approach for existing projects (slot-099).
+
 ## [3.25.1] — 2026-03-10
 
 ### Fixed

@@ -129,3 +129,21 @@ components:
     file: v3.0.json
     tags: [plsat, para-301]
     references: ["#paradigm-sync"]
+
+  plsat-questions-stack-presets:
+    description: "PLSAT questions testing stack presets and discipline layering (para-201)"
+    file: v3.0.json
+    tags: [plsat, para-201]
+    references: ["#stack-presets", "#disciplines"]
+
+  plsat-questions-auto-scan:
+    description: "PLSAT questions testing paradigm scan auto and cold-start bootstrap (para-301, para-101)"
+    file: v3.0.json
+    tags: [plsat, para-301, para-101]
+    references: ["#scan-index", "#stack-presets"]
+
+  plsat-questions-cold-start:
+    description: "PLSAT questions testing incremental adoption on existing projects (para-101)"
+    file: v3.0.json
+    tags: [plsat, para-101]
+    references: ["#cold-start", "#disciplines"]
