@@ -9,6 +9,7 @@ project: "{{PROJECT_NAME}}"
 # Set to 'auto' for auto-detection from project structure (resolved at init time)
 # See specs/disciplines.md for symbol interpretations per discipline
 discipline: auto  # auto-detect from project structure
+# stack: auto     # framework preset (e.g., nextjs, fastapi, swift-ios) — auto-detected
 
 # Guidelines for AI agents working in this codebase
 agent-guidelines:

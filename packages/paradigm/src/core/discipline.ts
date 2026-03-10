@@ -23,6 +23,28 @@ export interface DisciplineConfig {
   examples: Record<string, string[]>;
 }
 
+export interface StackPreset {
+  /** Unique preset ID */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Parent discipline */
+  discipline: Discipline;
+  /** Directory pattern → symbol type overrides (merged over discipline defaults) */
+  symbolMapping: Record<string, string>;
+  /** Where .purpose files should exist */
+  purposeRequired: PurposeRequirement[];
+  /** Hints for auto-scan to find framework-specific patterns */
+  scanHints: {
+    componentPatterns: string[];
+    routePatterns: string[];
+    authPatterns: string[];
+    statePatterns: string[];
+  };
+  /** Auto-detection function — returns true if project matches this stack */
+  detectFn: (rootDir: string) => boolean;
+}
+
 // ============================================================================
 // Detection
 // ============================================================================
@@ -792,4 +814,679 @@ function hasFilesMatching(rootDir: string, extension: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ============================================================================
+// Stack Presets
+// ============================================================================
+
+export const STACK_PRESETS: Record<string, StackPreset> = {
+  // --- Fullstack ---
+  nextjs: {
+    id: 'nextjs',
+    name: 'Next.js',
+    discipline: 'fullstack',
+    symbolMapping: {
+      'app/**/page.tsx': '#',
+      'app/**/layout.tsx': '#',
+      'app/**/loading.tsx': '#',
+      'app/**/error.tsx': '#',
+      'app/api/**': '#',
+      'pages/**': '#',
+      'pages/api/**': '#',
+      'components/**': '#',
+      'lib/**': '#',
+      'hooks/**': '#',
+      'stores/**': '#',
+      'utils/**': '#',
+      'services/**': '#',
+      'config/**': '#',
+      'middleware.ts': '^',
+      'app/api/auth/**': '^',
+      'events/**': '!',
+      'handlers/**': '!',
+      'flows/**': '$',
+      'aspects/**': '~',
+      'rules/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'app/*', depth: 1 },
+      { pattern: 'app/api/*', depth: 1 },
+      { pattern: 'components/*', depth: 1 },
+      { pattern: 'lib/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['app/**/page.tsx', 'app/**/layout.tsx', 'components/**/*.tsx', 'pages/**/*.tsx'],
+      routePatterns: ['app/api/**/route.ts', 'app/**/page.tsx', 'pages/api/**/*.ts'],
+      authPatterns: ['middleware.ts', 'app/api/auth/**', 'lib/auth.*'],
+      statePatterns: ['stores/**', 'lib/*store*', 'lib/*context*'],
+    },
+    detectFn: (dir) => {
+      try { return fs.readdirSync(dir).some((f) => f.startsWith('next.config')); } catch { return false; }
+    },
+  },
+
+  remix: {
+    id: 'remix',
+    name: 'Remix',
+    discipline: 'fullstack',
+    symbolMapping: {
+      'app/routes/**': '#',
+      'app/components/**': '#',
+      'app/models/**': '#',
+      'app/utils/**': '#',
+      'app/lib/**': '#',
+      'app/services/**': '#',
+      'app/hooks/**': '#',
+      'app/stores/**': '#',
+      'app/config/**': '#',
+      'app/middleware/**': '^',
+      'app/auth/**': '^',
+      'app/events/**': '!',
+      'app/flows/**': '$',
+      'app/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'app/routes/*', depth: 1 },
+      { pattern: 'app/components/*', depth: 1 },
+      { pattern: 'app/models/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['app/routes/**/*.tsx', 'app/components/**/*.tsx'],
+      routePatterns: ['app/routes/**/*.tsx'],
+      authPatterns: ['app/utils/auth.*', 'app/services/auth.*'],
+      statePatterns: ['app/utils/*session*', 'app/models/**'],
+    },
+    detectFn: (dir) => {
+      try { return fs.readdirSync(dir).some((f) => f.startsWith('remix.config')); } catch { return false; }
+    },
+  },
+
+  nuxt: {
+    id: 'nuxt',
+    name: 'Nuxt',
+    discipline: 'fullstack',
+    symbolMapping: {
+      'pages/**': '#',
+      'components/**': '#',
+      'composables/**': '#',
+      'server/api/**': '#',
+      'server/routes/**': '#',
+      'server/utils/**': '#',
+      'utils/**': '#',
+      'stores/**': '#',
+      'plugins/**': '#',
+      'layouts/**': '#',
+      'server/middleware/**': '^',
+      'middleware/**': '^',
+      'server/plugins/**': '!',
+      'flows/**': '$',
+      'aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'pages/*', depth: 1 },
+      { pattern: 'components/*', depth: 1 },
+      { pattern: 'server/api/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['pages/**/*.vue', 'components/**/*.vue', 'layouts/**/*.vue'],
+      routePatterns: ['server/api/**/*.ts', 'server/routes/**/*.ts', 'pages/**/*.vue'],
+      authPatterns: ['server/middleware/auth.*', 'middleware/auth.*', 'server/utils/auth.*'],
+      statePatterns: ['stores/**/*.ts', 'composables/use*State*'],
+    },
+    detectFn: (dir) => {
+      try { return fs.readdirSync(dir).some((f) => f.startsWith('nuxt.config')); } catch { return false; }
+    },
+  },
+
+  sveltekit: {
+    id: 'sveltekit',
+    name: 'SvelteKit',
+    discipline: 'fullstack',
+    symbolMapping: {
+      'src/routes/**': '#',
+      'src/lib/**': '#',
+      'src/lib/components/**': '#',
+      'src/lib/server/**': '#',
+      'src/lib/stores/**': '#',
+      'src/lib/utils/**': '#',
+      'src/hooks.*': '^',
+      'src/lib/auth/**': '^',
+      'src/lib/events/**': '!',
+      'src/lib/flows/**': '$',
+      'src/lib/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/routes/*', depth: 1 },
+      { pattern: 'src/lib/components/*', depth: 1 },
+      { pattern: 'src/lib/server/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/routes/**/+page.svelte', 'src/lib/components/**/*.svelte'],
+      routePatterns: ['src/routes/**/+server.ts', 'src/routes/**/+page.server.ts'],
+      authPatterns: ['src/hooks.server.ts', 'src/lib/auth/**', 'src/lib/server/auth.*'],
+      statePatterns: ['src/lib/stores/**'],
+    },
+    detectFn: (dir) => {
+      try { return fs.readdirSync(dir).some((f) => f.startsWith('svelte.config')); } catch { return false; }
+    },
+  },
+
+  astro: {
+    id: 'astro',
+    name: 'Astro',
+    discipline: 'fullstack',
+    symbolMapping: {
+      'src/pages/**': '#',
+      'src/components/**': '#',
+      'src/layouts/**': '#',
+      'src/content/**': '#',
+      'src/lib/**': '#',
+      'src/utils/**': '#',
+      'src/middleware.*': '^',
+      'src/events/**': '!',
+      'src/flows/**': '$',
+      'src/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/pages/*', depth: 1 },
+      { pattern: 'src/components/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/pages/**/*.astro', 'src/components/**/*.astro', 'src/layouts/**/*.astro'],
+      routePatterns: ['src/pages/**/*.astro', 'src/pages/api/**/*.ts'],
+      authPatterns: ['src/middleware.*'],
+      statePatterns: ['src/content/**'],
+    },
+    detectFn: (dir) => {
+      try { return fs.readdirSync(dir).some((f) => f.startsWith('astro.config')); } catch { return false; }
+    },
+  },
+
+  // --- Web (SPA) ---
+  'react-spa': {
+    id: 'react-spa',
+    name: 'React SPA',
+    discipline: 'web',
+    symbolMapping: {
+      'src/components/**': '#',
+      'src/pages/**': '#',
+      'src/views/**': '#',
+      'src/hooks/**': '#',
+      'src/stores/**': '#',
+      'src/state/**': '#',
+      'src/utils/**': '#',
+      'src/lib/**': '#',
+      'src/services/**': '#',
+      'src/api/**': '#',
+      'src/config/**': '#',
+      'src/middleware/**': '^',
+      'src/auth/**': '^',
+      'src/guards/**': '^',
+      'src/events/**': '!',
+      'src/handlers/**': '!',
+      'src/flows/**': '$',
+      'src/aspects/**': '~',
+      'src/rules/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/components/*', depth: 1 },
+      { pattern: 'src/pages/*', depth: 1 },
+      { pattern: 'src/features/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/components/**/*.tsx', 'src/pages/**/*.tsx', 'src/views/**/*.tsx'],
+      routePatterns: ['src/routes.*', 'src/App.tsx'],
+      authPatterns: ['src/auth/**', 'src/guards/**', 'src/hooks/useAuth*'],
+      statePatterns: ['src/stores/**', 'src/state/**', 'src/hooks/use*Store*'],
+    },
+    detectFn: (dir) => {
+      const pkg = readPackageJson(dir);
+      if (!pkg) return false;
+      const deps = { ...(pkg.dependencies as Record<string, unknown> ?? {}), ...(pkg.devDependencies as Record<string, unknown> ?? {}) };
+      return 'react' in deps && !('next' in deps) && !('remix' in deps) && !('react-native' in deps);
+    },
+  },
+
+  'vue-spa': {
+    id: 'vue-spa',
+    name: 'Vue SPA',
+    discipline: 'web',
+    symbolMapping: {
+      'src/components/**': '#',
+      'src/views/**': '#',
+      'src/pages/**': '#',
+      'src/composables/**': '#',
+      'src/stores/**': '#',
+      'src/utils/**': '#',
+      'src/lib/**': '#',
+      'src/services/**': '#',
+      'src/api/**': '#',
+      'src/config/**': '#',
+      'src/router/**': '$',
+      'src/middleware/**': '^',
+      'src/auth/**': '^',
+      'src/guards/**': '^',
+      'src/events/**': '!',
+      'src/flows/**': '$',
+      'src/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/components/*', depth: 1 },
+      { pattern: 'src/views/*', depth: 1 },
+      { pattern: 'src/stores/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/components/**/*.vue', 'src/views/**/*.vue'],
+      routePatterns: ['src/router/**/*.ts'],
+      authPatterns: ['src/auth/**', 'src/guards/**', 'src/router/guards*'],
+      statePatterns: ['src/stores/**/*.ts', 'src/composables/**/*.ts'],
+    },
+    detectFn: (dir) => {
+      const pkg = readPackageJson(dir);
+      if (!pkg) return false;
+      const deps = { ...(pkg.dependencies as Record<string, unknown> ?? {}), ...(pkg.devDependencies as Record<string, unknown> ?? {}) };
+      return 'vue' in deps && !('nuxt' in deps);
+    },
+  },
+
+  // --- API ---
+  express: {
+    id: 'express',
+    name: 'Express',
+    discipline: 'api',
+    symbolMapping: {
+      'src/routes/**': '#',
+      'src/controllers/**': '#',
+      'src/services/**': '#',
+      'src/models/**': '#',
+      'src/lib/**': '#',
+      'src/utils/**': '#',
+      'src/config/**': '#',
+      'src/middleware/**': '^',
+      'src/auth/**': '^',
+      'src/guards/**': '^',
+      'src/policies/**': '^',
+      'src/events/**': '!',
+      'src/handlers/**': '!',
+      'src/listeners/**': '!',
+      'src/webhooks/**': '!',
+      'src/flows/**': '$',
+      'src/workflows/**': '$',
+      'src/aspects/**': '~',
+      'src/rules/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/routes/*', depth: 1 },
+      { pattern: 'src/services/*', depth: 1 },
+      { pattern: 'src/controllers/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/routes/**/*.ts', 'src/controllers/**/*.ts', 'src/services/**/*.ts'],
+      routePatterns: ['src/routes/**/*.ts', 'src/index.ts', 'src/app.ts'],
+      authPatterns: ['src/middleware/auth*', 'src/auth/**'],
+      statePatterns: ['src/models/**/*.ts'],
+    },
+    detectFn: (dir) => {
+      const pkg = readPackageJson(dir);
+      if (!pkg) return false;
+      const deps = { ...(pkg.dependencies as Record<string, unknown> ?? {}) };
+      return 'express' in deps;
+    },
+  },
+
+  fastify: {
+    id: 'fastify',
+    name: 'Fastify',
+    discipline: 'api',
+    symbolMapping: {
+      'src/routes/**': '#',
+      'src/plugins/**': '#',
+      'src/services/**': '#',
+      'src/models/**': '#',
+      'src/schemas/**': '#',
+      'src/lib/**': '#',
+      'src/utils/**': '#',
+      'src/config/**': '#',
+      'src/hooks/**': '^',
+      'src/auth/**': '^',
+      'src/decorators/**': '^',
+      'src/events/**': '!',
+      'src/handlers/**': '!',
+      'src/flows/**': '$',
+      'src/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/routes/*', depth: 1 },
+      { pattern: 'src/plugins/*', depth: 1 },
+      { pattern: 'src/services/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/routes/**/*.ts', 'src/plugins/**/*.ts', 'src/services/**/*.ts'],
+      routePatterns: ['src/routes/**/*.ts'],
+      authPatterns: ['src/hooks/auth*', 'src/auth/**', 'src/decorators/auth*'],
+      statePatterns: ['src/models/**/*.ts', 'src/schemas/**/*.ts'],
+    },
+    detectFn: (dir) => {
+      const pkg = readPackageJson(dir);
+      if (!pkg) return false;
+      const deps = { ...(pkg.dependencies as Record<string, unknown> ?? {}) };
+      return 'fastify' in deps;
+    },
+  },
+
+  fastapi: {
+    id: 'fastapi',
+    name: 'FastAPI',
+    discipline: 'api',
+    symbolMapping: {
+      'routers/**': '#',
+      'routes/**': '#',
+      'api/**': '#',
+      'services/**': '#',
+      'models/**': '#',
+      'schemas/**': '#',
+      'crud/**': '#',
+      'core/**': '#',
+      'utils/**': '#',
+      'config/**': '#',
+      'deps/**': '^',
+      'middleware/**': '^',
+      'auth/**': '^',
+      'events/**': '!',
+      'handlers/**': '!',
+      'flows/**': '$',
+      'aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'routers/*', depth: 1 },
+      { pattern: 'services/*', depth: 1 },
+      { pattern: 'models/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['routers/**/*.py', 'api/**/*.py', 'services/**/*.py'],
+      routePatterns: ['routers/**/*.py', 'api/**/*.py', 'main.py', 'app.py'],
+      authPatterns: ['deps/**/*.py', 'auth/**/*.py', 'middleware/**/*.py'],
+      statePatterns: ['models/**/*.py', 'schemas/**/*.py'],
+    },
+    detectFn: (dir) => {
+      const pyDeps = (readFileIfExists(dir, 'pyproject.toml') || '') + (readFileIfExists(dir, 'requirements.txt') || '');
+      return /fastapi/i.test(pyDeps);
+    },
+  },
+
+  django: {
+    id: 'django',
+    name: 'Django',
+    discipline: 'api',
+    symbolMapping: {
+      '**/views/**': '#',
+      '**/views.py': '#',
+      '**/serializers/**': '#',
+      '**/models/**': '#',
+      '**/models.py': '#',
+      '**/admin.py': '#',
+      '**/forms.py': '#',
+      '**/urls.py': '$',
+      '**/management/**': '#',
+      '**/utils/**': '#',
+      '**/middleware/**': '^',
+      '**/permissions/**': '^',
+      '**/signals/**': '!',
+      '**/tasks/**': '$',
+      '**/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: '*/views/*', depth: 1 },
+      { pattern: '*/models/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['**/views.py', '**/views/**/*.py', '**/serializers.py'],
+      routePatterns: ['**/urls.py'],
+      authPatterns: ['**/permissions.py', '**/permissions/**/*.py', '**/middleware/**/*.py'],
+      statePatterns: ['**/models.py', '**/models/**/*.py'],
+    },
+    detectFn: (dir) => {
+      return fs.existsSync(path.join(dir, 'manage.py'));
+    },
+  },
+
+  gin: {
+    id: 'gin',
+    name: 'Gin (Go)',
+    discipline: 'api',
+    symbolMapping: {
+      'handlers/**': '#',
+      'controllers/**': '#',
+      'services/**': '#',
+      'models/**': '#',
+      'repository/**': '#',
+      'pkg/**': '#',
+      'internal/**': '#',
+      'cmd/**': '#',
+      'config/**': '#',
+      'middleware/**': '^',
+      'auth/**': '^',
+      'events/**': '!',
+      'flows/**': '$',
+      'aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'handlers/*', depth: 1 },
+      { pattern: 'services/*', depth: 1 },
+      { pattern: 'cmd/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['handlers/**/*.go', 'controllers/**/*.go', 'services/**/*.go'],
+      routePatterns: ['cmd/**/*.go', 'routes/**/*.go', 'router/**/*.go'],
+      authPatterns: ['middleware/**/*.go', 'auth/**/*.go'],
+      statePatterns: ['models/**/*.go', 'repository/**/*.go'],
+    },
+    detectFn: (dir) => {
+      const goMod = readFileIfExists(dir, 'go.mod') || '';
+      return /gin-gonic\/gin/i.test(goMod);
+    },
+  },
+
+  axum: {
+    id: 'axum',
+    name: 'Axum (Rust)',
+    discipline: 'api',
+    symbolMapping: {
+      'src/handlers/**': '#',
+      'src/routes/**': '#',
+      'src/services/**': '#',
+      'src/models/**': '#',
+      'src/db/**': '#',
+      'src/lib.rs': '#',
+      'src/config/**': '#',
+      'src/middleware/**': '^',
+      'src/auth/**': '^',
+      'src/extractors/**': '^',
+      'src/events/**': '!',
+      'src/flows/**': '$',
+      'src/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'src/handlers/*', depth: 1 },
+      { pattern: 'src/services/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['src/handlers/**/*.rs', 'src/routes/**/*.rs', 'src/services/**/*.rs'],
+      routePatterns: ['src/routes/**/*.rs', 'src/main.rs', 'src/lib.rs'],
+      authPatterns: ['src/middleware/**/*.rs', 'src/auth/**/*.rs', 'src/extractors/**/*.rs'],
+      statePatterns: ['src/models/**/*.rs', 'src/db/**/*.rs'],
+    },
+    detectFn: (dir) => {
+      const cargo = readFileIfExists(dir, 'Cargo.toml') || '';
+      return /axum/i.test(cargo);
+    },
+  },
+
+  // --- Mobile ---
+  'swift-ios': {
+    id: 'swift-ios',
+    name: 'Swift iOS',
+    discipline: 'mobile',
+    symbolMapping: {
+      '**/Views/**': '#',
+      '**/Screens/**': '#',
+      '**/Components/**': '#',
+      '**/ViewModels/**': '#',
+      '**/Models/**': '#',
+      '**/Services/**': '#',
+      '**/Managers/**': '#',
+      '**/Helpers/**': '#',
+      '**/Utils/**': '#',
+      '**/Extensions/**': '#',
+      '**/Networking/**': '#',
+      '**/Coordinators/**': '$',
+      '**/Navigation/**': '$',
+      '**/Flows/**': '$',
+      '**/Auth/**': '^',
+      '**/Middleware/**': '^',
+      '**/Events/**': '!',
+      '**/Notifications/**': '!',
+      '**/Aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: '**/Views/*', depth: 1 },
+      { pattern: '**/Screens/*', depth: 1 },
+      { pattern: '**/Services/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['**/*.swift'],
+      routePatterns: ['**/Navigation/**/*.swift', '**/Coordinators/**/*.swift'],
+      authPatterns: ['**/Auth/**/*.swift', '**/Keychain*'],
+      statePatterns: ['**/ViewModels/**/*.swift', '**/Models/**/*.swift', '**/Stores/**/*.swift'],
+    },
+    detectFn: (dir) => {
+      const hasXcodeproj = hasFilesMatching(dir, '.xcodeproj') || hasFilesMatching(dir, '.xcworkspace');
+      const hasSwift = fs.existsSync(path.join(dir, 'Package.swift')) ||
+        (fs.existsSync(path.join(dir, 'Sources')) && hasFilesMatching(path.join(dir, 'Sources'), '.swift'));
+      return hasXcodeproj || hasSwift;
+    },
+  },
+
+  'kotlin-android': {
+    id: 'kotlin-android',
+    name: 'Kotlin Android',
+    discipline: 'mobile',
+    symbolMapping: {
+      '**/ui/**': '#',
+      '**/screens/**': '#',
+      '**/components/**': '#',
+      '**/viewmodel/**': '#',
+      '**/viewmodels/**': '#',
+      '**/model/**': '#',
+      '**/models/**': '#',
+      '**/data/**': '#',
+      '**/repository/**': '#',
+      '**/service/**': '#',
+      '**/network/**': '#',
+      '**/api/**': '#',
+      '**/util/**': '#',
+      '**/utils/**': '#',
+      '**/di/**': '#',
+      '**/navigation/**': '$',
+      '**/auth/**': '^',
+      '**/middleware/**': '^',
+      '**/events/**': '!',
+      '**/flows/**': '$',
+      '**/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: '**/ui/*', depth: 1 },
+      { pattern: '**/screens/*', depth: 1 },
+      { pattern: '**/data/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['**/*.kt'],
+      routePatterns: ['**/navigation/**/*.kt'],
+      authPatterns: ['**/auth/**/*.kt'],
+      statePatterns: ['**/viewmodel/**/*.kt', '**/viewmodels/**/*.kt', '**/model/**/*.kt', '**/repository/**/*.kt'],
+    },
+    detectFn: (dir) => {
+      return fs.existsSync(path.join(dir, 'build.gradle.kts')) || fs.existsSync(path.join(dir, 'build.gradle'));
+    },
+  },
+
+  flutter: {
+    id: 'flutter',
+    name: 'Flutter',
+    discipline: 'mobile',
+    symbolMapping: {
+      'lib/screens/**': '#',
+      'lib/pages/**': '#',
+      'lib/widgets/**': '#',
+      'lib/components/**': '#',
+      'lib/models/**': '#',
+      'lib/services/**': '#',
+      'lib/providers/**': '#',
+      'lib/repositories/**': '#',
+      'lib/utils/**': '#',
+      'lib/config/**': '#',
+      'lib/routes/**': '$',
+      'lib/navigation/**': '$',
+      'lib/auth/**': '^',
+      'lib/middleware/**': '^',
+      'lib/events/**': '!',
+      'lib/flows/**': '$',
+      'lib/aspects/**': '~',
+    },
+    purposeRequired: [
+      { pattern: 'lib/screens/*', depth: 1 },
+      { pattern: 'lib/widgets/*', depth: 1 },
+      { pattern: 'lib/services/*', depth: 1 },
+    ],
+    scanHints: {
+      componentPatterns: ['lib/**/*.dart'],
+      routePatterns: ['lib/routes/**/*.dart', 'lib/navigation/**/*.dart'],
+      authPatterns: ['lib/auth/**/*.dart'],
+      statePatterns: ['lib/providers/**/*.dart', 'lib/models/**/*.dart', 'lib/repositories/**/*.dart'],
+    },
+    detectFn: (dir) => {
+      return fs.existsSync(path.join(dir, 'pubspec.yaml'));
+    },
+  },
+};
+
+/**
+ * Detect the stack preset from project files.
+ * Returns the preset ID or null if no match.
+ */
+export function detectStack(rootDir: string): string | null {
+  for (const [id, preset] of Object.entries(STACK_PRESETS)) {
+    if (preset.detectFn(rootDir)) {
+      return id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the effective config for a stack preset.
+ * Merges the preset's config over the discipline defaults.
+ */
+export function getStackConfig(stackId: string): DisciplineConfig | null {
+  const preset = STACK_PRESETS[stackId];
+  if (!preset) return null;
+
+  const base = getDisciplineConfig(preset.discipline);
+  return {
+    symbolMapping: { ...base.symbolMapping, ...preset.symbolMapping },
+    purposeRequired: preset.purposeRequired,
+    examples: base.examples,
+  };
+}
+
+/**
+ * List all available stack presets, optionally filtered by discipline.
+ */
+export function listStackPresets(discipline?: Discipline): StackPreset[] {
+  const presets = Object.values(STACK_PRESETS);
+  if (discipline) {
+    return presets.filter((p) => p.discipline === discipline);
+  }
+  return presets;
 }

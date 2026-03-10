@@ -18,7 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand } from './scan/index.js';
-import { detectDiscipline, getDisciplineConfig } from '../core/discipline.js';
+import { detectDiscipline, getDisciplineConfig, detectStack, getStackConfig } from '../core/discipline.js';
 
 // ============================================
 // Types
@@ -31,6 +31,8 @@ export interface InitOptions {
   migrate?: boolean;
   quick?: boolean;
   dryRun?: boolean;
+  /** Explicit stack preset (e.g., 'nextjs', 'fastapi', 'swift-ios') */
+  stack?: string;
 }
 
 interface DetectedFile {
@@ -52,6 +54,7 @@ interface DetectionResult {
   totalLines: number;
   projectType?: string;
   discipline?: string;
+  stack?: string;
 }
 
 // ============================================
@@ -211,6 +214,7 @@ function detectExistingIDEFiles(rootDir: string): DetectionResult {
   }
 
   const discipline = detectDiscipline(rootDir);
+  const stack = detectStack(rootDir);
 
   return {
     ides,
@@ -218,6 +222,7 @@ function detectExistingIDEFiles(rootDir: string): DetectionResult {
     totalLines,
     projectType: detectProjectType(rootDir),
     discipline: discipline !== 'backend' ? discipline : undefined, // Only show if non-fallback
+    stack: stack || undefined,
   };
 }
 
@@ -460,7 +465,8 @@ function displayDetectionResults(detection: DetectionResult, projectName: string
   console.log(chalk.white('  📁 Project: ') + chalk.cyan(projectName) +
     (detection.projectType ? chalk.gray(` (${detection.projectType} detected)`) : ''));
   if (detection.discipline) {
-    console.log(chalk.white('  🎯 Discipline: ') + chalk.cyan(detection.discipline));
+    console.log(chalk.white('  🎯 Discipline: ') + chalk.cyan(detection.discipline) +
+      (detection.stack ? chalk.gray(` → stack: ${detection.stack}`) : ''));
   }
   console.log('');
   
@@ -634,8 +640,8 @@ export async function initCommand(options: InitOptions) {
         createFixturesTemplate(paradigmDir);
       }
 
-      // Apply detected discipline to config.yaml
-      applyDisciplineToConfig(paradigmDir, cwd);
+      // Apply detected discipline and stack preset to config.yaml
+      applyDisciplineToConfig(paradigmDir, cwd, options.stack);
 
       spinner.succeed(chalk.green('.paradigm/ created'));
     } else {
@@ -714,11 +720,12 @@ export async function initCommand(options: InitOptions) {
 }
 
 /**
- * Detect the project discipline and update config.yaml with discipline-specific settings.
- * Replaces `discipline: auto` with the detected value and populates the symbol-mapping
- * and purpose-required sections from the discipline's defaults.
+ * Detect the project discipline and stack, then update config.yaml with
+ * discipline/stack-specific settings. Replaces `discipline: auto` with the
+ * detected value, adds `stack:` if detected, and populates the symbol-mapping
+ * and purpose-required sections.
  */
-function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
+function applyDisciplineToConfig(paradigmDir: string, rootDir: string, explicitStack?: string): void {
   const configPath = path.join(paradigmDir, 'config.yaml');
   if (!fs.existsSync(configPath)) return;
 
@@ -733,10 +740,48 @@ function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
     `discipline: ${discipline}`
   );
 
-  // Get discipline-specific config
-  const config = getDisciplineConfig(discipline);
+  // Detect or use explicit stack preset
+  const stackId = explicitStack || detectStack(rootDir);
+  const config = stackId ? getStackConfig(stackId) : getDisciplineConfig(discipline);
 
-  // Replace the symbol-mapping section with discipline-specific mappings
+  if (!config) {
+    // Fallback to discipline config if stack ID is invalid
+    const fallback = getDisciplineConfig(discipline);
+    applyConfigToContent();
+    return;
+
+    function applyConfigToContent() {
+      const mappingLines = Object.entries(fallback.symbolMapping)
+        .map(([pattern, symbol]) => `    "${pattern}": "${symbol}"`)
+        .join('\n');
+
+      content = content.replace(
+        /  symbol-mapping:\n(?:(?:    .*| *)\n)*/,
+        `  symbol-mapping:\n${mappingLines}\n`
+      );
+
+      const purposeLines = fallback.purposeRequired
+        .map((pr) => `  - pattern: "${pr.pattern}"\n    depth: ${pr.depth}`)
+        .join('\n');
+
+      content = content.replace(
+        /purpose-required:\n(?:  - pattern:.*\n    depth:.*\n)*/,
+        `purpose-required:\n${purposeLines}\n`
+      );
+
+      fs.writeFileSync(configPath, content, 'utf8');
+    }
+  }
+
+  // Add stack field after discipline line
+  if (stackId) {
+    content = content.replace(
+      /^(discipline:\s*.+)$/m,
+      `$1\nstack: ${stackId}`
+    );
+  }
+
+  // Replace the symbol-mapping section with stack/discipline-specific mappings
   const mappingLines = Object.entries(config.symbolMapping)
     .map(([pattern, symbol]) => `    "${pattern}": "${symbol}"`)
     .join('\n');
@@ -746,7 +791,7 @@ function applyDisciplineToConfig(paradigmDir: string, rootDir: string): void {
     `  symbol-mapping:\n${mappingLines}\n`
   );
 
-  // Replace the purpose-required section with discipline-specific paths
+  // Replace the purpose-required section
   const purposeLines = config.purposeRequired
     .map((pr) => `  - pattern: "${pr.pattern}"\n    depth: ${pr.depth}`)
     .join('\n');

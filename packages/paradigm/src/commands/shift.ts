@@ -36,6 +36,8 @@ export interface ShiftOptions {
   workspace?: string;
   /** Custom workspace file location (default: ../.paradigm-workspace) */
   workspacePath?: string;
+  /** Explicit stack preset (e.g., 'nextjs', 'fastapi', 'swift-ios') */
+  stack?: string;
 }
 
 export async function shiftCommand(options: ShiftOptions = {}) {
@@ -65,6 +67,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
         force: options.force,
         quick: true, // We'll scan separately for better UX
         name: projectName,
+        stack: options.stack,
       });
       spinner.succeed(chalk.green('Paradigm initialized'));
     } catch (error) {

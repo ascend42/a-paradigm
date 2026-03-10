@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.25.0] — 2026-03-10
+
+### Added
+
+- **Stack presets**: 16 framework-specific presets layered on top of disciplines for precise cold-start configuration. `paradigm init --stack nextjs` or auto-detected from project files. Each preset provides tailored `symbol-mapping`, `purpose-required`, and `scanHints` for the framework.
+  - **Fullstack**: nextjs, remix, nuxt, sveltekit, astro
+  - **Web**: react-spa, vue-spa
+  - **API**: express, fastify, fastapi, django, gin, axum
+  - **Mobile**: swift-ios, kotlin-android, flutter
+
+- **`paradigm presets` command**: List all available stack presets, optionally filtered by discipline (`--discipline mobile`).
+
+- **`--stack` flag** on `paradigm init` and `paradigm shift`: Explicitly set a stack preset, or omit for auto-detection.
+
+- **`stack:` field** in `.paradigm/config.yaml`: Records the detected/chosen stack preset alongside the discipline.
+
 ## [3.24.1] — 2026-03-08
 
 ### Fixed

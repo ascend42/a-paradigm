@@ -33,6 +33,7 @@ program
   .option('-f, --force', 'Overwrite existing files')
   .option('--name <name>', 'Project name')
   .option('--ide <ide>', 'Target IDE: cursor, copilot, windsurf, claude')
+  .option('--stack <stack>', 'Stack preset (e.g., nextjs, fastapi, swift-ios). Auto-detected if omitted.')
   .option('--migrate', 'Output migration prompt for existing IDE files')
   .option('--quick', 'Non-interactive mode with smart defaults')
   .option('--dry-run', 'Show what would be created without creating')
@@ -47,11 +48,49 @@ program
   .option('--verify', 'Run health checks after setup')
   .option('--ide <ide>', 'Target specific IDE instead of all')
   .option('--configure-models', 'Force model configuration prompts for team agents')
+  .option('--stack <stack>', 'Stack preset (e.g., nextjs, fastapi, swift-ios). Auto-detected if omitted.')
   .option('--workspace <name>', 'Create or join a multi-project workspace with this name (creates ../.paradigm-workspace)')
   .option('--workspace-path <path>', 'Custom workspace file location (default: ../.paradigm-workspace)')
   .action(async (options) => {
     const { shiftCommand } = await import('./commands/shift.js');
     await shiftCommand(options);
+  });
+
+// paradigm presets - list available stack presets
+program
+  .command('presets')
+  .description('List available stack presets for paradigm init/shift')
+  .option('-d, --discipline <discipline>', 'Filter by discipline (e.g., fullstack, api, mobile)')
+  .action(async (options) => {
+    const { listStackPresets } = await import('./core/discipline.js');
+    const chalk = (await import('chalk')).default;
+    const presets = listStackPresets(options.discipline);
+
+    if (presets.length === 0) {
+      console.log(chalk.yellow(`\n  No presets found${options.discipline ? ` for discipline: ${options.discipline}` : ''}\n`));
+      return;
+    }
+
+    console.log(chalk.blue('\n  Available Stack Presets\n'));
+    console.log(chalk.gray('  Use with: paradigm init --stack <id> or paradigm shift --stack <id>\n'));
+
+    // Group by discipline
+    const byDiscipline = new Map<string, typeof presets>();
+    for (const preset of presets) {
+      const group = byDiscipline.get(preset.discipline) || [];
+      group.push(preset);
+      byDiscipline.set(preset.discipline, group);
+    }
+
+    for (const [discipline, group] of byDiscipline) {
+      console.log(chalk.white(`  ${discipline}`));
+      for (const preset of group) {
+        console.log(chalk.cyan(`    ${preset.id.padEnd(20)}`) + chalk.gray(preset.name));
+      }
+      console.log('');
+    }
+
+    console.log(chalk.gray(`  ${presets.length} presets available. Auto-detected when --stack is omitted.\n`));
   });
 
 // paradigm setup
