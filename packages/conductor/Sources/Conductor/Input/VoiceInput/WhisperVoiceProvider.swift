@@ -45,6 +45,12 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
         ConductorLog.component("whisper-voice-provider").info("Voice mode set to \(String(describing: mode))")
     }
 
+    func downloadModel(progress: @escaping (Double) -> Void) async throws {
+        // No-op during setup — download + compile happens lazily in ensureLoaded()
+        isModelReady = true
+        progress(1.0)
+    }
+
     /// Ensure WhisperKit is initialized (called lazily before first transcription).
     /// Downloads the model if needed, then compiles and loads it.
     private func ensureLoaded() async throws {
