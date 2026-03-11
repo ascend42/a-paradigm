@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.31.1] — 2026-03-11
+
+### Added
+
+- **Input Status monitor (`#input-status`)**: Live sidebar panel showing real-time status of all four input modalities — gaze (eye tracking coordinates), eyebrows (smoothed L/R values), voice (model state, recording state, last transcription), and gestures (hand detection state). Color-coded dots: gray = off, yellow = active but no data, green = receiving, red = recording.
+
+- **`lastTranscription` on InputOrchestrator**: Published property showing the most recent voice transcription text, displayed in the Input Status panel for immediate speech feedback.
+
 ## [3.31.0] — 2026-03-11
 
 ### Added

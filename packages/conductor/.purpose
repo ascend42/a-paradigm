@@ -334,6 +334,12 @@ context:
   anchors:
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
+#input-status:
+  description: "Live sidebar panel showing real-time status of all input modalities — gaze coords, eyebrow values, voice transcription, hand state. Color-coded dots for instant diagnosis."
+  tags: [ui, status, debug, feedback]
+  anchors:
+    - Sources/Conductor/UI/Views/InputStatusView.swift:1
+
 #gesture-confirmation:
   description: "Transparent click-through overlay showing top-center toast when a gesture, eyebrow event, or voice command fires. Auto-fades after 1.5s. Toggleable via Settings > Gestures."
   tags: [ui, gesture, feedback, overlay, practice]

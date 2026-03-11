@@ -184,10 +184,15 @@ struct MainOverlayView: View {
                 calibrationBanner
             }
 
+            // Live input status monitor
+            InputStatusView(orchestrator: orchestrator)
+
             // Voice control HUD (shows when eyebrow control is active)
             if orchestrator.eyebrowEnabled {
                 VoiceControlHUD(coordinator: orchestrator.voiceCoordinator)
             }
+
+            Divider()
 
             // Buffer area
             BufferView(

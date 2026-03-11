@@ -16,6 +16,7 @@ final class InputOrchestrator: ObservableObject {
     @Published private(set) var videoActive = false
     @Published private(set) var voiceActive = false
     @Published private(set) var lastRecognizedGesture: RecognizedGesture?
+    @Published private(set) var lastTranscription: String = ""
 
     // MARK: - Dependencies
 
@@ -300,6 +301,9 @@ final class InputOrchestrator: ObservableObject {
             guard let self else { return }
             for await result in provider.transcriptionStream {
                 guard !Task.isCancelled else { break }
+
+                // Update last transcription for status display
+                self.lastTranscription = result.text
 
                 // Check for voice commands in the transcription
                 let matchResult = self.voiceCommandMatcher.match(
