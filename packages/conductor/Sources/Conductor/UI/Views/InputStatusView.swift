@@ -55,11 +55,11 @@ struct InputStatusView: View {
 
     private func gazeDetail(active: Bool, calibrated: Bool) -> String {
         if !active { return "Off" }
-        if !calibrated { return "Active — not calibrated" }
         if let point = orchestrator.gazeRouter.currentGazePoint {
-            return String(format: "Tracking (%.0f, %.0f)", point.x, point.y)
+            let prefix = calibrated ? "Calibrated" : "Uncalibrated"
+            return String(format: "%@ (%.0f, %.0f)", prefix, point.x, point.y)
         }
-        return "Active — waiting for face"
+        return calibrated ? "Active — waiting for face" : "Active — not calibrated"
     }
 
     // MARK: - Eyebrows
@@ -115,7 +115,10 @@ struct InputStatusView: View {
     private func voiceDetail(active: Bool, modelReady: Bool, recording: Bool) -> String {
         if !active { return "Off" }
         if !modelReady { return "Loading model..." }
-        if recording { return "Recording..." }
+        if recording {
+            let mode = orchestrator.voiceProvider?.currentMode ?? .pushToTalk
+            return mode == .continuous ? "Listening..." : "Recording..."
+        }
         return "Ready"
     }
 

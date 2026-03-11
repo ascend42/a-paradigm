@@ -243,6 +243,7 @@ final class InputOrchestrator: ObservableObject {
     // MARK: - Voice Lifecycle
 
     /// Start the voice provider. Creates one on demand if none exists.
+    /// Automatically starts continuous recording so speech flows to buffer.
     func startVoiceProvider() async {
         if voiceProvider == nil {
             voiceProvider = WhisperVoiceProvider()
@@ -253,10 +254,16 @@ final class InputOrchestrator: ObservableObject {
         ConductorLog.component("input-orchestrator").info("Starting voice provider...")
         try? await voiceProvider.start()
         voiceActive = voiceProvider.isActive
+
+        // Auto-start continuous recording so speech appears in buffer immediately
+        if voiceActive {
+            voiceProvider.startContinuous()
+        }
     }
 
     /// Stop the voice provider.
     func stopVoiceProvider() {
+        voiceProvider?.stopContinuous()
         voiceProvider?.stop()
         voiceActive = false
         ConductorLog.component("input-orchestrator").info("Voice provider stopped")

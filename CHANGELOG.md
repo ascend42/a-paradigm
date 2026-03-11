@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.32.1] — 2026-03-11
+
+### Fixed
+
+- **Gaze status display (`#input-status`)**: Input Status panel now shows gaze coordinates even when not calibrated (e.g. "Uncalibrated (960, 540)") instead of short-circuiting to "Active — not calibrated". This lets users verify gaze data is flowing before running calibration.
+
+### Added
+
+- **Continuous voice recording (`#whisper-voice-provider`)**: When voice is toggled on, recording now starts immediately in continuous mode — 4-second chunks auto-transcribed via WhisperKit. No longer requires eyebrow trigger or push-to-talk. Transcription text flows directly to the buffer. Input Status shows "Listening..." in continuous mode vs "Recording..." in push-to-talk mode.
+
 ## [3.32.0] — 2026-03-11
 
 ### Changed
