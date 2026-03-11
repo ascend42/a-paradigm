@@ -9,6 +9,8 @@ struct MainOverlayView: View {
     let permissionStatus: PermissionStatus
 
     @AppStorage("setupComplete") private var setupComplete: Bool = false
+    @AppStorage("gazeEnabled") private var gazeEnabled: Bool = false
+    @AppStorage("gazeCalibrated") private var gazeCalibrated: Bool = false
 
     @StateObject private var buffer = BufferEngine()
     @StateObject private var detector = ClaudeCodeDetector()
@@ -129,6 +131,11 @@ struct MainOverlayView: View {
 
     private var mainContent: some View {
         VStack(spacing: 12) {
+            // Gaze calibration prompt
+            if gazeEnabled && !gazeCalibrated {
+                calibrationBanner
+            }
+
             // Buffer area
             BufferView(
                 buffer: buffer,
@@ -147,6 +154,25 @@ struct MainOverlayView: View {
             Spacer(minLength: 0)
         }
         .padding(12)
+    }
+
+    private var calibrationBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "eye.trianglebadge.exclamationmark")
+                .foregroundStyle(.orange)
+            Text("Gaze not calibrated")
+                .font(.caption)
+            Spacer()
+            Button("Calibrate") {
+                NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
+                gazeCalibrated = true
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.1)))
     }
 
     // MARK: - Actions

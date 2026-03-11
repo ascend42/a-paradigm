@@ -469,6 +469,7 @@ struct SetupWizardView: View {
         // Stay on this step — user sees calibration overlay, then comes back
         // and clicks "Continue" to proceed.
         calibrationComplete = true
+        UserDefaults.standard.set(true, forKey: "gazeCalibrated")
     }
 
     private func skipCalibration() {
