@@ -29,8 +29,8 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     /// Duration of each recording chunk in continuous mode (seconds).
     private let continuousChunkDuration: TimeInterval = 4.0
 
-    /// Minimum number of samples required to attempt transcription (0.5s at 48kHz).
-    private let minimumSampleCount = 24000
+    /// Minimum number of samples required to attempt transcription (0.25s at 48kHz).
+    private let minimumSampleCount = 12000
 
     /// WhisperKit model variant, configurable via Settings/Setup.
     var modelVariant: String {
@@ -194,18 +194,31 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
         }
     }
 
-    /// Stop continuous recording.
+    /// Stop continuous recording. Flushes any remaining audio for transcription.
     func stopContinuous() {
         continuousTask?.cancel()
         continuousTask = nil
         audioCapture.stop()
         isRecording = false
         currentMode = .pushToTalk
+
+        // Flush remaining audio — transcribe what was captured
+        if !audioSamples.isEmpty {
+            let samples = audioSamples
+            let startTime = recordingStartTime ?? .now
+            audioSamples.removeAll()
+            Task { [weak self] in
+                await self?.transcribeSamples(samples, startTime: startTime)
+            }
+        }
+
         ConductorLog.component("whisper-voice-provider").info("Continuous recording stopped")
     }
 
     /// Transcribe the current audio chunk without stopping recording.
     private func transcribeChunk() async {
+        guard isRecording else { return }
+
         let samples = audioSamples
         let startTime = recordingStartTime ?? .now
         audioSamples.removeAll()
@@ -225,7 +238,7 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
             return
         }
 
-        guard let kit = whisperKit else { return }
+        guard let kit = whisperKit, isRecording else { return }
 
         let audioDuration = TimeInterval(samples.count) / 16000.0
         ConductorLog.component("whisper-voice-provider")
@@ -233,10 +246,12 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
 
         do {
             let wkResults = try await kit.transcribe(audioArray: samples)
-            let text = wkResults.compactMap { $0.text }.joined(separator: " ")
-                .trimmingCharacters(in: .whitespaces)
+            let text = Self.cleanTranscription(
+                wkResults.compactMap { $0.text }.joined(separator: " ")
+            )
 
             guard !text.isEmpty else { return }
+            guard isRecording else { return }
 
             let allSegments = wkResults.flatMap { $0.segments }
             let avgConfidence: Double = allSegments.isEmpty ? 1.0 :
@@ -293,7 +308,9 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
         do {
             let wkResults = try await kit.transcribe(audioArray: samples)
 
-            let text = wkResults.compactMap { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            let text = Self.cleanTranscription(
+                wkResults.compactMap { $0.text }.joined(separator: " ")
+            )
 
             guard !text.isEmpty else {
                 ConductorLog.component("whisper-voice-provider").info("Transcription returned empty text")
@@ -320,6 +337,69 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
             ConductorLog.component("whisper-voice-provider")
                 .error("Transcription failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Shared transcription for flushed samples (used by stopContinuous).
+    private func transcribeSamples(_ samples: [Float], startTime: Date) async {
+        guard samples.count >= minimumSampleCount else { return }
+
+        do {
+            try await ensureLoaded()
+        } catch {
+            ConductorLog.component("whisper-voice-provider")
+                .error("Failed to load WhisperKit: \(error.localizedDescription)")
+            return
+        }
+
+        guard let kit = whisperKit else { return }
+
+        let audioDuration = TimeInterval(samples.count) / 16000.0
+        do {
+            let wkResults = try await kit.transcribe(audioArray: samples)
+            let text = Self.cleanTranscription(
+                wkResults.compactMap { $0.text }.joined(separator: " ")
+            )
+            guard !text.isEmpty else { return }
+
+            let allSegments = wkResults.flatMap { $0.segments }
+            let avgConfidence: Double = allSegments.isEmpty ? 1.0 :
+                Double(allSegments.map { 1.0 - Double($0.noSpeechProb) }.reduce(0, +)) / Double(allSegments.count)
+
+            let result = TranscriptionResult(
+                text: text,
+                isFinal: true,
+                confidence: avgConfidence,
+                audioDuration: audioDuration,
+                timestamp: startTime
+            )
+            transcriptionContinuation?.yield(result)
+            ConductorLog.signal("transcription-ready")
+                .info("Flush: \"\(text.prefix(80))\"")
+        } catch {
+            ConductorLog.component("whisper-voice-provider")
+                .error("Flush transcription failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Text Cleanup
+
+    /// Strip WhisperKit special tokens and noise from transcription output.
+    private static func cleanTranscription(_ raw: String) -> String {
+        var text = raw
+        // Remove WhisperKit special tokens
+        let specialTokens = [
+            "[BLANK_AUDIO]", "[SILENCE]", "[NO_SPEECH]",
+            "[INAUDIBLE]", "[MUSIC]", "[APPLAUSE]", "[LAUGHTER]",
+        ]
+        for token in specialTokens {
+            text = text.replacingOccurrences(of: token, with: "")
+        }
+        // Collapse whitespace and trim
+        text = text.components(separatedBy: .whitespaces)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return text
     }
 
     // MARK: - Audio Conversion

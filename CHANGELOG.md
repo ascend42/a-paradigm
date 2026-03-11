@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.32.2] — 2026-03-11
+
+### Fixed
+
+- **`[BLANK_AUDIO]` spam filtered (`#whisper-voice-provider`)**: WhisperKit special tokens (`[BLANK_AUDIO]`, `[SILENCE]`, `[NO_SPEECH]`, etc.) are now stripped from transcription output before yielding results. Fixes repeated `[BLANK_AUDIO]` appearing in the buffer after toggling voice off.
+- **Continuous voice flush on stop (`#whisper-voice-provider`)**: `stopContinuous()` now flushes remaining buffered audio for transcription instead of silently discarding it. Ensures speech captured before toggling off still gets transcribed.
+- **Minimum sample threshold reduced (`#whisper-voice-provider`)**: Lowered from 24000 (0.5s) to 12000 (0.25s) samples so shorter utterances are not silently dropped.
+
 ## [3.32.1] — 2026-03-11
 
 ### Fixed
