@@ -54,9 +54,6 @@ struct InputStatusView: View {
     }
 
     private func gazeDetail(active: Bool, calibrated: Bool) -> String {
-        if orchestrator.gestureProvider?.isActive == true && !(orchestrator.gazeProvider?.isActive ?? false) {
-            return "Blocked — camera in use by gestures"
-        }
         if !active { return "Off" }
         if !calibrated { return "Active — not calibrated" }
         if let point = orchestrator.gazeRouter.currentGazePoint {

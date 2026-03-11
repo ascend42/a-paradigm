@@ -81,21 +81,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Create/destroy input providers based on UserDefaults preferences.
+    /// All vision providers share the orchestrator's SharedCameraSession.
     private func createProvidersFromPreferences() {
         let gazeEnabled = UserDefaults.standard.bool(forKey: "gazeEnabled")
         let gestureEnabled = UserDefaults.standard.bool(forKey: "gestureEnabled")
         let voiceEnabled = UserDefaults.standard.bool(forKey: "voiceEnabled")
 
         if gazeEnabled && orchestrator.gazeProvider == nil {
-            orchestrator.gazeProvider = MediaPipeGazeProvider()
-            ConductorLog.component("conductor-app").info("Created gaze provider")
+            let provider = VisionGazeProvider()
+            provider.setSharedCamera(orchestrator.sharedCamera)
+            orchestrator.gazeProvider = provider
+            ConductorLog.component("conductor-app").info("Created gaze provider (native Vision)")
         } else if !gazeEnabled && orchestrator.gazeProvider != nil {
             orchestrator.gazeProvider = nil
             ConductorLog.component("conductor-app").info("Removed gaze provider")
         }
 
         if gestureEnabled && orchestrator.gestureProvider == nil {
-            orchestrator.gestureProvider = VisionGestureProvider()
+            let provider = VisionGestureProvider()
+            provider.setSharedCamera(orchestrator.sharedCamera)
+            orchestrator.gestureProvider = provider
             ConductorLog.component("conductor-app").info("Created gesture provider")
         } else if !gestureEnabled && orchestrator.gestureProvider != nil {
             orchestrator.gestureProvider = nil
@@ -327,9 +332,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleCalibrateEyebrows() {
         ConductorLog.component("eyebrow-calibration").info("Eyebrow calibration requested")
         Task { @MainActor in
-            // Ensure gaze provider exists and is started (eyebrow data comes from gaze camera)
+            // Ensure gaze provider exists and is started (eyebrow data comes from face landmarks)
             if orchestrator.gazeProvider == nil {
-                orchestrator.gazeProvider = MediaPipeGazeProvider()
+                let provider = VisionGazeProvider()
+                provider.setSharedCamera(orchestrator.sharedCamera)
+                orchestrator.gazeProvider = provider
                 ConductorLog.component("eyebrow-calibration").info("Created gaze provider for calibration")
             }
             if let provider = orchestrator.gazeProvider, !provider.isActive {

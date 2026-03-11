@@ -1,13 +1,14 @@
 purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions
-version: 0.4.0
-description: Workspace manager that launches and owns CC instances. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
+version: 0.5.0
+description: Workspace manager that launches and owns CC instances. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
   - 7 platform abstraction protocols for future Windows port
-  - All ML inference runs locally — zero cloud, zero cost
+  - All ML inference runs locally — zero cloud, zero cost, no Python dependency
+  - SharedCameraSession distributes frames to gaze + gesture providers simultaneously
+  - VisionGazeProvider uses VNDetectFaceLandmarksRequest for native gaze + eyebrow tracking
   - Sidebar-based workspace manager replaces floating overlay
-  - Eyebrow gestures trigger voice recording via MediaPipe FaceMesh
   - Custom gesture recording via DTW matching
   - Voice command phrase binding with fuzzy matching
   - Single-owner pattern — AppDelegate is the sole lifecycle owner of orchestrator and workspace
@@ -96,9 +97,21 @@ context:
   anchors:
     - Sources/Conductor/Input/VoiceInput/AudioCapture.swift:1
 
+#shared-camera:
+  description: "Single AVCaptureSession shared by all Vision providers — distributes frames to registered CameraFrameConsumer instances. Eliminates camera conflicts."
+  tags: [input, camera, shared, avfoundation]
+  anchors:
+    - Sources/Conductor/Input/SharedCameraSession.swift:1
+
+#vision-gaze-provider:
+  description: "Native Vision framework gaze tracking — VNDetectFaceLandmarksRequest for pupil positions and eyebrow distances. Replaces MediaPipeGazeProvider (no Python dependency). Shares camera with gesture provider."
+  tags: [gaze, vision, face-landmarks, native]
+  anchors:
+    - Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift:1
+
 #vision-gesture-provider:
-  description: Apple Vision hand pose detection
-  tags: [gesture, vision, neural-engine]
+  description: "Apple Vision hand pose detection — receives frames from SharedCameraSession instead of owning its own AVCaptureSession"
+  tags: [gesture, vision, neural-engine, shared-camera]
   anchors:
     - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift:1
 
@@ -121,8 +134,8 @@ context:
     - Sources/Conductor/UI/Views/GestureHUDView.swift:1
 
 #mediapipe-gaze-provider:
-  description: MediaPipe FaceMesh gaze estimation
-  tags: [gaze, mediapipe, python]
+  description: "LEGACY — MediaPipe FaceMesh gaze via Python subprocess. Replaced by #vision-gaze-provider. Retained as fallback reference."
+  tags: [gaze, mediapipe, python, legacy]
   anchors:
     - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
 
@@ -195,7 +208,7 @@ context:
     - Sources/Conductor/UI/Views/SetupWizardView.swift:1
 
 #dependency-checker:
-  description: Checks Python 3, MediaPipe/OpenCV, and downloads WhisperKit models during setup
+  description: Downloads WhisperKit models during setup (Python/MediaPipe no longer required — gaze uses native Vision)
   tags: [setup, dependencies]
   anchors:
     - Sources/Conductor/Utils/DependencyChecker.swift:1
@@ -231,8 +244,8 @@ context:
     - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
 
 #input-orchestrator:
-  description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Publishes videoActive/voiceActive state. Owns provider start/stop lifecycle with toggleVideo()/toggleVoice() methods."
-  tags: [orchestration, input, coordinator, toggle]
+  description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Owns SharedCameraSession for all vision providers. Publishes videoActive/voiceActive state. No camera conflict — both gaze and gesture run simultaneously."
+  tags: [orchestration, input, coordinator, toggle, shared-camera]
   anchors:
     - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
 
@@ -406,9 +419,9 @@ flows:
       - "#gesture-state-machine"
       - "#text-buffer"
   gaze-target:
-    description: Camera to MediaPipe to Iris to Calibration to Screen point to Window match to Target
+    description: Camera to Vision face landmarks to Pupil to Calibration to Screen point to Window match to Target
     steps:
-      - "#mediapipe-gaze-provider"
+      - "#vision-gaze-provider"
       - "#gaze-calibration"
       - "#kalman-filter"
       - "#gaze-router"
@@ -416,7 +429,7 @@ flows:
   gaze-dispatch:
     description: "Gaze → grid cell → right eyebrow → dispatch to cell's instance"
     steps:
-      - "#mediapipe-gaze-provider"
+      - "#vision-gaze-provider"
       - "#gaze-zone-router"
       - "#workspace-grid"
       - "#eyebrow-detector"
@@ -454,12 +467,13 @@ flows:
       - "#voice-command-registry"
       - "#input-orchestrator"
   orchestrator-startup:
-    description: "App launch → read preferences → create providers → wire workspace → start → UI ready"
+    description: "App launch → read preferences → create providers → wire shared camera → start → UI ready"
     steps:
       - "#conductor-app"
       - "#input-orchestrator"
+      - "#shared-camera"
       - "#workspace-manager"
-      - "#mediapipe-gaze-provider"
+      - "#vision-gaze-provider"
       - "#vision-gesture-provider"
       - "#whisper-voice-provider"
   context-enrichment:

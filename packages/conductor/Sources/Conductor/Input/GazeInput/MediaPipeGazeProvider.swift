@@ -226,6 +226,7 @@ enum GazeError: Error, LocalizedError {
     case mediapipeNotInstalled
     case notActive
     case calibrationFailed
+    case noCameraSession
 
     var errorDescription: String? {
         switch self {
@@ -237,6 +238,8 @@ enum GazeError: Error, LocalizedError {
             return "Gaze tracking must be started before calibration"
         case .calibrationFailed:
             return "Gaze calibration failed — ensure good lighting and face the camera"
+        case .noCameraSession:
+            return "No shared camera session available — configure SharedCameraSession before starting"
         }
     }
 }

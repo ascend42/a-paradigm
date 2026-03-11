@@ -32,8 +32,11 @@ final class InputOrchestrator: ObservableObject {
     let voiceCommandRegistry: VoiceCommandRegistry
     let voiceCommandMatcher: VoiceCommandMatcher
 
+    // Shared camera session — one AVCaptureSession for all vision providers
+    let sharedCamera: SharedCameraSession
+
     // Input providers (optional — may not all be active)
-    var gazeProvider: MediaPipeGazeProvider?
+    var gazeProvider: VisionGazeProvider?
     var gestureProvider: VisionGestureProvider?
     var voiceProvider: WhisperVoiceProvider?
 
@@ -57,6 +60,7 @@ final class InputOrchestrator: ObservableObject {
         self.buffer = buffer
         self.gazeRouter = gazeRouter
         self.dispatchTarget = dispatchTarget
+        self.sharedCamera = SharedCameraSession()
         self.actionRegistry = ActionRegistry()
         self.eyebrowDetector = EyebrowDetector()
         self.eyebrowStateMachine = EyebrowStateMachineWrapper()
@@ -106,7 +110,7 @@ final class InputOrchestrator: ObservableObject {
             subscribeToTranscriptions(voiceProvider)
         }
 
-        // Subscribe to gaze points (use zone router if workspace is configured)
+        // Subscribe to gaze points
         if let gazeProvider {
             subscribeToGazePoints(gazeProvider)
         }
@@ -119,7 +123,7 @@ final class InputOrchestrator: ObservableObject {
 
         // Start all configured providers
         Task {
-            // Start video providers (gaze + gesture share the camera pipeline)
+            // Start video providers (both share SharedCameraSession)
             if gazeProvider != nil || gestureProvider != nil {
                 await startVideoProviders()
             }
@@ -140,10 +144,11 @@ final class InputOrchestrator: ObservableObject {
         }
         inputTasks.removeAll()
 
-        // Stop all providers
+        // Stop all providers (they unregister from shared camera)
         gazeProvider?.stop()
         gestureProvider?.stop()
         voiceProvider?.stop()
+        sharedCamera.stop()
         videoActive = false
         voiceActive = false
 
@@ -162,54 +167,55 @@ final class InputOrchestrator: ObservableObject {
 
     // MARK: - Video (Gaze + Gesture) Lifecycle
 
-    /// Start gaze and gesture providers.
-    /// IMPORTANT: Both use the camera — gaze (Python/OpenCV) and gesture (AVCaptureSession)
-    /// cannot share the camera on macOS. Gesture provider gets priority since it uses native
-    /// Vision framework. Gaze provider only starts if gesture is disabled.
+    /// Start gaze and gesture providers via the shared camera session.
+    /// Both providers run their own Vision requests on the same camera frames —
+    /// no camera conflict, no mutual exclusion.
     /// Creates providers on demand if none exist.
     func startVideoProviders() async {
         lastError = nil
 
-        // Gesture provider (native AVCaptureSession + Vision) — gets camera priority
+        // Create gesture provider on demand
         if gestureProvider == nil {
-            gestureProvider = VisionGestureProvider()
+            let provider = VisionGestureProvider()
+            provider.setSharedCamera(sharedCamera)
+            gestureProvider = provider
             ConductorLog.component("input-orchestrator").info("Created gesture provider on demand")
-            subscribeToGestureActions(gestureProvider!)
-            subscribeToCustomGestures(gestureProvider!)
+            subscribeToGestureActions(provider)
+            subscribeToCustomGestures(provider)
         }
+
+        // Create gaze provider on demand
+        if gazeProvider == nil {
+            let provider = VisionGazeProvider()
+            provider.setSharedCamera(sharedCamera)
+            gazeProvider = provider
+            ConductorLog.component("input-orchestrator").info("Created gaze provider on demand")
+            subscribeToGazePoints(provider)
+            if eyebrowEnabled {
+                subscribeToEyebrowFrames(provider)
+            }
+        }
+
+        // Start both providers — they register with the shared camera
         if let gestureProvider, !gestureProvider.isActive {
             ConductorLog.component("input-orchestrator").info("Starting gesture provider...")
             do {
                 try await gestureProvider.start()
             } catch {
                 lastError = "Gestures: \(error.localizedDescription)"
-                ConductorLog.component("input-orchestrator").error("Gesture provider failed: \(error.localizedDescription)")
+                ConductorLog.component("input-orchestrator")
+                    .error("Gesture provider failed: \(error.localizedDescription)")
             }
         }
 
-        // Gaze provider (Python subprocess with OpenCV) — only if gesture not using camera
-        if gazeProvider == nil {
-            gazeProvider = MediaPipeGazeProvider()
-            ConductorLog.component("input-orchestrator").info("Created gaze provider on demand")
-            subscribeToGazePoints(gazeProvider!)
-            if eyebrowEnabled {
-                subscribeToEyebrowFrames(gazeProvider!)
-            }
-        }
         if let gazeProvider, !gazeProvider.isActive {
-            if gestureProvider?.isActive == true {
-                // Camera is held by gesture provider — gaze can't use it
-                lastError = "Gaze: Camera in use by gesture provider. Disable gestures for gaze tracking."
+            ConductorLog.component("input-orchestrator").info("Starting gaze provider...")
+            do {
+                try await gazeProvider.start()
+            } catch {
+                lastError = "Gaze: \(error.localizedDescription)"
                 ConductorLog.component("input-orchestrator")
-                    .info("Skipping gaze provider — camera held by gesture provider")
-            } else {
-                ConductorLog.component("input-orchestrator").info("Starting gaze provider...")
-                do {
-                    try await gazeProvider.start()
-                } catch {
-                    lastError = "Gaze: \(error.localizedDescription)"
-                    ConductorLog.component("input-orchestrator").error("Gaze provider failed: \(error.localizedDescription)")
-                }
+                    .error("Gaze provider failed: \(error.localizedDescription)")
             }
         }
 
@@ -220,6 +226,7 @@ final class InputOrchestrator: ObservableObject {
     func stopVideoProviders() {
         gazeProvider?.stop()
         gestureProvider?.stop()
+        sharedCamera.stop()
         videoActive = false
         ConductorLog.component("input-orchestrator").info("Video providers stopped")
     }
@@ -387,7 +394,7 @@ final class InputOrchestrator: ObservableObject {
         inputTasks.append(actionTask)
     }
 
-    private func subscribeToEyebrowFrames(_ provider: MediaPipeGazeProvider) {
+    private func subscribeToEyebrowFrames(_ provider: VisionGazeProvider) {
         let task = Task { [weak self] in
             guard let self else { return }
             for await frame in provider.eyebrowStream {
@@ -398,7 +405,7 @@ final class InputOrchestrator: ObservableObject {
         inputTasks.append(task)
     }
 
-    private func subscribeToGazePoints(_ provider: MediaPipeGazeProvider) {
+    private func subscribeToGazePoints(_ provider: VisionGazeProvider) {
         let task = Task { [weak self] in
             guard let self else { return }
             for await point in provider.gazePointStream {

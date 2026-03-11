@@ -1,13 +1,15 @@
 // VisionGestureProvider.swift — #vision-gesture-provider
 // Apple Vision framework hand pose detection at 15fps.
 // Uses VNDetectHumanHandPoseRequest on the Neural Engine.
+// Consumes frames from SharedCameraSession alongside VisionGazeProvider.
 
 import Vision
 import AVFoundation
 
 /// macOS gesture input provider using Apple Vision framework.
+/// Receives camera frames from SharedCameraSession instead of owning its own AVCaptureSession.
 @MainActor
-final class VisionGestureProvider: ObservableObject, GestureInputProvider {
+final class VisionGestureProvider: ObservableObject, GestureInputProvider, CameraFrameConsumer {
 
     // MARK: - Published State
 
@@ -20,9 +22,6 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
 
     // MARK: - Private
 
-    private var captureSession: AVCaptureSession?
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private let processingQueue = DispatchQueue(label: "com.a-company.conductor.gesture-processing")
     private var handPoseRequest = VNDetectHumanHandPoseRequest()
     private var gestureContinuation: AsyncStream<GestureAction>.Continuation?
     private var handPoseContinuation: AsyncStream<HandPoseFrame>.Continuation?
@@ -31,6 +30,7 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
     private var lastProcessTime: Date = .distantPast
     private var startTime: Date = .now
     private var frameInterval: TimeInterval { 1.0 / Double(detectionFPS) }
+    private weak var sharedCamera: SharedCameraSession?
 
     init() {
         self.classifier = GestureClassifier()
@@ -59,49 +59,39 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
 
     // MARK: - InputProvider
 
+    /// Start gesture detection by registering with the shared camera session.
     func start() async throws {
-        let session = AVCaptureSession()
-        session.sessionPreset = .medium
-
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+        guard let camera = sharedCamera else {
             throw GestureProviderError.noCameraAvailable
         }
 
-        let input = try AVCaptureDeviceInput(device: camera)
-        guard session.canAddInput(input) else {
-            throw GestureProviderError.cannotConfigureCamera
-        }
-        session.addInput(input)
+        camera.addConsumer(self)
 
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.setSampleBufferDelegate(
-            GestureVideoDelegate(provider: self),
-            queue: processingQueue
-        )
-        guard session.canAddOutput(videoOutput) else {
-            throw GestureProviderError.cannotConfigureCamera
+        if !camera.isRunning {
+            try await camera.start()
         }
-        session.addOutput(videoOutput)
 
-        self.captureSession = session
-        session.startRunning()
         isActive = true
-
         let fps = detectionFPS
-        ConductorLog.component("vision-gesture-provider").info("Gesture detection started at \(fps)fps")
+        ConductorLog.component("vision-gesture-provider")
+            .info("Gesture detection started at \(fps)fps (shared camera)")
     }
 
     func stop() {
-        captureSession?.stopRunning()
-        captureSession = nil
+        sharedCamera?.removeConsumer(self)
         isActive = false
         currentHandState = .none
         ConductorLog.component("vision-gesture-provider").info("Gesture detection stopped")
     }
 
-    // MARK: - Frame Processing
+    /// Set the shared camera session. Must be called before start().
+    func setSharedCamera(_ camera: SharedCameraSession) {
+        self.sharedCamera = camera
+    }
 
-    fileprivate func processFrame(_ pixelBuffer: CVPixelBuffer) {
+    // MARK: - CameraFrameConsumer
+
+    func processCameraFrame(_ pixelBuffer: CVPixelBuffer) {
         // Throttle to configured FPS
         let now = Date()
         guard now.timeIntervalSince(lastProcessTime) >= frameInterval else { return }
@@ -111,9 +101,7 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
         do {
             try handler.perform([handPoseRequest])
             guard let observation = handPoseRequest.results?.first else {
-                Task { @MainActor in
-                    currentHandState = .none
-                }
+                currentHandState = .none
                 return
             }
             processHandPose(observation)
@@ -122,6 +110,8 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
         }
     }
 
+    // MARK: - Hand Pose Processing
+
     private func processHandPose(_ observation: VNHumanHandPoseObservation) {
         let handState = classifier.classify(observation)
         let action = stateMachine.process(handState)
@@ -129,16 +119,14 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
         // Extract hand pose frame for custom gesture recording/matching
         let poseFrame = extractHandPoseFrame(from: observation)
 
-        Task { @MainActor in
-            currentHandState = handState
-            if action != .none {
-                gestureContinuation?.yield(action)
-                ConductorLog.signal("gesture-recognized")
-                    .info("Gesture: \(String(describing: action))")
-            }
-            if let frame = poseFrame {
-                handPoseContinuation?.yield(frame)
-            }
+        currentHandState = handState
+        if action != .none {
+            gestureContinuation?.yield(action)
+            ConductorLog.signal("gesture-recognized")
+                .info("Gesture: \(String(describing: action))")
+        }
+        if let frame = poseFrame {
+            handPoseContinuation?.yield(frame)
         }
     }
 
@@ -170,29 +158,6 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
             ringMCP: CGPointCodable(ringMCP.location),
             littleMCP: CGPointCodable(littleMCP.location)
         )
-    }
-}
-
-// MARK: - Video Delegate
-
-/// Bridges AVCaptureVideoDataOutputSampleBufferDelegate to the provider.
-private final class GestureVideoDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    private weak var provider: VisionGestureProvider?
-
-    init(provider: VisionGestureProvider) {
-        self.provider = provider
-    }
-
-    func captureOutput(
-        _ output: AVCaptureOutput,
-        didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
-    ) {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let provider = self.provider
-        Task { @MainActor in
-            provider?.processFrame(pixelBuffer)
-        }
     }
 }
 

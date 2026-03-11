@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.32.0] — 2026-03-11
+
+### Changed
+
+- **Shared camera architecture (`#shared-camera`)**: Replaced dual-camera conflict (Python/OpenCV vs AVCaptureSession) with a single `SharedCameraSession` that distributes frames to all Vision-based providers simultaneously. Both gaze and gesture providers now run their own Vision requests on the same camera frames — no mutual exclusion, no camera conflict.
+
+- **Native Vision gaze provider (`#vision-gaze-provider`)**: Replaced `MediaPipeGazeProvider` (Python subprocess + OpenCV + MediaPipe) with `VisionGazeProvider` using Apple Vision framework `VNDetectFaceLandmarksRequest`. Extracts pupil positions for gaze estimation and eyebrow distances for raise detection — all natively, no Python dependency. Reuses existing `GazeCalibration` and `KalmanFilter2D` pipeline.
+
+- **VisionGestureProvider shared camera**: Gesture provider no longer creates its own `AVCaptureSession`. Receives frames from `SharedCameraSession` via `CameraFrameConsumer` protocol. `setSharedCamera()` must be called before `start()`.
+
+- **InputOrchestrator simplified**: Removed camera conflict logic and mutual exclusion between gaze/gesture. Both providers start independently via shared camera. `startVideoProviders()` creates and starts both without priority ordering. `sharedCamera` is owned by the orchestrator.
+
+### Removed
+
+- **Python gaze dependency**: No longer requires Python 3, OpenCV, or MediaPipe installed. `MediaPipeGazeProvider.swift` retained in codebase as fallback reference but is no longer used by the orchestrator or AppDelegate.
+
 ## [3.31.2] — 2026-03-11
 
 ### Fixed
