@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MCP auto-registration with Conductor**: `paradigm-mcp` now auto-registers the session with Conductor on startup — writes `~/.conductor/sessions/{pid}.json` automatically. Process exit cleanup via `SIGTERM`/`exit` handlers. No user action required; `/conduct` still works for adding labels or re-registering.
 
+- **Toggleable gaze cursor debug overlay** (`#gaze-cursor`): Click-through transparent window showing gaze position dot. Toggle from Settings panel. Includes `GazeCursorView` (SwiftUI pulsating dot) and `GazeCursorWindowController` (NSPanel click-through management).
+
+- **Conductor test coverage**: 36 new unit tests across 5 test files — `GestureStateMachineTests` (12), `KalmanFilter2DTests` (6), `GazeCalibrationTests` (6), `EnrichedPayloadTests` (6), `ClaudeCodeInstanceTests` (6). Total: 45 tests.
+
 ### Fixed
 
 - **WhisperKit loading hang**: `WhisperKit.download()` and `WhisperKit()` init hung indefinitely during CoreML compilation. Fixed by deferring all model work to first voice use, pointing directly at pre-downloaded model folder (`~/Documents/huggingface/`), and adding a 90-second timeout via task group race.

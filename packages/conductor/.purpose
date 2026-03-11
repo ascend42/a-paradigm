@@ -193,8 +193,32 @@ context:
   anchors:
     - Sources/Conductor/Utils/DependencyChecker.swift:1
 
+#gaze-cursor:
+  description: Transparent click-through overlay showing gaze position dot for debug visualization
+  tags: [ui, gaze, debug, overlay]
+  anchors:
+    - Sources/Conductor/UI/GazeCursorController.swift:1
+
+#conductor-models:
+  description: Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState
+  tags: [models, types]
+  anchors:
+    - Sources/Conductor/Models/:1
+
+#conductor-log:
+  description: Structured logging via os.Logger with symbol-based categories
+  tags: [logging, diagnostics]
+  anchors:
+    - Sources/Conductor/Utils/ConductorLog.swift:1
+
+#main-overlay:
+  description: Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, gaze cursor
+  tags: [ui, layout, root]
+  anchors:
+    - Sources/Conductor/UI/Views/MainOverlayView.swift:1
+
 #settings-panel:
-  description: "Preferences: hotkeys, gestures, enrichment"
+  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger"
   tags: [ui, settings, preferences]
   anchors:
     - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
