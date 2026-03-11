@@ -22,6 +22,19 @@ struct InputStatusView: View {
                 voiceStatus
                 gestureStatus
             }
+
+            // Error banner
+            if let error = orchestrator.lastError {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption2)
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+                .padding(.top, 2)
+            }
         }
     }
 
@@ -41,6 +54,9 @@ struct InputStatusView: View {
     }
 
     private func gazeDetail(active: Bool, calibrated: Bool) -> String {
+        if orchestrator.gestureProvider?.isActive == true && !(orchestrator.gazeProvider?.isActive ?? false) {
+            return "Blocked — camera in use by gestures"
+        }
         if !active { return "Off" }
         if !calibrated { return "Active — not calibrated" }
         if let point = orchestrator.gazeRouter.currentGazePoint {

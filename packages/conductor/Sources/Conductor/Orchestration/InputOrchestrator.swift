@@ -17,6 +17,7 @@ final class InputOrchestrator: ObservableObject {
     @Published private(set) var voiceActive = false
     @Published private(set) var lastRecognizedGesture: RecognizedGesture?
     @Published private(set) var lastTranscription: String = ""
+    @Published private(set) var lastError: String?
 
     // MARK: - Dependencies
 
@@ -161,9 +162,32 @@ final class InputOrchestrator: ObservableObject {
 
     // MARK: - Video (Gaze + Gesture) Lifecycle
 
-    /// Start gaze and gesture providers (they share the camera pipeline).
+    /// Start gaze and gesture providers.
+    /// IMPORTANT: Both use the camera — gaze (Python/OpenCV) and gesture (AVCaptureSession)
+    /// cannot share the camera on macOS. Gesture provider gets priority since it uses native
+    /// Vision framework. Gaze provider only starts if gesture is disabled.
     /// Creates providers on demand if none exist.
     func startVideoProviders() async {
+        lastError = nil
+
+        // Gesture provider (native AVCaptureSession + Vision) — gets camera priority
+        if gestureProvider == nil {
+            gestureProvider = VisionGestureProvider()
+            ConductorLog.component("input-orchestrator").info("Created gesture provider on demand")
+            subscribeToGestureActions(gestureProvider!)
+            subscribeToCustomGestures(gestureProvider!)
+        }
+        if let gestureProvider, !gestureProvider.isActive {
+            ConductorLog.component("input-orchestrator").info("Starting gesture provider...")
+            do {
+                try await gestureProvider.start()
+            } catch {
+                lastError = "Gestures: \(error.localizedDescription)"
+                ConductorLog.component("input-orchestrator").error("Gesture provider failed: \(error.localizedDescription)")
+            }
+        }
+
+        // Gaze provider (Python subprocess with OpenCV) — only if gesture not using camera
         if gazeProvider == nil {
             gazeProvider = MediaPipeGazeProvider()
             ConductorLog.component("input-orchestrator").info("Created gaze provider on demand")
@@ -172,20 +196,23 @@ final class InputOrchestrator: ObservableObject {
                 subscribeToEyebrowFrames(gazeProvider!)
             }
         }
-        if gestureProvider == nil {
-            gestureProvider = VisionGestureProvider()
-            ConductorLog.component("input-orchestrator").info("Created gesture provider on demand")
-            subscribeToGestureActions(gestureProvider!)
-            subscribeToCustomGestures(gestureProvider!)
-        }
         if let gazeProvider, !gazeProvider.isActive {
-            ConductorLog.component("input-orchestrator").info("Starting gaze provider...")
-            try? await gazeProvider.start()
+            if gestureProvider?.isActive == true {
+                // Camera is held by gesture provider — gaze can't use it
+                lastError = "Gaze: Camera in use by gesture provider. Disable gestures for gaze tracking."
+                ConductorLog.component("input-orchestrator")
+                    .info("Skipping gaze provider — camera held by gesture provider")
+            } else {
+                ConductorLog.component("input-orchestrator").info("Starting gaze provider...")
+                do {
+                    try await gazeProvider.start()
+                } catch {
+                    lastError = "Gaze: \(error.localizedDescription)"
+                    ConductorLog.component("input-orchestrator").error("Gaze provider failed: \(error.localizedDescription)")
+                }
+            }
         }
-        if let gestureProvider, !gestureProvider.isActive {
-            ConductorLog.component("input-orchestrator").info("Starting gesture provider...")
-            try? await gestureProvider.start()
-        }
+
         videoActive = (gazeProvider?.isActive ?? false) || (gestureProvider?.isActive ?? false)
     }
 

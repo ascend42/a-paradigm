@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.31.2] — 2026-03-11
+
+### Fixed
+
+- **Camera conflict handling (`#input-orchestrator`)**: macOS only allows one process to hold the camera — gesture provider (native AVCaptureSession + Vision) now gets priority over gaze provider (Python/OpenCV subprocess). Gaze provider skips startup when gesture is active instead of silently failing. Clear error messaging: "Blocked — camera in use by gestures" shown in Input Status panel.
+
+- **Provider error surfacing (`#input-orchestrator`)**: Added `lastError` published property. Provider start failures now display in an orange warning banner in the Input Status panel instead of being silently swallowed.
+
+- **Gaze status detail**: Input Status now shows "Blocked — camera in use by gestures" when gaze can't start due to camera conflict, instead of misleading "Active — not calibrated".
+
 ## [3.31.1] — 2026-03-11
 
 ### Added
