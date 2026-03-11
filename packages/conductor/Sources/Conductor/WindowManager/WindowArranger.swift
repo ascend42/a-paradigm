@@ -50,6 +50,23 @@ final class AXWindowArranger: WindowArrangerProtocol {
         NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1920, height: 1080)
     }
 
+    // MARK: - Grid-Based Layout
+
+    /// Arrange instances using a WorkspaceGrid (for workspace manager integration).
+    func arrangeForGrid(_ grid: WorkspaceGrid, instances: [ClaudeCodeInstance]) {
+        for (index, instance) in instances.enumerated() {
+            let frame = grid.cellFrame(at: index)
+            do {
+                try setFrame(frame, for: instance)
+            } catch {
+                ConductorLog.component("window-arranger")
+                    .error("Failed to arrange instance \(instance.title): \(error.localizedDescription)")
+            }
+        }
+        ConductorLog.signal("layout-applied")
+            .info("Arranged \(instances.count) instances in grid")
+    }
+
     // MARK: - Layout Computation
 
     private func computeFrames(layout: WindowLayout, count: Int, screen: CGRect) -> [CGRect] {

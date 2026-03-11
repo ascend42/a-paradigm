@@ -12,12 +12,20 @@ struct MainOverlayView: View {
     @AppStorage("gazeEnabled") private var gazeEnabled: Bool = false
     @AppStorage("gazeCalibrated") private var gazeCalibrated: Bool = false
 
-    @StateObject private var buffer = BufferEngine()
     @StateObject private var detector = ClaudeCodeDetector()
     @StateObject private var sessionWatcher = SessionFileWatcher()
     @ObservedObject private var gazeRouter = GazeRouter.shared
+    @ObservedObject var orchestrator: InputOrchestrator
+    @ObservedObject var workspaceManager: WorkspaceManager
 
-    private let dispatchTarget = AXDispatchTarget()
+    @State private var showAddInstance = false
+
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager) {
+        self._showOnboarding = State(initialValue: showOnboarding)
+        self.permissionStatus = permissionStatus
+        self.orchestrator = orchestrator
+        self.workspaceManager = workspaceManager
+    }
 
     /// Merged instances from AX detection + file-registered sessions.
     private var allInstances: [ClaudeCodeInstance] {
@@ -93,7 +101,7 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
-            Text("v0.2.0")
+            Text("v0.3.1")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -129,6 +137,12 @@ struct MainOverlayView: View {
 
     // MARK: - Main Content
 
+    /// External instances not managed by the workspace (AX-detected + file-registered minus managed).
+    private var externalInstances: [ClaudeCodeInstance] {
+        let managedPIDs = Set(workspaceManager.managedInstances.compactMap(\.processID))
+        return allInstances.filter { !managedPIDs.contains($0.processID) }
+    }
+
     private var mainContent: some View {
         VStack(spacing: 12) {
             // Gaze calibration prompt
@@ -136,24 +150,38 @@ struct MainOverlayView: View {
                 calibrationBanner
             }
 
+            // Voice control HUD (shows when eyebrow control is active)
+            if orchestrator.eyebrowEnabled {
+                VoiceControlHUD(coordinator: orchestrator.voiceCoordinator)
+            }
+
             // Buffer area
             BufferView(
-                buffer: buffer,
+                buffer: orchestrator.buffer,
                 gazeRouter: gazeRouter,
+                gazeZoneRouter: orchestrator.gazeZoneRouter,
                 onSend: dispatchBuffer
             )
 
             Divider()
 
-            // Instance list (merged: AX-detected + file-registered)
-            InstanceListView(
-                instances: allInstances,
-                gazeRouter: gazeRouter
+            // Workspace view (managed instances + external)
+            WorkspaceView(
+                workspaceManager: workspaceManager,
+                gazeRouter: gazeRouter,
+                externalInstances: externalInstances,
+                onAddInstance: { showAddInstance = true }
             )
 
             Spacer(minLength: 0)
         }
         .padding(12)
+        .sheet(isPresented: $showAddInstance) {
+            AddInstanceSheet(
+                workspaceManager: workspaceManager,
+                isPresented: $showAddInstance
+            )
+        }
     }
 
     private var calibrationBanner: some View {
@@ -182,25 +210,8 @@ struct MainOverlayView: View {
     }
 
     private func dispatchBuffer() {
-        guard let target = gazeRouter.currentTarget else {
-            ConductorLog.component("conductor-app").info("No target for dispatch")
-            return
-        }
-
-        let text = buffer.flush()
-        guard !text.isEmpty else { return }
-
         Task {
-            do {
-                try await dispatchTarget.sendText(text, to: target, submit: true)
-                ConductorLog.signal("buffer-dispatched")
-                    .info("Dispatched \(text.count) chars to \(target.title)")
-            } catch {
-                ConductorLog.component("conductor-app")
-                    .error("Dispatch failed: \(error.localizedDescription)")
-                // Put text back in buffer on failure
-                buffer.append(text)
-            }
+            await orchestrator.executeAction(.send)
         }
     }
 }

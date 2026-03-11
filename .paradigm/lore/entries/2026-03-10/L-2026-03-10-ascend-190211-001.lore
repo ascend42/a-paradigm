@@ -1,0 +1,164 @@
+id: L-2026-03-10-ascend-190211-001
+type: decision
+timestamp: '2026-03-10T19:02:11.981Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Design Paradigm Conductor — multimodal mission control for Claude Code
+summary: Fully specced Paradigm Conductor, a native macOS floating overlay that lets you speak commands into a staging buffer, edit with hand gestures, target Claude Code windows with gaze tracking, and dispatch enriched prompts — all with zero paid APIs, zero cloud dependencies, and one-command setup. This is the most ambitious addition to Paradigm yet, turning it from a developer toolchain into a full human-AI interaction layer.
+symbols_touched:
+  - '#conductor-app'
+  - '#conductor-panel'
+  - '#text-buffer'
+  - '#window-detector'
+  - '#dispatch-target'
+  - '#whisper-voice-provider'
+  - '#vision-gesture-provider'
+  - '#gesture-classifier'
+  - '#mediapipe-gaze-provider'
+  - '#gaze-router'
+  - '#context-enricher'
+  - '#paradigm-mcp-client'
+  - '#window-arranger'
+  - '#status-tracker'
+  - $voice-to-dispatch
+  - $gesture-edit
+  - $gaze-target
+  - $context-enrichment
+  - $window-tiling
+  - ~local-only
+  - ~zero-cost
+  - ~platform-abstracted
+symbols_created:
+  - '#conductor-app'
+  - '#conductor-panel'
+  - '#permissions-onboarding'
+  - '#text-buffer'
+  - '#cursor-navigation'
+  - '#window-detector'
+  - '#keyboard-input'
+  - '#dispatch-target'
+  - '#buffer-view'
+  - '#instance-list-view'
+  - '#whisper-voice-provider'
+  - '#audio-capture'
+  - '#vision-gesture-provider'
+  - '#gesture-classifier'
+  - '#gesture-state-machine'
+  - '#gesture-hud'
+  - '#mediapipe-gaze-provider'
+  - '#gaze-calibration'
+  - '#kalman-filter'
+  - '#gaze-router'
+  - '#paradigm-mcp-client'
+  - '#git-monitor'
+  - '#context-enricher'
+  - '#sentinel-ws-client'
+  - '#window-arranger'
+  - '#status-tracker'
+  - '#notification-bubble'
+  - '#agent-count-badge'
+  - '#settings-panel'
+  - '#hotkey-manager'
+  - $voice-to-dispatch
+  - $gesture-edit
+  - $gaze-target
+  - $context-enrichment
+  - $window-tiling
+  - ^camera-permission
+  - ^microphone-permission
+  - ^accessibility-permission
+  - ^model-downloaded
+  - ^gaze-calibrated
+  - ^mcp-available
+  - '!buffer-dispatched'
+  - '!instance-detected'
+  - '!instance-lost'
+  - '!transcription-ready'
+  - '!gesture-recognized'
+  - '!gaze-target-changed'
+  - '!context-enriched'
+  - '!status-changed'
+  - '!agent-count-changed'
+  - '!layout-applied'
+  - ~local-only
+  - ~zero-cost
+  - ~platform-abstracted
+  - ~resource-conscious
+files_created:
+  - docs/private/plans/conductor-spec.md
+decisions:
+  - id: conductor-macos-first
+    decision: Build macOS-native with Swift/SwiftUI, defer Windows to future port
+    rationale: Native gives best UX, access to Apple Vision (Neural Engine) and WhisperKit (CoreML). 7 abstraction protocols ensure Windows port doesn't require rewrite.
+  - id: conductor-zero-cost
+    decision: All ML inference runs locally — zero paid APIs, zero subscriptions
+    rationale: Aligns with Paradigm philosophy of empowering developers without extracting. WhisperKit and MediaPipe are both free and run on-device.
+  - id: conductor-ships-with-paradigm
+    decision: Conductor ships as part of @a-company/paradigm, not a separate package
+    rationale: Tight integration with paradigm-mcp for context enrichment, Sentinel for status, workspace for multi-project awareness. One install, one command.
+  - id: conductor-sprint-symbol-gates
+    decision: Register Paradigm symbols via MCP at each sprint gate
+    rationale: Conductor eats its own dogfood — every sprint completion requires recording new components, flows, gates, signals, and aspects in the .purpose file via MCP tools.
+learnings:
+  - Voice-to-buffer staging with gesture editing is a fundamentally different interaction model than typing — it separates composition from dispatch
+  - Apple Vision framework on Neural Engine gives essentially free hand pose detection at 15fps, making gesture input viable without GPU overhead
+  - MediaPipe FaceMesh is the only viable cross-platform gaze solution — works identically on macOS and Windows
+  - Sprint 1 being camera-free (keyboard + window detection + manual send) means Conductor is immediately useful even before the multimodal features land
+  - Context enrichment via paradigm-mcp subprocess per project means each Claude Code window gets project-specific context automatically — this is the killer integration point
+tags:
+  - arc:conductor
+  - design
+  - vision
+  - multimodal
+  - planning
+body: |-
+  ## What Is Conductor
+
+  Paradigm Conductor is a multimodal mission control for managing multiple Claude Code sessions simultaneously. It captures voice via WhisperKit (offline, CoreML), lets you edit the staged text with hand gestures via Apple Vision framework, tracks which Claude Code window you're looking at via MediaPipe gaze estimation, and dispatches enriched text to the targeted window — all from a floating overlay that stays on top of everything.
+
+  ## Scope
+
+  - **8 sprints** (S0–S7), each 2 weeks: Foundation → Buffer+Windows → Voice → Gestures → Gaze → Context Enrichment → Window Management → Polish
+  - **30 components**, 5 flows, 6 gates, 10 signals, 4 aspects in the Paradigm symbol map
+  - **7 platform abstraction protocols** defined from Sprint 0 to ensure Windows portability without rewrite
+  - Ships inside `@a-company/paradigm` — launched via `paradigm conductor`
+  - Native Swift/SwiftUI on macOS; future Windows port via Tauri + Rust core
+
+  ## Why This Matters — The Value Proposition
+
+  Paradigm started as structured metadata for AI agents. Then it became a knowledge graph. Then observability (Sentinel), learning (University), orchestration (multi-agent), and governance (hooks, portals, habits). Each addition made Paradigm more valuable but stayed in the "developer writes text, AI reads text" paradigm.
+
+  Conductor breaks that boundary. It's the first time Paradigm enters the **interaction layer** — how humans physically communicate with AI agents. Voice, gesture, gaze — these aren't gimmicks. When you're running 3-4 Claude Code sessions on a complex feature, the bottleneck isn't the AI's capability, it's the human's ability to context-switch, type, and manage windows. Conductor removes that bottleneck.
+
+  The zero-cost constraint is critical. Every ML model runs locally (WhisperKit on Apple Silicon's Neural Engine, MediaPipe on GPU). No API keys, no subscriptions, no usage fees. This means Conductor scales with the user's hardware, not their wallet — which aligns with Paradigm's philosophy of empowering developers without extracting from them.
+
+  ## Where Paradigm Is Heading
+
+  With Conductor, Paradigm completes a full loop:
+
+  1. **Structure** (Purpose, Portal, Premise) — AI understands your project
+  2. **Governance** (Hooks, PM, Habits) — AI follows your rules
+  3. **Memory** (Lore, Wisdom, History) — AI remembers across sessions
+  4. **Observability** (Sentinel) — you see what AI is doing
+  5. **Learning** (University) — developers learn the system
+  6. **Orchestration** (Multi-agent) — multiple AI agents coordinate
+  7. **Interaction** (Conductor) — humans communicate with AI using voice, gesture, and gaze
+
+  This is no longer just a "documentation framework" or even a "meta-framework." Paradigm is becoming a complete human-AI collaboration operating system. Conductor is the physical interface to that OS.
+
+  The long-term vision: you walk up to your desk, say "paradigm conductor," and a floating overlay appears. You speak your intent, gesture to refine it, look at the right window, and it goes — enriched with full project context, dispatched to the right agent, with status bubbles showing you what every session is doing. No clicking, no typing, no window dragging. Just thought → action → result.
+
+  ## Key Decisions
+
+  - **macOS-first, not cross-platform-first**: Native Swift/SwiftUI gives best UX and access to Apple Vision (Neural Engine) and WhisperKit (CoreML). Windows port designed for but not built yet.
+  - **7 abstraction protocols at Sprint 0**: VoiceInputProvider, GestureInputProvider, GazeTrackingProvider, WindowDetector, WindowArranger, DispatchTarget, OverlayWindow. These are the portability boundary.
+  - **MediaPipe as Python subprocess**: Easiest distribution, evaluate C++ FFI after v1.0.
+  - **Sprint 1 usable without camera**: Buffer + window detection + manual send works keyboard-only. Camera features layer on top.
+  - **Context enrichment always-on**: Spawns paradigm-mcp per project, appends Paradigm + git context to every dispatch. Toggle available but defaults to on.
+  - **Per-sprint MCP symbol gates**: Every sprint gate requires registering new Paradigm symbols via MCP tools — Conductor eats its own dogfood from day one.
+git_context:
+  ref: 0c26ba763a518d309cedd2af9e9a512b7a1e324f
+  branch: main
+  dirty: true

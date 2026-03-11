@@ -12,7 +12,9 @@ struct SetupWizardView: View {
     enum SetupStep: Int, CaseIterable {
         case featureSelection
         case dependencies
+        case workspaceConfig
         case gazeCalibration
+        case eyebrowCalibration
         case ready
     }
 
@@ -23,12 +25,16 @@ struct SetupWizardView: View {
     @AppStorage("voiceEnabled") private var voiceEnabled: Bool = true
     @AppStorage("gestureEnabled") private var gestureEnabled: Bool = false
     @AppStorage("gazeEnabled") private var gazeEnabled: Bool = false
+    @AppStorage("eyebrowEnabled") private var eyebrowEnabled: Bool = false
     @AppStorage("whisperModel") private var selectedModel: String = "tiny.en"
+    @AppStorage("sidebarSide") private var sidebarSide: String = "left"
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 320
 
     // MARK: - Dependencies
 
     @StateObject private var depChecker = DependencyChecker()
     @State private var calibrationComplete: Bool = false
+    @State private var eyebrowCalibrationComplete: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,8 +53,12 @@ struct SetupWizardView: View {
                     featureSelectionStep
                 case .dependencies:
                     dependenciesStep
+                case .workspaceConfig:
+                    workspaceConfigStep
                 case .gazeCalibration:
                     gazeCalibrationStep
+                case .eyebrowCalibration:
+                    eyebrowCalibrationStep
                 case .ready:
                     readyStep
                 }
@@ -77,8 +87,12 @@ struct SetupWizardView: View {
         if needsDependencyStep {
             steps.append(.dependencies)
         }
+        steps.append(.workspaceConfig)
         if gazeEnabled {
             steps.append(.gazeCalibration)
+        }
+        if eyebrowEnabled {
+            steps.append(.eyebrowCalibration)
         }
         steps.append(.ready)
         return steps
@@ -152,6 +166,13 @@ struct SetupWizardView: View {
                     detail: "Target windows by looking at them",
                     isOn: $gazeEnabled
                 )
+
+                featureToggleRow(
+                    icon: "eyebrow",
+                    title: "Eyebrow Control",
+                    detail: "Trigger voice recording with eyebrow raises",
+                    isOn: $eyebrowEnabled
+                )
             }
 
             Spacer()
@@ -199,14 +220,12 @@ struct SetupWizardView: View {
 
     private func advanceFromFeatureSelection() {
         ConductorLog.component("setup-wizard").info(
-            "Features selected — voice: \(voiceEnabled), gestures: \(gestureEnabled), gaze: \(gazeEnabled)"
+            "Features selected — voice: \(voiceEnabled), gestures: \(gestureEnabled), gaze: \(gazeEnabled), eyebrow: \(eyebrowEnabled)"
         )
         if needsDependencyStep {
             currentStep = .dependencies
-        } else if gazeEnabled {
-            currentStep = .gazeCalibration
         } else {
-            currentStep = .ready
+            currentStep = .workspaceConfig
         }
     }
 
@@ -396,14 +415,85 @@ struct SetupWizardView: View {
     }
 
     private func advanceFromDependencies() {
+        currentStep = .workspaceConfig
+    }
+
+    // MARK: - Step 3: Workspace Configuration
+
+    private var workspaceConfigStep: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 4) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.cyan)
+                Text("Workspace Layout")
+                    .font(.title3.bold())
+                Text("Configure how Conductor's sidebar appears.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 8)
+
+            VStack(spacing: 12) {
+                // Sidebar side picker
+                HStack {
+                    Text("Sidebar position")
+                        .font(.subheadline)
+                    Spacer()
+                    Picker("", selection: $sidebarSide) {
+                        Text("Left").tag("left")
+                        Text("Right").tag("right")
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
+
+                // Sidebar width slider
+                HStack {
+                    Text("Sidebar width")
+                        .font(.subheadline)
+                    Spacer()
+                    Slider(value: $sidebarWidth, in: 280...500, step: 10)
+                        .frame(width: 140)
+                    Text("\(Int(sidebarWidth))px")
+                        .monospacedDigit()
+                        .frame(width: 46)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
+            }
+
+            Spacer()
+
+            Button(action: advanceFromWorkspaceConfig) {
+                Text("Next")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func advanceFromWorkspaceConfig() {
+        ConductorLog.component("setup-wizard").info(
+            "Workspace configured — side: \(sidebarSide), width: \(Int(sidebarWidth))"
+        )
         if gazeEnabled {
             currentStep = .gazeCalibration
+        } else if eyebrowEnabled {
+            currentStep = .eyebrowCalibration
         } else {
             currentStep = .ready
         }
     }
 
-    // MARK: - Step 3: Gaze Calibration
+    // MARK: - Step 4: Gaze Calibration
 
     private var gazeCalibrationStep: some View {
         VStack(spacing: 16) {
@@ -452,7 +542,7 @@ struct SetupWizardView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                 } else {
-                    Button(action: { currentStep = .ready }) {
+                    Button(action: advanceFromGazeCalibration) {
                         Text("Continue")
                             .frame(maxWidth: .infinity)
                     }
@@ -473,6 +563,84 @@ struct SetupWizardView: View {
 
     private func skipCalibration() {
         ConductorLog.component("setup-wizard").info("Gaze calibration skipped")
+        advanceFromGazeCalibration()
+    }
+
+    private func advanceFromGazeCalibration() {
+        if eyebrowEnabled {
+            currentStep = .eyebrowCalibration
+        } else {
+            currentStep = .ready
+        }
+    }
+
+    // MARK: - Step 5: Eyebrow Calibration
+
+    private var eyebrowCalibrationStep: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 4) {
+                Image(systemName: "eyebrow")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.cyan)
+                Text("Calibrate Eyebrows")
+                    .font(.title3.bold())
+                Text("We'll learn your eyebrow raise range for accurate detection.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 8)
+
+            Spacer()
+
+            if eyebrowCalibrationComplete {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.green)
+                    Text("Eyebrow calibration complete")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            VStack(spacing: 8) {
+                if !eyebrowCalibrationComplete {
+                    Button(action: startEyebrowCalibration) {
+                        Text("Calibrate")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
+
+                    Button(action: skipEyebrowCalibration) {
+                        Text("Skip for now")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Button(action: { currentStep = .ready }) {
+                        Text("Continue")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+    }
+
+    private func startEyebrowCalibration() {
+        ConductorLog.component("setup-wizard").info("Starting eyebrow calibration from setup wizard")
+        NotificationCenter.default.post(name: .conductorCalibrateEyebrows, object: nil)
+        eyebrowCalibrationComplete = true
+    }
+
+    private func skipEyebrowCalibration() {
+        ConductorLog.component("setup-wizard").info("Eyebrow calibration skipped")
         currentStep = .ready
     }
 
@@ -499,6 +667,7 @@ struct SetupWizardView: View {
                 summaryRow(icon: "mic", label: "Voice", status: voiceSummary)
                 summaryRow(icon: "hand.raised", label: "Gestures", status: gestureSummary)
                 summaryRow(icon: "eye", label: "Gaze", status: gazeSummary)
+                summaryRow(icon: "eyebrow", label: "Eyebrows", status: eyebrowSummary)
             }
 
             Spacer()
@@ -540,6 +709,11 @@ struct SetupWizardView: View {
 
     private var gestureSummary: String {
         gestureEnabled ? "Ready" : "Disabled"
+    }
+
+    private var eyebrowSummary: String {
+        guard eyebrowEnabled else { return "Disabled" }
+        return eyebrowCalibrationComplete ? "Calibrated" : "Ready (uncalibrated)"
     }
 
     private var gazeSummary: String {

@@ -1,19 +1,24 @@
-purpose: Paradigm Conductor — multimodal mission control for Claude Code sessions
-version: 0.2.1
-description: Voice-to-buffer, gesture editing, gaze-targeted dispatch with Paradigm context enrichment. Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command.
+purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions
+version: 0.3.1
+description: Workspace manager that launches and owns CC instances. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
   - 7 platform abstraction protocols for future Windows port
   - All ML inference runs locally — zero cloud, zero cost
+  - Sidebar-based workspace manager replaces floating overlay
+  - Eyebrow gestures trigger voice recording via MediaPipe FaceMesh
+  - Custom gesture recording via DTW matching
+  - Voice command phrase binding with fuzzy matching
+  - Single-owner pattern — AppDelegate is the sole lifecycle owner of orchestrator and workspace
 
 # ============================================
 # Components (#)
 # ============================================
 
 #conductor-app:
-  description: Main app entry point, lifecycle, menu bar
-  tags: [app, lifecycle, macos]
+  description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager
+  tags: [app, lifecycle, macos, single-owner]
   anchors:
     - Sources/Conductor/App/:1
 
@@ -182,7 +187,7 @@ context:
     - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
 
 #setup-wizard:
-  description: Multi-step setup wizard — feature selection, dependency checking, model picker, gaze calibration
+  description: "Multi-step setup wizard — feature selection, dependency checking, model picker, workspace config, gaze calibration, eyebrow calibration"
   tags: [ui, setup, onboarding]
   anchors:
     - Sources/Conductor/UI/Views/SetupWizardView.swift:1
@@ -200,10 +205,132 @@ context:
     - Sources/Conductor/UI/GazeCursorController.swift:1
 
 #conductor-models:
-  description: Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState
+  description: Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction, ManagedInstance, HandPoseFrame
   tags: [models, types]
   anchors:
     - Sources/Conductor/Models/:1
+
+#eyebrow-detector:
+  description: Consumes eyebrow stream, KalmanFilter1D smoothing, threshold + hysteresis → emits EyebrowEvent
+  tags: [input, eyebrow, detection]
+  anchors:
+    - Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift:1
+
+#eyebrow-state-machine:
+  description: "Pure state machine: idle → armed → recording → stopped → send for eyebrow-driven voice control"
+  tags: [input, eyebrow, state-machine]
+  anchors:
+    - Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift:1
+
+#eyebrow-calibration:
+  description: 4-step calibration flow learning user's eyebrow raise range
+  tags: [input, eyebrow, calibration]
+  anchors:
+    - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
+
+#input-orchestrator:
+  description: Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands
+  tags: [orchestration, input, coordinator]
+  anchors:
+    - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
+
+#action-registry:
+  description: Maps input events to ConductorAction values with persistence and custom bindings
+  tags: [orchestration, bindings, configuration]
+  anchors:
+    - Sources/Conductor/Orchestration/ActionRegistry.swift:1
+
+#voice-control-coordinator:
+  description: "State machine coordinating eyebrow-triggered voice recording: idle → armed → recording → transcribing → readyToSend"
+  tags: [voice, orchestration, state-machine]
+  anchors:
+    - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift:1
+
+#workspace-manager:
+  description: Owns managed CC instances, grid layout, terminal lifecycle
+  tags: [workspace, management, terminal]
+  anchors:
+    - Sources/Conductor/Workspace/WorkspaceManager.swift:1
+
+#terminal-launcher:
+  description: Launches CC in Terminal.app, iTerm2, Ghostty, Warp, Kitty, Alacritty
+  tags: [workspace, terminal, launch]
+  anchors:
+    - Sources/Conductor/Workspace/TerminalLauncher.swift:1
+
+#workspace-grid:
+  description: Pure struct computing deterministic grid cell frames from screen geometry
+  tags: [workspace, grid, layout]
+  anchors:
+    - Sources/Conductor/Workspace/WorkspaceGrid.swift:1
+
+#workspace-view:
+  description: Sidebar view with grid minimap, per-instance controls, add instance button
+  tags: [ui, workspace, sidebar]
+  anchors:
+    - Sources/Conductor/UI/Views/WorkspaceView.swift:1
+    - Sources/Conductor/UI/Views/AddInstanceSheet.swift:1
+
+#gaze-zone-router:
+  description: Maps gaze points to grid cells deterministically with dwell timer
+  tags: [gaze, dispatch, grid, targeting]
+  anchors:
+    - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
+    - Sources/Conductor/UI/Views/GazeZoneOverlay.swift:1
+
+#voice-control-hud:
+  description: Compact sidebar widget showing voice control state with visual indicators
+  tags: [ui, voice, feedback]
+  anchors:
+    - Sources/Conductor/UI/Views/VoiceControlHUD.swift:1
+
+#workspace-settings:
+  description: Settings tab for workspace configuration — terminal, sidebar, instances
+  tags: [ui, settings, workspace]
+  anchors:
+    - Sources/Conductor/UI/Views/WorkspaceSettingsView.swift:1
+
+#gesture-recorder:
+  description: Records hand pose time-series, normalizes, produces averaged GestureTemplate
+  tags: [input, gesture, recording, custom]
+  anchors:
+    - Sources/Conductor/Input/CustomGesture/GestureRecorder.swift:1
+
+#gesture-template:
+  description: Named custom gesture with normalized joint position sequence, persisted to ~/.conductor/gestures/
+  tags: [input, gesture, template, persistence]
+  anchors:
+    - Sources/Conductor/Input/CustomGesture/GestureTemplate.swift:1
+
+#dtw-matcher:
+  description: Dynamic Time Warping implementation for comparing hand pose time-series
+  tags: [input, gesture, algorithm, matching]
+  anchors:
+    - Sources/Conductor/Input/CustomGesture/DTWMatcher.swift:1
+
+#custom-gesture-classifier:
+  description: Sliding window DTW matching against registered custom gesture templates
+  tags: [input, gesture, classification, custom]
+  anchors:
+    - Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift:1
+
+#voice-command-matcher:
+  description: Scans transcription text for phrase→action bindings with fuzzy Levenshtein matching
+  tags: [voice, command, matching, fuzzy]
+  anchors:
+    - Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift:1
+
+#voice-command-registry:
+  description: CRUD for voice phrase→action mappings with persistence
+  tags: [voice, command, registry, persistence]
+  anchors:
+    - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
+
+#bindings-manager:
+  description: Settings tab for managing gesture bindings, voice commands, eyebrow bindings
+  tags: [ui, settings, bindings, customization]
+  anchors:
+    - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
 #conductor-log:
   description: Structured logging via os.Logger with symbol-based categories
@@ -211,14 +338,20 @@ context:
   anchors:
     - Sources/Conductor/Utils/ConductorLog.swift:1
 
+#eyebrow-calibration-controller:
+  description: Fullscreen NSWindow hosting EyebrowCalibrationView, mirrors CalibrationWindowController pattern
+  tags: [input, eyebrow, calibration, ui]
+  anchors:
+    - Sources/Conductor/UI/EyebrowCalibrationWindowController.swift:1
+
 #main-overlay:
-  description: Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, gaze cursor
+  description: Root SwiftUI view composing onboarding, buffer, instance list, calibration banner — observes (not owns) orchestrator and workspace
   tags: [ui, layout, root]
   anchors:
     - Sources/Conductor/UI/Views/MainOverlayView.swift:1
 
 #settings-panel:
-  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger"
+  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs"
   tags: [ui, settings, preferences]
   anchors:
     - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
@@ -242,6 +375,15 @@ flows:
       - "#text-buffer"
       - "#context-enricher"
       - "#dispatch-target"
+  eyebrow-voice-control:
+    description: "Eyebrow raise → voice record → WhisperKit → buffer → dispatch"
+    steps:
+      - "#eyebrow-detector"
+      - "#eyebrow-state-machine"
+      - "#voice-control-coordinator"
+      - "#whisper-voice-provider"
+      - "#text-buffer"
+      - "#dispatch-target"
   gesture-edit:
     description: Camera to Vision to Classify to Buffer edit action
     steps:
@@ -257,6 +399,55 @@ flows:
       - "#kalman-filter"
       - "#gaze-router"
       - "#window-detector"
+  gaze-dispatch:
+    description: "Gaze → grid cell → right eyebrow → dispatch to cell's instance"
+    steps:
+      - "#mediapipe-gaze-provider"
+      - "#gaze-zone-router"
+      - "#workspace-grid"
+      - "#eyebrow-detector"
+      - "#dispatch-target"
+  workspace-launch:
+    description: "Add button → terminal launched → window positioned → registered"
+    steps:
+      - "#workspace-view"
+      - "#terminal-launcher"
+      - "#workspace-manager"
+      - "#workspace-grid"
+      - "#window-arranger"
+  voice-dispatch-flow:
+    description: "Eyebrow → record → transcribe → voice command check → buffer → dispatch"
+    steps:
+      - "#eyebrow-detector"
+      - "#voice-control-coordinator"
+      - "#whisper-voice-provider"
+      - "#voice-command-matcher"
+      - "#text-buffer"
+      - "#dispatch-target"
+  custom-gesture-flow:
+    description: "Record → template → runtime DTW match → action"
+    steps:
+      - "#gesture-recorder"
+      - "#gesture-template"
+      - "#dtw-matcher"
+      - "#custom-gesture-classifier"
+      - "#action-registry"
+  voice-command-flow:
+    description: "Transcription → phrase match → extract command → fire action + buffer remainder"
+    steps:
+      - "#whisper-voice-provider"
+      - "#voice-command-matcher"
+      - "#voice-command-registry"
+      - "#input-orchestrator"
+  orchestrator-startup:
+    description: "App launch → read preferences → create providers → wire workspace → start → UI ready"
+    steps:
+      - "#conductor-app"
+      - "#input-orchestrator"
+      - "#workspace-manager"
+      - "#mediapipe-gaze-provider"
+      - "#vision-gesture-provider"
+      - "#whisper-voice-provider"
   context-enrichment:
     description: Buffer flush to MCP status + search + history to Git diff to Enriched payload
     steps:
@@ -311,6 +502,12 @@ gates:
   mcp-available:
     description: paradigm-mcp reachable for context enrichment
     check: "mcpClient.isConnected"
+  providers-ready:
+    description: All user-enabled input providers have started successfully
+    check: "orchestrator.isRunning"
+  conductor-launched:
+    description: Only Conductor-owned instances get primary grid treatment
+    check: "workspaceManager.managedInstances.contains(instance)"
 
 # ============================================
 # Signals (!)
@@ -346,6 +543,39 @@ signals:
   session-unregistered:
     description: Claude Code session unregistered from Conductor
     emitters: ["#session-file-watcher"]
+  eyebrow-raise-left:
+    description: Left eyebrow raised above threshold
+    emitters: ["#eyebrow-detector"]
+  eyebrow-raise-right:
+    description: Right eyebrow raised above threshold
+    emitters: ["#eyebrow-detector"]
+  voice-recording-started:
+    description: Voice recording started via eyebrow trigger
+    emitters: ["#voice-control-coordinator"]
+  voice-recording-stopped:
+    description: Voice recording stopped via eyebrow trigger
+    emitters: ["#voice-control-coordinator"]
+  voice-dispatch-complete:
+    description: Full voice pipeline complete — transcribed and ready to send
+    emitters: ["#voice-control-coordinator"]
+  instance-launched:
+    description: New CC instance launched via workspace manager
+    emitters: ["#workspace-manager"]
+  instance-closed:
+    description: Managed CC instance closed or terminated
+    emitters: ["#workspace-manager"]
+  layout-changed:
+    description: Workspace grid layout rearranged
+    emitters: ["#workspace-manager"]
+  custom-gesture-recognized:
+    description: User-recorded custom gesture matched via DTW
+    emitters: ["#custom-gesture-classifier"]
+  voice-command-matched:
+    description: Voice command phrase detected in transcription
+    emitters: ["#input-orchestrator"]
+  eyebrow-calibration-complete:
+    description: Eyebrow calibration thresholds applied to detector
+    emitters: ["#conductor-app"]
 
 # ============================================
 # Aspects (~)
@@ -378,6 +608,23 @@ signals:
   description: CPU/RAM budgets enforced, auto-throttle under load
   anchors:
     - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
+
+~single-owner:
+  description: Each stateful component has exactly one lifecycle owner — AppDelegate owns orchestrator and workspace
+  anchors:
+    - Sources/Conductor/App/AppDelegate.swift:1
+
+~zone-deterministic:
+  description: Gaze uses cell boundaries, not arbitrary window bounds — eliminates jitter via discrete grid cells
+  anchors:
+    - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
+
+~user-configurable:
+  description: All input-to-action mappings are user-overridable via ActionRegistry, VoiceCommandRegistry, and custom gestures
+  anchors:
+    - Sources/Conductor/Orchestration/ActionRegistry.swift:1
+    - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
+    - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
 tags:
   - conductor

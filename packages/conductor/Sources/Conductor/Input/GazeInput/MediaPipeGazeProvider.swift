@@ -18,6 +18,7 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
 
     private var process: Process?
     private var gazePointContinuation: AsyncStream<CGPoint>.Continuation?
+    private var eyebrowContinuation: AsyncStream<EyebrowFrame>.Continuation?
     private let calibrationData = GazeCalibration()
     private var kalmanFilter = KalmanFilter2D()
 
@@ -32,6 +33,15 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
         AsyncStream { [weak self] continuation in
             Task { @MainActor in
                 self?.gazePointContinuation = continuation
+            }
+        }
+    }
+
+    /// Async stream of raw eyebrow distance frames (when MediaPipe outputs 4 values).
+    var eyebrowStream: AsyncStream<EyebrowFrame> {
+        AsyncStream { [weak self] continuation in
+            Task { @MainActor in
+                self?.eyebrowContinuation = continuation
             }
         }
     }
@@ -87,13 +97,22 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
                   let line = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !line.isEmpty else { return }
 
-            // Parse "x,y" coordinates
+            // Parse "x,y" or "x,y,leftRaise,rightRaise" coordinates
             let parts = line.split(separator: ",")
-            if parts.count == 2,
+            if parts.count >= 2,
                let x = Double(parts[0]),
                let y = Double(parts[1]) {
                 Task { @MainActor in
                     self?.processGazePoint(CGPoint(x: x, y: y))
+
+                    // Extended format: also includes eyebrow distances
+                    if parts.count >= 4,
+                       let leftRaise = Double(parts[2]),
+                       let rightRaise = Double(parts[3]) {
+                        self?.eyebrowContinuation?.yield(
+                            EyebrowFrame(leftDistance: leftRaise, rightDistance: rightRaise)
+                        )
+                    }
                 }
             }
         }
@@ -150,6 +169,12 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
     LEFT_IRIS = [468, 469, 470, 471, 472]
     RIGHT_IRIS = [473, 474, 475, 476, 477]
 
+    # Eyebrow landmark indices
+    LEFT_BROW_TOP = [223, 222, 221]   # left eyebrow upper edge
+    LEFT_EYE_REF  = [159]              # left eye upper lid (baseline)
+    RIGHT_BROW_TOP = [443, 442, 441]  # right eyebrow upper edge
+    RIGHT_EYE_REF  = [386]             # right eye upper lid (baseline)
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("ERROR:cannot open camera", file=sys.stderr)
@@ -177,7 +202,16 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
                 gaze_x = (left_x + right_x) / 2
                 gaze_y = (left_y + right_y) / 2
 
-                print(f"{gaze_x:.6f},{gaze_y:.6f}", flush=True)
+                # Eyebrow raise distances (distance from brow to eye — larger = more raised)
+                left_brow_y  = sum(landmarks[i].y for i in LEFT_BROW_TOP) / len(LEFT_BROW_TOP)
+                left_ref_y   = landmarks[LEFT_EYE_REF[0]].y
+                right_brow_y = sum(landmarks[i].y for i in RIGHT_BROW_TOP) / len(RIGHT_BROW_TOP)
+                right_ref_y  = landmarks[RIGHT_EYE_REF[0]].y
+
+                left_raise  = max(0, left_ref_y - left_brow_y)
+                right_raise = max(0, right_ref_y - right_brow_y)
+
+                print(f"{gaze_x:.6f},{gaze_y:.6f},{left_raise:.6f},{right_raise:.6f}", flush=True)
     except KeyboardInterrupt:
         pass
     finally:

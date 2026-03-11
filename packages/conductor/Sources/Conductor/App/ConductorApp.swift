@@ -12,7 +12,12 @@ struct ConductorApp: App {
         // Conductor uses a floating panel, not a standard window.
         // The panel is managed by AppDelegate.
         Settings {
-            SettingsPanelView()
+            SettingsPanelView(
+                workspaceManager: appDelegate.workspaceManager,
+                actionRegistry: appDelegate.orchestrator.actionRegistry,
+                voiceCommandRegistry: appDelegate.orchestrator.voiceCommandRegistry,
+                customGestureClassifier: appDelegate.orchestrator.customGestureClassifier
+            )
         }
     }
 }

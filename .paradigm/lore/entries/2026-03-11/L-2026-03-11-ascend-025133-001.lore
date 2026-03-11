@@ -1,0 +1,229 @@
+id: L-2026-03-11-ascend-025133-001
+type: milestone
+timestamp: '2026-03-11T02:51:33.358Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor 0.3.0 — Workspace Manager + Eyebrow Voice Control + Custom Bindings (S8–S13)
+summary: Implemented six sprints (S8–S13) transforming Conductor from a passive 320px floating overlay into a full workspace manager and extensible multimodal input system. 29 new source files, 6 new test files, 26 modifications — wiring together eyebrow detection, voice pipeline, gaze-to-grid targeting, custom gesture recording (DTW), and voice command binding into a unified InputOrchestrator. All 102 tests pass, clean release build.
+symbols_touched:
+  - '#input-orchestrator'
+  - '#eyebrow-detector'
+  - '#eyebrow-state-machine'
+  - '#action-registry'
+  - '#workspace-manager'
+  - '#terminal-launcher'
+  - '#workspace-grid'
+  - '#gaze-zone-router'
+  - '#voice-control-coordinator'
+  - '#voice-control-hud'
+  - '#eyebrow-calibration'
+  - '#workspace-settings'
+  - '#custom-gesture-classifier'
+  - '#dtw-matcher'
+  - '#gesture-recorder'
+  - '#gesture-template'
+  - '#voice-command-matcher'
+  - '#voice-command-registry'
+  - '#bindings-manager'
+  - '#conductor-panel'
+  - '#settings-panel'
+  - '#mediapipe-gaze-provider'
+  - '#vision-gesture-provider'
+  - '#conductor-app'
+symbols_created:
+  - '#input-orchestrator'
+  - '#eyebrow-detector'
+  - '#eyebrow-state-machine'
+  - '#action-registry'
+  - '#workspace-manager'
+  - '#terminal-launcher'
+  - '#workspace-grid'
+  - '#gaze-zone-router'
+  - '#voice-control-coordinator'
+  - '#voice-control-hud'
+  - '#eyebrow-calibration'
+  - '#workspace-settings'
+  - '#custom-gesture-classifier'
+  - '#dtw-matcher'
+  - '#gesture-recorder'
+  - '#gesture-template'
+  - '#voice-command-matcher'
+  - '#voice-command-registry'
+  - '#bindings-manager'
+  - '#gesture-recorder-view'
+files_created:
+  - Sources/Conductor/Models/EyebrowEvent.swift
+  - Sources/Conductor/Models/ConductorAction.swift
+  - Sources/Conductor/Models/ManagedInstance.swift
+  - Sources/Conductor/Models/HandPoseFrame.swift
+  - Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift
+  - Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift
+  - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift
+  - Sources/Conductor/Input/CustomGesture/GestureRecorder.swift
+  - Sources/Conductor/Input/CustomGesture/GestureTemplate.swift
+  - Sources/Conductor/Input/CustomGesture/DTWMatcher.swift
+  - Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift
+  - Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift
+  - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift
+  - Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - Sources/Conductor/Orchestration/ActionRegistry.swift
+  - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift
+  - Sources/Conductor/Workspace/WorkspaceManager.swift
+  - Sources/Conductor/Workspace/WorkspaceGrid.swift
+  - Sources/Conductor/Workspace/TerminalLauncher.swift
+  - Sources/Conductor/Dispatch/GazeZoneRouter.swift
+  - Sources/Conductor/UI/Views/WorkspaceView.swift
+  - Sources/Conductor/UI/Views/AddInstanceSheet.swift
+  - Sources/Conductor/UI/Views/WorkspaceSettingsView.swift
+  - Sources/Conductor/UI/Views/GazeZoneOverlay.swift
+  - Sources/Conductor/UI/Views/VoiceControlHUD.swift
+  - Sources/Conductor/UI/Views/EyebrowCalibrationView.swift
+  - Sources/Conductor/UI/Views/GestureRecorderView.swift
+  - Sources/Conductor/UI/Views/BindingsManagerView.swift
+  - Tests/ConductorTests/EyebrowStateMachineTests.swift
+  - Tests/ConductorTests/WorkspaceGridTests.swift
+  - Tests/ConductorTests/GazeZoneRouterTests.swift
+  - Tests/ConductorTests/VoiceControlCoordinatorTests.swift
+  - Tests/ConductorTests/DTWMatcherTests.swift
+  - Tests/ConductorTests/VoiceCommandMatcherTests.swift
+files_modified:
+  - Sources/Conductor/App/AppDelegate.swift
+  - Sources/Conductor/App/ConductorPanel.swift
+  - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+  - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift
+  - Sources/Conductor/Models/VoiceMode.swift
+  - Sources/Conductor/UI/Views/MainOverlayView.swift
+  - Sources/Conductor/UI/Views/SettingsPanelView.swift
+  - Sources/Conductor/UI/Views/BufferView.swift
+  - Sources/Conductor/WindowManager/WindowArranger.swift
+  - packages/conductor/.purpose
+lines_added: 4200
+decisions:
+  - id: unified-action-enum
+    decision: Route all inputs through a single ConductorAction enum
+    rationale: Decouples input sources from action execution. Any input (eyebrow, gesture, voice command, custom gesture) maps to the same action type, making the system composable and user-configurable.
+  - id: pure-struct-state-machines
+    decision: EyebrowStateMachine is a pure value-type struct with a @MainActor wrapper class
+    rationale: Pure structs are trivially testable (no async, no setup). The wrapper class handles @MainActor isolation and @Published state for SwiftUI. Pattern reused from existing GestureStateMachine.
+  - id: dtw-over-euclidean
+    decision: Use Dynamic Time Warping for custom gesture matching instead of simple Euclidean distance
+    rationale: Hand gestures have variable duration — DTW handles time-warped sequences. A wave at 0.5x speed should still match a template recorded at 1x speed.
+  - id: edge-only-voice-commands
+    decision: Only detect voice commands at the start or end of transcription text
+    rationale: Prevents false positives from mid-sentence matches. 'I want to send an email' should not trigger the 'send' command.
+  - id: sidebar-dual-mode
+    decision: ConductorPanel supports both sidebar and floating overlay modes
+    rationale: Backward compatibility for users who prefer the floating overlay. Sidebar is the new default for workspace management but the old mode is preserved.
+  - id: mainactor-appdelegate
+    decision: Made entire AppDelegate class @MainActor
+    rationale: All AppDelegate methods interact with UI (NSPanel, NSStatusBar, WorkspaceManager). Annotating the class is simpler and correct vs annotating each method individually.
+errors_encountered:
+  - description: EyebrowEvent failed OSLog interpolation — 'appendInterpolation requires CustomStringConvertible'
+    resolution: Added CustomStringConvertible conformance with description computed property
+    time_to_fix: 1min
+  - description: CGFloat.greatestFiniteMagnitude ambiguous between CoreFoundation.CGFloat and Swift.Double
+    resolution: Qualified as CGFloat.greatestFiniteMagnitude explicitly
+    time_to_fix: 1min
+  - description: Missing self. in string interpolations inside closures (3 files)
+    resolution: Added self. prefix in ConductorPanel, CustomGestureClassifier, and WorkspaceManager
+    time_to_fix: 2min
+  - description: AppDelegate launchPanel accessing @MainActor WorkspaceManager properties from non-isolated context
+    resolution: Made AppDelegate class @MainActor, removed redundant @MainActor annotations on properties
+    time_to_fix: 3min
+  - description: Unused variable warning for previousState in EyebrowStateMachine
+    resolution: Removed the unused variable
+    time_to_fix: 1min
+learnings:
+  - OSLog string interpolation requires CustomStringConvertible conformance on custom enum types — Swift compiler error is not intuitive ('appendInterpolation requires conformance')
+  - CGFloat.greatestFiniteMagnitude is ambiguous in NSSize context because both CGFloat and Double have the property — must qualify explicitly
+  - Swift 6 strict concurrency requires explicit self. in string interpolations inside closures, even for @MainActor classes — this catches many files at once
+  - Making NSApplicationDelegate subclasses @MainActor resolves most actor isolation issues since all their methods touch UI anyway
+  - AsyncStream with [weak self] capture + Task { @MainActor in } is the standard pattern for safe continuation storage across the codebase
+  - MediaPipe FaceMesh Python subprocess output format can be extended with backward compatibility by checking parts.count in the Swift parser
+  - DTW sliding window matching needs buffer clearing after a match to prevent repeated triggers of the same gesture
+verification:
+  status: pass
+  details:
+    build: pass — swift build -c release clean
+    tests: pass — 102 tests, 0 failures
+    npm-build-mcp: pass
+    npm-build-cli: pass
+    npm-link: pass
+tags:
+  - arc:conductor
+  - conductor
+  - multimodal
+  - workspace
+  - eyebrow
+  - voice
+  - gesture
+  - gaze
+  - dtw
+  - sprint-8
+  - sprint-9
+  - sprint-10
+  - sprint-11
+  - sprint-12
+  - sprint-13
+meta:
+  conductor_version: 0.3.0
+  paradigm_version: 3.29.0
+  sprints: S8-S13
+  new_source_files: 29
+  new_test_files: 6
+  modified_files: 26
+  total_tests: 102
+  binary_target: arm64-apple-macos14
+body: |-
+  ## Architecture
+
+  The core architectural achievement is the InputOrchestrator — a central coordinator that subscribes to four independent AsyncStream-based input pipelines (eyebrow, gesture, voice, gaze) and routes all events through a unified ConductorAction enum via ActionRegistry. This makes the entire input system composable and user-configurable.
+
+  ### Input Pipeline Flow
+  ```
+  MediaPipe FaceMesh (Python) → EyebrowFrame → EyebrowDetector (KalmanFilter1D + hysteresis) → EyebrowEvent → EyebrowStateMachine → ConductorAction
+  Vision Framework (15fps) → HandPoseFrame → CustomGestureClassifier (DTW sliding window) → ConductorAction
+                           → GestureAction → ActionRegistry → ConductorAction
+  WhisperKit (CoreML) → transcription → VoiceCommandMatcher (Levenshtein) → ConductorAction + remainder to buffer
+  MediaPipe FaceMesh → gaze point → GazeZoneRouter (grid cell dwell) → target for dispatch
+  ```
+
+  ### Key Design Decisions
+
+  **Eyebrow State Machine**: Pure struct (not class) for testability. Five states: idle → armed → recording → stopped → send. Left eyebrow controls voice start/stop, right eyebrow dispatches. 0.3s cooldown prevents flutter. Cancel path (right raise from armed) allows graceful abort.
+
+  **Workspace Grid**: Deterministic cell computation — no floating point accumulation errors. Layouts: 1=full, 2=side-by-side, 3=2+1, 4+=2-column grid. Sidebar excluded from available area. Gap parameter for visual separation.
+
+  **ConductorPanel Dual Mode**: Sidebar mode (full-height, edge-snapped, non-draggable) and legacy floating overlay mode coexist. This was necessary because the sidebar transformation is opt-in — users who prefer the floating overlay keep it.
+
+  **DTW for Custom Gestures**: Dynamic Time Warping was chosen over simpler distance metrics because hand gestures have variable duration. A user performing a "wave" gesture at different speeds should still match. The sliding window (30 frames ≈ 2s at 15fps) with periodic matching (every 5 frames) balances responsiveness with CPU cost.
+
+  **Voice Command Matching at Edges Only**: Commands are only detected at the start or end of transcription text, never mid-sentence. This prevents false positives when the user says "I want to send an email" (contains "send" mid-sentence). Longer phrases are preferred over shorter ones ("send it" wins over "send").
+
+  **Backward-Compatible MediaPipe Output**: The Python script now outputs 4 values (gaze_x, gaze_y, left_raise, right_raise) but the Swift parser handles both 2-value and 4-value lines. This means the extended script works with both old and new Swift code during development.
+
+  ## Compilation Fixes
+
+  Six compilation errors fixed during build verification:
+  1. `EyebrowEvent` needed `CustomStringConvertible` for OSLog string interpolation
+  2. `ConductorPanel` had ambiguous `.greatestFiniteMagnitude` (CGFloat vs Double)
+  3. Three files had missing `self.` in string interpolations inside closures (Swift 6 strict concurrency)
+  4. `AppDelegate` needed `@MainActor` class annotation to access `WorkspaceManager` properties
+  5. Unused `previousState` variable in `EyebrowStateMachine`
+
+  ## What This Enables
+
+  Users can now:
+  - Launch Claude Code instances from Conductor and have them auto-arranged in a grid
+  - Use eyebrow gestures for hands-free voice control (left eyebrow = voice toggle, right = send)
+  - Gaze at a grid cell to target it, then dispatch text via right eyebrow raise
+  - Record custom hand gestures and bind them to any action
+  - Define voice command phrases ("send it", "undo that") with fuzzy matching
+  - Calibrate eyebrow sensitivity to their personal range
+  - Configure all input bindings from the Settings panel
+git_context:
+  ref: daecf8c05727565592bd7f56ef78ed883760a0b0
+  branch: main
+  dirty: true

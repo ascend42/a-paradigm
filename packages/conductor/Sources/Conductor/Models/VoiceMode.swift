@@ -10,4 +10,7 @@ enum VoiceMode: Equatable {
 
     /// Always listening, uses VAD to detect speech boundaries.
     case continuous
+
+    /// Eyebrow raise starts recording, eyebrow lower stops.
+    case eyebrowTrigger
 }

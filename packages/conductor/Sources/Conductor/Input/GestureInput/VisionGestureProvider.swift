@@ -25,9 +25,11 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
     private let processingQueue = DispatchQueue(label: "com.a-company.conductor.gesture-processing")
     private var handPoseRequest = VNDetectHumanHandPoseRequest()
     private var gestureContinuation: AsyncStream<GestureAction>.Continuation?
+    private var handPoseContinuation: AsyncStream<HandPoseFrame>.Continuation?
     private var classifier: GestureClassifier
     private var stateMachine: GestureStateMachine
     private var lastProcessTime: Date = .distantPast
+    private var startTime: Date = .now
     private var frameInterval: TimeInterval { 1.0 / Double(detectionFPS) }
 
     init() {
@@ -42,6 +44,15 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
         AsyncStream { [weak self] continuation in
             Task { @MainActor in
                 self?.gestureContinuation = continuation
+            }
+        }
+    }
+
+    /// Raw hand pose frame stream for custom gesture recording and matching.
+    var handPoseStream: AsyncStream<HandPoseFrame> {
+        AsyncStream { [weak self] continuation in
+            Task { @MainActor in
+                self?.handPoseContinuation = continuation
             }
         }
     }
@@ -115,6 +126,9 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
         let handState = classifier.classify(observation)
         let action = stateMachine.process(handState)
 
+        // Extract hand pose frame for custom gesture recording/matching
+        let poseFrame = extractHandPoseFrame(from: observation)
+
         Task { @MainActor in
             currentHandState = handState
             if action != .none {
@@ -122,7 +136,40 @@ final class VisionGestureProvider: ObservableObject, GestureInputProvider {
                 ConductorLog.signal("gesture-recognized")
                     .info("Gesture: \(String(describing: action))")
             }
+            if let frame = poseFrame {
+                handPoseContinuation?.yield(frame)
+            }
         }
+    }
+
+    /// Extract a HandPoseFrame from a Vision observation for custom gesture support.
+    private func extractHandPoseFrame(from observation: VNHumanHandPoseObservation) -> HandPoseFrame? {
+        guard let thumbTip = try? observation.recognizedPoint(.thumbTip),
+              let indexTip = try? observation.recognizedPoint(.indexTip),
+              let middleTip = try? observation.recognizedPoint(.middleTip),
+              let ringTip = try? observation.recognizedPoint(.ringTip),
+              let littleTip = try? observation.recognizedPoint(.littleTip),
+              let wrist = try? observation.recognizedPoint(.wrist),
+              let indexMCP = try? observation.recognizedPoint(.indexMCP),
+              let middleMCP = try? observation.recognizedPoint(.middleMCP),
+              let ringMCP = try? observation.recognizedPoint(.ringMCP),
+              let littleMCP = try? observation.recognizedPoint(.littleMCP) else {
+            return nil
+        }
+
+        return HandPoseFrame(
+            timestamp: Date().timeIntervalSince(startTime),
+            thumbTip: CGPointCodable(thumbTip.location),
+            indexTip: CGPointCodable(indexTip.location),
+            middleTip: CGPointCodable(middleTip.location),
+            ringTip: CGPointCodable(ringTip.location),
+            littleTip: CGPointCodable(littleTip.location),
+            wrist: CGPointCodable(wrist.location),
+            indexMCP: CGPointCodable(indexMCP.location),
+            middleMCP: CGPointCodable(middleMCP.location),
+            ringMCP: CGPointCodable(ringMCP.location),
+            littleMCP: CGPointCodable(littleMCP.location)
+        )
     }
 }
 

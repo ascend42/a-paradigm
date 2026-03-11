@@ -6,6 +6,7 @@ import SwiftUI
 struct BufferView: View {
     @ObservedObject var buffer: BufferEngine
     @ObservedObject var gazeRouter: GazeRouter
+    var gazeZoneRouter: GazeZoneRouter?
     let onSend: () -> Void
 
     @State private var inputText: String = ""
@@ -69,7 +70,17 @@ struct BufferView: View {
             }
 
             // Target indicator
-            if let target = gazeRouter.currentTarget {
+            if let zoneRouter = gazeZoneRouter, let managed = zoneRouter.targetedInstance {
+                HStack(spacing: 4) {
+                    Image(systemName: "target")
+                        .foregroundStyle(.green)
+                    Text("Will send to: [Cell \(managed.gridIndex + 1)] \(managed.label)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            } else if let target = gazeRouter.currentTarget {
                 HStack(spacing: 4) {
                     Image(systemName: "target")
                         .foregroundStyle(.green)

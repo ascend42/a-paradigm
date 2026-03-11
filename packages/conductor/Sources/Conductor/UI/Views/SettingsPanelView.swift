@@ -7,11 +7,18 @@ struct SettingsPanelView: View {
     @AppStorage("voiceMode") private var voiceMode: String = "pushToTalk"
     @AppStorage("gestureEnabled") private var gestureEnabled: Bool = true
     @AppStorage("gazeEnabled") private var gazeEnabled: Bool = true
+    @AppStorage("eyebrowEnabled") private var eyebrowEnabled: Bool = false
+    @AppStorage("eyebrowSensitivity") private var eyebrowSensitivity: Double = 0.035
     @AppStorage("enrichmentEnabled") private var enrichmentEnabled: Bool = true
     @AppStorage("detectionFPS") private var detectionFPS: Double = 15
     @AppStorage("dwellDuration") private var dwellDuration: Double = 0.5
     @AppStorage("gazeOverlayVisible") private var gazeOverlayVisible: Bool = false
     @AppStorage("pollingInterval") private var pollingInterval: Double = 2.0
+
+    var workspaceManager: WorkspaceManager?
+    var actionRegistry: ActionRegistry?
+    var voiceCommandRegistry: VoiceCommandRegistry?
+    var customGestureClassifier: CustomGestureClassifier?
 
     var body: some View {
         TabView {
@@ -21,8 +28,20 @@ struct SettingsPanelView: View {
                 .tabItem { Label("Input", systemImage: "hand.raised") }
             enrichmentTab
                 .tabItem { Label("Context", systemImage: "text.badge.plus") }
+            if let manager = workspaceManager {
+                WorkspaceSettingsView(workspaceManager: manager)
+                    .tabItem { Label("Workspace", systemImage: "square.grid.2x2") }
+            }
+            if let registry = actionRegistry, let voiceCmds = voiceCommandRegistry, let gestureClassifier = customGestureClassifier {
+                BindingsManagerView(
+                    actionRegistry: registry,
+                    voiceCommandRegistry: voiceCmds,
+                    customGestureClassifier: gestureClassifier
+                )
+                .tabItem { Label("Bindings", systemImage: "keyboard") }
+            }
         }
-        .frame(width: 450, height: 350)
+        .frame(width: 450, height: 400)
         .padding()
     }
 
@@ -83,6 +102,29 @@ struct SettingsPanelView: View {
                 Picker("Mode", selection: $voiceMode) {
                     Text("Push to Talk").tag("pushToTalk")
                     Text("Continuous").tag("continuous")
+                    Text("Eyebrow Trigger").tag("eyebrowTrigger")
+                }
+            }
+
+            Section("Eyebrow Control") {
+                Toggle("Enable eyebrow voice control", isOn: $eyebrowEnabled)
+                if eyebrowEnabled {
+                    HStack {
+                        Text("Sensitivity")
+                        Spacer()
+                        Slider(value: $eyebrowSensitivity, in: 0.015...0.06, step: 0.005)
+                            .frame(width: 150)
+                        Text("\(eyebrowSensitivity, specifier: "%.3f")")
+                            .monospacedDigit()
+                            .frame(width: 42)
+                    }
+                    Text("Lower = more sensitive. Raise left eyebrow to start voice, raise again to stop, raise right to send.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Button("Calibrate Eyebrows\u{2026}") {
+                        NotificationCenter.default.post(name: .conductorCalibrateEyebrows, object: nil)
+                    }
                 }
             }
 
@@ -159,4 +201,7 @@ extension Notification.Name {
 
     /// Posted by SettingsPanelView to re-run the setup wizard.
     static let conductorRunSetup = Notification.Name("com.a-company.conductor.runSetup")
+
+    /// Posted by SettingsPanelView to start eyebrow calibration.
+    static let conductorCalibrateEyebrows = Notification.Name("com.a-company.conductor.calibrateEyebrows")
 }

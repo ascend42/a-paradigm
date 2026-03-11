@@ -1,0 +1,45 @@
+id: L-2026-03-10-ascend-181924-001
+type: agent-session
+timestamp: '2026-03-10T18:19:24.256Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Add AI discoverability, university stack preset content, and website sections doc
+summary: Created llms.txt at repo root following the llmstxt.org spec for AI agent discovery. Optimized README.md with language-agnostic messaging, 'Who Is This For?' section, and collapsed AI quick-context block. Updated PARA 201 Disciplines lesson with full Stack Presets section (16 presets, auto-detection, paradigm presets command). Updated PARA 101 First Steps with cold-start and stack auto-detection context. Added PLSAT v3.0 slots 097-099 (6 question variants) covering stack presets, auto-scan mechanics, and incremental adoption. Created private website-sections.md as maintained cliff notes for a-company.org/paradigm site sections.
+symbols_touched:
+  - '#paradigm-docs'
+  - '#university-courses'
+  - '#plsat-v3'
+  - '#stack-presets'
+  - '#disciplines'
+files_created:
+  - llms.txt
+  - docs/private/website-sections.md
+files_modified:
+  - README.md
+  - CHANGELOG.md
+  - packages/paradigm/package.json
+  - packages/university/package.json
+  - packages/university/src/content/courses/para-101.json
+  - packages/university/src/content/courses/para-201.json
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/src/content/courses/.purpose
+  - packages/university/src/content/plsat/.purpose
+lines_added: 769
+lines_removed: 220
+learnings:
+  - llms.txt spec uses Markdown format with H1 + blockquote + freeform body + H2 link lists; Stripe uses the freeform body as an instructions block to correct common LLM mistakes
+  - PLSAT v3.0 had slots 097-099 available (96 of 99 filled); totalSlots field stays at 99
+tags:
+  - feature
+  - docs
+  - university
+  - plsat
+  - ai-discoverability
+linked_commits:
+  - 0c26ba76
+git_context:
+  ref: 0c26ba763a518d309cedd2af9e9a512b7a1e324f
+  branch: main
+  dirty: true

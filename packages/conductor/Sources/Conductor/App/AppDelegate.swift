@@ -1,14 +1,26 @@
 // AppDelegate.swift — #conductor-app
 // NSApplicationDelegate managing lifecycle, menu bar icon, and the floating panel.
+// Single owner of InputOrchestrator and WorkspaceManager — all stateful components
+// have exactly one lifecycle owner (~single-owner).
 
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
     private let permissionsManager = PermissionsManager()
-    @MainActor private lazy var gazeCursor = GazeCursorController()
+    private lazy var gazeCursor = GazeCursorController()
+
+    // MARK: - Owned State (single-owner pattern)
+
+    let workspaceManager = WorkspaceManager()
+    let buffer = BufferEngine()
+    private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
+        buffer: buffer,
+        gazeRouter: GazeRouter.shared
+    )
 
     // MARK: - Lifecycle
 
@@ -19,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         setupMenuBar()
+        setupOrchestrator()
         checkPermissionsAndLaunch()
 
         // Listen for calibration requests from Settings / banner / setup wizard
@@ -29,7 +42,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
-        // Watch for gaze overlay toggle changes via UserDefaults notification
+        // Listen for eyebrow calibration requests
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCalibrateEyebrows),
+            name: .conductorCalibrateEyebrows,
+            object: nil
+        )
+
+        // Watch for preference changes (gaze overlay, provider toggles)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleDefaultsChange),
@@ -38,7 +59,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    // MARK: - Orchestrator Setup ($orchestrator-startup)
+
+    /// Wire workspace, create providers from preferences, start orchestration.
+    private func setupOrchestrator() {
+        orchestrator.setWorkspaceManager(workspaceManager)
+
+        // Read provider preferences and create providers conditionally
+        createProvidersFromPreferences()
+
+        // Read eyebrow preference
+        let eyebrowEnabled = UserDefaults.standard.bool(forKey: "eyebrowEnabled")
+        orchestrator.setEyebrowEnabled(eyebrowEnabled)
+
+        orchestrator.start()
+        ConductorLog.flow("orchestrator-startup")
+            .info("Orchestrator started — ^providers-ready")
+    }
+
+    /// Create/destroy input providers based on UserDefaults preferences.
+    private func createProvidersFromPreferences() {
+        let gazeEnabled = UserDefaults.standard.bool(forKey: "gazeEnabled")
+        let gestureEnabled = UserDefaults.standard.bool(forKey: "gestureEnabled")
+        let voiceEnabled = UserDefaults.standard.bool(forKey: "voiceEnabled")
+
+        if gazeEnabled && orchestrator.gazeProvider == nil {
+            orchestrator.gazeProvider = MediaPipeGazeProvider()
+            ConductorLog.component("conductor-app").info("Created gaze provider")
+        } else if !gazeEnabled && orchestrator.gazeProvider != nil {
+            orchestrator.gazeProvider = nil
+            ConductorLog.component("conductor-app").info("Removed gaze provider")
+        }
+
+        if gestureEnabled && orchestrator.gestureProvider == nil {
+            orchestrator.gestureProvider = VisionGestureProvider()
+            ConductorLog.component("conductor-app").info("Created gesture provider")
+        } else if !gestureEnabled && orchestrator.gestureProvider != nil {
+            orchestrator.gestureProvider = nil
+            ConductorLog.component("conductor-app").info("Removed gesture provider")
+        }
+
+        if voiceEnabled && orchestrator.voiceProvider == nil {
+            orchestrator.voiceProvider = WhisperVoiceProvider()
+            ConductorLog.component("conductor-app").info("Created voice provider")
+        } else if !voiceEnabled && orchestrator.voiceProvider != nil {
+            orchestrator.voiceProvider = nil
+            ConductorLog.component("conductor-app").info("Removed voice provider")
+        }
+    }
+
+    /// Track previous preference values to detect actual changes.
+    private var previousGazeEnabled: Bool?
+    private var previousGestureEnabled: Bool?
+    private var previousVoiceEnabled: Bool?
+    private var previousEyebrowEnabled: Bool?
+
     @objc private func handleDefaultsChange() {
+        // Gaze cursor overlay toggle
         let visible = UserDefaults.standard.bool(forKey: "gazeOverlayVisible")
         Task { @MainActor in
             if visible {
@@ -49,10 +126,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 gazeCursor.stop()
             }
         }
+
+        // Provider preference changes — restart orchestrator if providers changed
+        let gazeEnabled = UserDefaults.standard.bool(forKey: "gazeEnabled")
+        let gestureEnabled = UserDefaults.standard.bool(forKey: "gestureEnabled")
+        let voiceEnabled = UserDefaults.standard.bool(forKey: "voiceEnabled")
+        let eyebrowEnabled = UserDefaults.standard.bool(forKey: "eyebrowEnabled")
+
+        let providersChanged = gazeEnabled != previousGazeEnabled ||
+            gestureEnabled != previousGestureEnabled ||
+            voiceEnabled != previousVoiceEnabled ||
+            eyebrowEnabled != previousEyebrowEnabled
+
+        if providersChanged {
+            previousGazeEnabled = gazeEnabled
+            previousGestureEnabled = gestureEnabled
+            previousVoiceEnabled = voiceEnabled
+            previousEyebrowEnabled = eyebrowEnabled
+
+            ConductorLog.component("conductor-app")
+                .info("Provider preferences changed — reconfiguring orchestrator")
+            orchestrator.stop()
+            createProvidersFromPreferences()
+            orchestrator.setEyebrowEnabled(eyebrowEnabled)
+            orchestrator.start()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         ConductorLog.app.info("Conductor shutting down")
+        orchestrator.stop()
+        workspaceManager.cleanup()
         conductorPanel?.close()
     }
 
@@ -100,11 +204,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func launchPanel(showOnboarding: Bool = false, permissionStatus: PermissionStatus? = nil) {
-        let panel = ConductorPanel()
+        let panel = ConductorPanel(
+            sidebarMode: true,
+            side: workspaceManager.sidebarSide,
+            width: workspaceManager.sidebarWidth
+        )
         panel.contentView = NSHostingView(
             rootView: MainOverlayView(
                 showOnboarding: showOnboarding,
-                permissionStatus: permissionStatus ?? permissionsManager.checkAll()
+                permissionStatus: permissionStatus ?? permissionsManager.checkAll(),
+                orchestrator: orchestrator,
+                workspaceManager: workspaceManager
             )
         )
         panel.makeKeyAndOrderFront(nil)
@@ -143,19 +253,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleRecalibrate() {
         ConductorLog.component("gaze-calibration").info("Calibration requested via notification")
         Task { @MainActor in
-            // Create a placeholder gaze stream — the calibration overlay collects
-            // screen target positions. Without a live gaze provider, we provide
-            // simulated center-of-target iris points so the UI flow works.
-            let gazeStream = AsyncStream<CGPoint> { continuation in
-                // Emit center points at ~30fps so the calibration view has data
-                Task {
-                    while !Task.isCancelled {
-                        // Simulated iris position (center of gaze) — actual gaze
-                        // provider would feed real data here
-                        continuation.yield(CGPoint(x: 0.5, y: 0.5))
-                        try? await Task.sleep(for: .milliseconds(33))
+            let gazeStream: AsyncStream<CGPoint>
+
+            if let provider = orchestrator.gazeProvider {
+                // Use the real gaze provider stream
+                if !provider.isActive {
+                    ConductorLog.component("gaze-calibration")
+                        .info("Starting gaze provider temporarily for calibration")
+                    try? await provider.start()
+                }
+                gazeStream = provider.gazePointStream
+            } else {
+                // No gaze provider — use simulated center points so UI flow works
+                ConductorLog.component("gaze-calibration")
+                    .info("No gaze provider — using simulated calibration data")
+                gazeStream = AsyncStream<CGPoint> { continuation in
+                    Task {
+                        while !Task.isCancelled {
+                            continuation.yield(CGPoint(x: 0.5, y: 0.5))
+                            try? await Task.sleep(for: .milliseconds(33))
+                        }
+                        continuation.finish()
                     }
-                    continuation.finish()
                 }
             }
 
@@ -167,6 +286,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 ConductorLog.component("gaze-calibration").info("Calibration cancelled")
             }
+        }
+    }
+
+    // MARK: - Eyebrow Calibration (Phase 5)
+
+    @objc private func handleCalibrateEyebrows() {
+        ConductorLog.component("eyebrow-calibration").info("Eyebrow calibration requested")
+        Task { @MainActor in
+            let eyebrowStream: AsyncStream<EyebrowFrame>?
+
+            if let gazeProvider = orchestrator.gazeProvider {
+                eyebrowStream = gazeProvider.eyebrowStream
+            } else {
+                eyebrowStream = nil
+            }
+
+            await EyebrowCalibrationWindowController.run(
+                eyebrowStream: eyebrowStream,
+                onComplete: { [weak self] raiseThreshold, lowerThreshold in
+                    self?.orchestrator.eyebrowDetector.setThresholds(
+                        raise: raiseThreshold,
+                        lower: lowerThreshold
+                    )
+                    ConductorLog.signal("eyebrow-calibration-complete")
+                        .info("Eyebrow thresholds applied — raise: \(raiseThreshold), lower: \(lowerThreshold)")
+                }
+            )
         }
     }
 }

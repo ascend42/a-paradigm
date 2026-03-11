@@ -5,6 +5,78 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.30.0] — 2026-03-11
+
+### Added
+
+- **Conductor 0.3.1 — Wiring Fixes + UX Improvements**: Resolves 7 runtime wiring gaps in the 0.3.0 sprint output. The S8–S13 components compiled and tested individually but were structurally assembled without being wired at runtime. This release fixes the ownership inversion that left the InputOrchestrator inert.
+
+  - **Single-owner architecture (`~single-owner`)**: AppDelegate is now the sole lifecycle owner of `InputOrchestrator`, `BufferEngine`, and `WorkspaceManager`. MainOverlayView switches from `@StateObject` to `@ObservedObject` — it observes, never owns. Eliminates the duplicate `WorkspaceManager` and `BufferEngine` that existed in the view layer.
+
+  - **`$orchestrator-startup` flow**: `applicationDidFinishLaunching` → read `UserDefaults` → create providers conditionally (gaze/gesture/voice only when enabled) → wire workspace → `orchestrator.start()` → UI ready. Providers are created/destroyed mid-session when the user toggles preferences.
+
+  - **Settings tabs fully wired**: `ConductorApp.Settings` now passes `workspaceManager`, `actionRegistry`, `voiceCommandRegistry`, and `customGestureClassifier` from `appDelegate.orchestrator`. Workspace and Bindings tabs render for the first time.
+
+  - **Real gaze calibration**: `handleRecalibrate()` feeds `orchestrator.gazeProvider.gazePointStream` to the calibration overlay when a gaze provider exists. Falls back to simulated data only when gaze is disabled.
+
+  - **`.voiceArm` action**: New `ConductorAction.voiceArm` emitted by `EyebrowStateMachine` on idle→armed and stopped→re-armed transitions. `InputOrchestrator` calls `voiceCoordinator.arm()`. VoiceControlHUD now correctly shows the full state progression: gray (idle) → yellow (armed) → red (recording) → spinner (transcribing) → green (ready).
+
+  - **SetupWizard expansion**: Two new steps — workspace configuration (sidebar position + width) and eyebrow calibration (when eyebrow control enabled). Step routing updated for all combinations of enabled features.
+
+  - **`EyebrowCalibrationWindowController`**: Fullscreen NSWindow for eyebrow calibration, mirrors `CalibrationWindowController` pattern. Feeds real eyebrow frames from gaze provider to `EyebrowCalibration`, applies computed thresholds to `EyebrowDetector` on completion.
+
+- **New Conductor symbols**: `$orchestrator-startup` flow, `^providers-ready` + `^conductor-launched` gates, `~single-owner` + `~zone-deterministic` + `~user-configurable` aspects, `#eyebrow-calibration-controller` component, `!eyebrow-calibration-complete` signal.
+
+### Changed
+
+- **Conductor version**: 0.3.0 → 0.3.1
+- **`AppDelegate`**: Owns orchestrator lifecycle, creates/destroys providers on preference change, handles eyebrow calibration notifications, clean shutdown sequence (`orchestrator.stop()` → `workspaceManager.cleanup()`)
+- **`MainOverlayView`**: No longer owns any stateful components. Accepts `orchestrator` and `workspaceManager` as init params. `dispatchBuffer()` delegates to `orchestrator.executeAction(.send)` instead of maintaining its own `AXDispatchTarget`.
+- **`EyebrowStateMachine`**: Armed transitions now emit `.voiceArm` instead of `nil` — 2 test assertions updated accordingly
+- **`ActionRegistry`**: `voiceArm` added to serialization helpers (`actionFromName`/`nameFromAction`)
+
+### Fixed
+
+- InputOrchestrator was never started — `orchestrator.start()` now called from `AppDelegate.setupOrchestrator()`
+- Input providers were always nil — created from `UserDefaults` preferences during setup
+- Two `WorkspaceManager` instances existed (AppDelegate + MainOverlayView) — now single instance passed through
+- Settings Workspace and Bindings tabs showed empty content — dependencies now injected from app delegate
+- Gaze calibration used simulated data even when a real provider was available
+- VoiceControlHUD skipped the armed (yellow) state — `.voiceArm` action now fires `coordinator.arm()`
+- SetupWizard had no workspace configuration or eyebrow calibration steps
+
+## [3.29.0] — 2026-03-10
+
+### Added
+
+- **Conductor 0.3.0 — Workspace Manager + Eyebrow Voice Control + Custom Bindings**: Six-sprint implementation (S8–S13) transforming Conductor from a passive overlay into a full workspace manager and extensible multimodal input system. 29 new source files, 6 new test files, 26 modifications to existing files.
+
+  - **S8 — Eyebrow Detection + InputOrchestrator**: Extended MediaPipe FaceMesh Python script to extract eyebrow landmark distances (LEFT_BROW_TOP [223,222,221], RIGHT_BROW_TOP [443,442,441]) alongside existing gaze data. New `#eyebrow-detector` with KalmanFilter1D smoothing and raise/lower hysteresis thresholds (0.035/0.025). `#eyebrow-state-machine` maps eyebrow gestures to voice control: left raise → arm, left lower → start recording, left raise → stop, right raise → send. `#input-orchestrator` wires all input streams (eyebrow, voice, gesture, gaze) through a unified `#action-registry` → `ConductorAction` enum pipeline. `EyebrowStateMachineWrapper` provides @MainActor-safe access.
+
+  - **S9 — Workspace Manager + Terminal Launching**: `#workspace-manager` launches and owns Claude Code terminal instances, arranges them in a deterministic grid. `#terminal-launcher` supports 6 terminal apps (Terminal.app, iTerm2, Ghostty, Warp, Kitty, Alacritty) via AppleScript/NSWorkspace. `#workspace-grid` computes cell frames for 1–6 instances with configurable sidebar position/width. `ConductorPanel` now supports sidebar mode (full-height, edge-snapped) alongside legacy floating overlay. `WorkspaceView` replaces `InstanceListView` as primary UI with grid minimap and instance management.
+
+  - **S10 — Gaze-to-Grid Zone Targeting**: `#gaze-zone-router` maps gaze points to grid cells deterministically using `WorkspaceGrid.cellIndex(for:)`. Dwell timer (0.5s) locks target before dispatch. `GazeZoneOverlay` shows grid boundaries and active zone highlight. BufferView shows "Will send to: [Cell N] label" when zone router has a target.
+
+  - **S11 — Full Voice Pipeline Wiring**: `#voice-control-coordinator` manages the complete voice lifecycle: idle → armed → recording → transcribing → readyToSend → error. Auto-recovery from errors after 3 seconds. Duration counter for recording feedback. `#voice-control-hud` shows visual states (gray mic, yellow pulse, red pulse+waveform, spinner, green check). WhisperKit pre-loaded at orchestrator startup.
+
+  - **S12 — Polish + Settings + Calibration**: `#eyebrow-calibration` 4-step flow (restLeft → raiseLeft → restRight → raiseRight) collecting 30 samples per step, computing personalized raise/lower thresholds. `EyebrowCalibrationView` fullscreen overlay with real-time distance bars. `WorkspaceSettingsView` adds Settings tab for default terminal, sidebar position/width, max instances, auto-arrange toggle.
+
+  - **S13 — Custom Gesture Recording + Voice Command Binding**: Full user-configurable input system. `#gesture-recorder` captures hand pose time-series (5 samples), normalizes and averages into `GestureTemplate` stored at `~/.conductor/gestures/`. `#dtw-matcher` (Dynamic Time Warping) matches incoming hand poses against templates with configurable thresholds. `#custom-gesture-classifier` uses 30-frame sliding window, matching every 5 frames, max 20 templates. `#voice-command-matcher` scans transcription start/end for registered phrases with fuzzy matching (Levenshtein distance). `#voice-command-registry` manages phrase→action bindings with defaults (send, undo, redo, cancel). `BindingsManagerView` provides three-section Settings tab for custom gestures, voice commands, and built-in gesture info. `GestureRecorderView` full-screen recording UI with progress circles and action picker.
+
+- **Conductor test coverage expansion**: 66 new tests across 6 test suites — `EyebrowStateMachineTests` (12), `WorkspaceGridTests` (10), `GazeZoneRouterTests` (8), `VoiceControlCoordinatorTests` (9 with 1 existing modified), `DTWMatcherTests` (8), `VoiceCommandMatcherTests` (8). Total: 102 tests (up from 45).
+
+- **New Conductor symbols**: ~20 new components (#eyebrow-detector, #eyebrow-state-machine, #input-orchestrator, #action-registry, #workspace-manager, #terminal-launcher, #workspace-grid, #gaze-zone-router, #voice-control-coordinator, #voice-control-hud, #eyebrow-calibration, #workspace-settings, #gesture-recorder, #gesture-template, #dtw-matcher, #custom-gesture-classifier, #voice-command-matcher, #voice-command-registry, #bindings-manager, #gesture-recorder-view). 9 new flows. 11 new signals.
+
+### Changed
+
+- **Conductor version**: 0.2.1 → 0.3.0
+- **`ConductorPanel`**: Now supports both sidebar mode (full-height, edge-snapped, non-draggable) and legacy floating overlay mode. Configurable width (280–500px) and screen edge.
+- **`AppDelegate`**: Made `@MainActor` for proper Swift 6 concurrency. Initializes `WorkspaceManager`, cleans up on quit.
+- **`MainOverlayView`**: Restructured as sidebar layout with `InputOrchestrator`, `WorkspaceManager`, `VoiceControlHUD`, `WorkspaceView`, and `AddInstanceSheet`.
+- **`SettingsPanelView`**: Five tabs (General, Input, Context, Workspace, Bindings). New eyebrow control section with sensitivity slider and calibration button. Voice mode picker includes "Eyebrow Trigger". Gaze cursor toggle.
+- **`MediaPipeGazeProvider`**: Python script extended to output 4 values (gaze_x, gaze_y, left_raise, right_raise). Swift parser handles both 2-value and 4-value output for backward compatibility. New `eyebrowStream` AsyncStream.
+- **`VisionGestureProvider`**: Exposes raw `handPoseStream` alongside existing `gestureStream` for custom gesture recording/matching. Extracts 10-joint `HandPoseFrame` from VNHumanHandPoseObservation.
+
 ## [3.28.0] — 2026-03-10
 
 ### Added

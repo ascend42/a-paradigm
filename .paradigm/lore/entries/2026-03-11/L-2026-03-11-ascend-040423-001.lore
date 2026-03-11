@@ -1,0 +1,129 @@
+id: L-2026-03-11-ascend-040423-001
+type: milestone
+timestamp: '2026-03-11T04:04:23.853Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor 0.3.1 — Wiring Fixes + The Physical Orchestration Vision
+summary: Fixed 7 runtime wiring gaps in Conductor 0.3.0 that left the system structurally assembled but inert. The root cause was ownership inversion — InputOrchestrator lived as a @StateObject inside a SwiftUI view while the true lifecycle owner (AppDelegate) had no access to it. Established the single-owner architecture pattern where AppDelegate owns all stateful components and views observe them.
+symbols_touched:
+  - '#conductor-app'
+  - '#input-orchestrator'
+  - '#main-overlay'
+  - '#settings-panel'
+  - '#setup-wizard'
+  - '#eyebrow-state-machine'
+  - '#action-registry'
+  - '#voice-control-coordinator'
+  - '#gaze-calibration'
+  - '#eyebrow-calibration'
+  - '#conductor-models'
+  - '#workspace-manager'
+symbols_created:
+  - $orchestrator-startup
+  - ^providers-ready
+  - ^conductor-launched
+  - ~single-owner
+  - ~zone-deterministic
+  - ~user-configurable
+  - '#eyebrow-calibration-controller'
+  - '!eyebrow-calibration-complete'
+files_created:
+  - packages/conductor/Sources/Conductor/UI/EyebrowCalibrationWindowController.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Sources/Conductor/App/ConductorApp.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+  - packages/conductor/Sources/Conductor/Models/ConductorAction.swift
+  - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift
+  - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+  - packages/conductor/Tests/ConductorTests/EyebrowStateMachineTests.swift
+  - packages/conductor/.purpose
+  - CHANGELOG.md
+decisions:
+  - id: D-single-owner
+    decision: AppDelegate is the sole lifecycle owner of all stateful components
+    rationale: SwiftUI @StateObject creates ownership at the view layer, but views are ephemeral — the app delegate persists for the entire app lifecycle. Components like InputOrchestrator need to outlive any individual view presentation.
+  - id: D-voiceArm-action
+    decision: EyebrowStateMachine emits .voiceArm on arming transitions instead of nil
+    rationale: The VoiceControlCoordinator has an explicit .armed state that the HUD visualizes (yellow). Without the action, arm() was never called and the HUD skipped from idle (gray) directly to recording (red). The action makes the state machine's output complete — every meaningful transition produces an action.
+  - id: D-provider-lifecycle
+    decision: Providers are created/destroyed from UserDefaults preferences, not hardcoded
+    rationale: 'Users may enable/disable gaze, gestures, or voice mid-session from Settings. The orchestrator needs to handle hot-swapping: stop → reconfigure providers → restart. Creating unused providers wastes resources (camera access, Python subprocess).'
+  - id: D-observed-not-owned
+    decision: MainOverlayView uses @ObservedObject instead of @StateObject for orchestrator and workspace
+    rationale: '@StateObject means the view creates and owns the object. @ObservedObject means something else owns it and the view just watches. Since AppDelegate owns these, the view must observe, not own. This eliminates the duplicate instances.'
+learnings:
+  - Tests passing does not mean the system works — integration wiring (who creates, who starts, who passes) is a separate verification concern from unit correctness
+  - SwiftUI @StateObject creates ownership at the view layer, which is wrong for app-lifetime components — use @ObservedObject and pass from the true lifecycle owner
+  - When a state machine transition is silent (returns nil), downstream consumers that depend on being notified will silently fail — every meaningful transition should produce an action
+  - 'The pattern of ''create providers conditionally from preferences'' enables hot-swapping: stop orchestrator, reconfigure, restart — no app restart needed'
+verification:
+  status: pass
+  details:
+    build_debug: pass
+    build_release: pass
+    tests: 102/102 pass (2 updated for .voiceArm)
+    paradigm_mcp_build: pass
+    paradigm_cli_build: pass
+tags:
+  - arc:conductor
+  - wiring
+  - architecture
+  - single-owner
+  - physical-orchestration
+  - vision
+body: |-
+  ## The Wiring Problem
+
+  Conductor 0.3.0 shipped 29 source files, 6 test files, 102 passing tests across sprints S8-S13. Every individual component worked — EyebrowStateMachine transitions were correct, DTW matching produced accurate results, VoiceControlCoordinator state machine was clean. But the system was dead at runtime.
+
+  The root cause was a single architectural mistake: `InputOrchestrator` was created as a `@StateObject` inside `MainOverlayView`. This meant:
+  1. `orchestrator.start()` was never called — nobody triggered it
+  2. All providers were nil — nobody created `MediaPipeGazeProvider`, `VisionGestureProvider`, `WhisperVoiceProvider`
+  3. Two `WorkspaceManager` instances existed — one in AppDelegate (for panel sizing), one in MainOverlayView (for the actual workspace)
+  4. Settings tabs for Workspace and Bindings rendered empty — they had optional dependencies that were never passed in
+  5. Gaze calibration used simulated data even when a real gaze provider could have been available
+  6. The VoiceControlHUD skipped the armed state — `voiceCoordinator.arm()` was never called because the eyebrow state machine emitted `nil` on arming
+
+  This is the classic "tests pass but nothing works" failure mode. Each unit was tested in isolation with correct inputs. The integration layer — who creates what, who starts what, who passes what to whom — was never wired.
+
+  ## The Fix: Single-Owner Architecture
+
+  The fix established `~single-owner` as an architectural aspect:
+  - **AppDelegate** owns `BufferEngine`, `InputOrchestrator`, `WorkspaceManager`
+  - **AppDelegate** creates providers from UserDefaults, starts the orchestrator, handles calibration
+  - **MainOverlayView** uses `@ObservedObject` — it watches state, it never creates it
+  - **ConductorApp.Settings** receives dependencies from `appDelegate.orchestrator`
+  - Provider preference changes mid-session trigger `stop() → reconfigure → start()`
+
+  ## The Physical Orchestration Vision
+
+  This wiring work crystallized the broader vision for what Conductor is becoming. It's not an accessibility tool or a voice assistant. It's a **physical orchestration layer** — the body becomes the interface for human-agent collaboration.
+
+  The interaction model:
+  - **Continuous speaking**: Voice is always building a buffer. You speak freely, sip water, come back. The buffer is a drafting area that could go to any window.
+  - **Per-modality lock modes**: Gaze lock means "stop re-targeting, I'm looking around while I think." Each input type can have independent lock toggles.
+  - **Window aliases**: Instances get human names. "Send to Tony." Navigation becomes conversational.
+  - **Bindable everything**: Every action is a bindable. Users compose their own gesture vocabularies. The eyebrow ceremony is one option; a user might bind a fist gesture to dispatch.
+  - **Auto-dispatch mode**: A bindable setting. Some users want explicit send; others want silence-timeout auto-dispatch.
+
+  The key insight: the five correct architectural decisions from 0.3.0 — gaze-to-grid (discrete cells eliminate jitter), unforgeable eyebrow ceremony, utterance-edge-only voice commands, DTW for gesture matching, and the ActionRegistry binding system — are the foundation for this vision. The wiring fixes make them actually run.
+
+  ## What's Next
+
+  Future directions enabled by this wiring:
+  - `$lock-mode` flow — per-modality lock toggling
+  - `#window-alias` — user-assigned names for managed instances
+  - `$voice-targeting` — "send to Tony" voice-based dispatch
+  - `#buffer-history` — circular buffer of dispatched texts, undo-send
+  - `ConductorAction.lockGaze`, `.lockGesture`, `.deleteLastWord`, `.repeatDelete` — more bindable actions
+  - Per-cell draft buffers — switch between drafts by gazing at different cells
+git_context:
+  ref: daecf8c05727565592bd7f56ef78ed883760a0b0
+  branch: main
+  dirty: true

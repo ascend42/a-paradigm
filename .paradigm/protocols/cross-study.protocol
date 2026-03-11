@@ -1,0 +1,29 @@
+id: P-cross-study
+name: Cross Study
+description: Research an array of GitHub projects, tools, or sites and produce a competitive/opportunity analysis report evaluating overlaps with Paradigm, new tool ideas, product value, and concerns.
+trigger:
+  - cross study
+  - competitive analysis
+  - research projects
+  - evaluate tools
+  - compare with paradigm
+tags:
+  - research
+  - strategy
+  - competitive-analysis
+  - private
+symbols: []
+steps:
+  - action: verify
+    notes: User provides an array of GitHub repos, websites, or tools to research
+  - action: run
+    notes: 'For each project: fetch README, docs, and key source files. Understand what it does, its architecture, and target audience.'
+  - action: create
+    target: docs/private/cross-studies/{study-name}.md
+    notes: 'Create report with 4 sections: (1) Overlaps with Paradigm — features/concepts that already exist in Paradigm, (2) New Tools Paradigm Could Create — gaps or ideas inspired by the project, (3) Overall Product Value — what makes it compelling, market fit, adoption signals, (4) Further Thoughts / Concerns — security, maintainability, scope creep, licensing, etc. Include a summary matrix at the top mapping each project to these 4 dimensions.'
+  - action: verify
+    notes: Report lives in docs/private/cross-studies/ which is gitignored — never committed to public repo
+recorded_at: '2026-03-10T17:06:25.324Z'
+last_verified: '2026-03-10T17:06:25.324Z'
+verified_by: claude-opus-4-6
+status: current
