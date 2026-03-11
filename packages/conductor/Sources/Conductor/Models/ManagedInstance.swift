@@ -29,6 +29,10 @@ struct ManagedInstance: Identifiable, Equatable {
     /// Process ID of the launched terminal.
     var processID: pid_t?
 
+    /// AppleScript window/session identifier for targeted close.
+    /// For Terminal.app: window ID. For iTerm2: session ID.
+    var windowIdentifier: String?
+
     /// Whether the process is still running.
     var isAlive: Bool {
         guard let pid = processID else { return false }

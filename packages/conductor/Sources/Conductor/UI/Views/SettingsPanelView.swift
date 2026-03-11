@@ -13,6 +13,7 @@ struct SettingsPanelView: View {
     @AppStorage("detectionFPS") private var detectionFPS: Double = 15
     @AppStorage("dwellDuration") private var dwellDuration: Double = 0.5
     @AppStorage("gazeOverlayVisible") private var gazeOverlayVisible: Bool = false
+    @AppStorage("gestureConfirmationEnabled") private var gestureConfirmationEnabled: Bool = false
     @AppStorage("pollingInterval") private var pollingInterval: Double = 2.0
 
     var workspaceManager: WorkspaceManager?
@@ -70,28 +71,30 @@ struct SettingsPanelView: View {
 
             Section("Hotkeys") {
                 LabeledContent("Toggle Panel") {
-                    Text("Cmd+Shift+C")
-                        .font(.caption.monospaced())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
+                    hotkeyBadge("Cmd+Shift+C")
+                }
+                LabeledContent("Toggle Video") {
+                    hotkeyBadge("Cmd+Shift+V")
+                }
+                LabeledContent("Toggle Voice") {
+                    hotkeyBadge("Cmd+Shift+M")
                 }
                 LabeledContent("Push to Talk") {
-                    Text("F5")
-                        .font(.caption.monospaced())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
+                    hotkeyBadge("F5")
                 }
                 LabeledContent("Window Layouts") {
-                    Text("Cmd+1–4")
-                        .font(.caption.monospaced())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
+                    hotkeyBadge("Cmd+1–4")
                 }
             }
         }
+    }
+
+    private func hotkeyBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.monospaced())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
     }
 
     // MARK: - Input
@@ -140,6 +143,12 @@ struct SettingsPanelView: View {
                             .monospacedDigit()
                             .frame(width: 24)
                     }
+                }
+                Toggle("Show gesture confirmation overlay", isOn: $gestureConfirmationEnabled)
+                if gestureConfirmationEnabled {
+                    Text("Shows a top-center toast when a gesture, eyebrow event, or voice command is recognized. Great for practice.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 

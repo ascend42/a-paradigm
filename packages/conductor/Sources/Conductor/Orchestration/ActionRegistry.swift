@@ -115,6 +115,12 @@ final class ActionRegistry: ObservableObject {
         case "cursorLeftWord": return .cursorLeft(granularity: .word)
         case "cursorRightChar": return .cursorRight(granularity: .character)
         case "cursorRightWord": return .cursorRight(granularity: .word)
+        case "toggleVideo": return .toggleVideo
+        case "toggleVoice": return .toggleVoice
+        case "muteVideo": return .muteVideo
+        case "muteVoice": return .muteVoice
+        case "unmuteVideo": return .unmuteVideo
+        case "unmuteVoice": return .unmuteVoice
         default:
             if name.hasPrefix("custom:") {
                 return .custom(String(name.dropFirst(7)))
@@ -139,6 +145,12 @@ final class ActionRegistry: ObservableObject {
         case .cursorRight(.character): return "cursorRightChar"
         case .cursorRight(.word): return "cursorRightWord"
         case .cursorRight(.line): return "cursorRightLine"
+        case .toggleVideo: return "toggleVideo"
+        case .toggleVoice: return "toggleVoice"
+        case .muteVideo: return "muteVideo"
+        case .muteVoice: return "muteVoice"
+        case .unmuteVideo: return "unmuteVideo"
+        case .unmuteVoice: return "unmuteVoice"
         case .switchToCell(let i): return "switchToCell:\(i)"
         case .custom(let name): return "custom:\(name)"
         }

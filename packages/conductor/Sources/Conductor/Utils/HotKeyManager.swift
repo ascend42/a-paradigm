@@ -165,4 +165,10 @@ extension HotKeyBinding {
 
     /// F5 — Push to talk
     static let pushToTalk = HotKeyBinding(keyCode: 96, modifiers: [])
+
+    /// Cmd+Shift+V — Toggle video (camera/gaze/gesture)
+    static let toggleVideo = HotKeyBinding(keyCode: 9, modifiers: [.command, .shift])
+
+    /// Cmd+Shift+M — Toggle voice (mic)
+    static let toggleVoice = HotKeyBinding(keyCode: 46, modifiers: [.command, .shift])
 }

@@ -96,6 +96,10 @@ struct BindingsManagerView: View {
                         Text("Redo").tag("redo")
                         Text("Voice Start").tag("voiceStart")
                         Text("Voice Stop").tag("voiceStop")
+                        Text("Toggle Video").tag("toggleVideo")
+                        Text("Toggle Voice").tag("toggleVoice")
+                        Text("Mute Video").tag("muteVideo")
+                        Text("Mute Voice").tag("muteVoice")
                     }
                     .labelsHidden()
                     .frame(width: 100)

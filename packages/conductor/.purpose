@@ -1,6 +1,6 @@
 purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions
-version: 0.3.1
-description: Workspace manager that launches and owns CC instances. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
+version: 0.4.0
+description: Workspace manager that launches and owns CC instances. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
@@ -11,14 +11,16 @@ context:
   - Custom gesture recording via DTW matching
   - Voice command phrase binding with fuzzy matching
   - Single-owner pattern — AppDelegate is the sole lifecycle owner of orchestrator and workspace
+  - Video/voice toggle icons in header bar with Cmd+Shift+V / Cmd+Shift+M hotkeys
+  - Targeted terminal close via AppleScript window IDs — closing one window no longer kills all terminals
 
 # ============================================
 # Components (#)
 # ============================================
 
 #conductor-app:
-  description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager
-  tags: [app, lifecycle, macos, single-owner]
+  description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager, global hotkey wiring (video/voice toggles)
+  tags: [app, lifecycle, macos, single-owner, hotkeys]
   anchors:
     - Sources/Conductor/App/:1
 
@@ -205,7 +207,7 @@ context:
     - Sources/Conductor/UI/GazeCursorController.swift:1
 
 #conductor-models:
-  description: Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction, ManagedInstance, HandPoseFrame
+  description: "Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction (incl. toggleVideo/Voice, mute/unmute), ManagedInstance (with windowIdentifier), HandPoseFrame, LaunchedTerminal"
   tags: [models, types]
   anchors:
     - Sources/Conductor/Models/:1
@@ -229,13 +231,13 @@ context:
     - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
 
 #input-orchestrator:
-  description: Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands
-  tags: [orchestration, input, coordinator]
+  description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Publishes videoActive/voiceActive state. Owns provider start/stop lifecycle with toggleVideo()/toggleVoice() methods."
+  tags: [orchestration, input, coordinator, toggle]
   anchors:
     - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
 
 #action-registry:
-  description: Maps input events to ConductorAction values with persistence and custom bindings
+  description: "Maps input events to ConductorAction values with persistence and custom bindings. Serializes all actions incl. toggleVideo/Voice, mute/unmute for UserDefaults storage."
   tags: [orchestration, bindings, configuration]
   anchors:
     - Sources/Conductor/Orchestration/ActionRegistry.swift:1
@@ -247,14 +249,14 @@ context:
     - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift:1
 
 #workspace-manager:
-  description: Owns managed CC instances, grid layout, terminal lifecycle
+  description: Owns managed CC instances, grid layout, terminal lifecycle. Uses targeted window close (AppleScript) instead of kill() to avoid destroying all terminal windows.
   tags: [workspace, management, terminal]
   anchors:
     - Sources/Conductor/Workspace/WorkspaceManager.swift:1
 
 #terminal-launcher:
-  description: Launches CC in Terminal.app, iTerm2, Ghostty, Warp, Kitty, Alacritty
-  tags: [workspace, terminal, launch]
+  description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others."
+  tags: [workspace, terminal, launch, close, applescript]
   anchors:
     - Sources/Conductor/Workspace/TerminalLauncher.swift:1
 
@@ -332,6 +334,12 @@ context:
   anchors:
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
+#gesture-confirmation:
+  description: "Transparent click-through overlay showing top-center toast when a gesture, eyebrow event, or voice command fires. Auto-fades after 1.5s. Toggleable via Settings > Gestures."
+  tags: [ui, gesture, feedback, overlay, practice]
+  anchors:
+    - Sources/Conductor/UI/GestureConfirmationController.swift:1
+
 #conductor-log:
   description: Structured logging via os.Logger with symbol-based categories
   tags: [logging, diagnostics]
@@ -345,8 +353,8 @@ context:
     - Sources/Conductor/UI/EyebrowCalibrationWindowController.swift:1
 
 #main-overlay:
-  description: Root SwiftUI view composing onboarding, buffer, instance list, calibration banner — observes (not owns) orchestrator and workspace
-  tags: [ui, layout, root]
+  description: "Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, video/voice toggle icons in header — observes (not owns) orchestrator and workspace"
+  tags: [ui, layout, root, toggle]
   anchors:
     - Sources/Conductor/UI/Views/MainOverlayView.swift:1
 
@@ -357,7 +365,7 @@ context:
     - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
 
 #hotkey-manager:
-  description: Global hotkey registration
+  description: "Global hotkey registration via CGEvent tap — Cmd+Shift+C (panel), Cmd+Shift+V (video toggle), Cmd+Shift+M (voice toggle), F5 (push-to-talk), Cmd+1–4 (layouts)"
   tags: [input, hotkeys, cgevent]
   anchors:
     - Sources/Conductor/Utils/HotKeyManager.swift:1
@@ -576,6 +584,12 @@ signals:
   eyebrow-calibration-complete:
     description: Eyebrow calibration thresholds applied to detector
     emitters: ["#conductor-app"]
+  video-toggled:
+    description: Video (gaze+gesture camera) toggled on or off via UI or hotkey
+    emitters: ["#input-orchestrator"]
+  voice-toggled:
+    description: Voice (mic) toggled on or off via UI or hotkey
+    emitters: ["#input-orchestrator"]
 
 # ============================================
 # Aspects (~)

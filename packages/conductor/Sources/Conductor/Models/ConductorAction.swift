@@ -24,6 +24,14 @@ enum ConductorAction: Equatable {
     // Workspace
     case switchToCell(Int)
 
+    // Input toggles
+    case toggleVideo
+    case toggleVoice
+    case muteVideo
+    case muteVoice
+    case unmuteVideo
+    case unmuteVoice
+
     // Extensible — for custom gesture or voice command bindings
     case custom(String)
 }

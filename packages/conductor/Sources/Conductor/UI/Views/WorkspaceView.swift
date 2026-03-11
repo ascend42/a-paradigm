@@ -202,7 +202,15 @@ struct WorkspaceView: View {
         )
         .onTapGesture {
             if let instance = managed.instance {
+                // AX-linked instance — set as gaze target
                 gazeRouter.setTarget(instance)
+            } else if let pid = managed.processID {
+                // Not yet AX-linked — activate the terminal window directly
+                if let app = NSRunningApplication(processIdentifier: pid) {
+                    app.activate()
+                    ConductorLog.component("workspace-view")
+                        .info("Activated terminal for \(managed.label) (PID \(pid))")
+                }
             }
         }
     }

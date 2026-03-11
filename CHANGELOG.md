@@ -5,6 +5,57 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.31.0] — 2026-03-11
+
+### Added
+
+- **Conductor 0.4.0 — Video/Voice Toggles + Terminal Close Fix**
+
+  - **Video/voice toggle icons**: Header bar now shows camera (video.fill/video.slash.fill) and mic (mic.fill/mic.slash.fill) toggle buttons with live green/gray state indicators. Click to toggle gaze+gesture camera or voice mic on/off.
+
+  - **Global hotkeys**: `Cmd+Shift+V` toggles video (gaze+gesture), `Cmd+Shift+M` toggles voice. Registered via CGEvent tap in `#hotkey-manager`, wired through `#conductor-app` to `#input-orchestrator`.
+
+  - **New ConductorAction cases**: `toggleVideo`, `toggleVoice`, `muteVideo`, `muteVoice`, `unmuteVideo`, `unmuteVoice` — all bindable via voice commands and custom gestures in the Bindings tab.
+
+  - **InputOrchestrator provider lifecycle**: `videoActive`/`voiceActive` published state. `startVideoProviders()`/`stopVideoProviders()`/`toggleVideo()` and matching voice methods. Gaze and gesture providers now actually call `.start()` during orchestrator startup (previously only voice was started — **this was a bug**).
+
+  - **`LaunchedTerminal` struct**: `TerminalLauncher.launch()` now returns `LaunchedTerminal` with `processID`, `windowIdentifier`, and `terminalApp`. Terminal.app returns the AppleScript window ID, iTerm2 returns the session ID.
+
+  - **`TerminalLauncher.closeWindow()`**: Static method for targeted close — AppleScript `close window N` for Terminal.app, session-targeted close for iTerm2, SIGTERM fallback for per-window terminals (Ghostty, Kitty, etc.).
+
+  - **Gesture confirmation overlay (`#gesture-confirmation`)**: Top-center toast showing recognized gesture name and bound action, auto-fades after 1.5s. Toggle via Settings > Input > Gestures > "Show gesture confirmation overlay". Covers built-in gestures, custom DTW gestures, eyebrow events, and voice commands. Great for practice.
+
+  - **Buffer listening state**: When voice is active, the text buffer shows a red "Listening" badge, red border glow, and subtle shadow — clear visual feedback that the mic is receiving.
+
+  - **On-demand provider creation**: Video/voice toggles now create providers on the fly if they weren't enabled at startup. No need to toggle settings first — just hit the header icon or hotkey.
+
+  - **Live gaze dot during calibration**: `GazeCalibrationView` now renders a yellow dot tracking the user's estimated gaze position in real time, so you can see whether you're actually looking at the target.
+
+### Fixed
+
+- **Terminal close kills all windows**: `WorkspaceManager.closeInstance()` was calling `kill(pid, SIGTERM)` on Terminal.app's application PID, which killed the entire app and all windows. Now uses AppleScript targeted close via window identifier — only the Conductor-launched window is closed.
+
+- **Terminal.app AppleScript error ("Can't get window of tab")**: `do script` returns a tab reference, not a window. Changed to `id of front window` after script execution.
+
+- **Gaze/gesture providers never started**: `InputOrchestrator.start()` subscribed to gaze/gesture streams but never called `.start()` on the providers. Camera was never activated except during calibration (which had its own explicit `.start()` call). Now fixed — all enabled providers are started during orchestrator startup.
+
+- **Provider cleanup on stop**: `InputOrchestrator.stop()` now properly calls `.stop()` on all active providers and resets `videoActive`/`voiceActive` state.
+
+- **Eyebrow calibration not tracking**: Calibration started without ensuring the gaze provider was active. Now creates and starts the provider before opening the calibration overlay.
+
+- **Can't select workspace windows**: Tapping a managed instance was a no-op when the AX link hadn't been established (common for Terminal.app). Now falls back to `NSRunningApplication.activate()` to bring the terminal window to front.
+
+### Changed
+
+- **Conductor version**: 0.3.1 → 0.4.0
+- **`ManagedInstance`**: New `windowIdentifier: String?` field for AppleScript-targeted close
+- **`WorkspaceManager.cleanup()`**: Uses `TerminalLauncher.closeWindow()` instead of raw `kill()`
+- **`SettingsPanelView` hotkeys section**: Now lists Toggle Video (Cmd+Shift+V) and Toggle Voice (Cmd+Shift+M), refactored to `hotkeyBadge()` helper
+- **`BindingsManagerView` voice command picker**: Includes toggleVideo, toggleVoice, muteVideo, muteVoice options
+- **`ActionRegistry` serialization**: Handles all 6 new action cases in `actionFromName`/`nameFromAction`
+- **`InputOrchestrator`**: Publishes `lastRecognizedGesture` for the confirmation overlay to consume
+- **`BufferView`**: Accepts `orchestrator` param, shows listening state visuals when `voiceActive`
+
 ## [3.30.0] — 2026-03-11
 
 ### Added

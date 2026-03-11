@@ -25,6 +25,7 @@ struct GazeCalibrationView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var gazeTask: Task<Void, Never>?
     @State private var dwellTask: Task<Void, Never>?
+    @State private var currentGazePoint: CGPoint? = nil
 
     /// Calibration targets computed from screen geometry.
     private var targets: [CGPoint] {
@@ -75,11 +76,39 @@ struct GazeCalibrationView: View {
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.8))
                     .padding(.top, 48)
+
+                Text("Look at the cyan target")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.4))
                 Spacer()
             }
 
             // Target reticle positioned in screen coordinates
             targetReticle
+
+            // Live gaze position dot — shows where the system thinks you're looking
+            gazePositionDot
+        }
+    }
+
+    private var gazePositionDot: some View {
+        GeometryReader { geo in
+            if let gaze = currentGazePoint {
+                let x = gaze.x * geo.size.width
+                let y = gaze.y * geo.size.height
+
+                Circle()
+                    .fill(Color.yellow.opacity(0.6))
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.yellow.opacity(0.3), lineWidth: 2)
+                            .frame(width: 22, height: 22)
+                    )
+                    .position(x: x, y: y)
+                    .animation(.linear(duration: 0.05), value: gaze.x)
+                    .animation(.linear(duration: 0.05), value: gaze.y)
+            }
         }
     }
 
@@ -134,10 +163,11 @@ struct GazeCalibrationView: View {
     // MARK: - Dwell Logic
 
     private func startDwell() {
-        // Begin consuming the gaze stream for iris samples
+        // Begin consuming the gaze stream for iris samples + live feedback
         gazeTask = Task { @MainActor in
             for await irisPoint in gazeStream {
                 irisSamples.append(irisPoint)
+                currentGazePoint = irisPoint
             }
         }
 

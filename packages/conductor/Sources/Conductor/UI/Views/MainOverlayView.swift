@@ -101,14 +101,48 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
-            Text("v0.3.1")
+            Text("v0.4.0")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
+            inputToggles
             statusIndicator
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var inputToggles: some View {
+        HStack(spacing: 6) {
+            // Video toggle (gaze + gesture camera)
+            Button(action: {
+                Task { await orchestrator.toggleVideo() }
+            }) {
+                Image(systemName: orchestrator.videoActive ? "video.fill" : "video.slash.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(orchestrator.videoActive ? .green : .secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help(orchestrator.videoActive ? "Disable camera (Cmd+Shift+V)" : "Enable camera (Cmd+Shift+V)")
+
+            // Voice toggle
+            Button(action: {
+                Task { await orchestrator.toggleVoice() }
+            }) {
+                Image(systemName: orchestrator.voiceActive ? "mic.fill" : "mic.slash.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(orchestrator.voiceActive ? .green : .secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help(orchestrator.voiceActive ? "Mute voice (Cmd+Shift+M)" : "Unmute voice (Cmd+Shift+M)")
+
+            Divider()
+                .frame(height: 16)
+        }
     }
 
     private var statusIndicator: some View {
@@ -159,6 +193,7 @@ struct MainOverlayView: View {
             BufferView(
                 buffer: orchestrator.buffer,
                 gazeRouter: gazeRouter,
+                orchestrator: orchestrator,
                 gazeZoneRouter: orchestrator.gazeZoneRouter,
                 onSend: dispatchBuffer
             )

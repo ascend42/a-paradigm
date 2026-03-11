@@ -13,6 +13,9 @@ final class InputOrchestrator: ObservableObject {
 
     @Published private(set) var isRunning = false
     @Published private(set) var eyebrowEnabled = false
+    @Published private(set) var videoActive = false
+    @Published private(set) var voiceActive = false
+    @Published private(set) var lastRecognizedGesture: RecognizedGesture?
 
     // MARK: - Dependencies
 
@@ -112,21 +115,36 @@ final class InputOrchestrator: ObservableObject {
             subscribeToCustomGestures(gestureProvider)
         }
 
-        // Pre-load WhisperKit in background
-        if voiceProvider != nil {
-            Task {
-                ConductorLog.component("input-orchestrator").info("Pre-loading WhisperKit...")
+        // Start all configured providers
+        Task {
+            // Start video providers (gaze + gesture share the camera pipeline)
+            if gazeProvider != nil || gestureProvider != nil {
+                await startVideoProviders()
+            }
+
+            // Start voice provider
+            if voiceProvider != nil {
+                ConductorLog.component("input-orchestrator").info("Starting voice provider...")
                 try? await voiceProvider?.start()
+                voiceActive = voiceProvider?.isActive ?? false
             }
         }
     }
 
-    /// Stop all input subscriptions.
+    /// Stop all input subscriptions and providers.
     func stop() {
         for task in inputTasks {
             task.cancel()
         }
         inputTasks.removeAll()
+
+        // Stop all providers
+        gazeProvider?.stop()
+        gestureProvider?.stop()
+        voiceProvider?.stop()
+        videoActive = false
+        voiceActive = false
+
         isRunning = false
         ConductorLog.component("input-orchestrator").info("Input orchestration stopped")
     }
@@ -140,6 +158,84 @@ final class InputOrchestrator: ObservableObject {
         }
     }
 
+    // MARK: - Video (Gaze + Gesture) Lifecycle
+
+    /// Start gaze and gesture providers (they share the camera pipeline).
+    /// Creates providers on demand if none exist.
+    func startVideoProviders() async {
+        if gazeProvider == nil {
+            gazeProvider = MediaPipeGazeProvider()
+            ConductorLog.component("input-orchestrator").info("Created gaze provider on demand")
+            subscribeToGazePoints(gazeProvider!)
+            if eyebrowEnabled {
+                subscribeToEyebrowFrames(gazeProvider!)
+            }
+        }
+        if gestureProvider == nil {
+            gestureProvider = VisionGestureProvider()
+            ConductorLog.component("input-orchestrator").info("Created gesture provider on demand")
+            subscribeToGestureActions(gestureProvider!)
+            subscribeToCustomGestures(gestureProvider!)
+        }
+        if let gazeProvider, !gazeProvider.isActive {
+            ConductorLog.component("input-orchestrator").info("Starting gaze provider...")
+            try? await gazeProvider.start()
+        }
+        if let gestureProvider, !gestureProvider.isActive {
+            ConductorLog.component("input-orchestrator").info("Starting gesture provider...")
+            try? await gestureProvider.start()
+        }
+        videoActive = (gazeProvider?.isActive ?? false) || (gestureProvider?.isActive ?? false)
+    }
+
+    /// Stop gaze and gesture providers.
+    func stopVideoProviders() {
+        gazeProvider?.stop()
+        gestureProvider?.stop()
+        videoActive = false
+        ConductorLog.component("input-orchestrator").info("Video providers stopped")
+    }
+
+    /// Toggle video (gaze + gesture) on/off.
+    func toggleVideo() async {
+        if videoActive {
+            stopVideoProviders()
+        } else {
+            await startVideoProviders()
+        }
+    }
+
+    // MARK: - Voice Lifecycle
+
+    /// Start the voice provider. Creates one on demand if none exists.
+    func startVoiceProvider() async {
+        if voiceProvider == nil {
+            voiceProvider = WhisperVoiceProvider()
+            ConductorLog.component("input-orchestrator").info("Created voice provider on demand")
+            subscribeToTranscriptions(voiceProvider!)
+        }
+        guard let voiceProvider, !voiceProvider.isActive else { return }
+        ConductorLog.component("input-orchestrator").info("Starting voice provider...")
+        try? await voiceProvider.start()
+        voiceActive = voiceProvider.isActive
+    }
+
+    /// Stop the voice provider.
+    func stopVoiceProvider() {
+        voiceProvider?.stop()
+        voiceActive = false
+        ConductorLog.component("input-orchestrator").info("Voice provider stopped")
+    }
+
+    /// Toggle voice on/off.
+    func toggleVoice() async {
+        if voiceActive {
+            stopVoiceProvider()
+        } else {
+            await startVoiceProvider()
+        }
+    }
+
     // MARK: - Input Subscriptions
 
     private func subscribeToEyebrowEvents() {
@@ -148,11 +244,25 @@ final class InputOrchestrator: ObservableObject {
             for await event in self.eyebrowDetector.eventStream {
                 guard !Task.isCancelled else { break }
                 if let action = self.eyebrowStateMachine.process(event) {
+                    self.lastRecognizedGesture = RecognizedGesture(
+                        source: "eyebrow",
+                        name: Self.eyebrowEventName(event),
+                        actionName: ActionRegistry.nameFromAction(action)
+                    )
                     await self.executeAction(action)
                 }
             }
         }
         inputTasks.append(task)
+    }
+
+    private static func eyebrowEventName(_ event: EyebrowEvent) -> String {
+        switch event {
+        case .leftRaise: return "Left Eyebrow Raise"
+        case .leftLower: return "Left Eyebrow Lower"
+        case .rightRaise: return "Right Eyebrow Raise"
+        case .rightLower: return "Right Eyebrow Lower"
+        }
     }
 
     private func subscribeToGestureActions(_ provider: VisionGestureProvider) {
@@ -161,11 +271,28 @@ final class InputOrchestrator: ObservableObject {
             for await gestureAction in provider.gestureStream {
                 guard !Task.isCancelled else { break }
                 if let action = self.actionRegistry.actionForGesture(gestureAction) {
+                    self.lastRecognizedGesture = RecognizedGesture(
+                        source: "gesture",
+                        name: Self.gestureName(gestureAction),
+                        actionName: ActionRegistry.nameFromAction(action)
+                    )
                     await self.executeAction(action)
                 }
             }
         }
         inputTasks.append(task)
+    }
+
+    private static func gestureName(_ gesture: GestureAction) -> String {
+        switch gesture {
+        case .cursorLeft: return "Swipe Left"
+        case .cursorRight: return "Swipe Right"
+        case .deleteBackward: return "Pinch"
+        case .undo: return "Fist"
+        case .redo: return "Open Palm"
+        case .send: return "Two-Finger Tap"
+        case .none: return "None"
+        }
     }
 
     private func subscribeToTranscriptions(_ provider: WhisperVoiceProvider) {
@@ -218,6 +345,11 @@ final class InputOrchestrator: ObservableObject {
             guard let self else { return }
             for await action in self.customGestureClassifier.actionStream {
                 guard !Task.isCancelled else { break }
+                self.lastRecognizedGesture = RecognizedGesture(
+                    source: "custom",
+                    name: "Custom Gesture",
+                    actionName: ActionRegistry.nameFromAction(action)
+                )
                 await self.executeAction(action)
             }
         }
@@ -290,6 +422,24 @@ final class InputOrchestrator: ObservableObject {
             // Handled by GazeZoneRouter (Sprint 10)
             break
 
+        case .toggleVideo:
+            await toggleVideo()
+
+        case .toggleVoice:
+            await toggleVoice()
+
+        case .muteVideo:
+            stopVideoProviders()
+
+        case .muteVoice:
+            stopVoiceProvider()
+
+        case .unmuteVideo:
+            await startVideoProviders()
+
+        case .unmuteVoice:
+            await startVoiceProvider()
+
         case .custom(let name):
             ConductorLog.component("input-orchestrator")
                 .info("Custom action: \(name)")
@@ -317,6 +467,17 @@ final class InputOrchestrator: ObservableObject {
             buffer.append(text)
         }
     }
+}
+
+// MARK: - Recognized Gesture
+
+/// A gesture or input that was recognized and acted upon — for the confirmation overlay.
+struct RecognizedGesture: Identifiable, Equatable {
+    let id = UUID()
+    let source: String        // "gesture", "custom", "voice", "eyebrow"
+    let name: String           // e.g. "Fist", "Pinch", "Custom: Wave"
+    let actionName: String     // e.g. "Undo", "Delete", "Send"
+    let timestamp: Date = .now
 }
 
 // MARK: - EyebrowStateMachine Wrapper

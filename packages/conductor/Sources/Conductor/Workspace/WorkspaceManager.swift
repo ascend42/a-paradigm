@@ -50,26 +50,27 @@ final class WorkspaceManager: ObservableObject {
         ConductorLog.flow("workspace-launch")
             .info("Launching instance in \(terminal.rawValue) at \(projectDir)")
 
-        let pid = try await TerminalLauncher.launch(
+        let launched = try await TerminalLauncher.launch(
             terminal: terminal,
             projectDirectory: projectDir,
             label: label
         )
 
         let managed = ManagedInstance(
-            id: "managed-\(pid)-\(gridIndex)",
+            id: "managed-\(launched.processID)-\(gridIndex)",
             instance: nil,
             gridIndex: gridIndex,
             label: label,
             terminalApp: terminal,
             launchedAt: .now,
             projectDirectory: projectDir,
-            processID: pid
+            processID: launched.processID,
+            windowIdentifier: launched.windowIdentifier
         )
 
         managedInstances.append(managed)
         ConductorLog.signal("instance-launched")
-            .info("Instance launched: \(label) (PID \(pid))")
+            .info("Instance launched: \(label) (PID \(launched.processID))")
 
         if autoArrange {
             rearrange()
@@ -79,10 +80,13 @@ final class WorkspaceManager: ObservableObject {
     }
 
     /// Close and remove a managed instance.
+    /// Uses AppleScript targeted close for Terminal.app/iTerm2 to avoid killing all windows.
     func closeInstance(_ instance: ManagedInstance) {
-        if let pid = instance.processID {
-            kill(pid, SIGTERM)
-        }
+        TerminalLauncher.closeWindow(
+            terminal: instance.terminalApp,
+            windowIdentifier: instance.windowIdentifier,
+            processID: instance.processID
+        )
 
         managedInstances.removeAll { $0.id == instance.id }
 
@@ -197,11 +201,13 @@ final class WorkspaceManager: ObservableObject {
         processMonitorTask?.cancel()
         processMonitorTask = nil
 
-        // Terminate all managed instances
+        // Close all managed instance windows (targeted, not kill-all)
         for instance in managedInstances {
-            if let pid = instance.processID {
-                kill(pid, SIGTERM)
-            }
+            TerminalLauncher.closeWindow(
+                terminal: instance.terminalApp,
+                windowIdentifier: instance.windowIdentifier,
+                processID: instance.processID
+            )
         }
         managedInstances.removeAll()
     }

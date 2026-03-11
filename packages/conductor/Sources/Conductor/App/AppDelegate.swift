@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var conductorPanel: ConductorPanel?
     private let permissionsManager = PermissionsManager()
     private lazy var gazeCursor = GazeCursorController()
+    private lazy var gestureConfirmation = GestureConfirmationController()
+    private let hotKeyManager = HotKeyManager()
 
     // MARK: - Owned State (single-owner pattern)
 
@@ -32,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupMenuBar()
         setupOrchestrator()
+        setupHotKeys()
         checkPermissionsAndLaunch()
 
         // Listen for calibration requests from Settings / banner / setup wizard
@@ -127,6 +130,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Gesture confirmation overlay toggle
+        let gestureConfirmationEnabled = UserDefaults.standard.bool(forKey: "gestureConfirmationEnabled")
+        Task { @MainActor in
+            if gestureConfirmationEnabled {
+                if !gestureConfirmation.isActive {
+                    gestureConfirmation.start(orchestrator: orchestrator)
+                }
+            } else {
+                gestureConfirmation.stop()
+            }
+        }
+
         // Provider preference changes — restart orchestrator if providers changed
         let gazeEnabled = UserDefaults.standard.bool(forKey: "gazeEnabled")
         let gestureEnabled = UserDefaults.standard.bool(forKey: "gestureEnabled")
@@ -153,8 +168,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Register global keyboard shortcuts for video/voice toggles and panel control.
+    private func setupHotKeys() {
+        hotKeyManager.register(.toggleVideo) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.orchestrator.toggleVideo()
+            }
+        }
+        hotKeyManager.register(.toggleVoice) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.orchestrator.toggleVoice()
+            }
+        }
+        ConductorLog.component("conductor-app").info("Global hotkeys registered (Cmd+Shift+V, Cmd+Shift+M)")
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         ConductorLog.app.info("Conductor shutting down")
+        hotKeyManager.unregisterAll()
         orchestrator.stop()
         workspaceManager.cleanup()
         conductorPanel?.close()
@@ -294,13 +327,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleCalibrateEyebrows() {
         ConductorLog.component("eyebrow-calibration").info("Eyebrow calibration requested")
         Task { @MainActor in
-            let eyebrowStream: AsyncStream<EyebrowFrame>?
-
-            if let gazeProvider = orchestrator.gazeProvider {
-                eyebrowStream = gazeProvider.eyebrowStream
-            } else {
-                eyebrowStream = nil
+            // Ensure gaze provider exists and is started (eyebrow data comes from gaze camera)
+            if orchestrator.gazeProvider == nil {
+                orchestrator.gazeProvider = MediaPipeGazeProvider()
+                ConductorLog.component("eyebrow-calibration").info("Created gaze provider for calibration")
             }
+            if let provider = orchestrator.gazeProvider, !provider.isActive {
+                ConductorLog.component("eyebrow-calibration").info("Starting gaze provider for calibration")
+                try? await provider.start()
+            }
+
+            let eyebrowStream: AsyncStream<EyebrowFrame>? = orchestrator.gazeProvider?.eyebrowStream
 
             await EyebrowCalibrationWindowController.run(
                 eyebrowStream: eyebrowStream,

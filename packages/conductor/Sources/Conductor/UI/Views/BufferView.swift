@@ -6,17 +6,36 @@ import SwiftUI
 struct BufferView: View {
     @ObservedObject var buffer: BufferEngine
     @ObservedObject var gazeRouter: GazeRouter
+    @ObservedObject var orchestrator: InputOrchestrator
     var gazeZoneRouter: GazeZoneRouter?
     let onSend: () -> Void
 
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
 
+    /// Whether voice is actively listening.
+    private var isListening: Bool { orchestrator.voiceActive }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Text Buffer", systemImage: "text.cursor")
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
+            HStack {
+                Label("Text Buffer", systemImage: "text.cursor")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+
+                if isListening {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 6, height: 6)
+                        Text("Listening")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.red)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: isListening)
 
             // Text input area
             TextEditor(text: $inputText)
@@ -28,6 +47,15 @@ struct BufferView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(nsColor: .textBackgroundColor))
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(
+                            isListening ? Color.red.opacity(0.5) : Color.clear,
+                            lineWidth: 2
+                        )
+                        .animation(.easeInOut(duration: 0.3), value: isListening)
+                )
+                .shadow(color: isListening ? .red.opacity(0.15) : .clear, radius: 8)
                 .focused($isInputFocused)
                 .onChange(of: inputText) { _, newValue in
                     buffer.replace(with: newValue)
