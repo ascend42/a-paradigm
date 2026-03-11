@@ -466,13 +466,9 @@ struct SetupWizardView: View {
     private func startCalibration() {
         ConductorLog.component("setup-wizard").info("Starting gaze calibration from setup wizard")
         NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
-
-        // Listen for calibration completion. The calibration overlay will post back
-        // when done. For the wizard, we mark it complete after a reasonable delay
-        // since CalibrationWindowController is fully async and managed externally.
-        // In practice, the user will see the calibration overlay and return here.
+        // Stay on this step — user sees calibration overlay, then comes back
+        // and clicks "Continue" to proceed.
         calibrationComplete = true
-        currentStep = .ready
     }
 
     private func skipCalibration() {
