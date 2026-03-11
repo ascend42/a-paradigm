@@ -385,20 +385,17 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
 
     /// Strip WhisperKit special tokens and noise from transcription output.
     private static func cleanTranscription(_ raw: String) -> String {
+        // Remove any bracketed token like [BLANK_AUDIO], [inaudible], [NOISE], etc.
         var text = raw
-        // Remove WhisperKit special tokens
-        let specialTokens = [
-            "[BLANK_AUDIO]", "[SILENCE]", "[NO_SPEECH]",
-            "[INAUDIBLE]", "[MUSIC]", "[APPLAUSE]", "[LAUGHTER]",
-        ]
-        for token in specialTokens {
-            text = text.replacingOccurrences(of: token, with: "")
+        while let open = text.range(of: "["),
+              let close = text.range(of: "]", range: open.upperBound..<text.endIndex) {
+            text.removeSubrange(open.lowerBound...close.lowerBound)
         }
         // Collapse whitespace and trim
         text = text.components(separatedBy: .whitespaces)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return text
     }
 

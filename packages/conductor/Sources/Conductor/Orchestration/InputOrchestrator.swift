@@ -494,7 +494,9 @@ final class InputOrchestrator: ObservableObject {
     // MARK: - Dispatch
 
     private func dispatchToTarget() async {
-        guard let target = gazeRouter.currentTarget else {
+        // Prefer zone router's managed instance, fall back to gaze router direct target
+        let target: ClaudeCodeInstance? = gazeZoneRouter.targetedInstance?.instance ?? gazeRouter.currentTarget
+        guard let target else {
             ConductorLog.component("input-orchestrator").info("No target for dispatch")
             return
         }

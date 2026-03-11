@@ -93,7 +93,7 @@ struct BufferView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(buffer.isEmpty || gazeRouter.currentTarget == nil)
+                .disabled(buffer.isEmpty || (gazeRouter.currentTarget == nil && gazeZoneRouter?.targetedInstance == nil))
                 .keyboardShortcut(.return, modifiers: .command)
             }
 
