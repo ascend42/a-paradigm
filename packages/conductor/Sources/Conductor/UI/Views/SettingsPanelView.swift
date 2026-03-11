@@ -10,6 +10,7 @@ struct SettingsPanelView: View {
     @AppStorage("enrichmentEnabled") private var enrichmentEnabled: Bool = true
     @AppStorage("detectionFPS") private var detectionFPS: Double = 15
     @AppStorage("dwellDuration") private var dwellDuration: Double = 0.5
+    @AppStorage("gazeOverlayVisible") private var gazeOverlayVisible: Bool = false
     @AppStorage("pollingInterval") private var pollingInterval: Double = 2.0
 
     var body: some View {
@@ -112,6 +113,8 @@ struct SettingsPanelView: View {
                             .monospacedDigit()
                             .frame(width: 36)
                     }
+
+                    Toggle("Show gaze cursor", isOn: $gazeOverlayVisible)
 
                     Button("Recalibrate…") {
                         NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)

@@ -15,7 +15,7 @@ struct MainOverlayView: View {
     @StateObject private var buffer = BufferEngine()
     @StateObject private var detector = ClaudeCodeDetector()
     @StateObject private var sessionWatcher = SessionFileWatcher()
-    @StateObject private var gazeRouter = GazeRouter()
+    @ObservedObject private var gazeRouter = GazeRouter.shared
 
     private let dispatchTarget = AXDispatchTarget()
 

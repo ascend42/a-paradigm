@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
     private let permissionsManager = PermissionsManager()
+    @MainActor private lazy var gazeCursor = GazeCursorController()
 
     // MARK: - Lifecycle
 
@@ -27,6 +28,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: .conductorRecalibrate,
             object: nil
         )
+
+        // Watch for gaze overlay toggle changes via UserDefaults notification
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDefaultsChange),
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleDefaultsChange() {
+        let visible = UserDefaults.standard.bool(forKey: "gazeOverlayVisible")
+        Task { @MainActor in
+            if visible {
+                if !gazeCursor.isActive {
+                    gazeCursor.start(gazeRouter: GazeRouter.shared)
+                }
+            } else {
+                gazeCursor.stop()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

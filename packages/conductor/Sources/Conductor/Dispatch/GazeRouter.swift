@@ -9,11 +9,22 @@ import Foundation
 /// duration before it becomes the target.
 @MainActor
 final class GazeRouter: ObservableObject {
+    /// Shared instance used by both MainOverlayView and AppDelegate.
+    static let shared = GazeRouter()
+
     /// The currently targeted instance (nil if no target).
     @Published private(set) var currentTarget: ClaudeCodeInstance?
 
+    /// Current gaze screen point (for debug overlay).
+    @Published private(set) var currentGazePoint: CGPoint?
+
     /// Dwell duration required to switch targets (seconds).
     var dwellDuration: TimeInterval = 0.5
+
+    /// Update the current gaze screen point.
+    func updateGazePoint(_ point: CGPoint) {
+        currentGazePoint = point
+    }
 
     /// Manually set the target (used when gaze is unavailable).
     func setTarget(_ instance: ClaudeCodeInstance?) {
