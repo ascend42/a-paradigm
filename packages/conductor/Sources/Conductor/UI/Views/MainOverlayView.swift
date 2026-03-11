@@ -165,7 +165,6 @@ struct MainOverlayView: View {
             Spacer()
             Button("Calibrate") {
                 NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
-                gazeCalibrated = true
             }
             .controlSize(.small)
             .buttonStyle(.borderedProminent)

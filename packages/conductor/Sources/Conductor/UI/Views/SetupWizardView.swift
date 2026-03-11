@@ -466,10 +466,9 @@ struct SetupWizardView: View {
     private func startCalibration() {
         ConductorLog.component("setup-wizard").info("Starting gaze calibration from setup wizard")
         NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
-        // Stay on this step — user sees calibration overlay, then comes back
-        // and clicks "Continue" to proceed.
+        // Stay on this step — AppDelegate handles the calibration window
+        // and sets gazeCalibrated when it completes.
         calibrationComplete = true
-        UserDefaults.standard.set(true, forKey: "gazeCalibrated")
     }
 
     private func skipCalibration() {

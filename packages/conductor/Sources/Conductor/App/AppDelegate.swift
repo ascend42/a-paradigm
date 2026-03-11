@@ -19,6 +19,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupMenuBar()
         checkPermissionsAndLaunch()
+
+        // Listen for calibration requests from Settings / banner / setup wizard
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRecalibrate),
+            name: .conductorRecalibrate,
+            object: nil
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -108,5 +116,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func handleRecalibrate() {
+        ConductorLog.component("gaze-calibration").info("Calibration requested via notification")
+        Task { @MainActor in
+            // Create a placeholder gaze stream — the calibration overlay collects
+            // screen target positions. Without a live gaze provider, we provide
+            // simulated center-of-target iris points so the UI flow works.
+            let gazeStream = AsyncStream<CGPoint> { continuation in
+                // Emit center points at ~30fps so the calibration view has data
+                Task {
+                    while !Task.isCancelled {
+                        // Simulated iris position (center of gaze) — actual gaze
+                        // provider would feed real data here
+                        continuation.yield(CGPoint(x: 0.5, y: 0.5))
+                        try? await Task.sleep(for: .milliseconds(33))
+                    }
+                    continuation.finish()
+                }
+            }
+
+            let result = await CalibrationWindowController.run(gazeStream: gazeStream)
+            if let points = result, !points.isEmpty {
+                UserDefaults.standard.set(true, forKey: "gazeCalibrated")
+                ConductorLog.signal("calibration-complete")
+                    .info("Gaze calibration completed with \(points.count) points")
+            } else {
+                ConductorLog.component("gaze-calibration").info("Calibration cancelled")
+            }
+        }
     }
 }
