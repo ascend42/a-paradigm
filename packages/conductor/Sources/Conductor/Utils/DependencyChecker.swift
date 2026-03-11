@@ -26,8 +26,6 @@ final class DependencyChecker: ObservableObject {
 
     // MARK: - Private
 
-    private let whisperProvider = WhisperVoiceProvider()
-
     // MARK: - Python Check
 
     /// Check whether `python3` is available on the system PATH.
@@ -65,27 +63,15 @@ final class DependencyChecker: ObservableObject {
         }
     }
 
-    // MARK: - WhisperKit Model Download
+    // MARK: - WhisperKit Model Check
 
-    /// Download the WhisperKit base.en model, reporting progress via the published property.
-    func downloadWhisperModel() async throws {
-        whisperModel = .downloading(progress: 0)
-        ConductorLog.component("setup-wizard").info("Starting WhisperKit model download...")
-
-        do {
-            try await whisperProvider.downloadModel { [weak self] progress in
-                Task { @MainActor in
-                    self?.whisperModel = .downloading(progress: progress)
-                }
-            }
-            whisperModel = .ready
-            ConductorLog.signal("whisper-model-ready").info("WhisperKit model download complete")
-        } catch {
-            whisperModel = .missing(hint: "Download failed: \(error.localizedDescription). Check network connection.")
-            ConductorLog.component("setup-wizard")
-                .error("WhisperKit model download failed: \(error.localizedDescription)")
-            throw error
-        }
+    /// Mark WhisperKit model as ready. Actual download + CoreML compilation
+    /// happens lazily on first voice use (WhisperKit.download() hangs during setup).
+    func checkWhisperModel() {
+        let variant = UserDefaults.standard.string(forKey: "whisperModel") ?? "tiny.en"
+        whisperModel = .ready
+        ConductorLog.component("setup-wizard")
+            .info("WhisperKit model \(variant) selected — will download on first voice use")
     }
 
     // MARK: - Retry All
@@ -99,7 +85,7 @@ final class DependencyChecker: ObservableObject {
             await checkMediaPipe()
         }
         if case .missing = whisperModel {
-            try? await downloadWhisperModel()
+            checkWhisperModel()
         }
     }
 

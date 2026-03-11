@@ -45,60 +45,29 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
         ConductorLog.component("whisper-voice-provider").info("Voice mode set to \(String(describing: mode))")
     }
 
-    func downloadModel(progress: @escaping (Double) -> Void) async throws {
-        let variant = self.modelVariant
-        ConductorLog.component("whisper-voice-provider").info("Downloading WhisperKit model \(variant)...")
-
-        do {
-            // Phase 1: Download model files only (no compilation/loading)
-            progress(0.05)
-            _ = try await WhisperKit.download(
-                variant: variant,
-                progressCallback: { progressObj in
-                    Task { @MainActor in
-                        progress(max(0.05, progressObj.fractionCompleted))
-                    }
-                }
-            )
-
-            // Mark as downloaded — actual WhisperKit init happens lazily on first transcription
-            isModelReady = true
-            progress(1.0)
-            ConductorLog.gate("model-downloaded").info("WhisperKit model \(variant) downloaded")
-        } catch {
-            ConductorLog.component("whisper-voice-provider")
-                .error("WhisperKit download failed: \(error.localizedDescription)")
-            throw error
-        }
-    }
-
     /// Ensure WhisperKit is initialized (called lazily before first transcription).
+    /// Downloads the model if needed, then compiles and loads it.
     private func ensureLoaded() async throws {
         guard whisperKit == nil else { return }
         let variant = self.modelVariant
 
-        ConductorLog.component("whisper-voice-provider").info("Loading WhisperKit \(variant)...")
+        ConductorLog.component("whisper-voice-provider").info("Downloading + loading WhisperKit \(variant)...")
         let kit = try await WhisperKit(
             model: variant,
             verbose: false,
             logLevel: .error,
             prewarm: false,
             load: true,
-            download: false // Already downloaded
+            download: true
         )
         self.whisperKit = kit
-        ConductorLog.component("whisper-voice-provider").info("WhisperKit loaded and ready")
+        isModelReady = true
+        ConductorLog.component("whisper-voice-provider").info("WhisperKit \(variant) ready")
     }
 
     // MARK: - InputProvider
 
     func start() async throws {
-        guard isModelReady else {
-            ConductorLog.component("whisper-voice-provider")
-                .error("Cannot start — model not downloaded")
-            return
-        }
-
         try audioCapture.setup()
 
         // Wire audio buffer callback to accumulate float samples

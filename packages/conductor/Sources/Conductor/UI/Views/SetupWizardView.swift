@@ -233,7 +233,7 @@ struct SetupWizardView: View {
                 if voiceEnabled {
                     dependencyRow(
                         icon: "waveform",
-                        label: "WhisperKit Model (\(selectedModel))",
+                        label: "WhisperKit (\(selectedModel))",
                         status: depChecker.whisperModel
                     )
                 }
@@ -271,7 +271,6 @@ struct SetupWizardView: View {
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                .disabled(hasBlockingDownload)
             }
         }
         .onAppear {
@@ -364,14 +363,6 @@ struct SetupWizardView: View {
         return whisperOK && pythonOK && mediapipeOK
     }
 
-    /// Whether a download is currently in progress (blocks the Continue button).
-    private var hasBlockingDownload: Bool {
-        if case .downloading = depChecker.whisperModel {
-            return true
-        }
-        return false
-    }
-
     /// Whether any dependency is in a missing state (shows retry button).
     private var hasMissingDeps: Bool {
         if voiceEnabled, case .missing = depChecker.whisperModel { return true }
@@ -391,9 +382,7 @@ struct SetupWizardView: View {
         ConductorLog.component("setup-wizard").info("Starting dependency checks")
 
         if voiceEnabled {
-            Task {
-                try? await depChecker.downloadWhisperModel()
-            }
+            depChecker.checkWhisperModel()
         }
 
         if gazeEnabled {
@@ -550,9 +539,7 @@ struct SetupWizardView: View {
 
     private var voiceSummary: String {
         guard voiceEnabled else { return "Disabled" }
-        if depChecker.whisperModel == .ready { return "Ready" }
-        if case .missing = depChecker.whisperModel { return "Model missing" }
-        return "Enabled"
+        return "\(selectedModel) — downloads on first use"
     }
 
     private var gestureSummary: String {
