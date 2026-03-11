@@ -52,23 +52,62 @@ final class WhisperVoiceProvider: ObservableObject, VoiceInputProvider {
     }
 
     /// Ensure WhisperKit is initialized (called lazily before first transcription).
-    /// Downloads the model if needed, then compiles and loads it.
+    /// Uses pre-downloaded model folder if available, falls back to download.
+    /// Times out after 90 seconds to avoid indefinite hangs.
     private func ensureLoaded() async throws {
         guard whisperKit == nil else { return }
         let variant = self.modelVariant
 
-        ConductorLog.component("whisper-voice-provider").info("Downloading + loading WhisperKit \(variant)...")
-        let kit = try await WhisperKit(
-            model: variant,
-            verbose: false,
-            logLevel: .error,
-            prewarm: false,
-            load: true,
-            download: true
-        )
-        self.whisperKit = kit
-        isModelReady = true
-        ConductorLog.component("whisper-voice-provider").info("WhisperKit \(variant) ready")
+        // Check for pre-downloaded model folder
+        let hfCache = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-\(variant)")
+        let hasLocalModel = FileManager.default.fileExists(atPath: hfCache.path)
+
+        ConductorLog.component("whisper-voice-provider")
+            .info("Loading WhisperKit \(variant) (local: \(hasLocalModel))...")
+
+        // Race: init vs timeout
+        try await withThrowingTaskGroup(of: WhisperKit.self) { group in
+            group.addTask { @MainActor in
+                if hasLocalModel {
+                    return try await WhisperKit(
+                        modelFolder: hfCache.path,
+                        verbose: false,
+                        logLevel: .error,
+                        prewarm: false,
+                        load: true,
+                        download: false
+                    )
+                } else {
+                    return try await WhisperKit(
+                        model: variant,
+                        verbose: false,
+                        logLevel: .error,
+                        prewarm: false,
+                        load: true,
+                        download: true
+                    )
+                }
+            }
+
+            group.addTask { @MainActor in
+                try await Task.sleep(for: .seconds(90))
+                throw WhisperLoadError.timeout
+            }
+
+            // First to finish wins
+            if let kit = try await group.next() {
+                self.whisperKit = kit
+                self.isModelReady = true
+                group.cancelAll()
+                ConductorLog.component("whisper-voice-provider").info("WhisperKit \(variant) ready")
+            }
+        }
+    }
+
+    enum WhisperLoadError: LocalizedError {
+        case timeout
+        var errorDescription: String? { "WhisperKit loading timed out after 90 seconds" }
     }
 
     // MARK: - InputProvider
