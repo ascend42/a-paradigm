@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-10T22:59:07.528Z'
+generated: '2026-03-11T00:33:39.468Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -5627,11 +5627,62 @@ by_symbol:
       agent: []
   '#conductor-app':
     symbol: '#conductor-app'
-    total_changes: 1
-    last_modified: '2026-03-10T22:24:53Z'
+    total_changes: 3
+    last_modified: '2026-03-11T00:15:45Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_82
+        id: h0145
+        ts: '2026-03-11T00:15:45Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: fdd3bdf2c4a931edb5670564654d61b9d1bf490a
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+        description: 'fix(#conductor-app): restore downloadModel protocol conformance, hardcode version'
+      - &ref_83
+        id: h0143
+        ts: '2026-03-10T23:55:41Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#dependency-checker'
+          - '#settings-panel'
+          - '#setup-wizard'
+          - '#whisper-voice-provider'
+          - $setup-flow
+        author:
+          type: human
+          id: ascend
+        commit: 4787ba65486e70478a97bea5e6a7c58d76f5aaeb
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-integration-test.protocol
+          - .paradigm/protocols/update-changelog.protocol
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/Info.plist
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+          - packages/conductor/Sources/Conductor/Utils/DependencyChecker.swift
+        description: 'feat(#conductor-app): setup wizard, model picker, lazy WhisperKit loading, version display'
       - *ref_80
     contributors:
       human:
@@ -5758,11 +5809,26 @@ by_symbol:
       agent: []
   '#gaze-calibration':
     symbol: '#gaze-calibration'
-    total_changes: 1
-    last_modified: '2026-03-10T22:59:02Z'
+    total_changes: 2
+    last_modified: '2026-03-11T00:33:38Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_85
+        id: h0147
+        ts: '2026-03-11T00:33:38Z'
+        type: implement
+        symbols:
+          - '#gaze-calibration'
+          - '#setup-wizard'
+        author:
+          type: human
+          id: ascend
+        commit: 87dac37ef5872938835b9b4d72e20134c13dc3b8
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+        description: 'fix(#setup-wizard): don''t auto-advance past gaze calibration step'
       - *ref_81
     contributors:
       human:
@@ -5770,12 +5836,96 @@ by_symbol:
       agent: []
   '#whisper-voice-provider':
     symbol: '#whisper-voice-provider'
-    total_changes: 1
-    last_modified: '2026-03-10T22:59:02Z'
+    total_changes: 5
+    last_modified: '2026-03-11T00:27:21Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0146
+        ts: '2026-03-11T00:27:21Z'
+        type: implement
+        symbols:
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 2ab40c7b5d7e98beaf3020e2f02299e396abbc50
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+        description: 'fix(#whisper-voice-provider): use local model folder + 90s timeout for WhisperKit'
+      - *ref_82
+      - &ref_84
+        id: h0144
+        ts: '2026-03-11T00:05:24Z'
+        type: implement
+        symbols:
+          - '#dependency-checker'
+          - '#setup-wizard'
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 87248b2e41ca9642acc5cb83d5628e36d6865250
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+          - packages/conductor/Sources/Conductor/Utils/DependencyChecker.swift
+        description: 'fix(#whisper-voice-provider): defer WhisperKit download to first voice use'
+      - *ref_83
       - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#dependency-checker':
+    symbol: '#dependency-checker'
+    total_changes: 2
+    last_modified: '2026-03-11T00:05:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_84
+      - *ref_83
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#settings-panel':
+    symbol: '#settings-panel'
+    total_changes: 1
+    last_modified: '2026-03-10T23:55:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_83
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#setup-wizard':
+    symbol: '#setup-wizard'
+    total_changes: 3
+    last_modified: '2026-03-11T00:33:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_85
+      - *ref_84
+      - *ref_83
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $setup-flow:
+    symbol: $setup-flow
+    total_changes: 1
+    last_modified: '2026-03-10T23:55:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_83
     contributors:
       human:
         - ascend

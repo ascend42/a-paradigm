@@ -9,17 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **WhisperKit integration**: `#whisper-voice-provider` now uses real WhisperKit 0.16.0 (CoreML, Apple Silicon) for local speech-to-text. Download-only during setup, lazy CoreML compilation on first transcription. CMSampleBuffer→Float conversion, confidence scoring from segment data.
+- **WhisperKit integration**: `#whisper-voice-provider` now uses real WhisperKit 0.16.0 (CoreML, Apple Silicon) for local speech-to-text. Fully lazy — model downloads and CoreML compilation happen on first voice use, not during setup. Uses pre-downloaded model folder when available, with 90-second timeout to prevent indefinite hangs. CMSampleBuffer→Float conversion, confidence scoring from segment data.
 
-- **Setup wizard** (`#setup-wizard`, `#dependency-checker`): Multi-step onboarding flow — feature selection (voice/gestures/gaze toggles), WhisperKit model picker (tiny.en/base.en/small.en), dependency verification (Python 3, MediaPipe/OpenCV), download progress with percentage, retry for failed checks, gaze calibration step, ready summary. Inserted between permissions onboarding and main content. Re-runnable from Settings.
+- **Setup wizard** (`#setup-wizard`, `#dependency-checker`): Multi-step onboarding flow — feature selection (voice/gestures/gaze toggles), WhisperKit model picker (tiny.en/base.en/small.en), dependency verification (Python 3, MediaPipe/OpenCV), retry for failed checks, gaze calibration step (no longer auto-skips), ready summary. Inserted between permissions onboarding and main content. Re-runnable from Settings.
 
-- **Conductor version display**: Header bar now shows version number (e.g., "Conductor v0.2.0") from `CFBundleShortVersionString`.
+- **Conductor version display**: Header bar shows "v0.2.0" next to the Conductor title.
 
 - **Gaze calibration UI**: Fullscreen 5-point calibration overlay (`GazeCalibrationView`, `CalibrationWindowController`). Pulsating cyan targets with clockwise dwell-fill animation, 2-second dwell per point, ESC to cancel, iris sample averaging from live gaze stream. Wired to `MediaPipeGazeProvider.calibrate()` and the Settings "Recalibrate..." button via NotificationCenter.
 
 - **MCP auto-registration with Conductor**: `paradigm-mcp` now auto-registers the session with Conductor on startup — writes `~/.conductor/sessions/{pid}.json` automatically. Process exit cleanup via `SIGTERM`/`exit` handlers. No user action required; `/conduct` still works for adding labels or re-registering.
 
 ### Fixed
+
+- **WhisperKit loading hang**: `WhisperKit.download()` and `WhisperKit()` init hung indefinitely during CoreML compilation. Fixed by deferring all model work to first voice use, pointing directly at pre-downloaded model folder (`~/Documents/huggingface/`), and adding a 90-second timeout via task group race.
+
+- **Setup wizard gaze calibration auto-skip**: "Start Calibration" immediately advanced to the ready step without waiting. Now stays on the calibration step so users see the result and click Continue manually.
 
 - **`paradigm conductor` CLI path resolution**: Command now works when run from inside `packages/conductor/` or any subdirectory of the monorepo, not just the root. Added cwd-is-conductor detection and upward walk from cwd.
 
