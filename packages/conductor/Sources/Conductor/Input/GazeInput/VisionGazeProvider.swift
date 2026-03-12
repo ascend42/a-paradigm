@@ -27,6 +27,7 @@ final class VisionGazeProvider: ObservableObject, GazeTrackingProvider, CameraFr
 
     private var faceLandmarksRequest = VNDetectFaceLandmarksRequest()
     private var gazePointContinuation: AsyncStream<CGPoint>.Continuation?
+    private var rawIrisContinuation: AsyncStream<CGPoint>.Continuation?
     private var eyebrowContinuation: AsyncStream<EyebrowFrame>.Continuation?
     private let calibrationData = GazeCalibration()
     private var kalmanFilter = KalmanFilter2D()
@@ -40,6 +41,16 @@ final class VisionGazeProvider: ObservableObject, GazeTrackingProvider, CameraFr
         AsyncStream { [weak self] continuation in
             Task { @MainActor in
                 self?.gazePointContinuation = continuation
+            }
+        }
+    }
+
+    /// Raw iris positions (normalized 0–1) before calibration/smoothing.
+    /// Used by calibration view to collect ground-truth iris samples.
+    var rawIrisStream: AsyncStream<CGPoint> {
+        AsyncStream { [weak self] continuation in
+            Task { @MainActor in
+                self?.rawIrisContinuation = continuation
             }
         }
     }
@@ -58,7 +69,9 @@ final class VisionGazeProvider: ObservableObject, GazeTrackingProvider, CameraFr
 
         ConductorLog.component("vision-gaze-provider").info("Starting 5-point calibration")
 
-        guard let points = await CalibrationWindowController.run(gazeStream: gazePointStream) else {
+        // Pass the RAW iris stream (0–1 normalized) so calibration collects
+        // actual iris positions, not already-calibrated screen coordinates.
+        guard let points = await CalibrationWindowController.run(rawIrisStream: rawIrisStream) else {
             ConductorLog.component("vision-gaze-provider").info("Calibration cancelled")
             return
         }
@@ -68,9 +81,19 @@ final class VisionGazeProvider: ObservableObject, GazeTrackingProvider, CameraFr
             calibrationData.addCalibrationPoint(iris: point.iris, screen: point.screen)
         }
 
+        // Reset Kalman filter — the calibration changes the mapping so
+        // the filter's state/velocity from the old mapping is stale.
+        kalmanFilter.reset()
+
         isCalibrated = true
+        let quality = calibrationData.calibrationQuality()
         ConductorLog.gate("gaze-calibrated")
-            .info("Calibration complete with \(points.count) points")
+            .info("Calibration complete with \(points.count) points, residual: \(String(format: "%.1f", quality ?? -1))px")
+    }
+
+    /// Average calibration residual in pixels (lower is better). Nil if uncalibrated.
+    var calibrationResidual: Double? {
+        calibrationData.calibrationQuality()
     }
 
     // MARK: - InputProvider
@@ -239,6 +262,9 @@ final class VisionGazeProvider: ObservableObject, GazeTrackingProvider, CameraFr
     // MARK: - Gaze Processing
 
     private func processGazePoint(_ rawPoint: CGPoint) {
+        // Yield raw iris (0–1 normalized) for calibration consumers
+        rawIrisContinuation?.yield(rawPoint)
+
         let calibratedPoint = calibrationData.mapToScreen(rawPoint)
         let smoothedPoint = kalmanFilter.update(calibratedPoint)
         gazePointContinuation?.yield(smoothedPoint)

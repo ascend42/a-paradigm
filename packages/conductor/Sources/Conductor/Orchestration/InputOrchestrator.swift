@@ -423,6 +423,16 @@ final class InputOrchestrator: ObservableObject {
             }
         }
         inputTasks.append(task)
+
+        // Also subscribe to raw iris stream for debug overlay
+        let rawTask = Task { [weak self] in
+            guard let self else { return }
+            for await rawPoint in provider.rawIrisStream {
+                guard !Task.isCancelled else { break }
+                self.gazeRouter.updateRawIrisPoint(rawPoint)
+            }
+        }
+        inputTasks.append(rawTask)
     }
 
     // MARK: - Action Execution

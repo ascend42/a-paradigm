@@ -18,12 +18,20 @@ final class GazeRouter: ObservableObject {
     /// Current gaze screen point (for debug overlay).
     @Published private(set) var currentGazePoint: CGPoint?
 
+    /// Current raw iris position (normalized 0–1, pre-calibration).
+    @Published private(set) var currentRawIrisPoint: CGPoint?
+
     /// Dwell duration required to switch targets (seconds).
     var dwellDuration: TimeInterval = 0.5
 
     /// Update the current gaze screen point.
     func updateGazePoint(_ point: CGPoint) {
         currentGazePoint = point
+    }
+
+    /// Update the current raw iris position (pre-calibration, 0–1).
+    func updateRawIrisPoint(_ point: CGPoint) {
+        currentRawIrisPoint = point
     }
 
     /// Manually set the target (used when gaze is unavailable).

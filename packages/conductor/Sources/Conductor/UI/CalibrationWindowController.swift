@@ -15,14 +15,15 @@ final class CalibrationWindowController {
 
     /// Run the 5-point calibration overlay and return collected point pairs.
     /// Returns `nil` if the user cancels (ESC).
-    static func run(gazeStream: AsyncStream<CGPoint>) async -> [(iris: CGPoint, screen: CGPoint)]? {
+    /// - Parameter rawIrisStream: Pre-calibration iris positions (normalized 0–1).
+    static func run(rawIrisStream: AsyncStream<CGPoint>) async -> [(iris: CGPoint, screen: CGPoint)]? {
         let controller = CalibrationWindowController()
-        return await controller.present(gazeStream: gazeStream)
+        return await controller.present(rawIrisStream: rawIrisStream)
     }
 
     // MARK: - Presentation
 
-    private func present(gazeStream: AsyncStream<CGPoint>) async -> [(iris: CGPoint, screen: CGPoint)]? {
+    private func present(rawIrisStream: AsyncStream<CGPoint>) async -> [(iris: CGPoint, screen: CGPoint)]? {
         guard let screen = NSScreen.main else {
             ConductorLog.component("gaze-calibration").error("No main screen available")
             return nil
@@ -30,7 +31,7 @@ final class CalibrationWindowController {
 
         return await withCheckedContinuation { continuation in
             let calibrationView = GazeCalibrationView(
-                gazeStream: gazeStream,
+                rawIrisStream: rawIrisStream,
                 onComplete: { [weak self] result in
                     self?.dismiss()
                     continuation.resume(returning: result)

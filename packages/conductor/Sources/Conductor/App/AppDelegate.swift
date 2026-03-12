@@ -316,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            let result = await CalibrationWindowController.run(gazeStream: gazeStream)
+            let result = await CalibrationWindowController.run(rawIrisStream: gazeStream)
             if let points = result, !points.isEmpty {
                 UserDefaults.standard.set(true, forKey: "gazeCalibrated")
                 ConductorLog.signal("calibration-complete")

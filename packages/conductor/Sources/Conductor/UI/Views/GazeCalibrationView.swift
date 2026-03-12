@@ -1,6 +1,6 @@
 // GazeCalibrationView.swift — #gaze-calibration
 // Fullscreen 5-point calibration overlay.
-// Shows pulsating targets one at a time; collects iris samples via an AsyncStream.
+// Shows pulsating targets one at a time; collects raw iris samples via an AsyncStream.
 
 import SwiftUI
 
@@ -9,8 +9,9 @@ typealias CalibrationCompletion = ([(iris: CGPoint, screen: CGPoint)]) -> Void
 
 /// Fullscreen SwiftUI view that walks the user through 5 calibration targets.
 struct GazeCalibrationView: View {
-    /// Live iris-position stream from the gaze provider.
-    let gazeStream: AsyncStream<CGPoint>
+    /// Raw iris-position stream (normalized 0–1) from the gaze provider.
+    /// These are pre-calibration positions used for collecting ground-truth samples.
+    let rawIrisStream: AsyncStream<CGPoint>
 
     /// Called with collected point pairs on success, or nil on cancel.
     let onComplete: ([(iris: CGPoint, screen: CGPoint)]?) -> Void
@@ -25,9 +26,10 @@ struct GazeCalibrationView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var gazeTask: Task<Void, Never>?
     @State private var dwellTask: Task<Void, Never>?
-    @State private var currentGazePoint: CGPoint? = nil
+    /// Current raw iris position for feedback dot (0–1 normalized).
+    @State private var currentRawIris: CGPoint? = nil
 
-    /// Calibration targets computed from screen geometry.
+    /// Calibration targets computed from screen geometry (AppKit coords, Y-up).
     private var targets: [CGPoint] {
         GazeCalibration().calibrationTargets()
     }
@@ -86,16 +88,20 @@ struct GazeCalibrationView: View {
             // Target reticle positioned in screen coordinates
             targetReticle
 
-            // Live gaze position dot — shows where the system thinks you're looking
+            // Live gaze position dot — shows approximate screen position from raw iris
             gazePositionDot
         }
     }
 
+    /// Shows where the system estimates you're looking, derived from raw iris
+    /// via simple mapping (mirrored X, direct Y → screen pixels).
     private var gazePositionDot: some View {
         GeometryReader { geo in
-            if let gaze = currentGazePoint {
-                let x = gaze.x * geo.size.width
-                let y = gaze.y * geo.size.height
+            if let iris = currentRawIris {
+                // Convert raw iris (0–1) to screen position for feedback.
+                // X is mirrored (front-facing camera). Y maps directly.
+                let screenX = (1.0 - iris.x) * geo.size.width
+                let screenY = (1.0 - iris.y) * geo.size.height  // Flip: Vision Y-up → SwiftUI Y-down
 
                 Circle()
                     .fill(Color.yellow.opacity(0.6))
@@ -105,9 +111,9 @@ struct GazeCalibrationView: View {
                             .stroke(Color.yellow.opacity(0.3), lineWidth: 2)
                             .frame(width: 22, height: 22)
                     )
-                    .position(x: x, y: y)
-                    .animation(.linear(duration: 0.05), value: gaze.x)
-                    .animation(.linear(duration: 0.05), value: gaze.y)
+                    .position(x: screenX, y: screenY)
+                    .animation(.linear(duration: 0.05), value: iris.x)
+                    .animation(.linear(duration: 0.05), value: iris.y)
             }
         }
     }
@@ -163,11 +169,11 @@ struct GazeCalibrationView: View {
     // MARK: - Dwell Logic
 
     private func startDwell() {
-        // Begin consuming the gaze stream for iris samples + live feedback
+        // Begin consuming the raw iris stream for samples + live feedback
         gazeTask = Task { @MainActor in
-            for await irisPoint in gazeStream {
-                irisSamples.append(irisPoint)
-                currentGazePoint = irisPoint
+            for await rawIrisPoint in rawIrisStream {
+                irisSamples.append(rawIrisPoint)
+                currentRawIris = rawIrisPoint
             }
         }
 
@@ -198,10 +204,9 @@ struct GazeCalibrationView: View {
     private func advanceTarget() {
         guard currentIndex < targets.count else { return }
 
-        // Average collected iris samples
+        // Average collected raw iris samples (0–1 normalized)
         let avgIris: CGPoint
         if irisSamples.isEmpty {
-            // No gaze data received — use a zero placeholder
             avgIris = .zero
         } else {
             let sumX = irisSamples.reduce(0.0) { $0 + $1.x }
@@ -212,6 +217,9 @@ struct GazeCalibrationView: View {
 
         let screenPoint = targets[currentIndex]
         collectedPairs.append((iris: avgIris, screen: screenPoint))
+
+        ConductorLog.component("gaze-calibration")
+            .debug("Point \(currentIndex + 1): iris=(\(String(format: "%.3f", avgIris.x)), \(String(format: "%.3f", avgIris.y))) → screen=(\(Int(screenPoint.x)), \(Int(screenPoint.y))), samples=\(irisSamples.count)")
 
         let nextIndex = currentIndex + 1
         if nextIndex >= targetCount {

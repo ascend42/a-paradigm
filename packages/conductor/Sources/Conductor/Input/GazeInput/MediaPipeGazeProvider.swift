@@ -52,7 +52,7 @@ final class MediaPipeGazeProvider: ObservableObject, GazeTrackingProvider {
         ConductorLog.component("gaze-calibration").info("Starting 5-point calibration")
 
         // Run the calibration overlay, feeding it the live gaze stream
-        guard let points = await CalibrationWindowController.run(gazeStream: gazePointStream) else {
+        guard let points = await CalibrationWindowController.run(rawIrisStream: gazePointStream) else {
             ConductorLog.component("gaze-calibration").info("Calibration cancelled")
             return
         }
