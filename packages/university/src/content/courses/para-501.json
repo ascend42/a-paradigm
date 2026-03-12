@@ -789,6 +789,90 @@
           "explanation": "`paradigm_lore_search` supports combining filters: `tag` for arc prefix matching, `type` for entry type, and `symbol` for symbol references. These filters combine (AND logic), so you get only retro entries in the auth-hardening arc that touch the payment service. The assessment tools (B) are deprecated. Using `tags` array (C) uses OR logic, not AND. General search (D) searches the symbol index, not lore content."
         }
       ]
+    },
+    {
+      "id": "symphony-a-mail",
+      "title": "Symphony: Multi-Agent Messaging with A-Mail",
+      "content": "## Agents Need to Talk\n\nUntil now, every Paradigm agent has worked in isolation. A Claude Code session modifying the backend has no awareness of what the session working on the frontend is doing. Two developers on the same team, each with their own AI assistant, have no way for those assistants to coordinate — even when they are working on the same project at the same time.\n\nSymphony changes this. It is Paradigm's multi-agent, multi-human collaborative intelligence layer. And its foundation is A-Mail: a lightweight, file-based messaging protocol that gives every Claude Code session its own mailbox.\n\n## The Metaphor: Email for AI Agents\n\nA-Mail works exactly like email. Each agent has an identity, an inbox, and an outbox. Messages are delivered as JSONL files on the filesystem. Agents poll for new messages on a timer. There is no persistent server, no WebSocket connection, and no cloud dependency. If two agents are running on the same machine, they can message each other through nothing more than file reads and writes.\n\nThis simplicity is deliberate. A-Mail is the CLI-only foundation of Symphony — it works with zero dependencies beyond the Paradigm CLI. No Conductor, no Sentinel, no network configuration. The only requirement is that agents are running on the same machine (or connected via a lightweight TCP relay for cross-machine scenarios).\n\n## Agent Identity and Discovery\n\nEvery Claude Code session that participates in A-Mail has a stable identity. The identity is derived from the project directory and the agent's role — for example, `a-paradigm/backend` or `a-kamiki/frontend`. This deterministic naming means the same project opened in the same context always gets the same identity, even across session restarts.\n\nWhen you run `paradigm mail link`, the CLI discovers all Claude Code sessions on the current machine and connects them into a mail network. Each session gets a mailbox directory at `~/.paradigm/mail/agents/{agent-id}/` containing four files:\n\n- **`inbox.jsonl`** — Messages waiting for this agent, one per line, append-only\n- **`outbox.jsonl`** — Replies from this agent, append-only\n- **`ack.json`** — The ID of the last acknowledged message (for garbage collection)\n- **`identity.json`** — Agent ID, project, role, PID, and session start time\n\nThe JSONL format — one JSON object per line — makes appending atomic and parsing trivial. No file locking, no corruption risk from concurrent writes, no binary format to decode.\n\n## Messaging and Threading\n\nMessages in A-Mail carry structured metadata beyond plain text. Every message has an **intent** that classifies its purpose:\n\n| Intent | Meaning |\n|---|---|\n| `question` | Asking for information from other agents |\n| `context` | Providing background or context |\n| `proposal` | Proposing an action or fix |\n| `action` | Announcing an action the agent took |\n| `decision` | Recording a decision |\n| `alert` | Forwarding a Sentinel alert |\n| `approval` / `rejection` | Responding to a proposal |\n| `handoff` | Transferring responsibility to another agent |\n| `fileRequest` | Requesting a file from another agent |\n| `fileDelivery` | Delivering a requested file |\n\nIntents serve two purposes. First, they give the receiving agent structured context about what kind of response is expected — a question needs an answer, a proposal needs approval or rejection, a decision needs acknowledgment. Second, they feed into Lore: when a message has `intent: decision`, Symphony can automatically record it as a lore entry.\n\nMessages belong to **threads**. A thread starts when the first message on a topic is sent (with no `parentId`). Subsequent replies reference the thread root, building a conversation tree. Thread state is tracked in `~/.paradigm/mail/threads/{thread-id}.json`, which records the topic, participants, message count, and last activity timestamp.\n\n## The File Pipeline\n\nAgents often need to share files — a type definition, an API contract, a configuration file. A-Mail's file pipeline enables this with a critical security constraint: **every file transfer requires explicit human approval**.\n\nThe flow works like this: Agent A sends a `fileRequest` message specifying the file path, a reason, and the target agent. The request appears in the owning human's terminal (via `paradigm mail requests`). The human reviews and either approves, denies, or approves with redaction (stripping sensitive lines). Only after human approval does the file content get written to the requester's inbox.\n\nTrust configuration lives in `~/.paradigm/mail/trust.yaml`. You can define auto-approve patterns for trusted users (`docs/**`, `*.md`) and never-approve patterns for sensitive files (`.env*`, `*.key`, `*.pem`, `**/secrets/**`). The never-approve list is enforced absolutely — even clicking approve on a `.env` file will be denied by the system. File requests expire after one hour without action, and all transfers are logged.\n\n## /loop: The Agent Heartbeat\n\nThe glue that makes A-Mail work is `/loop`. Each Claude Code session runs `/loop 10s paradigm_symphony_poll`, which polls the inbox every 10 seconds for new messages. The `paradigm_symphony_poll` MCP tool reads `inbox.jsonl`, formats messages as structured prompts the agent can reason about, and suggests actions.\n\nWithout `/loop`, messages would accumulate in the inbox with nobody reading them. The loop is the heartbeat — it keeps agents responsive. When an agent processes a message and replies via `paradigm_symphony_send`, the reply goes to `outbox.jsonl`. A mail router (or Conductor, in later phases) picks up outbox messages and delivers them to the appropriate inbox files.\n\nThe convenience command `paradigm symphony join` combines registration and loop setup in one step — it registers the session's identity and starts the polling loop automatically.\n\n## Thread Resolution and Lore Integration\n\nConversation threads are not meant to live forever. When a thread reaches a conclusion, any participant (human or agent) can resolve it with `paradigm mail resolve <thread-id>`. Resolution triggers an automatic lore entry that captures the full conversation: topic, participants, decisions made, actions taken, and symbols discussed.\n\nThis is the bridge between ephemeral conversation and permanent project memory. A 15-minute exchange between three agents about a serialization bug becomes a searchable lore entry tagged with the relevant symbols and arc. The next developer encountering a similar issue can find the conversation, the decision, and the fix — all linked together.\n\n## CLI Commands\n\nThe `paradigm mail` command group provides the complete human interface:\n\n- `paradigm mail whoami` — Show this agent's identity and linked peers\n- `paradigm mail list` — List all known agents with status (awake/asleep) and location\n- `paradigm mail link` — Discover and connect Claude Code sessions on this machine\n- `paradigm mail link --remote <ip>` — Connect to a remote machine's mail server\n- `paradigm mail send \"message\"` — Broadcast to all linked agents\n- `paradigm mail send --to <agent> \"message\"` — Direct message to a specific agent\n- `paradigm mail send --thread <id> \"message\"` — Reply to an existing thread\n- `paradigm mail read` — Show unread messages\n- `paradigm mail threads` — List active threads\n- `paradigm mail resolve <id>` — Resolve a thread, creating a lore entry\n- `paradigm mail status` — Network overview (agents, threads, unread count)\n\nFor the file pipeline: `paradigm mail request`, `paradigm mail requests`, `paradigm mail approve`, and `paradigm mail deny`.\n\n## MCP Tools for Agent Participation\n\nSix MCP tools power agent-side Symphony participation:\n\n- **`paradigm_symphony_poll`** — The heartbeat. Reads inbox, returns formatted messages and thread summaries. Called by `/loop`.\n- **`paradigm_symphony_send`** — Send a message with intent, text, optional symbols, diff, or decision. Writes to outbox.\n- **`paradigm_symphony_status`** — Overview of the local network: agents, threads, Sentinel endpoint.\n- **`paradigm_symphony_thread`** — Get full context of a conversation thread with messages, participants, and extracted decisions.\n- **`paradigm_symphony_request_file`** — Request a file from another agent. Returns immediately with `pending` status; delivery arrives via future poll.\n- **`paradigm_symphony_approve_file`** — Approve or deny a pending file request after human confirmation.\n\nThese tools compose naturally with existing Paradigm workflows. An agent can poll for messages, discover a question about `#payment-serializer`, call `paradigm_ripple` to check impact, and respond with full context — all within a single `/loop` cycle.",
+      "keyConcepts": [
+        "A-Mail is Symphony's CLI-only foundation — file-based messaging between agents with zero dependencies beyond the Paradigm CLI",
+        "Agent identity is derived from project directory + role (e.g., a-paradigm/backend), stable across session restarts",
+        "Mailbox protocol uses JSONL files: inbox.jsonl (incoming), outbox.jsonl (replies), ack.json (last acknowledged), identity.json (agent metadata)",
+        "Messages carry structured intents (question, proposal, decision, action, alert, etc.) that classify purpose and drive Lore integration",
+        "Threads group related messages into conversations, tracked in ~/.paradigm/mail/threads/{thread-id}.json",
+        "The file pipeline requires explicit human approval for every file transfer, with configurable trust levels and a hard deny list for sensitive files",
+        "/loop is the agent heartbeat — each session runs /loop 10s paradigm_symphony_poll to stay responsive to incoming messages",
+        "Thread resolution via paradigm mail resolve triggers automatic lore entry creation, bridging ephemeral conversation to permanent project memory",
+        "Six MCP tools: paradigm_symphony_poll, paradigm_symphony_send, paradigm_symphony_status, paradigm_symphony_thread, paradigm_symphony_request_file, paradigm_symphony_approve_file",
+        "paradigm mail link discovers Claude Code sessions on the local machine; paradigm mail link --remote <ip> extends to remote machines via TCP"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You have three Claude Code sessions open on your machine: one working on the core library, one on the backend API, and one on the frontend. You want them to communicate. What is the correct setup sequence?",
+          "choices": {
+            "A": "Start a Sentinel hub, then connect each session to the WebSocket endpoint",
+            "B": "Install Conductor, which automatically links all sessions on the machine",
+            "C": "Run `paradigm mail link` to discover and connect the sessions, then run `/loop 10s paradigm_symphony_poll` in each session",
+            "D": "Create a `.paradigm-workspace` file listing all three projects — workspace linking enables messaging",
+            "E": "Run `paradigm team orchestrate` which automatically sets up inter-agent communication"
+          },
+          "correct": "C",
+          "explanation": "A-Mail is the CLI-only foundation that requires no Conductor, no Sentinel, and no workspace setup. `paradigm mail link` discovers Claude Code sessions on the machine and creates mailboxes. Then each session needs `/loop 10s paradigm_symphony_poll` to poll for incoming messages. Conductor (B) auto-links sessions but is not required — A-Mail works standalone."
+        },
+        {
+          "id": "q2",
+          "question": "An agent sends a message with `intent: 'decision'` and the text 'Use Redis for session storage instead of in-memory.' What happens beyond normal message delivery?",
+          "choices": {
+            "A": "The message is blocked — only humans can make decisions",
+            "B": "Symphony automatically records a lore entry of type `decision` with the message text, linking it to the conversation thread and referenced symbols",
+            "C": "The message is flagged for human review before delivery",
+            "D": "Nothing special — intent is informational only and has no side effects",
+            "E": "The decision is written to `.paradigm/config.yaml` as a project setting"
+          },
+          "correct": "B",
+          "explanation": "Messages with `intent: decision` trigger automatic Lore integration. Symphony records a lore entry with the decision text, links it to the conversation thread, and tags it with referenced symbols. This bridges ephemeral conversation to permanent project memory without manual recording."
+        },
+        {
+          "id": "q3",
+          "question": "Agent A (on your machine) requests `src/types.ts` from Agent B (on a teammate's machine). What must happen before Agent A receives the file?",
+          "choices": {
+            "A": "Agent B must call `paradigm_symphony_approve_file` — agents can approve their own file requests",
+            "B": "The file is sent automatically since both agents are linked in the same Symphony network",
+            "C": "The teammate (human) must explicitly approve the file transfer — every cross-agent file transfer requires human approval from the file owner's side",
+            "D": "Agent A must have the `^file-access` gate declared in portal.yaml",
+            "E": "The file is sent if it matches the auto-approve glob patterns, but there is no human gate"
+          },
+          "correct": "C",
+          "explanation": "The file pipeline's core security constraint is that every file transfer requires explicit human approval from the owner's side. When Agent A requests a file, the teammate sees a prompt (via Conductor or `paradigm mail requests`) and must approve, deny, or approve with redaction. Even if auto-approve patterns exist in trust.yaml, the initial setup still requires human-configured trust levels."
+        },
+        {
+          "id": "q4",
+          "question": "An agent's `paradigm_symphony_poll` returns 3 new messages in a thread about a failing test. The agent reads them, investigates the code, and finds the bug. How should the agent communicate its findings?",
+          "choices": {
+            "A": "Call `paradigm_lore_record` with the findings — lore is the communication channel",
+            "B": "Call `paradigm_symphony_send` with `intent: 'context'` providing the investigation results, then `intent: 'proposal'` with the fix, writing to `outbox.jsonl` for delivery to the thread",
+            "C": "Write directly to the other agents' `inbox.jsonl` files for immediate delivery",
+            "D": "Call `paradigm_sentinel_record` to log the bug as an incident",
+            "E": "Call `paradigm mail send` from the CLI — agents cannot use MCP tools to reply"
+          },
+          "correct": "B",
+          "explanation": "Agents communicate via `paradigm_symphony_send`, which writes structured messages to `outbox.jsonl`. Using multiple messages with appropriate intents (context for the investigation, proposal for the fix) gives other agents structured context. Writing directly to inbox files (C) bypasses the routing protocol. Lore (A) and Sentinel (D) are recording systems, not communication channels."
+        },
+        {
+          "id": "q5",
+          "question": "A thread about a serialization bug has been active for 20 minutes across 4 agents. The team agrees on a fix. What should happen next?",
+          "choices": {
+            "A": "Delete the thread files from `~/.paradigm/mail/threads/` to clean up",
+            "B": "Let the thread expire naturally — threads auto-resolve after 1 hour of inactivity",
+            "C": "Run `paradigm mail resolve <thread-id>` which marks the thread as resolved and automatically creates a lore entry capturing the full conversation, decisions, and actions",
+            "D": "Each agent independently records a lore entry about their contribution",
+            "E": "Run `paradigm_reindex` to incorporate the thread into the project index"
+          },
+          "correct": "C",
+          "explanation": "Thread resolution via `paradigm mail resolve` is the bridge between ephemeral conversation and permanent project memory. It marks the thread as resolved and automatically creates a comprehensive lore entry with the topic, participants, decisions, actions, and referenced symbols. This single action preserves the entire collaborative context for future reference."
+        }
+      ]
     }
   ]
 }

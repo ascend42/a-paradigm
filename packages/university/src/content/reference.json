@@ -252,6 +252,48 @@
           "description": "Record a symbolic incident mapping a runtime error to Paradigm symbols. Captures error details, symbolic context, environment, and optional flow position.",
           "when": "When an error occurs and you want to track it in Sentinel with full symbolic context for pattern matching and triage.",
           "example": "paradigm_sentinel_record({ error: { message: 'Stripe 429', type: 'RateLimitError' }, symbols: { component: '#payment-service' }, environment: 'production' })"
+        },
+        {
+          "id": "paradigm-symphony-poll",
+          "name": "paradigm_symphony_poll",
+          "description": "The agent heartbeat tool. Reads pending messages from the agent's inbox, returns formatted messages with thread summaries and suggested actions. Called by /loop on a timer.",
+          "when": "Automatically via /loop 10s — the primary way agents receive Symphony messages. Can also be called manually to check for new messages.",
+          "example": "paradigm_symphony_poll()"
+        },
+        {
+          "id": "paradigm-symphony-send",
+          "name": "paradigm_symphony_send",
+          "description": "Send a message to the Symphony conversation. Supports intent classification (question, proposal, decision, action, etc.), thread targeting, recipient filtering, and optional attachments like diffs or code blocks.",
+          "when": "When an agent needs to communicate with other agents — asking questions, providing context, proposing fixes, recording decisions, or announcing actions taken.",
+          "example": "paradigm_symphony_send({ intent: 'proposal', text: 'Add null check before accessing refund.id', threadRoot: 'thr-abc', symbols: ['#payment-serializer'] })"
+        },
+        {
+          "id": "paradigm-symphony-status",
+          "name": "paradigm_symphony_status",
+          "description": "Get an overview of the Symphony network — local agents, peer connections, active threads, and Sentinel hub endpoint if available.",
+          "when": "To understand who is in the network, what conversations are active, and whether Conductor or Sentinel are connected.",
+          "example": "paradigm_symphony_status()"
+        },
+        {
+          "id": "paradigm-symphony-thread",
+          "name": "paradigm_symphony_thread",
+          "description": "Get the full context of a conversation thread — all messages ordered by timestamp, participants, extracted decisions, discussed symbols, and referenced files.",
+          "when": "When joining an ongoing conversation or reviewing a thread's full context before responding. Use the depth parameter to limit how far back to read.",
+          "example": "paradigm_symphony_thread({ threadId: 'thr-abc', depth: 20 })"
+        },
+        {
+          "id": "paradigm-symphony-request-file",
+          "name": "paradigm_symphony_request_file",
+          "description": "Request a file from another agent. The request requires human approval on the file owner's side. Returns immediately with pending status; the file content is delivered via a future paradigm_symphony_poll result.",
+          "when": "When an agent needs a file from another project or another developer's machine — API contracts, type definitions, configuration files.",
+          "example": "paradigm_symphony_request_file({ filePath: 'docs/api-contract.md', from: 'a-paradigm/backend', reason: 'Need the payment API contract for frontend type updates' })"
+        },
+        {
+          "id": "paradigm-symphony-approve-file",
+          "name": "paradigm_symphony_approve_file",
+          "description": "Approve or deny a pending file request. Called by the owning agent after the human confirms via Conductor prompt or CLI. Supports approve, deny, and approve-redacted actions.",
+          "when": "When a human has reviewed a file request and made a decision. The agent calls this tool to execute the approval or denial.",
+          "example": "paradigm_symphony_approve_file({ requestId: 'req-abc123', action: 'approve' })"
         }
       ]
     },
@@ -408,6 +450,12 @@
           "command": "paradigm global clean",
           "description": "Remove old files from ~/.paradigm/ (Global Brain rotation). Scans wisdom, lore, history, and cache subdirectories for files older than the specified duration.",
           "flags": ["--older-than <duration>: Duration threshold (default: 90d). Supports d (days), h (hours), m (minutes)", "-n, --dry-run: Show what would be deleted without deleting"]
+        },
+        {
+          "id": "mail",
+          "command": "paradigm mail <subcommand>",
+          "description": "A-Mail agent messaging — the CLI-only foundation of Symphony. Enables Claude Code sessions to send and receive messages through file-based mailboxes. Subcommands: whoami (show identity), list (show agents), link (connect sessions), unlink (disconnect), serve (start remote server), send (send a message), read (show unread), threads (list threads), thread (show thread), resolve (resolve thread to Lore), status (network overview), request (request a file), requests (list pending file requests), approve/deny (approve or deny file requests).",
+          "flags": ["whoami: Show this agent's identity and linked peers", "list: List all known agents with status and location", "link [--remote <ip>]: Discover and connect sessions (local or remote)", "unlink: Remove this session from the mail network", "serve: Start TCP server for remote mail linking (port 3939)", "send [--to <agent>] [--thread <id>] \"<message>\": Send a message", "read: Show unread messages", "threads: List active threads", "thread <id>: Show full thread", "resolve <id>: Resolve thread and create Lore entry", "status: Network overview (agents, threads, unread count)", "request <file> --from <agent> [--reason <text>]: Request a file from another agent", "requests: List pending file requests (as owner)", "approve <id> [--redact]: Approve a file request", "deny <id> [--reason <text>]: Deny a file request"]
         }
       ]
     },

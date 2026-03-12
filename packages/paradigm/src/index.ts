@@ -1826,5 +1826,158 @@ pipelineCmd
     await pipelineListCommand();
   });
 
+// paradigm mail <command> — A-Mail agent-to-agent messaging
+const mailCmd = program
+  .command('mail')
+  .description('A-Mail — agent-to-agent messaging for multi-session collaboration');
+
+mailCmd
+  .command('link')
+  .description('Link this session to the A-Mail network')
+  .option('--remote <ip>', 'Connect to remote mail server')
+  .action(async (options) => {
+    const { mailLinkCommand } = await import('./commands/mail/index.js');
+    await mailLinkCommand(options);
+  });
+
+mailCmd
+  .command('unlink')
+  .description('Remove this session from the A-Mail network')
+  .action(async () => {
+    const { mailUnlinkCommand } = await import('./commands/mail/index.js');
+    await mailUnlinkCommand();
+  });
+
+mailCmd
+  .command('whoami')
+  .description('Show this agent\'s identity and linked peers')
+  .action(async () => {
+    const { mailWhoamiCommand } = await import('./commands/mail/index.js');
+    await mailWhoamiCommand();
+  });
+
+mailCmd
+  .command('list')
+  .alias('ls')
+  .description('List all linked agents')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mailListCommand } = await import('./commands/mail/index.js');
+    await mailListCommand(options);
+  });
+
+mailCmd
+  .command('send <message>')
+  .description('Send a message to agents')
+  .option('--to <agent>', 'Send to specific agent (omit for broadcast)')
+  .option('--thread <id>', 'Reply to existing thread')
+  .action(async (message, options) => {
+    const { mailSendCommand } = await import('./commands/mail/index.js');
+    await mailSendCommand(message, options);
+  });
+
+mailCmd
+  .command('read')
+  .description('Show unread messages')
+  .action(async () => {
+    const { mailReadCommand } = await import('./commands/mail/index.js');
+    await mailReadCommand();
+  });
+
+mailCmd
+  .command('inbox')
+  .description('Show unread messages (alias for read)')
+  .action(async () => {
+    const { mailReadCommand } = await import('./commands/mail/index.js');
+    await mailReadCommand();
+  });
+
+mailCmd
+  .command('threads')
+  .description('List all threads')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mailThreadsCommand } = await import('./commands/mail/index.js');
+    await mailThreadsCommand(options);
+  });
+
+mailCmd
+  .command('thread <id>')
+  .description('Show full thread conversation')
+  .action(async (id) => {
+    const { mailThreadCommand } = await import('./commands/mail/index.js');
+    await mailThreadCommand(id);
+  });
+
+mailCmd
+  .command('resolve <id>')
+  .description('Mark a thread as resolved')
+  .option('--decision <text>', 'Decision text to record')
+  .action(async (id, options) => {
+    const { mailResolveCommand } = await import('./commands/mail/index.js');
+    await mailResolveCommand(id, options);
+  });
+
+mailCmd
+  .command('status')
+  .description('Show A-Mail network status')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { mailStatusCommand } = await import('./commands/mail/index.js');
+    await mailStatusCommand(options);
+  });
+
+mailCmd
+  .command('serve')
+  .description('Start TCP server for remote mail linking')
+  .option('--port <port>', 'Port to listen on', '3939')
+  .action(async (options) => {
+    const { mailServeCommand } = await import('./commands/mail/index.js');
+    await mailServeCommand(options);
+  });
+
+mailCmd
+  .command('request <file>')
+  .description('Request a file from another agent')
+  .option('--from <agent>', 'Agent to request from')
+  .option('--reason <text>', 'Why this file is needed')
+  .action(async (file, options) => {
+    const { mailRequestCommand } = await import('./commands/mail/index.js');
+    await mailRequestCommand(file, options);
+  });
+
+mailCmd
+  .command('requests')
+  .description('List pending file requests')
+  .action(async () => {
+    const { mailRequestsCommand } = await import('./commands/mail/index.js');
+    await mailRequestsCommand();
+  });
+
+mailCmd
+  .command('approve <id>')
+  .description('Approve a file request')
+  .option('--redact', 'Strip sensitive lines before sending')
+  .action(async (id, options) => {
+    const { mailApproveCommand } = await import('./commands/mail/index.js');
+    await mailApproveCommand(id, options);
+  });
+
+mailCmd
+  .command('deny <id>')
+  .description('Deny a file request')
+  .option('--reason <text>', 'Reason for denial')
+  .action(async (id, options) => {
+    const { mailDenyCommand } = await import('./commands/mail/index.js');
+    await mailDenyCommand(id, options);
+  });
+
+// Default mail action (status)
+mailCmd
+  .action(async () => {
+    const { mailStatusCommand } = await import('./commands/mail/index.js');
+    await mailStatusCommand({});
+  });
+
 // Parse and run
 program.parse();

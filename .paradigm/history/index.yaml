@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-11T01:09:59.528Z'
+generated: '2026-03-12T19:03:53.246Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1946,11 +1946,24 @@ by_symbol:
       agent: []
   '#paradigm-plugin':
     symbol: '#paradigm-plugin'
-    total_changes: 1
-    last_modified: '2026-02-22T03:26:23Z'
+    total_changes: 2
+    last_modified: '2026-03-12T19:03:09Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0165
+        ts: '2026-03-12T19:03:09Z'
+        type: implement
+        symbols:
+          - '#paradigm-plugin'
+        author:
+          type: human
+          id: ascend
+        commit: 52a497a87e489f0c32f87fca935788faaadf5890
+        intent: feature
+        files:
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'chore(#paradigm-plugin): bump plugin version 3.24.1 → 3.34.0'
       - id: h0028
         ts: '2026-02-22T03:26:23Z'
         type: implement
@@ -4013,11 +4026,124 @@ by_symbol:
       agent: []
   '':
     symbol: ''
-    total_changes: 1
-    last_modified: '2026-02-26T06:04:40Z'
+    total_changes: 3
+    last_modified: '2026-03-11T05:24:31Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_81
+        id: h0154
+        ts: '2026-03-11T05:24:31Z'
+        type: implement
+        symbols:
+          - ''
+          - '#conductor-app'
+          - '#input-orchestrator'
+          - '#terminal-launcher'
+          - '#workspace-manager'
+        author:
+          type: human
+          id: ascend
+        commit: ee0464e00876a44c1e63859794f90ac99b8f2f39
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Models/ConductorAction.swift
+          - packages/conductor/Sources/Conductor/Models/ManagedInstance.swift
+          - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/GestureConfirmationController.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BindingsManagerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BufferView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/GazeCalibrationView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/WorkspaceView.swift
+          - packages/conductor/Sources/Conductor/Utils/HotKeyManager.swift
+          - packages/conductor/Sources/Conductor/Workspace/TerminalLauncher.swift
+          - packages/conductor/Sources/Conductor/Workspace/WorkspaceManager.swift
+        description: 'feat(#conductor-app): Conductor 0.4.0 — video/voice toggles, targeted terminal close, gesture overlay'
+      - &ref_82
+        id: h0153
+        ts: '2026-03-11T04:05:09Z'
+        type: implement
+        symbols:
+          - ''
+          - '#conductor-app'
+          - '#input-orchestrator'
+          - '#main-overlay'
+          - '#settings-panel'
+        author:
+          type: human
+          id: ascend
+        commit: df82185046a5d0173ad4f17d019680dc2af338af
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-10/L-2026-03-10-ascend-181924-001.lore
+          - .paradigm/lore/entries/2026-03-10/L-2026-03-10-ascend-190211-001.lore
+          - .paradigm/lore/entries/2026-03-11/L-2026-03-11-ascend-025133-001.lore
+          - .paradigm/lore/entries/2026-03-11/L-2026-03-11-ascend-040423-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/protocols/cross-study.protocol
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/App/ConductorApp.swift
+          - packages/conductor/Sources/Conductor/App/ConductorPanel.swift
+          - packages/conductor/Sources/Conductor/Dispatch/GazeZoneRouter.swift
+          - packages/conductor/Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift
+          - packages/conductor/Sources/Conductor/Input/CustomGesture/DTWMatcher.swift
+          - packages/conductor/Sources/Conductor/Input/CustomGesture/GestureRecorder.swift
+          - packages/conductor/Sources/Conductor/Input/CustomGesture/GestureTemplate.swift
+          - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift
+          - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift
+          - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift
+          - packages/conductor/Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift
+          - packages/conductor/Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift
+          - packages/conductor/Sources/Conductor/Models/ConductorAction.swift
+          - packages/conductor/Sources/Conductor/Models/EyebrowEvent.swift
+          - packages/conductor/Sources/Conductor/Models/HandPoseFrame.swift
+          - packages/conductor/Sources/Conductor/Models/ManagedInstance.swift
+          - packages/conductor/Sources/Conductor/Models/VoiceMode.swift
+          - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/Orchestration/VoiceControlCoordinator.swift
+          - packages/conductor/Sources/Conductor/UI/EyebrowCalibrationWindowController.swift
+          - packages/conductor/Sources/Conductor/UI/Views/AddInstanceSheet.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BindingsManagerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BufferView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/EyebrowCalibrationView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/GazeZoneOverlay.swift
+          - packages/conductor/Sources/Conductor/UI/Views/GestureRecorderView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/VoiceControlHUD.swift
+          - packages/conductor/Sources/Conductor/UI/Views/WorkspaceSettingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/WorkspaceView.swift
+          - packages/conductor/Sources/Conductor/WindowManager/WindowArranger.swift
+          - packages/conductor/Sources/Conductor/Workspace/TerminalLauncher.swift
+          - packages/conductor/Sources/Conductor/Workspace/WorkspaceGrid.swift
+          - packages/conductor/Sources/Conductor/Workspace/WorkspaceManager.swift
+          - packages/conductor/Tests/ConductorTests/DTWMatcherTests.swift
+          - packages/conductor/Tests/ConductorTests/EyebrowStateMachineTests.swift
+          - packages/conductor/Tests/ConductorTests/GazeZoneRouterTests.swift
+          - packages/conductor/Tests/ConductorTests/VoiceCommandMatcherTests.swift
+          - packages/conductor/Tests/ConductorTests/VoiceControlCoordinatorTests.swift
+          - packages/conductor/Tests/ConductorTests/WorkspaceGridTests.swift
+          - packages/paradigm/package.json
+        description: 'feat(#conductor-app): Conductor 0.3.1 — wiring fixes + single-owner architecture'
       - &ref_52
         id: h0068
         ts: '2026-02-26T06:04:40Z'
@@ -5627,112 +5753,77 @@ by_symbol:
       agent: []
   '#conductor-app':
     symbol: '#conductor-app'
-    total_changes: 8
-    last_modified: '2026-03-11T01:06:19Z'
+    total_changes: 13
+    last_modified: '2026-03-11T08:17:21Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_87
-        id: h0152
-        ts: '2026-03-11T01:06:19Z'
-        type: implement
-        symbols:
-          - '#conductor-app'
-          - '#conductor-log'
-          - '#conductor-models'
-          - '#gaze-cursor'
-          - '#main-overlay'
-          - '#settings-panel'
-        author:
-          type: human
-          id: ascend
-        commit: daecf8c05727565592bd7f56ef78ed883760a0b0
-        intent: feature
-        files:
-          - CHANGELOG.md
-          - packages/conductor/.purpose
-          - packages/conductor/Tests/ConductorTests/ClaudeCodeInstanceTests.swift
-          - packages/conductor/Tests/ConductorTests/EnrichedPayloadTests.swift
-          - packages/conductor/Tests/ConductorTests/GazeCalibrationTests.swift
-          - packages/conductor/Tests/ConductorTests/GestureStateMachineTests.swift
-          - packages/conductor/Tests/ConductorTests/KalmanFilter2DTests.swift
-        description: 'test(#conductor-app): add 36 unit tests for gesture, gaze, calibration, enrichment, instance types'
-      - &ref_88
-        id: h0151
-        ts: '2026-03-11T00:49:04Z'
-        type: implement
-        symbols:
-          - '#conductor-app'
-          - '#gaze-cursor'
-          - '#gaze-router'
-          - '#settings-panel'
-        author:
-          type: human
-          id: ascend
-        commit: f0b2ad921c52e39dfeaf3229ce989dc0f9f5f5ba
-        intent: feature
-        files:
-          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
-          - packages/conductor/Sources/Conductor/Dispatch/GazeRouter.swift
-          - packages/conductor/Sources/Conductor/UI/GazeCursorController.swift
-          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
-        description: 'feat(#gaze-cursor): add toggleable gaze cursor debug overlay'
-      - &ref_82
-        id: h0150
-        ts: '2026-03-11T00:43:24Z'
-        type: implement
-        symbols:
-          - '#conductor-app'
-          - '#gaze-calibration'
-          - '#setup-wizard'
-        author:
-          type: human
-          id: ascend
-        commit: 37cac25506718c2660d7dfbc636d01d156159a2b
-        intent: fix
-        files:
-          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
-          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
-        description: 'fix(#gaze-calibration): wire calibration notification to actual overlay'
-      - &ref_83
-        id: h0149
-        ts: '2026-03-11T00:40:33Z'
-        type: implement
-        symbols:
-          - '#conductor-app'
-          - '#gaze-calibration'
-          - '#settings-panel'
-          - '#setup-wizard'
-        author:
-          type: human
-          id: ascend
-        commit: 8ff1cd241c0775612275eccef53d777962e221a4
-        intent: fix
-        files:
-          - packages/conductor/Sources/Conductor/App/ConductorApp.swift
-          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
-        description: 'fix(#conductor-app): wire SettingsPanelView, add gaze calibration banner'
       - &ref_84
-        id: h0148
-        ts: '2026-03-11T00:34:23Z'
+        id: h0161
+        ts: '2026-03-11T08:17:21Z'
         type: implement
         symbols:
+          - '#buffer-view'
           - '#conductor-app'
-          - '#setup-wizard'
+          - '#input-orchestrator'
           - '#whisper-voice-provider'
         author:
           type: human
           id: ascend
-        commit: 95d1fd70d965c3b0610d63d2d6a8d659ef606b52
+        commit: dcec38558acd8d513bf6201c99e665c9ff6cd475
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BufferView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+        description: 'fix(#conductor-app): Send button + dispatch with zone router, strip all bracketed tokens'
+      - id: h0160
+        ts: '2026-03-11T06:43:00Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+        author:
+          type: human
+          id: ascend
+        commit: 8b9a2dfb1e72baffe3f3a7fb8c2d8b88c24ab37b
         intent: feature
         files:
-          - .paradigm/history/index.yaml
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+        description: 'chore(#conductor-app): bump Conductor to v0.5.1'
+      - &ref_94
+        id: h0157
+        ts: '2026-03-11T05:55:23Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#input-orchestrator'
+          - '#input-status'
+          - '#main-overlay'
+          - '#shared-camera'
+          - '#vision-gaze-provider'
+          - '#vision-gesture-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 6a70d916f654a9df1abd9d8f9557d8bb017095bc
+        intent: feature
+        files:
           - .paradigm/history/log.jsonl
           - CHANGELOG.md
-        description: 'docs(#conductor-app): update changelog with WhisperKit fixes, calibration fix, version display'
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift
+          - packages/conductor/Sources/Conductor/Input/SharedCameraSession.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/Views/InputStatusView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+        description: 'feat(#shared-camera): shared AVCaptureSession architecture — gaze + gesture run simultaneously'
+      - *ref_81
+      - *ref_82
     contributors:
       human:
         - ascend
@@ -5744,7 +5835,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_81
+      - &ref_83
         id: h0142
         ts: '2026-03-10T22:59:02Z'
         type: implement
@@ -5826,7 +5917,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_81
+      - *ref_83
       - *ref_80
     contributors:
       human:
@@ -5839,7 +5930,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_81
+      - *ref_83
     contributors:
       human:
         - ascend
@@ -5851,20 +5942,80 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_81
+      - *ref_83
     contributors:
       human:
         - ascend
       agent: []
   '#gaze-calibration':
     symbol: '#gaze-calibration'
-    total_changes: 4
-    last_modified: '2026-03-11T00:43:24Z'
+    total_changes: 5
+    last_modified: '2026-03-12T18:58:41Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_82
-      - *ref_83
+      - &ref_91
+        id: h0163
+        ts: '2026-03-12T18:58:41Z'
+        type: implement
+        symbols:
+          - '#gaze-calibration'
+          - '#gaze-cursor'
+          - '#vision-gaze-provider'
+        author:
+          type: human
+          id: ascend
+        commit: a10fed7f441e36d9fbb2067c3c975228869b1eb4
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Dispatch/GazeRouter.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/GazeCalibration.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/CalibrationWindowController.swift
+          - packages/conductor/Sources/Conductor/UI/GazeCursorController.swift
+          - packages/conductor/Sources/Conductor/UI/Views/GazeCalibrationView.swift
+          - packages/conductor/Tests/ConductorTests/GazeCalibrationTests.swift
+        description: 'fix(#gaze-calibration): raw iris stream, least-squares affine, Kalman reset, debug overlay'
+      - &ref_87
+        id: h0150
+        ts: '2026-03-11T00:43:24Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#gaze-calibration'
+          - '#setup-wizard'
+        author:
+          type: human
+          id: ascend
+        commit: 37cac25506718c2660d7dfbc636d01d156159a2b
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+        description: 'fix(#gaze-calibration): wire calibration notification to actual overlay'
+      - &ref_85
+        id: h0149
+        ts: '2026-03-11T00:40:33Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#gaze-calibration'
+          - '#settings-panel'
+          - '#setup-wizard'
+        author:
+          type: human
+          id: ascend
+        commit: 8ff1cd241c0775612275eccef53d777962e221a4
+        intent: fix
+        files:
+          - packages/conductor/Sources/Conductor/App/ConductorApp.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
+        description: 'fix(#conductor-app): wire SettingsPanelView, add gaze calibration banner'
       - &ref_89
         id: h0147
         ts: '2026-03-11T00:33:38Z'
@@ -5880,19 +6031,71 @@ by_symbol:
         files:
           - packages/conductor/Sources/Conductor/UI/Views/SetupWizardView.swift
         description: 'fix(#setup-wizard): don''t auto-advance past gaze calibration step'
-      - *ref_81
+      - *ref_83
     contributors:
       human:
         - ascend
       agent: []
   '#whisper-voice-provider':
     symbol: '#whisper-voice-provider'
-    total_changes: 6
-    last_modified: '2026-03-11T00:34:23Z'
+    total_changes: 9
+    last_modified: '2026-03-11T08:17:21Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_84
+      - id: h0159
+        ts: '2026-03-11T06:40:42Z'
+        type: implement
+        symbols:
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 8004144af01c3a2223c385b7f2e59fe916684c04
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+        description: 'fix(#whisper-voice-provider): filter [BLANK_AUDIO] tokens, flush on stop, lower sample threshold'
+      - &ref_95
+        id: h0158
+        ts: '2026-03-11T06:25:20Z'
+        type: implement
+        symbols:
+          - '#input-orchestrator'
+          - '#input-status'
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 0359490f231884d7eea1c5a0993d77ba26dbc3d7
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/Views/InputStatusView.swift
+        description: 'fix(#whisper-voice-provider): continuous recording mode + gaze status display fix'
+      - &ref_88
+        id: h0148
+        ts: '2026-03-11T00:34:23Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#setup-wizard'
+          - '#whisper-voice-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 95d1fd70d965c3b0610d63d2d6a8d659ef606b52
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+        description: 'docs(#conductor-app): update changelog with WhisperKit fixes, calibration fix, version display'
       - id: h0146
         ts: '2026-03-11T00:27:21Z'
         type: implement
@@ -5906,22 +6109,18 @@ by_symbol:
         files:
           - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
         description: 'fix(#whisper-voice-provider): use local model folder + 90s timeout for WhisperKit'
-      - id: h0145
-        ts: '2026-03-11T00:15:45Z'
-        type: implement
-        symbols:
-          - '#conductor-app'
-          - '#whisper-voice-provider'
-        author:
-          type: human
-          id: ascend
-        commit: fdd3bdf2c4a931edb5670564654d61b9d1bf490a
-        intent: fix
-        files:
-          - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
-          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
-        description: 'fix(#conductor-app): restore downloadModel protocol conformance, hardcode version'
-      - &ref_85
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#dependency-checker':
+    symbol: '#dependency-checker'
+    total_changes: 2
+    last_modified: '2026-03-11T00:05:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_90
         id: h0144
         ts: '2026-03-11T00:05:24Z'
         type: implement
@@ -5978,29 +6177,61 @@ by_symbol:
       human:
         - ascend
       agent: []
-  '#dependency-checker':
-    symbol: '#dependency-checker'
-    total_changes: 2
-    last_modified: '2026-03-11T00:05:24Z'
-    stability_score: 1
-    fragility: low
-    recent:
-      - *ref_85
-      - *ref_86
-    contributors:
-      human:
-        - ascend
-      agent: []
   '#settings-panel':
     symbol: '#settings-panel'
-    total_changes: 4
-    last_modified: '2026-03-11T01:06:19Z'
+    total_changes: 5
+    last_modified: '2026-03-11T04:05:09Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_87
-      - *ref_88
-      - *ref_83
+      - *ref_82
+      - &ref_92
+        id: h0152
+        ts: '2026-03-11T01:06:19Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#conductor-log'
+          - '#conductor-models'
+          - '#gaze-cursor'
+          - '#main-overlay'
+          - '#settings-panel'
+        author:
+          type: human
+          id: ascend
+        commit: daecf8c05727565592bd7f56ef78ed883760a0b0
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Tests/ConductorTests/ClaudeCodeInstanceTests.swift
+          - packages/conductor/Tests/ConductorTests/EnrichedPayloadTests.swift
+          - packages/conductor/Tests/ConductorTests/GazeCalibrationTests.swift
+          - packages/conductor/Tests/ConductorTests/GestureStateMachineTests.swift
+          - packages/conductor/Tests/ConductorTests/KalmanFilter2DTests.swift
+        description: 'test(#conductor-app): add 36 unit tests for gesture, gaze, calibration, enrichment, instance types'
+      - &ref_93
+        id: h0151
+        ts: '2026-03-11T00:49:04Z'
+        type: implement
+        symbols:
+          - '#conductor-app'
+          - '#gaze-cursor'
+          - '#gaze-router'
+          - '#settings-panel'
+        author:
+          type: human
+          id: ascend
+        commit: f0b2ad921c52e39dfeaf3229ce989dc0f9f5f5ba
+        intent: feature
+        files:
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Dispatch/GazeRouter.swift
+          - packages/conductor/Sources/Conductor/UI/GazeCursorController.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+        description: 'feat(#gaze-cursor): add toggleable gaze cursor debug overlay'
+      - *ref_85
       - *ref_86
     contributors:
       human:
@@ -6013,11 +6244,11 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_82
-      - *ref_83
-      - *ref_84
-      - *ref_89
+      - *ref_87
       - *ref_85
+      - *ref_88
+      - *ref_89
+      - *ref_90
     contributors:
       human:
         - ascend
@@ -6036,13 +6267,14 @@ by_symbol:
       agent: []
   '#gaze-cursor':
     symbol: '#gaze-cursor'
-    total_changes: 2
-    last_modified: '2026-03-11T01:06:19Z'
+    total_changes: 3
+    last_modified: '2026-03-12T18:58:41Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_87
-      - *ref_88
+      - *ref_91
+      - *ref_92
+      - *ref_93
     contributors:
       human:
         - ascend
@@ -6054,7 +6286,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_88
+      - *ref_93
     contributors:
       human:
         - ascend
@@ -6066,7 +6298,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_87
+      - *ref_92
     contributors:
       human:
         - ascend
@@ -6078,19 +6310,330 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_87
+      - *ref_92
     contributors:
       human:
         - ascend
       agent: []
   '#main-overlay':
     symbol: '#main-overlay'
-    total_changes: 1
-    last_modified: '2026-03-11T01:06:19Z'
+    total_changes: 4
+    last_modified: '2026-03-11T05:55:23Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_87
+      - *ref_94
+      - &ref_96
+        id: h0155
+        ts: '2026-03-11T05:36:20Z'
+        type: implement
+        symbols:
+          - '#input-orchestrator'
+          - '#input-status'
+          - '#main-overlay'
+        author:
+          type: human
+          id: ascend
+        commit: 6023c7c892d940b0a043686e05f24da2e97a8450
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/Views/InputStatusView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+        description: 'feat(#input-status): add live input modality status monitor to sidebar'
+      - *ref_82
+      - *ref_92
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#input-orchestrator':
+    symbol: '#input-orchestrator'
+    total_changes: 7
+    last_modified: '2026-03-11T08:17:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_84
+      - *ref_95
+      - *ref_94
+      - &ref_97
+        id: h0156
+        ts: '2026-03-11T05:41:27Z'
+        type: implement
+        symbols:
+          - '#input-orchestrator'
+          - '#input-status'
+        author:
+          type: human
+          id: ascend
+        commit: 97af8205eaf597a557d4c9cdb6d887b9fd406219
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/UI/Views/InputStatusView.swift
+        description: 'fix(#input-orchestrator): camera conflict handling — gesture gets priority, gaze blocked when camera held'
+      - *ref_96
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#terminal-launcher':
+    symbol: '#terminal-launcher'
+    total_changes: 1
+    last_modified: '2026-03-11T05:24:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#workspace-manager':
+    symbol: '#workspace-manager'
+    total_changes: 1
+    last_modified: '2026-03-11T05:24:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_81
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#input-status':
+    symbol: '#input-status'
+    total_changes: 4
+    last_modified: '2026-03-11T06:25:20Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_95
+      - *ref_94
+      - *ref_97
+      - *ref_96
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#shared-camera':
+    symbol: '#shared-camera'
+    total_changes: 1
+    last_modified: '2026-03-11T05:55:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_94
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#vision-gaze-provider':
+    symbol: '#vision-gaze-provider'
+    total_changes: 2
+    last_modified: '2026-03-12T18:58:41Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_91
+      - *ref_94
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#vision-gesture-provider':
+    symbol: '#vision-gesture-provider'
+    total_changes: 1
+    last_modified: '2026-03-11T05:55:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_94
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#buffer-view':
+    symbol: '#buffer-view'
+    total_changes: 1
+    last_modified: '2026-03-11T08:17:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_84
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#component-types':
+    symbol: '#component-types'
+    total_changes: 1
+    last_modified: '2026-03-12T18:19:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_98
+        id: h0162
+        ts: '2026-03-12T18:19:30Z'
+        type: implement
+        symbols:
+          - '#component-types'
+          - ~component-type-glossary
+        author:
+          type: human
+          id: ascend
+        commit: db8fc527935b10ac0093b6bbd9a5dfb2a8800a73
+        intent: feature
+        files:
+          - .paradigm/config.yaml
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-12/L-2026-03-12-ascend-161446-001.lore
+          - .paradigm/lore/entries/2026-03-12/L-2026-03-12-ascend-172420-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/conductor/.purpose
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/purpose-portal.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/src/core/.purpose
+          - packages/premise/core/src/aggregator.ts
+          - packages/premise/core/src/index.ts
+          - packages/premise/core/src/symbol-index.ts
+          - packages/premise/core/src/types.ts
+          - packages/probe/core/src/generator.ts
+          - packages/probe/core/src/types.ts
+          - packages/purpose/core/dist/index.d.ts
+          - packages/purpose/core/dist/index.js
+          - packages/purpose/core/src/parser.ts
+          - packages/purpose/core/src/types.ts
+          - packages/university/src/content/courses/para-101.json
+          - packages/university/src/content/plsat/v3.0.json
+        description: 'feat(#component-types): add type + parent fields to components, config glossary, search/status integration'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~component-type-glossary:
+    symbol: ~component-type-glossary
+    total_changes: 1
+    last_modified: '2026-03-12T18:19:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_98
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#migration-detector':
+    symbol: '#migration-detector'
+    total_changes: 1
+    last_modified: '2026-03-12T18:59:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_99
+        id: h0164
+        ts: '2026-03-12T18:59:04Z'
+        type: implement
+        symbols:
+          - '#migration-detector'
+          - '#migration-registry'
+          - '#migration-runner'
+          - '#paradigm-migrate'
+        author:
+          type: human
+          id: ascend
+        commit: 5cd40731e61327c839670a7e8f3269bdc5ac42a1
+        intent: feature
+        files:
+          - .cursor/hooks.json
+          - .cursor/hooks/paradigm-common.sh
+          - .cursor/hooks/paradigm-posttooluse.sh
+          - .cursor/hooks/paradigm-postwrite.sh
+          - .cursor/hooks/paradigm-pretooluse.sh
+          - .cursor/hooks/paradigm-session-start.sh
+          - .cursor/hooks/paradigm-stop.sh
+          - .paradigm/config.yaml
+          - .paradigm/docs/queries.md
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-01/L-2026-03-01-unknown-065750-001.lore
+          - .paradigm/lore/entries/2026-03-01/L-2026-03-01-unknown-223719-001.lore
+          - .paradigm/lore/entries/2026-03-02/L-2026-03-02-unknown-073042-001.lore
+          - .paradigm/lore/entries/2026-03-02/L-2026-03-02-unknown-224944-001.lore
+          - .paradigm/lore/entries/2026-03-11/L-2026-03-11-ascend-041036-001.lore
+          - .paradigm/lore/entries/2026-03-11/L-2026-03-11-ascend-083735-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/migrate.yaml
+          - .paradigm/prompts/implement-ftux.md
+          - .paradigm/prompts/implement-sandbox.md
+          - .paradigm/prompts/run-e2e-tests.md
+          - .paradigm/specs/scan.md
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/.purpose
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/migrate/detector.ts
+          - packages/paradigm/src/commands/migrate/index.ts
+          - packages/paradigm/src/commands/migrate/migrations.ts
+          - packages/paradigm/src/commands/migrate/runner.ts
+          - packages/paradigm/src/commands/migrate/types.ts
+          - packages/paradigm/src/commands/shift.ts
+          - packages/paradigm/src/commands/upgrade.ts
+          - packages/paradigm/src/index.ts
+          - packages/university/package.json
+        description: 'feat(#paradigm-migrate): version-aware project migration command'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#migration-registry':
+    symbol: '#migration-registry'
+    total_changes: 1
+    last_modified: '2026-03-12T18:59:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_99
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#migration-runner':
+    symbol: '#migration-runner'
+    total_changes: 1
+    last_modified: '2026-03-12T18:59:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_99
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-migrate':
+    symbol: '#paradigm-migrate'
+    total_changes: 1
+    last_modified: '2026-03-12T18:59:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_99
     contributors:
       human:
         - ascend

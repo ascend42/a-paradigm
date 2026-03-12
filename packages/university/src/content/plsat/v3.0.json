@@ -2,7 +2,7 @@
   "version": "3.0",
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
-  "totalSlots": 102,
+  "totalSlots": 108,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
   "description": "99 questions. 90 minutes. 80% to pass. Good luck, scholar.",
@@ -2564,6 +2564,216 @@
           },
           "correct": "B",
           "explanation": "The `paradigm_search` tool accepts a `componentType` filter that directly queries the symbol index for components of a specific type. This is the most efficient approach — it uses the index instead of reading files, and returns exactly the components with `type: router`."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-103",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-103",
+          "scenario": "Your team is evaluating Symphony's A-Mail for inter-agent communication. A team member asks: 'Does A-Mail require a central server or WebSocket connection to route messages between agents on the same machine?'",
+          "question": "How does A-Mail route messages between agents on a single machine?",
+          "choices": {
+            "A": "Through a persistent WebSocket connection managed by Sentinel's event hub",
+            "B": "Through a central message broker that must be started with `paradigm mail serve`",
+            "C": "Through file-based mailboxes — agents write to JSONL files in `~/.paradigm/mail/agents/` and poll for new messages via `/loop`",
+            "D": "Through Conductor's native IPC channel between Swift and Node.js processes",
+            "E": "Through a shared SQLite database at `~/.paradigm/mail/messages.db`"
+          },
+          "correct": "C",
+          "explanation": "A-Mail is file-based with zero daemon dependencies. Each agent has a mailbox directory containing inbox.jsonl and outbox.jsonl. Messages are appended as single JSON lines. Agents poll for new messages using `/loop 10s paradigm_symphony_poll`. No WebSocket, no broker, no Conductor required — just filesystem reads and writes."
+        },
+        {
+          "id": "plsat-103b",
+          "scenario": "A developer is comparing Symphony A-Mail to traditional inter-process communication. They note that A-Mail uses JSONL files for message passing instead of sockets, pipes, or shared memory.",
+          "question": "Why does A-Mail use JSONL files instead of a real-time transport like WebSockets?",
+          "choices": {
+            "A": "JSONL is faster than WebSockets for small messages under 1KB",
+            "B": "File-based messaging requires zero dependencies beyond the Paradigm CLI — no Conductor, no Sentinel, no persistent server process",
+            "C": "Claude Code sessions cannot open network connections, so files are the only option",
+            "D": "JSONL files provide built-in encryption that WebSockets lack",
+            "E": "File-based messaging is required by macOS sandboxing rules for CLI tools"
+          },
+          "correct": "B",
+          "explanation": "A-Mail's design goal is zero-dependency messaging. It works with nothing beyond the Paradigm CLI — no Conductor, no Sentinel, no network configuration. File-based JSONL is append-only (safe for concurrent writes), trivial to parse, and works on every OS without additional runtime dependencies. Later phases (Conductor, Sentinel) add richer transports, but A-Mail is the foundation that always works."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-104",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-104",
+          "scenario": "You have two Claude Code sessions open: one working on `a-paradigm` in the core library role, and another working on `a-paradigm` in the backend role. After running `paradigm mail link`, each session gets an identity.",
+          "question": "How are agent identities determined in A-Mail?",
+          "choices": {
+            "A": "Random UUIDs assigned at session start — different every time",
+            "B": "The process ID (PID) of the Claude Code session is used as the identity",
+            "C": "Derived from project directory + role (e.g., `a-paradigm/core`) — deterministic and stable across session restarts for the same project context",
+            "D": "The user's GitHub username combined with a session counter",
+            "E": "Assigned sequentially by the mail router: agent-001, agent-002, etc."
+          },
+          "correct": "C",
+          "explanation": "Agent identity in A-Mail is deterministic: `{project-name}/{role}`. The same project opened in the same context always gets the same identity, even across session restarts. This stability means other agents can reliably address messages to `a-paradigm/backend` knowing it will reach the backend agent regardless of which specific Claude Code session is running. PID maps to identity via identity.json but is not the identity itself."
+        },
+        {
+          "id": "plsat-104b",
+          "scenario": "After running `paradigm mail whoami`, an agent sees: `agent-abc123 (a-paradigm/backend) — 3 linked peers, 2 active threads`. The agent then crashes and a new Claude Code session is started for the same project directory with the same working context.",
+          "question": "What happens to the agent's identity after the restart?",
+          "choices": {
+            "A": "A new random identity is assigned — the old one is permanently lost",
+            "B": "The identity `a-paradigm/backend` is restored because it is derived from the project directory and role, not the PID",
+            "C": "The identity is lost unless the agent calls `paradigm mail recover` within 5 minutes",
+            "D": "The new session gets a different identity with a `-2` suffix to avoid conflicts",
+            "E": "The old session's mailbox is deleted and a fresh one is created with a new ID"
+          },
+          "correct": "B",
+          "explanation": "Agent identity is derived from project directory + role, not from PID or session-specific state. When a new session starts for the same project context, it gets the same deterministic identity. The PID-to-identity mapping in identity.json is updated, but the mailbox (inbox.jsonl, outbox.jsonl) persists. Unread messages from before the crash are still in the inbox waiting for the next poll."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-105",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-105",
+          "scenario": "An agent investigating a production bug sends a Symphony message to the frontend agent. The agent wants to indicate that it is asking a question and expects information in response, not just acknowledgment.",
+          "question": "Which message intent should the agent use?",
+          "choices": {
+            "A": "`context` — because the agent is seeking contextual information",
+            "B": "`clarification` — because the agent wants details clarified",
+            "C": "`question` — because the agent is asking for information and the intent classifies the message's purpose for structured processing",
+            "D": "`reference` — because the agent wants the frontend agent to reference its recent changes",
+            "E": "`alert` — because the production bug is urgent"
+          },
+          "correct": "C",
+          "explanation": "Message intents classify the purpose of a message. `question` signals that the sender is asking for information and expects a substantive response. `context` is for providing background (not requesting it). `clarification` is for asking about something already said. `alert` is specifically for forwarding Sentinel alerts. Intents help the receiving agent understand what kind of response is expected."
+        },
+        {
+          "id": "plsat-105b",
+          "scenario": "During a Symphony conversation thread, Agent A proposes a fix: 'Make the currency field optional with a default of USD.' Agent B agrees and wants to record this as a team decision that will be captured in Lore.",
+          "question": "What intent should Agent B use when confirming the decision?",
+          "choices": {
+            "A": "`approval` — to approve Agent A's proposal",
+            "B": "`decision` — to formally record the choice, triggering automatic Lore entry creation",
+            "C": "`action` — to announce it will implement the fix",
+            "D": "`verification` — to verify understanding of the proposal",
+            "E": "`context` — to provide context that it agrees"
+          },
+          "correct": "B",
+          "explanation": "The `decision` intent serves a dual purpose: it communicates agreement within the conversation AND triggers automatic Lore integration. Symphony auto-records messages with `intent: decision` as lore entries of type `decision`, linking them to the thread and referenced symbols. Using `approval` (A) would confirm the proposal but would not trigger the Lore recording side effect."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-106",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-106",
+          "scenario": "Agent A on your machine needs `src/config/database.ts` from Agent B on a teammate's machine. Agent A calls `paradigm_symphony_request_file` with the file path and reason. The teammate's trust.yaml has `neverApprove: [\".env*\", \"**/*.key\"]` but no entry for `.ts` files.",
+          "question": "What happens next in the file transfer pipeline?",
+          "choices": {
+            "A": "The file is automatically sent because `.ts` files are not in the neverApprove list",
+            "B": "The request is queued and the teammate (human) receives a prompt to approve, deny, or approve with redaction — human approval is required for every file transfer",
+            "C": "Agent B automatically reads and sends the file since both agents are in the same Symphony network",
+            "D": "The request is denied because `database.ts` might contain database credentials",
+            "E": "The file is sent after a 5-minute delay to give the human time to intervene"
+          },
+          "correct": "B",
+          "explanation": "Every file transfer requires explicit human approval regardless of trust configuration. The neverApprove list adds hard denials (even if the human clicks approve), but not being on the neverApprove list does not mean auto-approval. The teammate sees a prompt with the file path, the requesting agent, and the reason, then chooses: approve, deny, or approve with redaction."
+        },
+        {
+          "id": "plsat-106b",
+          "scenario": "A developer sees a file request in their terminal via `paradigm mail requests`: Agent C is requesting `.env.production` from their project. The developer's trust.yaml includes `neverApprove: [\".env*\"]`. The developer runs `paradigm mail approve req-xyz` anyway.",
+          "question": "What happens when the developer tries to approve a file on the neverApprove list?",
+          "choices": {
+            "A": "The approval succeeds — human override always takes priority over trust configuration",
+            "B": "The approval is rejected by the system — files matching neverApprove patterns are always denied, even if the human explicitly approves",
+            "C": "The file is sent but with all values redacted automatically",
+            "D": "The developer is prompted a second time to confirm the override",
+            "E": "The approval is queued for review by a second team member"
+          },
+          "correct": "B",
+          "explanation": "The neverApprove list is enforced absolutely by the system. Files matching patterns like `.env*`, `*.key`, or `*.pem` are always denied regardless of human action. This is a security guardrail — even well-intentioned approvals cannot override it. The developer would need to modify trust.yaml to remove the pattern before the file could be approved."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-107",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-107",
+          "scenario": "A thread about migrating to a new API version has been active for 30 minutes. Four agents and two humans participated. The team agreed on an approach: skip the database migration and hotfix the serializer. Someone runs `paradigm mail resolve thr-abc`.",
+          "question": "What does thread resolution produce?",
+          "choices": {
+            "A": "A git commit with the conversation as the commit message",
+            "B": "A comprehensive lore entry capturing the topic, participants, decisions made, actions taken, and symbols discussed — bridging ephemeral conversation to permanent project memory",
+            "C": "A .purpose file update adding the thread as a new component",
+            "D": "A Sentinel incident record linking the conversation to a production error",
+            "E": "An email summary sent to all team members who were not in the thread"
+          },
+          "correct": "B",
+          "explanation": "Thread resolution creates a lore entry that captures the entire collaborative context: the conversation topic, all participants (agents and humans), decisions made during the discussion, actions taken, and Paradigm symbols referenced. This bridges the gap between ephemeral real-time conversation and permanent project memory. Future developers can find and learn from the discussion via `paradigm_lore_search`."
+        },
+        {
+          "id": "plsat-107b",
+          "scenario": "An agent resolves a thread with `paradigm mail resolve thr-def`. The thread contained 12 messages, 3 decisions, and referenced symbols `#payment-serializer`, `#api-types`, and `$refund-flow`. A week later, a new developer encounters a similar serialization issue.",
+          "question": "How can the new developer find the resolved thread's knowledge?",
+          "choices": {
+            "A": "Search `~/.paradigm/mail/threads/` for the thread JSON file — resolved threads are kept permanently",
+            "B": "Call `paradigm_lore_search` with `symbol: '#payment-serializer'` — the resolved thread became a lore entry linked to the discussed symbols",
+            "C": "Call `paradigm_symphony_thread` with the old thread ID — resolved threads remain in the Symphony network",
+            "D": "Check git log for the conversation — resolved threads are saved as commit messages",
+            "E": "The knowledge is lost — resolved threads are deleted from the filesystem"
+          },
+          "correct": "B",
+          "explanation": "When a thread is resolved, it becomes a lore entry tagged with the symbols discussed in the conversation. The new developer searching for `#payment-serializer` via `paradigm_lore_search` will find the entry, which contains the full conversation context, decisions, and actions. This is the core value of thread resolution: converting temporary discussion into searchable, permanent project memory."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-108",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-108",
+          "scenario": "You have set up A-Mail with 3 linked agents. Each agent has a mailbox, but none of them are running `/loop`. You send a message via `paradigm mail send \"Check the failing test in #auth-service\"`. The message is written to each agent's inbox.jsonl.",
+          "question": "When will the agents see and respond to this message?",
+          "choices": {
+            "A": "Immediately — messages trigger an interrupt in the Claude Code session",
+            "B": "Never — without `/loop`, agents have no mechanism to poll their inbox and will not discover the message",
+            "C": "Within 30 seconds — the MCP tool cache automatically polls inboxes",
+            "D": "On the next `paradigm_status` call — status checks include inbox polling",
+            "E": "When the agent explicitly calls `paradigm mail read` from its session"
+          },
+          "correct": "B",
+          "explanation": "`/loop` is the agent heartbeat. It runs `paradigm_symphony_poll` on a timer (typically every 10 seconds), which reads inbox.jsonl and presents messages to the agent. Without `/loop`, messages accumulate in the inbox with nobody reading them. The convenience command `paradigm symphony join` sets up both identity registration and the polling loop in one step. This is why the setup instructions always include `/loop 10s paradigm_symphony_poll` in each session."
+        },
+        {
+          "id": "plsat-108b",
+          "scenario": "An agent is running `/loop 10s paradigm_symphony_poll`. During one poll cycle, the tool returns 2 new messages: a question from the frontend agent and a decision message from a human. The agent processes both and sends replies via `paradigm_symphony_send`.",
+          "question": "Where do the agent's replies go, and how are they delivered to the recipients?",
+          "choices": {
+            "A": "Directly into each recipient's inbox.jsonl — the send tool writes to all inboxes simultaneously",
+            "B": "To this agent's outbox.jsonl — a mail router (or Conductor) picks up outbox messages and delivers them to the appropriate recipient inboxes",
+            "C": "To a central message queue at `~/.paradigm/mail/queue.jsonl` that all agents read from",
+            "D": "Over a WebSocket connection to each recipient's MCP server",
+            "E": "To Sentinel's event hub, which broadcasts to all connected agents"
+          },
+          "correct": "B",
+          "explanation": "The agent writes replies to its own outbox.jsonl via `paradigm_symphony_send`. A mail router process (in A-Mail's Phase 0 implementation) or Conductor (in later phases) reads outbox files and delivers messages to the correct recipient inbox files. This separation of write (outbox) and delivery (router) keeps the protocol simple — agents only ever write to their own outbox and read from their own inbox."
         }
       ]
     }

@@ -1,0 +1,11 @@
+version: 2.0.0
+description: |
+  Utility modules for the MCP server — loaders, caches, and data access.
+
+components:
+  symphony-loader:
+    description: A-Mail file-based messaging — agent identity, JSONL mailboxes, threads, file pipeline, trust config
+    type: loader
+    tags: [feature, symphony]
+    anchors:
+      - symphony-loader.ts:1-988

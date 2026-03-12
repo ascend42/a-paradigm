@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.35.0] — 2026-03-12
+
+### Added
+
+- **Symphony Phase 0: A-Mail** — file-based agent-to-agent messaging for multi-session collaboration. No server dependency; uses JSONL mailboxes at `~/.paradigm/mail/` polled via `/loop`.
+- **6 new MCP tools**: `paradigm_symphony_poll` (inbox heartbeat), `paradigm_symphony_send` (message routing with 16 intents), `paradigm_symphony_status` (network overview with sleep detection), `paradigm_symphony_thread` (full thread context), `paradigm_symphony_request_file` (human-gated file pipeline), `paradigm_symphony_approve_file` (approve/deny/redact file transfers).
+- **`paradigm mail` CLI command group**: 16 subcommands — `link`, `unlink`, `whoami`, `list`, `send`, `read`, `inbox`, `threads`, `thread`, `resolve`, `status`, `serve`, `request`, `requests`, `approve`, `deny`.
+- **Agent identity system**: Deterministic `{project}/{role}` IDs derived from `config.yaml`, surviving session restarts. Auto-discovery of Conductor sessions.
+- **Thread management**: Auto-created on first message, with participant tracking, message counting, and resolution to Lore entries.
+- **File transfer pipeline**: Trust config (`trust.yaml`), hard-deny list (`.env*`, `*.key`, `*.pem`, `**/credentials*`, `**/secrets/**`), auto-approve globs, SHA-256 integrity hashes, secret redaction mode.
+- **TCP serve stub** (`paradigm mail serve`): Phase 0 placeholder for remote agent linking on port 3939.
+- **University**: New para-501 lesson "Symphony: Multi-Agent Messaging with A-Mail" with 5 quiz questions. 6 new PLSAT question slots (12 variants) covering A-Mail architecture, identity, intents, security, threading, and heartbeat. Reference cards for all 6 MCP tools and `paradigm mail` CLI commands.
+- **Quick start guide**: `docs/guides/symphony-quickstart.md` with step-by-step multi-agent setup.
+- **Troubleshooting**: Symphony/A-Mail entries in `.paradigm/docs/troubleshooting.md`.
+
+Symbols: #symphony-loader, #symphony-poll, #symphony-send, #symphony-status, #symphony-thread, #symphony-request-file, #symphony-approve-file, #mail-link, #mail-unlink, #mail-whoami, #mail-list, #mail-send, #mail-read, #mail-threads, #mail-thread, #mail-resolve, #mail-status, #mail-serve, #mail-request, #mail-approve, #mail-deny, $mail-send-flow, $mail-poll-flow, $file-request-flow, ^file-trust, !message-sent, !message-received, !thread-created, !thread-resolved, !file-requested, !file-approved, !file-denied, !file-delivered, ~human-gated-transfer, ~hard-deny-list
+
 ## [3.34.0] — 2026-03-12
 
 ### Added

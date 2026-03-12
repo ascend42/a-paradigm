@@ -1,0 +1,36 @@
+version: 2.0.0
+description: |
+  MCP tool handlers — dispatch layer for all paradigm_* tool calls.
+  Each tool file exports getXToolsList() + handleXTool() functions.
+
+components:
+  symphony-poll:
+    description: Poll mailbox for new messages (agent heartbeat)
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
+  symphony-send:
+    description: Send a message to other agents or broadcast
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
+  symphony-status:
+    description: List agents, threads, and unread count
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
+  symphony-thread:
+    description: Get full thread context with messages and decisions
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
+  symphony-request-file:
+    description: Request a file from another agent's project
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
+  symphony-approve-file:
+    description: Approve or deny a pending file request
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]

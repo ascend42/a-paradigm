@@ -1,0 +1,143 @@
+version: 2.0.0
+description: |
+  A-Mail CLI commands — terminal interface for agent-to-agent messaging.
+  Part of Symphony Phase 0: file-based mailboxes polled via /loop.
+
+components:
+  mail-link:
+    description: Link this session to the A-Mail network
+    type: command
+    tags: [feature, symphony]
+  mail-unlink:
+    description: Remove this session from the A-Mail network
+    type: command
+    tags: [feature, symphony]
+  mail-whoami:
+    description: Show agent identity and linked peers
+    type: command
+    tags: [feature, symphony]
+  mail-list:
+    description: List all linked agents with awake/asleep status
+    type: command
+    tags: [feature, symphony]
+  mail-send:
+    description: Send a message to agents (human CLI entry point)
+    type: command
+    tags: [feature, symphony]
+  mail-read:
+    description: Show unread messages with tree rendering
+    type: command
+    tags: [feature, symphony]
+  mail-threads:
+    description: List all threads (active and resolved)
+    type: command
+    tags: [feature, symphony]
+  mail-thread:
+    description: Show full thread conversation with all messages
+    type: command
+    tags: [feature, symphony]
+  mail-resolve:
+    description: Mark a thread as resolved with optional decision
+    type: command
+    tags: [feature, symphony]
+  mail-status:
+    description: Show A-Mail network overview
+    type: command
+    tags: [feature, symphony]
+  mail-serve:
+    description: Start TCP server for remote mail linking (Phase 0 stub)
+    type: command
+    tags: [feature, symphony]
+  mail-request:
+    description: Request a file from another agent's project
+    type: command
+    tags: [feature, symphony]
+  mail-approve:
+    description: Approve a pending file request
+    type: command
+    tags: [feature, symphony]
+  mail-deny:
+    description: Deny a pending file request
+    type: command
+    tags: [feature, symphony]
+
+flows:
+  mail-send-flow:
+    description: Human types message → built → routed to agent inboxes
+    tags: [symphony]
+    steps:
+      - '#mail-send'
+      - '#symphony-loader'
+      - '!message-sent'
+
+  mail-poll-flow:
+    description: /loop fires → poll → read inbox → agent processes → reply
+    tags: [symphony]
+    steps:
+      - '#symphony-poll'
+      - '#symphony-loader'
+      - '!message-received'
+
+  file-request-flow:
+    description: Request file → trust check → human approval → read file → deliver
+    tags: [symphony, security]
+    steps:
+      - '#mail-request'
+      - '^file-trust'
+      - '#mail-approve'
+      - '!file-delivered'
+
+gates:
+  file-trust:
+    description: Trust config check on file requests — hard-deny list always blocks
+    tags: [security, symphony]
+
+signals:
+  message-sent:
+    description: A message was sent via A-Mail
+    category: business
+    tags: [symphony]
+  message-received:
+    description: A message was received in an agent's inbox
+    category: business
+    tags: [symphony]
+  thread-created:
+    description: A new conversation thread was auto-created
+    category: business
+    tags: [symphony]
+  thread-resolved:
+    description: A thread was marked as resolved
+    category: business
+    tags: [symphony]
+  file-requested:
+    description: An agent requested a file from another project
+    category: business
+    tags: [symphony]
+  file-approved:
+    description: A file request was approved by the human owner
+    category: business
+    tags: [symphony]
+  file-denied:
+    description: A file request was denied
+    category: business
+    tags: [symphony]
+  file-delivered:
+    description: File content was delivered to the requesting agent
+    category: business
+    tags: [symphony]
+
+aspects:
+  human-gated-transfer:
+    description: File transfers always require explicit human approval (unless auto-approved in trust config)
+    category: rule
+    severity: critical
+    tags: [security, symphony]
+    anchors:
+      - ../../packages/paradigm-mcp/src/utils/symphony-loader.ts:600-650
+  hard-deny-list:
+    description: Certain file patterns (.env, *.key, *.pem, credentials) are always blocked regardless of approval
+    category: invariant
+    severity: critical
+    tags: [security, symphony]
+    anchors:
+      - ../../packages/paradigm-mcp/src/utils/symphony-loader.ts:660-690

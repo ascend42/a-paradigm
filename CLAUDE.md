@@ -274,6 +274,12 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Tracking work items** | `paradigm_task_create` / `paradigm_task_list` for persistent tasks |
 | **Recording reflections** | `paradigm_lore_record` with `arc:*` tags for thematic grouping |
 | **Reviewing progress** | `paradigm_lore_search` with tag filter for `arc:*` entries |
+| **Sending message to agents** | `paradigm_symphony_send` to compose + route |
+| **Checking agent messages** | `paradigm_symphony_poll` for inbox (via /loop) |
+| **Viewing agent network** | `paradigm_symphony_status` for linked agents |
+| **Reviewing conversation** | `paradigm_symphony_thread` for full thread |
+| **Requesting cross-project files** | `paradigm_symphony_request_file` for file pipeline |
+| **Approving file transfers** | `paradigm_symphony_approve_file` to approve/deny |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
 | **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
 | **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
@@ -300,6 +306,12 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_lore_record` | ~150 | Adding a lore entry (reflections, decisions, arcs) |
 | `paradigm_lore_search` | ~200 | Search lore by tag, symbol, or type |
 | `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
+| `paradigm_symphony_poll` | ~200 | Polling inbox via /loop |
+| `paradigm_symphony_send` | ~100 | Sending message to agents |
+| `paradigm_symphony_status` | ~150 | Checking agent network |
+| `paradigm_symphony_thread` | ~200 | Viewing thread conversation |
+| `paradigm_symphony_request_file` | ~100 | Requesting cross-project file |
+| `paradigm_symphony_approve_file` | ~100 | Approving/denying file request |
 | `paradigm_protocol_search` | ~200 | Search for matching protocol |
 | `paradigm_protocol_record` | ~100 | Record a new protocol |
 | `paradigm_protocol_validate` | ~200 | Validate protocol references |

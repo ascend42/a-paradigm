@@ -44,6 +44,7 @@ import { getGraphToolsList, handleGraphTool } from './graph.js';
 import { getHeatmapToolsList, handleHeatmapTool } from './heatmap.js';
 import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
+import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -281,6 +282,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPipelineToolsList(),
           // Conductor session registration tools
           ...getConductorToolsList(),
+          // Symphony (A-Mail) tools
+          ...getSymphonyToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1359,6 +1362,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try conductor tools
           if (name.startsWith('paradigm_conductor_')) {
             const result = await handleConductorTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try symphony tools
+          if (name.startsWith('paradigm_symphony_')) {
+            const result = await handleSymphonyTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

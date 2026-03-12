@@ -1182,3 +1182,42 @@ Mark an arc as complete or archived:
 
 ```bash
 paradigm_assessment_arc_close({ arc_id: "arc-auth-hardening", status: "complete" })
+```
+
+---
+
+## paradigm mail
+
+Agent-to-agent messaging for multi-session collaboration (Symphony Phase 0).
+
+| Subcommand | Arguments | Options | Description |
+|-----------|-----------|---------|-------------|
+| `link` | — | `--remote <ip>` | Link session to A-Mail network |
+| `unlink` | — | — | Remove from network |
+| `whoami` | — | — | Show identity + peers |
+| `list` | — | `--json` | List linked agents |
+| `send` | `<message>` | `--to <agent>`, `--thread <id>` | Send message |
+| `read` | — | — | Show unread messages |
+| `inbox` | — | — | Alias for read |
+| `threads` | — | `--json` | List threads |
+| `thread` | `<id>` | — | Show full thread |
+| `resolve` | `<id>` | `--decision <text>` | Resolve thread |
+| `status` | — | `--json` | Network overview |
+| `serve` | — | `--port <n>` | TCP server (Phase 0 stub) |
+| `request` | `<file>` | `--from <agent>`, `--reason <text>` | Request file |
+| `requests` | — | — | List pending requests |
+| `approve` | `<id>` | `--redact` | Approve file request |
+| `deny` | `<id>` | `--reason <text>` | Deny file request |
+
+Default action (no subcommand): shows status overview.
+
+**Quick start:**
+```sh
+# Terminal 1
+paradigm mail link
+# Terminal 2
+paradigm mail link
+paradigm mail send "Can you share your auth middleware?" --to a-paradigm/core
+# Terminal 1
+paradigm mail read
+```
