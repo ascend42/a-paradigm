@@ -145,6 +145,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                   type: 'boolean',
                   description: 'Also search sibling workspace projects (default: false). Requires workspace configured in config.yaml.',
                 },
+                componentType: {
+                  type: 'string',
+                  description: 'Filter components by type (e.g., "view", "service", "tool"). Only applies to #component symbols.',
+                },
               },
               required: ['query'],
             },
@@ -333,19 +337,23 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
       switch (name) {
         case 'paradigm_search': {
-          const { query, type, limit = 10, fuzzy = true, includeWorkspace = false } = args as {
+          const { query, type, limit = 10, fuzzy = true, includeWorkspace = false, componentType } = args as {
             query: string;
             type?: string;
             limit?: number;
             fuzzy?: boolean;
             includeWorkspace?: boolean;
+            componentType?: string;
           };
 
-          const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}:${includeWorkspace}`;
+          const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}:${includeWorkspace}:${componentType || ''}`;
           let results = await toolCache.getOrCompute(cacheKey, () => {
             let r = searchSymbols(ctx.index, query);
             if (type) {
               r = r.filter(s => s.type === type);
+            }
+            if (componentType) {
+              r = r.filter(s => s.componentType === componentType);
             }
             return r;
           });
@@ -379,6 +387,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               type: s.type,
               description: s.description,
               filePath: s.filePath,
+              ...(s.componentType ? { componentType: s.componentType } : {}),
+              ...(s.parentSymbol ? { parentSymbol: s.parentSymbol } : {}),
             })),
           };
 
@@ -784,6 +794,16 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               // Protocol health is optional
             }
 
+            // Build component type breakdown
+            const allComponents = getSymbolsByType(ctx.index, 'component');
+            const componentTypeBreakdown: Record<string, number> = {};
+            for (const comp of allComponents) {
+              if (comp.componentType) {
+                componentTypeBreakdown[comp.componentType] = (componentTypeBreakdown[comp.componentType] || 0) + 1;
+              }
+            }
+            const untypedCount = allComponents.filter(c => !c.componentType).length;
+
             return JSON.stringify({
               project: ctx.projectName,
               symbolSystem: 'v2',
@@ -795,11 +815,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 '~ aspects': counts.aspect,
               },
               total,
+              ...(Object.keys(componentTypeBreakdown).length > 0 ? {
+                componentTypes: {
+                  ...componentTypeBreakdown,
+                  ...(untypedCount > 0 ? { '(untyped)': untypedCount } : {}),
+                },
+              } : {}),
               examples,
               hasPortalYaml: ctx.gateConfig !== null,
               purposeFiles: ctx.aggregation.purposeFiles.length,
               ...(protocols ? { protocols } : {}),
-              note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification',
+              note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification. Use type field for structural role (view, service, tool, etc.)',
               environment: {
                 os: platform,
                 shell,

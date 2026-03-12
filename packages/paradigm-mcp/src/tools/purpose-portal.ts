@@ -143,6 +143,14 @@ const purposeAddComponentTool: Tool = {
         items: { type: 'string' },
         description: 'Component references (e.g. ["#stripe-service"])',
       },
+      type: {
+        type: 'string',
+        description: 'Component type (e.g., "view", "service", "model", "tool"). Open string per project vocabulary.',
+      },
+      parent: {
+        type: 'string',
+        description: 'Parent component (e.g., "#payment-page"). Establishes hierarchy.',
+      },
     },
     required: ['purposeFile', 'id', 'description'],
   },
@@ -729,6 +737,7 @@ async function handleAddComponent(
   const {
     purposeFile, id, description, section = 'components',
     file, status, endpoints, tests, flows, gates, signals, aspects, components,
+    type: componentType, parent,
   } = args as {
     purposeFile: string; id: string; description: string;
     section?: 'components' | 'features';
@@ -737,6 +746,7 @@ async function handleAddComponent(
     flows?: string[]; gates?: string[];
     signals?: string[]; aspects?: string[];
     components?: string[];
+    type?: string; parent?: string;
   };
 
   const filePath = resolvePurposeFilePath(purposeFile, ctx.rootDir);
@@ -762,6 +772,8 @@ async function handleAddComponent(
   if (signals !== undefined) item.signals = signals.map(s => ensurePrefix(s, '!'));
   if (aspects !== undefined) item.aspects = aspects.map(a => ensurePrefix(a, '~'));
   if (components !== undefined) item.components = components.map(c => ensurePrefix(c, '#'));
+  if (componentType !== undefined) item.type = componentType;
+  if (parent !== undefined) item.parent = ensurePrefix(parent, '#');
 
   existing[bareId] = item;
   (data as Record<string, unknown>)[sec] = existing;

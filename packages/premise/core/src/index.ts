@@ -68,4 +68,7 @@ export {
   createSymbolString,
   isValidSymbol,
   getAutocompleteSuggestions,
+  getComponentsByType,
+  getAllComponentTypes,
+  getChildComponents,
 } from './symbol-index.js';

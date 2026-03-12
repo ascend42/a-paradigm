@@ -5,6 +5,7 @@ description: |
 features:
   shift-command:
     description: Full project setup in one command (init → team init → scan → sync → doctor)
+    type: command
     flows:
       - $shift-flow
     components:
@@ -14,6 +15,7 @@ features:
       - '#model-configurator'
   init-command:
     description: Initialize Paradigm in a project with smart detection
+    type: command
     flows:
       - $init-flow
     signals:
@@ -25,25 +27,30 @@ features:
       - '#detection-engine'
   setup-command:
     description: Interactive setup wizard for new projects
+    type: command
     components:
       - '#setup-wizard'
   upgrade-command:
     description: Patch existing projects with new features and migrate from legacy format
+    type: command
     components:
       - '#upgrade-handler'
   doctor-command:
     description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files, and context audit checks for AI instruction file quality.
+    type: command
     components:
       - '#doctor-handler'
       - '#health-checker'
       - '#context-audit'
   scan-command:
     description: Generate navigator.yaml and scan index for codebase exploration
+    type: command
     components:
       - '#scan-handler'
       - '#navigator-generator'
   scan-auto-command:
     description: Auto-generate .purpose files from code analysis (React, Vue, routes, auth, signals)
+    type: command
     components:
       - '#auto-scan-handler'
       - '#component-detector'
@@ -52,41 +59,49 @@ features:
       - '#signal-detector'
   status-command:
     description: Show project symbol status, counts, and configuration overview
+    type: command
     components:
       - '#status-handler'
       - '#symbol-counter'
   beacon-command:
     description: Generate quick-start orientation for AI agents (beacon.md)
+    type: command
     components:
       - '#beacon-handler'
       - '#markdown-generator'
   constellation-command:
     description: Generate symbol relationship graph (constellation.json)
+    type: command
     components:
       - '#constellation-handler'
       - '#graph-builder'
   graph-command:
     description: Launch interactive Symbol Graph UI with local Express server
+    type: command
     components:
       - '#graph-server'
       - '#graph-ui'
   ripple-command:
     description: Analyze change impact upstream/downstream for a symbol
+    type: command
     components:
       - '#ripple-handler'
       - '#impact-analyzer'
   echo-command:
     description: Error-to-symbol mapping from echoes.yaml
+    type: command
     components:
       - '#echo-handler'
       - '#error-mapper'
   probe-command:
     description: Visual discovery via screenshots for scan indexing
+    type: command
     components:
       - '#probe-handler'
       - '#image-processor'
   sync-command:
     description: Generate IDE instruction files from .paradigm/ config (CLAUDE.md, .cursorrules, etc.)
+    type: command
     flows:
       - $sync-flow
     components:
@@ -94,18 +109,22 @@ features:
       - '#ide-adapters'
   sync-llms-command:
     description: Generate llms.txt - LLM-readable project summary following the llms.txt standard
+    type: command
     components:
       - '#sync-llms-handler'
   cursorrules-command:
     description: Generate .cursorrules from .paradigm config
+    type: command
     components:
       - '#cursorrules-handler'
   watch-command:
     description: Watch for changes and auto-sync configuration
+    type: command
     components:
       - '#watch-handler'
   lint-command:
     description: Validate .purpose files for schema errors with --fix auto-repair
+    type: command
     signals:
       - '!lint-error'
       - '!lint-fixed'
@@ -115,53 +134,65 @@ features:
       - '#schema-validator'
   cost-command:
     description: Analyze token costs - static vs MCP dynamic loading
+    type: command
     components:
       - '#cost-handler'
       - '#token-estimator'
   summary-command:
     description: Generate project.md with statistics
+    type: command
     components:
       - '#summary-handler'
   purpose-validate-command:
     description: Validate purpose files against schema
+    type: command
     components:
       - '#purpose-validator'
   purpose-remember-command:
     description: Aggregate and display purpose context
+    type: command
     components:
       - '#purpose-aggregator'
   premise-aggregate-command:
     description: Aggregate all premise sources (flows, symbols, signals)
+    type: command
     components:
       - '#premise-aggregator'
   premise-snapshot-command:
     description: Create a timeline snapshot of premise state
+    type: command
     components:
       - '#premise-snapshotter'
   portal-validate-command:
     description: Validate portal.yaml gate configuration
+    type: command
     components:
       - '#portal-validator'
   portal-check-command:
     description: Check portal.yaml compliance - verify gates are used and declared
+    type: command
     components:
       - '#portal-checker'
   portal-test-command:
     description: Generate and run gate tests
+    type: command
     components:
       - '#portal-tester'
   portal-watch-command:
     description: Launch Portal Viewer - real-time visualization dashboard
+    type: command
     components:
       - '#portal-viewer'
   team-init-command:
     description: Initialize multi-agent team configuration with interactive model selection
+    type: command
     components:
       - '#team-loader'
       - '#manifest-generator'
       - '#model-configurator'
   team-spawn-command:
     description: Spawn an individual AI agent with a specific task
+    type: command
     signals:
       - '!agent-spawned'
       - '!agent-completed'
@@ -172,6 +203,7 @@ features:
       - '#provider-registry'
   team-orchestrate-command:
     description: Orchestrate multi-agent task with AI conductor (solo/faceted/compare modes)
+    type: command
     flows:
       - $orchestration-flow
     signals:
@@ -184,36 +216,44 @@ features:
       - '#audit-logger'
   team-models-command:
     description: Configure or view agent model assignments
+    type: command
     components:
       - '#model-configurator'
       - '#model-discovery'
   team-providers-command:
     description: Show and configure agent providers (claude, claude-code, cursor-cli, manual)
+    type: command
     components:
       - '#provider-registry'
   team-agents-suggest-command:
     description: Suggest agents for a task based on classification triggers
+    type: command
     components:
       - '#agent-classifier'
   team-accept-command:
     description: Accept orchestration changes with optional notes
+    type: command
     components:
       - '#orchestration-acceptor'
   team-diff-command:
     description: Show diff from completed orchestration
+    type: command
     components:
       - '#orchestration-differ'
   team-cost-command:
     description: View cost summary for orchestrations with filtering
+    type: command
     components:
       - '#audit-logger'
       - '#budget-tracker'
   team-export-command:
     description: Export orchestration data as JSON/CSV
+    type: command
     components:
       - '#audit-logger'
   mcp-setup-command:
     description: Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue, Cline)
+    type: command
     signals:
       - '!mcp-configured'
     components:
@@ -222,53 +262,65 @@ features:
       - '#config-generator'
   wisdom-command:
     description: Team preferences, antipatterns, decisions, and expertise management
+    type: command
     components:
       - '#wisdom-handler'
   history-command:
     description: Implementation log, validation, and fragility tracking
+    type: command
     components:
       - '#history-handler'
   hooks-command:
     description: Git hooks, Claude Code hooks, and Cursor hooks for history capture and index enforcement (install/uninstall/status)
+    type: command
     components:
       - '#hooks-handler'
       - '#claude-code-hooks-installer'
       - '#cursor-hooks-installer'
   thread-command:
     description: Session continuity management (thread.md) with configurable trail/breadcrumb limits via limits.threadTrailMax in config.yaml
+    type: command
     components:
       - '#thread-handler'
       - '#session-storage'
   global-command:
     description: Manage Global Brain (~/.paradigm/) including rotation of old files from wisdom, lore, history, and cache directories
+    type: command
     components:
       - '#global-clean-handler'
   sentinel-command:
     description: Launch the unified codebase intelligence UI
+    type: command
     components:
       - '#sentinel-launcher'
   university-command:
     description: Launch the Paradigm University interactive learning platform & PLSAT certification
+    type: command
     components:
       - '#university-launcher'
   triage-command:
     description: Sentinel CLI for incident triage, pattern management, and statistics
+    type: command
     components:
       - '#triage-handler'
   dream-aggregate-command:
     description: Aggregate all dream sources (concepts, ideas, aspirations)
+    type: command
     components:
       - '#dream-aggregator'
   dream-snapshot-command:
     description: Create a timeline snapshot of dream state
+    type: command
     components:
       - '#dream-snapshotter'
   tutorial-command:
     description: Interactive tutorial with curriculum state tracking
+    type: command
     components:
       - '#tutorial-handler'
   sweep-command:
     description: Entropy detection and cleanup — 9 checks for orphaned symbols, stale purpose, phantom gates, dead signals, broken flows, lore rot, tag orphans, aspect drift, coverage decay. Auto-fix by default.
+    type: command
     components:
       - '#sweep-handler'
       - '#entropy-checker'
@@ -276,6 +328,7 @@ features:
       - '!sweep-completed'
   pipeline-command:
     description: Spec pipeline — structured feature workflow with 5 stages (specify, plan, task, implement, validate) and configurable gate modes (auto, manual, sentinel). 4 built-in templates.
+    type: command
     components:
       - '#pipeline-start'
       - '#pipeline-status'
@@ -286,136 +339,200 @@ features:
 components:
   init-handler:
     description: Handles paradigm init command logic
+    type: handler
   template-copier:
     description: Copies templates to project .paradigm/
+    type: utility
   detection-engine:
     description: Detects existing IDE files and project type
+    type: detector
   sync-handler:
     description: Handles paradigm sync command logic
+    type: handler
   sync-llms-handler:
     description: Generates llms.txt from .paradigm config, navigator.yaml, flows.yaml, and portal.yaml
+    type: service
   ide-adapters:
     description: Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)
   lint-handler:
     description: Handles paradigm lint command
+    type: handler
   yaml-fixer:
     description: Auto-fixes YAML issues (quotes symbols, converts markdown)
+    type: utility
   schema-validator:
     description: Validates .purpose files against schema
+    type: utility
   cost-handler:
     description: Handles paradigm cost command
+    type: handler
   token-estimator:
     description: Estimates token counts for context files
+    type: utility
   scan-handler:
     description: Handles paradigm scan command
+    type: handler
   auto-scan-handler:
     description: Handles paradigm scan --auto command
+    type: handler
   navigator-generator:
     description: Generates navigator.yaml for AI exploration
+    type: service
   component-detector:
     description: Detects React/Vue/Angular components
+    type: detector
   route-detector:
     description: Detects routes (Express, Next.js, React Router)
+    type: detector
   auth-detector:
     description: Detects auth middleware and gates
+    type: detector
   signal-detector:
     description: Detects events, errors, toast notifications
+    type: detector
   team-loader:
     description: Loads agents.yaml and team-state.yaml
+    type: loader
   manifest-generator:
     description: Generates default agents.yaml
+    type: config
   agent-spawner:
     description: Spawns AI agents via provider abstraction
+    type: service
   orchestrator:
     description: Coordinates multi-agent orchestration (solo/faceted modes)
+    type: service
   context-builder:
     description: Builds role-specific context for token efficiency
+    type: service
   provider-registry:
     description: Manages provider cascade (claude → claude-code → cursor-cli → manual)
+    type: config
   budget-tracker:
     description: Tracks token usage and enforces budget limits
+    type: service
   audit-logger:
     description: Logs orchestrations to .paradigm/orchestrations/
+    type: service
   model-configurator:
     description: Interactive prompts for configuring agent model assignments
+    type: config
   model-discovery:
     description: Discovers available AI models from APIs, remote manifest, and presets
+    type: config
   agent-classifier:
     description: Classifies tasks and suggests appropriate agents
+    type: service
   mcp-setup-handler:
     description: Handles MCP setup commands
+    type: config
   client-detector:
     description: Detects installed AI clients (Cursor, Claude Desktop, Continue, Cline)
+    type: detector
   config-generator:
     description: Generates MCP config for each client
+    type: service
   status-handler:
     description: Handles paradigm status command
+    type: handler
   symbol-counter:
     description: Counts symbols by type
+    type: utility
   beacon-handler:
     description: Generates beacon.md content
+    type: handler
   constellation-handler:
     description: Builds constellation graph
+    type: handler
   graph-builder:
     description: Builds symbol relationship graph
+    type: utility
   ripple-handler:
     description: Performs ripple analysis
+    type: handler
   impact-analyzer:
     description: Analyzes upstream/downstream impact
+    type: utility
   echo-handler:
     description: Handles echo lookups
+    type: handler
   error-mapper:
     description: Maps error codes to symbols
+    type: utility
   probe-handler:
     description: Handles probe command
+    type: handler
   image-processor:
     description: Processes screenshot input
+    type: utility
   doctor-handler:
     description: Runs health checks
+    type: handler
   health-checker:
     description: Validates project setup
+    type: utility
   thread-handler:
     description: Manages thread.md operations
+    type: handler
   session-storage:
     description: Stores session state in thread.md
+    type: utility
   wisdom-handler:
     description: Manages team preferences, antipatterns, decisions, and expertise
+    type: handler
   history-handler:
     description: Manages implementation log, validation, and fragility
+    type: handler
   hooks-handler:
     description: Manages git hooks for automatic history capture
+    type: handler
   claude-code-hooks-installer:
     description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex
+    type: installer
   sentinel-launcher:
     description: Launches the Sentinel codebase intelligence UI
+    type: service
   university-launcher:
     description: Launches the Paradigm University learning platform
+    type: service
     file: src/commands/university.ts
   triage-handler:
     description: Handles Sentinel CLI triage commands
+    type: handler
   purpose-validator:
     description: Validates purpose files against schema
+    type: service
   purpose-aggregator:
     description: Aggregates and displays purpose context
+    type: service
   premise-aggregator:
     description: Aggregates all premise sources
+    type: service
   premise-snapshotter:
     description: Creates timeline snapshots of premise state
+    type: service
   portal-validator:
     description: Validates portal.yaml configuration
+    type: service
   portal-checker:
     description: Checks portal.yaml compliance
+    type: service
   portal-tester:
     description: Generates and runs gate tests
+    type: service
   portal-viewer:
     description: Real-time portal visualization dashboard
+    type: service
   global-clean-handler:
     description: Scans and removes old files from ~/.paradigm/ subdirectories with configurable age threshold
+    type: service
   sweep-handler:
     description: Runs 9 entropy checks across the project and auto-fixes issues
+    type: handler
     file: src/commands/sweep/index.ts
   entropy-checker:
     description: Individual check functions for each entropy category (orphaned, stale, phantom, dead, broken, lore-rot, tag-orphan, semantic-drift, coverage-decay)
+    type: utility
     file: src/commands/sweep/index.ts
 signals:
   init-success:

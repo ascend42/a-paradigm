@@ -34,6 +34,8 @@ export interface AggregationInput {
     tags?: string[];
     references?: string[];
     referencedBy?: string[];
+    componentType?: string;
+    parentSymbol?: string;
   }>;
   purposeFiles: string[];
   portalFiles: string[];
@@ -93,6 +95,22 @@ export function generateScanIndex(
         };
       }
     }
+  }
+
+  // Aggregate component types into $meta
+  const typeCounts: Record<string, number> = {};
+  for (const comp of Object.values(index.components)) {
+    if (comp.componentType) {
+      typeCounts[comp.componentType] = (typeCounts[comp.componentType] || 0) + 1;
+    }
+  }
+  for (const feat of Object.values(index.features)) {
+    if (feat.componentType) {
+      typeCounts[feat.componentType] = (typeCounts[feat.componentType] || 0) + 1;
+    }
+  }
+  if (Object.keys(typeCounts).length > 0) {
+    index.$meta.componentTypes = typeCounts;
   }
 
   // Build reverse lookups for screens
@@ -176,6 +194,8 @@ function addComponent(
     description: symbol.description,
     visualTags,
     related: symbol.references,
+    componentType: symbol.componentType,
+    parent: symbol.parentSymbol,
   };
 
   index.components[id] = element;
@@ -202,6 +222,8 @@ function addFeature(
     description: symbol.description,
     visualTags,
     related: symbol.references,
+    componentType: symbol.componentType,
+    parent: symbol.parentSymbol,
   };
 
   index.features[id] = element;

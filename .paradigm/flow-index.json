@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-03-11T04:39:34.963Z",
+  "generatedAt": "2026-03-12T18:15:40.429Z",
   "flows": {
     "$plsat-exam-flow": {
       "id": "$plsat-exam-flow",
@@ -125,6 +125,33 @@
       ],
       "definedIn": "packages/paradigm/src/core/.purpose"
     },
+    "$purpose-parsing": {
+      "id": "$purpose-parsing",
+      "description": "Parse a .purpose file from raw YAML into validated structured data",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Read YAML file and parse with js-yaml",
+          "symbol": "#yaml-parser"
+        },
+        {
+          "id": "step-2",
+          "action": "Validate parsed data against PurposeFileSchema",
+          "symbol": "#zod-schemas"
+        },
+        {
+          "id": "step-3",
+          "action": "Extract components, gates, signals, flows, aspects from validated data",
+          "symbol": "#symbol-extractor"
+        },
+        {
+          "id": "step-4",
+          "action": "Return structured PurposeFile or validation errors",
+          "symbol": "#validator"
+        }
+      ],
+      "definedIn": "packages/purpose/core/.purpose"
+    },
     "$symbol-aggregation": {
       "id": "$symbol-aggregation",
       "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
@@ -161,33 +188,6 @@
         }
       ],
       "definedIn": "packages/premise/core/.purpose"
-    },
-    "$purpose-parsing": {
-      "id": "$purpose-parsing",
-      "description": "Parse a .purpose file from raw YAML into validated structured data",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Read YAML file and parse with js-yaml",
-          "symbol": "#yaml-parser"
-        },
-        {
-          "id": "step-2",
-          "action": "Validate parsed data against PurposeFileSchema",
-          "symbol": "#zod-schemas"
-        },
-        {
-          "id": "step-3",
-          "action": "Extract components, gates, signals, flows, aspects from validated data",
-          "symbol": "#symbol-extractor"
-        },
-        {
-          "id": "step-4",
-          "action": "Return structured PurposeFile or validation errors",
-          "symbol": "#validator"
-        }
-      ],
-      "definedIn": "packages/purpose/core/.purpose"
     },
     "$portal-validation-flow": {
       "id": "$portal-validation-flow",
@@ -271,6 +271,20 @@
     "#audit-logger": [
       "$agent-orchestration-flow"
     ],
+    "#yaml-parser": [
+      "$purpose-parsing",
+      "$portal-validation-flow"
+    ],
+    "#zod-schemas": [
+      "$purpose-parsing"
+    ],
+    "#symbol-extractor": [
+      "$purpose-parsing"
+    ],
+    "#validator": [
+      "$purpose-parsing",
+      "$portal-validation-flow"
+    ],
     "#aggregator": [
       "$symbol-aggregation"
     ],
@@ -285,20 +299,6 @@
     ],
     "#graph-builder": [
       "$symbol-aggregation"
-    ],
-    "#yaml-parser": [
-      "$purpose-parsing",
-      "$portal-validation-flow"
-    ],
-    "#zod-schemas": [
-      "$purpose-parsing"
-    ],
-    "#symbol-extractor": [
-      "$purpose-parsing"
-    ],
-    "#validator": [
-      "$purpose-parsing",
-      "$portal-validation-flow"
     ],
     "#gate-schemas": [
       "$portal-validation-flow"

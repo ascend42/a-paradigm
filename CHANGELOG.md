@@ -5,6 +5,41 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.33.0] — 2026-03-12
+
+### Added
+
+- **Component types (`type` field on PurposeItem)**: Optional open-string `type` field on components describes structural role (view, service, tool, router, filter, etc.). Added to `PurposeItem` interface and Zod schema (`@a-company/purpose-core`).
+- **Component hierarchy (`parent` field on PurposeItem)**: Optional `parent` field establishes component hierarchy, declared on child components with `#` symbol reference.
+- **`componentType` and `parentSymbol` on SymbolEntry**: Propagated through aggregation from .purpose items to the unified symbol index (`@a-company/premise-core`).
+- **Component type query functions (`@a-company/premise-core`)**: `getComponentsByType()`, `getAllComponentTypes()`, `getChildComponents()` — filter and query components by structural type.
+- **`componentType` filter on `paradigm_search`**: New optional parameter filters search results by component type.
+- **Component type breakdown in `paradigm_status`**: Status response now includes `componentTypes` section showing count per type.
+- **`componentType` on ScanElement, `componentTypes` on ScanIndexMeta (`@a-company/probe-core`)**: Scan index elements carry their component type; `$meta` aggregates type counts.
+- **`componentTypeBreakdown` in reindex result**: `paradigm_reindex` reports typed component counts in rebuild output.
+- **`symbolsByComponentType` in navigator.yaml**: Navigator groups symbols by their component type for quick lookup.
+- **`type` and `parent` parameters on `paradigm_purpose_add_component`**: MCP tool accepts structural type and parent component when creating/updating components.
+- **`component_types` glossary in `.paradigm/config.yaml`**: 17 type definitions (command, tool, utility, engine, loader, writer, service, model, view, provider, manager, detector, router, filter, store, handler, config).
+- **University lesson: "Component Types & Hierarchy" (para-101)**: Covers type vs tag distinction, parent field, config glossary, MCP integration, with 3 quiz questions.
+- **PLSAT questions (slots 100–102)**: 3 new assessment slots covering type vs tag usage, open-string types, parent declarations, and componentType search.
+- **Migrated 208 components across 5 .purpose files**: Added `type` (and `parent` where applicable) to `packages/conductor/.purpose`, `packages/paradigm-mcp/.purpose`, `packages/paradigm/.purpose`, and `packages/paradigm/src/core/.purpose`.
+- **CLAUDE.md documentation**: New "Component Types" section documenting type/parent fields, type vs tag distinction, MCP usage, and updated conventions.
+
+## [3.32.4] — 2026-03-11
+
+### Fixed
+
+- **Gaze calibration collected wrong data (`#gaze-calibration`)**: Calibration view was receiving the already-calibrated screen-pixel stream instead of raw iris positions (0–1 normalized). The affine transform trained on screen→screen instead of iris→screen, producing a tiny, mis-scaled, Y-inverted mapping. Now passes a dedicated `rawIrisStream` for sample collection.
+- **Calibration feedback dot off-screen (`#gaze-calibration`)**: Yellow gaze dot during calibration multiplied screen-pixel values by screen dimensions (treating ~960 as normalized 0–1), pushing it millions of pixels off-screen. Now correctly converts raw iris to screen coordinates.
+- **Only 3 of 5 calibration points used (`#gaze-calibration`)**: `affineMap` used only the first 3 points for a basic affine, discarding points 4 and 5. Replaced with least-squares affine fitting over all collected points for more robust mapping.
+- **Kalman filter stale after recalibration (`#vision-gaze-provider`)**: Kalman filter state wasn't reset after calibration, so the old mapping's velocity/position estimates corrupted the new calibration. Now resets on calibration completion.
+
+### Added
+
+- **Raw iris stream (`#vision-gaze-provider`)**: New `rawIrisStream` publishes pre-calibration iris positions (0–1 normalized) alongside the existing calibrated `gazePointStream`. Used by calibration and debug overlay.
+- **Calibration quality diagnostics (`#gaze-calibration`)**: `calibrationQuality()` returns average residual in pixels; `residuals()` returns per-point error breakdown. Logged after calibration.
+- **Enhanced gaze debug overlay (`#gaze-cursor`)**: Cyan dot (calibrated position) + yellow dot (raw iris estimate) + monospace coordinate label. Shows both pre- and post-calibration gaze positions for diagnosing mapping issues.
+
 ## [3.32.3] — 2026-03-11
 
 ### Fixed

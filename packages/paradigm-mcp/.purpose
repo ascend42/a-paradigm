@@ -12,6 +12,7 @@ description: |
 
 #MCPServer:
   description: Main MCP server entry point using @modelcontextprotocol/sdk
+  type: service
   tags: [feature]
   anchors:
     - src/index.ts:1-100
@@ -22,6 +23,7 @@ description: |
 
 #ResourceHandlers:
   description: MCP resource handlers for paradigm:// URIs
+  type: service
   tags: [feature, mcp]
   anchors:
     - src/resources/index.ts:1-200
@@ -30,6 +32,7 @@ description: |
 
 #ToolHandlers:
   description: MCP tool handlers for paradigm_* actions
+  type: service
   tags: [feature, mcp]
   aspects: ["~mcp-tool-handler"]
   anchors:
@@ -55,18 +58,21 @@ description: |
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/purpose-portal.ts:1-1350
 
 #OrchestrationTools:
   description: Inline multi-agent orchestration tools. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings.
+  type: tool
   tags: [mcp, team]
   anchors:
     - src/tools/orchestration.ts:1-1476
 
 #CoreTools:
   description: Core symbol tools (search, ripple, related, status, gates_for_route) with TTL caching for search and status
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/index.ts:100-800
@@ -77,6 +83,7 @@ description: |
 
 #WisdomTools:
   description: Team wisdom tools (context, record, expert, promote) with global+local merge
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/wisdom.ts:1-500
@@ -87,12 +94,14 @@ description: |
 
 #HistoryTools:
   description: Implementation history tools (context, record, validate, fragility)
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/history.ts:1-300
 
 #NavigateTools:
   description: Codebase navigation tools (find, explore, context) with TTL caching
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/navigate.ts:1-261
@@ -101,12 +110,14 @@ description: |
 
 #SentinelTools:
   description: Incident triage tools (triage, show, resolve, patterns, stats)
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/sentinel.ts:1-400
 
 #TagsTools:
   description: Tag bank tools for v2 symbol classification
+  type: tool
   tags: [mcp, v2]
   anchors:
     - src/tools/tags.ts:1-400
@@ -115,6 +126,7 @@ description: |
 
 #ReindexTools:
   description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Clears ToolCache on success.
+  type: tool
   tags: [mcp]
   anchors:
     - src/tools/reindex.ts:1-475
@@ -126,12 +138,14 @@ description: |
 
 #GraphTools:
   description: Graph Generate MCP tool — produces GraphState JSON for the Symbol Graph UI from scan-index data with auto-positioned nodes and group layout
+  type: tool
   tags: [mcp, visualization]
   anchors:
     - src/tools/graph.ts:1-300
 
 #ConductorTools:
   description: Conductor session management — auto-registers on MCP startup, manual register/unregister/list tools, process exit cleanup
+  type: tool
   tags: [mcp, conductor, auto-registration]
   anchors:
     - src/tools/conductor.ts:1-200
@@ -139,6 +153,7 @@ description: |
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation
+  type: tool
   tags: [mcp, habits]
   anchors:
     - src/tools/habits.ts:1-500
@@ -146,6 +161,7 @@ description: |
 
 #AspectGraphTools:
   description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm
+  type: tool
   tags: [mcp, aspect-graph]
   anchors:
     - src/tools/aspect-graph.ts:1-550
@@ -162,6 +178,7 @@ description: |
 
 #AspectLoreBridge:
   description: Links aspects to lore decision records via lore_links table. Infers edges between aspects sharing lore.
+  type: utility
   tags: [feature, aspect-graph]
   anchors:
     - src/utils/aspect-lore-bridge.ts:1-434
@@ -174,6 +191,7 @@ description: |
 
 #ContextTools:
   description: Context monitoring, session persistence, and handoff tools with global store integration
+  type: tool
   tags: [mcp]
   aspects: ["~global-persistence"]
   anchors:
@@ -188,6 +206,7 @@ description: |
 
 #GlobalStore:
   description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
+  type: store
   tags: [feature, persistence]
   aspects: ["~global-persistence"]
   anchors:
@@ -198,6 +217,7 @@ description: |
 
 #SessionTracker:
   description: Session tracking with dual-write breadcrumbs (local + global)
+  type: utility
   tags: [persistence]
   aspects: ["~global-persistence"]
   anchors:
@@ -207,6 +227,7 @@ description: |
 
 #WisdomLoader:
   description: Wisdom loader with global+local merge and scope tagging
+  type: loader
   tags: [persistence]
   anchors:
     - src/utils/wisdom-loader.ts:1-360
@@ -215,6 +236,7 @@ description: |
 
 #IndexLoader:
   description: Loads project symbol index using premise-core aggregator
+  type: loader
   tags: [integration]
   anchors:
     - src/utils/index-loader.ts:1-150
@@ -224,12 +246,14 @@ description: |
 
 #ToolCache:
   description: TTL-based cache for MCP tool results to avoid redundant recomputation within short windows
+  type: utility
   tags: [performance]
   anchors:
     - src/utils/tool-cache.ts:1-69
 
 #WorkspaceLoader:
   description: Multi-project workspace support. Loads .paradigm-workspace files, reads sibling scan-index.json, filters by exports, provides cross-project search/ripple helpers.
+  type: loader
   tags: [feature, workspace]
   anchors:
     - src/utils/workspace-loader.ts:1-430

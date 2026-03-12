@@ -1,0 +1,81 @@
+id: L-2026-03-12-ascend-172420-001
+type: insight
+timestamp: '2026-03-12T17:24:20.027Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm 4.0 ideation — component types, glossary, architectural self-description
+summary: 'Major architectural direction for Paradigm 4.0. Components get an open `type` field and `parent:` hierarchy. Projects define a type glossary in config — descriptions of what each type means in that project''s architecture. Agents read the glossary on entry and immediately understand the project''s vocabulary. Reindex aggregates all used types across the codebase. This replaces the flat #component bag with a typed, hierarchical, self-describing architecture map.'
+symbols_touched:
+  - '#paradigm-core'
+decisions:
+  - id: open-types
+    decision: Component types are open strings, not a fixed enum
+    rationale: Every project has its own architectural vocabulary. Forcing universal types would be like forcing one folder structure on all projects.
+  - id: parent-hierarchy
+    decision: 'Composition via parent: field on children, computed upward'
+    rationale: Children reference parents, system view computed during reindex. Avoids maintaining rosters in parent .purpose files that drift.
+  - id: type-glossary
+    decision: Project defines type meanings in config.yaml component_types section
+    rationale: Agents need to know what a 'provider' means in THIS project. Glossary is shared team knowledge that makes architecture portable across sessions and agents.
+learnings:
+  - Tags drift because they're declarations someone has to remember to maintain. Types + glossary are more stable because they describe structural roles that rarely change.
+  - Component hierarchy should use one mechanism (parent:) at every level rather than special-casing system vs component relationships.
+  - The type vocabulary aggregated during reindex IS the project's architectural self-description.
+tags:
+  - arc:paradigm-4
+  - architecture
+  - ideation
+  - component-types
+  - glossary
+body: |-
+  ## Core Design Decisions
+
+  ### Component redefinition
+  - A component is "any named thing in the codebase" — file, function, class, UI element
+  - Not abstract concepts, not 1:1 with files — multiple components per file is normal
+  - Anchors point to file + line, `parent:` declares composition
+
+  ### Type field
+  - Open string, NOT a fixed enum — every project has its own architectural vocabulary
+  - A React project: page, component, hook, context, store
+  - A Swift app: view, viewmodel, protocol, provider, manager
+  - A backend: controller, service, repository, model, middleware
+
+  ### Hierarchy via parent:
+  - Three levels: system → component → component
+  - `system:` for package/feature scope parent
+  - `parent:` for component-to-component nesting (same mechanism at every level)
+  - Children reference parents, system view is computed during reindex
+
+  ### Type glossary in config
+  - `component_types:` in .paradigm/config.yaml
+  - Each type has a description explaining what it means IN THIS PROJECT
+  - Agents read this on session start — instant architectural understanding
+  - Portable across handoffs, sessions, team members
+
+  ### Auto-discovery
+  - `paradigm reindex` walks all .purpose files, extracts all used type values
+  - Aggregated vocabulary surfaced in scan index and paradigm_status
+  - Types can be auto-suggested from directory conventions
+
+  ### Symbol grouping (user's framing)
+  - Static: Component + Aspect (what things are and what rules apply)
+  - Dynamic: Flow + Signal + Gate (what happens, events, checkpoints within process)
+  - Signals and gates only exist within flow context
+  - Aspects only meaningful when anchored to components
+
+  ### Solves the cross-cutting discovery problem
+  - "Find all places handling access control" → search by type (guard, middleware, policy)
+  - Types ARE the discovery mechanism — no drifting tags needed
+  - Type + glossary means the query is always in the project's own vocabulary
+
+  ## Scope
+  - This is the basis for Paradigm 4.0.0
+  - Conductor will ship alongside as the runtime companion
+  - There's a larger idea dependent on Claude's upcoming "flow" feature (TBD)
+git_context:
+  ref: dcec38558acd8d513bf6201c99e665c9ff6cd475
+  branch: main
+  dirty: true

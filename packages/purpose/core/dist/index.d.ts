@@ -111,6 +111,14 @@ interface Reference {
 interface PurposeItem {
     /** Human-readable description */
     description: string;
+    /** Component type — open string per project vocabulary (e.g., "view", "service", "model") */
+    type?: string;
+    /** Parent component reference (e.g., "#payment-page") */
+    parent?: string;
+    /** Code anchors (file:line format, same as aspects) */
+    anchors?: string[];
+    /** Classification tags */
+    tags?: string[];
     /** API endpoints associated with this item */
     endpoints?: string[];
     /** Test files associated with this item */

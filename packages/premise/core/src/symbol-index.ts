@@ -114,10 +114,47 @@ export function searchSymbols(index: SymbolIndex, query: string): SymbolEntry[] 
     // Match tags
     if (entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery))) {
       results.push(entry);
+      continue;
+    }
+
+    // Match component type
+    if (entry.componentType?.toLowerCase().includes(lowerQuery)) {
+      results.push(entry);
+      continue;
     }
   }
 
   return results;
+}
+
+/**
+ * Get components filtered by component type
+ */
+export function getComponentsByType(index: SymbolIndex, componentType: string): SymbolEntry[] {
+  const components = getSymbolsByType(index, 'component');
+  return components.filter(c => c.componentType === componentType);
+}
+
+/**
+ * Get all unique component types in the index
+ */
+export function getAllComponentTypes(index: SymbolIndex): string[] {
+  const types = new Set<string>();
+  const components = getSymbolsByType(index, 'component');
+  for (const comp of components) {
+    if (comp.componentType) {
+      types.add(comp.componentType);
+    }
+  }
+  return Array.from(types).sort();
+}
+
+/**
+ * Get child components of a parent symbol
+ */
+export function getChildComponents(index: SymbolIndex, parentSymbol: string): SymbolEntry[] {
+  const components = getSymbolsByType(index, 'component');
+  return components.filter(c => c.parentSymbol === parentSymbol);
 }
 
 /**

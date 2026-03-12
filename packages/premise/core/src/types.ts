@@ -152,6 +152,10 @@ export interface SymbolEntry {
   appliesTo?: string[];
   /** For aspects: enforcement description */
   enforcement?: string;
+  /** Component type from .purpose type field */
+  componentType?: string;
+  /** Parent component symbol from .purpose parent field */
+  parentSymbol?: string;
 }
 
 // ============================================

@@ -2,7 +2,7 @@
   "version": "3.0",
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
-  "totalSlots": 99,
+  "totalSlots": 102,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
   "description": "99 questions. 90 minutes. 80% to pass. Good luck, scholar.",
@@ -2487,6 +2487,83 @@
           },
           "correct": "B",
           "explanation": "Stack presets include scan hints — framework-specific patterns that tell the auto-scanner where to look and what patterns to match. The django preset knows that views.py files contain route handlers, models.py files contain data models, and urls.py files define URL routing. This is why stack presets solve the cold-start problem: they bring framework knowledge that makes auto-scanning productive for existing projects."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-100",
+      "course": "para-101",
+      "variants": [
+        {
+          "id": "plsat-100",
+          "scenario": "Your project has a `#PaymentService` that coordinates payment processing and integrates with Stripe. A new developer asks whether they should use `type: integration` or `tags: [integration]` to capture the Stripe relationship.",
+          "question": "What is the correct approach?",
+          "choices": {
+            "A": "`type: integration` — because the Stripe integration is the most important thing about this component",
+            "B": "`type: service` with `tags: [integration]` — type describes structural role, tags describe domain/behavior",
+            "C": "Both `type: integration` and `tags: [integration]` — redundancy is good for search",
+            "D": "Neither — integration is a v1 concept replaced by `&` prefix in v2",
+            "E": "`type: stripe` — use the specific integration name as the type"
+          },
+          "correct": "B",
+          "explanation": "The `type` field describes a component's structural role — what the code IS architecturally. PaymentService is a service, so `type: service`. The Stripe integration is a behavioral/domain concern, captured with `tags: [integration]`. Type and tags serve different classification axes: type = architecture, tags = domain."
+        },
+        {
+          "id": "plsat-100b",
+          "scenario": "A developer adds a new `#EmailValidator` utility and sets `type: validator` in the .purpose file. Another developer points out that `validator` is not in the project's `component_types` glossary in config.yaml.",
+          "question": "Is `type: validator` valid?",
+          "choices": {
+            "A": "No — types must exactly match the glossary entries or they are rejected",
+            "B": "Yes — types are open strings and the glossary is descriptive only, not enforced",
+            "C": "No — you must add it to the glossary first before using it",
+            "D": "Yes — but only if the developer also adds a `~validator` aspect",
+            "E": "It depends on the `strict-types` setting in config.yaml"
+          },
+          "correct": "B",
+          "explanation": "Component types are open strings — any project can invent its own vocabulary. The glossary in config.yaml is descriptive only (it helps agents understand types) but does not enforce or block unknown types. The developer can use `type: validator` freely."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-101",
+      "course": "para-101",
+      "variants": [
+        {
+          "id": "plsat-101",
+          "scenario": "You have a `#GazeRouter` component that maps gaze coordinates to dispatch targets. It is managed by `#InputOrchestrator`. You want to express this hierarchy in the .purpose file.",
+          "question": "How should the parent relationship be declared?",
+          "choices": {
+            "A": "On `#InputOrchestrator` with `children: [\"#GazeRouter\"]`",
+            "B": "On `#GazeRouter` with `parent: \"#InputOrchestrator\"`",
+            "C": "In a separate `relationships` section at the top of the .purpose file",
+            "D": "In portal.yaml alongside route gates",
+            "E": "Using `tags: [child-of-InputOrchestrator]` on GazeRouter"
+          },
+          "correct": "B",
+          "explanation": "Parent relationships are declared on the child component using the `parent` field with a `#` symbol reference. This keeps .purpose files decentralized — you don't need to maintain a children roster on the parent. The parent field is computed upward, not maintained downward."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-102",
+      "course": "para-101",
+      "variants": [
+        {
+          "id": "plsat-102",
+          "scenario": "An AI agent needs to find all router components in a project to understand the dispatch architecture. The project uses component types consistently.",
+          "question": "What is the most efficient MCP tool call?",
+          "choices": {
+            "A": "`paradigm_search` with `query: \"router\"` — search by name",
+            "B": "`paradigm_search` with `query: \"*\"` and `componentType: \"router\"` — filter by type",
+            "C": "`paradigm_navigate` with `intent: \"find\"` and `target: \"router\"` — navigate to routers",
+            "D": "`paradigm_ripple` with `symbol: \"#router\"` — check router dependencies",
+            "E": "Read every .purpose file and grep for `type: router`"
+          },
+          "correct": "B",
+          "explanation": "The `paradigm_search` tool accepts a `componentType` filter that directly queries the symbol index for components of a specific type. This is the most efficient approach — it uses the index instead of reading files, and returns exactly the components with `type: router`."
         }
       ]
     }

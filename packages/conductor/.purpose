@@ -21,127 +21,154 @@ context:
 
 #conductor-app:
   description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager, global hotkey wiring (video/voice toggles)
+  type: config
   tags: [app, lifecycle, macos, single-owner, hotkeys]
   anchors:
     - Sources/Conductor/App/:1
 
 #conductor-panel:
   description: NSPanel floating overlay window — always-on-top, draggable, transparent
+  type: config
   tags: [ui, overlay, macos]
   anchors:
     - Sources/Conductor/App/ConductorPanel.swift:1
 
 #permissions-onboarding:
   description: Camera/Mic/Accessibility permission request flow
+  type: manager
   tags: [permissions, onboarding, macos]
   anchors:
     - Sources/Conductor/App/PermissionsManager.swift:1
 
 #text-buffer:
   description: Staged text buffer with cursor, undo/redo — convergence point for all inputs
+  type: engine
   tags: [buffer, editing]
   anchors:
     - Sources/Conductor/Buffer/BufferEngine.swift:1
 
 #cursor-navigation:
   description: Character/word/line boundary cursor movement
+  type: engine
   tags: [buffer, navigation]
   anchors:
     - Sources/Conductor/Buffer/BufferEngine.swift:1
 
 #window-detector:
   description: AXUIElement-based Claude Code instance discovery
+  type: detector
   tags: [window, detection, macos]
   anchors:
     - Sources/Conductor/WindowManager/ClaudeCodeDetector.swift:1
 
 #session-file-watcher:
   description: Watches ~/.conductor/sessions/ for registration files from /conduct or paradigm_conductor_register
+  type: detector
   tags: [window, detection, file-watcher, registration]
   anchors:
     - Sources/Conductor/WindowManager/SessionFileWatcher.swift:1
 
 #keyboard-input:
   description: NSTextField keyboard input handler
+  type: provider
   tags: [input, keyboard]
   anchors:
     - Sources/Conductor/Input/KeyboardInput/KeyboardInputHandler.swift:1
 
 #dispatch-target:
   description: AX text injection to targeted CC window
+  type: router
   tags: [dispatch, accessibility, macos]
   anchors:
     - Sources/Conductor/Dispatch/AXDispatchTarget.swift:1
 
 #buffer-view:
   description: SwiftUI text buffer display with cursor
+  type: view
+  parent: "#text-buffer"
   tags: [ui, buffer]
   anchors:
     - Sources/Conductor/UI/Views/BufferView.swift:1
 
 #instance-list-view:
   description: SwiftUI list of detected CC instances
+  type: view
   tags: [ui, instances]
   anchors:
     - Sources/Conductor/UI/Views/InstanceListView.swift:1
 
 #whisper-voice-provider:
   description: WhisperKit speech-to-text — real CoreML transcription via WhisperKit 0.16.0
+  type: provider
   tags: [voice, whisperkit, coreml]
   anchors:
     - Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift:1
 
 #audio-capture:
   description: AVCaptureSession microphone pipeline
+  type: provider
+  parent: "#whisper-voice-provider"
   tags: [voice, audio, avfoundation]
   anchors:
     - Sources/Conductor/Input/VoiceInput/AudioCapture.swift:1
 
 #shared-camera:
   description: "Single AVCaptureSession shared by all Vision providers — distributes frames to registered CameraFrameConsumer instances. Eliminates camera conflicts."
+  type: provider
   tags: [input, camera, shared, avfoundation]
   anchors:
     - Sources/Conductor/Input/SharedCameraSession.swift:1
 
 #vision-gaze-provider:
-  description: "Native Vision framework gaze tracking — VNDetectFaceLandmarksRequest for pupil positions and eyebrow distances. Replaces MediaPipeGazeProvider (no Python dependency). Shares camera with gesture provider."
-  tags: [gaze, vision, face-landmarks, native]
+  description: "Native Vision framework gaze tracking — VNDetectFaceLandmarksRequest for pupil positions and eyebrow distances. Dual streams: calibrated (screen-space) + raw iris (0–1 normalized). Replaces MediaPipeGazeProvider (no Python dependency). Shares camera with gesture provider."
+  type: provider
+  tags: [gaze, vision, face-landmarks, native, dual-stream]
   anchors:
     - Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift:1
 
 #vision-gesture-provider:
   description: "Apple Vision hand pose detection — receives frames from SharedCameraSession instead of owning its own AVCaptureSession"
+  type: provider
   tags: [gesture, vision, neural-engine, shared-camera]
   anchors:
     - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift:1
 
 #gesture-classifier:
   description: Joint positions to GestureAction mapping
+  type: store
+  parent: "#vision-gesture-provider"
   tags: [gesture, classification]
   anchors:
     - Sources/Conductor/Input/GestureInput/GestureClassifier.swift:1
 
 #gesture-state-machine:
   description: Debounce, cooldowns, state transitions
+  type: filter
+  parent: "#vision-gesture-provider"
   tags: [gesture, state-machine]
   anchors:
     - Sources/Conductor/Input/GestureInput/GestureStateMachine.swift:1
 
 #gesture-hud:
   description: Hand state + gesture feedback overlay
+  type: view
+  parent: "#vision-gesture-provider"
   tags: [ui, gesture, feedback]
   anchors:
     - Sources/Conductor/UI/Views/GestureHUDView.swift:1
 
 #mediapipe-gaze-provider:
   description: "LEGACY — MediaPipe FaceMesh gaze via Python subprocess. Replaced by #vision-gaze-provider. Retained as fallback reference."
+  type: provider
   tags: [gaze, mediapipe, python, legacy]
   anchors:
     - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
 
 #gaze-calibration:
-  description: 5-point calibration — math, fullscreen overlay UI, and window controller
-  tags: [gaze, calibration, ui]
+  description: "5-point calibration — least-squares affine over all points, raw iris collection, fullscreen overlay UI, calibration quality diagnostics"
+  type: store
+  parent: "#vision-gaze-provider"
+  tags: [gaze, calibration, ui, least-squares]
   anchors:
     - Sources/Conductor/Input/GazeInput/GazeCalibration.swift:1
     - Sources/Conductor/UI/Views/GazeCalibrationView.swift:1
@@ -149,138 +176,168 @@ context:
 
 #kalman-filter:
   description: Gaze coordinate smoothing
+  type: filter
+  parent: "#vision-gaze-provider"
   tags: [gaze, filter, math]
   anchors:
     - Sources/Conductor/Input/GazeInput/KalmanFilter.swift:1
 
 #gaze-router:
   description: Gaze point to target window mapping
+  type: router
   tags: [gaze, dispatch, targeting]
   anchors:
     - Sources/Conductor/Dispatch/GazeRouter.swift:1
 
 #paradigm-mcp-client:
   description: Spawn paradigm-mcp, call tools via stdio JSON-RPC
+  type: service
   tags: [integration, mcp, json-rpc]
   anchors:
     - Sources/Conductor/Integration/ParadigmMCPClient.swift:1
 
 #git-monitor:
   description: Poll git diff for project context
+  type: service
   tags: [integration, git]
   anchors:
     - Sources/Conductor/Integration/GitMonitor.swift:1
 
 #context-enricher:
   description: Assemble Paradigm + git context for dispatch
+  type: service
   tags: [dispatch, context, enrichment]
   anchors:
     - Sources/Conductor/Dispatch/ContextEnricher.swift:1
 
 #sentinel-ws-client:
   description: WebSocket client for Sentinel events
+  type: service
   tags: [integration, sentinel, websocket]
   anchors:
     - Sources/Conductor/Integration/SentinelWSClient.swift:1
 
 #window-arranger:
   description: Tile/snap/layout CC windows
+  type: store
   tags: [window, layout, tiling]
   anchors:
     - Sources/Conductor/WindowManager/WindowArranger.swift:1
 
 #status-tracker:
   description: Poll CC windows for idle/processing/finished
+  type: detector
   tags: [window, status, monitoring]
   anchors:
     - Sources/Conductor/WindowManager/StatusTracker.swift:1
 
 #notification-bubble:
   description: Per-instance status bubble overlay
+  type: view
   tags: [ui, notification, status]
   anchors:
     - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
 
 #setup-wizard:
   description: "Multi-step setup wizard — feature selection, dependency checking, model picker, workspace config, gaze calibration, eyebrow calibration"
+  type: view
   tags: [ui, setup, onboarding]
   anchors:
     - Sources/Conductor/UI/Views/SetupWizardView.swift:1
 
 #dependency-checker:
   description: Downloads WhisperKit models during setup (Python/MediaPipe no longer required — gaze uses native Vision)
+  type: service
   tags: [setup, dependencies]
   anchors:
     - Sources/Conductor/Utils/DependencyChecker.swift:1
 
 #gaze-cursor:
-  description: Transparent click-through overlay showing gaze position dot for debug visualization
-  tags: [ui, gaze, debug, overlay]
+  description: "Transparent click-through overlay — cyan calibrated dot, yellow raw iris dot, coordinate label for gaze diagnostics"
+  type: view
+  parent: "#vision-gaze-provider"
+  tags: [ui, gaze, debug, overlay, diagnostics]
   anchors:
     - Sources/Conductor/UI/GazeCursorController.swift:1
 
 #conductor-models:
   description: "Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction (incl. toggleVideo/Voice, mute/unmute), ManagedInstance (with windowIdentifier), HandPoseFrame, LaunchedTerminal"
+  type: model
   tags: [models, types]
   anchors:
     - Sources/Conductor/Models/:1
 
 #eyebrow-detector:
   description: Consumes eyebrow stream, KalmanFilter1D smoothing, threshold + hysteresis → emits EyebrowEvent
+  type: detector
   tags: [input, eyebrow, detection]
   anchors:
     - Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift:1
 
 #eyebrow-state-machine:
   description: "Pure state machine: idle → armed → recording → stopped → send for eyebrow-driven voice control"
+  type: filter
+  parent: "#eyebrow-detector"
   tags: [input, eyebrow, state-machine]
   anchors:
     - Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift:1
 
 #eyebrow-calibration:
   description: 4-step calibration flow learning user's eyebrow raise range
+  type: store
+  parent: "#eyebrow-detector"
   tags: [input, eyebrow, calibration]
   anchors:
     - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
 
 #input-orchestrator:
   description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Owns SharedCameraSession for all vision providers. Publishes videoActive/voiceActive state. No camera conflict — both gaze and gesture run simultaneously."
+  type: service
   tags: [orchestration, input, coordinator, toggle, shared-camera]
   anchors:
     - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
 
 #action-registry:
   description: "Maps input events to ConductorAction values with persistence and custom bindings. Serializes all actions incl. toggleVideo/Voice, mute/unmute for UserDefaults storage."
+  type: service
   tags: [orchestration, bindings, configuration]
   anchors:
     - Sources/Conductor/Orchestration/ActionRegistry.swift:1
 
 #voice-control-coordinator:
   description: "State machine coordinating eyebrow-triggered voice recording: idle → armed → recording → transcribing → readyToSend"
+  type: service
   tags: [voice, orchestration, state-machine]
   anchors:
     - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift:1
 
 #workspace-manager:
   description: Owns managed CC instances, grid layout, terminal lifecycle. Uses targeted window close (AppleScript) instead of kill() to avoid destroying all terminal windows.
+  type: manager
   tags: [workspace, management, terminal]
   anchors:
     - Sources/Conductor/Workspace/WorkspaceManager.swift:1
 
 #terminal-launcher:
   description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others."
+  type: service
+  parent: "#workspace-manager"
   tags: [workspace, terminal, launch, close, applescript]
   anchors:
     - Sources/Conductor/Workspace/TerminalLauncher.swift:1
 
 #workspace-grid:
   description: Pure struct computing deterministic grid cell frames from screen geometry
+  type: store
+  parent: "#workspace-manager"
   tags: [workspace, grid, layout]
   anchors:
     - Sources/Conductor/Workspace/WorkspaceGrid.swift:1
 
 #workspace-view:
   description: Sidebar view with grid minimap, per-instance controls, add instance button
+  type: view
+  parent: "#workspace-manager"
   tags: [ui, workspace, sidebar]
   anchors:
     - Sources/Conductor/UI/Views/WorkspaceView.swift:1
@@ -288,6 +345,8 @@ context:
 
 #gaze-zone-router:
   description: Maps gaze points to grid cells deterministically with dwell timer
+  type: view
+  parent: "#gaze-router"
   tags: [gaze, dispatch, grid, targeting]
   anchors:
     - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
@@ -295,96 +354,118 @@ context:
 
 #voice-control-hud:
   description: Compact sidebar widget showing voice control state with visual indicators
+  type: view
+  parent: "#voice-control-coordinator"
   tags: [ui, voice, feedback]
   anchors:
     - Sources/Conductor/UI/Views/VoiceControlHUD.swift:1
 
 #workspace-settings:
   description: Settings tab for workspace configuration — terminal, sidebar, instances
+  type: view
+  parent: "#workspace-manager"
   tags: [ui, settings, workspace]
   anchors:
     - Sources/Conductor/UI/Views/WorkspaceSettingsView.swift:1
 
 #gesture-recorder:
   description: Records hand pose time-series, normalizes, produces averaged GestureTemplate
+  type: store
   tags: [input, gesture, recording, custom]
   anchors:
     - Sources/Conductor/Input/CustomGesture/GestureRecorder.swift:1
 
 #gesture-template:
   description: Named custom gesture with normalized joint position sequence, persisted to ~/.conductor/gestures/
+  type: store
+  parent: "#gesture-recorder"
   tags: [input, gesture, template, persistence]
   anchors:
     - Sources/Conductor/Input/CustomGesture/GestureTemplate.swift:1
 
 #dtw-matcher:
   description: Dynamic Time Warping implementation for comparing hand pose time-series
+  type: utility
+  parent: "#custom-gesture-classifier"
   tags: [input, gesture, algorithm, matching]
   anchors:
     - Sources/Conductor/Input/CustomGesture/DTWMatcher.swift:1
 
 #custom-gesture-classifier:
   description: Sliding window DTW matching against registered custom gesture templates
+  type: store
   tags: [input, gesture, classification, custom]
   anchors:
     - Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift:1
 
 #voice-command-matcher:
   description: Scans transcription text for phrase→action bindings with fuzzy Levenshtein matching
+  type: utility
+  parent: "#voice-command-registry"
   tags: [voice, command, matching, fuzzy]
   anchors:
     - Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift:1
 
 #voice-command-registry:
   description: CRUD for voice phrase→action mappings with persistence
+  type: store
   tags: [voice, command, registry, persistence]
   anchors:
     - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
 
 #bindings-manager:
   description: Settings tab for managing gesture bindings, voice commands, eyebrow bindings
+  type: view
   tags: [ui, settings, bindings, customization]
   anchors:
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
 #input-status:
   description: "Live sidebar panel showing real-time status of all input modalities — gaze coords, eyebrow values, voice transcription, hand state. Color-coded dots for instant diagnosis."
+  type: view
   tags: [ui, status, debug, feedback]
   anchors:
     - Sources/Conductor/UI/Views/InputStatusView.swift:1
 
 #gesture-confirmation:
   description: "Transparent click-through overlay showing top-center toast when a gesture, eyebrow event, or voice command fires. Auto-fades after 1.5s. Toggleable via Settings > Gestures."
+  type: view
   tags: [ui, gesture, feedback, overlay, practice]
   anchors:
     - Sources/Conductor/UI/GestureConfirmationController.swift:1
 
 #conductor-log:
   description: Structured logging via os.Logger with symbol-based categories
+  type: config
   tags: [logging, diagnostics]
   anchors:
     - Sources/Conductor/Utils/ConductorLog.swift:1
 
 #eyebrow-calibration-controller:
   description: Fullscreen NSWindow hosting EyebrowCalibrationView, mirrors CalibrationWindowController pattern
+  type: view
+  parent: "#eyebrow-detector"
   tags: [input, eyebrow, calibration, ui]
   anchors:
     - Sources/Conductor/UI/EyebrowCalibrationWindowController.swift:1
 
 #main-overlay:
   description: "Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, video/voice toggle icons in header — observes (not owns) orchestrator and workspace"
+  type: view
   tags: [ui, layout, root, toggle]
   anchors:
     - Sources/Conductor/UI/Views/MainOverlayView.swift:1
 
 #settings-panel:
   description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs"
+  type: view
   tags: [ui, settings, preferences]
   anchors:
     - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
 
 #hotkey-manager:
   description: "Global hotkey registration via CGEvent tap — Cmd+Shift+C (panel), Cmd+Shift+V (video toggle), Cmd+Shift+M (voice toggle), F5 (push-to-talk), Cmd+1–4 (layouts)"
+  type: manager
   tags: [input, hotkeys, cgevent]
   anchors:
     - Sources/Conductor/Utils/HotKeyManager.swift:1

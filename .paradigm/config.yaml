@@ -90,6 +90,27 @@ tag-bank:
   # Allow AI to suggest new tags (requires human approval)
   allow-suggestions: true
 
+# Component types glossary — defines the project vocabulary for the `type` field on components
+# Each type describes a structural role (what the code IS), not behavior (use tags for that)
+component_types:
+  command: "CLI command handler — registers subcommand, parses args, calls core logic"
+  tool: "MCP tool definition + handler — serves AI agents via JSON-RPC"
+  utility: "Shared helper function or module — no side effects, pure logic"
+  engine: "Stateful processing core — owns data transformation lifecycle"
+  loader: "Reads and parses data sources into typed structures"
+  writer: "Writes structured data to files (YAML, JSON)"
+  service: "Business logic coordinator — orchestrates tools, loaders, writers"
+  model: "Data shape — TypeScript interface or type definition"
+  view: "UI rendering unit — SwiftUI view, React component"
+  provider: "Protocol-conforming platform capability wrapper — owns lifecycle"
+  manager: "Stateful coordinator that owns child lifecycles"
+  detector: "Observes external state and emits events"
+  router: "Maps input signals to targets based on rules"
+  filter: "Transforms or smooths data in a pipeline"
+  store: "Persistent or reactive state container"
+  handler: "Event handler, webhook receiver, or request processor"
+  config: "Configuration, environment, constants"
+
 # Logging configuration
 logging:
   # Include logging rules in generated IDE instructions

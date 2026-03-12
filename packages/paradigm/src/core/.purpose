@@ -6,14 +6,17 @@ description: |
 components:
   pipeline-types:
     description: Spec pipeline type definitions — 5 stages, 3 gate modes, pipeline state, templates
+    type: model
     tags: [pipeline, types]
     path: pipeline-types.ts
   pipeline-utils:
     description: Pipeline YAML utilities — load, save, list, create, archive pipeline state files
+    type: utility
     tags: [pipeline, utilities]
     path: pipeline-utils.ts
   orchestrator:
     description: Multi-agent task conductor supporting solo and faceted modes
+    type: engine
     aspects:
       - ~budget-enforced
     flows:
@@ -21,48 +24,61 @@ components:
     path: orchestrator.ts
   agent-spawner:
     description: Spawn individual agents with task, context, and budget constraints
+    type: service
     aspects:
       - ~provider-cascade
     path: agent-spawner.ts
   agent-matcher:
     description: Classify tasks and match appropriate agent teams based on triggers
+    type: service
     path: agent-matcher.ts
   agent-prompts:
     description: Generate agent-specific prompts with role context and handoff data. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review protocol (spec compliance then code quality) with minimum 3 categorized findings.
+    type: utility
     path: agent-prompts.ts
   model-discovery:
     description: Discover available LLM models from APIs, remote manifest, and presets
+    type: service
     path: model-discovery.ts
   provider-registry:
     description: Registry for agent providers with priority cascade and availability checking
+    type: store
     aspects:
       - ~provider-cascade
     path: provider-registry.ts
   task-classifier:
     description: Classify task complexity (simple/moderate/complex) and assign models
+    type: service
     path: task-classifier.ts
   budget-tracker:
     description: Track token and cost budgets during orchestration execution
+    type: engine
     aspects:
       - ~budget-enforced
     path: budget-tracker.ts
   cost-estimator:
     description: Estimate token costs for models based on pricing data
+    type: utility
     path: cost-estimator.ts
   context-builder:
     description: Build AI context from symbols, files, and role-specific includes/excludes
+    type: service
     path: context-builder.ts
   flow-validator:
     description: Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams
+    type: service
     path: flow-validator.ts
   portal-compliance:
     description: Validate portal.yaml gates are used in routes and routes reference declared gates
+    type: service
     path: portal-compliance.ts
   audit-logger:
     description: Log orchestration execution details and costs to .paradigm/orchestrations/
+    type: service
     path: audit-logger.ts
   background-orchestrator:
     description: Run orchestration in background with progress reporting
+    type: engine
     path: background-orchestrator.ts
 signals:
   orchestration-started:

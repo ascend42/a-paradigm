@@ -61,6 +61,32 @@ Use these prefixes in documentation and commits:
 | `!` | Signal | `!login-success` |
 | `~` | Aspect | `~audit-required` |
 
+## Component Types
+
+Components (#) support an optional `type` field that describes their structural role (what the code IS) and an optional `parent` field for hierarchy. Types are open strings defined per project in `component_types` glossary in `.paradigm/config.yaml`.
+
+### .purpose file example
+```yaml
+components:
+  GazeRouter:
+    description: Maps gaze coordinates to dispatch targets
+    type: router
+    parent: "#InputOrchestrator"
+  KalmanFilter2D:
+    description: Smooths noisy gaze signal
+    type: filter
+    parent: "#GazeRouter"
+```
+
+### Type vs Tag
+- **`type`** = structural role (view, service, tool, router, filter) — one per component
+- **`tags`** = behavioral/domain classification (feature, integration, state, critical) — many per component
+
+### MCP usage
+- `paradigm_search` accepts `componentType` filter to find all components of a given type
+- `paradigm_status` shows component type breakdown
+- `paradigm_purpose_add_component` accepts `type` and `parent` parameters
+
 ## First Actions for New Sessions
 
 **Resuming a session:** Call `paradigm_session_recover` for previous session context.
@@ -391,6 +417,8 @@ See `.paradigm/specs/logger.md` for full specification.
 - Use signals for side effects, not direct mutations
 - Aspects (~) MUST have code anchors - no unanchored aspects
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
+- Use `type` field for structural role (view, service, tool); use tags for behavior/domain
+- Use `parent` field to establish component hierarchy when relationships are clear
 
 ## When to Update Paradigm Files
 

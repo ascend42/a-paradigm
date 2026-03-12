@@ -48,6 +48,7 @@ export async function aggregateFromPremise(
         // Extract features (v2: now #components with [feature] tag)
         const features = extractFeatures(parsed);
         for (const [id, { item, filePath }] of features) {
+          const featureTags = ['feature', ...(item.tags || [])];
           symbols.push(createSymbolEntry({
             id: `purpose-feature-${id}`,
             symbol: `#${id}`,
@@ -56,7 +57,10 @@ export async function aggregateFromPremise(
             filePath,
             data: item,
             description: item.description,
-            tags: ['feature'],
+            tags: featureTags,
+            componentType: item.type,
+            parentSymbol: item.parent,
+            anchors: item.anchors?.map((a: string) => parseAnchorString(a)),
           }));
         }
 
@@ -71,6 +75,10 @@ export async function aggregateFromPremise(
             filePath,
             data: item,
             description: item.description,
+            tags: item.tags,
+            componentType: item.type,
+            parentSymbol: item.parent,
+            anchors: item.anchors?.map((a: string) => parseAnchorString(a)),
           }));
         }
 

@@ -15,6 +15,12 @@ import type { PurposeFile, ParseResult, ParseError } from './types.js';
 // Uses passthrough() to allow extra fields like tags, location, uses, used-by, etc.
 const PurposeItemSchema = z.object({
   description: z.string(),
+  // Component type and hierarchy (v4)
+  type: z.string().optional(),
+  parent: z.string().optional(),
+  anchors: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  // Standard fields
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
   rules: z.record(z.unknown()).optional(),
@@ -26,7 +32,6 @@ const PurposeItemSchema = z.object({
   states: z.array(z.string()).optional(),
   components: z.array(z.string()).optional(),
   // Extra fields preserved
-  tags: z.array(z.string()).optional(),
   location: z.string().optional(),
   locations: z.array(z.string()).optional(),
   uses: z.array(z.string()).optional(),

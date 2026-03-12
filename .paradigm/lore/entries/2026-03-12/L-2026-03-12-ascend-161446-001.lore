@@ -1,0 +1,58 @@
+id: L-2026-03-12-ascend-161446-001
+type: agent-session
+timestamp: '2026-03-12T16:14:46.834Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Fix gaze calibration pipeline — raw iris stream + least-squares affine
+summary: 'Fixed three critical bugs in gaze calibration: (1) calibration view received already-calibrated screen-pixel stream instead of raw iris positions, training the affine on screen→screen instead of iris→screen; (2) feedback dot during calibration was off-screen due to double-scaling screen pixels as normalized coords; (3) only 3 of 5 calibration points were used. Replaced with raw iris stream, least-squares affine over all points, Kalman reset on recalibration, and enhanced debug overlay showing both raw and calibrated dots with coordinate labels.'
+symbols_touched:
+  - '#gaze-calibration'
+  - '#vision-gaze-provider'
+  - '#gaze-cursor'
+  - '#gaze-router'
+  - '#input-orchestrator'
+  - '#kalman-filter'
+files_modified:
+  - packages/conductor/Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift
+  - packages/conductor/Sources/Conductor/Input/GazeInput/GazeCalibration.swift
+  - packages/conductor/Sources/Conductor/UI/Views/GazeCalibrationView.swift
+  - packages/conductor/Sources/Conductor/UI/CalibrationWindowController.swift
+  - packages/conductor/Sources/Conductor/UI/GazeCursorController.swift
+  - packages/conductor/Sources/Conductor/Dispatch/GazeRouter.swift
+  - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - packages/conductor/Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Tests/ConductorTests/GazeCalibrationTests.swift
+  - packages/conductor/.purpose
+decisions:
+  - id: raw-iris-stream
+    decision: Added dedicated rawIrisStream to VisionGazeProvider separate from calibrated gazePointStream
+    rationale: Calibration needs ground-truth iris positions (0-1 normalized), not post-calibration screen coords. Dual streams keep the public API backward-compatible.
+  - id: least-squares-affine
+    decision: Replaced 3-point affine with least-squares normal equations over all collected points
+    rationale: Using all 5 calibration points via least-squares is more robust and makes better use of the calibration effort the user invests.
+  - id: dual-dot-debug
+    decision: Debug overlay shows cyan (calibrated) + yellow (raw iris) dots with coordinate label
+    rationale: User reported 'somewhat works' — needs visual feedback to diagnose remaining accuracy issues.
+learnings:
+  - Gaze calibration data must come from raw sensor stream, never from post-calibration output — otherwise the affine trains on its own (wrong) predictions
+  - Vision framework iris positions are normalized 0-1 with Y-up; multiplying screen-pixel values by screen dimensions is a telltale sign of coordinate space confusion
+  - Kalman filter must be reset after recalibration since its state/velocity estimates are in the old mapping's coordinate space
+verification:
+  status: pass
+  details:
+    build: pass
+    tests: 10/10 pass
+    user_test: somewhat works — needs further iteration
+tags:
+  - conductor
+  - gaze
+  - calibration
+  - bugfix
+  - arc:conductor-gaze
+git_context:
+  ref: dcec38558acd8d513bf6201c99e665c9ff6cd475
+  branch: main
+  dirty: true

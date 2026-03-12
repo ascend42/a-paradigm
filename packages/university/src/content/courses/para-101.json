@@ -557,6 +557,59 @@
           "explanation": "A common pitfall is trying to document everything on day one. The recommended approach is to start with the most critical module, create one .purpose file, and expand incrementally as the project grows."
         }
       ]
+    },
+    {
+      "id": "component-types",
+      "title": "Component Types & Hierarchy",
+      "content": "## Why Component Types?\n\nComponents (`#`) are the most common symbol in any Paradigm project. A large project might have hundreds of components — services, views, utilities, routers, filters, models, and more. Without further classification, an AI agent triaging 'where is access control handled?' has to read every component to understand what kind of thing it is.\n\nComponent types solve this by adding an optional `type` field that describes a component's **structural role** — what the code IS, not what domain it belongs to.\n\n## The `type` Field\n\nAdd `type` to any component in a `.purpose` file:\n\n```yaml\ncomponents:\n  PaymentService:\n    description: Coordinates payment processing\n    type: service\n  PaymentForm:\n    description: Credit card input form\n    type: view\n  format-currency:\n    description: Formats numbers as currency strings\n    type: utility\n```\n\nTypes are **open strings** — each project defines its own vocabulary in the `component_types` glossary in `.paradigm/config.yaml`. There is no fixed enum. Common types include: `view`, `service`, `model`, `tool`, `utility`, `engine`, `loader`, `provider`, `manager`, `router`, `filter`, `handler`, `config`.\n\n## The `parent` Field\n\nComponents can declare a parent to establish hierarchy:\n\n```yaml\ncomponents:\n  InputOrchestrator:\n    description: Coordinates all input sources\n    type: manager\n  GazeRouter:\n    description: Maps gaze coordinates to dispatch targets\n    type: router\n    parent: \"#InputOrchestrator\"\n  KalmanFilter2D:\n    description: Smooths noisy gaze signal\n    type: filter\n    parent: \"#GazeRouter\"\n```\n\nParent is declared on the **child**, not maintained as a roster on the parent. This keeps `.purpose` files decentralized.\n\n## Type vs Tag\n\nThis is a common source of confusion:\n\n- **`type`** = structural role (what the code IS). One per component. Examples: `service`, `view`, `router`\n- **`tags`** = behavioral or domain classification. Many per component. Examples: `[feature]`, `[security]`, `[integration]`\n\nA component can be `type: service` with `tags: [feature, security]`. Type tells you the architecture; tags tell you the domain.\n\n## Config Glossary\n\nProjects define their vocabulary in `.paradigm/config.yaml`:\n\n```yaml\ncomponent_types:\n  service: \"Business logic coordinator — orchestrates tools, loaders, writers\"\n  view: \"UI rendering unit — SwiftUI view, React component\"\n  utility: \"Shared helper function or module — no side effects, pure logic\"\n  router: \"Maps input signals to targets based on rules\"\n```\n\nThe glossary is **descriptive only** — it helps agents understand types but does not enforce them.\n\n## MCP Integration\n\nComponent types integrate with MCP tools:\n\n- `paradigm_search` with `componentType: \"service\"` finds all services\n- `paradigm_status` shows a component type breakdown\n- `paradigm_purpose_add_component` accepts `type` and `parent` parameters\n- `paradigm_reindex` aggregates type counts into `$meta.componentTypes`",
+      "keyConcepts": [
+        "Component type describes structural role (what the code IS)",
+        "Types are open strings defined per project vocabulary",
+        "Parent field establishes hierarchy (declared on child)",
+        "Type vs tag: type = architecture, tags = domain/behavior",
+        "Config glossary describes types but does not enforce them"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What does the `type` field on a component describe?",
+          "choices": {
+            "A": "The programming language the component is written in",
+            "B": "The structural role of the component (e.g., service, view, router)",
+            "C": "The business domain the component belongs to",
+            "D": "The test coverage level of the component",
+            "E": "The deployment environment for the component"
+          },
+          "correct": "B",
+          "explanation": "The `type` field describes a component's structural role — what the code IS architecturally (service, view, router, filter, etc.). Business domain classification uses tags instead."
+        },
+        {
+          "id": "q2",
+          "question": "Where should the `parent` relationship be declared?",
+          "choices": {
+            "A": "On the parent component, listing all children",
+            "B": "In a separate relationships.yaml file",
+            "C": "On the child component, referencing the parent with a # symbol",
+            "D": "In portal.yaml alongside gate definitions",
+            "E": "In the config.yaml component_types glossary"
+          },
+          "correct": "C",
+          "explanation": "Parent is declared on the child component using a `parent: \"#parent-name\"` field. This keeps .purpose files decentralized — you don't need to maintain rosters on parent components."
+        },
+        {
+          "id": "q3",
+          "question": "A `PaymentService` handles payment processing and integrates with Stripe. How should it be documented?",
+          "choices": {
+            "A": "`type: integration` with no tags",
+            "B": "`type: service` with `tags: [integration, feature]`",
+            "C": "`tags: [service, integration]` with no type",
+            "D": "`type: feature` with `tags: [service]`",
+            "E": "`type: service-integration` combining both concepts"
+          },
+          "correct": "B",
+          "explanation": "Type describes what the code IS (a service), while tags describe behavior and domain (it's an integration and a feature). The correct approach is `type: service` with `tags: [integration, feature]`."
+        }
+      ]
     }
   ]
 }

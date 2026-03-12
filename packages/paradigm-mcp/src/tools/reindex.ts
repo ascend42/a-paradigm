@@ -131,6 +131,7 @@ export interface RebuildResult {
     stale: number;
     broken: number;
   };
+  componentTypeBreakdown?: Record<string, number>;
 }
 
 export async function rebuildStaticFiles(
@@ -243,6 +244,14 @@ export async function rebuildStaticFiles(
     breakdown[sym.type] = (breakdown[sym.type] || 0) + 1;
   }
 
+  // Build component type breakdown
+  const componentTypeBreakdown: Record<string, number> = {};
+  for (const sym of aggregation.symbols) {
+    if (sym.type === 'component' && sym.componentType) {
+      componentTypeBreakdown[sym.componentType] = (componentTypeBreakdown[sym.componentType] || 0) + 1;
+    }
+  }
+
   return {
     action: 'reindex',
     filesWritten,
@@ -252,6 +261,7 @@ export async function rebuildStaticFiles(
     aspectGraphStats,
     personaCount,
     protocolHealth,
+    ...(Object.keys(componentTypeBreakdown).length > 0 ? { componentTypeBreakdown } : {}),
   };
 }
 
@@ -270,6 +280,16 @@ function buildNavigatorData(
   rootDir: string,
   aggregation: { symbols: SymbolInfo[]; purposeFiles: string[] },
 ): Record<string, unknown> {
+  // Group symbols by component type
+  const symbolsByComponentType: Record<string, string[]> = {};
+  for (const sym of aggregation.symbols) {
+    if (sym.type === 'component' && (sym as { componentType?: string }).componentType) {
+      const ct = (sym as { componentType?: string }).componentType!;
+      if (!symbolsByComponentType[ct]) symbolsByComponentType[ct] = [];
+      symbolsByComponentType[ct].push(sym.symbol);
+    }
+  }
+
   return {
     version: '1.0',
     generated: new Date().toISOString(),
@@ -277,6 +297,7 @@ function buildNavigatorData(
     key_files: buildKeyFiles(rootDir),
     skip_patterns: buildSkipPatterns(rootDir),
     symbols: buildSymbolMap(aggregation.symbols, aggregation.purposeFiles, rootDir),
+    ...(Object.keys(symbolsByComponentType).length > 0 ? { symbolsByComponentType } : {}),
   };
 }
 

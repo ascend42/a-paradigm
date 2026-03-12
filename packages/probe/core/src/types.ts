@@ -76,6 +76,8 @@ export interface ScanElement {
   children?: string[];
   /** Related symbols */
   related?: string[];
+  /** Component type (e.g., "view", "service") */
+  componentType?: string;
   /** Custom metadata */
   meta?: Record<string, unknown>;
 }
@@ -182,6 +184,8 @@ export interface ScanIndexMeta {
     portalFiles: number;
     premiseFiles: number;
   };
+  /** Discovered component types with counts */
+  componentTypes?: Record<string, number>;
 }
 
 /**
