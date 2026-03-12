@@ -1,0 +1,58 @@
+version: "1.0"
+cliVersion: 3.34.0
+lastMigrated: "2026-03-12T18:56:09.434Z"
+applied:
+  - id: legacy-file-to-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: legacy-scan-index-location
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-specs-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-docs-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-prompts-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-tag-bank-config
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-purpose-required-config
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-discipline-config
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-wisdom-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-history-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-lore-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-tasks-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-personas-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-protocols-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-habits-directory
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: add-component-types-config
+    appliedAt: "2026-03-12T18:40:11.722Z"
+    cliVersion: 3.29.0
+  - id: sync-templates
+    appliedAt: "2026-03-12T18:40:11.724Z"
+    cliVersion: 3.29.0
+  - id: refresh-hooks
+    appliedAt: "2026-03-12T18:40:11.724Z"
+    cliVersion: 3.29.0

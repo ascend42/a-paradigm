@@ -1,0 +1,70 @@
+id: L-2026-03-02-unknown-224944-001
+type: milestone
+timestamp: '2026-03-02T22:49:44.926Z'
+author: unknown
+title: Lore identity model and context capture foundation
+summary: Completed the author/agent split refactor and added git_context + meta fields, establishing the correct identity and context model that all future lore features depend on.
+body: |-
+  ## What happened
+
+  The lore schema had a fundamental identity problem: `author` was an object with `{ type: 'agent'|'human', id, model? }` that conflated "who is the human" with "what AI tool helped." This made it impossible to properly model the reality that there's always a human behind every session.
+
+  We refactored `author` to a plain string (always the human user) and added `agent?: { provider, model }` as a separate optional field. This touched 29 files across 4 packages — types, storage, normalization, filters, server routes, MCP tools, CLI commands, and the entire lore viewer UI.
+
+  Then we added `git_context` (auto-captured ref, branch, dirty) and `meta` (open-ended project metadata) to complete the contextual foundation.
+
+  ## What was learned
+
+  1. **Identity must be correct before building higher-order features.** The author/agent split was prerequisite for plan tracking, deliberation records, and meeting notes — all of which need to distinguish "who is the human" from "what tool was used."
+
+  2. **Normalize on read, never require migration.** By adding `normalizeLoreEntry()` at all load boundaries, old entries work forever without a migration step. This is the right pattern for any schema evolution in a file-based system.
+
+  3. **Open-ended metadata beats prescriptive schemas.** Adding `meta: Record<string, unknown>` instead of specific fields like `sprint` or `meeting_type` lets each project define its own vocabulary. Paradigm provides mechanism, projects define policy.
+
+  4. **The habit model is the right abstraction for agent behavior.** The idea of agents proactively asking "should I save this plan to lore?" should be a per-project habit, not a framework-level rule. This reinforces that Paradigm's habit system is the right place for behavioral expectations.
+
+  ## What changed architecturally
+
+  - `LoreEntry.author` is now always a string — the human user
+  - `LoreEntry.agent` is an optional `{ provider, model }` for AI metadata
+  - `LoreEntry.git_context` auto-captures `{ ref, branch, dirty }` on write
+  - `LoreEntry.meta` accepts arbitrary project-defined key-value pairs
+  - File naming uses `.lore` extension with author+time scoping
+  - `normalizeLoreEntry()` handles all backward compatibility at read boundaries
+  - `resolveAuthor()` chain: PARADIGM_AUTHOR env → git config → os.userInfo → 'unknown'
+  - `captureGitContext()` runs at write time in both core and MCP paths
+
+  ## Vision forward
+
+  Lore is evolving from "what happened" records into the connective tissue for all agent-assisted development:
+
+  - **Deliberation records**: Capture the planning conversation itself — proposals, counter-proposals, decisions with attribution
+  - **Plan-backed implementation**: Record the plan as lore before implementing, creating a full chain of custody
+  - **AI synthesis**: An agent reads a session transcript and produces structured lore with decisions, action items, and participant attribution
+  - **Git context as audit trail**: Combined with symbols_touched, each lore entry captures who, what, when, where (git ref), and why (decisions)
+  - **Protocol emergence**: When the same pattern appears in 3+ lore entries, it's a protocol waiting to be extracted
+
+  The foundation is now correct — identity, context, and extensibility are all in place.
+symbols_touched:
+  - '#lore'
+  - '#lore-viewer'
+  - '#lore-server'
+tags:
+  - arc:arc-lore-evolution
+  - assessment:milestone
+  - schema-refactor
+  - identity-model
+  - foundation
+  - vision
+  - migrated-from-assessment
+linked_lore:
+  - L-2026-03-02-004
+linked_commits:
+  - e68934c1
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+git_context:
+  ref: db8fc527935b10ac0093b6bbd9a5dfb2a8800a73
+  branch: main
+  dirty: true

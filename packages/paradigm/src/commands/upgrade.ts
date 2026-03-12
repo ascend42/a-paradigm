@@ -52,6 +52,7 @@ export async function upgradeCommand(targetPath: string | undefined, options: Up
   const projectName = path.basename(rootDir);
   const spinner = ora();
 
+  console.log(chalk.yellow('\n  `paradigm upgrade` is deprecated. Use `paradigm migrate` instead.\n'));
   console.log(chalk.blue('\n🔄 Paradigm Upgrade\n'));
 
   // Handle --from-horizon migration

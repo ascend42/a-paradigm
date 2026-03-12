@@ -114,6 +114,18 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Step 1b: Auto-migrate (bring existing projects up to date)
+  if (isInitialized) {
+    spinner.start('Step 1b/6: Checking for migrations...');
+    try {
+      const { migrateCommand } = await import('./migrate/index.js');
+      await migrateCommand({ apply: true, quiet: true, noSync: true });
+      spinner.succeed(chalk.green('Migrations applied'));
+    } catch (error) {
+      spinner.warn(chalk.yellow(`Migration warning: ${(error as Error).message}`));
+    }
+  }
+
   // Workspace: create-or-join (--workspace flag) or auto-detect
   {
     const configPath = path.join(paradigmDir, 'config.yaml');

@@ -5,6 +5,27 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.34.0] — 2026-03-12
+
+### Added
+
+- **`paradigm migrate` command**: Version-aware project migration system that detects what version a project is effectively at and applies pending migrations automatically. Subsumes the old `paradigm upgrade` command.
+- **Migration registry**: 19 ordered migrations covering legacy format conversion, directory creation, config field additions, template sync, and hook refresh. Each migration is self-contained with `check()` and `apply()`.
+- **`.paradigm/migrate.yaml` state tracking**: Records which migrations have been applied, when, and by which CLI version. First-run bootstrap auto-marks existing structures as applied to prevent false positives.
+- **Auto vs manual migration classification**: Directory, config, template, and hook migrations apply automatically; schema/format migrations that change user content (e.g., assessment-to-lore) are flagged for manual review with guidance.
+- **`paradigm shift` step 1b integration**: Re-running `paradigm shift` on existing projects now silently applies pending migrations, making shift a full upgrade path.
+- **Evergreen migrations**: `sync-templates` and `refresh-hooks` re-check every run to keep templates and hooks current regardless of when they were last applied.
+- **CLI flags**: `--dry-run`, `--apply`, `--force`, `--only <ids>`, `--category <cat>`, `--list`, `--verbose` for full control over migration behavior.
+
+### Fixed
+
+- **Assessment migration check false positive**: `migrate-assessments-to-lore` no longer reports as pending after entries have been migrated (now checks for unmigrated YAML files rather than directory existence).
+
+### Changed
+
+- **`paradigm upgrade` deprecated**: Now shows deprecation notice directing users to `paradigm migrate`. Existing functionality preserved for `--from-horizon` migration path.
+- **Version sync**: `@a-company/paradigm-mcp` 3.21.0 → 3.34.0, `@a-company/university` 3.10.6 → 3.34.0.
+
 ## [3.33.0] — 2026-03-12
 
 ### Added

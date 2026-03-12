@@ -288,10 +288,27 @@ probeCmd
     await indexCommand(path, options);
   });
 
-// paradigm upgrade
+// paradigm migrate
+program
+  .command('migrate')
+  .description('Detect and apply migrations to bring project up to date')
+  .option('--dry-run', 'Preview changes without applying')
+  .option('--apply', 'Apply all auto migrations without prompting')
+  .option('-f, --force', 'Re-run previously applied migrations')
+  .option('--only <ids...>', 'Run specific migrations by ID')
+  .option('--category <cat>', 'Run migrations in a category (directory, config, template, hook)')
+  .option('--no-sync', 'Skip template sync')
+  .option('--list', 'List all migrations and their status')
+  .option('-v, --verbose', 'Show detailed output')
+  .action(async (options) => {
+    const { migrateCommand } = await import('./commands/migrate/index.js');
+    await migrateCommand(options);
+  });
+
+// paradigm upgrade (deprecated — use `paradigm migrate`)
 program
   .command('upgrade [path]')
-  .description('Upgrade project with new Paradigm features')
+  .description('(Deprecated) Upgrade project with new Paradigm features — use `paradigm migrate`')
   .option('--features <features...>', 'Features to upgrade (probe, logger)')
   .option('--all', 'Apply all available upgrades')
   .option('--from-horizon', 'Migrate from Horizon to Paradigm')

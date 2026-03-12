@@ -1,0 +1,108 @@
+id: L-2026-03-11-ascend-083735-001
+type: agent-session
+timestamp: '2026-03-11T08:37:35.310Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Conductor 0.5.0–0.5.2: Shared camera, native gaze, continuous voice, dispatch fixes'
+summary: Replaced the dual-camera architecture (Python/MediaPipe + AVCaptureSession) with a single SharedCameraSession feeding both VisionGazeProvider and VisionGestureProvider natively. Added continuous voice recording mode (4s chunk auto-transcription), fixed WhisperKit special token leakage ([BLANK_AUDIO], [inaudible], [NOISE] etc.) with generic bracket stripping, and fixed the Send button / dispatch path to work with GazeZoneRouter-managed workspace instances.
+symbols_touched:
+  - '#shared-camera'
+  - '#vision-gaze-provider'
+  - '#vision-gesture-provider'
+  - '#whisper-voice-provider'
+  - '#input-orchestrator'
+  - '#buffer-view'
+  - '#input-status'
+  - '#conductor-app'
+symbols_created:
+  - '#shared-camera'
+  - '#vision-gaze-provider'
+files_created:
+  - packages/conductor/Sources/Conductor/Input/SharedCameraSession.swift
+  - packages/conductor/Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift
+  - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - packages/conductor/Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift
+  - packages/conductor/Sources/Conductor/UI/Views/BufferView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/InputStatusView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+decisions:
+  - id: shared-camera-arch
+    decision: Single SharedCameraSession with CameraFrameConsumer protocol instead of per-provider AVCaptureSessions
+    rationale: macOS only allows one AVCaptureSession per camera device — dual sessions caused conflicts. Shared session distributes CVPixelBuffers to all registered consumers via weak references.
+  - id: native-vision-gaze
+    decision: Replace MediaPipeGazeProvider (Python subprocess) with VisionGazeProvider (Apple Vision framework)
+    rationale: Eliminates Python dependency, runs natively on Apple Silicon, shares camera frames with gesture provider, uses VNDetectFaceLandmarksRequest for pupil + eyebrow extraction.
+  - id: continuous-voice-mode
+    decision: Auto-start continuous 4-second chunk recording when voice is toggled on
+    rationale: Push-to-talk required eyebrow trigger which users may not have configured. Continuous mode feeds speech directly to buffer without manual control.
+  - id: generic-bracket-strip
+    decision: Strip all [bracketed] tokens generically instead of hardcoded list
+    rationale: WhisperKit outputs many token variants ([BLANK_AUDIO], [inaudible], [NOISE], etc.) in mixed case. Generic stripping catches all current and future tokens.
+  - id: zone-router-dispatch
+    decision: dispatchToTarget() prefers gazeZoneRouter.targetedInstance over gazeRouter.currentTarget
+    rationale: Workspace-managed instances are targeted via GazeZoneRouter but the ManagedInstance.instance may be nil before AX detection, leaving gazeRouter.currentTarget nil. Both paths must be checked.
+errors_encountered:
+  - description: Gaze status showing 'Active — not calibrated' even with gaze data flowing
+    resolution: Reordered InputStatusView.gazeDetail() to check for gaze point first before calibration status
+    time_to_fix: 5min
+  - description: Voice not picking up any words — push-to-talk only, no continuous mode
+    resolution: Added startContinuous()/stopContinuous() to WhisperVoiceProvider, auto-started from InputOrchestrator.startVoiceProvider()
+    time_to_fix: 15min
+  - description: '[BLANK_AUDIO] spam flooding buffer after toggling voice off'
+    resolution: Added cleanTranscription() with initially hardcoded token list, then upgraded to generic bracket stripping
+    time_to_fix: 10min
+  - description: '[inaudible][NOISE] tokens leaking through — case-sensitive hardcoded list missed lowercase variants'
+    resolution: Replaced hardcoded token list with generic regex-free bracket removal loop
+    time_to_fix: 5min
+  - description: Send button disabled even when workspace cell is targeted
+    resolution: BufferView disable condition now checks gazeZoneRouter.targetedInstance in addition to gazeRouter.currentTarget; dispatchToTarget() also prefers zone router path
+    time_to_fix: 10min
+  - description: Disk full (1GB free) caused ENOSPC during edit
+    resolution: Cleaned up /private/tmp/claude-501/ temp files to recover 14GB
+    time_to_fix: 2min
+learnings:
+  - macOS only allows one AVCaptureSession per physical camera — multiple providers MUST share a single session
+  - WhisperKit outputs many special tokens in mixed case — always use generic bracket stripping, not a hardcoded list
+  - GazeZoneRouter sets GazeRouter.shared.setTarget() for backward compat but ManagedInstance.instance can be nil before AX detection, so both target sources must be checked
+  - stopContinuous() must flush remaining audio samples for transcription, not discard them silently
+  - 'Vision framework VNFaceLandmarks2D: leftPupil/rightPupil may be nil on some macOS versions — use leftEye/rightEye center as fallback'
+verification:
+  status: partial
+  details:
+    build: pass
+    voice_transcription: pass
+    token_filtering: pass
+    send_button: fixed_but_untested_by_user
+    gaze_tracking: needs_calibration_testing
+tags: arc:conductor-input, conductor, voice, gaze, camera, whisperkit, bugfix, architecture
+body: |-
+  ## Conductor v0.5.0–v0.5.2 Session
+
+  ### Architecture Change: Shared Camera
+  The original architecture had MediaPipeGazeProvider running a Python subprocess with OpenCV camera access, while VisionGestureProvider ran its own AVCaptureSession. These conflicted because macOS only allows one active capture session per camera device.
+
+  Solution: `SharedCameraSession` — a single AVCaptureSession that distributes `CVPixelBuffer` frames to any number of `CameraFrameConsumer` protocol conformers. Both VisionGazeProvider and VisionGestureProvider register as consumers and run their own Vision requests independently on the same frames.
+
+  ### Native Gaze: VisionGazeProvider
+  Replaced the Python/MediaPipe subprocess with native Apple Vision `VNDetectFaceLandmarksRequest`. Extracts pupil positions (with eye center fallback for macOS versions where `leftPupil`/`rightPupil` are nil) and eyebrow distances. Feeds into existing GazeCalibration + KalmanFilter2D pipeline.
+
+  ### Voice: Continuous Mode + Token Filtering
+  WhisperVoiceProvider was push-to-talk only (required eyebrow raise trigger). Added continuous recording mode: 4-second audio chunks auto-transcribed and yielded to the buffer. On stop, remaining audio is flushed for one final transcription.
+
+  WhisperKit outputs bracketed tokens for non-speech audio (`[BLANK_AUDIO]`, `[inaudible]`, `[NOISE]`, etc.). Initially used a hardcoded list which missed lowercase variants. Switched to generic bracket stripping that removes any `[...]` pattern.
+
+  ### Dispatch Fix: Zone Router Target
+  The Send button was disabled because `BufferView` only checked `gazeRouter.currentTarget`. With workspace-managed instances, targeting happens via `GazeZoneRouter` which sets `targetedInstance` (a `ManagedInstance`). The zone router does call `GazeRouter.shared.setTarget()` for backward compat, but `ManagedInstance.instance` can be nil before AX detection, leaving the gaze router target nil. Fixed by checking both target sources in the disable condition and in `dispatchToTarget()`.
+linked_commits:
+  - 8004144a
+  - 8b9a2dfb
+  - dcec3855
+git_context:
+  ref: dcec38558acd8d513bf6201c99e665c9ff6cd475
+  branch: main
+  dirty: true

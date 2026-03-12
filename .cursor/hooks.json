@@ -19,6 +19,26 @@
         "matcher": "git commit",
         "timeout": 30
       }
+    ],
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/paradigm-session-start.sh",
+        "timeout": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/paradigm-pretooluse.sh",
+        "matcher": "Edit|Write",
+        "timeout": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/paradigm-posttooluse.sh",
+        "matcher": "Edit|Write",
+        "timeout": 5
+      }
     ]
   }
 }

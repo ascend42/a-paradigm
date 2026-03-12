@@ -30,8 +30,15 @@ features:
     type: command
     components:
       - '#setup-wizard'
+  migrate-command:
+    description: Version-aware project migration — detects project state, applies pending migrations, tracks applied migrations in migrate.yaml
+    type: command
+    components:
+      - '#migration-detector'
+      - '#migration-runner'
+      - '#migration-registry'
   upgrade-command:
-    description: Patch existing projects with new features and migrate from legacy format
+    description: (Deprecated) Patch existing projects with new features — use migrate-command instead
     type: command
     components:
       - '#upgrade-handler'
@@ -337,6 +344,18 @@ features:
       - '#pipeline-abort'
       - '#pipeline-list'
 components:
+  migration-detector:
+    description: Detects project state by reading migrate.yaml, config.yaml, and filesystem to determine pending migrations
+    type: detector
+    file: src/commands/migrate/detector.ts
+  migration-runner:
+    description: Executes migrations sequentially, records results to migrate.yaml state
+    type: engine
+    file: src/commands/migrate/runner.ts
+  migration-registry:
+    description: Ordered array of 19 self-contained migration steps covering legacy, directory, config, template, and hook migrations
+    type: config
+    file: src/commands/migrate/migrations.ts
   init-handler:
     description: Handles paradigm init command logic
     type: handler

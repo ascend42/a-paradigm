@@ -235,3 +235,4 @@ context:
   index-file: .index.yaml
   # Root documentation directory
   docs-path: docs/
+workspace: "../.paradigm-workspace"

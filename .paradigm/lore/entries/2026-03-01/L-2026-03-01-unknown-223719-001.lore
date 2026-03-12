@@ -1,0 +1,56 @@
+id: L-2026-03-01-unknown-223719-001
+type: milestone
+timestamp: '2026-03-01T22:37:19.522Z'
+author: unknown
+title: Sentinel Bundled into Paradigm — 3.13.0 Shipped
+summary: Bundled sentinel and sentinel-mcp binaries into @a-company/paradigm so users only need one global install. Renamed dashboard command to 'defend'. Fixed UI asset serving for bundled context.
+body: |-
+  ## What happened
+
+  Implemented single-install story for Sentinel: `npm i -g @a-company/paradigm` now provides `sentinel`, `sentinel-mcp`, `paradigm`, and `paradigm-mcp` — four binaries from one package.
+
+  ## Key changes (3.13.0)
+
+  1. **tsup.config.ts** — Added sentinel + sentinel-mcp build entries following the paradigm-mcp cross-compile pattern. Sentinel entries externalize `simple-git`, `ws`, `sql.js` as runtime deps.
+
+  2. **package.json** — Added bin entries + runtime deps (`simple-git`, `ws`, `uuid`).
+
+  3. **CLI version** — Fixed sentinel's hardcoded `0.2.0` version → dynamic via `createRequire` (same pattern as paradigm CLI).
+
+  4. **Command rename** — `dashboard` → `defend`. Both `sentinel defend` and `paradigm sentinel defend` work. `defend` is the default subcommand so bare `sentinel` still launches the dashboard.
+
+  5. **UI asset serving** — Two-part fix:
+     - Added `build:sentinel-assets` script to copy `sentinel/ui/dist` → `paradigm/dist/sentinel-ui/` during build (same pattern as university-assets)
+     - Updated server's UI path resolution to try multiple candidates: `dist/sentinel-ui/` (bundled), `../../ui/dist` (standalone from server/), `../ui/dist` (standalone flat)
+
+  ## Lessons learned
+
+  - **tsup only bundles JS** — static assets (HTML/CSS/JS UI) need explicit copy steps. This bit us twice: first the path resolution was wrong, then the assets weren't present in the global install at all.
+  - **npm link vs npm install -g** — `npm install -g` creates a full copy, not a symlink. After adding new build artifacts, `npm link` is needed to re-establish the symlink so local builds are immediately reflected.
+  - **`__dirname` shifts in bundled context** — When tsup bundles sentinel's server into paradigm's dist/, `__dirname` changes from `sentinel/dist/server/` to `paradigm/dist/`. All relative path calculations break. Multi-candidate path arrays are the robust pattern.
+  - **Paradigm already has the pattern** — `university-assets` and `lore-ui` both copy UI dist folders. Should have checked those first.
+symbols_touched:
+  - '#sentinel'
+  - '#paradigm-cli'
+  - '#sentinel-mcp'
+tags:
+  - arc:arc-sentinel-bundling
+  - assessment:milestone
+  - bundling
+  - dx
+  - build
+  - 3.13.0
+  - migrated-from-assessment
+linked_commits:
+  - 2b4c849
+  - c4189bc
+  - 4529a7d
+  - 40dc503
+  - eecd695
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+git_context:
+  ref: db8fc527935b10ac0093b6bbd9a5dfb2a8800a73
+  branch: main
+  dirty: true

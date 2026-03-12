@@ -1,0 +1,82 @@
+id: L-2026-03-01-unknown-065750-001
+type: retro
+timestamp: '2026-03-01T06:57:50.570Z'
+author: unknown
+title: Workspace DX Gaps — Deus Projects Audit
+summary: 'Auditing the deus-backend/deus-frontend projects against the workspace feature (3.10.0) revealed 3 DX gaps: workspace creation requires leaving your project directory, CLAUDE.md doesn''t inject workspace context, and the shift→init→shift dance is more steps than necessary.'
+body: |-
+  ## Context
+
+  Shipped workspaces in 3.10.0. Tested against the two deus projects (backend API + React frontend) which are the natural first adopters. Neither has workspace configured yet despite being the reference example in the spec.
+
+  ## Current Flow (Too Many Steps)
+
+  1. `cd parent-dir && paradigm workspace init` — must leave project
+  2. `cd project-a && paradigm shift` — auto-detects, adds workspace field
+  3. `cd project-b && paradigm shift` — same
+  4. `paradigm workspace reindex` — build unified index
+
+  This is 4 commands across 3 directories. For a feature that's supposed to "just work," that's friction.
+
+  ## Proposed Simplification
+
+  Single command from any member project:
+  ```
+  paradigm shift --workspace "deus"
+  ```
+
+  This would:
+  - Create `../.paradigm-workspace` if it doesn't exist (with workspace name)
+  - Add current project as a member (auto-detect role)
+  - Set `workspace` field in local config.yaml
+  - When run from second project, find existing file and add self
+
+  Result: each project joins the workspace from its own directory. No parent-dir dance.
+
+  ## Gap 2: CLAUDE.md Missing Workspace Section
+
+  `paradigm shift` generates CLAUDE.md but doesn't inject workspace-specific instructions. When workspace is configured, CLAUDE.md should include:
+  - Sibling project names and roles
+  - When to use `includeWorkspace: true`
+  - Cross-project symbol prefix format (`backend/#symbol`)
+
+  ## Gap 3 (Resolved): Frontend .purpose
+
+  Initially appeared empty due to a bad commit. Verified it's now fully populated with 30+ features, 40+ components, 9 Zustand stores, and phased development plan. No action needed.
+
+  ## Deus Project Status
+
+  | Aspect | Backend | Frontend |
+  |--------|---------|----------|
+  | Paradigm version | 1.0 config | 1.0 config |
+  | .purpose coverage | Rich | Rich (restored) |
+  | scan-index.json | 91KB | 97KB |
+  | Workspace configured | No | No |
+  | portal.yaml | Yes (8 gates) | No (client-side) |
+
+  ## Decisions Needed
+
+  1. Should `--workspace` accept a custom location arg, or always default to `../.paradigm-workspace`?
+  2. Should shift auto-add the other project's symbols to CLAUDE.md, or just reference the workspace?
+  3. Should we validate that sibling projects exist during workspace join?
+symbols_touched:
+  - '#workspaces'
+  - '#shift'
+  - '#workspace-loader'
+tags:
+  - arc:arc-workspaces
+  - assessment:retro
+  - dx
+  - adoption
+  - deus
+  - workspace
+  - migrated-from-assessment
+linked_commits:
+  - 40b7aff6839bcac604b92f3e6a8487942359ab07
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+git_context:
+  ref: db8fc527935b10ac0093b6bbd9a5dfb2a8800a73
+  branch: main
+  dirty: true
