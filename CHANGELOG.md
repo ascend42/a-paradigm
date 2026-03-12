@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`paradigm upgrade` deprecated**: Now shows deprecation notice directing users to `paradigm migrate`. Existing functionality preserved for `--from-horizon` migration path.
-- **Version sync**: `@a-company/paradigm-mcp` 3.21.0 → 3.34.0, `@a-company/university` 3.10.6 → 3.34.0.
+- **Version sync**: `@a-company/paradigm-mcp` 3.21.0 → 3.34.0, `@a-company/university` 3.10.6 → 3.34.0, plugin 3.24.1 → 3.34.0.
 
 ## [3.33.0] — 2026-03-12
 
