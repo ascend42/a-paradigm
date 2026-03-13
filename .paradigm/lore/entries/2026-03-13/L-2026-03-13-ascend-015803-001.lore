@@ -1,0 +1,122 @@
+id: L-2026-03-13-ascend-015803-001
+type: milestone
+timestamp: '2026-03-13T01:58:03.934Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Symphony Phase 0: A-Mail agent-to-agent messaging'
+summary: Implemented Symphony Phase 0 — file-based agent-to-agent messaging (A-Mail) for multi-session Claude Code collaboration. Created symphony-loader with JSONL mailbox I/O, agent identity, threads, and human-gated file pipeline. Added 6 MCP tools, 16 CLI commands under `paradigm mail`, and full university content (lesson, 12 PLSAT variants, reference cards).
+symbols_touched:
+  - '#symphony-loader'
+  - '#symphony-poll'
+  - '#symphony-send'
+  - '#symphony-status'
+  - '#symphony-thread'
+  - '#symphony-request-file'
+  - '#symphony-approve-file'
+  - '#mail-link'
+  - '#mail-send'
+  - '#mail-read'
+  - '#mail-resolve'
+  - $mail-send-flow
+  - $mail-poll-flow
+  - $file-request-flow
+  - ^file-trust
+  - ~human-gated-transfer
+  - ~hard-deny-list
+symbols_created:
+  - '#symphony-loader'
+  - '#symphony-poll'
+  - '#symphony-send'
+  - '#symphony-status'
+  - '#symphony-thread'
+  - '#symphony-request-file'
+  - '#symphony-approve-file'
+  - '#mail-link'
+  - '#mail-unlink'
+  - '#mail-whoami'
+  - '#mail-list'
+  - '#mail-send'
+  - '#mail-read'
+  - '#mail-threads'
+  - '#mail-thread'
+  - '#mail-resolve'
+  - '#mail-status'
+  - '#mail-serve'
+  - '#mail-request'
+  - '#mail-approve'
+  - '#mail-deny'
+  - $mail-send-flow
+  - $mail-poll-flow
+  - $file-request-flow
+  - ^file-trust
+  - '!message-sent'
+  - '!message-received'
+  - '!thread-created'
+  - '!thread-resolved'
+  - '!file-requested'
+  - '!file-approved'
+  - '!file-denied'
+  - '!file-delivered'
+  - ~human-gated-transfer
+  - ~hard-deny-list
+files_created:
+  - packages/paradigm-mcp/src/utils/symphony-loader.ts
+  - packages/paradigm-mcp/src/tools/symphony.ts
+  - packages/paradigm/src/commands/mail/index.ts
+  - packages/paradigm/src/commands/mail/types.ts
+  - packages/paradigm/src/commands/mail/.purpose
+  - packages/paradigm-mcp/src/tools/.purpose
+  - packages/paradigm-mcp/src/utils/.purpose
+  - docs/guides/symphony-quickstart.md
+files_modified:
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm-mcp/.purpose
+  - CLAUDE.md
+  - CHANGELOG.md
+  - .paradigm/docs/commands.md
+  - .paradigm/docs/troubleshooting.md
+  - packages/university/src/content/courses/para-501.json
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/src/content/reference.json
+lines_added: 8161
+lines_removed: 2034
+commit: 8dc63847
+decisions:
+  - id: D1
+    decision: Mailbox at ~/.paradigm/mail/ not ~/.conductor/
+    rationale: A-Mail works without Conductor — separate directory avoids coupling
+  - id: D2
+    decision: Agent identity = {project}/{role} from config.yaml
+    rationale: Deterministic IDs survive session restarts, unlike PID-based
+  - id: D3
+    decision: JSONL for messages with append-only writes
+    rationale: Atomic on POSIX for small writes, no locking needed
+  - id: D4
+    decision: Relative import path from CLI to MCP loader
+    rationale: paradigm-mcp has no sub-path exports; tsup noExternal bundles relative imports correctly
+  - id: D5
+    decision: TCP serve as Phase 0 stub
+    rationale: Placeholder for remote linking — full protocol deferred to later phase
+verification:
+  status: pass
+  details:
+    build_mcp: pass
+    build_cli: pass
+    reindex: pass
+    purpose_validate: pass
+    cli_smoke: pass
+    hard_deny: pass
+tags:
+  - symphony
+  - a-mail
+  - phase-0
+  - arc:symphony
+linked_commits:
+  - 8dc63847
+git_context:
+  ref: 8dc63847df4a00f5f5fb2bd8ed394c3b3b35b1ee
+  branch: main
+  dirty: true

@@ -1,0 +1,88 @@
+id: L-2026-03-12-ascend-202044-001
+type: decision
+timestamp: '2026-03-12T20:20:44.791Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Design Paradigm Symphony — networked multi-agent collaborative intelligence
+summary: 'Fully specced Paradigm Symphony, a real-time networked multi-agent, multi-human collaborative intelligence layer. Two tiers: A-Mail (CLI-only agent messaging via file-based mailboxes, works without Conductor) and full Symphony (Conductor auto-link, Bonjour peer discovery, Sentinel conversation tree view, voice participation). 8 implementation phases, 13 spec sections, 1379 lines. Key insight: agents get "email addresses" and can only receive when awake — Conductor is the mail carrier that auto-discovers everyone.'
+symbols_touched:
+  - '#conductor-app'
+  - '#sentinel-server'
+  - '#paradigm-mail'
+  - '#symphony-relay'
+  - '#agent-mailbox'
+symbols_created:
+  - '#paradigm-mail'
+  - '#symphony-relay'
+  - '#agent-mailbox'
+  - $agent-conversation
+  - $mail-delivery
+files_created:
+  - docs/specs/symphony.md
+decisions:
+  - id: D-SYMPHONY-001
+    decision: 'Two-tier architecture: A-Mail (CLI-only) and Conductor (auto-link)'
+    rationale: A-Mail works with zero dependencies — just paradigm CLI. Conductor enhances with auto-discovery, voice, gaze. Users shouldn't need Conductor to get basic agent messaging.
+  - id: D-SYMPHONY-002
+    decision: File-based mailbox protocol (JSONL) at ~/.paradigm/mail/
+    rationale: Avoids needing IPC/WebSocket between Swift Conductor and Node.js MCP. Both can read/write JSONL files. Simple, debuggable, zero-dependency.
+  - id: D-SYMPHONY-003
+    decision: Agent identity = project-name/role, not PID
+    rationale: PIDs change on restart. Project dir + role is stable and meaningful. Thread continuity survives session restarts.
+  - id: D-SYMPHONY-004
+    decision: /loop as the agent heartbeat (10s default)
+    rationale: Claude Code's /loop feature enables polling without custom infrastructure. Each agent polls its mailbox every 10 seconds via paradigm_symphony_poll.
+  - id: D-SYMPHONY-005
+    decision: Sentinel as conversation visualization hub, not message router
+    rationale: Sentinel already has generic events, causality tracking, scope grouping, and WebSocket broadcasting. Symphony messages become Sentinel events with tree visualization. Sentinel observes, doesn't route.
+tags:
+  - arc:symphony
+  - arc:conductor
+  - design
+  - vision
+  - multi-agent
+  - networking
+  - a-mail
+body: |-
+  ## The Symphony Vision
+
+  Symphony transforms Paradigm from a single-developer toolchain into a networked collaborative intelligence layer where AI agents and humans are peers in a shared conversation graph.
+
+  **Metaphor:** A live band. Each musician (agent/human) has their own instrument (codebase, specialty). Conductor is the bandleader. Sentinel is the mixing board. Lore is the setlist.
+
+  ## Two Tiers
+
+  ### A-Mail (CLI-only, Phase 0)
+  - `paradigm mail link` discovers Claude Code sessions on the machine
+  - File-based mailbox: `~/.paradigm/mail/agents/{id}/inbox.jsonl`
+  - `/loop 10s paradigm_symphony_poll` as heartbeat
+  - `paradigm mail send` for human → agent messages from terminal
+  - `paradigm mail serve` + `--remote` for cross-machine without Conductor
+
+  ### Full Symphony (Conductor + Sentinel, Phases 1-7)
+  - Conductor auto-links all detected sessions
+  - Bonjour/mDNS peer discovery on LAN
+  - Voice participation via Conductor
+  - Sentinel ConversationView with live threaded tree
+  - Hub election for multi-machine unified view
+  - Lore auto-capture of decisions
+
+  ## Key Design Decisions
+  1. File-based mailbox (JSONL) — both Swift and Node.js read/write without IPC
+  2. Agent identity = project/role — survives PID changes
+  3. Message intents (question, proposal, decision, action) — drive conversation semantics
+  4. Sentinel as observer, not router — leverages existing event infrastructure
+  5. Loop detection (10 agent-agent exchanges without human) — prevents infinite loops
+
+  ## Existing Infrastructure Reuse
+  - Conductor: ClaudeCodeDetector, SessionFileWatcher, WhisperVoiceProvider, GazeZoneRouter, SentinelWSClient
+  - Sentinel: WebSocket server, generic events, causality tracking, scope grouping, visualization hints (tree view)
+  - Team: AgentRelay format, agent-provider abstraction
+  - Lore: arc tags, decision entries, thread resolution → lore
+  - /loop: polling mechanism built into Claude Code
+git_context:
+  ref: 8c7f8f3dee72cbf54368687c1237a3128cceda8c
+  branch: main
+  dirty: true
