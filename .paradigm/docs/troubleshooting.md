@@ -792,8 +792,8 @@ If none of these solutions work:
 
 | Issue | Solution |
 |-------|----------|
-| "Mail not delivered" | Check agent is linked (`paradigm mail list`) and polling (`/loop`) |
-| "File request denied" | Check `~/.paradigm/mail/trust.yaml` patterns — `.env*`, `*.key` always blocked |
+| "Mail not delivered" | Check agent is linked (`paradigm symphony list`) and polling (`/loop`) |
+| "File request denied" | Check `~/.paradigm/score/trust.yaml` patterns — `.env*`, `*.key` always blocked |
 | "Agent shows as asleep" | Agent hasn't polled in 60s — ensure `/loop 10s paradigm_symphony_poll` is running |
-| "Thread not found" | Run `paradigm mail threads` to list all threads |
-| "No agents found" | Run `paradigm mail link` in each terminal first |
+| "Thread not found" | Run `paradigm symphony threads` to list all threads |
+| "No agents found" | Run `paradigm symphony join` in each terminal first |

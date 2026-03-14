@@ -1,6 +1,6 @@
-purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions
-version: 0.5.0
-description: Workspace manager that launches and owns CC instances. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle.
+purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions + Symphony inter-agent messaging
+version: 0.6.0
+description: Workspace manager that launches and owns CC instances. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
@@ -14,6 +14,10 @@ context:
   - Single-owner pattern — AppDelegate is the sole lifecycle owner of orchestrator and workspace
   - Video/voice toggle icons in header bar with Cmd+Shift+V / Cmd+Shift+M hotkeys
   - Targeted terminal close via AppleScript window IDs — closing one window no longer kills all terminals
+  - Symphony: file-based inter-agent messaging at ~/.paradigm/score/ with JSONL mailboxes
+  - Symphony: auto-link creates agent parts when CC sessions are detected
+  - Symphony: 5s relay poll routes notes between agent inboxes/outboxes
+  - Symphony: file approval with trust.yaml, hard-deny patterns, SHA-256 hashing
 
 # ============================================
 # Components (#)
@@ -225,9 +229,9 @@ context:
     - Sources/Conductor/WindowManager/WindowArranger.swift:1
 
 #status-tracker:
-  description: Poll CC windows for idle/processing/finished
+  description: Poll CC windows for idle/processing/finished. Combines per-project .paradigm/tasks/ counts with global ~/.paradigm/score/agents/ registry for accurate agent counts.
   type: detector
-  tags: [window, status, monitoring]
+  tags: [window, status, monitoring, agents]
   anchors:
     - Sources/Conductor/WindowManager/StatusTracker.swift:1
 
@@ -470,6 +474,71 @@ context:
   anchors:
     - Sources/Conductor/Utils/HotKeyManager.swift:1
 
+# --- Symphony Phase 1-2 Components ---
+
+#symphony-types:
+  description: Wire-compatible Codable structs for The Score protocol matching TypeScript symphony-loader.ts
+  type: model
+  tags: [symphony, types, codable, wire-compat]
+  anchors:
+    - Sources/Conductor/Symphony/SymphonyTypes.swift:1
+
+#score-io:
+  description: JSONL read/write + directory management at ~/.paradigm/score/
+  type: utility
+  tags: [symphony, io, jsonl, filesystem]
+  anchors:
+    - Sources/Conductor/Symphony/ScoreIO.swift:1
+
+#agent-part-manager:
+  description: Agent registration/unregistration, scanning, stale cleanup
+  type: manager
+  tags: [symphony, agent, registration, lifecycle]
+  anchors:
+    - Sources/Conductor/Symphony/AgentPartManager.swift:1
+
+#note-relay:
+  description: 5-second polling relay routing notes from outboxes to inboxes with dedup
+  type: service
+  tags: [symphony, relay, polling, routing, dedup]
+  anchors:
+    - Sources/Conductor/Symphony/NoteRelay.swift:1
+
+#file-approval-manager:
+  description: File request approval/denial with trust config, path safety checks, and SHA-256 hashing
+  type: manager
+  tags: [symphony, file-transfer, trust, security]
+  anchors:
+    - Sources/Conductor/Symphony/FileApprovalManager.swift:1
+
+#auto-link-coordinator:
+  description: Auto-detect CC sessions via ClaudeCodeDetector, create agent parts, start relay
+  type: service
+  tags: [symphony, auto-link, detection, coordinator]
+  anchors:
+    - Sources/Conductor/Symphony/AutoLinkCoordinator.swift:1
+
+#thread-list-view:
+  description: Active threads displayed in Conductor overlay sidebar
+  type: view
+  tags: [symphony, ui, threads, sidebar]
+  anchors:
+    - Sources/Conductor/UI/Views/ThreadListView.swift:1
+
+#file-request-notification:
+  description: Banner card for pending file requests with approve/deny actions
+  type: view
+  tags: [symphony, ui, file-transfer, notification, banner]
+  anchors:
+    - Sources/Conductor/UI/Views/FileRequestNotificationView.swift:1
+
+#symphony-settings:
+  description: Settings tab for Symphony configuration — relay interval, auto-link toggle, trust config
+  type: view
+  tags: [symphony, ui, settings, configuration]
+  anchors:
+    - Sources/Conductor/UI/Views/SymphonySettingsView.swift:1
+
 # ============================================
 # Flows ($)
 # ============================================
@@ -587,6 +656,36 @@ flows:
       - "#hotkey-manager"
       - "#window-arranger"
       - "#window-detector"
+  # --- Symphony Phase 1-2 Flows ---
+  $symphony-auto-link:
+    description: "CC detected → resolve project dir → derive agent ID → part created → relay starts"
+    steps:
+      - "#auto-link-coordinator"
+      - "#agent-part-manager"
+      - "#score-io"
+      - "#note-relay"
+  $symphony-relay:
+    description: "Outbox → relay polls on 5s timer → routes to inbox → agent polls → dedup"
+    steps:
+      - "#note-relay"
+      - "#score-io"
+  $symphony-file-approval:
+    description: "File request detected → notification banner → user approve/deny → file delivery"
+    steps:
+      - "#file-approval-manager"
+      - "#file-request-notification"
+      - "#score-io"
+  $symphony-voice-approve:
+    description: "Voice transcription → 'approve' keyword matched → file approval triggered → delivery"
+    steps:
+      - "#file-approval-manager"
+      - "#score-io"
+  $symphony-startup:
+    description: "App launch → part manager init → auto-link coordinator scans → relay starts"
+    steps:
+      - "#agent-part-manager"
+      - "#auto-link-coordinator"
+      - "#note-relay"
 
 # ============================================
 # Gates (^)
@@ -617,6 +716,13 @@ gates:
   conductor-launched:
     description: Only Conductor-owned instances get primary grid treatment
     check: "workspaceManager.managedInstances.contains(instance)"
+  # --- Symphony Phase 1-2 Gates ---
+  ^symphony-enabled:
+    description: Auto-link enabled in Symphony settings
+    check: "UserDefaults.standard.bool(forKey: 'symphonyAutoLink')"
+  ^file-request-allowed:
+    description: File path passes trust config deny-lists and auto-approve globs
+    check: "FileApprovalManager.isPathAllowed(path, trustConfig)"
 
 # ============================================
 # Signals (!)
@@ -691,6 +797,31 @@ signals:
   voice-toggled:
     description: Voice (mic) toggled on or off via UI or hotkey
     emitters: ["#input-orchestrator"]
+  # --- Symphony Phase 1-2 Signals ---
+  !agent-part-created:
+    description: New agent part registered in The Score
+    emitters: ["#agent-part-manager", "#auto-link-coordinator"]
+  !agent-auto-linked:
+    description: CC session auto-detected and linked as agent part
+    emitters: ["#auto-link-coordinator"]
+  !agent-auto-unlinked:
+    description: CC session disappeared and agent part unregistered
+    emitters: ["#auto-link-coordinator"]
+  !note-relayed:
+    description: One or more notes relayed from outboxes to inboxes
+    emitters: ["#note-relay"]
+  !file-request-received:
+    description: Incoming file request detected for approval
+    emitters: ["#file-approval-manager"]
+  !file-request-approved:
+    description: File request approved and file delivered
+    emitters: ["#file-approval-manager"]
+  !file-request-denied:
+    description: File request denied by user or trust config
+    emitters: ["#file-approval-manager"]
+  !symphony-relay-started:
+    description: Note relay polling loop has started
+    emitters: ["#note-relay"]
 
 # ============================================
 # Aspects (~)
@@ -741,6 +872,19 @@ signals:
     - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
+# --- Symphony Phase 1-2 Aspects ---
+
+~jsonl-compatible:
+  description: Swift Codable output is byte-compatible with TypeScript JSON.stringify — no pretty-print, consistent key ordering
+  anchors:
+    - Sources/Conductor/Symphony/SymphonyTypes.swift:1
+    - Sources/Conductor/Symphony/ScoreIO.swift:1
+
+~file-safety:
+  description: Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)
+  anchors:
+    - Sources/Conductor/Symphony/FileApprovalManager.swift:1
+
 tags:
   - conductor
   - macos
@@ -749,3 +893,4 @@ tags:
   - gesture
   - gaze
   - overlay
+  - symphony

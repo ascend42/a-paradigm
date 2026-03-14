@@ -20,6 +20,8 @@ struct SettingsPanelView: View {
     var actionRegistry: ActionRegistry?
     var voiceCommandRegistry: VoiceCommandRegistry?
     var customGestureClassifier: CustomGestureClassifier?
+    var agentPartManager: AgentPartManager?
+    var noteRelay: NoteRelay?
 
     var body: some View {
         TabView {
@@ -40,6 +42,10 @@ struct SettingsPanelView: View {
                     customGestureClassifier: gestureClassifier
                 )
                 .tabItem { Label("Bindings", systemImage: "keyboard") }
+            }
+            if let partManager = agentPartManager, let relay = noteRelay {
+                SymphonySettingsView(partManager: partManager, relay: relay)
+                    .tabItem { Label("Symphony", systemImage: "music.quarternote.3") }
             }
         }
         .frame(width: 450, height: 400)

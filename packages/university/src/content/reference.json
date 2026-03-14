@@ -453,8 +453,8 @@
         },
         {
           "id": "mail",
-          "command": "paradigm mail <subcommand>",
-          "description": "A-Mail agent messaging — the CLI-only foundation of Symphony. Enables Claude Code sessions to send and receive messages through file-based mailboxes. Subcommands: whoami (show identity), list (show agents), link (connect sessions), unlink (disconnect), serve (start remote server), send (send a message), read (show unread), threads (list threads), thread (show thread), resolve (resolve thread to Lore), status (network overview), request (request a file), requests (list pending file requests), approve/deny (approve or deny file requests).",
+          "command": "paradigm symphony <subcommand>",
+          "description": "The Score agent messaging — the CLI-only foundation of Symphony. Enables Claude Code sessions to send and receive messages through file-based mailboxes. Subcommands: whoami (show identity), list (show agents), link (connect sessions), unlink (disconnect), serve (start remote server), send (send a message), read (show unread), threads (list threads), thread (show thread), resolve (resolve thread to Lore), status (network overview), request (request a file), requests (list pending file requests), approve/deny (approve or deny file requests).",
           "flags": ["whoami: Show this agent's identity and linked peers", "list: List all known agents with status and location", "link [--remote <ip>]: Discover and connect sessions (local or remote)", "unlink: Remove this session from the mail network", "serve: Start TCP server for remote mail linking (port 3939)", "send [--to <agent>] [--thread <id>] \"<message>\": Send a message", "read: Show unread messages", "threads: List active threads", "thread <id>: Show full thread", "resolve <id>: Resolve thread and create Lore entry", "status: Network overview (agents, threads, unread count)", "request <file> --from <agent> [--reason <text>]: Request a file from another agent", "requests: List pending file requests (as owner)", "approve <id> [--redact]: Approve a file request", "deny <id> [--reason <text>]: Deny a file request"]
         }
       ]

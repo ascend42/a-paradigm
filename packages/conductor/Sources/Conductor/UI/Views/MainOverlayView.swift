@@ -17,14 +17,18 @@ struct MainOverlayView: View {
     @ObservedObject private var gazeRouter = GazeRouter.shared
     @ObservedObject var orchestrator: InputOrchestrator
     @ObservedObject var workspaceManager: WorkspaceManager
+    @ObservedObject var noteRelay: NoteRelay
+    var fileApprovalManager: FileApprovalManager
 
     @State private var showAddInstance = false
 
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager) {
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager) {
         self._showOnboarding = State(initialValue: showOnboarding)
         self.permissionStatus = permissionStatus
         self.orchestrator = orchestrator
         self.workspaceManager = workspaceManager
+        self.noteRelay = noteRelay
+        self.fileApprovalManager = fileApprovalManager
     }
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -212,6 +216,26 @@ struct MainOverlayView: View {
                 externalInstances: externalInstances,
                 onAddInstance: { showAddInstance = true }
             )
+
+            // Symphony: file request notifications
+            FileRequestNotificationView(
+                requests: noteRelay.pendingFileRequests,
+                onApprove: { id in
+                    _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath)
+                },
+                onDeny: { id in
+                    fileApprovalManager.deny(id)
+                },
+                onApproveRedacted: { id in
+                    _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath, redact: true)
+                }
+            )
+
+            // Symphony: thread list
+            if !noteRelay.activeThreads.isEmpty {
+                Divider()
+                ThreadListView(relay: noteRelay)
+            }
 
             Spacer(minLength: 0)
         }

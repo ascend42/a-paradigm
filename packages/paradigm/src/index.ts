@@ -1826,157 +1826,157 @@ pipelineCmd
     await pipelineListCommand();
   });
 
-// paradigm mail <command> — A-Mail agent-to-agent messaging
-const mailCmd = program
-  .command('mail')
-  .description('A-Mail — agent-to-agent messaging for multi-session collaboration');
+// paradigm symphony <command> — The Score: agent-to-agent messaging
+const symphonyCmd = program
+  .command('symphony')
+  .description('Symphony — agent-to-agent messaging for multi-session collaboration');
 
-mailCmd
-  .command('link')
-  .description('Link this session to the A-Mail network')
-  .option('--remote <ip>', 'Connect to remote mail server')
+symphonyCmd
+  .command('join')
+  .description('Join this session to the Symphony network')
+  .option('--remote <ip>', 'Connect to remote Symphony server')
   .action(async (options) => {
-    const { mailLinkCommand } = await import('./commands/mail/index.js');
-    await mailLinkCommand(options);
+    const { symphonyJoinCommand } = await import('./commands/symphony/index.js');
+    await symphonyJoinCommand(options);
   });
 
-mailCmd
-  .command('unlink')
-  .description('Remove this session from the A-Mail network')
+symphonyCmd
+  .command('leave')
+  .description('Remove this session from the Symphony network')
   .action(async () => {
-    const { mailUnlinkCommand } = await import('./commands/mail/index.js');
-    await mailUnlinkCommand();
+    const { symphonyLeaveCommand } = await import('./commands/symphony/index.js');
+    await symphonyLeaveCommand();
   });
 
-mailCmd
+symphonyCmd
   .command('whoami')
   .description('Show this agent\'s identity and linked peers')
   .action(async () => {
-    const { mailWhoamiCommand } = await import('./commands/mail/index.js');
-    await mailWhoamiCommand();
+    const { symphonyWhoamiCommand } = await import('./commands/symphony/index.js');
+    await symphonyWhoamiCommand();
   });
 
-mailCmd
+symphonyCmd
   .command('list')
   .alias('ls')
-  .description('List all linked agents')
+  .description('List all joined agents')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const { mailListCommand } = await import('./commands/mail/index.js');
-    await mailListCommand(options);
+    const { symphonyListCommand } = await import('./commands/symphony/index.js');
+    await symphonyListCommand(options);
   });
 
-mailCmd
+symphonyCmd
   .command('send <message>')
-  .description('Send a message to agents')
+  .description('Send a note to agents')
   .option('--to <agent>', 'Send to specific agent (omit for broadcast)')
   .option('--thread <id>', 'Reply to existing thread')
   .action(async (message, options) => {
-    const { mailSendCommand } = await import('./commands/mail/index.js');
-    await mailSendCommand(message, options);
+    const { symphonySendCommand } = await import('./commands/symphony/index.js');
+    await symphonySendCommand(message, options);
   });
 
-mailCmd
+symphonyCmd
   .command('read')
-  .description('Show unread messages')
+  .description('Show unread notes')
   .action(async () => {
-    const { mailReadCommand } = await import('./commands/mail/index.js');
-    await mailReadCommand();
+    const { symphonyReadCommand } = await import('./commands/symphony/index.js');
+    await symphonyReadCommand();
   });
 
-mailCmd
+symphonyCmd
   .command('inbox')
-  .description('Show unread messages (alias for read)')
+  .description('Show unread notes (alias for read)')
   .action(async () => {
-    const { mailReadCommand } = await import('./commands/mail/index.js');
-    await mailReadCommand();
+    const { symphonyReadCommand } = await import('./commands/symphony/index.js');
+    await symphonyReadCommand();
   });
 
-mailCmd
+symphonyCmd
   .command('threads')
   .description('List all threads')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const { mailThreadsCommand } = await import('./commands/mail/index.js');
-    await mailThreadsCommand(options);
+    const { symphonyThreadsCommand } = await import('./commands/symphony/index.js');
+    await symphonyThreadsCommand(options);
   });
 
-mailCmd
+symphonyCmd
   .command('thread <id>')
   .description('Show full thread conversation')
   .action(async (id) => {
-    const { mailThreadCommand } = await import('./commands/mail/index.js');
-    await mailThreadCommand(id);
+    const { symphonyThreadCommand } = await import('./commands/symphony/index.js');
+    await symphonyThreadCommand(id);
   });
 
-mailCmd
+symphonyCmd
   .command('resolve <id>')
   .description('Mark a thread as resolved')
   .option('--decision <text>', 'Decision text to record')
   .action(async (id, options) => {
-    const { mailResolveCommand } = await import('./commands/mail/index.js');
-    await mailResolveCommand(id, options);
+    const { symphonyResolveCommand } = await import('./commands/symphony/index.js');
+    await symphonyResolveCommand(id, options);
   });
 
-mailCmd
+symphonyCmd
   .command('status')
-  .description('Show A-Mail network status')
+  .description('Show Symphony network status')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const { mailStatusCommand } = await import('./commands/mail/index.js');
-    await mailStatusCommand(options);
+    const { symphonyStatusCommand } = await import('./commands/symphony/index.js');
+    await symphonyStatusCommand(options);
   });
 
-mailCmd
+symphonyCmd
   .command('serve')
-  .description('Start TCP server for remote mail linking')
+  .description('Start TCP server for remote Symphony linking')
   .option('--port <port>', 'Port to listen on', '3939')
   .action(async (options) => {
-    const { mailServeCommand } = await import('./commands/mail/index.js');
-    await mailServeCommand(options);
+    const { symphonyServeCommand } = await import('./commands/symphony/index.js');
+    await symphonyServeCommand(options);
   });
 
-mailCmd
+symphonyCmd
   .command('request <file>')
   .description('Request a file from another agent')
   .option('--from <agent>', 'Agent to request from')
   .option('--reason <text>', 'Why this file is needed')
   .action(async (file, options) => {
-    const { mailRequestCommand } = await import('./commands/mail/index.js');
-    await mailRequestCommand(file, options);
+    const { symphonyRequestCommand } = await import('./commands/symphony/index.js');
+    await symphonyRequestCommand(file, options);
   });
 
-mailCmd
+symphonyCmd
   .command('requests')
   .description('List pending file requests')
   .action(async () => {
-    const { mailRequestsCommand } = await import('./commands/mail/index.js');
-    await mailRequestsCommand();
+    const { symphonyRequestsCommand } = await import('./commands/symphony/index.js');
+    await symphonyRequestsCommand();
   });
 
-mailCmd
+symphonyCmd
   .command('approve <id>')
   .description('Approve a file request')
   .option('--redact', 'Strip sensitive lines before sending')
   .action(async (id, options) => {
-    const { mailApproveCommand } = await import('./commands/mail/index.js');
-    await mailApproveCommand(id, options);
+    const { symphonyApproveCommand } = await import('./commands/symphony/index.js');
+    await symphonyApproveCommand(id, options);
   });
 
-mailCmd
+symphonyCmd
   .command('deny <id>')
   .description('Deny a file request')
   .option('--reason <text>', 'Reason for denial')
   .action(async (id, options) => {
-    const { mailDenyCommand } = await import('./commands/mail/index.js');
-    await mailDenyCommand(id, options);
+    const { symphonyDenyCommand } = await import('./commands/symphony/index.js');
+    await symphonyDenyCommand(id, options);
   });
 
-// Default mail action (status)
-mailCmd
+// Default symphony action (status)
+symphonyCmd
   .action(async () => {
-    const { mailStatusCommand } = await import('./commands/mail/index.js');
-    await mailStatusCommand({});
+    const { symphonyStatusCommand } = await import('./commands/symphony/index.js');
+    await symphonyStatusCommand({});
   });
 
 // Parse and run

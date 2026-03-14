@@ -1186,7 +1186,7 @@ paradigm_assessment_arc_close({ arc_id: "arc-auth-hardening", status: "complete"
 
 ---
 
-## paradigm mail
+## paradigm symphony
 
 Agent-to-agent messaging for multi-session collaboration (Symphony Phase 0).
 
@@ -1214,10 +1214,10 @@ Default action (no subcommand): shows status overview.
 **Quick start:**
 ```sh
 # Terminal 1
-paradigm mail link
+paradigm symphony join
 # Terminal 2
-paradigm mail link
-paradigm mail send "Can you share your auth middleware?" --to a-paradigm/core
+paradigm symphony join
+paradigm symphony send "Can you share your auth middleware?" --to a-paradigm/core
 # Terminal 1
-paradigm mail read
+paradigm symphony read
 ```

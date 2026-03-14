@@ -125,6 +125,15 @@ final class ActionRegistry: ObservableObject {
             if name.hasPrefix("custom:") {
                 return .custom(String(name.dropFirst(7)))
             }
+            if name.hasPrefix("approveFileRequest:") {
+                return .approveFileRequest(String(name.dropFirst(19)))
+            }
+            if name.hasPrefix("denyFileRequest:") {
+                return .denyFileRequest(String(name.dropFirst(16)))
+            }
+            if name.hasPrefix("approveFileRequestRedacted:") {
+                return .approveFileRequestRedacted(String(name.dropFirst(27)))
+            }
             return nil
         }
     }
@@ -152,6 +161,9 @@ final class ActionRegistry: ObservableObject {
         case .unmuteVideo: return "unmuteVideo"
         case .unmuteVoice: return "unmuteVoice"
         case .switchToCell(let i): return "switchToCell:\(i)"
+        case .approveFileRequest(let id): return "approveFileRequest:\(id)"
+        case .denyFileRequest(let id): return "denyFileRequest:\(id)"
+        case .approveFileRequestRedacted(let id): return "approveFileRequestRedacted:\(id)"
         case .custom(let name): return "custom:\(name)"
         }
     }

@@ -1,4 +1,4 @@
-# Symphony Quick Start — A-Mail Agent Messaging
+# Symphony Quick Start — The Score Agent Messaging
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@
 In each terminal, run:
 
 ```sh
-paradigm mail link
+paradigm symphony join
 ```
 
 This registers the session with a deterministic ID based on project name and role (e.g., `a-paradigm/core`).
@@ -23,14 +23,14 @@ In each Claude Code session, set up the polling loop:
 /loop 10s paradigm_symphony_poll
 ```
 
-This makes the agent check its mailbox every 10 seconds.
+This makes the agent check its part every 10 seconds.
 
 ## Step 3: Send a Test Message
 
 From the CLI:
 
 ```sh
-paradigm mail send "Hello from the backend team!" --to frontend/core
+paradigm symphony send "Hello from the backend team!" --to frontend/core
 ```
 
 Or from an MCP tool call:
@@ -42,7 +42,7 @@ paradigm_symphony_send({ intent: "question", text: "Can you share the auth middl
 ## Step 4: Check Messages
 
 ```sh
-paradigm mail read
+paradigm symphony read
 ```
 
 Or the agent's poll will automatically pick up new messages.
@@ -52,19 +52,19 @@ Or the agent's poll will automatically pick up new messages.
 List active threads:
 
 ```sh
-paradigm mail threads
+paradigm symphony threads
 ```
 
 View full thread:
 
 ```sh
-paradigm mail thread thr-abc12345
+paradigm symphony thread thr-abc12345
 ```
 
 Resolve a thread:
 
 ```sh
-paradigm mail resolve thr-abc12345 --decision "Agreed to use JWT with RS256"
+paradigm symphony resolve thr-abc12345 --decision "Agreed to use JWT with RS256"
 ```
 
 ## Step 6: File Requests (Optional)
@@ -72,15 +72,15 @@ paradigm mail resolve thr-abc12345 --decision "Agreed to use JWT with RS256"
 Request a file from another project:
 
 ```sh
-paradigm mail request src/auth/middleware.ts --from backend/core --reason "Need auth types for frontend integration"
+paradigm symphony request src/auth/middleware.ts --from backend/core --reason "Need auth types for frontend integration"
 ```
 
 The owning agent's human approves:
 
 ```sh
-paradigm mail approve freq-abc12345
+paradigm symphony approve freq-abc12345
 # Or with secrets stripped:
-paradigm mail approve freq-abc12345 --redact
+paradigm symphony approve freq-abc12345 --redact
 ```
 
 ## Step 7: Remote Linking (Optional)
@@ -88,20 +88,20 @@ paradigm mail approve freq-abc12345 --redact
 Start a mail server on one machine:
 
 ```sh
-paradigm mail serve --port 3939
+paradigm symphony serve --port 3939
 ```
 
 Connect from another machine:
 
 ```sh
-paradigm mail link --remote 192.168.1.100:3939
+paradigm symphony join --remote 192.168.1.100:3939
 ```
 
 > Note: Remote linking is a Phase 0 stub. Full implementation in a future release.
 
 ## Trust Configuration
 
-Create `~/.paradigm/mail/trust.yaml` to control file transfer policies:
+Create `~/.paradigm/score/trust.yaml` to control file transfer policies:
 
 ```yaml
 trust:
@@ -126,10 +126,10 @@ trust:
 
 ## Architecture
 
-A-Mail uses file-based mailboxes at `~/.paradigm/mail/`:
+The Score uses file-based parts at `~/.paradigm/score/`:
 
 ```
-~/.paradigm/mail/
+~/.paradigm/score/
   agents/{project}/{role}/
     inbox.jsonl      <- Messages for this agent
     outbox.jsonl     <- Messages from this agent

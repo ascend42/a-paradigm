@@ -43,6 +43,9 @@ final class InputOrchestrator: ObservableObject {
     // Workspace
     var workspaceManager: WorkspaceManager?
 
+    // Symphony — file approval
+    var fileApprovalManager: FileApprovalManager?
+
     // Dispatch
     let dispatchTarget: AXDispatchTarget
 
@@ -494,6 +497,30 @@ final class InputOrchestrator: ObservableObject {
 
         case .unmuteVoice:
             await startVoiceProvider()
+
+        case .approveFileRequest(let requestId):
+            let result = fileApprovalManager?.approve(
+                requestId,
+                projectDir: FileManager.default.currentDirectoryPath
+            )
+            if case .failure(let error) = result {
+                ConductorLog.component("input-orchestrator")
+                    .error("File approval failed: \(error.description)")
+            }
+
+        case .denyFileRequest(let requestId):
+            fileApprovalManager?.deny(requestId)
+
+        case .approveFileRequestRedacted(let requestId):
+            let result = fileApprovalManager?.approve(
+                requestId,
+                projectDir: FileManager.default.currentDirectoryPath,
+                redact: true
+            )
+            if case .failure(let error) = result {
+                ConductorLog.component("input-orchestrator")
+                    .error("File approval (redacted) failed: \(error.description)")
+            }
 
         case .custom(let name):
             ConductorLog.component("input-orchestrator")

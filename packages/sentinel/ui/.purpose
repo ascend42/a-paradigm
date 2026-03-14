@@ -82,6 +82,21 @@ description: |
   anchors:
     - src/components/Input/Autocomplete.tsx:1-48
 
+#ConversationView:
+  description: Interactive tree view of Symphony agent conversations — ThreadList sidebar with ConversationPanel showing NoteBubbles, intent badges, and real-time WebSocket updates
+  type: view
+  tags: [ui, symphony]
+  anchors:
+    - src/views/ConversationView.tsx:1-309
+  components:
+    - "#IntentBadge"
+    - "#ParticipantBadge"
+    - "#NoteBubble"
+    - "#ThreadCard"
+    - "#DecisionSummary"
+  signals:
+    - !note-received-live
+
 # ============================================
 # State Management (#)
 # ============================================
@@ -106,6 +121,15 @@ description: |
   tags: [state]
   anchors:
     - src/store/themeStore.ts:1-40
+
+#ConversationStore:
+  description: Zustand store for Symphony conversation threads and notes — fetches from event API, supports real-time WebSocket updates, extracts decisions
+  type: state
+  tags: [state, symphony]
+  anchors:
+    - src/store/conversationStore.ts:1-179
+  signals:
+    - !note-received-live
 
 # ============================================
 # Flows ($)
@@ -136,6 +160,16 @@ $filter-symbols:
     - "!filters-changed"
     - "Reorganize visible nodes"
 
+$symphony-conversation:
+  description: End-to-end flow for live Symphony conversation rendering — MCP emits event, Sentinel stores, WebSocket pushes, UI renders
+  tags: [symphony, real-time]
+  steps:
+    - "#ConversationStore"        # Fetch threads/notes from event API
+    - "WebSocket receives event"  # Real-time push from Sentinel server
+    - "#ConversationStore"        # addRealtimeNote updates state
+    - "#ConversationView"         # NoteBubble rendered, auto-scroll
+  successSignal: "!note-received-live"
+
 # ============================================
 # Signals (!)
 # ============================================
@@ -163,6 +197,15 @@ $filter-symbols:
   payload:
     symbolId: string
     updates: object
+
+!note-received-live:
+  description: New Symphony note received via WebSocket and rendered in ConversationView
+  tags: [symphony, real-time]
+  payload:
+    threadId: string
+    eventType: string
+    sender: string
+    timestamp: ISO8601
 
 # ============================================
 # Aspects (~)

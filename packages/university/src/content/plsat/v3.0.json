@@ -2574,22 +2574,22 @@
       "variants": [
         {
           "id": "plsat-103",
-          "scenario": "Your team is evaluating Symphony's A-Mail for inter-agent communication. A team member asks: 'Does A-Mail require a central server or WebSocket connection to route messages between agents on the same machine?'",
-          "question": "How does A-Mail route messages between agents on a single machine?",
+          "scenario": "Your team is evaluating Symphony's The Score for inter-agent communication. A team member asks: 'Does The Score require a central server or WebSocket connection to route messages between agents on the same machine?'",
+          "question": "How does The Score route messages between agents on a single machine?",
           "choices": {
             "A": "Through a persistent WebSocket connection managed by Sentinel's event hub",
-            "B": "Through a central message broker that must be started with `paradigm mail serve`",
-            "C": "Through file-based mailboxes — agents write to JSONL files in `~/.paradigm/mail/agents/` and poll for new messages via `/loop`",
+            "B": "Through a central message broker that must be started with `paradigm symphony serve`",
+            "C": "Through file-based mailboxes — agents write to JSONL files in `~/.paradigm/score/agents/` and poll for new messages via `/loop`",
             "D": "Through Conductor's native IPC channel between Swift and Node.js processes",
-            "E": "Through a shared SQLite database at `~/.paradigm/mail/messages.db`"
+            "E": "Through a shared SQLite database at `~/.paradigm/score/messages.db`"
           },
           "correct": "C",
-          "explanation": "A-Mail is file-based with zero daemon dependencies. Each agent has a mailbox directory containing inbox.jsonl and outbox.jsonl. Messages are appended as single JSON lines. Agents poll for new messages using `/loop 10s paradigm_symphony_poll`. No WebSocket, no broker, no Conductor required — just filesystem reads and writes."
+          "explanation": "The Score is file-based with zero daemon dependencies. Each agent has a mailbox directory containing inbox.jsonl and outbox.jsonl. Messages are appended as single JSON lines. Agents poll for new messages using `/loop 10s paradigm_symphony_poll`. No WebSocket, no broker, no Conductor required — just filesystem reads and writes."
         },
         {
           "id": "plsat-103b",
-          "scenario": "A developer is comparing Symphony A-Mail to traditional inter-process communication. They note that A-Mail uses JSONL files for message passing instead of sockets, pipes, or shared memory.",
-          "question": "Why does A-Mail use JSONL files instead of a real-time transport like WebSockets?",
+          "scenario": "A developer is comparing Symphony The Score to traditional inter-process communication. They note that The Score uses JSONL files for message passing instead of sockets, pipes, or shared memory.",
+          "question": "Why does The Score use JSONL files instead of a real-time transport like WebSockets?",
           "choices": {
             "A": "JSONL is faster than WebSockets for small messages under 1KB",
             "B": "File-based messaging requires zero dependencies beyond the Paradigm CLI — no Conductor, no Sentinel, no persistent server process",
@@ -2598,7 +2598,7 @@
             "E": "File-based messaging is required by macOS sandboxing rules for CLI tools"
           },
           "correct": "B",
-          "explanation": "A-Mail's design goal is zero-dependency messaging. It works with nothing beyond the Paradigm CLI — no Conductor, no Sentinel, no network configuration. File-based JSONL is append-only (safe for concurrent writes), trivial to parse, and works on every OS without additional runtime dependencies. Later phases (Conductor, Sentinel) add richer transports, but A-Mail is the foundation that always works."
+          "explanation": "The Score's design goal is zero-dependency messaging. It works with nothing beyond the Paradigm CLI — no Conductor, no Sentinel, no network configuration. File-based JSONL is append-only (safe for concurrent writes), trivial to parse, and works on every OS without additional runtime dependencies. Later phases (Conductor, Sentinel) add richer transports, but The Score is the foundation that always works."
         }
       ]
     },
@@ -2609,8 +2609,8 @@
       "variants": [
         {
           "id": "plsat-104",
-          "scenario": "You have two Claude Code sessions open: one working on `a-paradigm` in the core library role, and another working on `a-paradigm` in the backend role. After running `paradigm mail link`, each session gets an identity.",
-          "question": "How are agent identities determined in A-Mail?",
+          "scenario": "You have two Claude Code sessions open: one working on `a-paradigm` in the core library role, and another working on `a-paradigm` in the backend role. After running `paradigm symphony join`, each session gets an identity.",
+          "question": "How are agent identities determined in The Score?",
           "choices": {
             "A": "Random UUIDs assigned at session start — different every time",
             "B": "The process ID (PID) of the Claude Code session is used as the identity",
@@ -2619,16 +2619,16 @@
             "E": "Assigned sequentially by the mail router: agent-001, agent-002, etc."
           },
           "correct": "C",
-          "explanation": "Agent identity in A-Mail is deterministic: `{project-name}/{role}`. The same project opened in the same context always gets the same identity, even across session restarts. This stability means other agents can reliably address messages to `a-paradigm/backend` knowing it will reach the backend agent regardless of which specific Claude Code session is running. PID maps to identity via identity.json but is not the identity itself."
+          "explanation": "Agent identity in The Score is deterministic: `{project-name}/{role}`. The same project opened in the same context always gets the same identity, even across session restarts. This stability means other agents can reliably address messages to `a-paradigm/backend` knowing it will reach the backend agent regardless of which specific Claude Code session is running. PID maps to identity via identity.json but is not the identity itself."
         },
         {
           "id": "plsat-104b",
-          "scenario": "After running `paradigm mail whoami`, an agent sees: `agent-abc123 (a-paradigm/backend) — 3 linked peers, 2 active threads`. The agent then crashes and a new Claude Code session is started for the same project directory with the same working context.",
+          "scenario": "After running `paradigm symphony whoami`, an agent sees: `agent-abc123 (a-paradigm/backend) — 3 linked peers, 2 active threads`. The agent then crashes and a new Claude Code session is started for the same project directory with the same working context.",
           "question": "What happens to the agent's identity after the restart?",
           "choices": {
             "A": "A new random identity is assigned — the old one is permanently lost",
             "B": "The identity `a-paradigm/backend` is restored because it is derived from the project directory and role, not the PID",
-            "C": "The identity is lost unless the agent calls `paradigm mail recover` within 5 minutes",
+            "C": "The identity is lost unless the agent calls `paradigm symphony recover` within 5 minutes",
             "D": "The new session gets a different identity with a `-2` suffix to avoid conflicts",
             "E": "The old session's mailbox is deleted and a fresh one is created with a new ID"
           },
@@ -2693,7 +2693,7 @@
         },
         {
           "id": "plsat-106b",
-          "scenario": "A developer sees a file request in their terminal via `paradigm mail requests`: Agent C is requesting `.env.production` from their project. The developer's trust.yaml includes `neverApprove: [\".env*\"]`. The developer runs `paradigm mail approve req-xyz` anyway.",
+          "scenario": "A developer sees a file request in their terminal via `paradigm symphony requests`: Agent C is requesting `.env.production` from their project. The developer's trust.yaml includes `neverApprove: [\".env*\"]`. The developer runs `paradigm symphony approve req-xyz` anyway.",
           "question": "What happens when the developer tries to approve a file on the neverApprove list?",
           "choices": {
             "A": "The approval succeeds — human override always takes priority over trust configuration",
@@ -2714,7 +2714,7 @@
       "variants": [
         {
           "id": "plsat-107",
-          "scenario": "A thread about migrating to a new API version has been active for 30 minutes. Four agents and two humans participated. The team agreed on an approach: skip the database migration and hotfix the serializer. Someone runs `paradigm mail resolve thr-abc`.",
+          "scenario": "A thread about migrating to a new API version has been active for 30 minutes. Four agents and two humans participated. The team agreed on an approach: skip the database migration and hotfix the serializer. Someone runs `paradigm symphony resolve thr-abc`.",
           "question": "What does thread resolution produce?",
           "choices": {
             "A": "A git commit with the conversation as the commit message",
@@ -2728,10 +2728,10 @@
         },
         {
           "id": "plsat-107b",
-          "scenario": "An agent resolves a thread with `paradigm mail resolve thr-def`. The thread contained 12 messages, 3 decisions, and referenced symbols `#payment-serializer`, `#api-types`, and `$refund-flow`. A week later, a new developer encounters a similar serialization issue.",
+          "scenario": "An agent resolves a thread with `paradigm symphony resolve thr-def`. The thread contained 12 messages, 3 decisions, and referenced symbols `#payment-serializer`, `#api-types`, and `$refund-flow`. A week later, a new developer encounters a similar serialization issue.",
           "question": "How can the new developer find the resolved thread's knowledge?",
           "choices": {
-            "A": "Search `~/.paradigm/mail/threads/` for the thread JSON file — resolved threads are kept permanently",
+            "A": "Search `~/.paradigm/score/threads/` for the thread JSON file — resolved threads are kept permanently",
             "B": "Call `paradigm_lore_search` with `symbol: '#payment-serializer'` — the resolved thread became a lore entry linked to the discussed symbols",
             "C": "Call `paradigm_symphony_thread` with the old thread ID — resolved threads remain in the Symphony network",
             "D": "Check git log for the conversation — resolved threads are saved as commit messages",
@@ -2749,14 +2749,14 @@
       "variants": [
         {
           "id": "plsat-108",
-          "scenario": "You have set up A-Mail with 3 linked agents. Each agent has a mailbox, but none of them are running `/loop`. You send a message via `paradigm mail send \"Check the failing test in #auth-service\"`. The message is written to each agent's inbox.jsonl.",
+          "scenario": "You have set up The Score with 3 linked agents. Each agent has a mailbox, but none of them are running `/loop`. You send a message via `paradigm symphony send \"Check the failing test in #auth-service\"`. The message is written to each agent's inbox.jsonl.",
           "question": "When will the agents see and respond to this message?",
           "choices": {
             "A": "Immediately — messages trigger an interrupt in the Claude Code session",
             "B": "Never — without `/loop`, agents have no mechanism to poll their inbox and will not discover the message",
             "C": "Within 30 seconds — the MCP tool cache automatically polls inboxes",
             "D": "On the next `paradigm_status` call — status checks include inbox polling",
-            "E": "When the agent explicitly calls `paradigm mail read` from its session"
+            "E": "When the agent explicitly calls `paradigm symphony read` from its session"
           },
           "correct": "B",
           "explanation": "`/loop` is the agent heartbeat. It runs `paradigm_symphony_poll` on a timer (typically every 10 seconds), which reads inbox.jsonl and presents messages to the agent. Without `/loop`, messages accumulate in the inbox with nobody reading them. The convenience command `paradigm symphony join` sets up both identity registration and the polling loop in one step. This is why the setup instructions always include `/loop 10s paradigm_symphony_poll` in each session."
@@ -2768,12 +2768,12 @@
           "choices": {
             "A": "Directly into each recipient's inbox.jsonl — the send tool writes to all inboxes simultaneously",
             "B": "To this agent's outbox.jsonl — a mail router (or Conductor) picks up outbox messages and delivers them to the appropriate recipient inboxes",
-            "C": "To a central message queue at `~/.paradigm/mail/queue.jsonl` that all agents read from",
+            "C": "To a central message queue at `~/.paradigm/score/queue.jsonl` that all agents read from",
             "D": "Over a WebSocket connection to each recipient's MCP server",
             "E": "To Sentinel's event hub, which broadcasts to all connected agents"
           },
           "correct": "B",
-          "explanation": "The agent writes replies to its own outbox.jsonl via `paradigm_symphony_send`. A mail router process (in A-Mail's Phase 0 implementation) or Conductor (in later phases) reads outbox files and delivers messages to the correct recipient inbox files. This separation of write (outbox) and delivery (router) keeps the protocol simple — agents only ever write to their own outbox and read from their own inbox."
+          "explanation": "The agent writes replies to its own outbox.jsonl via `paradigm_symphony_send`. A mail router process (in The Score's Phase 0 implementation) or Conductor (in later phases) reads outbox files and delivers messages to the correct recipient inbox files. This separation of write (outbox) and delivery (router) keeps the protocol simple — agents only ever write to their own outbox and read from their own inbox."
         }
       ]
     }

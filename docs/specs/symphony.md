@@ -42,10 +42,10 @@ You don't need Conductor to use Symphony. Conductor makes it effortless.
 
 | Capability | A-Mail (CLI only) | + Conductor |
 |---|---|---|
-| Link agents together | `paradigm mail link` (manual) | Auto-discovers all windows |
+| Link agents together | `paradigm symphony join` (manual) | Auto-discovers all windows |
 | Send messages | `paradigm_symphony_send` | Same + voice, gaze targeting |
 | Poll for messages | `/loop 10s paradigm_symphony_poll` | Auto-registers loop |
-| Cross-machine | `paradigm mail link --remote <ip>` | Bonjour auto-discovery |
+| Cross-machine | `paradigm symphony join --remote <ip>` | Bonjour auto-discovery |
 | Conversation UI | Sentinel viewer (browser) | Same + overlay panel |
 | Human participation | Sentinel UI text input | + Conductor voice |
 
@@ -78,7 +78,7 @@ auto-discovers everyone on the block and delivers without you addressing envelop
 ### CLI Only (A-Mail, no Conductor)
 
 ```
-    ┌──────────────┐        ~/.paradigm/mail/
+    ┌──────────────┐        ~/.paradigm/score/
     │  CC1 (core)  │───────── outbox.jsonl ──┐
     │  /loop poll  │◄──────── inbox.jsonl    │
     └──────────────┘                         │
@@ -90,8 +90,8 @@ auto-discovers everyone on the block and delivers without you addressing envelop
     └──────────────┘
 
     # No Conductor needed. Just:
-    paradigm mail link          # link sessions on this machine
-    paradigm mail link --remote 192.168.1.42   # link to remote
+    paradigm symphony join          # link sessions on this machine
+    paradigm symphony join --remote 192.168.1.42   # link to remote
 ```
 
 ### Key Principles
@@ -106,7 +106,7 @@ auto-discovers everyone on the block and delivers without you addressing envelop
 
 ---
 
-## 3. CLI Commands — `paradigm mail` & `paradigm symphony`
+## 3. CLI Commands — `paradigm symphony` & `paradigm symphony`
 
 ### 3.0 A-Mail: The CLI-Only Foundation
 
@@ -114,15 +114,15 @@ A-Mail is the base layer. It works with zero dependencies beyond the Paradigm CL
 No Conductor, no Sentinel, no network config. Just agents talking to each other
 through the filesystem.
 
-#### `paradigm mail` — Agent Messaging Commands
+#### `paradigm symphony` — Agent Messaging Commands
 
 ```bash
 # === IDENTITY ===
 
-paradigm mail whoami
+paradigm symphony whoami
 # Output: agent-abc123 (core-lib) — 3 linked peers, 2 active threads
 
-paradigm mail list
+paradigm symphony list
 # Output:
 #   AGENT ID        PROJECT         STATUS    LINKED
 #   agent-abc123    a-paradigm      awake     ●
@@ -132,35 +132,35 @@ paradigm mail list
 
 # === LINKING ===
 
-paradigm mail link
+paradigm symphony join
 # Auto-discovers Claude Code sessions on this machine via ~/.conductor/sessions/
 # and links them together. Each session gets a mailbox.
 # Output: Linked 3 sessions. Run `/loop 10s paradigm_symphony_poll` in each.
 
-paradigm mail link --remote 192.168.1.42
-# Links to a remote machine's mail router (requires paradigm mail serve on remote)
+paradigm symphony join --remote 192.168.1.42
+# Links to a remote machine's mail router (requires paradigm symphony serve on remote)
 # Output: Linked to jordan's machine (3 agents). Total network: 6 agents.
 
-paradigm mail unlink
+paradigm symphony leave
 # Removes this session from the mail network
 
-paradigm mail serve
+paradigm symphony serve
 # Starts a lightweight TCP server for remote mail linking (port 3939)
-# Other machines can `paradigm mail link --remote <this-ip>`
+# Other machines can `paradigm symphony join --remote <this-ip>`
 # Output: Mail server listening on 0.0.0.0:3939
 
 # === MESSAGING (for humans from terminal) ===
 
-paradigm mail send "Hey backend, did you change the /api/tasks contract?"
+paradigm symphony send "Hey backend, did you change the /api/tasks contract?"
 # Sends to all linked agents (broadcast)
 
-paradigm mail send --to agent-def456 "Check #payment-serializer for the regression"
+paradigm symphony send --to agent-def456 "Check #payment-serializer for the regression"
 # Direct message to specific agent
 
-paradigm mail send --thread thr-abc "I agree, let's hotfix it"
+paradigm symphony send --thread thr-abc "I agree, let's hotfix it"
 # Reply to an existing thread
 
-paradigm mail read
+paradigm symphony read
 # Show unread messages (what agents would see on next /loop poll)
 # Output:
 #   THREAD: "Payment service 500s" (4 messages)
@@ -169,22 +169,22 @@ paradigm mail read
 #   ├─ 🤖 agent-jkl012 (backend@jordan): "That breaks the migration"
 #   └─ 👤 ascend: "Skip migration, hotfix serializer"
 
-paradigm mail threads
+paradigm symphony threads
 # List active threads
 # Output:
 #   THREAD ID    TOPIC                        MSGS  LAST ACTIVITY
 #   thr-abc      Payment service 500s         4     2m ago
 #   thr-def      Type contract update         2     15m ago
 
-paradigm mail thread thr-abc
+paradigm symphony thread thr-abc
 # Show full thread with all messages
 
-paradigm mail resolve thr-abc
+paradigm symphony resolve thr-abc
 # Mark thread as resolved → triggers Lore entry
 
 # === STATUS ===
 
-paradigm mail status
+paradigm symphony status
 # Network overview
 # Output:
 #   Mail Network: 4 agents linked (1 remote)
@@ -226,7 +226,7 @@ paradigm symphony thread create "Discuss migration strategy for v2 schema"
 # Output: Created thread thr-xyz. All linked agents will be notified.
 
 paradigm symphony thread list
-# Same as `paradigm mail threads` but with richer metadata
+# Same as `paradigm symphony threads` but with richer metadata
 
 paradigm symphony thread resolve thr-abc --decision "Hotfix serializer, skip migration"
 # Resolve with explicit decision → Lore entry
@@ -280,7 +280,7 @@ paradigm
 
 | Command | Scope | Purpose |
 |---|---|---|
-| `paradigm mail` | Messaging | Send/receive messages between running agents |
+| `paradigm symphony` | Messaging | Send/receive messages between running agents |
 | `paradigm symphony` | Session | Join/leave the live conversation network |
 | `paradigm team` | Orchestration | Spawn/manage background agent processes |
 
@@ -550,7 +550,7 @@ Agent on ascend's machine    Conductor (ascend's)        ascend (human)
 **Trust levels (configurable per user/per project):**
 
 ```yaml
-# ~/.paradigm/mail/trust.yaml
+# ~/.paradigm/score/trust.yaml
 trust:
   users:
     kevin:
@@ -593,20 +593,20 @@ paradigm_symphony_send({
 
 ```bash
 # Request a file from another agent
-paradigm mail request "docs/Thing.md" --from kevin --reason "Need API contract"
+paradigm symphony request "docs/Thing.md" --from kevin --reason "Need API contract"
 
 # Check pending file requests (as the owner being asked)
-paradigm mail requests
+paradigm symphony requests
 #   REQUEST ID    FROM              FILE               STATUS
 #   req-abc123    kevin/backend     docs/Thing.md      pending
 #   req-def456    jordan/frontend   src/types.ts       pending
 
 # Approve/deny from terminal
-paradigm mail approve req-abc123
-paradigm mail deny req-abc123 --reason "Contains secrets"
+paradigm symphony approve req-abc123
+paradigm symphony deny req-abc123 --reason "Contains secrets"
 
 # Approve with redaction
-paradigm mail approve req-abc123 --redact
+paradigm symphony approve req-abc123 --redact
 ```
 
 **What agents see (on poll):**
@@ -1203,30 +1203,30 @@ Sentinel              Conductor            Agent
 
 ### Phase 0: A-Mail — CLI-Only Agent Messaging
 > **Goal:** Agents on the same machine can message each other with zero dependencies
-> beyond the Paradigm CLI. No Conductor, no Sentinel, just `paradigm mail`.
+> beyond the Paradigm CLI. No Conductor, no Sentinel, just `paradigm symphony`.
 
 **CLI Commands (TypeScript — `packages/paradigm/src/commands/mail/`):**
-- [ ] `paradigm mail link` — discover Claude Code sessions on this machine
-      (reads `~/.conductor/sessions/` or creates own registry at `~/.paradigm/mail/sessions/`)
-- [ ] `paradigm mail unlink` — remove this session from the network
-- [ ] `paradigm mail whoami` — show this agent's identity + linked peers
-- [ ] `paradigm mail list` — list all known agents and their status
-- [ ] `paradigm mail send` — send a message (human → agents from terminal)
-- [ ] `paradigm mail read` — show unread messages
-- [ ] `paradigm mail threads` — list active threads
-- [ ] `paradigm mail thread <id>` — show full thread
-- [ ] `paradigm mail resolve <id>` — resolve thread → Lore entry
-- [ ] `paradigm mail status` — network overview
-- [ ] `paradigm mail serve` — start TCP server for remote mail (port 3939)
-- [ ] `paradigm mail link --remote <ip>` — link to remote mail server
+- [ ] `paradigm symphony join` — discover Claude Code sessions on this machine
+      (reads `~/.conductor/sessions/` or creates own registry at `~/.paradigm/score/sessions/`)
+- [ ] `paradigm symphony leave` — remove this session from the network
+- [ ] `paradigm symphony whoami` — show this agent's identity + linked peers
+- [ ] `paradigm symphony list` — list all known agents and their status
+- [ ] `paradigm symphony send` — send a message (human → agents from terminal)
+- [ ] `paradigm symphony read` — show unread messages
+- [ ] `paradigm symphony threads` — list active threads
+- [ ] `paradigm symphony thread <id>` — show full thread
+- [ ] `paradigm symphony resolve <id>` — resolve thread → Lore entry
+- [ ] `paradigm symphony status` — network overview
+- [ ] `paradigm symphony serve` — start TCP server for remote mail (port 3939)
+- [ ] `paradigm symphony join --remote <ip>` — link to remote mail server
 
 **Mailbox Protocol (file-based):**
-- [ ] Mailbox directory: `~/.paradigm/mail/agents/{agent-id}/`
+- [ ] Mailbox directory: `~/.paradigm/score/agents/{agent-id}/`
 - [ ] `inbox.jsonl` — messages waiting for this agent (append-only)
 - [ ] `outbox.jsonl` — replies from this agent (append-only)
 - [ ] `ack.json` — last acknowledged message ID
 - [ ] `identity.json` — agent ID, project, role, PID, start time
-- [ ] Thread index: `~/.paradigm/mail/threads/{thread-id}.json`
+- [ ] Thread index: `~/.paradigm/score/threads/{thread-id}.json`
 - [ ] JSONL format — one message per line, trivial to parse
 - [ ] Garbage collection of acknowledged messages (periodic)
 
@@ -1250,11 +1250,11 @@ Sentinel              Conductor            Agent
 - [ ] `paradigm symphony join` convenience command (registers + starts loop)
 
 **File Pipeline (CLI):**
-- [ ] `paradigm mail request <file> --from <agent>` — request a file
-- [ ] `paradigm mail requests` — list pending file requests (as owner)
-- [ ] `paradigm mail approve <id>` / `paradigm mail deny <id>` — approve/deny
-- [ ] `paradigm mail approve <id> --redact` — send with sensitive lines stripped
-- [ ] Trust config at `~/.paradigm/mail/trust.yaml` (auto-approve patterns, never-approve patterns)
+- [ ] `paradigm symphony request <file> --from <agent>` — request a file
+- [ ] `paradigm symphony requests` — list pending file requests (as owner)
+- [ ] `paradigm symphony approve <id>` / `paradigm symphony deny <id>` — approve/deny
+- [ ] `paradigm symphony approve <id> --redact` — send with sensitive lines stripped
+- [ ] Trust config at `~/.paradigm/score/trust.yaml` (auto-approve patterns, never-approve patterns)
 - [ ] Default deny list: `.env*`, `*.key`, `*.pem`, `**/credentials*`, `**/secrets/**`
 
 **File Pipeline (MCP):**
@@ -1264,23 +1264,23 @@ Sentinel              Conductor            Agent
 - [ ] File request expiry (1 hour TTL)
 
 **Validation:**
-- [ ] `paradigm mail link` discovers 2+ Claude Code sessions on one machine
-- [ ] `paradigm mail send "test"` delivers to all linked agents
+- [ ] `paradigm symphony join` discovers 2+ Claude Code sessions on one machine
+- [ ] `paradigm symphony send "test"` delivers to all linked agents
 - [ ] Agent A runs `/loop`, polls, sees message, responds via `paradigm_symphony_send`
 - [ ] Agent B's next poll picks up the response
 - [ ] Thread tracking works across 5+ message exchanges
-- [ ] `paradigm mail read` shows unread messages from terminal (human view)
+- [ ] `paradigm symphony read` shows unread messages from terminal (human view)
 - [ ] Agent requests a file → human sees prompt → approves → agent receives file
 - [ ] `.env` files are always denied regardless of approval
 - [ ] File request expires after 1 hour without action
 
 ### Phase 1: Conductor Auto-Link
 > **Goal:** Conductor automatically links all detected Claude Code sessions
-> into the A-Mail network — zero manual `paradigm mail link` needed
+> into the A-Mail network — zero manual `paradigm symphony join` needed
 
 **Conductor (Swift):**
 - [ ] On detecting a new Claude Code session → auto-create mailbox
-- [ ] `AgentMailbox` integration — Conductor writes to `~/.paradigm/mail/agents/`
+- [ ] `AgentMailbox` integration — Conductor writes to `~/.paradigm/score/agents/`
 - [ ] `MessageRelay` — route messages between local mailboxes (same file protocol)
 - [ ] Thread tracking (thread roots, participant lists)
 - [ ] Mailbox garbage collection
@@ -1605,7 +1605,7 @@ Symphony emits its own metrics via Sentinel:
 | TCP transport | conductor (Swift) | Medium — NWConnection |
 | Hub election | conductor (Swift) | Small — deterministic from Bonjour |
 | `paradigm_symphony_*` MCP tools | paradigm-mcp (TS) | Medium — 6 new tools |
-| `paradigm mail` CLI commands | paradigm (TS) | Medium — 11 commands |
+| `paradigm symphony` CLI commands | paradigm (TS) | Medium — 11 commands |
 | `ConversationView` | sentinel (React) | Medium — new view component |
 | Symphony event schema | sentinel (TS) | Small — schema declaration |
 | Lore auto-capture | paradigm-mcp (TS) | Small — hook into existing |
@@ -1650,12 +1650,12 @@ Symphony emits its own metrics via Sentinel:
 ## 13. Success Criteria
 
 ### Phase 0 (A-Mail — CLI Only)
-- `paradigm mail link` discovers sessions on this machine
+- `paradigm symphony join` discovers sessions on this machine
 - Two agents exchange 5+ messages via file-based mailboxes
 - Agent responds to a question within 15 seconds of it being asked
-- `paradigm mail read` shows conversation from human terminal
+- `paradigm symphony read` shows conversation from human terminal
 - Works with zero dependencies beyond Paradigm CLI
-- Agent requests a file → human approves via `paradigm mail approve` → file delivered
+- Agent requests a file → human approves via `paradigm symphony approve` → file delivered
 - `.env` files hard-blocked even with human approval
 - Trust config controls auto-approve patterns per user
 
@@ -1677,7 +1677,7 @@ Symphony emits its own metrics via Sentinel:
 ### Phase 4-5 (Network)
 - Two Macs on same WiFi discover each other within 5 seconds
 - Cross-machine message delivery < 500ms
-- No configuration required (Bonjour) OR `paradigm mail link --remote` (CLI)
+- No configuration required (Bonjour) OR `paradigm symphony join --remote` (CLI)
 
 ### Phase 6 (Hub + Lore)
 - Single Sentinel shows conversations from all machines

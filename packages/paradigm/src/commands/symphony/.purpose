@@ -1,90 +1,94 @@
 version: 2.0.0
 description: |
-  A-Mail CLI commands — terminal interface for agent-to-agent messaging.
-  Part of Symphony Phase 0: file-based mailboxes polled via /loop.
+  Symphony CLI commands — terminal interface for The Score agent-to-agent messaging.
+  Part of Symphony: file-based agent parts polled via /loop.
 
 components:
-  mail-link:
-    description: Link this session to the A-Mail network
+  symphony-join:
+    description: Join this session to the Symphony network
     type: command
     tags: [feature, symphony]
-  mail-unlink:
-    description: Remove this session from the A-Mail network
+  symphony-leave:
+    description: Remove this session from the Symphony network
     type: command
     tags: [feature, symphony]
-  mail-whoami:
+  symphony-whoami:
     description: Show agent identity and linked peers
     type: command
     tags: [feature, symphony]
-  mail-list:
-    description: List all linked agents with awake/asleep status
+  symphony-list:
+    description: List all joined agents with awake/asleep status
     type: command
     tags: [feature, symphony]
-  mail-send:
-    description: Send a message to agents (human CLI entry point)
+  symphony-send:
+    description: Send a note to agents (human CLI entry point)
     type: command
     tags: [feature, symphony]
-  mail-read:
-    description: Show unread messages with tree rendering
+  symphony-read:
+    description: Show unread notes with tree rendering
     type: command
     tags: [feature, symphony]
-  mail-threads:
+  symphony-threads:
     description: List all threads (active and resolved)
     type: command
     tags: [feature, symphony]
-  mail-thread:
-    description: Show full thread conversation with all messages
+  symphony-thread:
+    description: Show full thread conversation with all notes
     type: command
     tags: [feature, symphony]
-  mail-resolve:
+  symphony-resolve:
     description: Mark a thread as resolved with optional decision
     type: command
     tags: [feature, symphony]
-  mail-status:
-    description: Show A-Mail network overview
+  symphony-status:
+    description: Show Symphony network overview
     type: command
     tags: [feature, symphony]
-  mail-serve:
-    description: Start TCP server for remote mail linking (Phase 0 stub)
+  symphony-serve:
+    description: Start TCP server for remote Symphony linking (Phase 0 stub)
     type: command
     tags: [feature, symphony]
-  mail-request:
+  symphony-request:
     description: Request a file from another agent's project
     type: command
     tags: [feature, symphony]
-  mail-approve:
+  symphony-approve:
     description: Approve a pending file request
     type: command
     tags: [feature, symphony]
-  mail-deny:
+  symphony-requests:
+    description: List pending file requests awaiting approval
+    type: command
+    tags: [feature, symphony]
+  symphony-deny:
     description: Deny a pending file request
     type: command
     tags: [feature, symphony]
 
 flows:
-  mail-send-flow:
-    description: Human types message → built → routed to agent inboxes
+  symphony-send-flow:
+    description: Human types note -> built -> routed to agent inboxes
     tags: [symphony]
     steps:
-      - '#mail-send'
+      - '#symphony-send'
       - '#symphony-loader'
-      - '!message-sent'
+      - '!note-sent'
 
-  mail-poll-flow:
-    description: /loop fires → poll → read inbox → agent processes → reply
+  symphony-poll-flow:
+    description: /loop fires -> poll -> read inbox -> agent processes -> reply
     tags: [symphony]
     steps:
       - '#symphony-poll'
       - '#symphony-loader'
-      - '!message-received'
+      - '!note-received'
 
   file-request-flow:
-    description: Request file → trust check → human approval → read file → deliver
+    description: Request file -> trust check -> human approval -> read file -> deliver
     tags: [symphony, security]
     steps:
-      - '#mail-request'
+      - '#symphony-request'
       - '^file-trust'
-      - '#mail-approve'
+      - '#symphony-approve'
       - '!file-delivered'
 
 gates:
@@ -93,12 +97,12 @@ gates:
     tags: [security, symphony]
 
 signals:
-  message-sent:
-    description: A message was sent via A-Mail
+  note-sent:
+    description: A note was sent via Symphony
     category: business
     tags: [symphony]
-  message-received:
-    description: A message was received in an agent's inbox
+  note-received:
+    description: A note was received in an agent's inbox
     category: business
     tags: [symphony]
   thread-created:

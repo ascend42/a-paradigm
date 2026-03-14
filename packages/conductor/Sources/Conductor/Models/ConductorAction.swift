@@ -32,6 +32,11 @@ enum ConductorAction: Equatable {
     case unmuteVideo
     case unmuteVoice
 
+    // Symphony — file request approval
+    case approveFileRequest(String)
+    case denyFileRequest(String)
+    case approveFileRequestRedacted(String)
+
     // Extensible — for custom gesture or voice command bindings
     case custom(String)
 }

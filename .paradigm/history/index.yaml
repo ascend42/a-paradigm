@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-12T19:03:53.246Z'
+generated: '2026-03-13T02:06:16.672Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -6634,6 +6634,402 @@ by_symbol:
     fragility: low
     recent:
       - *ref_99
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!file-approved':
+    symbol: '!file-approved'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_100
+        id: h0166
+        ts: '2026-03-12T22:34:11Z'
+        type: implement
+        symbols:
+          - '!file-approved'
+          - '!file-delivered'
+          - '!file-requested'
+          - '!message-received'
+          - '!message-sent'
+          - '!thread-created'
+          - '!thread-resolved'
+          - '#mail-link'
+          - '#mail-read'
+          - '#mail-resolve'
+          - '#mail-send'
+          - '#mail-status'
+          - '#mail-threads'
+          - '#symphony-approve-file'
+          - '#symphony-loader'
+          - '#symphony-poll'
+          - '#symphony-request-file'
+          - '#symphony-send'
+          - '#symphony-status'
+          - '#symphony-thread'
+          - ^file-trust
+          - ~hard-deny-list
+          - ~human-gated-transfer
+          - $file-request-flow
+          - $mail-poll-flow
+          - $mail-send-flow
+        author:
+          type: human
+          id: ascend
+        commit: 8dc63847df4a00f5f5fb2bd8ed394c3b3b35b1ee
+        intent: feature
+        files:
+          - .paradigm/docs/commands.md
+          - .paradigm/docs/troubleshooting.md
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - docs/guides/symphony-quickstart.md
+          - docs/specs/symphony.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/symphony.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/symphony-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/mail/.purpose
+          - packages/paradigm/src/commands/mail/index.ts
+          - packages/paradigm/src/commands/mail/types.ts
+          - packages/paradigm/src/index.ts
+          - packages/university/package.json
+          - packages/university/src/content/courses/para-501.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/src/content/reference.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#symphony-loader): Symphony Phase 0 — A-Mail agent-to-agent messaging'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!file-delivered':
+    symbol: '!file-delivered'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!file-requested':
+    symbol: '!file-requested'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!message-received':
+    symbol: '!message-received'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!message-sent':
+    symbol: '!message-sent'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!thread-created':
+    symbol: '!thread-created'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!thread-resolved':
+    symbol: '!thread-resolved'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-link':
+    symbol: '#mail-link'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-read':
+    symbol: '#mail-read'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-resolve':
+    symbol: '#mail-resolve'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-send':
+    symbol: '#mail-send'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-status':
+    symbol: '#mail-status'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mail-threads':
+    symbol: '#mail-threads'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-approve-file':
+    symbol: '#symphony-approve-file'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-loader':
+    symbol: '#symphony-loader'
+    total_changes: 2
+    last_modified: '2026-03-13T01:58:09Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0167
+        ts: '2026-03-13T01:58:09Z'
+        type: implement
+        symbols:
+          - '#symphony-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 5b6c5ca0fa2dccb75d995ff2e465769ad7600905
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-12/L-2026-03-12-ascend-202044-001.lore
+          - .paradigm/lore/entries/2026-03-13/L-2026-03-13-ascend-015803-001.lore
+          - .paradigm/lore/timeline.yaml
+        description: 'docs: record Symphony Phase 0 lore entry'
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-poll':
+    symbol: '#symphony-poll'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-request-file':
+    symbol: '#symphony-request-file'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-send':
+    symbol: '#symphony-send'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-status':
+    symbol: '#symphony-status'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-thread':
+    symbol: '#symphony-thread'
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^file-trust:
+    symbol: ^file-trust
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~hard-deny-list:
+    symbol: ~hard-deny-list
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~human-gated-transfer:
+    symbol: ~human-gated-transfer
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $file-request-flow:
+    symbol: $file-request-flow
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $mail-poll-flow:
+    symbol: $mail-poll-flow
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $mail-send-flow:
+    symbol: $mail-send-flow
+    total_changes: 1
+    last_modified: '2026-03-12T22:34:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_100
     contributors:
       human:
         - ascend

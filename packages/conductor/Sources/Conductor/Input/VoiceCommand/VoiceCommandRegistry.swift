@@ -21,6 +21,10 @@ final class VoiceCommandRegistry: ObservableObject {
         "undo that": .undo,
         "redo": .redo,
         "cancel": .voiceStop,
+        // Symphony file request commands — "approve" acts on the most recent pending request
+        "approve": .approveFileRequest("latest"),
+        "deny": .denyFileRequest("latest"),
+        "approve redacted": .approveFileRequestRedacted("latest"),
     ]
 
     // MARK: - Init

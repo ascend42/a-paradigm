@@ -165,6 +165,15 @@ description: |
   anchors:
     - src/schema/builtin-paradigm.ts:1-150
 
+#SymphonySchema:
+  description: Built-in schema declaration for Symphony agent-to-agent messaging events — 19 event types across 6 categories (dialogue, action, outcome, system, lifecycle, transfer) scoped by threadId
+  type: schema
+  tags: [feature, builtin, symphony]
+  anchors:
+    - src/schema/builtin-symphony.ts:1-315
+  signals:
+    - !note-received-live
+
 # ============================================
 # Flows ($)
 # ============================================
@@ -198,6 +207,17 @@ $resolution-flow:
     - "#IncidentStorage"      # Mark resolved
     - "!incident-resolved"
     - "Track for recurrence"
+
+$symphony-conversation:
+  description: End-to-end flow for live Symphony conversation rendering — MCP emits event, Sentinel stores, WebSocket pushes, UI renders
+  tags: [symphony, real-time]
+  steps:
+    - "#SymphonySchema"           # MCP emits paradigm-symphony event
+    - "#EventsStore"              # Sentinel ingests and stores the event
+    - "#SentinelServer"           # WebSocket broadcasts to subscribers
+    - "#ConversationStore"        # UI store receives real-time update
+    - "#ConversationView"         # Note bubble rendered in tree view
+  successSignal: "!note-received-live"
 
 # ============================================
 # Gates (^)
@@ -251,6 +271,15 @@ $resolution-flow:
   payload:
     suggestion: object
     incidentCount: number
+
+!note-received-live:
+  description: Emitted when a new Symphony note is received via WebSocket and rendered in the ConversationView
+  tags: [symphony, real-time]
+  payload:
+    threadId: string
+    eventType: string
+    sender: string
+    timestamp: ISO8601
 
 # ============================================
 # Aspects (~)

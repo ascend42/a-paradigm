@@ -7,6 +7,11 @@ struct NotificationBubbleView: View {
     let instance: ClaudeCodeInstance
     let status: InstanceStatus
     let agentCount: Int
+    var noteRelay: NoteRelay?
+
+    private var threadCount: Int {
+        noteRelay?.activeThreads.count ?? 0
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -14,6 +19,9 @@ struct NotificationBubbleView: View {
             statusText
             if agentCount > 0 {
                 agentBadge
+            }
+            if threadCount > 0 {
+                threadBadge
             }
         }
         .padding(.horizontal, 10)
@@ -65,6 +73,22 @@ struct NotificationBubbleView: View {
         .background(
             Capsule()
                 .fill(Color.purple.opacity(0.15))
+        )
+    }
+
+    private var threadBadge: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 8))
+            Text("\(threadCount)")
+                .font(.caption2.bold())
+        }
+        .foregroundStyle(.teal)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            Capsule()
+                .fill(Color.teal.opacity(0.15))
         )
     }
 }

@@ -26,6 +26,8 @@ import { createRateLimiter } from './middleware/rate-limit.js';
 import { SentinelStorage } from '../storage.js';
 import { loadServerConfig } from '../config.js';
 import { loadSymbolIndex } from './loaders/symbols.js';
+import { PARADIGM_SCHEMA } from '../schema/builtin-paradigm.js';
+import { SYMPHONY_SCHEMA } from '../schema/builtin-symphony.js';
 import type { LogEntry, GenericEvent, SentinelServerConfig } from '../types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -182,6 +184,11 @@ export async function startServer(options: ServerOptions): Promise<void> {
   // Create shared storage
   const storage = new SentinelStorage(options.dbPath);
   await storage.ensureReady();
+
+  // Auto-register builtin schemas (upsert — safe to call on every startup)
+  storage.registerSchema(PARADIGM_SCHEMA);
+  storage.registerSchema(SYMPHONY_SCHEMA);
+  log.component('sentinel-server').info('Registered builtin schemas', { schemas: 'paradigm-logger, paradigm-symphony' });
 
   // Load symbol index for validation
   let symbolIndex: Array<{ symbol: string; type: string; filePath: string }> = [];

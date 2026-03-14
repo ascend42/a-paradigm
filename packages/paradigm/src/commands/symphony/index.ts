@@ -1,7 +1,7 @@
 /**
- * Mail CLI Commands — Terminal interface for A-Mail agent messaging
+ * Symphony CLI Commands — Terminal interface for The Score agent messaging
  *
- * Commands: link, unlink, whoami, list, send, read, inbox, threads,
+ * Commands: join, leave, whoami, list, send, read, inbox, threads,
  *          thread, resolve, status, serve, request, requests, approve, deny
  */
 
@@ -9,16 +9,16 @@ import chalk from 'chalk';
 import * as path from 'path';
 import * as net from 'net';
 import type {
-  MailSendOptions,
-  MailListOptions,
-  MailThreadsOptions,
-  MailStatusOptions,
-  MailResolveOptions,
-  MailServeOptions,
-  MailRequestOptions,
-  MailApproveOptions,
-  MailDenyOptions,
-  MailLinkOptions,
+  SymphonySendOptions,
+  SymphonyListOptions,
+  SymphonyThreadsOptions,
+  SymphonyStatusOptions,
+  SymphonyResolveOptions,
+  SymphonyServeOptions,
+  SymphonyRequestOptions,
+  SymphonyApproveOptions,
+  SymphonyDenyOptions,
+  SymphonyJoinOptions,
 } from './types.js';
 import {
   registerAgent,
@@ -46,17 +46,17 @@ import {
   denyFileRequest,
   isPathDenied,
   loadTrustConfig,
-  ensureMailDirs,
+  ensureScoreDirs,
   type SymphonyMessage,
   type Participant,
   type AgentIdentity,
 } from '../../../../paradigm-mcp/src/utils/symphony-loader.js';
 
 // ────────────────────────────────────────────────────────
-// mail link
+// symphony join (formerly mail link)
 // ────────────────────────────────────────────────────────
 
-export async function mailLinkCommand(options: MailLinkOptions): Promise<void> {
+export async function symphonyJoinCommand(options: SymphonyJoinOptions): Promise<void> {
   const rootDir = process.cwd();
 
   if (options.remote) {
@@ -67,7 +67,7 @@ export async function mailLinkCommand(options: MailLinkOptions): Promise<void> {
 
   // Register this session
   const identity = registerAgent(rootDir);
-  console.log(chalk.green(`✓ Linked as ${chalk.bold(identity.id)}`));
+  console.log(chalk.green(`\u2713 Joined as ${chalk.bold(identity.id)}`));
 
   // Discover other sessions
   const sessions = discoverClaudeCodeSessions();
@@ -77,41 +77,41 @@ export async function mailLinkCommand(options: MailLinkOptions): Promise<void> {
     console.log(chalk.cyan(`\n  Found ${others.length} other session${others.length !== 1 ? 's' : ''}:`));
     for (const s of others) {
       const status = isAgentAsleep(s) ? chalk.yellow('asleep') : chalk.green('awake');
-      console.log(`    ${chalk.white(s.id)} — ${s.name} [${status}]`);
+      console.log(`    ${chalk.white(s.id)} \u2014 ${s.name} [${status}]`);
     }
   } else {
-    console.log(chalk.gray('\n  No other sessions found. Open another terminal and run "paradigm mail link".'));
+    console.log(chalk.gray('\n  No other sessions found. Open another terminal and run "paradigm symphony join".'));
   }
 
   console.log(chalk.gray(`\n  Tip: Set up polling with: /loop 10s paradigm_symphony_poll`));
 }
 
 // ────────────────────────────────────────────────────────
-// mail unlink
+// symphony leave (formerly mail unlink)
 // ────────────────────────────────────────────────────────
 
-export async function mailUnlinkCommand(): Promise<void> {
+export async function symphonyLeaveCommand(): Promise<void> {
   const rootDir = process.cwd();
   const agentId = resolveAgentIdentity(rootDir);
   const success = unregisterAgent(agentId);
 
   if (success) {
-    console.log(chalk.green(`✓ Unlinked ${agentId}`));
+    console.log(chalk.green(`\u2713 Left the score: ${agentId}`));
   } else {
-    console.log(chalk.yellow(`No active link found for this project.`));
+    console.log(chalk.yellow(`No active part found for this project.`));
   }
 }
 
 // ────────────────────────────────────────────────────────
-// mail whoami
+// symphony whoami
 // ────────────────────────────────────────────────────────
 
-export async function mailWhoamiCommand(): Promise<void> {
+export async function symphonyWhoamiCommand(): Promise<void> {
   const rootDir = process.cwd();
   const identity = getMyIdentity(rootDir);
 
   if (!identity) {
-    console.log(chalk.yellow('Not linked. Run "paradigm mail link" first.'));
+    console.log(chalk.yellow('Not joined. Run "paradigm symphony join" first.'));
     return;
   }
 
@@ -125,14 +125,14 @@ export async function mailWhoamiCommand(): Promise<void> {
   console.log(chalk.gray(`  Role: ${identity.role}`));
   console.log(chalk.gray(`  PID: ${identity.pid}`));
   console.log(chalk.gray(`  Started: ${identity.startedAt}`));
-  console.log(`\n  ${chalk.white(`${others.length} linked peer${others.length !== 1 ? 's' : ''}`)} — ${chalk.white(`${threads.length} active thread${threads.length !== 1 ? 's' : ''}`)} — ${chalk.white(`${unread.length} unread`)}`);
+  console.log(`\n  ${chalk.white(`${others.length} linked peer${others.length !== 1 ? 's' : ''}`)} \u2014 ${chalk.white(`${threads.length} active thread${threads.length !== 1 ? 's' : ''}`)} \u2014 ${chalk.white(`${unread.length} unread`)}`);
 }
 
 // ────────────────────────────────────────────────────────
-// mail list
+// symphony list
 // ────────────────────────────────────────────────────────
 
-export async function mailListCommand(options: MailListOptions): Promise<void> {
+export async function symphonyListCommand(options: SymphonyListOptions): Promise<void> {
   cleanStaleAgents();
   const agents = listAgents();
 
@@ -142,13 +142,13 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
   }
 
   if (agents.length === 0) {
-    console.log(chalk.yellow('No agents linked. Run "paradigm mail link" in each terminal.'));
+    console.log(chalk.yellow('No agents joined. Run "paradigm symphony join" in each terminal.'));
     return;
   }
 
-  console.log(chalk.cyan(`\n  A-Mail Agents (${agents.length})\n`));
+  console.log(chalk.cyan(`\n  Symphony Agents (${agents.length})\n`));
   console.log(chalk.gray(`  ${'AGENT ID'.padEnd(30)} ${'PROJECT'.padEnd(15)} ${'ROLE'.padEnd(10)} STATUS`));
-  console.log(chalk.gray(`  ${'─'.repeat(30)} ${'─'.repeat(15)} ${'─'.repeat(10)} ${'─'.repeat(8)}`));
+  console.log(chalk.gray(`  ${'\u2500'.repeat(30)} ${'\u2500'.repeat(15)} ${'\u2500'.repeat(10)} ${'\u2500'.repeat(8)}`));
 
   for (const agent of agents) {
     const status = isAgentAsleep(agent) ? chalk.yellow('asleep') : chalk.green('awake');
@@ -158,22 +158,22 @@ export async function mailListCommand(options: MailListOptions): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────
-// mail send
+// symphony send
 // ────────────────────────────────────────────────────────
 
-export async function mailSendCommand(messageText: string, options: MailSendOptions): Promise<void> {
+export async function symphonySendCommand(messageText: string, options: SymphonySendOptions): Promise<void> {
   const rootDir = process.cwd();
   let identity = getMyIdentity(rootDir);
 
   if (!identity) {
     identity = registerAgent(rootDir);
-    console.log(chalk.gray(`Auto-linked as ${identity.id}`));
+    console.log(chalk.gray(`Auto-joined as ${identity.id}`));
   }
 
   const sender: Participant = {
     id: identity.id,
     name: identity.name,
-    type: 'human', // CLI messages come from the human
+    type: 'human', // CLI notes come from the human
     project: identity.project,
     role: identity.role,
   };
@@ -202,21 +202,21 @@ export async function mailSendCommand(messageText: string, options: MailSendOpti
 
   const deliveryCount = routeMessage(message);
 
-  console.log(chalk.green(`✓ Sent to ${deliveryCount} agent${deliveryCount !== 1 ? 's' : ''}`));
+  console.log(chalk.green(`\u2713 Sent to ${deliveryCount} agent${deliveryCount !== 1 ? 's' : ''}`));
   console.log(chalk.gray(`  Thread: ${threadRoot}`));
-  console.log(chalk.gray(`  Message: ${message.id}`));
+  console.log(chalk.gray(`  Note: ${message.id}`));
 }
 
 // ────────────────────────────────────────────────────────
-// mail read / inbox
+// symphony read / inbox
 // ────────────────────────────────────────────────────────
 
-export async function mailReadCommand(): Promise<void> {
+export async function symphonyReadCommand(): Promise<void> {
   const rootDir = process.cwd();
   const identity = getMyIdentity(rootDir);
 
   if (!identity) {
-    console.log(chalk.yellow('Not linked. Run "paradigm mail link" first.'));
+    console.log(chalk.yellow('Not joined. Run "paradigm symphony join" first.'));
     return;
   }
 
@@ -224,7 +224,7 @@ export async function mailReadCommand(): Promise<void> {
   const messages = readInbox(identity.id);
 
   if (messages.length === 0) {
-    console.log(chalk.gray('\n  No unread messages.\n'));
+    console.log(chalk.gray('\n  No unread notes.\n'));
     return;
   }
 
@@ -236,7 +236,7 @@ export async function mailReadCommand(): Promise<void> {
     byThread.get(tid)!.push(msg);
   }
 
-  console.log(chalk.cyan(`\n  ${messages.length} unread message${messages.length !== 1 ? 's' : ''}\n`));
+  console.log(chalk.cyan(`\n  ${messages.length} unread note${messages.length !== 1 ? 's' : ''}\n`));
 
   for (const [threadId, msgs] of byThread) {
     let threadLabel = threadId;
@@ -245,18 +245,18 @@ export async function mailReadCommand(): Promise<void> {
       if (thread) threadLabel = `${thread.topic} (${threadId})`;
     }
 
-    console.log(chalk.white(`  ┌─ ${threadLabel}`));
+    console.log(chalk.white(`  \u250c\u2500 ${threadLabel}`));
 
     for (let i = 0; i < msgs.length; i++) {
       const msg = msgs[i];
       const isLast = i === msgs.length - 1;
-      const prefix = isLast ? '  └─' : '  ├─';
+      const prefix = isLast ? '  \u2514\u2500' : '  \u251c\u2500';
       const time = new Date(msg.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
       console.log(`${prefix} ${chalk.cyan(msg.sender.name)} ${chalk.gray(`[${msg.intent}]`)} ${chalk.gray(time)}`);
 
       const textLines = msg.content.text.split('\n');
-      const indent = isLast ? '     ' : '  │  ';
+      const indent = isLast ? '     ' : '  \u2502  ';
       for (const line of textLines) {
         console.log(`${indent}${line}`);
       }
@@ -275,10 +275,10 @@ export async function mailReadCommand(): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────
-// mail threads
+// symphony threads
 // ────────────────────────────────────────────────────────
 
-export async function mailThreadsCommand(options: MailThreadsOptions): Promise<void> {
+export async function symphonyThreadsCommand(options: SymphonyThreadsOptions): Promise<void> {
   const threads = listThreads();
 
   if (options.json) {
@@ -293,7 +293,7 @@ export async function mailThreadsCommand(options: MailThreadsOptions): Promise<v
 
   console.log(chalk.cyan(`\n  Threads (${threads.length})\n`));
   console.log(chalk.gray(`  ${'ID'.padEnd(14)} ${'TOPIC'.padEnd(35)} ${'MSGS'.padEnd(6)} ${'STATUS'.padEnd(10)} LAST ACTIVITY`));
-  console.log(chalk.gray(`  ${'─'.repeat(14)} ${'─'.repeat(35)} ${'─'.repeat(6)} ${'─'.repeat(10)} ${'─'.repeat(20)}`));
+  console.log(chalk.gray(`  ${'\u2500'.repeat(14)} ${'\u2500'.repeat(35)} ${'\u2500'.repeat(6)} ${'\u2500'.repeat(10)} ${'\u2500'.repeat(20)}`));
 
   for (const thread of threads) {
     const topic = thread.topic.length > 33 ? thread.topic.slice(0, 33) + '..' : thread.topic;
@@ -308,10 +308,10 @@ export async function mailThreadsCommand(options: MailThreadsOptions): Promise<v
 }
 
 // ────────────────────────────────────────────────────────
-// mail thread <id>
+// symphony thread <id>
 // ────────────────────────────────────────────────────────
 
-export async function mailThreadCommand(threadId: string): Promise<void> {
+export async function symphonyThreadCommand(threadId: string): Promise<void> {
   const thread = loadThread(threadId);
 
   if (!thread) {
@@ -322,14 +322,14 @@ export async function mailThreadCommand(threadId: string): Promise<void> {
   const messages = getThreadMessages(threadId);
 
   console.log(chalk.cyan(`\n  Thread: ${thread.topic}`));
-  console.log(chalk.gray(`  ID: ${thread.id} | Status: ${thread.status} | Messages: ${thread.messageCount}`));
+  console.log(chalk.gray(`  ID: ${thread.id} | Status: ${thread.status} | Notes: ${thread.messageCount}`));
   console.log(chalk.gray(`  Participants: ${thread.participants.map(p => p.name).join(', ')}`));
 
   if (thread.decision) {
     console.log(chalk.green(`  Decision: ${thread.decision}`));
   }
 
-  console.log(chalk.gray(`\n  ${'─'.repeat(60)}\n`));
+  console.log(chalk.gray(`\n  ${'\u2500'.repeat(60)}\n`));
 
   for (const msg of messages) {
     const time = new Date(msg.timestamp).toLocaleString(undefined, {
@@ -354,10 +354,10 @@ export async function mailThreadCommand(threadId: string): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────
-// mail resolve <id>
+// symphony resolve <id>
 // ────────────────────────────────────────────────────────
 
-export async function mailResolveCommand(threadId: string, options: MailResolveOptions): Promise<void> {
+export async function symphonyResolveCommand(threadId: string, options: SymphonyResolveOptions): Promise<void> {
   const thread = loadThread(threadId);
 
   if (!thread) {
@@ -368,7 +368,7 @@ export async function mailResolveCommand(threadId: string, options: MailResolveO
   const success = resolveThread(threadId, options.decision);
 
   if (success) {
-    console.log(chalk.green(`✓ Thread resolved: ${thread.topic}`));
+    console.log(chalk.green(`\u2713 Thread resolved: ${thread.topic}`));
     if (options.decision) {
       console.log(chalk.gray(`  Decision: ${options.decision}`));
     }
@@ -379,10 +379,10 @@ export async function mailResolveCommand(threadId: string, options: MailResolveO
 }
 
 // ────────────────────────────────────────────────────────
-// mail status
+// symphony status
 // ────────────────────────────────────────────────────────
 
-export async function mailStatusCommand(options: MailStatusOptions): Promise<void> {
+export async function symphonyStatusCommand(options: SymphonyStatusOptions): Promise<void> {
   cleanStaleAgents();
 
   const rootDir = process.cwd();
@@ -403,31 +403,31 @@ export async function mailStatusCommand(options: MailStatusOptions): Promise<voi
     return;
   }
 
-  console.log(chalk.cyan('\n  A-Mail Status\n'));
+  console.log(chalk.cyan('\n  Symphony Status\n'));
 
   if (identity) {
     console.log(`  ${chalk.white('Identity:')} ${identity.id}`);
   } else {
-    console.log(`  ${chalk.yellow('Not linked.')} Run "paradigm mail link" to join.`);
+    console.log(`  ${chalk.yellow('Not joined.')} Run "paradigm symphony join" to join.`);
   }
 
   const awake = agents.filter(a => !isAgentAsleep(a)).length;
-  console.log(`  ${chalk.white('Agents:')} ${agents.length} linked (${awake} awake)`);
+  console.log(`  ${chalk.white('Agents:')} ${agents.length} joined (${awake} awake)`);
   console.log(`  ${chalk.white('Threads:')} ${threads.length} active`);
-  console.log(`  ${chalk.white('Unread:')} ${unread.length} message${unread.length !== 1 ? 's' : ''}`);
+  console.log(`  ${chalk.white('Unread:')} ${unread.length} note${unread.length !== 1 ? 's' : ''}`);
   console.log(`  ${chalk.white('File Requests:')} ${pendingRequests.length} pending`);
   console.log();
 }
 
 // ────────────────────────────────────────────────────────
-// mail serve
+// symphony serve
 // ────────────────────────────────────────────────────────
 
-export async function mailServeCommand(options: MailServeOptions): Promise<void> {
+export async function symphonyServeCommand(options: SymphonyServeOptions): Promise<void> {
   const port = parseInt(options.port || '3939', 10);
 
-  console.log(chalk.cyan(`\n  Starting A-Mail TCP server on port ${port}...`));
-  console.log(chalk.gray('  Phase 0 stub — remote linking protocol not yet implemented.\n'));
+  console.log(chalk.cyan(`\n  Starting Symphony TCP server on port ${port}...`));
+  console.log(chalk.gray('  Phase 0 stub \u2014 remote linking protocol not yet implemented.\n'));
 
   const server = net.createServer((socket) => {
     socket.write(JSON.stringify({ type: 'hello', version: '0.1.0' }) + '\n');
@@ -443,8 +443,8 @@ export async function mailServeCommand(options: MailServeOptions): Promise<void>
   });
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(chalk.green(`  ✓ Mail server listening on 0.0.0.0:${port}`));
-    console.log(chalk.gray(`  Connect from another machine: paradigm mail link --remote <this-ip>:${port}`));
+    console.log(chalk.green(`  \u2713 Symphony server listening on 0.0.0.0:${port}`));
+    console.log(chalk.gray(`  Connect from another machine: paradigm symphony join --remote <this-ip>:${port}`));
   });
 
   server.on('error', (err) => {
@@ -456,10 +456,10 @@ export async function mailServeCommand(options: MailServeOptions): Promise<void>
 }
 
 // ────────────────────────────────────────────────────────
-// mail request
+// symphony request
 // ────────────────────────────────────────────────────────
 
-export async function mailRequestCommand(file: string, options: MailRequestOptions): Promise<void> {
+export async function symphonyRequestCommand(file: string, options: SymphonyRequestOptions): Promise<void> {
   const rootDir = process.cwd();
   let identity = getMyIdentity(rootDir);
 
@@ -485,7 +485,7 @@ export async function mailRequestCommand(file: string, options: MailRequestOptio
   // Check hard-deny
   const trust = loadTrustConfig();
   if (isPathDenied(file, trust)) {
-    console.log(chalk.red(`✗ "${file}" is on the hard-deny list and cannot be requested.`));
+    console.log(chalk.red(`\u2717 "${file}" is on the hard-deny list and cannot be requested.`));
     return;
   }
 
@@ -517,19 +517,19 @@ export async function mailRequestCommand(file: string, options: MailRequestOptio
   });
   routeMessage(msg);
 
-  console.log(chalk.green(`✓ File request created: ${record.request.requestId}`));
+  console.log(chalk.green(`\u2713 File request created: ${record.request.requestId}`));
   console.log(chalk.gray(`  File: ${file}`));
   console.log(chalk.gray(`  From: ${from}`));
   console.log(chalk.gray(`  Reason: ${reason}`));
   console.log(chalk.gray(`\n  The owning agent's human must approve with:`));
-  console.log(chalk.white(`    paradigm mail approve ${record.request.requestId}`));
+  console.log(chalk.white(`    paradigm symphony approve ${record.request.requestId}`));
 }
 
 // ────────────────────────────────────────────────────────
-// mail requests
+// symphony requests
 // ────────────────────────────────────────────────────────
 
-export async function mailRequestsCommand(): Promise<void> {
+export async function symphonyRequestsCommand(): Promise<void> {
   const requests = listFileRequests('pending');
 
   if (requests.length === 0) {
@@ -548,45 +548,45 @@ export async function mailRequestsCommand(): Promise<void> {
     console.log(`    From: ${req.request.requester.name} (${req.request.requester.id})`);
     console.log(`    Reason: ${req.request.reason}`);
     console.log(chalk.gray(`    ${ageMin}m ago`));
-    console.log(chalk.gray(`    → paradigm mail approve ${req.request.requestId}`));
-    console.log(chalk.gray(`    → paradigm mail deny ${req.request.requestId}`));
+    console.log(chalk.gray(`    \u2192 paradigm symphony approve ${req.request.requestId}`));
+    console.log(chalk.gray(`    \u2192 paradigm symphony deny ${req.request.requestId}`));
     console.log();
   }
 }
 
 // ────────────────────────────────────────────────────────
-// mail approve
+// symphony approve
 // ────────────────────────────────────────────────────────
 
-export async function mailApproveCommand(requestId: string, options: MailApproveOptions): Promise<void> {
+export async function symphonyApproveCommand(requestId: string, options: SymphonyApproveOptions): Promise<void> {
   const rootDir = process.cwd();
   const result = approveFileRequest(requestId, rootDir, options.redact);
 
   if (!result.success) {
-    console.log(chalk.red(`✗ ${result.error}`));
+    console.log(chalk.red(`\u2717 ${result.error}`));
     return;
   }
 
   const label = options.redact ? 'approved (redacted)' : 'approved';
-  console.log(chalk.green(`✓ File request ${label}`));
+  console.log(chalk.green(`\u2713 File request ${label}`));
   console.log(chalk.gray(`  File: ${result.delivery?.filePath}`));
   console.log(chalk.gray(`  Size: ${result.delivery?.size} bytes`));
   console.log(chalk.gray(`  SHA-256: ${result.delivery?.hash?.slice(0, 16)}...`));
 }
 
 // ────────────────────────────────────────────────────────
-// mail deny
+// symphony deny
 // ────────────────────────────────────────────────────────
 
-export async function mailDenyCommand(requestId: string, options: MailDenyOptions): Promise<void> {
+export async function symphonyDenyCommand(requestId: string, options: SymphonyDenyOptions): Promise<void> {
   const success = denyFileRequest(requestId, options.reason);
 
   if (success) {
-    console.log(chalk.green(`✓ File request denied: ${requestId}`));
+    console.log(chalk.green(`\u2713 File request denied: ${requestId}`));
     if (options.reason) {
       console.log(chalk.gray(`  Reason: ${options.reason}`));
     }
   } else {
-    console.log(chalk.red(`✗ File request not found or already resolved: ${requestId}`));
+    console.log(chalk.red(`\u2717 File request not found or already resolved: ${requestId}`));
   }
 }

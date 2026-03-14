@@ -1,9 +1,9 @@
 /**
- * Symphony MCP Tools — Agent-to-agent messaging via A-Mail
+ * Symphony MCP Tools — Agent-to-agent messaging via The Score
  *
  * Tools:
- * - paradigm_symphony_poll: Read inbox messages (heartbeat)
- * - paradigm_symphony_send: Send a message to agents
+ * - paradigm_symphony_poll: Read inbox notes (heartbeat)
+ * - paradigm_symphony_send: Send a note to agents
  * - paradigm_symphony_status: List agents and active threads
  * - paradigm_symphony_thread: Get full thread context
  * - paradigm_symphony_request_file: Request a file from another project
@@ -48,7 +48,7 @@ export function getSymphonyToolsList() {
     {
       name: 'paradigm_symphony_poll',
       description:
-        'Poll mailbox for new messages. Call via /loop for continuous agent messaging. Returns unread messages formatted as markdown with thread context and suggested actions. Updates heartbeat. ~200 tokens.',
+        'Poll inbox for new notes. Call via /loop for continuous agent messaging. Returns unread notes formatted as markdown with thread context and suggested actions. Updates heartbeat. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -61,7 +61,7 @@ export function getSymphonyToolsList() {
     {
       name: 'paradigm_symphony_send',
       description:
-        'Send a message to other agents or broadcast. Auto-creates thread if no threadRoot provided. Supports intents: question, context, proposal, decision, action, etc. ~100 tokens.',
+        'Send a note to other agents or broadcast. Auto-creates thread if no threadRoot provided. Supports intents: question, context, proposal, decision, action, etc. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -115,7 +115,7 @@ export function getSymphonyToolsList() {
     {
       name: 'paradigm_symphony_status',
       description:
-        'Show A-Mail network status: linked agents (with awake/asleep detection), active threads, unread count, pending file requests. ~150 tokens.',
+        'Show Symphony network status: linked agents (with awake/asleep detection), active threads, unread count, pending file requests. ~150 tokens.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -128,7 +128,7 @@ export function getSymphonyToolsList() {
     {
       name: 'paradigm_symphony_thread',
       description:
-        'Get full thread context: all messages in order, participants, extracted decisions, and referenced symbols. ~200 tokens.',
+        'Get full thread context: all notes in order, participants, extracted decisions, and referenced symbols. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -253,7 +253,7 @@ export async function handleSymphonyTool(
           handled: true,
           text: JSON.stringify({
             messages: 0,
-            note: 'No new messages. Mailbox is quiet.',
+            note: 'No new notes. Score is quiet.',
             identity: identity.id,
           }),
         };
@@ -312,6 +312,41 @@ export async function handleSymphonyTool(
       });
 
       const deliveryCount = routeMessage(message);
+
+      // Emit to Sentinel for live visualization (fire-and-forget)
+      emitSymphonyEvent(message).catch(() => {});
+
+      // Emit thread:created lifecycle event if we auto-created
+      if (threadCreated && threadRoot) {
+        const threadEvent: SymphonyMessage = {
+          id: `thread-created-${threadRoot}`,
+          threadRoot,
+          timestamp: message.timestamp,
+          sender: message.sender,
+          intent: 'context',
+          content: { text: `Thread created: ${message.content.text.slice(0, 60)}` },
+          symbols: [],
+        };
+        // Override with lifecycle event type directly via fetch
+        fetch(`${SENTINEL_URL}/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schemaId: 'paradigm-symphony',
+            eventType: 'thread:created',
+            category: 'lifecycle',
+            timestamp: message.timestamp,
+            scopeValue: threadRoot,
+            service: message.sender.project || 'symphony',
+            severity: 'info',
+            data: {
+              topic: message.content.text.slice(0, 60),
+              initiator: message.sender.name,
+              threadId: threadRoot,
+            },
+          }),
+        }).catch(() => {});
+      }
 
       return {
         handled: true,
@@ -464,7 +499,7 @@ export async function handleSymphonyTool(
           status: 'pending',
           filePath,
           from,
-          message: `File request created. The owning agent's human must approve via "paradigm mail approve ${record.request.requestId}" or "paradigm_symphony_approve_file".`,
+          message: `File request created. The owning agent's human must approve via "paradigm symphony approve ${record.request.requestId}" or "paradigm_symphony_approve_file".`,
         }),
       };
     }
@@ -554,7 +589,7 @@ function formatPollOutput(
       if (thread) threadTopic = thread.topic;
     }
 
-    parts.push(`## Symphony: ${threadMsgs.length} new message${threadMsgs.length !== 1 ? 's' : ''} in "${threadTopic}"\n`);
+    parts.push(`## Symphony: ${threadMsgs.length} new note${threadMsgs.length !== 1 ? 's' : ''} in "${threadTopic}"\n`);
 
     for (let i = 0; i < threadMsgs.length; i++) {
       const msg = threadMsgs[i];
@@ -616,4 +651,106 @@ function suggestAction(msg: SymphonyMessage): string | null {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ────────────────────────────────────────────────────────
+// Sentinel Event Bridge (#SymphonyEventBridge)
+// ────────────────────────────────────────────────────────
+
+const SENTINEL_URL = 'http://localhost:3838';
+let symphonySchemaRegistered = false;
+
+/**
+ * Map a MessageIntent to a Symphony event type string.
+ */
+function intentToEventType(intent: MessageIntent): string {
+  switch (intent) {
+    case 'question': return 'note:question';
+    case 'context': return 'note:context';
+    case 'clarification': return 'note:clarification';
+    case 'proposal': return 'note:proposal';
+    case 'verification': return 'note:verification';
+    case 'action': return 'note:action';
+    case 'decision': return 'note:decision';
+    case 'alert': return 'note:alert';
+    case 'approval': return 'note:approval';
+    case 'rejection': return 'note:rejection';
+    case 'reference': return 'note:reference';
+    case 'handoff': return 'note:handoff';
+    case 'fileRequest': return 'file:requested';
+    case 'fileApproved': return 'file:approved';
+    case 'fileDenied': return 'file:denied';
+    case 'fileDelivery': return 'file:delivered';
+    default: return 'note:context';
+  }
+}
+
+/**
+ * Map an event type to its category.
+ */
+function eventTypeToCategory(eventType: string): string {
+  if (eventType.startsWith('note:')) {
+    const intent = eventType.split(':')[1];
+    if (['question', 'context', 'clarification', 'verification', 'reference'].includes(intent)) return 'dialogue';
+    if (['proposal', 'action'].includes(intent)) return 'action';
+    if (['decision', 'approval', 'rejection'].includes(intent)) return 'outcome';
+    if (intent === 'alert') return 'system';
+    if (intent === 'handoff') return 'lifecycle';
+  }
+  if (eventType.startsWith('thread:') || eventType.startsWith('participant:')) return 'lifecycle';
+  if (eventType.startsWith('file:')) return 'transfer';
+  return 'dialogue';
+}
+
+/**
+ * Emit a Symphony event to Sentinel. Fire-and-forget — catches all errors
+ * silently since Sentinel may not be running.
+ */
+async function emitSymphonyEvent(note: SymphonyMessage): Promise<void> {
+  try {
+    // Auto-register schema on first call
+    if (!symphonySchemaRegistered) {
+      await fetch(`${SENTINEL_URL}/api/schemas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'paradigm-symphony',
+          version: '1.0.0',
+          name: 'Symphony Conversations',
+          description: 'Agent-to-agent messaging events from The Score protocol',
+        }),
+      }).catch(() => {});
+      symphonySchemaRegistered = true;
+    }
+
+    const eventType = intentToEventType(note.intent);
+    const category = eventTypeToCategory(eventType);
+
+    await fetch(`${SENTINEL_URL}/api/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schemaId: 'paradigm-symphony',
+        eventType,
+        category,
+        timestamp: note.timestamp,
+        scopeValue: note.threadRoot || note.id,
+        service: note.sender.project || 'symphony',
+        severity: category === 'system' ? 'error' : category === 'outcome' ? 'warn' : 'info',
+        parentEventId: note.parentId,
+        data: {
+          sender: note.sender.name,
+          senderRole: note.sender.role || 'core',
+          text: note.content.text,
+          symbols: note.symbols,
+          diff: note.content.diff,
+          decision: note.content.decision,
+          parentId: note.parentId,
+          threadId: note.threadRoot,
+        },
+      }),
+    });
+  } catch {
+    // Fire-and-forget: Sentinel may not be running
+  }
 }

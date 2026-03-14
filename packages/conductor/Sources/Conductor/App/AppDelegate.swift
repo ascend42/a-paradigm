@@ -24,6 +24,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gazeRouter: GazeRouter.shared
     )
 
+    // MARK: - Symphony Components (single-owner)
+
+    let agentPartManager = AgentPartManager()
+    let noteRelay = NoteRelay()
+    let fileApprovalManager = FileApprovalManager()
+    private(set) lazy var autoLinkCoordinator = AutoLinkCoordinator(
+        partManager: agentPartManager,
+        relay: noteRelay
+    )
+
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -34,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupMenuBar()
         setupOrchestrator()
+        setupSymphony()
         setupHotKeys()
         checkPermissionsAndLaunch()
 
@@ -62,11 +73,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    // MARK: - Symphony Setup ($symphony-startup)
+
+    /// Initialize Symphony components: auto-link + note relay.
+    private func setupSymphony() {
+        ScoreIO.ensureScoreDirs()
+        agentPartManager.cleanStaleAgents()
+
+        // Auto-link will start monitoring the detector once it's available
+        // (after permissions are granted and detection starts)
+        ConductorLog.flow("symphony-startup")
+            .info("Symphony components initialized")
+    }
+
+    /// Called after detection starts to wire auto-link to the detector.
+    private func startSymphonyAutoLink(detector: ClaudeCodeDetector) {
+        autoLinkCoordinator.start(detector: detector)
+        ConductorLog.signal("symphony-relay-started")
+            .info("Symphony auto-link active")
+    }
+
     // MARK: - Orchestrator Setup ($orchestrator-startup)
 
     /// Wire workspace, create providers from preferences, start orchestration.
     private func setupOrchestrator() {
         orchestrator.setWorkspaceManager(workspaceManager)
+        orchestrator.fileApprovalManager = fileApprovalManager
 
         // Read provider preferences and create providers conditionally
         createProvidersFromPreferences()
@@ -192,6 +224,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         ConductorLog.app.info("Conductor shutting down")
+        autoLinkCoordinator.stop()
+        noteRelay.stop()
         hotKeyManager.unregisterAll()
         orchestrator.stop()
         workspaceManager.cleanup()
@@ -252,7 +286,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showOnboarding: showOnboarding,
                 permissionStatus: permissionStatus ?? permissionsManager.checkAll(),
                 orchestrator: orchestrator,
-                workspaceManager: workspaceManager
+                workspaceManager: workspaceManager,
+                noteRelay: noteRelay,
+                fileApprovalManager: fileApprovalManager
             )
         )
         panel.makeKeyAndOrderFront(nil)

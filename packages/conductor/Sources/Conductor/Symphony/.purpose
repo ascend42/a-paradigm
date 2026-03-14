@@ -1,0 +1,183 @@
+purpose: Symphony Phase 1 & 2 — Conductor auto-detection, relay, file approval, and UI for agent-to-agent messaging via The Score protocol
+version: 0.2.0
+description: "File-based inter-agent messaging integrated into Conductor. Auto-detects Claude Code instances via ClaudeCodeDetector, registers them as agent parts in The Score (~/.paradigm/score/), and relays notes between agents on a 5-second polling loop. Wire-compatible Codable types match the TypeScript symphony-loader.ts. Includes file transfer approval/denial with trust configuration and security checks. Phase 2 adds thread list view, file request notification banner, and Symphony settings tab in Conductor overlay."
+context:
+  - Storage at ~/.paradigm/score/ with JSONL inbox/outbox per agent
+  - Agent IDs use {project}/{role} format — deterministic, survives session restarts
+  - Auto-migrates from legacy ~/.paradigm/mail/ directory
+  - Wire-compatible with Node.js JSON.stringify output (no pretty-print in JSONL)
+  - SHA-256 via CryptoKit for file delivery hashing
+  - Hard-deny patterns block .env, .key, .pem, credentials, secrets
+  - Trust configuration loaded from trust.yaml (JSON fallback)
+  - Thread list view shows active threads in Conductor overlay sidebar
+  - File request notification appears as banner card for pending approvals
+  - Symphony settings tab for relay interval, auto-link toggle, trust config
+
+# ============================================
+# Components (#)
+# ============================================
+
+#symphony-types:
+  description: Wire-compatible Codable structs matching TypeScript symphony-loader.ts types for The Score protocol
+  type: model
+  tags: [symphony, types, codable, wire-compat]
+  anchors:
+    - SymphonyTypes.swift:1
+
+#score-io:
+  description: JSONL read/write + directory management at ~/.paradigm/score/
+  type: utility
+  tags: [symphony, io, jsonl, filesystem]
+  anchors:
+    - ScoreIO.swift:1
+
+#agent-part-manager:
+  description: Agent registration/unregistration, scanning, stale cleanup
+  type: manager
+  tags: [symphony, agent, registration, lifecycle]
+  anchors:
+    - AgentPartManager.swift:1
+
+#note-relay:
+  description: 5-second polling relay routing notes from outboxes to inboxes with dedup
+  type: service
+  tags: [symphony, relay, polling, routing, dedup]
+  anchors:
+    - NoteRelay.swift:1
+
+#file-approval-manager:
+  description: File request approval/denial with trust config, path safety checks, and SHA-256 hashing
+  type: manager
+  tags: [symphony, file-transfer, trust, security]
+  anchors:
+    - FileApprovalManager.swift:1
+
+#auto-link-coordinator:
+  description: Auto-detect CC sessions via ClaudeCodeDetector, create agent parts, start relay
+  type: service
+  tags: [symphony, auto-link, detection, coordinator]
+  anchors:
+    - AutoLinkCoordinator.swift:1
+
+#thread-list-view:
+  description: Active threads displayed in Conductor overlay sidebar
+  type: view
+  tags: [symphony, ui, threads, sidebar]
+  anchors:
+    - ../UI/Views/ThreadListView.swift:1
+
+#file-request-notification:
+  description: Banner card for pending file requests with approve/deny actions
+  type: view
+  tags: [symphony, ui, file-transfer, notification, banner]
+  anchors:
+    - ../UI/Views/FileRequestNotificationView.swift:1
+
+#symphony-settings:
+  description: Settings tab for Symphony configuration — relay interval, auto-link toggle, trust config
+  type: view
+  tags: [symphony, ui, settings, configuration]
+  anchors:
+    - ../UI/Views/SymphonySettingsView.swift:1
+
+# ============================================
+# Flows ($)
+# ============================================
+
+flows:
+  $symphony-auto-link:
+    description: "CC detected → resolve project dir → derive agent ID → part created → relay starts"
+    steps:
+      - "#auto-link-coordinator"
+      - "#agent-part-manager"
+      - "#score-io"
+      - "#note-relay"
+  $symphony-relay:
+    description: "Outbox → relay polls on 5s timer → routes to inbox → agent polls → dedup"
+    steps:
+      - "#note-relay"
+      - "#score-io"
+  $symphony-file-approval:
+    description: "File request detected → notification banner → user approve/deny → file delivery"
+    steps:
+      - "#file-approval-manager"
+      - "#file-request-notification"
+      - "#score-io"
+  $symphony-voice-approve:
+    description: "Voice transcription → 'approve' keyword matched → file approval triggered → delivery"
+    steps:
+      - "#file-approval-manager"
+      - "#score-io"
+  $symphony-startup:
+    description: "App launch → part manager init → auto-link coordinator scans → relay starts"
+    steps:
+      - "#agent-part-manager"
+      - "#auto-link-coordinator"
+      - "#note-relay"
+
+# ============================================
+# Gates (^)
+# ============================================
+
+gates:
+  ^symphony-enabled:
+    description: Auto-link enabled in Symphony settings
+    check: "UserDefaults.standard.bool(forKey: 'symphonyAutoLink')"
+  ^file-request-allowed:
+    description: File path passes trust config deny-lists and auto-approve globs
+    check: "FileApprovalManager.isPathAllowed(path, trustConfig)"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+signals:
+  !agent-part-created:
+    description: New agent part registered in The Score
+    emitters: ["#agent-part-manager", "#auto-link-coordinator"]
+  !agent-auto-linked:
+    description: CC session auto-detected and linked as agent part
+    emitters: ["#auto-link-coordinator"]
+  !agent-auto-unlinked:
+    description: CC session disappeared and agent part unregistered
+    emitters: ["#auto-link-coordinator"]
+  !note-relayed:
+    description: One or more notes relayed from outboxes to inboxes
+    emitters: ["#note-relay"]
+  !file-request-received:
+    description: Incoming file request detected for approval
+    emitters: ["#file-approval-manager"]
+  !file-request-approved:
+    description: File request approved and file delivered
+    emitters: ["#file-approval-manager"]
+  !file-request-denied:
+    description: File request denied by user or trust config
+    emitters: ["#file-approval-manager"]
+  !symphony-relay-started:
+    description: Note relay polling loop has started
+    emitters: ["#note-relay"]
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~jsonl-compatible:
+  description: Swift Codable output is byte-compatible with TypeScript JSON.stringify — no pretty-print, consistent key ordering
+  anchors:
+    - SymphonyTypes.swift:1
+    - ScoreIO.swift:1
+
+~file-safety:
+  description: Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)
+  anchors:
+    - FileApprovalManager.swift:1
+
+tags:
+  - symphony
+  - phase-1
+  - phase-2
+  - conductor
+  - inter-agent
+  - messaging
+  - file-transfer
+  - ui

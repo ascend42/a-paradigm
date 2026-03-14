@@ -5,6 +5,35 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.36.0] — 2026-03-13
+
+### Added
+
+- **Symphony Phases 1 & 2** — Conductor auto-link + Sentinel conversation view for multi-agent orchestration.
+- **Naming rename: "A-Mail" → "The Score"**: Protocol directory `~/.paradigm/mail/` → `~/.paradigm/score/`, CLI `paradigm mail` → `paradigm symphony`, subcommand `link` → `join`, `unlink` → `leave`. Backward-compat migration auto-renames legacy directory on first access.
+- **Conductor auto-link** (Phase 1, Swift): 9 new Swift files — `SymphonyTypes.swift` (wire-compatible Codable types), `ScoreIO.swift` (JSONL I/O), `AgentPartManager.swift` (agent registration), `NoteRelay.swift` (5s polling relay with dedup), `FileApprovalManager.swift` (approve/deny/redact with SHA-256 + path safety), `AutoLinkCoordinator.swift` (auto-detect CC sessions).
+- **Conductor Symphony UI** (Phase 1, SwiftUI): `ThreadListView`, `FileRequestNotificationView`, `SymphonySettingsView` (6th settings tab). Voice commands: "approve", "deny", "approve redacted" for hands-free file approval.
+- **Sentinel ConversationView** (Phase 2, React): Interactive tree view of Symphony agent conversations — `ThreadList` sidebar + `ConversationPanel` with `NoteBubble`, `IntentBadge`, `ParticipantBadge`, `DecisionSummary`. WebSocket real-time updates with slide-in animation.
+- **`paradigm-symphony` event schema**: 19 event types across 6 categories (dialogue, action, outcome, system, lifecycle, transfer). Auto-registered on Sentinel startup alongside `paradigm-logger`.
+- **Symphony event bridge** (`#SymphonyEventBridge`): MCP symphony tools emit events to Sentinel via fire-and-forget POST. Maps all 16 message intents to event types. Emits thread lifecycle events on auto-thread creation.
+- **Zustand conversation store** (`#ConversationStore`): Threads from `/api/events/scopes`, notes from `/api/events`, decision extraction, WebSocket real-time updates.
+- **StatusTracker enhancement**: Now scans `~/.paradigm/score/agents/` for registered agent counts alongside project task files.
+- **NotificationBubbleView enhancement**: Thread count badge showing active Symphony conversations per instance.
+
+### Changed
+
+- **CLI command group rename**: `paradigm mail` → `paradigm symphony` with 16 subcommands renamed (join, leave, whoami, list, send, read, inbox, threads, thread, resolve, status, serve, request, requests, approve, deny).
+- **symphony-loader.ts**: `MAIL_DIR` → `SCORE_DIR`, `ensureMailDirs()` → `ensureScoreDirs()` (deprecated alias kept), user-facing strings updated ("mailbox" → "inbox", "message" → "note").
+- **ConductorAction**: +3 cases (`.approveFileRequest`, `.denyFileRequest`, `.approveFileRequestRedacted`).
+- **InputOrchestrator**: Handles Symphony file approval actions via `fileApprovalManager`.
+- **VoiceCommandRegistry**: Default commands for file approval ("approve", "deny", "approve redacted").
+- **ActionRegistry**: Serialization for new Symphony action cases.
+- **AppDelegate**: Owns Symphony components (agentPartManager, noteRelay, fileApprovalManager, autoLinkCoordinator), lifecycle management.
+- **MainOverlayView**: File request notifications + thread list sections.
+- **SettingsPanelView**: Symphony tab added.
+
+Symbols: #symphony-types, #score-io, #agent-part-manager, #note-relay, #file-approval-manager, #auto-link-coordinator, #thread-list-view, #file-request-notification, #symphony-settings, #SymphonySchema, #ConversationView, #ConversationStore, #SymphonyEventBridge, #symphony-join, #symphony-leave, $symphony-auto-link, $symphony-relay, $symphony-file-approval, $symphony-voice-approve, $symphony-startup, $symphony-conversation, ^symphony-enabled, ^file-request-allowed, !agent-part-created, !agent-auto-linked, !note-relayed, !file-request-received, !file-request-approved, !note-received-live, ~jsonl-compatible, ~file-safety
+
 ## [3.35.0] — 2026-03-12
 
 ### Added

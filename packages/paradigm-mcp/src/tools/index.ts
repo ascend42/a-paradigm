@@ -282,7 +282,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPipelineToolsList(),
           // Conductor session registration tools
           ...getConductorToolsList(),
-          // Symphony (A-Mail) tools
+          // Symphony (The Score) tools
           ...getSymphonyToolsList(),
           // Plugin update check
           {

@@ -5,27 +5,27 @@ description: |
 
 components:
   symphony-poll:
-    description: Poll mailbox for new messages (agent heartbeat)
+    description: Poll Score part for new notes (agent heartbeat)
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
   symphony-send:
-    description: Send a message to other agents or broadcast
+    description: Send a note to other agents or broadcast via The Score
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
   symphony-status:
-    description: List agents, threads, and unread count
+    description: List agents, threads, and unread count in The Score
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
   symphony-thread:
-    description: Get full thread context with messages and decisions
+    description: Get full thread context with notes and decisions
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
   symphony-request-file:
-    description: Request a file from another agent's project
+    description: Request a file from another agent's project via The Score
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
@@ -34,3 +34,10 @@ components:
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
+  SymphonyEventBridge:
+    description: Bridges Score notes to Sentinel events via fire-and-forget POST. Auto-registers paradigm-symphony schema on first call, maps MessageIntent to event types and categories.
+    type: integration
+    parent: '#SymphonyTools'
+    tags: [integration, symphony, sentinel]
+    anchors:
+      - symphony.ts:657-756

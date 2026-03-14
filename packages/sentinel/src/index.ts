@@ -58,3 +58,4 @@ export { SentinelTransport, createSentinelTransport, enableSentinel } from './tr
 
 // Schema Registry
 export { PARADIGM_SCHEMA } from './schema/builtin-paradigm.js';
+export { SYMPHONY_SCHEMA } from './schema/builtin-symphony.js';

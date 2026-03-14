@@ -58,11 +58,11 @@ description: |
     - "#SymphonyTools"
 
 #SymphonyTools:
-  description: A-Mail agent-to-agent messaging tools (poll, send, status, thread, file requests)
+  description: "The Score: agent-to-agent messaging tools (poll, send, status, thread, file requests) with Sentinel event bridge"
   type: tool
   tags: [mcp, symphony]
   anchors:
-    - src/tools/symphony.ts:1-620
+    - src/tools/symphony.ts:1-757
 
 #PurposePortalTools:
   description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.

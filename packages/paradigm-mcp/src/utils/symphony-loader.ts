@@ -1,15 +1,15 @@
 /**
- * Symphony Loader — A-Mail file-based agent messaging
+ * Symphony Loader — The Score: file-based agent messaging
  *
- * Manages ~/.paradigm/mail/ directory for inter-agent communication.
+ * Manages ~/.paradigm/score/ directory for inter-agent communication.
  * No server dependency — uses JSONL files polled by /loop.
  *
  * Storage layout:
- *   ~/.paradigm/mail/
+ *   ~/.paradigm/score/
  *     agents/{agentId}/
- *       inbox.jsonl      — Messages waiting for this agent
- *       outbox.jsonl     — Messages sent by this agent
- *       ack.json         — Last acknowledged message ID
+ *       inbox.jsonl      — Notes waiting for this agent
+ *       outbox.jsonl     — Notes sent by this agent
+ *       ack.json         — Last acknowledged note ID
  *       identity.json    — Agent identity (project, role, PID)
  *     threads/{threadId}.json  — Thread metadata
  *     file-requests/{requestId}.json — Pending file transfer requests
@@ -159,11 +159,12 @@ export interface TrustConfig {
 // Constants
 // ────────────────────────────────────────────────────────
 
-const MAIL_DIR = path.join(os.homedir(), '.paradigm', 'mail');
-const AGENTS_DIR = path.join(MAIL_DIR, 'agents');
-const THREADS_DIR = path.join(MAIL_DIR, 'threads');
-const FILE_REQUESTS_DIR = path.join(MAIL_DIR, 'file-requests');
-const TRUST_CONFIG_PATH = path.join(MAIL_DIR, 'trust.yaml');
+const SCORE_DIR = path.join(os.homedir(), '.paradigm', 'score');
+const LEGACY_MAIL_DIR = path.join(os.homedir(), '.paradigm', 'mail');
+const AGENTS_DIR = path.join(SCORE_DIR, 'agents');
+const THREADS_DIR = path.join(SCORE_DIR, 'threads');
+const FILE_REQUESTS_DIR = path.join(SCORE_DIR, 'file-requests');
+const TRUST_CONFIG_PATH = path.join(SCORE_DIR, 'trust.yaml');
 
 const FILE_REQUEST_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -186,13 +187,30 @@ const DEFAULT_TRUST: TrustConfig = {
 // Directory Management
 // ────────────────────────────────────────────────────────
 
-export function ensureMailDirs(): void {
+/**
+ * Auto-migrate from legacy ~/.paradigm/mail/ to ~/.paradigm/score/
+ */
+function migrateFromLegacyMail(): void {
+  if (fs.existsSync(LEGACY_MAIL_DIR) && !fs.existsSync(SCORE_DIR)) {
+    try {
+      fs.renameSync(LEGACY_MAIL_DIR, SCORE_DIR);
+    } catch {
+      // If rename fails (cross-device), just create fresh
+    }
+  }
+}
+
+export function ensureScoreDirs(): void {
+  migrateFromLegacyMail();
   for (const dir of [AGENTS_DIR, THREADS_DIR, FILE_REQUESTS_DIR]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   }
 }
+
+/** @deprecated Use ensureScoreDirs() */
+export const ensureMailDirs = ensureScoreDirs;
 
 export function getAgentDir(agentId: string): string {
   return path.join(AGENTS_DIR, agentId);
@@ -270,7 +288,7 @@ export function registerAgent(
   role?: string,
   label?: string
 ): AgentIdentity {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   const agentId = resolveAgentIdentity(projectDir, role);
   const agentDir = ensureAgentDir(agentId);
@@ -309,7 +327,7 @@ export function unregisterAgent(agentId: string): boolean {
 }
 
 export function listAgents(): AgentIdentity[] {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   if (!fs.existsSync(AGENTS_DIR)) return [];
 
@@ -403,7 +421,7 @@ export function discoverClaudeCodeSessions(): AgentIdentity[] {
           const session = JSON.parse(content);
           const pid = parseInt(path.basename(file, '.json'), 10);
 
-          // Check if this session is already registered as a mail agent
+          // Check if this session is already registered as a score agent
           if (!alive.some(a => a.pid === pid) && isProcessAlive(pid)) {
             alive.push({
               id: `conductor/${pid}`,
@@ -428,7 +446,7 @@ export function discoverClaudeCodeSessions(): AgentIdentity[] {
 }
 
 // ────────────────────────────────────────────────────────
-// Mailbox I/O
+// Part I/O (each agent's part of the score)
 // ────────────────────────────────────────────────────────
 
 function inboxPath(agentId: string): string {
@@ -526,7 +544,7 @@ function threadPath(threadId: string): string {
 }
 
 export function createThread(topic: string, initiator: Participant): ThreadMeta {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   const id = 'thr-' + crypto.randomBytes(4).toString('hex');
   const now = new Date().toISOString();
@@ -558,7 +576,7 @@ export function loadThread(threadId: string): ThreadMeta | null {
 }
 
 export function listThreads(status?: 'active' | 'resolved'): ThreadMeta[] {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   if (!fs.existsSync(THREADS_DIR)) return [];
 
@@ -658,7 +676,7 @@ export function buildMessage(params: BuildMessageParams): SymphonyMessage {
 }
 
 export function routeMessage(message: SymphonyMessage): number {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   // Append to sender's outbox
   appendToOutbox(message.sender.id, message);
@@ -739,7 +757,7 @@ export function createFileRequest(params: {
   snippet?: string;
   threadRoot?: string;
 }): FileRequestRecord {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   const requestId = 'freq-' + crypto.randomBytes(4).toString('hex');
 
@@ -773,7 +791,7 @@ export function loadFileRequest(requestId: string): FileRequestRecord | null {
 }
 
 export function listFileRequests(status?: FileRequestRecord['status']): FileRequestRecord[] {
-  ensureMailDirs();
+  ensureScoreDirs();
 
   if (!fs.existsSync(FILE_REQUESTS_DIR)) return [];
 
