@@ -28,7 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reindex pipeline upgraded from 7 to 11 steps.
 - Stop hook upgraded from 11 to 12 checks.
 
-Symbols: #IntegrityChecker, #integrity-command, #config-schema-validator, #validator, #aggregator, ~advisory-first
+### Fixed
+
+- **Anchor resolution** — Anchors now resolve relative to their `.purpose` file's directory first, falling back to rootDir. Eliminates false positives from sub-package `.purpose` files (355 → 0 missing anchors).
+- **Duplicate detection** — Skips `.purpose` + `portal.yaml` overlap for gate symbols (by design, not a conflict).
+- **Orphan definition** — Now reports true isolates (zero refs in AND out) instead of all unreferenced symbols. Tree roots (features with outgoing refs) are structural, not defects (440 → 135 reported).
+- **10 out-of-bounds anchors** — Updated stale line ranges across sentinel, paradigm-mcp, and sentinel-ui `.purpose` files.
+- **Symphony anchor paths** — Fixed malformed relative paths (`../../` → `../../../../../`) in `packages/paradigm/src/commands/symphony/.purpose`.
+- **Root .purpose cleanup** — Removed duplicate `#probe-protocol` (authoritative copy in `packages/probe/core/.purpose`).
+
+Symbols: #IntegrityChecker, #integrity-command, #config-schema-validator, #doctor-command, #validator, #aggregator, ~advisory-first, ~anchor-resolution
 
 ## [3.36.0] — 2026-03-13
 

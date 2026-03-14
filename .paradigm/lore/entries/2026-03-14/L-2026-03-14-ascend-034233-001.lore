@@ -1,0 +1,92 @@
+id: L-2026-03-14-ascend-034233-001
+type: retro
+timestamp: '2026-03-14T03:42:33.820Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Integrity Hardening Complete: The Numbers Don''t Lie'
+summary: After building the integrity checker, we turned it on ourselves and fixed everything it found. Anchor resolution was producing 355 false positives — fixed by resolving relative to the .purpose file's directory. Duplicate detection was flagging portal/.purpose gate overlap — fixed with source-awareness. The orphan check was reporting 440 symbols when only 135 were truly isolated — fixed by distinguishing tree roots from true isolates. The system now informs without confusing.
+symbols_touched:
+  - '#IntegrityChecker'
+  - '#integrity-command'
+  - '#doctor-command'
+  - ~anchor-resolution
+  - ~advisory-first
+decisions:
+  - id: true-isolate-definition
+    decision: Orphans = zero refs in AND zero refs out. Tree roots are not orphans.
+    rationale: 440 reported orphans when 305 were structurally expected tree roots. A check that cries wolf teaches you to ignore it.
+  - id: inform-not-confuse
+    decision: Every number the system reports must be actionable
+    rationale: False positives erode trust. 355 missing anchors that all exist, 3 duplicates that are by design, 440 orphans that are mostly features — each one trained the user to dismiss the check.
+learnings:
+  - Always run your checker on its own codebase before shipping — every assumption is tested immediately
+  - Anchor paths are inherently relative to the file that declares them, not to the project root
+  - Portal and .purpose gate overlap is by design — domain-aware dedup prevents false positives
+  - The difference between a tree root and an orphan is whether the symbol has outgoing references — both have zero incoming, but only isolates have zero outgoing
+verification:
+  status: pass
+  details:
+    broken_refs: '0'
+    duplicates: '0'
+    missing_anchors: '0'
+    oob_anchors: '0'
+    true_isolates: '135'
+    purpose_coverage: 100%
+    config_schema: valid
+tags: arc:self-insurance, retro, integrity, quality, inform-not-confuse
+body: |-
+  ## The Cleanup Arc
+
+  Building the integrity checker was Phase 1. Phase 2 was harder: making it tell the truth.
+
+  ### Anchor Resolution (355 → 0)
+
+  Every sub-package .purpose file uses anchors relative to its own directory: `src/storage.ts` in `packages/sentinel/.purpose` means `packages/sentinel/src/storage.ts`. But the checker resolved against the project root, producing 355 false positives. The fix: `resolveAnchorPath` now tries `path.dirname(sym.filePath)` first, falls back to rootDir. One line of logic, 355 false positives eliminated.
+
+  Two genuine missing anchors remained — symphony's .purpose used `../../packages/paradigm-mcp/...` which didn't traverse enough `..` segments. Fixed the paths. Then 10 out-of-bounds anchors where files had shrunk a few lines below their declared range. Fixed all 10.
+
+  ### Duplicate Detection (3 → 0)
+
+  Three "duplicates" were reported. One was real: `#probe-protocol` defined minimally in root `.purpose` and fully in `packages/probe/core/.purpose`. Removed the root copy.
+
+  The other two (`^api-authenticated`, `^admin-only`) were portal/.purpose overlap — gates intentionally declared in both `.purpose` (metadata, anchors, tags) and `portal.yaml` (runtime check logic). Fixed by checking `sym.source`: if one is 'purpose' and the other is 'portal', skip. Domain knowledge encoded in code.
+
+  ### Orphan Redefinition (440 → 135)
+
+  The original check: "referencedBy.length === 0". This flagged 440 symbols — 53% of the entire codebase. Clearly wrong.
+
+  Analysis revealed two populations:
+  - **305 tree roots**: Features and top-level groupings that reference children but aren't referenced back. `#ide-sync` references 7 adapters, but nothing references `#ide-sync`. That's the definition of a root — it's structural, not a defect.
+  - **135 true isolates**: Symbols with zero connections in either direction. Components declared in .purpose but never wired into any feature and never referencing anything.
+
+  The fix: `referencedBy.length === 0 && references.length === 0`. Applied to integrity checker, CLI command, and doctor. Now every reported isolate is actionable.
+
+  ## Current Project State
+
+  | Metric | Value |
+  |--------|-------|
+  | Broken references | 0 |
+  | Duplicate symbols | 0 |
+  | Missing anchors | 0 |
+  | OOB anchors | 0 |
+  | True isolates | 135 |
+  | Purpose coverage | 100% (133/133 dirs) |
+  | Config schema | Valid |
+  | Oversized .purpose | 4 files |
+  | Stale doc paths | 30 |
+
+  The metadata layer is structurally sound. What remains is hygiene: wiring the 135 isolates into features, splitting 4 bloated .purpose files, and cleaning 30 stale doc paths.
+
+  ## The Principle
+
+  "Inform, not confuse." A check that reports 440 issues when 305 are by design doesn't inform — it teaches you to ignore it. A check that reports 135 genuine isolates gives you a real to-do list. The integrity system now tells the truth, and truth is the foundation of trust.
+linked_commits:
+  - 660fab04
+  - 01b37338
+  - d38f6cde
+git_context:
+  ref: d38f6cde826c67c8bfb36c99c8829770e9eb275b
+  branch: main
+  dirty: true
