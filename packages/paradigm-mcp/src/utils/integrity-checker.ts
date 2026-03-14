@@ -262,8 +262,10 @@ function findOrphanedSymbols(
   const orphaned: IntegrityReport['orphanedSymbols'] = [];
 
   for (const sym of symbols) {
-    const refCount = sym.referencedBy.length;
-    if (refCount === 0) {
+    // True orphan = nothing references it AND it references nothing.
+    // Symbols with outgoing refs but no incoming refs are tree roots
+    // (features, top-level groupings) — structurally expected, not orphans.
+    if (sym.referencedBy.length === 0 && sym.references.length === 0) {
       orphaned.push({
         symbol: sym.symbol,
         file: sym.filePath,

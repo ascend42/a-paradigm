@@ -81,9 +81,9 @@ export async function integrityCommand(options: IntegrityOptions = {}): Promise<
     console.log(chalk.green('  ✓ No duplicate symbols'));
   }
 
-  // Orphaned symbols
+  // Orphaned symbols (true isolates — no refs in or out)
   if (orphanedCount > 0) {
-    console.log(chalk.yellow(`  ⚠ ${orphanedCount} orphaned symbol${orphanedCount > 1 ? 's' : ''} (zero cross-references)`));
+    console.log(chalk.yellow(`  ⚠ ${orphanedCount} isolated symbol${orphanedCount > 1 ? 's' : ''} (no connections to other symbols)`));
     for (const orph of orphaned.slice(0, 5)) {
       console.log(chalk.gray(`    │ ${orph.symbol} in ${orph.file}`));
     }
@@ -91,7 +91,7 @@ export async function integrityCommand(options: IntegrityOptions = {}): Promise<
       console.log(chalk.gray(`    │ ... and ${orphanedCount - 5} more`));
     }
   } else {
-    console.log(chalk.green('  ✓ All symbols have cross-references'));
+    console.log(chalk.green('  ✓ All symbols are connected'));
   }
 
   // Missing anchors
@@ -182,8 +182,10 @@ function findDuplicateSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; f
 }
 
 function findOrphanedSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; file: string }> {
+  // True orphan = nothing references it AND it references nothing.
+  // Symbols with outgoing refs but no incoming are tree roots — not orphans.
   return symbols
-    .filter(s => s.referencedBy.length === 0)
+    .filter(s => s.referencedBy.length === 0 && s.references.length === 0)
     .map(s => ({ symbol: s.symbol, file: s.filePath }));
 }
 
