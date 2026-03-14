@@ -1,0 +1,112 @@
+id: L-2026-03-14-ascend-032857-001
+type: milestone
+timestamp: '2026-03-14T03:28:57.804Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Paradigm Self-Insurance: The System That Checks Itself'
+summary: Paradigm now eats its own cooking. A 7-check integrity system validates broken references, duplicate symbols, orphaned symbols, missing anchors, out-of-bounds anchors, component anchor health, and .purpose file bloat — wired into reindex, postflight, doctor, status, stop hook, and a new CLI command. Every quality gap that could slip through silently is now surfaced automatically.
+symbols_touched:
+  - '#IntegrityChecker'
+  - '#integrity-command'
+  - '#config-schema-validator'
+  - '#validator'
+  - '#aggregator'
+  - '#ReindexTools'
+  - ~advisory-first
+  - ~reindex-11-stage-pipeline
+  - ~anchor-resolution
+symbols_created:
+  - '#IntegrityChecker'
+  - '#integrity-command'
+  - '#config-schema-validator'
+  - ~advisory-first
+  - ~anchor-resolution
+files_created:
+  - packages/paradigm-mcp/src/utils/integrity-checker.ts
+  - packages/paradigm/src/commands/integrity.ts
+  - packages/paradigm/src/core/config-schema.ts
+files_modified:
+  - packages/paradigm-mcp/src/tools/reindex.ts
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/utils/index-loader.ts
+  - packages/paradigm/src/commands/doctor/context-audit.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/lore-server/routes/lore.ts
+  - packages/paradigm/src/lore-server/routes/sessions.ts
+  - packages/premise/core/src/aggregator.ts
+  - packages/premise/core/src/types.ts
+  - packages/purpose/core/src/validator.ts
+  - packages/purpose/core/src/index.ts
+  - plugins/paradigm/scripts/paradigm-common.sh
+lines_added: 1535
+lines_removed: 91
+decisions:
+  - id: advisory-first
+    decision: All new integrity checks warn but never block
+    rationale: Blocking during active development is hostile — symbols are created before code exists. Trust the developer, provide information.
+  - id: anchor-relative-resolution
+    decision: Resolve anchors relative to .purpose file directory first, fall back to rootDir
+    rationale: Sub-package .purpose files use paths relative to their own directory (e.g., src/storage.ts), not the monorepo root. Resolving against rootDir produced 355 false positives.
+  - id: portal-purpose-overlap
+    decision: Skip duplicate detection when one source is 'purpose' and the other is 'portal'
+    rationale: Gates are intentionally declared in both .purpose (metadata/anchors) and portal.yaml (runtime checks). This is by design, not a conflict.
+  - id: cross-package-integrity
+    decision: CLI integrity command inlines checks rather than importing from paradigm-mcp
+    rationale: paradigm depends on paradigm-mcp at build time but paradigm-mcp is private and not a declared dependency. Inlining avoids circular dependency while keeping both in sync.
+learnings:
+  - Running integrity tools on their own codebase immediately reveals resolution assumptions — the 355 false-positive anchors were only visible when the checker met real sub-package .purpose files
+  - Duplicate detection needs domain awareness — portal.yaml and .purpose intentionally overlap for gates, and naive dedup flags this as a bug
+  - Advisory-only checks build trust faster than blocking checks — developers adopt tools that inform, not tools that obstruct
+  - Cross-file .purpose validation catches a class of errors invisible to single-file validators — parent references, flow step symbols, and gate lists that point to nothing
+verification:
+  status: pass
+  details:
+    build: pass
+    integrity: 0 broken, 0 dupes, 0 missing, 0 OOB
+    doctor_check_8: pass — config.yaml schema valid
+    doctor_check_9: pass — 4 oversized files flagged
+    stop_hook_12: pass — advisory wired
+    cli_json: pass — paradigm integrity --json returns valid output
+tags: arc:self-insurance, integrity, quality, milestone, advisory-first
+body: |-
+  ## The Problem
+
+  Paradigm had grown to 38 .purpose files totaling 7,694 lines, with 900+ line files and 55-file commits. The stop hook enforced 11 checks, but the system had blind spots: you could write `parent: "#NonExistent"` and nothing would catch it. Duplicate symbol IDs were silently resolved first-come-first-served. Component anchors drifted without detection. Config.yaml typos were invisible. The system that enforced quality on other projects couldn't enforce quality on itself.
+
+  ## The Philosophy: Advisory First
+
+  The hardest design decision wasn't what to check — it was what to do when checks fail. Blocking during active development is hostile. You create the .purpose entry before the code exists. You reference symbols that don't exist yet. The answer: **advisory first**. Every new check warns but doesn't block. The stop hook's Check 12 adds to ADVISORY, not VIOLATIONS. Postflight's broken-reference check uses severity 'warning'. Doctor surfaces issues for humans to decide. The system trusts the developer and provides information, not friction.
+
+  ## The Anchor Resolution Bug
+
+  The most satisfying moment: running integrity on Paradigm itself and getting 355 "missing anchor" errors. Every sub-package .purpose file referenced anchors like `src/storage.ts` — correct relative to the .purpose file's directory, but the checker resolved against the project root. The fix was elegant: try `path.dirname(sym.filePath)` first, fall back to `rootDir`. 355 false positives → 2 genuine issues (malformed relative paths in symphony's .purpose). The system found its own bug on its first real run.
+
+  ## The Duplicate Detection Nuance
+
+  Portal gates are *supposed* to be defined in both `.purpose` (with description, anchors, tags) and `portal.yaml` (with runtime check logic). The naive duplicate checker flagged these as conflicts. The fix: check `sym.source` — if one is 'purpose' and the other is 'portal', it's by design. This is the kind of domain knowledge that only emerges when you actually run the tool on real data.
+
+  ## Architecture
+
+  One utility (`integrity-checker.ts`), seven integration points:
+  - **Reindex** (steps 8-11): integrity, component anchors, purpose health, cross-file validation
+  - **Postflight** (check 6): broken parent references on touched symbols
+  - **Doctor** (checks 8-9): config schema validation, purpose file health
+  - **Status**: purpose health score (0-100)
+  - **Stop hook** (check 12): advisory symbol integrity
+  - **CLI**: `paradigm integrity [--json]` for on-demand checks
+
+  The cross-package dependency constraint shaped the design: `integrity-checker.ts` lives in paradigm-mcp (shared), the CLI command inlines its own checks using premise-core (no circular dependency), and config schema validation is split — lightweight in index-loader, full Zod in doctor.
+
+  ## What This Means
+
+  Paradigm is now self-insuring. Every session that modifies symbols gets automatic feedback on referential integrity, anchor validity, and .purpose health. The system that watches over codebases now watches over itself. This is the foundation for everything that comes next — you can't build reliable automation on an unreliable metadata layer.
+linked_commits:
+  - f6b5dddd
+  - 660fab04
+git_context:
+  ref: 660fab049d7a19ce0ff9d17ba6dbcca361af031c
+  branch: main
+  dirty: true
