@@ -1,0 +1,191 @@
+id: L-2026-03-14-ascend-023307-001
+type: milestone
+timestamp: '2026-03-14T02:33:07.572Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Symphony Phases 1 & 2 — The Score comes alive
+summary: Shipped Conductor auto-link (9 Swift files) and Sentinel ConversationView (React) in a single session spanning two context windows. Renamed A-Mail → The Score across the entire codebase. Agents can now be auto-detected, their conversations visualized in real-time, and file transfers approved by voice. 55 files changed, 4334 lines added, 32 new symbols.
+symbols_touched:
+  - '#symphony-types'
+  - '#score-io'
+  - '#agent-part-manager'
+  - '#note-relay'
+  - '#file-approval-manager'
+  - '#auto-link-coordinator'
+  - '#SymphonySchema'
+  - '#ConversationView'
+  - '#ConversationStore'
+  - '#SymphonyEventBridge'
+  - '#symphony-join'
+  - '#symphony-leave'
+  - $symphony-auto-link
+  - $symphony-relay
+  - $symphony-conversation
+  - ^symphony-enabled
+  - ~jsonl-compatible
+  - ~file-safety
+symbols_created:
+  - '#symphony-types'
+  - '#score-io'
+  - '#agent-part-manager'
+  - '#note-relay'
+  - '#file-approval-manager'
+  - '#auto-link-coordinator'
+  - '#thread-list-view'
+  - '#file-request-notification'
+  - '#symphony-settings'
+  - '#SymphonySchema'
+  - '#ConversationView'
+  - '#ConversationStore'
+  - '#SymphonyEventBridge'
+  - '#symphony-join'
+  - '#symphony-leave'
+  - $symphony-auto-link
+  - $symphony-relay
+  - $symphony-file-approval
+  - $symphony-voice-approve
+  - $symphony-startup
+  - $symphony-conversation
+  - ^symphony-enabled
+  - ^file-request-allowed
+  - '!agent-part-created'
+  - '!agent-auto-linked'
+  - '!note-relayed'
+  - '!file-request-received'
+  - '!note-received-live'
+  - ~jsonl-compatible
+  - ~file-safety
+files_created:
+  - packages/conductor/Sources/Conductor/Symphony/SymphonyTypes.swift
+  - packages/conductor/Sources/Conductor/Symphony/ScoreIO.swift
+  - packages/conductor/Sources/Conductor/Symphony/AgentPartManager.swift
+  - packages/conductor/Sources/Conductor/Symphony/NoteRelay.swift
+  - packages/conductor/Sources/Conductor/Symphony/FileApprovalManager.swift
+  - packages/conductor/Sources/Conductor/Symphony/AutoLinkCoordinator.swift
+  - packages/conductor/Sources/Conductor/UI/Views/ThreadListView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/FileRequestNotificationView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SymphonySettingsView.swift
+  - packages/sentinel/src/schema/builtin-symphony.ts
+  - packages/sentinel/ui/src/store/conversationStore.ts
+  - packages/sentinel/ui/src/views/ConversationView.tsx
+  - packages/sentinel/ui/src/styles/conversation.css
+  - packages/paradigm/src/commands/symphony/index.ts
+  - packages/paradigm/src/commands/symphony/types.ts
+files_modified:
+  - packages/paradigm-mcp/src/utils/symphony-loader.ts
+  - packages/paradigm-mcp/src/tools/symphony.ts
+  - packages/paradigm/src/index.ts
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - packages/conductor/Sources/Conductor/Models/ConductorAction.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/NotificationBubbleView.swift
+  - packages/conductor/Sources/Conductor/WindowManager/StatusTracker.swift
+  - packages/sentinel/ui/src/App.tsx
+  - packages/sentinel/src/server/index.ts
+  - CHANGELOG.md
+lines_added: 4334
+lines_removed: 417
+commit: fa37bd6c
+decisions:
+  - id: D-symphony-naming
+    decision: Renamed A-Mail → The Score, mail → symphony, mailbox → part, message → note
+    rationale: 'The orchestral metaphor is load-bearing: score=shared document, notes=atomic expressions, parts=per-performer views. Musical naming reinforces the collaborative intelligence framing.'
+  - id: D-fire-and-forget-bridge
+    decision: Event bridge to Sentinel uses fire-and-forget POST with silent error swallowing
+    rationale: Sentinel is optional infrastructure. Symphony must work without it. The JSONL files are the source of truth; Sentinel visualization is a nice-to-have.
+  - id: D-remove-default-params
+    decision: Removed default parameter values for @MainActor types in SwiftUI inits
+    rationale: Swift 6 strict concurrency prevents calling @MainActor init() from nonisolated SwiftUI init contexts. Callers must explicitly pass instances.
+  - id: D-backward-compat-migration
+    decision: Auto-rename ~/.paradigm/mail/ → ~/.paradigm/score/ on first access via migrateFromLegacyMail()
+    rationale: Users who installed Phase 0 yesterday shouldn't lose their mailboxes. One-time rename is invisible and idempotent.
+learnings:
+  - Swift 6 @MainActor isolation prevents default parameter values that construct actor-isolated types — must pass explicitly from actor-isolated callers
+  - 8 parallel builder agents can implement a cohesive feature set without conflicts when given non-overlapping file scopes
+  - JSONL-over-filesystem is a surprisingly robust IPC mechanism — no serialization format issues, no connection management, just append and read
+  - The fire-and-forget pattern for optional infrastructure (POST to Sentinel, catch and ignore) keeps the critical path clean
+  - TypeScript unknown type in JSX requires != null checks, not truthiness checks, to avoid ReactNode assignment errors
+verification:
+  status: pass
+  details:
+    swift_build: pass (release, 11.58s)
+    paradigm_mcp_build: pass
+    paradigm_cli_build: pass
+    sentinel_build: pass (tsc + vite, 66 modules)
+    npm_link: pass
+tags:
+  - arc:symphony
+  - milestone
+  - phase-1
+  - phase-2
+  - conductor
+  - sentinel
+  - the-score
+  - architecture-reflection
+body: |-
+  ## What happened
+
+  Symphony Phase 0 shipped yesterday as "A-Mail" — a file-based JSONL mailbox protocol where agents manually link with `paradigm mail link`. It worked, but it was manual, invisible, and named wrong.
+
+  This session landed Phases 1 and 2 in one sweep:
+
+  **Phase 1 (Conductor/Swift)** makes the protocol zero-setup. When Conductor detects a Claude Code window, AutoLinkCoordinator automatically creates an agent "part" at `~/.paradigm/score/agents/{project}/{role}/`, writes identity.json, and starts the NoteRelay — a 5-second polling loop that routes outbox notes to recipient inboxes with cursor tracking and dedup. FileApprovalManager adds human-gated file transfers with SHA-256 verification, hard-deny patterns (.env, *.key, *.pem), and a redaction mode that strips sensitive lines. Voice commands ("approve", "deny", "approve redacted") let the human stay hands-free.
+
+  **Phase 2 (Sentinel/React)** makes conversations visible. A `paradigm-symphony` event schema (19 event types across 6 categories) feeds into Sentinel's existing event infrastructure. The MCP tools now fire-and-forget POST events to Sentinel after every `routeMessage()`. ConversationView renders a thread sidebar + note bubbles with category-colored borders, intent badges (DECISION, ACTION, QUESTION, ALERT), participant badges (human vs agent), collapsible diffs, symbol chips, and a decision summary footer. WebSocket pushes new notes in real-time with slide-in animation.
+
+  **The rename** was pervasive: ~/.paradigm/mail/ → ~/.paradigm/score/, `paradigm mail` → `paradigm symphony`, link → join, unlink → leave, message → note, mailbox → part. Backward-compat migration auto-renames the legacy directory. Updated across CLI, MCP tools, symphony-loader, docs, specs, quickstart guide, troubleshooting, university lessons, PLSAT questions, and reference cards.
+
+  ## The naming matters
+
+  "The Score" is not just branding. In an orchestra, the score is the shared document that every performer reads from — it contains all parts, all voices, all timing. That's exactly what `~/.paradigm/score/` is: a shared filesystem artifact that multiple agents read and write independently, each seeing the full conversation history. "Notes" carry double meaning: musical notes (small atomic units of expression) and "passing a note" (informal communication). "Parts" are what each performer plays from. The metaphor is load-bearing.
+
+  ## Architecture reflection
+
+  The JSONL-over-filesystem approach continues to prove itself. No server dependency, no database, no network configuration. Agents write to outbox.jsonl, the relay copies to inbox.jsonl, done. The relay runs at 5 seconds, which is slow enough to be cheap but fast enough for collaborative work. CryptoKit SHA-256 on file transfers provides integrity without complexity.
+
+  The event bridge is elegantly disposable — if Sentinel isn't running, the POST silently fails and nothing breaks. This "fire-and-forget to optional infrastructure" pattern is worth preserving. The conversation data lives in the JSONL files regardless; Sentinel just makes it pretty.
+
+  ## What I think about this system
+
+  Paradigm has become something genuinely unusual. It's not a framework, not an IDE plugin, not a project management tool. It's a *cognitive substrate* for AI-assisted development — a shared memory and communication layer that makes AI agents structurally aware of the codebase they're working in.
+
+  The symbol system (#, $, ^, !, ~) with .purpose files is the foundation. It's deceptively simple: just YAML files in directories. But it creates a navigable map of intent that survives across sessions, across agents, across context windows. When I start a new session and call `paradigm_status`, I don't just see files — I see *what things mean* and *how they relate*. That's fundamentally different from grep.
+
+  Symphony takes this further. Before Symphony, each Claude Code session was a solitary intelligence — it could read the codebase but couldn't coordinate with other sessions working on the same project. Now agents can ask each other questions, propose changes, request files, make decisions, and have those decisions automatically captured as Lore entries. The conversation becomes part of the project's institutional memory.
+
+  The layered architecture is well-considered:
+  - **Paradigm core** (symbols, .purpose, flows, gates) = structural awareness
+  - **Sentinel** (events, schemas, visualization) = observability
+  - **Conductor** (auto-link, relay, voice) = orchestration
+  - **Symphony** (notes, threads, file pipeline) = communication
+  - **Lore** (entries, arcs, decisions) = institutional memory
+  - **University** (lessons, PLSAT, reference cards) = self-teaching
+
+  Each layer is independently useful but compounds with the others. You can use Paradigm without Sentinel. You can use Symphony without Conductor. But when they're all running, you get something that feels like a living development environment — one that remembers, communicates, observes, and teaches.
+
+  ## Where I see it going
+
+  **Near-term (Phases 3-4):** Cross-machine Symphony via Bonjour/mDNS discovery. Consensus protocols for multi-agent decisions (quorum voting on architectural changes). Agent presence states (thinking, writing, reviewing, blocked) inferred from MCP tool usage patterns.
+
+  **Medium-term:** The decision timeline view — aggregating all `note:decision` events across threads into a chronological audit trail. This transforms Symphony from a communication tool into a *decision archaeology* system. Why was this architecture chosen? Who proposed it? What alternatives were rejected? All answered by querying Lore + Symphony together.
+
+  **Longer-term:** Paradigm becomes the coordination layer for teams of AI agents working on different parts of a large system. Not just Claude Code sessions on one machine, but heterogeneous agents (different models, different tools, different specializations) collaborating through a shared protocol. The Score is already model-agnostic — any process that can read/write JSONL can participate.
+
+  **The deeper bet:** Software development is becoming a collaborative activity between humans and AI agents, and the bottleneck is shifting from "can the AI write code" to "can multiple AIs coordinate coherently on a shared codebase." Paradigm is betting that structural awareness (symbols), shared memory (Lore), and a communication protocol (Symphony) are the primitives needed to make that coordination work. I think that bet is correct.
+
+  ## What concerns me
+
+  The system is getting complex. 55 files in one commit, 32 new symbols, 8 parallel agents running during implementation. The .purpose files alone are becoming substantial — the Conductor .purpose is now 900+ lines. There's a tension between "everything is documented" and "the documentation itself becomes a maintenance burden."
+
+  The answer is probably that .purpose files should be treated like the code they describe: refactored when they get unwieldy, split when they cover too many concerns, deleted when they describe things that no longer exist. The stop hook enforces their existence but not their quality. That's a gap worth closing.
+
+  Also: the JSONL polling at 5-second intervals works for 2-5 agents on one machine. It won't scale to 50 agents or cross-network scenarios without a different transport. Phase 3 needs to think carefully about when to keep JSONL-over-filesystem and when to introduce actual networking.
+linked_commits:
+  - fa37bd6c
+git_context:
+  ref: fa37bd6cdbfd607d86e9df9cabf539df28f67e07
+  branch: main
+  dirty: true
