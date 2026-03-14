@@ -58,5 +58,6 @@ export {
 // Validator
 export {
   validatePurposeFile,
+  validateCrossFile,
   formatValidationResult,
 } from './validator.js';

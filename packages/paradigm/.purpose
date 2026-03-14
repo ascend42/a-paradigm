@@ -43,12 +43,18 @@ features:
     components:
       - '#upgrade-handler'
   doctor-command:
-    description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning across .purpose files, and context audit checks for AI instruction file quality.
+    description: Health check and diagnostics for Paradigm setup. Includes clarification marker scanning, context audit (9 checks including config schema validation and purpose file health), and AI instruction file quality.
     type: command
     components:
       - '#doctor-handler'
       - '#health-checker'
       - '#context-audit'
+      - '#config-schema-validator'
+  integrity-command:
+    description: Symbol integrity check — validates broken references, duplicate symbols, orphaned symbols, and missing anchor files across .purpose files. Available as CLI (paradigm integrity --json) and integrated into reindex and stop hook (advisory Check 12).
+    type: command
+    components:
+      - '#integrity-checker'
   scan-command:
     description: Generate navigator.yaml and scan index for codebase exploration
     type: command
@@ -489,6 +495,12 @@ components:
     type: handler
   health-checker:
     description: Validates project setup
+    type: utility
+  config-schema-validator:
+    description: Zod-based schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
+    type: utility
+  integrity-checker:
+    description: CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors
     type: utility
   thread-handler:
     description: Manages thread.md operations

@@ -133,7 +133,7 @@ description: |
     - !tag-suggested
 
 #ReindexTools:
-  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Clears ToolCache on success.
+  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Runs 11 pipeline steps including integrity checks, component anchor validation, purpose health scoring, and cross-file validation. Clears ToolCache on success.
   type: tool
   tags: [mcp]
   anchors:
@@ -258,6 +258,16 @@ description: |
   tags: [performance]
   anchors:
     - src/utils/tool-cache.ts:1-69
+
+#IntegrityChecker:
+  description: Central utility for Paradigm symbol integrity validation — broken references, duplicate symbols, orphaned symbols, missing anchors, anchor out-of-bounds, component anchor validation, and purpose file health scoring
+  type: utility
+  tags: [quality, validation]
+  anchors:
+    - src/utils/integrity-checker.ts:1-400
+  components:
+    - "#ReindexTools"
+    - "#IndexLoader"
 
 #WorkspaceLoader:
   description: Multi-project workspace support. Loads .paradigm-workspace files, reads sibling scan-index.json, filters by exports, provides cross-project search/ripple helpers.
@@ -1219,8 +1229,8 @@ $wisdom-promotion:
 # Reindex Pipeline
 # ────────────────────────────────────────────
 
-~reindex-5-stage-pipeline:
-  description: Reindex rebuilds 5 artifacts in order — scan-index.json, navigator.yaml, flow-index.json, aspect-graph.db, and lore links
+~reindex-11-stage-pipeline:
+  description: Reindex rebuilds artifacts in 11 steps — scan-index.json, navigator.yaml, flow-index.json, aspect-graph.db, lore links, persona index, protocol index, integrity check, component anchors, purpose health, cross-file validation
   category: rule
   severity: high
   tags: [reindex, pipeline]

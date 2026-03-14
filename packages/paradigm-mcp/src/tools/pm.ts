@@ -318,7 +318,7 @@ function buildPreflightRecommendations(
 // ============================================================================
 
 interface PostflightViolation {
-  type: 'missing-purpose' | 'missing-portal-gate' | 'unregistered-symbol' | 'uncaptured-wisdom' | 'stale-aspect';
+  type: 'missing-purpose' | 'missing-portal-gate' | 'unregistered-symbol' | 'uncaptured-wisdom' | 'stale-aspect' | 'broken-reference';
   severity: 'error' | 'warning';
   message: string;
   file?: string;
@@ -490,6 +490,25 @@ function runPostflightCheck(
     });
   }
 
+  // 6. Lightweight broken-reference check for touched symbols
+  for (const symbol of symbolsTouched) {
+    const results = searchSymbols(ctx.index, symbol);
+    if (results.length === 0) continue;
+
+    const sym = results[0];
+    if (sym.parentSymbol) {
+      const parentResults = searchSymbols(ctx.index, sym.parentSymbol);
+      if (parentResults.length === 0) {
+        violations.push({
+          type: 'broken-reference',
+          severity: 'warning',
+          message: `Symbol "${symbol}" references parent "${sym.parentSymbol}" which does not exist`,
+          suggestion: `Create the parent symbol or update the parent reference in the .purpose file.`,
+        });
+      }
+    }
+  }
+
   // Summary
   const errors = violations.filter(v => v.severity === 'error').length;
   const warnings = violations.filter(v => v.severity === 'warning').length;
@@ -573,8 +592,8 @@ function runPostflightCheck(
     status,
     violations,
     summary: {
-      totalChecks: 6,
-      passed: 6 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
+      totalChecks: 7,
+      passed: 7 - (errors > 0 ? 1 : 0) - (warnings > 0 ? 1 : 0),
       warnings,
       errors,
     },

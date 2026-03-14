@@ -12,17 +12,7 @@ const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
 const SESSION_GAP_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-interface LoreEntry {
-  id: string;
-  type: string;
-  timestamp: string;
-  author: string;
-  agent?: { provider: string; model: string };
-  title: string;
-  summary: string;
-  symbols_touched: string[];
-  symbols_created?: string[];
-}
+import type { LoreEntry } from '../../core/lore/types.js';
 
 interface SessionBreadcrumb {
   phase?: string;

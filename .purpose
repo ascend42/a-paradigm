@@ -323,7 +323,7 @@ aspects:
       - pattern
       - infrastructure
     anchors:
-      - packages/sentinel/src/server/index.ts:54-94
+      - packages/sentinel/src/server/index.ts:56-96
       - packages/portal/viewer/src/server.ts:56-69
     applies-to:
       - '#SentinelServer'

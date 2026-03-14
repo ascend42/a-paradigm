@@ -693,6 +693,16 @@ program
     await doctorCommand(options);
   });
 
+// paradigm integrity
+program
+  .command('integrity')
+  .description('Symbol integrity check — broken refs, duplicates, orphans, missing anchors')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (options) => {
+    const { integrityCommand } = await import('./commands/integrity.js');
+    await integrityCommand(options);
+  });
+
 // paradigm sweep
 program
   .command('sweep')

@@ -807,6 +807,16 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
             const untypedCount = allComponents.filter(c => !c.componentType).length;
 
+            // Compute purpose health score (non-fatal)
+            let purposeHealthScore: number | undefined;
+            try {
+              const { checkPurposeHealth } = await import('../utils/integrity-checker.js');
+              const healthReport = checkPurposeHealth(ctx.aggregation.purposeFiles, ctx.rootDir);
+              purposeHealthScore = healthReport.healthScore;
+            } catch {
+              // Health check is optional
+            }
+
             return JSON.stringify({
               project: ctx.projectName,
               symbolSystem: 'v2',
@@ -827,6 +837,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               examples,
               hasPortalYaml: ctx.gateConfig !== null,
               purposeFiles: ctx.aggregation.purposeFiles.length,
+              ...(purposeHealthScore !== undefined ? { purposeHealthScore } : {}),
               ...(protocols ? { protocols } : {}),
               note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification. Use type field for structural role (view, service, tool, etc.)',
               environment: {

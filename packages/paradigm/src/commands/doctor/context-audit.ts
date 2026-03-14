@@ -1,5 +1,5 @@
 /**
- * Context Audit — 7 quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+ * Context Audit — 9 quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
  *
  * Checks:
  *   1. stale-references     — dead file/dir paths in instruction files
@@ -9,6 +9,8 @@
  *   5. orphaned-symbols      — symbols with zero cross-references
  *   6. stale-portal          — portal routes with no matching implementation
  *   7. instruction-vagueness — vague/hedging language in instruction files
+ *   8. config-schema-validation — config.yaml schema validation
+ *   9. purpose-file-health   — oversized/stale .purpose files
  */
 
 import * as fs from 'fs';
@@ -703,6 +705,147 @@ async function checkInstructionVagueness(rootDir: string): Promise<ContextAuditR
 }
 
 // ---------------------------------------------------------------------------
+// Check 8: Config Schema Validation
+// ---------------------------------------------------------------------------
+
+async function checkConfigSchema(rootDir: string): Promise<ContextAuditResult[]> {
+  const results: ContextAuditResult[] = [];
+  const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+
+  if (!fs.existsSync(configPath)) {
+    results.push({
+      check: 'config-schema-validation',
+      status: 'advisory',
+      message: 'No .paradigm/config.yaml found',
+    });
+    return results;
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, 'utf8');
+    const { validateConfig } = await import('../../core/config-schema.js');
+    const validation = validateConfig(content);
+
+    const details: string[] = [];
+    for (const err of validation.errors) {
+      details.push(`Error: ${err}`);
+    }
+    for (const warn of validation.warnings) {
+      details.push(`Warning: ${warn}`);
+    }
+
+    if (validation.errors.length > 0) {
+      results.push({
+        check: 'config-schema-validation',
+        status: 'error',
+        message: `${validation.errors.length} schema error${validation.errors.length > 1 ? 's' : ''} in config.yaml`,
+        details,
+        fix: 'Fix invalid fields in .paradigm/config.yaml',
+      });
+    } else if (validation.warnings.length > 0) {
+      results.push({
+        check: 'config-schema-validation',
+        status: 'warn',
+        message: `${validation.warnings.length} unrecognized key${validation.warnings.length > 1 ? 's' : ''} in config.yaml`,
+        details,
+        fix: 'Check for typos in .paradigm/config.yaml field names',
+      });
+    } else {
+      results.push({
+        check: 'config-schema-validation',
+        status: 'ok',
+        message: 'config.yaml schema is valid',
+      });
+    }
+  } catch (e) {
+    results.push({
+      check: 'config-schema-validation',
+      status: 'error',
+      message: `Could not validate config.yaml: ${(e as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Check 9: Purpose File Health
+// ---------------------------------------------------------------------------
+
+async function checkPurposeFileHealth(rootDir: string): Promise<ContextAuditResult[]> {
+  const results: ContextAuditResult[] = [];
+
+  // Find all .purpose files
+  const purposeFiles: string[] = [];
+  function findPurpose(dir: string): void {
+    const skipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build']);
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (skipDirs.has(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          findPurpose(full);
+        } else if (entry.name === '.purpose') {
+          purposeFiles.push(full);
+        }
+      }
+    } catch {
+      // Skip unreadable dirs
+    }
+  }
+  findPurpose(rootDir);
+
+  if (purposeFiles.length === 0) {
+    results.push({
+      check: 'purpose-file-health',
+      status: 'ok',
+      message: 'No .purpose files to check',
+    });
+    return results;
+  }
+
+  const oversized: string[] = [];
+  let maxLines = 0;
+  let maxFile = '';
+
+  for (const pf of purposeFiles) {
+    try {
+      const content = fs.readFileSync(pf, 'utf8');
+      const lines = content.split('\n').length;
+      if (lines > maxLines) {
+        maxLines = lines;
+        maxFile = path.relative(rootDir, pf);
+      }
+      if (lines > 500) {
+        const severity = lines > 1000 ? '!!' : '!';
+        oversized.push(`${severity} ${path.relative(rootDir, pf)} (${lines} lines)`);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (oversized.length > 0) {
+    results.push({
+      check: 'purpose-file-health',
+      status: 'warn',
+      message: `${oversized.length} oversized .purpose file${oversized.length > 1 ? 's' : ''} (largest: ${maxFile} at ${maxLines} lines)`,
+      details: oversized,
+      fix: 'Split large .purpose files by component type or subdirectory',
+    });
+  } else {
+    results.push({
+      check: 'purpose-file-health',
+      status: 'ok',
+      message: `${purposeFiles.length} .purpose files, all under 500 lines`,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -717,6 +860,8 @@ export async function runContextAudit(rootDir: string, _options?: { quiet?: bool
   results.push(...await checkOrphanedSymbols(rootDir));
   results.push(...await checkStalePortal(rootDir));
   results.push(...await checkInstructionVagueness(rootDir));
+  results.push(...await checkConfigSchema(rootDir));
+  results.push(...await checkPurposeFileHealth(rootDir));
 
   const errorCount = results.filter(r => r.status === 'error').length;
   const warnCount = results.filter(r => r.status === 'warn').length;

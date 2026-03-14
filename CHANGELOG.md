@@ -5,6 +5,31 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.37.0] — 2026-03-13
+
+### Added
+
+- **Integrity hardening** — New `integrity-checker.ts` utility in paradigm-mcp with 7 checks: broken references, duplicate symbols, orphaned symbols, missing anchor files, anchor out-of-bounds, component anchor validation, purpose file health (oversized/stale detection with health score).
+- **`paradigm integrity` CLI command** — Reports broken refs, duplicates, orphans, missing anchors. Supports `--json` for machine-readable output (used by stop hook Check 12).
+- **Reindex steps 8-11** — Reindex now runs integrity checks (step 8), component anchor validation (step 9), purpose health scoring (step 10), and cross-file .purpose validation (step 11). All non-fatal; results included in reindex output.
+- **Postflight check 6** — Validates `parentSymbol` references for touched symbols during postflight (advisory, severity: warning).
+- **Stop hook Check 12** — Advisory-only symbol integrity check (broken refs + duplicates + missing anchors). Non-blocking.
+- **Config schema validation** — Zod schema for `.paradigm/config.yaml` covering all known fields. `paradigm doctor` Check 8 validates config schema. Index-loader warns on missing required fields.
+- **Cross-file .purpose validation** — `validateCrossFile()` in purpose-core checks parent references, symbol list references, and flow step references across all .purpose files. Wired into reindex step 11.
+- **Doctor checks 8-9** — Check 8: config.yaml schema validation. Check 9: purpose file health (oversized >500 lines, split suggestions).
+- **Duplicate detection in aggregator** — premise-core aggregator now detects symbols defined in 2+ files, reports via `AggregationResult.duplicateSymbols`.
+- **Purpose health score in status** — `paradigm_status` MCP tool now includes `purposeHealthScore` (0-100).
+- **LoreEntry consolidation** — `lore.ts` and `sessions.ts` route files now import `LoreEntry` from `core/lore/types.ts` instead of inline interfaces.
+
+### Changed
+
+- Doctor command upgraded from 7 to 9 quality checks.
+- Postflight upgraded from 6 to 7 checks (totalChecks).
+- Reindex pipeline upgraded from 7 to 11 steps.
+- Stop hook upgraded from 11 to 12 checks.
+
+Symbols: #IntegrityChecker, #integrity-command, #config-schema-validator, #validator, #aggregator, ~advisory-first
+
 ## [3.36.0] — 2026-03-13
 
 ### Added

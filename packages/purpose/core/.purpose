@@ -47,7 +47,7 @@ components:
   zod-schemas:
     description: '#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc.'
   validator:
-    description: '#validator: Validates parsed purpose data'
+    description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
   aggregator:

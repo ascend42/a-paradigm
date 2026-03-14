@@ -10,35 +10,7 @@ import * as yaml from 'js-yaml';
 const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
 
-interface LoreEntry {
-  id: string;
-  type?: string;
-  timestamp: string;
-  duration_minutes?: number;
-  author: string;
-  agent?: { provider: string; model: string };
-  title: string;
-  summary: string;
-  symbols_touched: string[];
-  symbols_created?: string[];
-  files_created?: string[];
-  files_modified?: string[];
-  lines_added?: number;
-  lines_removed?: number;
-  commit?: string;
-  decisions?: Array<{ id: string; decision: string; rationale: string }>;
-  errors_encountered?: Array<{ description: string; resolution: string; time_to_fix?: string }>;
-  learnings?: string[];
-  verification?: { status: string; details?: Record<string, string> };
-  review?: { reviewer: string; completeness: number; quality: number; notes?: string; reviewed_at: string };
-  body?: string;
-  linked_lore?: string[];
-  linked_tasks?: string[];
-  linked_commits?: string[];
-  tags?: string[];
-  meta?: Record<string, unknown>;
-  git_context?: { ref: string; branch: string; dirty: boolean };
-}
+import type { LoreEntry } from '../../core/lore/types.js';
 
 /** Matches both .yaml and .lore lore entry files */
 function isLoreFile(filename: string): boolean {

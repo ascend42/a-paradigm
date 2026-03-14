@@ -373,6 +373,8 @@ export interface AggregationResult {
   errors: AggregationError[];
   /** Timestamp of aggregation */
   timestamp: number;
+  /** Symbols defined in multiple files (optional, populated by aggregator) */
+  duplicateSymbols?: Array<{ symbol: string; files: string[] }>;
 }
 
 /**

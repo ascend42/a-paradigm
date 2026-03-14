@@ -278,12 +278,29 @@ export async function aggregateFromPremise(
   // Resolve cross-references
   resolveReferences(symbols);
 
+  // Detect duplicate symbol IDs (same symbol defined in multiple files)
+  const symbolFileMap = new Map<string, string[]>();
+  for (const sym of symbols) {
+    const files = symbolFileMap.get(sym.symbol) || [];
+    if (!files.includes(sym.filePath)) {
+      files.push(sym.filePath);
+    }
+    symbolFileMap.set(sym.symbol, files);
+  }
+  const duplicateSymbols: Array<{ symbol: string; files: string[] }> = [];
+  for (const [symbol, files] of symbolFileMap) {
+    if (files.length > 1) {
+      duplicateSymbols.push({ symbol, files });
+    }
+  }
+
   return {
     symbols,
     purposeFiles,
     portalFiles,
     errors,
     timestamp: Date.now(),
+    ...(duplicateSymbols.length > 0 ? { duplicateSymbols } : {}),
   };
 }
 

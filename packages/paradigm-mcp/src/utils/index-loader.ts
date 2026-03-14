@@ -90,6 +90,17 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
     try {
       const configContent = fs.readFileSync(configPath, 'utf8');
       const config = yaml.load(configContent) as Record<string, unknown>;
+
+      // Lightweight config validation (full Zod schema runs in paradigm doctor)
+      if (config && typeof config === 'object') {
+        if (!config.version) {
+          console.error('[paradigm] Warning: config.yaml missing "version" field');
+        }
+        if (!config.project) {
+          console.error('[paradigm] Warning: config.yaml missing "project" field');
+        }
+      }
+
       if (config && typeof config.workspace === 'string') {
         workspace = loadWorkspaceContext(absoluteRoot, config.workspace);
       }

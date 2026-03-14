@@ -17,6 +17,15 @@ import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 import { rebuildPersonaIndex } from '../utils/personas-loader.js';
 import { rebuildProtocolIndex } from '../utils/protocol-loader.js';
+import {
+  checkIntegrity,
+  checkComponentAnchors,
+  checkPurposeHealth,
+  type IntegrityReport,
+  type ComponentAnchorReport,
+  type PurposeHealthReport,
+} from '../utils/integrity-checker.js';
+import { parsePurposeFile, validateCrossFile, type PurposeFile } from '@a-company/purpose-core';
 
 // ============================================================================
 // Navigator constants (ported from packages/paradigm/src/commands/scan/navigator.ts)
@@ -132,6 +141,10 @@ export interface RebuildResult {
     broken: number;
   };
   componentTypeBreakdown?: Record<string, number>;
+  integrityReport?: IntegrityReport;
+  componentAnchorIssues?: number;
+  purposeHealth?: PurposeHealthReport;
+  crossFileIssues?: number;
 }
 
 export async function rebuildStaticFiles(
@@ -238,6 +251,55 @@ export async function rebuildStaticFiles(
     // Protocol index build is non-fatal
   }
 
+  // 8. Run integrity checks (non-fatal)
+  let integrityReport: IntegrityReport | undefined;
+  try {
+    integrityReport = checkIntegrity(aggregation, rootDir);
+  } catch {
+    // Integrity check is non-fatal
+  }
+
+  // 9. Component anchor validation (non-fatal)
+  let componentAnchorIssues: number | undefined;
+  try {
+    const anchorReport = checkComponentAnchors(aggregation.symbols, rootDir);
+    const issues = anchorReport.missing + anchorReport.outOfBounds;
+    if (issues > 0) {
+      componentAnchorIssues = issues;
+    }
+  } catch {
+    // Component anchor check is non-fatal
+  }
+
+  // 10. Purpose file health (non-fatal)
+  let purposeHealth: PurposeHealthReport | undefined;
+  try {
+    purposeHealth = checkPurposeHealth(aggregation.purposeFiles, rootDir);
+  } catch {
+    // Purpose health check is non-fatal
+  }
+
+  // 11. Cross-file .purpose validation (non-fatal)
+  let crossFileIssues: number | undefined;
+  try {
+    const parsedFiles: Array<{ filePath: string; data: PurposeFile }> = [];
+    for (const filePath of aggregation.purposeFiles) {
+      const result = parsePurposeFile(filePath);
+      if (result.data) {
+        parsedFiles.push({ filePath, data: result.data });
+      }
+    }
+    if (parsedFiles.length > 0) {
+      const crossResult = validateCrossFile(parsedFiles);
+      const warningCount = crossResult.issues.length;
+      if (warningCount > 0) {
+        crossFileIssues = warningCount;
+      }
+    }
+  } catch {
+    // Cross-file validation is non-fatal
+  }
+
   // Build breakdown
   const breakdown: Record<string, number> = {};
   for (const sym of aggregation.symbols) {
@@ -262,6 +324,10 @@ export async function rebuildStaticFiles(
     personaCount,
     protocolHealth,
     ...(Object.keys(componentTypeBreakdown).length > 0 ? { componentTypeBreakdown } : {}),
+    ...(integrityReport ? { integrityReport } : {}),
+    ...(componentAnchorIssues !== undefined ? { componentAnchorIssues } : {}),
+    ...(purposeHealth ? { purposeHealth } : {}),
+    ...(crossFileIssues !== undefined ? { crossFileIssues } : {}),
   };
 }
 

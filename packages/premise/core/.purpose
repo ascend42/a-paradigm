@@ -30,7 +30,7 @@ features:
       - '#graph-builder'
 components:
   aggregator:
-    description: '#aggregator: Main aggregation logic'
+    description: '#aggregator: Main aggregation logic — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols)'
   source-loader:
     description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:
