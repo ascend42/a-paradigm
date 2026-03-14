@@ -203,8 +203,6 @@ components:
     description: Real-time visualization of authorization flows
   portal-manager:
     description: Test generation and flow management
-  probe-protocol:
-    description: Protocol for visual-to-code mapping
   scan-generator:
     description: Generates scan-index.json for component mapping
   agent-spawner:
@@ -379,7 +377,7 @@ aspects:
       - aspect-graph
       - architecture
     anchors:
-      - packages/paradigm-mcp/src/tools/reindex.ts:140-175
+      - packages/paradigm-mcp/src/tools/reindex.ts:153-188
       - packages/paradigm-mcp/src/utils/aspect-graph.ts:1-50
     applies-to:
       - '#AspectGraph'

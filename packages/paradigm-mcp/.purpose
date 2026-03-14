@@ -105,7 +105,7 @@ description: |
   type: tool
   tags: [mcp]
   anchors:
-    - src/tools/history.ts:1-300
+    - src/tools/history.ts:1-294
 
 #NavigateTools:
   description: Codebase navigation tools (find, explore, context) with TTL caching
@@ -157,7 +157,7 @@ description: |
   tags: [mcp, conductor, auto-registration]
   anchors:
     - src/tools/conductor.ts:1-200
-    - src/utils/conductor-loader.ts:1-240
+    - src/utils/conductor-loader.ts:1-238
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation

@@ -90,19 +90,19 @@ description: |
   description: Column-based view grouping symbols by type
   tags: [ui]
   anchors:
-    - ui/src/components/Views/GridView.tsx:1-130
+    - ui/src/components/Views/GridView.tsx:1-127
 
 #ListView:
   description: Sortable table view of all symbols
   tags: [ui]
   anchors:
-    - ui/src/components/Views/ListView.tsx:1-130
+    - ui/src/components/Views/ListView.tsx:1-129
 
 #PropertiesPanel:
   description: Side panel for editing symbol properties, tags, and viewing references
   tags: [ui]
   anchors:
-    - ui/src/components/Panel/PropertiesPanel.tsx:1-350
+    - ui/src/components/Panel/PropertiesPanel.tsx:1-348
 
 #sentinel-sdk:
   description: Unified Sentinel SDK — TypeScript client for sending structured logs, metrics, and traces to Sentinel with batching, ring buffer, auto-retry, and graceful degradation. See also #SentinelRustClient in sentinel-rs for the Rust variant.
@@ -126,7 +126,7 @@ description: |
   description: Zustand store managing symbol nodes, filters, and layout state
   tags: [state]
   anchors:
-    - ui/src/store/nodesStore.ts:1-420
+    - ui/src/store/nodesStore.ts:1-397
 
 #SchemaRegistry:
   description: Schema-driven event registry — applications register event schemas, Sentinel ingests/stores/queries any structured event data

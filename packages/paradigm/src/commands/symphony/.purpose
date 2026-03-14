@@ -137,11 +137,11 @@ aspects:
     severity: critical
     tags: [security, symphony]
     anchors:
-      - ../../packages/paradigm-mcp/src/utils/symphony-loader.ts:600-650
+      - ../../../../../packages/paradigm-mcp/src/utils/symphony-loader.ts:600-650
   hard-deny-list:
     description: Certain file patterns (.env, *.key, *.pem, credentials) are always blocked regardless of approval
     category: invariant
     severity: critical
     tags: [security, symphony]
     anchors:
-      - ../../packages/paradigm-mcp/src/utils/symphony-loader.ts:660-690
+      - ../../../../../packages/paradigm-mcp/src/utils/symphony-loader.ts:660-690

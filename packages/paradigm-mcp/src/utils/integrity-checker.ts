@@ -224,21 +224,29 @@ function normalizeSymbolRef(ref: string): string | null {
 function findDuplicateSymbols(
   symbols: SymbolEntry[],
 ): IntegrityReport['duplicateSymbols'] {
-  const bySymbol = new Map<string, string[]>();
+  const bySymbol = new Map<string, Array<{ file: string; source: string }>>();
 
   for (const sym of symbols) {
-    const files = bySymbol.get(sym.symbol) || [];
-    if (!files.includes(sym.filePath)) {
-      files.push(sym.filePath);
+    const entries = bySymbol.get(sym.symbol) || [];
+    const existing = entries.find(e => e.file === sym.filePath);
+    if (!existing) {
+      entries.push({ file: sym.filePath, source: sym.source });
     }
-    bySymbol.set(sym.symbol, files);
+    bySymbol.set(sym.symbol, entries);
   }
 
   const duplicates: IntegrityReport['duplicateSymbols'] = [];
-  for (const [symbol, files] of bySymbol) {
-    if (files.length > 1) {
-      duplicates.push({ symbol, files });
+  for (const [symbol, entries] of bySymbol) {
+    if (entries.length <= 1) continue;
+
+    // Don't flag .purpose + portal.yaml overlap for the same package —
+    // gates are expected to be declared in both files.
+    if (entries.length === 2) {
+      const sources = entries.map(e => e.source).sort();
+      if (sources[0] === 'portal' && sources[1] === 'purpose') continue;
     }
+
+    duplicates.push({ symbol, files: entries.map(e => e.file) });
   }
 
   return duplicates;
@@ -281,7 +289,7 @@ function findMissingAnchors(
     if (!sym.anchors || sym.anchors.length === 0) continue;
 
     for (const anchor of sym.anchors) {
-      const filePath = resolveAnchorPath(anchor.path, rootDir);
+      const filePath = resolveAnchorPath(anchor.path, rootDir, sym.filePath);
       if (!fs.existsSync(filePath)) {
         missing.push({
           symbol: sym.symbol,
@@ -308,7 +316,7 @@ function findAnchorOutOfBounds(
     if (!sym.anchors || sym.anchors.length === 0) continue;
 
     for (const anchor of sym.anchors) {
-      const filePath = resolveAnchorPath(anchor.path, rootDir);
+      const filePath = resolveAnchorPath(anchor.path, rootDir, sym.filePath);
       if (!fs.existsSync(filePath)) continue; // Already caught by missing anchors
 
       const maxLine = getMaxLine(anchor);
@@ -356,7 +364,7 @@ export function checkComponentAnchors(
     if (!sym.anchors || sym.anchors.length === 0) continue;
 
     for (const anchor of sym.anchors) {
-      const filePath = resolveAnchorPath(anchor.path, rootDir);
+      const filePath = resolveAnchorPath(anchor.path, rootDir, sym.filePath);
 
       if (!fs.existsSync(filePath)) {
         report.missing++;
@@ -500,8 +508,22 @@ export function checkPurposeHealth(
 // Helpers
 // ============================================================================
 
-function resolveAnchorPath(anchorPath: string, rootDir: string): string {
+/**
+ * Resolve an anchor path. Tries relative to the .purpose file's directory first,
+ * then falls back to rootDir. This handles sub-package anchors like
+ * `packages/sentinel/.purpose` referencing `src/storage.ts`.
+ */
+function resolveAnchorPath(anchorPath: string, rootDir: string, purposeFilePath?: string): string {
   if (path.isAbsolute(anchorPath)) return anchorPath;
+
+  // Try relative to .purpose file's directory first
+  if (purposeFilePath) {
+    const purposeDir = path.dirname(purposeFilePath);
+    const relativePath = path.join(purposeDir, anchorPath);
+    if (fs.existsSync(relativePath)) return relativePath;
+  }
+
+  // Fall back to rootDir
   return path.join(rootDir, anchorPath);
 }
 

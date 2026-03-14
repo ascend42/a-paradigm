@@ -160,15 +160,23 @@ function findBrokenReferences(symbols: SymbolEntry[]): BrokenRef[] {
 }
 
 function findDuplicateSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; files: string[] }> {
-  const bySymbol = new Map<string, string[]>();
+  const bySymbol = new Map<string, Array<{ file: string; source: string }>>();
   for (const sym of symbols) {
-    const files = bySymbol.get(sym.symbol) || [];
-    if (!files.includes(sym.filePath)) files.push(sym.filePath);
-    bySymbol.set(sym.symbol, files);
+    const entries = bySymbol.get(sym.symbol) || [];
+    if (!entries.find(e => e.file === sym.filePath)) {
+      entries.push({ file: sym.filePath, source: sym.source });
+    }
+    bySymbol.set(sym.symbol, entries);
   }
   const dupes: Array<{ symbol: string; files: string[] }> = [];
-  for (const [symbol, files] of bySymbol) {
-    if (files.length > 1) dupes.push({ symbol, files });
+  for (const [symbol, entries] of bySymbol) {
+    if (entries.length <= 1) continue;
+    // Don't flag .purpose + portal.yaml overlap — gates are expected in both
+    if (entries.length === 2) {
+      const sources = entries.map(e => e.source).sort();
+      if (sources[0] === 'portal' && sources[1] === 'purpose') continue;
+    }
+    dupes.push({ symbol, files: entries.map(e => e.file) });
   }
   return dupes;
 }
@@ -179,12 +187,23 @@ function findOrphanedSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; fi
     .map(s => ({ symbol: s.symbol, file: s.filePath }));
 }
 
+function resolveAnchorPath(anchorPath: string, rootDir: string, purposeFilePath?: string): string {
+  if (path.isAbsolute(anchorPath)) return anchorPath;
+  // Try relative to .purpose file's directory first
+  if (purposeFilePath) {
+    const purposeDir = path.dirname(purposeFilePath);
+    const relativePath = path.join(purposeDir, anchorPath);
+    if (fs.existsSync(relativePath)) return relativePath;
+  }
+  return path.join(rootDir, anchorPath);
+}
+
 function findMissingAnchors(symbols: SymbolEntry[], rootDir: string): Array<{ symbol: string; anchor: string }> {
   const missing: Array<{ symbol: string; anchor: string }> = [];
   for (const sym of symbols) {
     if (!sym.anchors || sym.anchors.length === 0) continue;
     for (const anchor of sym.anchors) {
-      const filePath = path.isAbsolute(anchor.path) ? anchor.path : path.join(rootDir, anchor.path);
+      const filePath = resolveAnchorPath(anchor.path, rootDir, sym.filePath);
       if (!fs.existsSync(filePath)) {
         missing.push({ symbol: sym.symbol, anchor: anchor.raw });
       }
@@ -198,7 +217,7 @@ function findAnchorOutOfBounds(symbols: SymbolEntry[], rootDir: string): Array<{
   for (const sym of symbols) {
     if (!sym.anchors || sym.anchors.length === 0) continue;
     for (const anchor of sym.anchors) {
-      const filePath = path.isAbsolute(anchor.path) ? anchor.path : path.join(rootDir, anchor.path);
+      const filePath = resolveAnchorPath(anchor.path, rootDir, sym.filePath);
       if (!fs.existsSync(filePath)) continue;
       const maxLine = getMaxLine(anchor);
       if (maxLine <= 0) continue;

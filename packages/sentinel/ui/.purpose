@@ -25,7 +25,7 @@ description: |
   description: Top navigation with layout controls, filters, and theme toggle
   tags: [ui]
   anchors:
-    - src/components/Toolbar/Toolbar.tsx:1-290
+    - src/components/Toolbar/Toolbar.tsx:1-288
   components:
     - "#LayoutToggle"
     - "#TypeFilters"
@@ -47,7 +47,7 @@ description: |
   description: Infinite pan/zoom canvas for draggable symbol nodes
   tags: [ui]
   anchors:
-    - src/components/Canvas/Canvas.tsx:1-150
+    - src/components/Canvas/Canvas.tsx:1-117
   signals:
     - !node-moved
     - !node-selected
@@ -56,7 +56,7 @@ description: |
   description: Renders individual symbol nodes with type-specific styling
   tags: [ui]
   anchors:
-    - src/components/Nodes/NodeRenderer.tsx:1-105
+    - src/components/Nodes/NodeRenderer.tsx:1-90
 
 #ConnectionRenderer:
   description: Renders reference arrows between connected nodes
@@ -80,7 +80,7 @@ description: |
   description: Dropdown for symbol search and selection
   tags: [ui]
   anchors:
-    - src/components/Input/Autocomplete.tsx:1-48
+    - src/components/Input/Autocomplete.tsx:1-47
 
 #ConversationView:
   description: Interactive tree view of Symphony agent conversations — ThreadList sidebar with ConversationPanel showing NoteBubbles, intent badges, and real-time WebSocket updates
@@ -105,7 +105,7 @@ description: |
   description: Zustand store for symbol nodes, selection, and filters
   tags: [state]
   anchors:
-    - src/store/nodesStore.ts:1-420
+    - src/store/nodesStore.ts:1-397
   signals:
     - !node-selected
     - !filters-changed
