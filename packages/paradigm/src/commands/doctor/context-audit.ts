@@ -495,27 +495,40 @@ async function checkOrphanedSymbols(rootDir: string): Promise<ContextAuditResult
     }
   }
 
-  // Find symbols that are never referenced by any other symbol's related list
-  const orphaned: string[] = [];
-  for (const [symbol] of allSymbols) {
-    if (!referencedSymbols.has(symbol)) {
-      orphaned.push(symbol);
+  // Build set of symbols that DO reference others (have outgoing refs)
+  const hasOutgoingRefs = new Set<string>();
+  for (const cat of categories) {
+    const entries = index[cat];
+    if (!entries || typeof entries !== 'object') continue;
+    for (const [, entry] of Object.entries(entries)) {
+      if (entry.symbol && entry.related && Array.isArray(entry.related) && entry.related.length > 0) {
+        hasOutgoingRefs.add(entry.symbol);
+      }
     }
   }
 
-  if (orphaned.length > 0) {
+  // True isolates = not referenced AND don't reference anything.
+  // Symbols with outgoing refs but no incoming are tree roots — expected.
+  const isolated: string[] = [];
+  for (const [symbol] of allSymbols) {
+    if (!referencedSymbols.has(symbol) && !hasOutgoingRefs.has(symbol)) {
+      isolated.push(symbol);
+    }
+  }
+
+  if (isolated.length > 0) {
     results.push({
       check: 'orphaned-symbols',
       status: 'advisory',
-      message: `${orphaned.length} symbol${orphaned.length > 1 ? 's' : ''} with zero cross-references`,
-      details: orphaned.slice(0, 20),
-      fix: 'Add cross-references in .purpose files to connect orphaned symbols',
+      message: `${isolated.length} isolated symbol${isolated.length > 1 ? 's' : ''} (no connections to other symbols)`,
+      details: isolated.slice(0, 20),
+      fix: 'Wire isolated symbols into features or remove them from .purpose files',
     });
   } else {
     results.push({
       check: 'orphaned-symbols',
       status: 'ok',
-      message: 'All symbols have cross-references',
+      message: 'All symbols are connected',
     });
   }
 
