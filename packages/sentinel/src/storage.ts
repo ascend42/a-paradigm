@@ -725,6 +725,20 @@ export class SentinelStorage {
     this.save();
   }
 
+  resolveIncident(id: string, options?: { notes?: string; patternId?: string }): void {
+    this.updateIncident(id, {
+      status: 'resolved',
+      resolvedAt: new Date().toISOString(),
+    });
+    if (options?.notes) {
+      this.addIncidentNote(id, {
+        author: 'system',
+        content: options.notes,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   addIncidentNote(
     incidentId: string,
     note: Omit<IncidentNote, 'id'>
