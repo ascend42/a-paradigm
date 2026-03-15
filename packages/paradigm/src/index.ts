@@ -2054,11 +2054,49 @@ symphonyCmd
 
 symphonyCmd
   .command('serve')
-  .description('Start TCP server for remote Symphony linking')
+  .description('Start Symphony relay server for cross-machine networking')
   .option('--port <port>', 'Port to listen on', '3939')
+  .option('--public', 'Show connection string for internet access')
   .action(async (options) => {
     const { symphonyServeCommand } = await import('./commands/symphony/index.js');
     await symphonyServeCommand(options);
+  });
+
+// peers subcommands
+const peersCmd = symphonyCmd
+  .command('peers')
+  .description('Manage trusted remote peers');
+
+peersCmd
+  .command('list', { isDefault: true })
+  .description('List trusted peers and their agents')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { symphonyPeersCommand } = await import('./commands/symphony/peers.js');
+    await symphonyPeersCommand(options);
+  });
+
+peersCmd
+  .command('revoke <id>')
+  .description('Revoke trust for a peer (disconnects immediately)')
+  .action(async (id) => {
+    const { symphonyPeersRevokeCommand } = await import('./commands/symphony/peers.js');
+    await symphonyPeersRevokeCommand(id);
+  });
+
+peersCmd
+  .command('forget')
+  .description('Clear all peer trust records')
+  .option('--force', 'Skip confirmation')
+  .action(async (options) => {
+    const { symphonyPeersForgetCommand } = await import('./commands/symphony/peers.js');
+    await symphonyPeersForgetCommand(options);
+  });
+
+peersCmd
+  .action(async () => {
+    const { symphonyPeersCommand } = await import('./commands/symphony/peers.js');
+    await symphonyPeersCommand({});
   });
 
 symphonyCmd

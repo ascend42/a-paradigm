@@ -83,21 +83,61 @@ paradigm symphony approve freq-abc12345
 paradigm symphony approve freq-abc12345 --redact
 ```
 
-## Step 7: Remote Linking (Optional)
+## Step 7: Remote Linking
 
-Start a mail server on one machine:
+Connect Symphony agents across machines using the WebSocket relay.
 
-```sh
-paradigm symphony serve --port 3939
-```
+### LAN Pairing (Same WiFi)
 
-Connect from another machine:
+On Machine A (hub):
 
 ```sh
-paradigm symphony join --remote 192.168.1.100:3939
+paradigm symphony serve
 ```
 
-> Note: Remote linking is a Phase 0 stub. Full implementation in a future release.
+This displays a 6-digit pairing code. Share it with the person connecting.
+
+On Machine B (spoke):
+
+```sh
+paradigm symphony join --remote 192.168.1.42:3939
+```
+
+Enter the pairing code when prompted. Once connected, messages flow bidirectionally.
+
+### Internet Direct Connect
+
+On Machine A:
+
+```sh
+paradigm symphony serve --public
+```
+
+This shows a connection string with the pairing code embedded.
+
+On Machine B:
+
+```sh
+paradigm symphony join --remote 73.162.44.103:3939#847291
+```
+
+No interactive prompt needed — the code after `#` is used automatically.
+
+> **Note:** Internet mode requires port 3939 to be reachable (port forward, VPN, or SSH tunnel).
+
+### Managing Peers
+
+```sh
+paradigm symphony peers          # List trusted peers
+paradigm symphony peers revoke <id>  # Revoke + disconnect
+paradigm symphony peers forget --force  # Clear all peer trust
+```
+
+### How It Works
+
+The relay uses a hub-and-spoke topology. The `serve` machine acts as hub, and each `join --remote` machine is a spoke. The hub relays messages between all connected machines. Pairing codes rotate every 5 minutes, and authentication uses HMAC-SHA256 challenge-response.
+
+Remote agents appear in `paradigm symphony list` with a `(remote: peer-name)` tag. Messages to/from remote agents land in local inboxes — no changes to your workflow.
 
 ## Trust Configuration
 

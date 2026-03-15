@@ -797,3 +797,15 @@ If none of these solutions work:
 | "Agent shows as asleep" | Agent hasn't polled in 60s — ensure `/loop 10s paradigm_symphony_poll` is running |
 | "Thread not found" | Run `paradigm symphony threads` to list all threads |
 | "No agents found" | Run `paradigm symphony join` in each terminal first |
+
+### Networking
+
+| Issue | Solution |
+|-------|----------|
+| Peer not connecting | Check firewall allows port 3939 (TCP). On macOS, check System Settings > Network > Firewall |
+| Pairing code rejected | Codes rotate every 5 minutes. Get a fresh code from the hub terminal |
+| Auto-reconnect failing | Check that the hub (`paradigm symphony serve`) is still running. The spoke retries with exponential backoff (1s → 30s max) |
+| "Too many failed attempts" | Wait 60 seconds. After 3 wrong codes from the same IP, a cooldown is enforced |
+| Internet mode not working | Port 3939 must be reachable from the internet. Use port forwarding, VPN, or SSH tunnel (`ssh -R 3939:localhost:3939 server`) |
+| Remote agents not showing | Run `paradigm symphony peers` to verify the connection. Agents sync happens after successful pairing |
+| NAT/double-NAT issues | If both machines are behind NAT, use a relay server or SSH tunnel. Direct LAN connect only works on the same network |

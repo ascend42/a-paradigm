@@ -1188,30 +1188,34 @@ paradigm_assessment_arc_close({ arc_id: "arc-auth-hardening", status: "complete"
 
 ## paradigm symphony
 
-Agent-to-agent messaging for multi-session collaboration (Symphony Phase 0).
+Agent-to-agent messaging for multi-session collaboration. Supports local (single-machine) and networked (cross-machine) operation.
 
 | Subcommand | Arguments | Options | Description |
 |-----------|-----------|---------|-------------|
-| `link` | — | `--remote <ip>` | Link session to A-Mail network |
-| `unlink` | — | — | Remove from network |
+| `join` | — | `--remote <ip[:port][#code]>` | Join session to Symphony network (local or remote) |
+| `leave` | — | — | Remove from network |
 | `whoami` | — | — | Show identity + peers |
-| `list` | — | `--json` | List linked agents |
+| `list` | — | `--json` | List local + remote agents |
 | `send` | `<message>` | `--to <agent>`, `--thread <id>` | Send message |
 | `read` | — | — | Show unread messages |
 | `inbox` | — | — | Alias for read |
 | `threads` | — | `--json` | List threads |
 | `thread` | `<id>` | — | Show full thread |
 | `resolve` | `<id>` | `--decision <text>` | Resolve thread |
-| `status` | — | `--json` | Network overview |
-| `serve` | — | `--port <n>` | TCP server (Phase 0 stub) |
+| `status` | — | `--json` | Network overview (agents, peers, threads) |
+| `serve` | — | `--port <n>`, `--public` | Start WebSocket relay server for cross-machine networking |
+| `watch` | — | `--interval <ms>`, `--thread <id>`, `--quiet` | Zero-token real-time inbox monitor |
 | `request` | `<file>` | `--from <agent>`, `--reason <text>` | Request file |
 | `requests` | — | — | List pending requests |
 | `approve` | `<id>` | `--redact` | Approve file request |
 | `deny` | `<id>` | `--reason <text>` | Deny file request |
+| `peers` | — | `--json` | List trusted remote peers |
+| `peers revoke` | `<id>` | — | Revoke peer trust (disconnects immediately) |
+| `peers forget` | — | `--force` | Clear all peer trust records |
 
 Default action (no subcommand): shows status overview.
 
-**Quick start:**
+**Quick start (local):**
 ```sh
 # Terminal 1
 paradigm symphony join
@@ -1220,4 +1224,15 @@ paradigm symphony join
 paradigm symphony send "Can you share your auth middleware?" --to a-paradigm/core
 # Terminal 1
 paradigm symphony read
+```
+
+**Quick start (cross-machine):**
+```sh
+# Machine A (hub)
+paradigm symphony serve
+# Shows pairing code, e.g. 847 291
+
+# Machine B (spoke)
+paradigm symphony join --remote 192.168.1.42:3939
+# Enter pairing code when prompted
 ```

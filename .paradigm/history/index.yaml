@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-15T19:12:00.472Z'
+generated: '2026-03-15T19:17:32.446Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -8445,6 +8445,50 @@ by_symbol:
     fragility: low
     recent:
       - *ref_111
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-peek':
+    symbol: '#symphony-peek'
+    total_changes: 1
+    last_modified: '2026-03-15T19:15:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_112
+        id: h0183
+        ts: '2026-03-15T19:15:06Z'
+        type: implement
+        symbols:
+          - '#symphony-peek'
+          - '#symphony-watch'
+        author:
+          type: human
+          id: ascend
+        commit: 1f92610106c12768cbaaaf30c0ae4a7c5e646204
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm/src/commands/symphony/.purpose
+        description: 'chore: update .purpose files and reindex for symphony-peek + symphony-watch'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-watch':
+    symbol: '#symphony-watch'
+    total_changes: 1
+    last_modified: '2026-03-15T19:15:06Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_112
     contributors:
       human:
         - ascend

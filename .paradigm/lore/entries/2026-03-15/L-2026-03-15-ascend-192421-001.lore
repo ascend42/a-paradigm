@@ -1,0 +1,111 @@
+id: L-2026-03-15-ascend-192421-001
+type: milestone
+timestamp: '2026-03-15T19:24:21.014Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Symphony Goes Live — Zero-Cost Multi-Agent Orchestra (3.45.0)
+summary: Symphony is now a fully operational multi-agent communication system with near-zero monitoring cost. Agents coordinate via peek/poll ($0.02/hr per agent on Sonnet), humans watch for free via Platform UI and `symphony watch`, and everyone can participate in threaded conversations from browser, terminal, or MCP tools. This is the moment Paradigm became a true orchestra — multiple Claude Code sessions working as musicians on the same score.
+symbols_touched:
+  - '#SymphonySection'
+  - '#SymphonyStore'
+  - '#SymphonyRouter'
+  - '#SymphonyPeek'
+  - '#SymphonyWatch'
+  - '#ThreadsTab'
+  - '#NetworkTab'
+  - '#FilesTab'
+  - '#symphony-loader'
+  - '#PlatformServer'
+symbols_created:
+  - '#SymphonySection'
+  - '#SymphonyStore'
+  - '#SymphonyRouter'
+  - '#SymphonyPeek'
+  - '#SymphonyWatch'
+  - '#ThreadsTab'
+  - '#NetworkTab'
+  - '#FilesTab'
+decisions:
+  - id: three-tier-monitoring
+    decision: 'Three monitoring tiers: free (Platform UI + watch), near-free (peek at $0.02/hr), full (poll only on demand)'
+    rationale: 'User insight: polling doesn''t need AI. Separating detection (cheap) from processing (expensive) drops multi-agent coordination cost by 12x.'
+  - id: peek-over-push
+    decision: File-stat peek instead of true push/interrupt
+    rationale: Claude Code doesn't support external interrupts. fs.stat every 10s is ~15 tokens — close enough to free that push architecture isn't worth the complexity.
+  - id: status-blurb-on-heartbeat
+    decision: Agent status blurbs piggyback on existing heartbeat mechanism
+    rationale: Agents already call peek/poll regularly. Adding a status string costs nothing extra and gives humans immediate visibility into what each agent is doing.
+learnings:
+  - AI token cost is dominated by idle polling — separating detection from processing yields order-of-magnitude savings
+  - File-system watching (fs.stat) is effectively free and sufficient for inter-process coordination on a single machine
+  - The three-tier pattern (free human monitoring / near-free agent peek / full-cost agent processing) should be the default for any agent communication system
+  - Multi-agent orchestration doesn't need complex infrastructure — JSONL files + file watching + a browser UI covers the full workflow
+  - Status blurbs transform agents from opaque processes into observable musicians — small feature, massive UX impact
+verification:
+  status: pass
+  details:
+    paradigm-mcp-build: pass
+    paradigm-cli-build: pass
+    platform-ui-build: pass
+    npm-publish: pass
+    symphony-watch-startup: pass
+    peek-tool-registered: pass
+tags:
+  - arc:symphony
+  - arc:platform
+  - arc:multi-agent
+  - milestone
+  - breakthrough
+body: |-
+  ## What This Means
+
+  This session delivered the complete Symphony experience stack in one shot:
+
+  ### Layer 1: Platform UI (free)
+  The Symphony section in `paradigm serve` gives humans a real-time dashboard — thread list, conversation view with intent color-coding, agent network with status blurbs, file request approvals. All via HTTP polling, zero AI tokens. Humans can compose messages into any thread and direct agents from the browser.
+
+  ### Layer 2: Terminal Watch (free)
+  `paradigm symphony watch` is a pure Node.js file watcher. Color-coded messages stream to the terminal as they arrive. No AI involved. Works alongside the Platform UI or standalone.
+
+  ### Layer 3: Agent Peek (near-free)
+  `paradigm_symphony_peek` is an fs.stat check — no JSONL parsing, no message reading. Returns `{ hasNew: false }` 99% of the time at ~15 tokens per cycle. At `/loop 10s`, that's $0.02/hr on Sonnet. Only when messages actually arrive does the agent call full `paradigm_symphony_poll` to read and respond.
+
+  ### Layer 4: Agent Status Blurbs
+  Agents broadcast what they're working on: "Building dashboard API — 3 files modified". Visible in Platform Network tab, CLI, and MCP tools. Humans always know what each musician is playing.
+
+  ## The Economics
+
+  Two agents collaborating 24/7 on Sonnet: **~$0.96/day** for the messaging backbone. The old approach would've been $12/day. That's a 12x reduction. On Haiku it drops to $0.19/day — essentially free infrastructure for multi-agent collaboration.
+
+  ## The Metaphor Made Real
+
+  Symphony was always named for a reason — agents as musicians, the Score as their shared sheet music, threads as movements. With this release, you can literally:
+  - Open `paradigm serve` and watch the orchestra perform
+  - See each musician's status blurb ("playing the authentication movement")
+  - Jump into any thread from the browser to conduct
+  - Run `symphony watch` in a terminal for a live feed
+  - Two agents on deus-frontend and deus-backend coordinate in real-time for under a dollar a day
+
+  This isn't a prototype anymore. Deus is running it in production across both windows right now.
+
+  ## What's Next
+
+  - Phase 1: Conductor integration (native macOS overlay shows Symphony threads)
+  - Phase 2: Sentinel live view (Symphony events visualized in Sentinel's event stream — already bridged)
+  - Phase 3+: Cross-machine networking, consensus protocols, agent voting
+linked_lore:
+  - L-2026-03-15-ascend-184232-001
+linked_commits:
+  - b530caf1
+  - e9cfebad
+  - 08f7fa7d
+  - 2ccce78c
+  - 1f926101
+  - 74f113d7
+confidence: 0.95
+git_context:
+  ref: 74f113d72db8349e87c9bc54ba6451edc72b794d
+  branch: main
+  dirty: true

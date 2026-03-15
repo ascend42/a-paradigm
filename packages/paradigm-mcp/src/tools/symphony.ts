@@ -413,6 +413,23 @@ export async function handleSymphonyTool(
       const unread = readInbox(identity.id);
       const pendingRequests = listFileRequests('pending');
 
+      // Load peer info
+      let peers: Array<{ id: string; address: string; agents: number; lastSeen: string }> = [];
+      try {
+        const { loadPeers } = await import('../utils/symphony-peers.js');
+        const allPeers = loadPeers();
+        peers = allPeers
+          .filter(p => !p.revoked)
+          .map(p => ({
+            id: p.id,
+            address: p.address,
+            agents: p.agents?.length ?? 0,
+            lastSeen: p.lastSeen,
+          }));
+      } catch {
+        // peers module not available — ignore
+      }
+
       return {
         handled: true,
         text: JSON.stringify({
@@ -430,6 +447,7 @@ export async function handleSymphonyTool(
             lastPoll: a.lastPoll,
             statusBlurb: a.statusBlurb,
           })),
+          peers,
           activeThreads: threads.map(t => ({
             id: t.id,
             topic: t.topic,

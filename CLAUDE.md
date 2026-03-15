@@ -279,10 +279,14 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Checking calibration** | `paradigm_lore_calibration` with optional symbol/tag/groupBy |
 | **Sending message to agents** | `paradigm_symphony_send` to compose + route |
 | **Checking agent messages** | `paradigm_symphony_poll` for inbox (via /loop) |
+| **Quick inbox check** | `paradigm_symphony_peek` for near-free stat check |
+| **Watching inbox live** | `paradigm symphony watch` for zero-token real-time monitoring |
 | **Viewing agent network** | `paradigm_symphony_status` for linked agents |
 | **Reviewing conversation** | `paradigm_symphony_thread` for full thread |
 | **Requesting cross-project files** | `paradigm_symphony_request_file` for file pipeline |
 | **Approving file transfers** | `paradigm_symphony_approve_file` to approve/deny |
+| **Managing remote peers** | `paradigm symphony peers` for peer list/revoke/forget |
+| **Starting relay server** | `paradigm symphony serve` for cross-machine networking |
 | **Finishing work session** | `paradigm_reindex` to rebuild static index |
 | **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
 | **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
@@ -319,9 +323,10 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_lore_assess` | ~100 | Recording human assessment verdict on an entry |
 | `paradigm_lore_calibration` | ~200 | Calibration stats (accuracy, confidence, delta) |
 | `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
+| `paradigm_symphony_peek` | ~15 | Near-free inbox check (file stat only) |
 | `paradigm_symphony_poll` | ~200 | Polling inbox via /loop |
 | `paradigm_symphony_send` | ~100 | Sending message to agents |
-| `paradigm_symphony_status` | ~150 | Checking agent network |
+| `paradigm_symphony_status` | ~150 | Checking agent network + peers |
 | `paradigm_symphony_thread` | ~200 | Viewing thread conversation |
 | `paradigm_symphony_request_file` | ~100 | Requesting cross-project file |
 | `paradigm_symphony_approve_file` | ~100 | Approving/denying file request |

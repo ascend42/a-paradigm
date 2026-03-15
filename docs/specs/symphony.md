@@ -1274,33 +1274,35 @@ Sentinel              Conductor            Agent
 - [ ] `.env` files are always denied regardless of approval
 - [ ] File request expires after 1 hour without action
 
-### Phase 1: Conductor Auto-Link
-> **Goal:** Conductor automatically links all detected Claude Code sessions
-> into the A-Mail network — zero manual `paradigm symphony join` needed
+### Phase 1: Cross-Machine Networking
+> **Goal:** Connect Symphony agents across machines using a WebSocket relay
+> with pairing-code authentication — no Bonjour/NWConnection dependency
+>
+> **Implemented in 3.46.0**
 
-**Conductor (Swift):**
-- [ ] On detecting a new Claude Code session → auto-create mailbox
-- [ ] `AgentMailbox` integration — Conductor writes to `~/.paradigm/score/agents/`
-- [ ] `MessageRelay` — route messages between local mailboxes (same file protocol)
-- [ ] Thread tracking (thread roots, participant lists)
-- [ ] Mailbox garbage collection
+The original spec called for Apple Network framework (NWBrowser + NWListener)
+with Bonjour zero-config discovery. The actual implementation uses a simpler
+WebSocket relay with hub-and-spoke topology, which works across LAN and
+internet without platform-specific APIs.
 
-**Integration:**
-- [ ] Conductor reads `outbox.jsonl`, routes to appropriate `inbox.jsonl`
-- [ ] Auto-register `/loop` when Conductor manages the session
-- [ ] Conductor UI shows active threads in overlay panel
-
-**File Pipeline (Conductor UI):**
-- [ ] File request notification in Conductor overlay (native macOS alert)
-- [ ] Approve/deny/redact buttons in overlay
-- [ ] Voice approval: "approve" / "deny" via Conductor voice pipeline
-- [ ] File transfer activity in Conductor status panel
+**Approach taken:**
+- [x] Hub-and-spoke WebSocket relay on port 3939
+- [x] 6-digit pairing codes (rotate every 5 minutes) for authentication
+- [x] HMAC-SHA256 challenge-response after pairing
+- [x] `paradigm symphony serve` starts hub; `paradigm symphony join --remote` connects spoke
+- [x] Internet mode via `--public` flag (requires port forwarding / VPN / SSH tunnel)
+- [x] `paradigm symphony peers` for listing, revoking, and forgetting trusted peers
+- [x] Exponential backoff reconnect (1s → 30s max) on spoke side
+- [x] Cooldown after 3 failed pairing attempts from the same IP
+- [x] Remote agents appear in `paradigm symphony list` with `(remote: peer-name)` tag
+- [x] Messages to/from remote agents land in local inboxes — no workflow changes
 
 **Validation:**
-- [ ] Start Conductor + 2 Claude Code sessions → auto-linked, no commands needed
-- [ ] Same messaging works as Phase 0 but with zero setup
-- [ ] Conductor shows thread activity in overlay
-- [ ] File requests show as native notifications with approve/deny actions
+- [x] Two machines on same WiFi connect via pairing code
+- [x] Internet direct connect works with port forwarding
+- [x] Peer revoke disconnects immediately
+- [x] Spoke auto-reconnects when hub restarts
+- [x] Remote agents visible in `paradigm symphony list` and MCP tools
 
 ### Phase 2: Sentinel Conversation View
 > **Goal:** Live visualization of agent conversations in Sentinel
@@ -1659,10 +1661,12 @@ Symphony emits its own metrics via Sentinel:
 - `.env` files hard-blocked even with human approval
 - Trust config controls auto-approve patterns per user
 
-### Phase 1 (Conductor Auto-Link)
-- Conductor auto-links all Claude Code sessions — no manual commands
-- Same messaging as Phase 0 but with zero setup
-- File requests show as native macOS notifications with approve/deny
+### Phase 1 (Cross-Machine Networking) — Implemented in 3.46.0
+- WebSocket relay with hub-and-spoke topology (not Bonjour/NWConnection)
+- 6-digit pairing codes with HMAC-SHA256 challenge-response auth
+- `paradigm symphony serve` (hub) + `paradigm symphony join --remote` (spoke)
+- Works across LAN and internet (with port forwarding / VPN / SSH tunnel)
+- `paradigm symphony peers` for peer management (list/revoke/forget)
 
 ### Phase 2 (Sentinel View)
 - Conversation tree renders live in browser

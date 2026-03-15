@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm-mcp",
-  "version": "3.45.0",
+  "version": "3.46.0",
   "private": true,
   "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
   "type": "module",
@@ -29,6 +29,7 @@
     "@a-company/sentinel": "*",
     "js-yaml": "^4.1.0",
     "sql.js": "^1.10.3",
+    "ws": "^8.19.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

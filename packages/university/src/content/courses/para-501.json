@@ -955,6 +955,90 @@
           "explanation": "paradigm_platform_observe is the dedicated tool for reading UI state. It sends an 'observe' command to the Platform server, which returns the UserStateTracker's accumulated state: current section, selected symbol, theme, mute status, connected agents, and optionally active highlights/annotations. This is real-time data from the server, not a file read."
         }
       ]
+    },
+    {
+      "id": "symphony-networking",
+      "title": "Symphony Networking: Cross-Machine Relay",
+      "content": "## Beyond Single-Machine Messaging\n\nSymphony Phase 0 (A-Mail) established file-based agent-to-agent messaging on a single machine — JSONL mailboxes at `~/.paradigm/score/`, polled via `/loop`. But what happens when two developers on the same WiFi, or at different locations, want their Claude instances to collaborate?\n\nSymphony Phase 1 adds cross-machine networking via a WebSocket relay. The key design principle: **the local mailbox model is unchanged**. Networking is a transparent sync layer that watches local outboxes and delivers remote messages to local inboxes.\n\n## Hub-and-Spoke Topology\n\nOne machine runs `paradigm symphony serve` (the **hub**), and others connect with `paradigm symphony join --remote` (the **spokes**). The hub relays messages between all connected machines.\n\n```\nMachine A (Hub)                     Machine B (Spoke)\n┌─────────────────────┐           ┌─────────────────────┐\n│ ~/.paradigm/score/  │           │ ~/.paradigm/score/  │\n│   agents/projA/core │           │   agents/projB/core │\n│     inbox.jsonl     │◄────ws───►│     inbox.jsonl     │\n│     outbox.jsonl    │  :3939    │     outbox.jsonl    │\n└─────────────────────┘           └─────────────────────┘\n```\n\nThe relay watches each local agent's outbox file (polling every 2 seconds via `fs.stat`). When new messages appear, they're pushed to all connected peers as WebSocket frames. Incoming messages from peers are written to the appropriate local inbox via `appendToInbox()`.\n\n## Pairing & Authentication\n\nSecurity is critical when connecting machines over a network. Symphony uses a pairing code + HMAC challenge-response protocol:\n\n1. The hub generates a 32-byte random secret and derives a **6-digit pairing code**\n2. The code is displayed on the hub's terminal\n3. The spoke connects and receives a `hello` frame with a random challenge nonce\n4. The user enters the code on the spoke terminal (or embeds it in the connection string)\n5. The spoke computes `HMAC-SHA256(challenge, SHA256(code))` and sends an `auth` frame\n6. The hub verifies the code and HMAC proof, then sends `auth_ok` with its agent list\n\nPairing codes rotate every 5 minutes. After 3 failed attempts from the same IP, a 60-second cooldown is enforced. Peer records are saved to `~/.paradigm/score/peers.json` (file mode 0600) for auto-reconnect.\n\n## Two Connection Modes\n\n### LAN Pairing (same WiFi)\n\n```sh\n# Machine A (hub)\nparadigm symphony serve\n# Shows: Pairing Code: 847 291\n\n# Machine B (spoke)\nparadigm symphony join --remote 192.168.1.42:3939\n# Prompted for code\n```\n\n### Internet Direct Connect\n\n```sh\n# Machine A\nparadigm symphony serve --public\n# Shows connection string\n\n# Machine B\nparadigm symphony join --remote 73.162.44.103:3939#847291\n# Code embedded — no prompt\n```\n\nInternet mode requires port 3939 to be reachable (port forward, VPN, or SSH tunnel).\n\n## Trust Management\n\nPeers are managed via CLI commands:\n\n- `paradigm symphony peers` — List trusted peers with agent counts and last-seen times\n- `paradigm symphony peers revoke <id>` — Immediately disconnect and block reconnection\n- `paradigm symphony peers forget --force` — Clear all peer trust records\n\nExisting `trust.yaml` hard-deny patterns (`.env*`, `*.key`, `*.pem`) apply to remote file requests — the trust boundary extends across the network.\n\n## Relay Internals\n\nThe `SymphonyRelay` class handles both server and client modes:\n\n- **Outbox watcher**: Polls every 2s, compares outbox line counts against stored positions, forwards new messages\n- **Deduplication**: Bounded `Set<string>` of message IDs (max 10,000) prevents duplicate delivery\n- **Keepalive**: Ping/pong every 30s with 10s pong timeout. Dead connections are auto-terminated\n- **Auto-reconnect**: Client mode uses exponential backoff (1s → 2s → 4s → ... → 30s max)\n- **Rate limiting**: 3 failed auth attempts from the same IP triggers a 60s cooldown\n\n## Remote Agent Visibility\n\nRemote agents appear throughout the Symphony CLI and MCP tools:\n\n- `paradigm symphony list` shows remote agents with a `(remote: peer-name)` tag\n- `paradigm symphony status` includes peer count and remote agent totals\n- `paradigm_symphony_status` MCP tool returns a `peers` array in its response\n- Platform UI `GET /api/symphony/peers` endpoint returns connected peer data\n\nLocal MCP tools (`peek`, `poll`, `send`) work unchanged — they just read/write local files. The relay handles the network transport transparently.\n\n## Backward Compatibility\n\nIf `paradigm symphony serve` is never run, Symphony operates exactly as Phase 0: local-only file-based messaging. Networking is purely additive — no existing workflows change.",
+      "keyConcepts": [
+        "Hub-and-spoke topology: one serve (hub), multiple join --remote (spokes)",
+        "WebSocket relay watches local outboxes and delivers remote messages to local inboxes",
+        "Pairing: 6-digit code + HMAC-SHA256 challenge-response authentication",
+        "Codes rotate every 5 minutes; 3 failed auth attempts trigger 60s cooldown",
+        "Two modes: LAN pairing (interactive code) and internet direct connect (embedded code in connection string)",
+        "Peer trust stored in ~/.paradigm/score/peers.json (mode 0600)",
+        "Trust management: peers list/revoke/forget commands",
+        "Outbox watcher polls every 2s; dedup via bounded Set<string> (max 10,000)",
+        "Auto-reconnect with exponential backoff (1s → 30s max)",
+        "Remote agents visible in list/status CLI and MCP tools with peer provenance"
+      ],
+      "quiz": [
+        {
+          "id": "net-q1",
+          "question": "Developer A runs `paradigm symphony serve` and sees pairing code 472831. Developer B runs `paradigm symphony join --remote 192.168.1.42:3939`. What happens next?",
+          "choices": {
+            "A": "Developer B's agents automatically appear in A's inbox",
+            "B": "Developer B is prompted to enter the 6-digit pairing code from A's terminal",
+            "C": "The connection fails because Developer B didn't specify the --public flag",
+            "D": "Developer B must also run `paradigm symphony serve` to create a peer-to-peer link",
+            "E": "Developer B receives A's full agent list immediately without authentication"
+          },
+          "correct": "B",
+          "explanation": "When connecting via --remote without an embedded code (no # in the address), the user is prompted to enter the 6-digit pairing code displayed on the hub. The code is used to compute an HMAC proof for authentication. Only after successful verification does the agent list exchange occur."
+        },
+        {
+          "id": "net-q2",
+          "question": "A spoke machine loses its network connection to the hub. What happens?",
+          "choices": {
+            "A": "All local messages are deleted and the agent must re-pair from scratch",
+            "B": "The spoke immediately attempts to reconnect using a fixed 5-second interval",
+            "C": "The spoke schedules reconnect with exponential backoff (1s → 2s → 4s → ... → 30s max)",
+            "D": "The spoke shuts down and the user must manually restart `paradigm symphony join`",
+            "E": "The hub removes the spoke's peer record from peers.json"
+          },
+          "correct": "C",
+          "explanation": "The client-mode relay uses exponential backoff for auto-reconnect: starting at 1 second and doubling each attempt up to a maximum of 30 seconds. On successful reconnect, the delay resets to 1 second. Local messages are unaffected — they remain in the JSONL files."
+        },
+        {
+          "id": "net-q3",
+          "question": "An attacker tries to brute-force the pairing code. After entering 3 wrong codes from IP 10.0.0.5, what happens on the next attempt?",
+          "choices": {
+            "A": "The pairing code is rotated and a new code must be obtained from the hub",
+            "B": "The hub blocks all incoming connections permanently until restarted",
+            "C": "The connection is accepted but messages are quarantined for review",
+            "D": "The hub sends `auth_fail` with 'Too many failed attempts' and enforces a 60-second cooldown for that IP",
+            "E": "The hub disconnects but allows immediate retry with the correct code"
+          },
+          "correct": "D",
+          "explanation": "After 3 failed auth attempts from the same IP address, the relay enforces a 60-second cooldown. During this period, any connection from that IP receives an immediate auth_fail with the message 'Too many failed attempts — try again later' and is disconnected."
+        },
+        {
+          "id": "net-q4",
+          "question": "How does the relay prevent duplicate message delivery when two peers forward the same message?",
+          "choices": {
+            "A": "Messages include a TTL counter that decrements on each hop",
+            "B": "A bounded Set of seen message IDs (max 10,000) skips already-processed messages",
+            "C": "Each peer maintains a sequence number and only accepts higher-numbered messages",
+            "D": "The hub assigns unique relay IDs to prevent duplicates",
+            "E": "Messages are only forwarded once per minute, allowing time for dedup"
+          },
+          "correct": "B",
+          "explanation": "The relay maintains a bounded Set<string> of message IDs it has already processed. When a message arrives, if its ID is in the set, the relay sends an ack but skips delivery. When the set exceeds 10,000 entries, the oldest half is evicted. This prevents both echo (receiving your own message back) and multi-path duplicates."
+        },
+        {
+          "id": "net-q5",
+          "question": "Developer B wants to connect to Developer A's machine over the internet. Developer A runs `paradigm symphony serve --public`. What is the correct command for Developer B?",
+          "choices": {
+            "A": "`paradigm symphony join --remote devA.example.com` and enter the code when prompted",
+            "B": "`paradigm symphony join --remote 73.162.44.103:3939#847291` with the embedded code",
+            "C": "`paradigm symphony serve --connect 73.162.44.103:3939`",
+            "D": "`paradigm symphony peers add 73.162.44.103:3939 --code 847291`",
+            "E": "`paradigm symphony join --public 73.162.44.103`"
+          },
+          "correct": "B",
+          "explanation": "Internet direct connect uses the connection string format: address:port#code. The --public flag on the hub displays this connection string. The spoke parses the embedded code from after the # character and uses it automatically — no interactive prompt needed. Port 3939 must be reachable from the internet (port forward, VPN, or SSH tunnel)."
+        }
+      ]
     }
   ]
 }

@@ -17,3 +17,15 @@ components:
     description: "HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command."
     type: loader
     tags: [feature, platform, agent-ui]
+  symphony-peers:
+    description: "Peer trust records for Symphony cross-machine networking — peers.json CRUD, pairing code generation/verification, HMAC authentication."
+    type: loader
+    tags: [feature, symphony, networking]
+    anchors:
+      - symphony-peers.ts:1-229
+  symphony-relay:
+    description: "WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect."
+    type: integration
+    tags: [feature, symphony, networking]
+    anchors:
+      - symphony-relay.ts:1-925

@@ -85,6 +85,7 @@ export interface SymphonyMessage {
   symbols: string[];
   attachments?: Attachment[];
   metadata?: MessageMetadata;
+  origin?: string;  // Peer ID that originated this message (set by relay)
 }
 
 export type FileUrgency = 'normal' | 'urgent';
@@ -160,7 +161,7 @@ export interface TrustConfig {
 // Constants
 // ────────────────────────────────────────────────────────
 
-const SCORE_DIR = path.join(os.homedir(), '.paradigm', 'score');
+export const SCORE_DIR = path.join(os.homedir(), '.paradigm', 'score');
 const LEGACY_MAIL_DIR = path.join(os.homedir(), '.paradigm', 'mail');
 const AGENTS_DIR = path.join(SCORE_DIR, 'agents');
 const THREADS_DIR = path.join(SCORE_DIR, 'threads');

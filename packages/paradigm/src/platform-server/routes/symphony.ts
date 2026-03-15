@@ -76,6 +76,27 @@ export function createSymphonyRouter(
     }
   });
 
+  // ── Peers ──────────────────────────────────────────────
+
+  router.get('/peers', async (_req: Request, res: Response) => {
+    try {
+      const { loadPeers } = await import('../../../../paradigm-mcp/src/utils/symphony-peers.js');
+      const peers = loadPeers();
+      const result = peers.map(p => ({
+        id: p.id,
+        displayName: p.displayName,
+        address: p.address,
+        connectedAt: p.connectedAt,
+        lastSeen: p.lastSeen,
+        revoked: p.revoked,
+        agents: p.agents || [],
+      }));
+      res.json({ peers: result });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to list peers', detail: String(err) });
+    }
+  });
+
   // ── Threads ─────────────────────────────────────────────
 
   router.get('/threads', (req: Request, res: Response) => {

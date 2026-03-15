@@ -25,6 +25,19 @@ export interface SymphonyResolveOptions {
 
 export interface SymphonyServeOptions {
   port?: string;
+  public?: boolean;
+}
+
+export interface SymphonyPeersOptions {
+  json?: boolean;
+}
+
+export interface SymphonyPeersRevokeOptions {
+  // no extra options
+}
+
+export interface SymphonyPeersForgetOptions {
+  force?: boolean;
 }
 
 export interface SymphonyRequestOptions {

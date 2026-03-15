@@ -1,0 +1,70 @@
+id: L-2026-03-15-ascend-232403-001
+type: milestone
+timestamp: '2026-03-15T23:24:03.718Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Symphony Phase 1: Cross-Machine Networking'
+summary: Implemented WebSocket relay for cross-machine Symphony messaging. Hub-and-spoke topology with pairing code + HMAC-SHA256 authentication. Three new files (symphony-relay.ts, symphony-peers.ts, peers.ts CLI), seven modified code files, docs/university/CHANGELOG updates. Version bump to 3.46.0.
+symbols_touched:
+  - '#symphony-relay'
+  - '#symphony-peers'
+  - '#symphony-serve'
+  - '#symphony-join'
+  - '#symphony-list'
+  - '#symphony-status'
+  - '#symphony-loader'
+  - '!peer-connected'
+  - '!peer-disconnected'
+symbols_created:
+  - '#symphony-relay'
+  - '#symphony-peers'
+  - '#symphony-peers-revoke'
+  - '#symphony-peers-forget'
+  - '!peer-connected'
+  - '!peer-disconnected'
+files_created:
+  - packages/paradigm-mcp/src/utils/symphony-relay.ts
+  - packages/paradigm-mcp/src/utils/symphony-peers.ts
+  - packages/paradigm/src/commands/symphony/peers.ts
+files_modified:
+  - packages/paradigm-mcp/src/utils/symphony-loader.ts
+  - packages/paradigm-mcp/src/tools/symphony.ts
+  - packages/paradigm/src/commands/symphony/index.ts
+  - packages/paradigm/src/commands/symphony/types.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/platform-server/routes/symphony.ts
+  - packages/paradigm-mcp/package.json
+  - packages/paradigm/package.json
+  - CHANGELOG.md
+  - docs/guides/symphony-quickstart.md
+  - docs/specs/symphony.md
+  - .paradigm/docs/troubleshooting.md
+  - CLAUDE.md
+  - packages/university/src/content/courses/para-501.json
+decisions:
+  - id: ws-relay
+    decision: Use WebSocket relay with hub-and-spoke topology instead of peer-to-peer mesh
+    rationale: Simpler implementation, one machine serves as hub relaying to all spokes. Avoids NAT traversal complexity of mesh topology.
+  - id: pairing-auth
+    decision: 6-digit pairing code + HMAC-SHA256 challenge-response for authentication
+    rationale: Human-friendly pairing (easy to read aloud) with cryptographic proof to prevent replay attacks. Codes rotate every 5 minutes.
+  - id: transparent-sync
+    decision: Relay watches outboxes and writes to inboxes — no changes to existing MCP tools
+    rationale: Existing symphony_poll, symphony_send, symphony_peek all work unchanged. Networking is a transparent sync layer on the file-based mailbox model.
+verification:
+  status: partial
+  details:
+    build: pass
+    reindex: pass
+    manual-test: untested
+tags:
+  - symphony
+  - networking
+  - arc:symphony-phases
+confidence: 0.85
+git_context:
+  ref: 74f113d72db8349e87c9bc54ba6451edc72b794d
+  branch: main
+  dirty: true

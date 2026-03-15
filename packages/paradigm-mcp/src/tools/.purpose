@@ -20,7 +20,7 @@ components:
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]
   symphony-status:
-    description: List agents, threads, and unread count in The Score
+    description: List agents, threads, peers, and unread count in The Score
     type: tool
     parent: '#ToolHandlers'
     tags: [feature, symphony, mcp]

@@ -5,6 +5,32 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.46.0] — 2026-03-15
+
+### Added
+
+- **Symphony Phase 1: Cross-Machine Networking** — WebSocket relay for multi-machine agent communication. Hub-and-spoke topology: `paradigm symphony serve` runs the hub, `paradigm symphony join --remote <ip>` connects spokes. Messages bridge transparently between local JSONL mailboxes.
+- **Pairing Security** — 6-digit pairing codes with HMAC-SHA256 challenge-response authentication. Codes rotate every 5 minutes. 3 failed auth attempts from same IP triggers 60s cooldown. Peer secrets stored in `~/.paradigm/score/peers.json` (mode 0600).
+- **`paradigm symphony peers`** — Peer trust management CLI: `peers list`, `peers revoke <id>`, `peers forget --force`.
+- **Auto-reconnect** — Client mode reconnects with exponential backoff (1s → 30s max) when the hub drops.
+- **Internet Direct Connect** — `paradigm symphony serve --public` displays a connection string with embedded pairing code. `paradigm symphony join --remote <ip>:3939#847291` skips interactive prompt.
+- **Remote agent visibility** — `paradigm symphony list` shows remote agents with `(remote: peer-name)` tag. `paradigm symphony status` shows peer count and remote agent count.
+- **MCP `paradigm_symphony_status`** — Now includes `peers` array with id, address, agent count, and lastSeen for each connected peer.
+- **Platform REST `GET /api/symphony/peers`** — Returns trusted peer list for the Platform UI network tab.
+- **Outbox watcher** — Relay polls local outboxes every 2s, forwarding new messages to all connected peers. Dedup via bounded message ID set (max 10,000).
+- **Keepalive** — Ping/pong every 30s with 10s timeout. Dead connections auto-terminated.
+
+### Changed
+
+- **`symphonyServeCommand`** — Upgraded from Phase 0 TCP stub to full WebSocket relay server with pairing code display, code rotation, and peer event logging.
+- **`symphonyJoinCommand`** — Remote path now connects via WebSocket relay with HMAC authentication (previously logged "not yet implemented").
+- **`symphonyListCommand`** — Shows remote agents from trusted peers below local agents section.
+- **`symphonyStatusCommand`** — Includes peer connection info (count, addresses, agent totals).
+- **`SymphonyMessage`** — Added optional `origin?: string` field for relay provenance tracking.
+- **`SCORE_DIR`** — Now exported from `symphony-loader.ts` for use by relay and peers modules.
+
+Symbols: #symphony-relay, #symphony-peers, #symphony-serve, #symphony-peers-revoke, #symphony-peers-forget, !peer-connected, !peer-disconnected
+
 ## [3.45.0] — 2026-03-15
 
 ### Added

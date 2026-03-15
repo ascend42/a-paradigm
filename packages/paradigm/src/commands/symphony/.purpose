@@ -45,9 +45,21 @@ components:
     type: command
     tags: [feature, symphony]
   symphony-serve:
-    description: Start TCP server for remote Symphony linking (Phase 0 stub)
+    description: Start WebSocket relay server for cross-machine Symphony networking — pairing codes, message relay, auto-reconnect
     type: command
-    tags: [feature, symphony]
+    tags: [feature, symphony, networking]
+  symphony-peers:
+    description: List trusted remote peers and their agents
+    type: command
+    tags: [feature, symphony, networking]
+  symphony-peers-revoke:
+    description: Revoke trust for a peer — disconnects immediately, blocks reconnect
+    type: command
+    tags: [feature, symphony, networking]
+  symphony-peers-forget:
+    description: Clear all peer trust records — requires --force
+    type: command
+    tags: [feature, symphony, networking]
   symphony-request:
     description: Request a file from another agent's project
     type: command
@@ -133,6 +145,14 @@ signals:
     description: File content was delivered to the requesting agent
     category: business
     tags: [symphony]
+  peer-connected:
+    description: A remote peer completed pairing and connected via WebSocket relay
+    category: lifecycle
+    tags: [symphony, networking]
+  peer-disconnected:
+    description: A remote peer disconnected from the relay
+    category: lifecycle
+    tags: [symphony, networking]
 
 aspects:
   human-gated-transfer:

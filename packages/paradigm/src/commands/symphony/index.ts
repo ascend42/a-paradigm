@@ -7,7 +7,6 @@
 
 import chalk from 'chalk';
 import * as path from 'path';
-import * as net from 'net';
 import * as fs from 'fs';
 import * as os from 'os';
 import type {
@@ -63,8 +62,8 @@ export async function symphonyJoinCommand(options: SymphonyJoinOptions): Promise
   const rootDir = process.cwd();
 
   if (options.remote) {
-    console.log(chalk.yellow(`Remote linking to ${options.remote} — not yet implemented in Phase 0.`));
-    console.log(chalk.gray('Remote linking will be available in a future Symphony phase.'));
+    // Remote join — connect to a Symphony relay server
+    await symphonyJoinRemote(rootDir, options.remote);
     return;
   }
 
@@ -87,6 +86,110 @@ export async function symphonyJoinCommand(options: SymphonyJoinOptions): Promise
   }
 
   console.log(chalk.gray(`\n  Tip: Set up polling with: /loop 10s paradigm_symphony_poll`));
+}
+
+/**
+ * Connect to a remote Symphony relay server.
+ * Parses the address, extracts optional embedded pairing code, authenticates.
+ */
+async function symphonyJoinRemote(rootDir: string, remote: string): Promise<void> {
+  const { SymphonyRelay } = await import('../../../../paradigm-mcp/src/utils/symphony-relay.js');
+
+  // Parse address — may include embedded code after '#'
+  let address: string;
+  let embeddedCode: string | undefined;
+
+  if (remote.includes('#')) {
+    const parts = remote.split('#');
+    address = parts[0];
+    embeddedCode = parts[1];
+  } else {
+    address = remote;
+  }
+
+  // Add default port if not specified
+  if (!address.includes(':')) {
+    address = `${address}:3939`;
+  }
+
+  // Register locally first
+  let identity = getMyIdentity(rootDir);
+  if (!identity) {
+    identity = registerAgent(rootDir);
+  }
+
+  // Get pairing code — either embedded or prompt user
+  let code: string;
+  if (embeddedCode) {
+    code = embeddedCode;
+    console.log(chalk.cyan(`\n  Connecting to ${address} with embedded pairing code...`));
+  } else {
+    console.log(chalk.cyan(`\n  Connecting to ${address}...`));
+    console.log(chalk.white('  Enter the 6-digit pairing code shown on the host:'));
+    // Read code from stdin
+    code = await readLineFromStdin('  Code: ');
+    code = code.trim();
+    if (!/^\d{6}$/.test(code)) {
+      console.log(chalk.red('  Invalid code. Must be 6 digits.'));
+      return;
+    }
+  }
+
+  const relay = new SymphonyRelay({
+    mode: 'client',
+    peerId: identity.id,
+    events: {
+      onPeerConnected: (peerId, displayName) => {
+        console.log(chalk.green(`  \u2713 Connected to ${chalk.bold(displayName)} (${peerId})`));
+      },
+      onPeerDisconnected: (peerId) => {
+        console.log(chalk.yellow(`  Peer ${peerId} disconnected. Reconnecting...`));
+      },
+      onMessageRelayed: (messageId, from, to) => {
+        console.log(chalk.gray(`  \u2190 Message ${messageId.slice(0, 8)} from ${from} \u2192 ${to}`));
+      },
+      onError: (err) => {
+        console.log(chalk.red(`  Error: ${err.message}`));
+      },
+    },
+  });
+
+  try {
+    await relay.connectToServer(address, code);
+    console.log(chalk.green('\n  \u2713 Paired and connected!'));
+    console.log(chalk.gray('  Messages from remote agents will appear in your inbox.'));
+    console.log(chalk.gray('  Press Ctrl+C to disconnect.\n'));
+
+    // Handle shutdown
+    process.on('SIGINT', () => {
+      console.log(chalk.yellow('\n  Disconnecting...'));
+      relay.stop();
+      process.exit(0);
+    });
+
+    // Keep alive
+    await new Promise(() => {});
+  } catch (err) {
+    console.log(chalk.red(`  Failed to connect: ${(err as Error).message}`));
+    relay.stop();
+  }
+}
+
+/**
+ * Read a line from stdin (for interactive pairing code entry).
+ */
+function readLineFromStdin(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt);
+    let data = '';
+    process.stdin.setEncoding('utf-8');
+    process.stdin.resume();
+    process.stdin.once('data', (chunk) => {
+      data = chunk.toString();
+      process.stdin.pause();
+      resolve(data);
+    });
+  });
 }
 
 // ────────────────────────────────────────────────────────
@@ -141,18 +244,34 @@ export async function symphonyWhoamiCommand(): Promise<void> {
 export async function symphonyListCommand(options: SymphonyListOptions): Promise<void> {
   cleanStaleAgents();
   const agents = listAgents();
+  const { loadPeers } = await import('../../../../paradigm-mcp/src/utils/symphony-peers.js');
+  const peers = loadPeers();
+
+  // Gather remote agents from peer records
+  const remoteAgents: Array<{ id: string; project: string; role: string; status: string; peerId: string }> = [];
+  for (const peer of peers) {
+    if (peer.revoked) continue;
+    for (const agent of peer.agents || []) {
+      remoteAgents.push({ ...agent, peerId: peer.id });
+    }
+  }
+
+  const totalCount = agents.length + remoteAgents.length;
 
   if (options.json) {
-    console.log(JSON.stringify(agents, null, 2));
+    console.log(JSON.stringify({
+      local: agents,
+      remote: remoteAgents,
+    }, null, 2));
     return;
   }
 
-  if (agents.length === 0) {
+  if (totalCount === 0) {
     console.log(chalk.yellow('No agents joined. Run "paradigm symphony join" in each terminal.'));
     return;
   }
 
-  console.log(chalk.cyan(`\n  Symphony Agents (${agents.length})\n`));
+  console.log(chalk.cyan(`\n  Symphony Agents (${totalCount})\n`));
   console.log(chalk.gray(`  ${'AGENT ID'.padEnd(30)} ${'PROJECT'.padEnd(15)} ${'ROLE'.padEnd(10)} STATUS`));
   console.log(chalk.gray(`  ${'\u2500'.repeat(30)} ${'\u2500'.repeat(15)} ${'\u2500'.repeat(10)} ${'\u2500'.repeat(8)}`));
 
@@ -163,6 +282,18 @@ export async function symphonyListCommand(options: SymphonyListOptions): Promise
       console.log(`  ${chalk.gray(`  \u2514 ${agent.statusBlurb}`)}`);
     }
   }
+
+  // Show remote agents
+  if (remoteAgents.length > 0) {
+    console.log(chalk.gray(`\n  ${'─'.repeat(65)}`));
+    console.log(chalk.cyan(`  Remote Agents (${remoteAgents.length})\n`));
+    for (const agent of remoteAgents) {
+      const status = agent.status === 'awake' ? chalk.green('awake') : chalk.yellow('asleep');
+      const tag = chalk.magenta(`(remote: ${agent.peerId})`);
+      console.log(`  ${chalk.white(agent.id.padEnd(30))} ${agent.project.padEnd(15)} ${agent.role.padEnd(10)} ${status} ${tag}`);
+    }
+  }
+
   console.log();
 }
 
@@ -400,11 +531,15 @@ export async function symphonyStatusCommand(options: SymphonyStatusOptions): Pro
   const threads = listThreads('active');
   const pendingRequests = listFileRequests('pending');
   const unread = identity ? readInbox(identity.id) : [];
+  const { loadPeers } = await import('../../../../paradigm-mcp/src/utils/symphony-peers.js');
+  const peers = loadPeers();
+  const activePeers = peers.filter(p => !p.revoked);
 
   if (options.json) {
     console.log(JSON.stringify({
       identity: identity ? { id: identity.id, project: identity.project, role: identity.role } : null,
       agents: agents.map(a => ({ id: a.id, status: isAgentAsleep(a) ? 'asleep' : 'awake', statusBlurb: a.statusBlurb })),
+      peers: activePeers.map(p => ({ id: p.id, address: p.address, agents: p.agents?.length ?? 0, lastSeen: p.lastSeen })),
       activeThreads: threads.length,
       unreadMessages: unread.length,
       pendingFileRequests: pendingRequests.length,
@@ -430,6 +565,18 @@ export async function symphonyStatusCommand(options: SymphonyStatusOptions): Pro
     console.log(`    ${chalk.white(a.id)} [${st}]${blurb}`);
   }
 
+  // Show peers
+  if (activePeers.length > 0) {
+    const totalRemoteAgents = activePeers.reduce((sum, p) => sum + (p.agents?.length ?? 0), 0);
+    console.log(`  ${chalk.white('Peers:')} ${activePeers.length} connected (${totalRemoteAgents} remote agents)`);
+    for (const p of activePeers) {
+      const agentCount = p.agents?.length ?? 0;
+      console.log(`    ${chalk.white(p.id)} at ${p.address} (${agentCount} agent${agentCount !== 1 ? 's' : ''})`);
+    }
+  } else {
+    console.log(`  ${chalk.white('Peers:')} ${chalk.gray('none (run "paradigm symphony serve" to accept connections)')}`);
+  }
+
   console.log(`  ${chalk.white('Threads:')} ${threads.length} active`);
   console.log(`  ${chalk.white('Unread:')} ${unread.length} note${unread.length !== 1 ? 's' : ''}`);
   console.log(`  ${chalk.white('File Requests:')} ${pendingRequests.length} pending`);
@@ -442,34 +589,108 @@ export async function symphonyStatusCommand(options: SymphonyStatusOptions): Pro
 
 export async function symphonyServeCommand(options: SymphonyServeOptions): Promise<void> {
   const port = parseInt(options.port || '3939', 10);
+  const rootDir = process.cwd();
+  const { SymphonyRelay } = await import('../../../../paradigm-mcp/src/utils/symphony-relay.js');
 
-  console.log(chalk.cyan(`\n  Starting Symphony TCP server on port ${port}...`));
-  console.log(chalk.gray('  Phase 0 stub \u2014 remote linking protocol not yet implemented.\n'));
+  // Register locally
+  let identity = getMyIdentity(rootDir);
+  if (!identity) {
+    identity = registerAgent(rootDir);
+  }
 
-  const server = net.createServer((socket) => {
-    socket.write(JSON.stringify({ type: 'hello', version: '0.1.0' }) + '\n');
-    socket.on('data', (data) => {
-      try {
-        const msg = JSON.parse(data.toString().trim());
-        socket.write(JSON.stringify({ type: 'ack', received: msg.type }) + '\n');
-      } catch {
-        socket.write(JSON.stringify({ type: 'error', message: 'Invalid JSON' }) + '\n');
-      }
+  console.log(chalk.cyan('\n  Starting Symphony relay server...\n'));
+
+  const relay = new SymphonyRelay({
+    mode: 'server',
+    peerId: identity.id,
+    port,
+    events: {
+      onPeerConnected: (peerId, displayName) => {
+        console.log(chalk.green(`  \u2713 Peer connected: ${chalk.bold(displayName)} (${peerId})`));
+        const remoteAgents = relay.getRemoteAgents();
+        if (remoteAgents.length > 0) {
+          console.log(chalk.gray(`    Remote agents: ${remoteAgents.map(a => a.id).join(', ')}`));
+        }
+      },
+      onPeerDisconnected: (peerId) => {
+        console.log(chalk.yellow(`  Peer disconnected: ${peerId}`));
+      },
+      onPeerAuthFailed: (address, reason) => {
+        console.log(chalk.red(`  Auth failed from ${address}: ${reason}`));
+      },
+      onMessageRelayed: (messageId, from, to) => {
+        console.log(chalk.gray(`  \u2194 Relayed ${messageId.slice(0, 8)} from ${from} to ${to}`));
+      },
+      onError: (err) => {
+        console.log(chalk.red(`  Error: ${err.message}`));
+      },
+    },
+  });
+
+  try {
+    const pairing = await relay.startServer();
+    const localIp = getLocalIpAddress();
+
+    console.log(chalk.green(`  \u2713 Symphony relay listening on port ${port}`));
+    console.log();
+
+    // Display pairing code prominently
+    console.log(chalk.white('  Pairing Code:'));
+    console.log();
+    console.log(chalk.bold.cyan(`      ${pairing.code.slice(0, 3)} ${pairing.code.slice(3)}`));
+    console.log();
+    console.log(chalk.gray('  Share this code with the person connecting.'));
+    console.log(chalk.gray(`  Code rotates every 5 minutes.\n`));
+
+    // Connection instructions
+    console.log(chalk.white('  LAN connect:'));
+    console.log(chalk.gray(`    paradigm symphony join --remote ${localIp}:${port}`));
+
+    if (options.public) {
+      const connectionString = `${localIp}:${port}#${pairing.code}`;
+      console.log();
+      console.log(chalk.white('  Internet connect (connection string):'));
+      console.log(chalk.cyan(`    paradigm symphony join --remote ${connectionString}`));
+      console.log(chalk.gray('  (Requires port 3939 reachable: port forward, VPN, or SSH tunnel)'));
+    }
+
+    console.log(chalk.gray('\n  Press Ctrl+C to stop.\n'));
+
+    // Rotate pairing code every 5 minutes
+    const rotateInterval = setInterval(() => {
+      const newPairing = relay.rotatePairingCode();
+      console.log(chalk.cyan(`  Code rotated: ${newPairing.code.slice(0, 3)} ${newPairing.code.slice(3)}`));
+    }, 5 * 60 * 1000);
+
+    // Handle shutdown
+    process.on('SIGINT', () => {
+      console.log(chalk.yellow('\n  Shutting down relay...'));
+      clearInterval(rotateInterval);
+      relay.stop();
+      process.exit(0);
     });
-    socket.on('error', () => {});
-  });
 
-  server.listen(port, '0.0.0.0', () => {
-    console.log(chalk.green(`  \u2713 Symphony server listening on 0.0.0.0:${port}`));
-    console.log(chalk.gray(`  Connect from another machine: paradigm symphony join --remote <this-ip>:${port}`));
-  });
-
-  server.on('error', (err) => {
+    // Keep alive
+    await new Promise(() => {});
+  } catch (err) {
     console.log(chalk.red(`  Failed to start server: ${(err as Error).message}`));
-  });
+    relay.stop();
+  }
+}
 
-  // Keep alive
-  await new Promise(() => {});
+/**
+ * Get the first non-internal IPv4 address for display purposes.
+ */
+function getLocalIpAddress(): string {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
 }
 
 // ────────────────────────────────────────────────────────
