@@ -13,6 +13,7 @@ const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
 const GitSection = lazy(() => import('./sections/git/GitSection'));
 const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection'));
+const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection'));
 
 function SectionFallback() {
   return (
@@ -75,7 +76,7 @@ export default function App() {
             {activeSection === 'git' && <GitSection />}
             {activeSection === 'sentinel' && <SentinelSection />}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
-            {activeSection === 'symphony' && <ComingSoonSection name="Symphony" icon="♪" description="Agent-to-agent messaging threads and network status" />}
+            {activeSection === 'symphony' && <SymphonySection />}
           </Suspense>
         </div>
       </div>

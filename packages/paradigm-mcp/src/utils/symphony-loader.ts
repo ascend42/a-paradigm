@@ -129,6 +129,7 @@ export interface AgentIdentity {
   startedAt: string;
   lastPoll?: string;
   label?: string;
+  statusBlurb?: string;
 }
 
 export interface ThreadMeta {
@@ -386,13 +387,29 @@ export function getMyIdentity(projectDir: string): AgentIdentity | null {
   }
 }
 
-export function markAgentPollTime(agentId: string): void {
+export function markAgentPollTime(agentId: string, statusBlurb?: string): void {
   const identityPath = path.join(getAgentDir(agentId), 'identity.json');
   if (!fs.existsSync(identityPath)) return;
 
   try {
     const identity = JSON.parse(fs.readFileSync(identityPath, 'utf-8')) as AgentIdentity;
     identity.lastPoll = new Date().toISOString();
+    if (statusBlurb !== undefined) {
+      identity.statusBlurb = statusBlurb || undefined;
+    }
+    fs.writeFileSync(identityPath, JSON.stringify(identity, null, 2), 'utf-8');
+  } catch {
+    // Best-effort
+  }
+}
+
+export function updateAgentStatus(agentId: string, statusBlurb: string): void {
+  const identityPath = path.join(getAgentDir(agentId), 'identity.json');
+  if (!fs.existsSync(identityPath)) return;
+
+  try {
+    const identity = JSON.parse(fs.readFileSync(identityPath, 'utf-8')) as AgentIdentity;
+    identity.statusBlurb = statusBlurb || undefined;
     fs.writeFileSync(identityPath, JSON.stringify(identity, null, 2), 'utf-8');
   } catch {
     // Best-effort

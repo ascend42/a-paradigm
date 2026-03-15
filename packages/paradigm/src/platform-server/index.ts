@@ -233,6 +233,17 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
     }
   }
 
+  // Mount Symphony routes if section is enabled
+  if (sections.has('symphony')) {
+    try {
+      const { createSymphonyRouter } = await import('./routes/symphony.js');
+      app.use('/api/symphony', createSymphonyRouter(options.projectDir, wsContext.broadcast));
+      log.component('platform-server').success('Symphony routes mounted');
+    } catch (err) {
+      log.component('platform-server').warn('Symphony routes failed to mount');
+    }
+  }
+
   return new Promise((resolve, reject) => {
     httpServer.listen(options.port, () => {
       log.component('platform-server').success('Platform running', { url: `http://localhost:${options.port}` });

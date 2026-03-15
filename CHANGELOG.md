@@ -5,6 +5,32 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.44.0] — 2026-03-15
+
+### Added
+
+- **Symphony Platform Section** — Live agent-to-agent communication dashboard replacing the "Coming Soon" placeholder, with 3 sub-tabs: Threads, Network, and Files.
+- **Symphony REST routes** — `createSymphonyRouter()` factory at `/api/symphony/*` with 9 endpoints: agents (list + me), threads (list + detail + resolve), messages (send + inbox), file requests (list + action), and aggregated status.
+- **Thread-first UX** — Two-panel Threads tab with sidebar (status filter, thread cards with participant avatars) and conversation view (chronological messages, auto-scroll, intent color-coding by category).
+- **Human compose box** — Input at the bottom of every thread with intent selector dropdown and Enter-to-send, allowing humans to participate directly in agent conversations from the browser.
+- **Network tab** — Agent grid with awake/asleep status indicators (green pulse animation), last-poll timestamps, and 5 aggregate stat cards.
+- **Files tab** — File request list with Approve / Approve (redacted) / Deny action buttons, deny-reason input, urgency badges, and status filtering.
+- **Real-time WS forwarding** — `symphony:message` and `symphony:thread_resolved` events broadcast from server and forwarded via CustomEvent to the symphony store for live updates.
+- **Polling** — 3s poll for active thread, 10s poll for thread list + network + status, 10s poll for file requests when files tab active.
+- **Intent color map** — 6 color categories matching the Symphony spec: dialogue (blue), action (component), outcome (orange), system (red), lifecycle (aspect), transfer (green).
+- **SymphonyStore** — Zustand store managing agents, threads, messages, file requests, network status, and WS message handling.
+- **Agent status blurb** — Agents can now broadcast a short description of their current work (e.g., "Implementing auth middleware — 3 files modified") via the `status` param on `paradigm_symphony_poll`. Visible in Platform UI Network tab (blue-accented card), CLI `symphony list/status/whoami`, and `paradigm_symphony_status` MCP tool response.
+- **`updateAgentStatus()`** — Standalone loader function to update an agent's status blurb without a full poll cycle.
+
+### Changed
+
+- **Platform server** — Symphony routes mounted after sentinel bridge when symphony section is enabled.
+- **WS message forwarding** — `useAgentEffects` now dispatches `symphony-ws` CustomEvents alongside existing `sentinel-ws`.
+- **App.tsx** — `SymphonySection` lazy-loaded, replacing `ComingSoonSection` for symphony.
+- **`markAgentPollTime()`** — Now accepts optional `statusBlurb` parameter, written alongside the heartbeat timestamp.
+
+Symbols: #SymphonyRouter, #SymphonySection, #SymphonyStore, #ThreadsTab, #NetworkTab, #FilesTab
+
 ## [3.43.0] — 2026-03-15
 
 ### Added

@@ -125,6 +125,9 @@ export async function symphonyWhoamiCommand(): Promise<void> {
   console.log(chalk.gray(`  Role: ${identity.role}`));
   console.log(chalk.gray(`  PID: ${identity.pid}`));
   console.log(chalk.gray(`  Started: ${identity.startedAt}`));
+  if (identity.statusBlurb) {
+    console.log(chalk.white(`  Status: ${identity.statusBlurb}`));
+  }
   console.log(`\n  ${chalk.white(`${others.length} linked peer${others.length !== 1 ? 's' : ''}`)} \u2014 ${chalk.white(`${threads.length} active thread${threads.length !== 1 ? 's' : ''}`)} \u2014 ${chalk.white(`${unread.length} unread`)}`);
 }
 
@@ -153,6 +156,9 @@ export async function symphonyListCommand(options: SymphonyListOptions): Promise
   for (const agent of agents) {
     const status = isAgentAsleep(agent) ? chalk.yellow('asleep') : chalk.green('awake');
     console.log(`  ${chalk.white(agent.id.padEnd(30))} ${agent.project.padEnd(15)} ${agent.role.padEnd(10)} ${status}`);
+    if (agent.statusBlurb) {
+      console.log(`  ${chalk.gray(`  \u2514 ${agent.statusBlurb}`)}`);
+    }
   }
   console.log();
 }
@@ -395,7 +401,7 @@ export async function symphonyStatusCommand(options: SymphonyStatusOptions): Pro
   if (options.json) {
     console.log(JSON.stringify({
       identity: identity ? { id: identity.id, project: identity.project, role: identity.role } : null,
-      agents: agents.map(a => ({ id: a.id, status: isAgentAsleep(a) ? 'asleep' : 'awake' })),
+      agents: agents.map(a => ({ id: a.id, status: isAgentAsleep(a) ? 'asleep' : 'awake', statusBlurb: a.statusBlurb })),
       activeThreads: threads.length,
       unreadMessages: unread.length,
       pendingFileRequests: pendingRequests.length,
@@ -413,6 +419,14 @@ export async function symphonyStatusCommand(options: SymphonyStatusOptions): Pro
 
   const awake = agents.filter(a => !isAgentAsleep(a)).length;
   console.log(`  ${chalk.white('Agents:')} ${agents.length} joined (${awake} awake)`);
+
+  // Show agent blurbs if any
+  for (const a of agents) {
+    const st = isAgentAsleep(a) ? chalk.yellow('asleep') : chalk.green('awake');
+    const blurb = a.statusBlurb ? chalk.gray(` \u2014 ${a.statusBlurb}`) : '';
+    console.log(`    ${chalk.white(a.id)} [${st}]${blurb}`);
+  }
+
   console.log(`  ${chalk.white('Threads:')} ${threads.length} active`);
   console.log(`  ${chalk.white('Unread:')} ${unread.length} note${unread.length !== 1 ? 's' : ''}`);
   console.log(`  ${chalk.white('File Requests:')} ${pendingRequests.length} pending`);

@@ -37,6 +37,7 @@ flows:
       - Serve platform-ui static files
       - SPA fallback for client-side routing
       - Mount sentinel bridge (/api/sentinel/*) if sentinel section enabled
+      - Mount symphony routes (/api/symphony/*) if symphony section enabled
   $agent-command:
     description: MCP tool → HTTP POST → server validates → WS broadcast → browser updates
     steps:
@@ -51,3 +52,8 @@ flows:
     type: service
     parent: '#PlatformServer'
     tags: [feature, sentinel, observability]
+  SymphonyRouter:
+    description: REST endpoints for Symphony section — agents, threads, messages, file requests, and status via the Score mailbox
+    type: route
+    parent: '#PlatformServer'
+    tags: [feature, symphony]

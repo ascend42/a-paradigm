@@ -35,6 +35,7 @@ import {
   isAgentAsleep,
   cleanStaleAgents,
   garbageCollect,
+  updateAgentStatus,
   type SymphonyMessage,
   type Participant,
   type MessageIntent,
@@ -48,10 +49,15 @@ export function getSymphonyToolsList() {
     {
       name: 'paradigm_symphony_poll',
       description:
-        'Poll inbox for new notes. Call via /loop for continuous agent messaging. Returns unread notes formatted as markdown with thread context and suggested actions. Updates heartbeat. ~200 tokens.',
+        'Poll inbox for new notes. Call via /loop for continuous agent messaging. Returns unread notes formatted as markdown with thread context and suggested actions. Updates heartbeat and optional status blurb. ~200 tokens.',
       inputSchema: {
         type: 'object',
-        properties: {},
+        properties: {
+          status: {
+            type: 'string',
+            description: 'Short status blurb describing what you are currently working on (e.g., "Implementing auth middleware — 3 files modified"). Visible to humans and other agents in the Network view.',
+          },
+        },
       },
       annotations: {
         readOnlyHint: false, // Updates ack + poll time
@@ -230,8 +236,9 @@ export async function handleSymphonyTool(
       cleanStaleAgents();
       expireOldRequests();
 
-      // Mark poll time for heartbeat
-      markAgentPollTime(identity.id);
+      // Mark poll time for heartbeat + optional status blurb
+      const statusBlurb = args.status as string | undefined;
+      markAgentPollTime(identity.id, statusBlurb);
 
       // Read unread messages
       const messages = readInbox(identity.id);
@@ -384,6 +391,7 @@ export async function handleSymphonyTool(
             role: a.role,
             status: isAgentAsleep(a) ? 'asleep' : 'awake',
             lastPoll: a.lastPoll,
+            statusBlurb: a.statusBlurb,
           })),
           activeThreads: threads.map(t => ({
             id: t.id,

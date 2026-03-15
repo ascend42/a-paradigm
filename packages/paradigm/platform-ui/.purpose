@@ -84,3 +84,26 @@ components:
     type: view
     parent: '#SentinelSection'
     tags: [feature, sentinel]
+  SymphonySection:
+    description: Live agent-to-agent communication dashboard with 3 sub-tabs — Threads, Network, Files
+    type: view
+    tags: [feature, symphony]
+  SymphonyStore:
+    description: Zustand store for agents, threads, messages, file requests, and network status
+    type: store
+    tags: [state, symphony]
+  ThreadsTab:
+    description: Two-panel thread browser — sidebar with status filter, conversation view with messages and compose box
+    type: view
+    parent: '#SymphonySection'
+    tags: [feature, symphony]
+  NetworkTab:
+    description: Agent grid with awake/asleep status indicators and network stats
+    type: view
+    parent: '#SymphonySection'
+    tags: [feature, symphony]
+  FilesTab:
+    description: File request list with approve/deny/redact actions
+    type: view
+    parent: '#SymphonySection'
+    tags: [feature, symphony]

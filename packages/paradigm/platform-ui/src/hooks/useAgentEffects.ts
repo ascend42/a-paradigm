@@ -31,6 +31,10 @@ export function useAgentEffects() {
           if (msg.type?.startsWith('sentinel:')) {
             window.dispatchEvent(new CustomEvent('sentinel-ws', { detail: msg }));
           }
+          // Forward symphony:* messages to symphony stores via CustomEvent
+          if (msg.type?.startsWith('symphony:')) {
+            window.dispatchEvent(new CustomEvent('symphony-ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed
         }
