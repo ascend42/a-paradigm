@@ -64,6 +64,10 @@ components:
     description: Deny a pending file request
     type: command
     tags: [feature, symphony]
+  symphony-watch:
+    description: Zero-token real-time inbox monitor — pure file-system polling with intent color-coding and thread detection
+    type: command
+    tags: [feature, symphony]
 
 flows:
   symphony-send-flow:

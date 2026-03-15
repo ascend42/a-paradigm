@@ -4,6 +4,11 @@ description: |
   Each tool file exports getXToolsList() + handleXTool() functions.
 
 components:
+  symphony-peek:
+    description: Ultra-cheap inbox check — fs.stat only, no parsing. Returns hasNew true/false for near-free /loop monitoring
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, symphony, mcp]
   symphony-poll:
     description: Poll Score part for new notes (agent heartbeat)
     type: tool
