@@ -1,0 +1,33 @@
+description: Paradigm Platform SPA — unified React UI shell with sidebar navigation, absorbing lore-ui and graph-ui as sections
+components:
+  PlatformShell:
+    description: App shell with sidebar nav, header, and section router
+    type: view
+    tags: [feature, ui]
+  SidebarNav:
+    description: Section navigation sidebar with icons and labels
+    type: view
+  PlatformHeader:
+    description: Top header bar with project name and section indicator
+    type: view
+  OverviewSection:
+    description: Dashboard showing symbol counts and lore stats
+    type: view
+  LoreSection:
+    description: Absorbed lore-ui — timeline, session, symbol, and author views
+    type: view
+  GraphSection:
+    description: Absorbed graph-ui — React Flow canvas with symbol nodes
+    type: view
+  AgentToast:
+    description: Toast notification component for agent-driven annotations
+    type: view
+    tags: [feature, agent-ui]
+  AgentCallout:
+    description: Floating callout and navigation prompt for agent-driven UI
+    type: view
+    tags: [feature, agent-ui]
+  AgentStore:
+    description: Zustand store for agent presence, highlights, annotations, toasts, and mute state
+    type: store
+    tags: [feature, agent-ui, state]

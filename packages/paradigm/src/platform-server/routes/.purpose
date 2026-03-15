@@ -1,0 +1,6 @@
+description: Platform-specific HTTP routes for agent-driven UI
+components:
+  AgentCommandRoute:
+    description: POST /api/platform/agent-command — receives navigate/highlight/annotate/observe/clear commands, broadcasts via WS
+    type: route
+    tags: [feature, agent-ui]

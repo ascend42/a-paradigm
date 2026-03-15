@@ -1,0 +1,24 @@
+description: CLI command implementations for the paradigm binary
+components:
+  ServeCommand:
+    description: paradigm serve — launches the unified Platform server
+    type: command
+    tags: [feature]
+  ShiftCommand:
+    description: paradigm shift — full project setup in one command
+    type: command
+  InitCommand:
+    description: paradigm init — initialize Paradigm in a project
+    type: command
+  ScanCommand:
+    description: paradigm scan — rebuild symbol index
+    type: command
+  DoctorCommand:
+    description: paradigm doctor — health checks
+    type: command
+  GraphCommand:
+    description: paradigm graph — interactive symbol graph (standalone)
+    type: command
+  MigrateCommand:
+    description: paradigm migrate — version-aware project migration
+    type: command

@@ -1,0 +1,10 @@
+purpose: University CLI commands
+description: >
+  CLI command group for per-project university management.
+  Subcommands: serve, list, add, show, quiz, status, validate.
+
+components:
+  UniversityCommands:
+    description: CLI interface for university content management
+    type: command-group
+    tags: [university, cli]

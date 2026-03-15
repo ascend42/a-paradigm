@@ -147,3 +147,9 @@ components:
     file: v3.0.json
     tags: [plsat, para-101]
     references: ["#cold-start", "#disciplines"]
+
+  plsat-questions-platform-agent-ui:
+    description: "PLSAT questions testing Platform agent-driven UI — MCP→HTTP→WS pipeline, conflict resolution, observe, highlights, presence pruning, useAgentEffects (slots 109-112, para-501)"
+    file: v3.0.json
+    tags: [plsat, para-501]
+    references: ["#PlatformWebSocket", "#AgentPresenceManager", "#UserStateTracker", "#PlatformTools", "#AgentStore"]

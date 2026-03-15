@@ -489,6 +489,104 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
+    // Check university health
+    const universityDir = path.join(cwd, '.paradigm', 'university');
+    if (fs.existsSync(universityDir)) {
+      try {
+        const contentDir = path.join(universityDir, 'content');
+        let contentCount = 0;
+        let issues = 0;
+
+        if (fs.existsSync(contentDir)) {
+          // Count content files
+          for (const subdir of ['notes', 'policies', 'quizzes', 'paths']) {
+            const sd = path.join(contentDir, subdir);
+            if (fs.existsSync(sd)) {
+              contentCount += fs.readdirSync(sd).filter(f => f.endsWith('.md') || f.endsWith('.yaml')).length;
+            }
+          }
+        }
+
+        if (contentCount === 0) {
+          results.push({
+            name: 'University content',
+            status: 'warn',
+            message: 'University directory exists but no content found',
+            fix: 'Add content: paradigm university add note --title "Getting Started"',
+          });
+        } else {
+          // Quick validation: check quiz answer validity
+          const quizDir = path.join(contentDir, 'quizzes');
+          if (fs.existsSync(quizDir)) {
+            for (const file of fs.readdirSync(quizDir).filter(f => f.endsWith('.yaml'))) {
+              try {
+                const { parse } = await import('yaml');
+                const quiz = parse(fs.readFileSync(path.join(quizDir, file), 'utf8'));
+                if (quiz?.questions) {
+                  for (const q of quiz.questions) {
+                    if (q.choices && q.correct && !(q.correct in q.choices)) {
+                      issues++;
+                    }
+                  }
+                }
+              } catch { /* skip */ }
+            }
+          }
+
+          // Check learning path references
+          const pathDir = path.join(contentDir, 'paths');
+          if (fs.existsSync(pathDir)) {
+            for (const file of fs.readdirSync(pathDir).filter(f => f.endsWith('.yaml'))) {
+              try {
+                const { parse } = await import('yaml');
+                const lp = parse(fs.readFileSync(path.join(pathDir, file), 'utf8'));
+                if (lp?.steps) {
+                  for (const step of lp.steps) {
+                    if (step.content && !step.content.startsWith('plsat:')) {
+                      // Check if referenced content exists
+                      let found = false;
+                      for (const sd of ['notes', 'policies', 'quizzes', 'paths']) {
+                        const sdPath = path.join(contentDir, sd);
+                        if (fs.existsSync(sdPath)) {
+                          const files = fs.readdirSync(sdPath);
+                          if (files.some(f => f.startsWith(step.content))) {
+                            found = true;
+                            break;
+                          }
+                        }
+                      }
+                      if (!found) issues++;
+                    }
+                  }
+                }
+              } catch { /* skip */ }
+            }
+          }
+
+          if (issues > 0) {
+            results.push({
+              name: 'University content',
+              status: 'warn',
+              message: `${contentCount} items, ${issues} issue${issues > 1 ? 's' : ''}`,
+              fix: 'Run: paradigm university validate --deep',
+            });
+          } else {
+            results.push({
+              name: 'University content',
+              status: 'ok',
+              message: `${contentCount} content item${contentCount > 1 ? 's' : ''}`,
+            });
+          }
+        }
+      } catch {
+        results.push({
+          name: 'University content',
+          status: 'warn',
+          message: 'Could not read university directory',
+        });
+      }
+    }
+
     // Check hook freshness
     const hooksJsonPath = path.join(cwd, '.claude', 'hooks.json');
     const pluginHooksPath = path.join(cwd, 'plugins', 'paradigm', 'hooks.json');

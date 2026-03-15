@@ -1,0 +1,42 @@
+version: 2.0.0
+description: |
+  CLI commands for the lore subsystem — project history timeline, recording,
+  review, assessment, calibration, and management.
+
+components:
+  lore-record-command:
+    description: Record a new lore entry with optional --confidence flag (0.0-1.0)
+    type: command
+  lore-assess-command:
+    description: Record an assessment verdict (correct/partial/incorrect) on a lore entry with delta computation
+    type: command
+  lore-calibration-command:
+    description: Show calibration statistics across assessed entries with groupBy, symbol/tag/author filters
+    type: command
+  lore-review-command:
+    description: Add a human review (completeness/quality 1-5) to a lore entry
+    type: command
+  lore-list-command:
+    description: List recent lore entries with filters
+    type: command
+  lore-show-command:
+    description: Show full detail for a single lore entry
+    type: command
+  lore-edit-command:
+    description: Edit an existing lore entry's fields
+    type: command
+  lore-delete-command:
+    description: Delete a lore entry with confirmation
+    type: command
+  lore-timeline-command:
+    description: Show timeline grouped by date with hot symbols and authors
+    type: command
+  lore-serve-command:
+    description: Launch the lore timeline UI web server
+    type: command
+  lore-retag-command:
+    description: Add or remove tags from matching lore entries
+    type: command
+  lore-migrate-assessments-command:
+    description: Migrate old assessment entries to lore with arc tags
+    type: command

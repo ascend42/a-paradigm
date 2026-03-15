@@ -23,7 +23,8 @@ export type HabitCategory =
   | 'testing'
   | 'documentation'
   | 'collaboration'
-  | 'security';
+  | 'security'
+  | 'quality';
 
 export type HabitTrigger = 'preflight' | 'postflight' | 'on-commit' | 'on-stop';
 export type HabitSeverity = 'advisory' | 'warn' | 'block';
@@ -213,6 +214,16 @@ const SEED_HABITS: HabitDefinition[] = [
     enabled: true,
   },
   {
+    id: 'confidence-on-decisions',
+    name: 'Confidence on Decisions',
+    description: 'When recording lore, include a confidence score (0.0-1.0) to enable calibration tracking over time',
+    category: 'documentation',
+    trigger: 'on-stop',
+    severity: 'advisory',
+    check: { type: 'tool-called', params: { tools: ['paradigm_lore_record'] } },
+    enabled: true,
+  },
+  {
     id: 'gates-for-routes',
     name: 'Gates for Routes',
     description: 'API routes should have corresponding gate declarations in portal.yaml',
@@ -221,6 +232,26 @@ const SEED_HABITS: HabitDefinition[] = [
     severity: 'warn',
     check: { type: 'gates-declared', params: { requireRoutes: true } },
     enabled: true,
+  },
+  {
+    id: 'university-content-valid',
+    name: 'University Content Valid',
+    description: 'Validate university content integrity when files in symbol-covered areas change',
+    category: 'quality',
+    trigger: 'on-stop',
+    severity: 'advisory',
+    check: { type: 'tool-called', params: { tools: ['paradigm_university_validate'] } },
+    enabled: true,
+  },
+  {
+    id: 'university-onboarded',
+    name: 'University Onboarding',
+    description: 'Call paradigm_university_onboard at session start for project-specific learning content',
+    category: 'discovery',
+    trigger: 'preflight',
+    severity: 'advisory',
+    check: { type: 'tool-called', params: { tools: ['paradigm_university_onboard'] } },
+    enabled: false,
   },
 ];
 

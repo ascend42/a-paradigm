@@ -17,6 +17,7 @@ import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 import { rebuildPersonaIndex } from '../utils/personas-loader.js';
 import { rebuildProtocolIndex } from '../utils/protocol-loader.js';
+import { rebuildUniversityIndex } from '../utils/university-loader.js';
 import {
   checkIntegrity,
   checkComponentAnchors,
@@ -141,6 +142,7 @@ export interface RebuildResult {
     broken: number;
   };
   componentTypeBreakdown?: Record<string, number>;
+  universityStats?: { totalContent: number; diplomaCount: number };
   integrityReport?: IntegrityReport;
   componentAnchorIssues?: number;
   purposeHealth?: PurposeHealthReport;
@@ -251,7 +253,25 @@ export async function rebuildStaticFiles(
     // Protocol index build is non-fatal
   }
 
-  // 8. Run integrity checks (non-fatal)
+  // 8. Rebuild university index (non-fatal)
+  let universityStats: RebuildResult['universityStats'];
+  try {
+    const uniDir = path.join(rootDir, '.paradigm', 'university');
+    if (fs.existsSync(uniDir)) {
+      const uniIndex = rebuildUniversityIndex(rootDir);
+      if (uniIndex.totalContent > 0 || uniIndex.diplomaCount > 0) {
+        universityStats = {
+          totalContent: uniIndex.totalContent,
+          diplomaCount: uniIndex.diplomaCount,
+        };
+        filesWritten.push('.paradigm/university/index.yaml');
+      }
+    }
+  } catch {
+    // University index build is non-fatal
+  }
+
+  // 9. Run integrity checks (non-fatal)
   let integrityReport: IntegrityReport | undefined;
   try {
     integrityReport = checkIntegrity(aggregation, rootDir);
@@ -324,6 +344,7 @@ export async function rebuildStaticFiles(
     personaCount,
     protocolHealth,
     ...(Object.keys(componentTypeBreakdown).length > 0 ? { componentTypeBreakdown } : {}),
+    ...(universityStats ? { universityStats } : {}),
     ...(integrityReport ? { integrityReport } : {}),
     ...(componentAnchorIssues !== undefined ? { componentAnchorIssues } : {}),
     ...(purposeHealth ? { purposeHealth } : {}),

@@ -273,7 +273,10 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
 | **Tracking work items** | `paradigm_task_create` / `paradigm_task_list` for persistent tasks |
 | **Recording reflections** | `paradigm_lore_record` with `arc:*` tags for thematic grouping |
+| **Recording with confidence** | `paradigm_lore_record` with `confidence: 0.0-1.0` |
 | **Reviewing progress** | `paradigm_lore_search` with tag filter for `arc:*` entries |
+| **Assessing correctness** | `paradigm_lore_assess` with verdict (correct/partial/incorrect) |
+| **Checking calibration** | `paradigm_lore_calibration` with optional symbol/tag/groupBy |
 | **Sending message to agents** | `paradigm_symphony_send` to compose + route |
 | **Checking agent messages** | `paradigm_symphony_poll` for inbox (via /loop) |
 | **Viewing agent network** | `paradigm_symphony_status` for linked agents |
@@ -284,6 +287,14 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
 | **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
 | **Reindex workspace** | `paradigm_workspace_reindex` to rebuild all members |
+| **Finding project knowledge** | `paradigm_university_search` by type/tag/symbol |
+| **Onboarding to project** | `paradigm_university_onboard` for learning sequence |
+| **Validating university content** | `paradigm_university_validate` with `deep: true` |
+| **Navigating Platform UI** | `paradigm_platform_navigate` with section/symbol/loreId |
+| **Highlighting symbols in UI** | `paradigm_platform_highlight` with symbols + color/label |
+| **Showing toasts/callouts** | `paradigm_platform_annotate` with type + message |
+| **Reading UI state** | `paradigm_platform_observe` for section/symbol/theme/agents |
+| **Clearing agent effects** | `paradigm_platform_clear` to remove highlights/annotations |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -305,6 +316,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_task_list` | ~200 | Checking open tasks |
 | `paradigm_lore_record` | ~150 | Adding a lore entry (reflections, decisions, arcs) |
 | `paradigm_lore_search` | ~200 | Search lore by tag, symbol, or type |
+| `paradigm_lore_assess` | ~100 | Recording human assessment verdict on an entry |
+| `paradigm_lore_calibration` | ~200 | Calibration stats (accuracy, confidence, delta) |
 | `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
 | `paradigm_symphony_poll` | ~200 | Polling inbox via /loop |
 | `paradigm_symphony_send` | ~100 | Sending message to agents |
@@ -312,9 +325,19 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_symphony_thread` | ~200 | Viewing thread conversation |
 | `paradigm_symphony_request_file` | ~100 | Requesting cross-project file |
 | `paradigm_symphony_approve_file` | ~100 | Approving/denying file request |
+| `paradigm_university_search` | ~150 | Search project university content |
+| `paradigm_university_get` | ~300 | Fetch content item by ID |
+| `paradigm_university_create` | ~100 | Create note/policy/quiz/path |
+| `paradigm_university_onboard` | ~200 | Get onboarding sequence |
+| `paradigm_university_validate` | ~200 | Validate content integrity |
 | `paradigm_protocol_search` | ~200 | Search for matching protocol |
 | `paradigm_protocol_record` | ~100 | Record a new protocol |
 | `paradigm_protocol_validate` | ~200 | Validate protocol references |
+| `paradigm_platform_navigate` | ~100 | Navigate Platform UI sections/symbols |
+| `paradigm_platform_highlight` | ~100 | Highlight symbols in Platform UI |
+| `paradigm_platform_annotate` | ~100 | Show toasts/callouts/badges in UI |
+| `paradigm_platform_observe` | ~150 | Read current Platform UI state |
+| `paradigm_platform_clear` | ~50 | Remove agent effects from UI |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |
@@ -624,6 +647,100 @@ feat(#payment-form): add Apple Pay support
 
 Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
+
+## Project University
+
+Every project can maintain its own university at `.paradigm/university/` — a structured knowledge base with notes, policies, quizzes, learning paths, and diplomas.
+
+### Content Types
+
+| Type | Prefix | Format | Purpose |
+|------|--------|--------|---------|
+| Note | `N-` | Markdown + YAML frontmatter | Architecture docs, guides, runbooks |
+| Policy | `P-` | Markdown + YAML frontmatter | Code review process, deployment checklists |
+| Quiz | `Q-` | YAML | Knowledge checks with grading |
+| Learning Path | `LP-` | YAML | Ordered sequences of content + quizzes |
+| Diploma | `D-` | YAML (auto-generated) | Completion records |
+
+### Key MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `paradigm_university_search` | Search content by type, tag, difficulty, symbol |
+| `paradigm_university_get` | Fetch full content by ID |
+| `paradigm_university_create` | Create new content (agent-authored) |
+| `paradigm_university_quiz` | Get quiz questions (no answers) for taking |
+| `paradigm_university_submit` | Submit answers, auto-grade, save diploma |
+| `paradigm_university_onboard` | Get recommended onboarding sequence |
+| `paradigm_university_validate` | Validate content integrity + symbol coverage |
+
+### Symbol Linking
+
+The `symbols` field on university content is **load-bearing**:
+- `paradigm_university_validate` checks symbol refs against `scan-index.json`
+- `paradigm_ripple` surfaces `university_content_affected` for symbols referenced in content
+- Content staleness is detected when a symbol's `.purpose` file is newer than the content
+
+### CLI Commands
+
+```
+paradigm university list [--type X] [--tag Y]
+paradigm university add <type> --title "..."
+paradigm university show <id>
+paradigm university quiz <id>        # Interactive terminal quiz
+paradigm university status           # Content overview + diplomas
+paradigm university validate [--deep]
+paradigm university serve            # Launch learning platform UI
+```
+
+## Confidence Calibration
+
+Lore entries support a confidence-assessment loop that builds domain-specific reliability maps over time.
+
+### Recording Confidence
+
+When recording lore, attach a confidence score (0.0–1.0) expressing how confident you are that the work is correct:
+
+```
+paradigm_lore_record({
+  title: "...", summary: "...", symbols_touched: [...],
+  confidence: 0.85
+})
+```
+
+CLI: `paradigm lore record --title "..." --summary "..." --symbols "#x" --confidence 0.85`
+
+### Assessing Correctness
+
+After the fact, humans assess whether the work was correct:
+
+```
+paradigm_lore_assess({ id: "L-2026-03-15-...", verdict: "correct" })
+```
+
+Verdicts: `correct` (1.0), `partial` (0.5), `incorrect` (0.0). The system computes `assessment_delta = impliedScore - confidence`. Positive delta = under-confident, negative = over-confident.
+
+CLI: `paradigm lore assess <id> <correct|partial|incorrect> [--notes "..."]`
+
+### Querying Calibration
+
+View calibration statistics across assessed entries:
+
+```
+paradigm_lore_calibration({ symbol: "#auth-middleware", groupBy: "symbol" })
+```
+
+Returns: accuracy rate, avg confidence, calibration score (1.0 = perfect), verdict breakdown, and natural-language insights with low-N caveats.
+
+CLI: `paradigm lore calibration [--symbol #X] [--tag Y] [--group-by symbol] [--json]`
+
+### Key Distinctions
+
+- **`review`** = meta-quality of the *work session* (completeness 1-5, quality 1-5)
+- **`assessment`** = correctness verdict on the *decisions/changes made* (correct/partial/incorrect)
+- **`confidence`** = agent's predicted probability of being correct (0.0–1.0)
+
+All three coexist independently. Confidence recording is encouraged, never enforced.
 
 ## Automatic Enforcement (Claude Code Hooks)
 

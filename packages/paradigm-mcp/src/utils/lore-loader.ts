@@ -27,6 +27,16 @@ export interface LoreDecision {
   id: string;
   decision: string;
   rationale: string;
+  confidence?: number; // 0.0 to 1.0
+}
+
+export type AssessmentVerdict = 'correct' | 'partial' | 'incorrect';
+
+export interface LoreAssessment {
+  verdict: AssessmentVerdict;
+  assessed_by: string;
+  assessed_at: string; // ISO 8601
+  notes?: string;
 }
 
 export interface LoreError {
@@ -81,6 +91,9 @@ export interface LoreEntry {
   linked_lore?: string[];
   linked_tasks?: string[];
   linked_commits?: string[];
+  confidence?: number; // 0.0 to 1.0
+  assessment?: LoreAssessment;
+  assessment_delta?: number;
   tags?: string[];
   meta?: Record<string, unknown>;
   git_context?: {
@@ -103,6 +116,8 @@ export interface LoreFilter {
   hasBody?: boolean;
   tags?: string[];
   hasReview?: boolean;
+  hasConfidence?: boolean;
+  hasAssessment?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -572,9 +587,49 @@ export async function updateLoreEntry(
   if (partial.linked_lore !== undefined) entry.linked_lore = partial.linked_lore;
   if (partial.linked_tasks !== undefined) entry.linked_tasks = partial.linked_tasks;
   if (partial.linked_commits !== undefined) entry.linked_commits = partial.linked_commits;
+  if (partial.confidence !== undefined) entry.confidence = partial.confidence;
+  if (partial.assessment !== undefined) entry.assessment = partial.assessment;
+  if (partial.assessment_delta !== undefined) entry.assessment_delta = partial.assessment_delta;
 
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
   await rebuildTimeline(rootDir);
+  return true;
+}
+
+/**
+ * Compute implied score from assessment verdict
+ */
+function verdictToScore(verdict: LoreAssessment['verdict']): number {
+  switch (verdict) {
+    case 'correct': return 1.0;
+    case 'partial': return 0.5;
+    case 'incorrect': return 0.0;
+  }
+}
+
+/**
+ * Add or update an assessment on an existing lore entry
+ */
+export async function addLoreAssessment(
+  rootDir: string,
+  entryId: string,
+  assessment: LoreAssessment
+): Promise<boolean> {
+  const entry = await loadLoreEntry(rootDir, entryId);
+  if (!entry) return false;
+
+  const dateStr = entry.timestamp.slice(0, 10);
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+  if (!entryPath) return false;
+
+  entry.assessment = assessment;
+
+  // Compute assessment_delta if confidence exists
+  if (entry.confidence != null) {
+    entry.assessment_delta = verdictToScore(assessment.verdict) - entry.confidence;
+  }
+
+  fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
   return true;
 }
 
@@ -657,6 +712,12 @@ function applyFilter(entries: LoreEntry[], filter: LoreFilter): LoreEntry[] {
   }
   if (filter.hasReview !== undefined) {
     result = result.filter(e => filter.hasReview ? e.review != null : e.review == null);
+  }
+  if (filter.hasConfidence !== undefined) {
+    result = result.filter(e => filter.hasConfidence ? e.confidence != null : e.confidence == null);
+  }
+  if (filter.hasAssessment !== undefined) {
+    result = result.filter(e => filter.hasAssessment ? e.assessment != null : e.assessment == null);
   }
 
   result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

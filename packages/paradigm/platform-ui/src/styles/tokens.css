@@ -1,0 +1,56 @@
+/* Paradigm Platform — Design Tokens */
+
+:root,
+[data-theme="dark"] {
+  /* Surface */
+  --p-bg-primary: #0d1117;
+  --p-bg-secondary: #161b22;
+  --p-bg-tertiary: #21262d;
+  --p-bg-hover: #30363d;
+
+  /* Text */
+  --p-text-primary: #e6edf3;
+  --p-text-secondary: #8b949e;
+  --p-text-muted: #484f58;
+
+  /* Borders */
+  --p-border: #30363d;
+  --p-border-active: #58a6ff;
+
+  /* Accent */
+  --p-accent-blue: #58a6ff;
+  --p-accent-green: #3fb950;
+  --p-accent-red: #f85149;
+  --p-accent-orange: #d29922;
+  --p-accent-purple: #bc8cff;
+
+  /* Symbols */
+  --p-symbol-component: #58a6ff;
+  --p-symbol-flow: #3fb950;
+  --p-symbol-gate: #f85149;
+  --p-symbol-signal: #d29922;
+  --p-symbol-aspect: #bc8cff;
+
+  /* Layout */
+  --p-sidebar-width: 56px;
+  --p-header-height: 44px;
+  --p-radius: 6px;
+  --p-transition: 150ms ease;
+}
+
+[data-theme="light"] {
+  --p-bg-primary: #ffffff;
+  --p-bg-secondary: #f6f8fa;
+  --p-bg-tertiary: #eaeef2;
+  --p-bg-hover: #d0d7de;
+  --p-text-primary: #1f2328;
+  --p-text-secondary: #656d76;
+  --p-text-muted: #8b949e;
+  --p-border: #d0d7de;
+  --p-border-active: #0969da;
+  --p-accent-blue: #0969da;
+  --p-accent-green: #1a7f37;
+  --p-accent-red: #cf222e;
+  --p-accent-orange: #9a6700;
+  --p-accent-purple: #8250df;
+}

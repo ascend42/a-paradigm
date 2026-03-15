@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "3.37.0",
+  "version": "3.41.0",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,8 @@
     "dist",
     "templates",
     "lore-ui/dist",
-    "graph-ui/dist"
+    "graph-ui/dist",
+    "platform-ui/dist"
   ],
   "scripts": {
     "build": "node scripts/generate-hooks.mjs && tsup && npm run build:sentinel-assets && npm run build:university-assets",
@@ -23,6 +24,7 @@
     "check:hooks": "node scripts/generate-hooks.mjs --check",
     "build:lore-ui": "cd lore-ui && npx vite build",
     "build:graph-ui": "cd graph-ui && npx vite build",
+    "build:platform-ui": "cd platform-ui && npx vite build",
     "build:university-assets": "rm -rf dist/university-ui dist/university-content && cp -r ../university/ui/dist dist/university-ui && cp -r ../university/src/content dist/university-content",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "test": "vitest run",

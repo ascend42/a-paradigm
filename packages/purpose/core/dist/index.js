@@ -759,6 +759,138 @@ function validatePurposeItem(id, item, itemType, prefix, issues) {
     }
   }
 }
+function validateCrossFile(allFiles) {
+  const issues = [];
+  const definedSymbols = /* @__PURE__ */ new Set();
+  for (const { data } of allFiles) {
+    const components = normalizeToEntries(data.components);
+    for (const [id] of components) {
+      definedSymbols.add(`#${id}`);
+      definedSymbols.add(id);
+    }
+    const features = normalizeToEntries(data.features);
+    for (const [id] of features) {
+      definedSymbols.add(`#${id}`);
+      definedSymbols.add(id);
+    }
+    if (data.gates) {
+      for (const id of Object.keys(data.gates)) {
+        definedSymbols.add(`^${id}`);
+        definedSymbols.add(id);
+      }
+    }
+    if (data.signals) {
+      for (const id of Object.keys(data.signals)) {
+        definedSymbols.add(`!${id}`);
+        definedSymbols.add(id);
+      }
+    }
+    if (data.flows) {
+      if (Array.isArray(data.flows)) {
+        for (const flow of data.flows) {
+          if (flow?.name) {
+            definedSymbols.add(`$${flow.name}`);
+            definedSymbols.add(flow.name);
+          }
+        }
+      } else {
+        for (const id of Object.keys(data.flows)) {
+          definedSymbols.add(`$${id}`);
+          definedSymbols.add(id);
+        }
+      }
+    }
+    if (data.aspects) {
+      for (const id of Object.keys(data.aspects)) {
+        definedSymbols.add(`~${id}`);
+        definedSymbols.add(id);
+      }
+    }
+    if (data.states) {
+      for (const id of Object.keys(data.states)) {
+        definedSymbols.add(`#${id}`);
+        definedSymbols.add(id);
+      }
+    }
+  }
+  for (const { filePath, data } of allFiles) {
+    const prefix = filePath ? `${filePath}: ` : "";
+    const allEntries = [
+      ...normalizeToEntries(data.components),
+      ...normalizeToEntries(data.features)
+    ];
+    for (const [id, item] of allEntries) {
+      if (item.parent) {
+        const parentRef = item.parent.replace(/^["']|["']$/g, "");
+        const bareRef = parentRef.replace(/^[#$^!~@%?&]/, "");
+        if (!definedSymbols.has(parentRef) && !definedSymbols.has(bareRef)) {
+          issues.push({
+            type: "warning",
+            message: `${prefix}Component "${id}" references parent "${parentRef}" which is not defined in any .purpose file`,
+            path: `components.${id}.parent`
+          });
+        }
+      }
+      const refLists = [
+        { field: "gates", refs: item.gates },
+        { field: "signals", refs: item.signals },
+        { field: "flows", refs: item.flows },
+        { field: "components", refs: item.components },
+        { field: "aspects", refs: item.aspects }
+      ];
+      for (const { field, refs } of refLists) {
+        if (!refs) continue;
+        for (const ref of refs) {
+          const bareRef = ref.replace(/^[#$^!~@%?&]/, "");
+          if (!definedSymbols.has(ref) && !definedSymbols.has(bareRef)) {
+            issues.push({
+              type: "warning",
+              message: `${prefix}Symbol "${id}" references ${field} "${ref}" which is not defined`,
+              path: `components.${id}.${field}`
+            });
+          }
+        }
+      }
+    }
+    if (data.flows) {
+      if (Array.isArray(data.flows)) {
+        for (const flow of data.flows) {
+          if (!flow?.steps) continue;
+          for (const step of flow.steps) {
+            if (typeof step === "string" || !step?.component) continue;
+            const bareRef = step.component.replace(/^#/, "");
+            if (!definedSymbols.has(step.component) && !definedSymbols.has(bareRef)) {
+              issues.push({
+                type: "warning",
+                message: `${prefix}Flow "${flow.name}" step references "${step.component}" which is not defined`,
+                path: `flows.${flow.name}.steps`
+              });
+            }
+          }
+        }
+      } else {
+        for (const [flowId, flowDef] of Object.entries(data.flows)) {
+          if (!flowDef?.steps) continue;
+          for (const step of flowDef.steps) {
+            if (typeof step === "string" || !step?.component) continue;
+            const bareRef = step.component.replace(/^#/, "");
+            if (!definedSymbols.has(step.component) && !definedSymbols.has(bareRef)) {
+              issues.push({
+                type: "warning",
+                message: `${prefix}Flow "${flowId}" step references "${step.component}" which is not defined`,
+                path: `flows.${flowId}.steps`
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  return {
+    valid: issues.filter((i) => i.type === "error").length === 0,
+    issues
+  };
+}
 function formatValidationResult(result) {
   if (result.valid && result.issues.length === 0) {
     return "\u2705 Purpose file is valid";
@@ -807,5 +939,6 @@ export {
   parsePurposeFile,
   parsePurposeFileDetailed,
   serializePurposeFile,
+  validateCrossFile,
   validatePurposeFile
 };

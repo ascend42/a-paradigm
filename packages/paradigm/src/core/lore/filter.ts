@@ -71,6 +71,18 @@ export function applyLoreFilter(entries: LoreEntry[], filter: LoreFilter): LoreE
     );
   }
 
+  if (filter.hasConfidence !== undefined) {
+    result = result.filter(e =>
+      filter.hasConfidence ? e.confidence != null : e.confidence == null
+    );
+  }
+
+  if (filter.hasAssessment !== undefined) {
+    result = result.filter(e =>
+      filter.hasAssessment ? e.assessment != null : e.assessment == null
+    );
+  }
+
   if (filter.minCompleteness !== undefined) {
     result = result.filter(e =>
       e.review != null && e.review.completeness >= filter.minCompleteness!

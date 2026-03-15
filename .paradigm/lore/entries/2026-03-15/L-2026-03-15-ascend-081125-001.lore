@@ -1,0 +1,136 @@
+id: L-2026-03-15-ascend-081125-001
+type: milestone
+timestamp: '2026-03-15T08:11:25.380Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Agent-Driven UI shipped — Paradigm becomes a shared workspace
+summary: 'Implemented the Agent-Driven UI pipeline: 5 MCP tools (navigate, highlight, annotate, observe, clear) that let the AI agent drive the Platform browser UI in real-time. The architecture is MCP → HTTP POST → Platform server → WebSocket broadcast → browser Zustand store → visual effects. This turns Paradigm from "agent responds to text" into "agent and human share a workspace" — the agent can point at symbols, walk through code visually, and present decisions with toasts and callouts. User always wins via conflict resolution (idle → auto-navigate, active → prompt, muted → discard).'
+symbols_touched:
+  - '#PlatformWebSocket'
+  - '#AgentPresenceManager'
+  - '#UserStateTracker'
+  - '#AgentCommandRoute'
+  - '#PlatformTools'
+  - '#AgentStore'
+  - '#AgentToast'
+  - '#AgentCallout'
+  - '#PlatformServer'
+symbols_created:
+  - '#PlatformWebSocket'
+  - '#AgentPresenceManager'
+  - '#UserStateTracker'
+  - '#AgentCommandRoute'
+  - '#PlatformTools'
+  - '#AgentStore'
+  - '#AgentToast'
+  - '#AgentCallout'
+files_created:
+  - packages/paradigm/src/platform-server/ws/index.ts
+  - packages/paradigm/src/platform-server/ws/agent.ts
+  - packages/paradigm/src/platform-server/routes/agent.ts
+  - packages/paradigm-mcp/src/tools/platform.ts
+  - packages/paradigm-mcp/src/utils/platform-bridge.ts
+  - packages/paradigm/platform-ui/src/store/agentStore.ts
+  - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+  - packages/paradigm/platform-ui/src/hooks/useActivityReporter.ts
+  - packages/paradigm/platform-ui/src/components/AgentToast.tsx
+  - packages/paradigm/platform-ui/src/components/AgentCallout.tsx
+  - packages/paradigm/platform-ui/src/styles/agent.css
+files_modified:
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/platform-ui/src/components/PlatformHeader.tsx
+  - docs/specs/platform.md
+  - CLAUDE.md
+  - CHANGELOG.md
+decisions:
+  - id: http-bridge-not-ws
+    decision: Use HTTP POST bridge from MCP to Platform server instead of direct WebSocket from MCP
+    rationale: MCP is stdio-based with no event loop for WS connection management. HTTP POST is fire-and-forget, works within MCP's request/response model, and the server handles WS broadcast.
+  - id: user-always-wins
+    decision: Agent navigation respects user activity with 5s idle threshold and mute toggle
+    rationale: The agent should never hijack the user's attention. If the user is actively working, show a prompt. If they muted the agent, silently discard. This maintains trust.
+  - id: symphony-identity-reuse
+    decision: Reuse Symphony's agent identity pattern ({project}/{role}) for platform presence
+    rationale: No need to invent a new identity system. Symphony already solved deterministic agent naming. Platform reuses the same resolveAgentId pattern.
+learnings:
+  - The MCP→HTTP→WS→Browser pipeline is clean and fast (~25ms) — much better than file-watching alternatives
+  - Zustand stores compose well for agent state management alongside existing platform/lore/graph stores
+  - Conflict resolution (idle vs active user) is critical for agent-driven UI — without it the agent would be annoying
+  - The Sentinel WS server pattern (Set<WebSocket> + broadcast + JSON messages) transfers directly to Platform
+verification:
+  status: pass
+  details:
+    mcp_build: pass
+    cli_build: pass
+    cli_link: pass
+    reindex: pass
+tags:
+  - arc:platform
+  - arc:agent-ui
+  - milestone
+  - architecture
+body: |-
+  # Where Paradigm Is Now (v3.41.0, March 2026)
+
+  Paradigm has grown from a .purpose file convention into a full-stack development intelligence platform. Here's the current landscape:
+
+  ## The Stack
+
+  **Foundation Layer** — The symbol system (#, $, ^, !, ~) with .purpose files, scan-index, navigator, and aspect graph. 865 symbols across the monorepo. This is stable and proven.
+
+  **Intelligence Layer** — MCP server with 70+ tools covering search, ripple analysis, flow validation, wisdom, history, protocols, habits, heatmaps, pipelines, orchestration, fixtures, tags, personas, and now platform UI control. Tool caching with 30s TTL. Session recovery with checkpoints.
+
+  **Observability Layer** — Sentinel (log/event ingestion, WebSocket live view, flow visualization, custom schemas). Logger package with transport abstraction. Rust crate for non-JS projects.
+
+  **Knowledge Layer** — University (notes, policies, quizzes, learning paths, diplomas). PLSAT examination system. Lore system with confidence calibration, assessment verdicts, arcs, and body content.
+
+  **Collaboration Layer** — Symphony (agent-to-agent messaging via file-based JSONL mailboxes, threads, file pipeline with trust config). Workspaces (multi-project symbol awareness). Conductor (native macOS Swift app for voice/gaze/gesture input — 7 sprints complete).
+
+  **Platform Layer** (NEW) — Unified `paradigm serve` on port 3850. Absorbs lore-ui, graph-ui under one shell. Agent-Driven UI just shipped: the agent can navigate sections, highlight symbols, annotate with toasts/callouts, observe user state, and clear effects — all in real-time via WebSocket.
+
+  ## What Just Shipped (v3.41.0)
+
+  The Agent-Driven UI is the first feature where the AI agent has a *body* in the collaboration space. Previously, the agent could only respond with text. Now it can:
+
+  1. **Navigate** — Switch the user's browser to any section, select any symbol
+  2. **Highlight** — Pulse symbols with colored glow + labels
+  3. **Annotate** — Show toasts (notifications), callouts (floating notes on graph nodes), badges
+  4. **Observe** — Read what the user is looking at, what's selected, what theme they're using
+  5. **Clear** — Remove all agent visual effects
+
+  The conflict resolution model respects the human: if the user is actively interacting (last action <5s ago), the agent shows a prompt ("Agent wants to show you #X — Go there / Dismiss") instead of auto-navigating. The user can also mute all agent actions entirely.
+
+  ## Where It's Going
+
+  ### Near-Term (Platform Phase 1-3)
+  - **Git section** — Commit history, diff viewer, branch management inside Platform
+  - **Sentinel section** — Live log/event dashboard absorbed into Platform
+  - **University section** — Course browser and PLSAT quiz UI inside Platform
+  - **Symphony section** — Thread viewer and agent network status inside Platform
+  - **Governance** — Vote/Promise/Deny primitives with lore auto-creation
+  - **Meetings** — Start meeting with agenda, auto-surface context, record decisions
+
+  ### Medium-Term
+  - **Graph collaboration** — Multiple users/agents on same canvas with cursors, follow mode
+  - **Context panels** — Click any symbol node → slide-in panel with lore, commits, calibration, ripple, threads
+  - **Agent-driven graph editing** — Agent can add/remove/connect nodes on the graph canvas
+  - **Watchers** — File system watchers for lore, git, symphony → live broadcast updates
+
+  ### Long-Term
+  - **Symphony Phase 1+** — Conductor integration, Sentinel live view, cross-machine messaging
+  - **Smart Drift Phase 3** — Content fingerprint search for fuzzy anchor relocation
+  - **P2P/WebRTC** — Direct browser-to-browser for cursor sync, voice/video in meetings
+  - **Mobile companion** — Read-only overview dashboard on phone
+
+  ## The Big Picture
+
+  Paradigm is evolving from a developer tool into a **development operating system** — a unified environment where humans and AI agents share the same workspace, see the same symbols, track the same decisions, and build together in real-time. The Agent-Driven UI is the first step toward that vision: the agent isn't just answering questions, it's *showing you things*.
+confidence: 0.92
+git_context:
+  ref: 9b15d3b08edd0ce88781616fed323919999c1365
+  branch: main
+  dirty: true

@@ -18,6 +18,7 @@ import {
   type ScopedAntipattern,
   type ScopedDecision,
 } from '../utils/wisdom-loader.js';
+import { loadLoreEntries, type LoreEntry } from '../utils/lore-loader.js';
 import type { WisdomAntipattern, WisdomDecision } from '../types/wisdom.js';
 import {
   recordGlobalAntipattern,
@@ -273,6 +274,56 @@ export async function handleWisdomTool(
       if (totalAntipatterns > 0) {
         result.warning =
           'There are antipatterns for these symbols - review before implementing';
+      }
+
+      // Add calibration data from assessed lore entries
+      try {
+        const calibration: Record<string, { total: number; correct: number; partial: number; incorrect: number; avgConfidence: number | null }> = {};
+        const calibration_warnings: string[] = [];
+
+        for (const sym of symbols) {
+          const assessed = await loadLoreEntries(ctx.rootDir, {
+            symbol: sym,
+            hasAssessment: true,
+            limit: 100,
+          });
+          if (assessed.length === 0) continue;
+
+          const breakdown = { correct: 0, partial: 0, incorrect: 0 };
+          let confSum = 0;
+          let confCount = 0;
+          for (const e of assessed) {
+            const v = e.assessment!.verdict;
+            breakdown[v]++;
+            if (e.confidence != null) {
+              confSum += e.confidence;
+              confCount++;
+            }
+          }
+
+          calibration[sym] = {
+            total: assessed.length,
+            ...breakdown,
+            avgConfidence: confCount > 0 ? Math.round(confSum / confCount * 1000) / 1000 : null,
+          };
+
+          // Warn on low accuracy (>30% incorrect with N>=3)
+          const accuracyRate = (breakdown.correct + breakdown.partial * 0.5) / assessed.length;
+          if (accuracyRate < 0.6 && assessed.length >= 3) {
+            calibration_warnings.push(
+              `Low historical accuracy for ${sym}: ${Math.round(accuracyRate * 100)}% across ${assessed.length} entries. Proceed with extra caution.`
+            );
+          }
+        }
+
+        if (Object.keys(calibration).length > 0) {
+          result.calibration = calibration;
+        }
+        if (calibration_warnings.length > 0) {
+          result.calibration_warnings = calibration_warnings;
+        }
+      } catch {
+        // Calibration data is optional — don't fail the wisdom query
       }
 
       return {

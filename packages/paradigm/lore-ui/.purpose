@@ -3,11 +3,11 @@ components:
   date-separator:
     description: DateSeparator component
   detail-panel:
-    description: DetailPanel component
+    description: DetailPanel component — shows full entry details including confidence/assessment section
   filter-bar:
     description: FilterBar component
   lore-card:
-    description: LoreCard component
+    description: LoreCard component — displays confidence badge and assessment verdict indicator
   review-stars:
     description: ReviewStars component
   symbol-tag:

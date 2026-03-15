@@ -873,6 +873,88 @@
           "explanation": "Thread resolution via `paradigm symphony resolve` is the bridge between ephemeral conversation and permanent project memory. It marks the thread as resolved and automatically creates a comprehensive lore entry with the topic, participants, decisions, actions, and referenced symbols. This single action preserves the entire collaborative context for future reference."
         }
       ]
+    },
+    {
+      "id": "platform-agent-ui",
+      "title": "Platform & Agent-Driven UI",
+      "content": "## The Unified Platform\n\n`paradigm serve` launches the Paradigm Platform — a unified development management interface on port 3850 that absorbs every Paradigm tool (Lore, Graph, Sentinel, University, Symphony) into one browser tab.\n\nThe Platform is built on Express + WebSocket on the server, React 18 + Zustand on the client. Sections are lazy-loaded. A shared design system provides consistent theming and symbol colors.\n\n### Architecture\n\n```\nlocalhost:3850 (Express + WebSocket)\n├── /api/lore/*        ← LoreRouter\n├── /api/symbols/*     ← SymbolsRouter\n├── /api/graphs/*      ← GraphsRouter\n├── /api/platform/*    ← PlatformRouter (health, sections, agent-command)\n├── /ws                ← WebSocket (agent commands + user activity)\n└── /                  ← Platform UI SPA\n```\n\n## Agent-Driven UI\n\nThe breakthrough: **the AI agent can drive the browser in real-time.** Five MCP tools let the agent navigate, highlight, annotate, observe, and clear — turning the Platform from a passive viewer into a shared workspace.\n\n### The Pipeline: MCP → HTTP → WebSocket → Browser\n\n```\nAgent (Claude Code)       Platform Server          Browser\n      │                          │                    │\n      │ paradigm_platform_*      │                    │\n      │ POST /api/platform/cmd   │                    │\n      │ ─────────────────────────►│                    │\n      │   ◄── { ok: true } ──────│                    │\n      │                          │  ws: agent:*       │\n      │                          │──────────────────►│\n      │                          │                    │ UI updates\n```\n\nWhy HTTP not file-based: the <500ms latency requirement rules out file-watching. Why not direct WebSocket from MCP: MCP tools are stdio-based with no event loop for persistent WS connections.\n\n### The Five Tools\n\n| Tool | Purpose |\n|------|---------|\n| `paradigm_platform_navigate` | Switch sections, select symbols, open lore entries |\n| `paradigm_platform_highlight` | Pulsing glow on symbols with color + label, auto-expires |\n| `paradigm_platform_annotate` | Toasts (notifications), callouts (on graph nodes), badges |\n| `paradigm_platform_observe` | Read user's current section, selected symbol, theme, mute state |\n| `paradigm_platform_clear` | Remove all agent highlights and annotations |\n\n### Conflict Resolution: User Always Wins\n\nThe agent must never hijack the user's attention:\n\n- **User idle (>5s):** Agent navigation executes immediately\n- **User active (<5s):** A prompt appears: \"Agent wants to show you #X — [Go there] [Dismiss]\"\n- **User muted:** All agent effects are silently discarded; `observe` returns `{ muted: true }`\n\n### Agent Presence\n\nThe `#AgentPresenceManager` tracks connected agents by their Symphony identity (`{project}/{role}`). Each agent gets a deterministic color from its ID hash. Presence dots appear in the Platform header with a mute toggle.\n\nStale agents are auto-pruned after 2 minutes of inactivity.\n\n### User State Tracking\n\nThe `#UserStateTracker` accumulates user activity — what section they're viewing, what symbol is selected, theme preference. This state is served to `paradigm_platform_observe` so the agent can reason about what the user is looking at.\n\nBrowser clients report activity via WebSocket messages: `user:navigate`, `user:select`, `user:theme`, `user:mute`.\n\n### Visual Treatment\n\n| Element | Human | Agent |\n|---------|-------|-------|\n| Selection ring | Solid 2px blue | Dashed 2px agent-color |\n| Highlight | N/A | Pulsing glow animation |\n| Toast | N/A | Left border + robot icon |\n| Navigation | Instant | 300ms ease + toast notification |\n\n### Browser Architecture\n\nThe agent UI layer sits alongside existing stores:\n\n- `agentStore.ts` — Zustand store managing presence, highlights, annotations, toasts, mute, pending navigation\n- `useAgentEffects` — Hook connecting WebSocket `agent:*` messages to store actions, with auto-reconnect\n- `useActivityReporter` — Hook reporting section/theme changes back to server\n- `AgentToast` — Severity-colored toast component\n- `AgentCallout` — Floating callout overlay + navigation conflict prompt",
+      "keyConcepts": [
+        "paradigm serve unifies all tools on port 3850 in one browser tab",
+        "Agent-Driven UI: 5 MCP tools (navigate, highlight, annotate, observe, clear) control the browser in real-time",
+        "Pipeline: MCP → HTTP POST → Platform server → WebSocket broadcast → browser Zustand store → visual effect",
+        "Conflict resolution: user idle → auto-navigate, user active → prompt, user muted → silently discard",
+        "Agent identity reuses Symphony pattern: {project}/{role} with deterministic color from hash",
+        "AgentPresenceManager tracks agents, auto-prunes after 2min idle",
+        "UserStateTracker accumulates section/symbol/theme for observe tool",
+        "Visual distinction: agent effects use dashed rings, pulsing glow, robot-icon toasts vs. human solid styles"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "An AI agent calls `paradigm_platform_navigate({ section: 'graph', symbol: '#payment-service' })` while the user is actively typing in the lore section. What happens in the browser?",
+          "choices": {
+            "A": "The browser immediately switches to the graph section and selects the node",
+            "B": "The command fails with an error because the user is in a different section",
+            "C": "A prompt appears: 'Agent wants to show you #payment-service — [Go there] [Dismiss]' — the user decides",
+            "D": "The agent's command is queued and executes when the user next switches sections",
+            "E": "The browser switches to graph but keeps the lore section visible in a split view"
+          },
+          "correct": "C",
+          "explanation": "When the user is active (last interaction <5s ago), the agent's navigation creates a pending navigation prompt instead of auto-navigating. The user sees 'Agent wants to show you #payment-service — [Go there] [Dismiss]' and chooses whether to follow. This is the conflict resolution model: user always wins."
+        },
+        {
+          "id": "q2",
+          "question": "What is the communication pipeline when an MCP tool like `paradigm_platform_highlight` sends a command to the browser?",
+          "choices": {
+            "A": "MCP tool → direct WebSocket connection to browser → UI update",
+            "B": "MCP tool → writes to file → browser polls file every 500ms → UI update",
+            "C": "MCP tool → HTTP POST to Platform server → server broadcasts via WebSocket → browser Zustand store → UI update",
+            "D": "MCP tool → writes to scan-index.json → browser watches index file → UI update",
+            "E": "MCP tool → sends message via Symphony mailbox → browser reads mailbox → UI update"
+          },
+          "correct": "C",
+          "explanation": "The pipeline is MCP → HTTP POST → WebSocket broadcast → browser. The MCP tool calls the platform-bridge helper which POSTs to /api/platform/agent-command. The server validates the command, updates server-side state (presence, highlights), and broadcasts a typed WebSocket message (e.g., agent:highlight) to all connected browsers. The browser's useAgentEffects hook receives the message and dispatches to the Zustand agentStore."
+        },
+        {
+          "id": "q3",
+          "question": "The user clicks the 'Mute' button in the Platform header. An agent then calls `paradigm_platform_annotate({ type: 'toast', message: 'Found a bug in #auth' })`. What happens?",
+          "choices": {
+            "A": "The toast appears but with reduced opacity",
+            "B": "The command returns `{ annotated: false, reason: 'Agent actions are muted by user' }` and no toast appears",
+            "C": "The toast is queued and shown when the user unmutes",
+            "D": "The command throws an error that the agent must handle",
+            "E": "The toast appears regardless — mute only affects navigation, not annotations"
+          },
+          "correct": "B",
+          "explanation": "When the user mutes agent actions, ALL agent effects are silently discarded — navigate, highlight, annotate, and clear commands all return a response with `reason: 'Agent actions are muted by user'`. The server checks UserStateTracker.isMuted() before broadcasting. The agent can detect this via `paradigm_platform_observe` which returns `{ muted: true }`."
+        },
+        {
+          "id": "q4",
+          "question": "How does the Platform determine an agent's display color in the header presence indicator?",
+          "choices": {
+            "A": "Each agent chooses its color when connecting via WebSocket",
+            "B": "Colors are assigned sequentially from a fixed palette (first agent = blue, second = green, etc.)",
+            "C": "The color is deterministically computed from a hash of the agent's Symphony identity string ({project}/{role})",
+            "D": "Colors are stored in .paradigm/config.yaml under platform.agentColors",
+            "E": "All agents share the same color — they're distinguished by name only"
+          },
+          "correct": "C",
+          "explanation": "Agent colors are deterministic: the AgentPresenceManager computes a hash of the agentId string (e.g., 'a-paradigm/core') and maps it to one of 8 predefined colors. This means the same agent always gets the same color across sessions, making it recognizable. The identity reuses Symphony's {project}/{role} pattern."
+        },
+        {
+          "id": "q5",
+          "question": "An agent wants to understand what the user is currently looking at before deciding what to highlight. Which approach is correct?",
+          "choices": {
+            "A": "Read the platformStore.ts file to check the activeSection variable",
+            "B": "Call `paradigm_platform_observe()` which returns the current section, selected symbol, theme, mute state, and connected agents",
+            "C": "Call `paradigm_status` which includes the Platform UI state in its output",
+            "D": "Check the browser's localStorage via a Bash command",
+            "E": "Call `paradigm_navigate({ intent: 'context' })` which includes Platform UI state"
+          },
+          "correct": "B",
+          "explanation": "paradigm_platform_observe is the dedicated tool for reading UI state. It sends an 'observe' command to the Platform server, which returns the UserStateTracker's accumulated state: current section, selected symbol, theme, mute status, connected agents, and optionally active highlights/annotations. This is real-time data from the server, not a file read."
+        }
+      ]
     }
   ]
 }

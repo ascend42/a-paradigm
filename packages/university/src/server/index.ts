@@ -58,6 +58,7 @@ export interface ServerOptions {
   open?: boolean;
   contentDir?: string;
   uiDistPath?: string;
+  projectDir?: string;
 }
 
 /**
@@ -93,7 +94,7 @@ function resolveAssetPaths(options?: { contentDir?: string; uiDistPath?: string 
 /**
  * Create the Express application with all routes configured
  */
-export function createApp(options?: { contentDir?: string; uiDistPath?: string }): Express {
+export function createApp(options?: { contentDir?: string; uiDistPath?: string; projectDir?: string }): Express {
   const app = express();
 
   app.use(express.json());
@@ -110,7 +111,7 @@ export function createApp(options?: { contentDir?: string; uiDistPath?: string }
 
   // API routes
   app.use('/api/courses', createCoursesRouter(contentDir));
-  app.use('/api/plsat', createPlsatRouter(contentDir));
+  app.use('/api/plsat', createPlsatRouter(contentDir, options?.projectDir));
 
   // Reference cards
   app.get('/api/reference', (_req: Request, res: Response) => {
@@ -151,6 +152,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const app = createApp({
     contentDir: options.contentDir,
     uiDistPath: options.uiDistPath,
+    projectDir: options.projectDir,
   });
 
   log.component('university-server').info('Starting server', { port: options.port });

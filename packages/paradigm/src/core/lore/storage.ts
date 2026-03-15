@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { execSync } from 'child_process';
-import type { LoreEntry, LoreFilter, LoreTimeline } from './types.js';
+import type { LoreEntry, LoreFilter, LoreTimeline, LoreAssessment } from './types.js';
 import { applyLoreFilter } from './filter.js';
 import { normalizeLoreEntry } from './normalize.js';
 import { resolveAuthor, sanitizeAuthor } from './resolve-author.js';
@@ -409,6 +409,51 @@ export async function addReview(
 }
 
 /**
+ * Compute implied score from assessment verdict
+ */
+function verdictToScore(verdict: LoreAssessment['verdict']): number {
+  switch (verdict) {
+    case 'correct': return 1.0;
+    case 'partial': return 0.5;
+    case 'incorrect': return 0.0;
+  }
+}
+
+/**
+ * Add or update an assessment on an existing lore entry
+ */
+export async function addAssessment(
+  rootDir: string,
+  entryId: string,
+  assessment: LoreAssessment
+): Promise<boolean> {
+  const entries = await loadLoreEntries(rootDir);
+  const entry = entries.find(e => e.id === entryId);
+
+  if (!entry) {
+    return false;
+  }
+
+  const dateStr = entry.timestamp.slice(0, 10);
+  const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
+
+  if (!entryPath) {
+    return false;
+  }
+
+  entry.assessment = assessment;
+
+  // Compute assessment_delta if confidence exists
+  if (entry.confidence != null) {
+    entry.assessment_delta = verdictToScore(assessment.verdict) - entry.confidence;
+  }
+
+  fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
+
+  return true;
+}
+
+/**
  * Load a single entry by ID
  */
 export async function loadLoreEntry(rootDir: string, entryId: string): Promise<LoreEntry | null> {
@@ -469,6 +514,9 @@ export async function updateLoreEntry(
   if (partial.linked_lore !== undefined) entry.linked_lore = partial.linked_lore;
   if (partial.linked_tasks !== undefined) entry.linked_tasks = partial.linked_tasks;
   if (partial.linked_commits !== undefined) entry.linked_commits = partial.linked_commits;
+  if (partial.confidence !== undefined) entry.confidence = partial.confidence;
+  if (partial.assessment !== undefined) entry.assessment = partial.assessment;
+  if (partial.assessment_delta !== undefined) entry.assessment_delta = partial.assessment_delta;
 
   fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
   await rebuildTimeline(rootDir);

@@ -1,5 +1,5 @@
 name: university-courses
-description: Course content for Paradigm University — 5 courses, 49 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
+description: Course content for Paradigm University — 5 courses, 50 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
 
 components:
   # PARA 101: Foundations (8 lessons)
@@ -305,3 +305,9 @@ components:
     file: para-501.json
     tags: [course-content, para-501]
     references: ["#lore-system"]
+
+  para-501-platform-agent-ui:
+    description: "Platform & Agent-Driven UI — paradigm serve, MCP→HTTP→WS→browser pipeline, 5 agent tools, conflict resolution, presence, visual treatment"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#PlatformServer", "#PlatformWebSocket", "#AgentPresenceManager", "#UserStateTracker", "#AgentCommandRoute", "#PlatformTools", "#AgentStore", "#AgentToast", "#AgentCallout"]

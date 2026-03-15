@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-12T21:30:09.702Z'
+generated: '2026-03-15T08:25:07.206Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -157,7 +157,7 @@ protocols:
       - status
   - id: P-add-mcp-tool
     name: Add a new MCP tool
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:45.738Z'
     trigger:
       - add tool
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 28
-  stale: 9
+  current: 27
+  stale: 10
   broken: 0

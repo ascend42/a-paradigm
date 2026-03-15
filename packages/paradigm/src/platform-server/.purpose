@@ -1,0 +1,46 @@
+description: Unified Express server for Paradigm Platform — mounts lore, graph, and platform routes under a single port, with WebSocket for agent-driven UI
+components:
+  PlatformServer:
+    description: Creates and starts the unified Express app with all route handlers and WebSocket
+    type: service
+    tags: [feature, server]
+  PlatformWebSocket:
+    description: WebSocket server attached to HTTP server — broadcasts agent commands to browsers, receives user activity
+    type: service
+    parent: '#PlatformServer'
+    tags: [feature, server, agent-ui]
+  AgentPresenceManager:
+    description: Tracks connected agents, auto-prunes stale agents after 2min idle
+    type: service
+    parent: '#PlatformWebSocket'
+    tags: [feature, agent-ui]
+  UserStateTracker:
+    description: Accumulates user activity (section, symbol, theme) for agent observe tool
+    type: service
+    parent: '#PlatformWebSocket'
+    tags: [feature, agent-ui]
+  AgentCommandRoute:
+    description: POST /api/platform/agent-command — receives MCP commands, broadcasts via WS
+    type: route
+    parent: '#PlatformServer'
+    tags: [feature, agent-ui]
+flows:
+  $platform-serve:
+    description: paradigm serve → create Express app → mount routes → attach WS → serve SPA → listen
+    steps:
+      - Mount lore routes (/api/lore, /api/info, /api/sessions)
+      - Mount graph routes (/api/symbols, /api/graphs)
+      - Mount platform routes (/api/platform/health, /api/platform/sections)
+      - Attach WebSocket server on /ws path
+      - Mount agent command route (/api/platform/agent-command)
+      - Serve platform-ui static files
+      - SPA fallback for client-side routing
+  $agent-command:
+    description: MCP tool → HTTP POST → server validates → WS broadcast → browser updates
+    steps:
+      - MCP tool calls platform-bridge HTTP helper
+      - POST /api/platform/agent-command with command + agentId + payload
+      - Server registers agent presence if new
+      - Server checks user mute state
+      - Server broadcasts typed WS message to all browser clients
+      - Browser agentStore processes message and updates UI

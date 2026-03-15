@@ -41,3 +41,21 @@ components:
     tags: [integration, symphony, sentinel]
     anchors:
       - symphony.ts:657-756
+  lore-assess:
+    description: "paradigm_lore_assess: record human assessment verdict (correct/partial/incorrect) on a lore entry, auto-compute calibration delta"
+    type: tool
+    parent: '#LoreTools'
+    tags: [feature, lore, calibration, mcp]
+  lore-calibration:
+    description: "paradigm_lore_calibration: query calibration statistics — accuracy rate, avg confidence, calibration score, verdict breakdown, groupBy (symbol/tag/type), low-N insights"
+    type: tool
+    parent: '#LoreTools'
+    tags: [feature, lore, calibration, mcp]
+  UniversityTools:
+    description: 9 MCP tools for per-project university (search, get, create, update, quiz, submit, onboard, diplomas, validate)
+    type: tool-group
+    tags: [feature, university, mcp]
+  PlatformTools:
+    description: 5 MCP tools for agent-driven UI (navigate, highlight, annotate, observe, clear) — HTTP bridge to Platform server
+    type: tool-group
+    tags: [feature, platform, agent-ui, mcp]

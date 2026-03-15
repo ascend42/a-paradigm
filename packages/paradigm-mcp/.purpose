@@ -52,6 +52,7 @@ description: |
     - "#OrchestrationTools"
     - "#AspectGraphTools"
     - "#WorkspaceLoader"
+    - "#LoreTools"
     - "#HabitsTools"
     - "#GraphTools"
     - "#ConductorTools"
@@ -158,6 +159,14 @@ description: |
   anchors:
     - src/tools/conductor.ts:1-200
     - src/utils/conductor-loader.ts:1-238
+
+#LoreTools:
+  description: "Lore MCP tools: search, record, get, update, delete, timeline, assess, calibration. Includes confidence scoring (0-1) on recording, human assessment verdicts (correct/partial/incorrect), delta computation, and calibration statistics with groupBy and low-N insights."
+  type: tool
+  tags: [mcp, lore, calibration]
+  anchors:
+    - src/tools/lore.ts:1-800
+    - src/utils/lore-loader.ts:1-720
 
 #HabitsTools:
   description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation

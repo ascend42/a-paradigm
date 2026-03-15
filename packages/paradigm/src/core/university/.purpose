@@ -1,0 +1,10 @@
+purpose: CLI-side university core - types and storage
+description: >
+  Core types and storage operations for per-project university content.
+  Mirrors MCP-side university-loader.ts for CLI command usage.
+
+components:
+  UniversityStorage:
+    description: CRUD operations for notes, quizzes, paths, diplomas
+    type: storage
+    tags: [university, storage]

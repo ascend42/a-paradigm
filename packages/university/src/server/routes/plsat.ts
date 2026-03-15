@@ -152,7 +152,7 @@ function countV3Questions(data: V3Exam): number {
   return count;
 }
 
-export function createPlsatRouter(contentDir: string): Router {
+export function createPlsatRouter(contentDir: string, projectDir?: string): Router {
   const router = Router();
 
   // GET /api/plsat - Get available PLSAT versions
@@ -218,6 +218,59 @@ export function createPlsatRouter(contentDir: string): Router {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Internal error';
       return res.status(500).json({ error: `Failed to load PLSAT exam: ${msg}` });
+    }
+  });
+
+  // POST /api/plsat/diploma - Save a PLSAT diploma to the project university
+  router.post('/diploma', (req: Request, res: Response) => {
+    if (!projectDir) {
+      return res.status(400).json({ error: 'No project directory configured' });
+    }
+
+    const diplomaDir = path.join(projectDir, '.paradigm', 'university', 'diplomas');
+    if (!fs.existsSync(diplomaDir)) {
+      // University not set up — silently succeed
+      return res.json({ saved: false, reason: 'university directory not found' });
+    }
+
+    try {
+      const { student, version, score, total, percentage, passed } = req.body;
+      if (!student || !version || score == null || total == null) {
+        return res.status(400).json({ error: 'Missing required fields: student, version, score, total' });
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const sanitizedStudent = String(student).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 20);
+      const id = `D-${today}-${sanitizedStudent}-plsat-v${version}`;
+
+      const diploma = {
+        id,
+        type: 'plsat',
+        student: sanitizedStudent,
+        earnedAt: new Date().toISOString(),
+        source: `plsat:v${version}`,
+        score,
+        total,
+        percentage: percentage ?? (total > 0 ? Math.round((score / total) * 10000) / 100 : 0),
+        passed: passed ?? false,
+        details: { plsatVersion: version },
+      };
+
+      const filePath = path.join(diplomaDir, `${id}.yaml`);
+      // Simple YAML serialization (avoid importing js-yaml in the university package)
+      const yamlLines = Object.entries(diploma).map(([k, v]) => {
+        if (typeof v === 'object' && v !== null) {
+          const nested = Object.entries(v).map(([nk, nv]) => `  ${nk}: ${JSON.stringify(nv)}`).join('\n');
+          return `${k}:\n${nested}`;
+        }
+        return `${k}: ${JSON.stringify(v)}`;
+      });
+      fs.writeFileSync(filePath, yamlLines.join('\n') + '\n', 'utf8');
+
+      return res.json({ saved: true, diplomaId: id });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Internal error';
+      return res.status(500).json({ error: `Failed to save diploma: ${msg}` });
     }
   });
 

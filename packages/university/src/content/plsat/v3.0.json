@@ -2,7 +2,7 @@
   "version": "3.0",
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
-  "totalSlots": 108,
+  "totalSlots": 112,
   "passThreshold": 0.8,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
   "description": "99 questions. 90 minutes. 80% to pass. Good luck, scholar.",
@@ -2774,6 +2774,118 @@
           },
           "correct": "B",
           "explanation": "The agent writes replies to its own outbox.jsonl via `paradigm_symphony_send`. A mail router process (in The Score's Phase 0 implementation) or Conductor (in later phases) reads outbox files and delivers messages to the correct recipient inbox files. This separation of write (outbox) and delivery (router) keeps the protocol simple — agents only ever write to their own outbox and read from their own inbox."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-109",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-109",
+          "scenario": "A developer is using `paradigm serve` to run the Platform. Their AI agent is helping refactor `#payment-service`. The agent wants to walk the developer through three related components on the Graph canvas, but the developer is currently reading a lore entry.",
+          "question": "What sequence of MCP tool calls should the agent use to present its walkthrough without disrupting the developer?",
+          "choices": {
+            "A": "Call `paradigm_platform_navigate` three times rapidly for each component — the browser handles queuing",
+            "B": "Call `paradigm_platform_observe` first to check if the user is active, then `paradigm_platform_annotate` with a toast saying 'I'd like to show you something on the Graph', then navigate after the user responds",
+            "C": "Call `paradigm_platform_highlight` on all three symbols simultaneously — highlights work across all sections",
+            "D": "Write to the Symphony mailbox and wait for the developer to read the message",
+            "E": "Call `paradigm_platform_clear` first, then force-navigate to each component"
+          },
+          "correct": "B",
+          "explanation": "The agent should first observe the user's state to understand context (are they busy? what section? muted?). Since the user is actively reading lore, the agent should use a toast annotation to signal intent rather than auto-navigating. When the user is active (<5s since last interaction), navigate commands show a prompt rather than auto-executing — but checking observe first lets the agent tailor its approach."
+        },
+        {
+          "id": "plsat-109b",
+          "scenario": "An AI agent calls `paradigm_platform_highlight({ symbols: ['#api-gateway', '#auth-middleware', '#rate-limiter'], label: 'Security surface', duration: 8000, pulse: true })` on the Platform. The developer sees three nodes glowing on the Graph canvas.",
+          "question": "What happens to the highlights after 8 seconds?",
+          "choices": {
+            "A": "They remain until the developer clicks on one of the nodes",
+            "B": "They fade out automatically — the duration parameter sets auto-expiry on both server (UserStateTracker) and browser (agentStore)",
+            "C": "They persist until the agent calls `paradigm_platform_clear({ target: 'highlights' })`",
+            "D": "They remain but the pulse animation stops",
+            "E": "The Platform server removes them but the browser keeps a static glow"
+          },
+          "correct": "B",
+          "explanation": "The duration parameter controls auto-expiry. On the server, UserStateTracker schedules removal after the specified milliseconds. On the browser, agentStore sets a setTimeout that filters out the highlight after duration expires. Both sides independently clean up, so even if a message is lost, the highlight eventually disappears."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-110",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-110",
+          "scenario": "The Platform server starts with `paradigm serve`. Two browser tabs are open. An MCP tool sends an `agent:annotate` command with type `callout` targeting `#database-pool`.",
+          "question": "How does the annotation reach both browser tabs?",
+          "choices": {
+            "A": "The MCP tool sends the command directly to each tab via separate HTTP requests",
+            "B": "The Platform server stores the annotation in scan-index.json and both tabs poll for changes",
+            "C": "The MCP tool POSTs to /api/platform/agent-command, the server broadcasts a WebSocket message to all connected clients in the wsClients Set — both tabs receive it",
+            "D": "Only the active tab receives the annotation; the other tab receives it on focus",
+            "E": "The annotation is stored in localStorage, which is shared between tabs"
+          },
+          "correct": "C",
+          "explanation": "The Platform server maintains a Set<WebSocket> of all connected browser clients. When the agent command route receives a POST, it broadcasts the typed message (agent:annotate) to every client with readyState === OPEN. Both tabs have independent WebSocket connections to ws://localhost:3850/ws, so both receive the broadcast simultaneously."
+        },
+        {
+          "id": "plsat-110b",
+          "scenario": "A developer opens the Platform at localhost:3850 and navigates to the Graph section. They select `#payment-service`. The Platform server's UserStateTracker records this activity. Ten seconds later, the AI agent calls `paradigm_platform_observe()`.",
+          "question": "What information does the observe tool return?",
+          "choices": {
+            "A": "Only whether the Platform is running — `{ connected: true }`",
+            "B": "The section, selected symbol, theme, mute state, connected agents, browser client count, and optionally active highlights/annotations",
+            "C": "The full DOM tree of the Platform UI for the agent to parse",
+            "D": "A diff of everything that changed since the agent's last observe call",
+            "E": "Only the section name and selected symbol — no agent or highlight info"
+          },
+          "correct": "B",
+          "explanation": "paradigm_platform_observe returns the full UI state from the UserStateTracker: connected (boolean), users (client count), agents (array of AgentPresence with agentId, color, timestamps), and state (section, selectedSymbol, theme, muted). With detail: 'full', it also includes active highlights and annotations. This gives the agent a complete picture of the shared workspace."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-111",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-111",
+          "scenario": "An agent connected to the Platform has been idle for 3 minutes. No MCP tool calls have been made. The AgentPresenceManager runs its periodic cleanup.",
+          "question": "What happens to the agent's presence?",
+          "choices": {
+            "A": "Nothing — agents are only removed when they explicitly disconnect",
+            "B": "The agent is marked as 'idle' but remains in the agents list with a dimmed indicator",
+            "C": "The agent is pruned from the presence list and an `agent:leave` message is broadcast to all browsers, removing the presence dot from the header",
+            "D": "The server sends a ping to the agent and waits for a response before deciding",
+            "E": "The agent's highlights and annotations are cleared but its presence remains"
+          },
+          "correct": "C",
+          "explanation": "The AgentPresenceManager runs pruneStale() every 30 seconds. Any agent whose lastActivity timestamp is more than 2 minutes old is removed from the agents Map and an agent:leave message is broadcast to all browser clients. The browser's agentStore filters out the agent, and the header presence dots update. This prevents ghost agents from accumulating."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-112",
+      "course": "para-501",
+      "variants": [
+        {
+          "id": "plsat-112",
+          "scenario": "You're building a new Platform section that should respond to agent highlight commands. The existing sections (Graph, Lore, Overview) already work with the agent-driven UI system.",
+          "question": "Which browser-side component is responsible for receiving WebSocket agent messages and updating the Zustand store?",
+          "choices": {
+            "A": "platformStore.ts — all state flows through the main platform store",
+            "B": "useActivityReporter — it handles all WebSocket communication bidirectionally",
+            "C": "useAgentEffects — it connects WebSocket `agent:*` messages to agentStore.handleAgentMessage, with auto-reconnect on disconnect",
+            "D": "AgentToast — it listens for WebSocket messages and renders toasts",
+            "E": "The Platform server pushes state updates directly into the browser's agentStore via a shared reference"
+          },
+          "correct": "C",
+          "explanation": "useAgentEffects is the WebSocket→store bridge. It establishes a WebSocket connection to ws://localhost:{port}/ws, listens for messages whose type starts with 'agent:', and dispatches them to agentStore.handleAgentMessage. It also handles auto-reconnect (3s delay on close). useActivityReporter (B) handles the opposite direction — reporting user actions TO the server. AgentToast (D) only renders; it reads from the store but doesn't handle WebSocket."
         }
       ]
     }

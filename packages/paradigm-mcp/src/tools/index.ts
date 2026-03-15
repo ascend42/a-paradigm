@@ -45,11 +45,14 @@ import { getHeatmapToolsList, handleHeatmapTool } from './heatmap.js';
 import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
 import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
+import { getUniversityToolsList, handleUniversityTool } from './university.js';
+import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
 import { getAffectedPersonas } from '../utils/personas-loader.js';
+import { getAffectedUniversityContent } from '../utils/university-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
@@ -284,6 +287,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getConductorToolsList(),
           // Symphony (The Score) tools
           ...getSymphonyToolsList(),
+          // University (per-project knowledge base) tools
+          ...getUniversityToolsList(),
+          // Platform agent-driven UI tools
+          ...getPlatformToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -641,6 +648,21 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           } catch {
             // Persona check is non-fatal
+          }
+
+          // Check for affected university content
+          try {
+            const universityAffected = getAffectedUniversityContent(ctx.rootDir, symbol);
+            if (universityAffected.length > 0) {
+              response.university_content_affected = universityAffected.map(c => ({
+                id: c.id,
+                title: c.title,
+                type: c.type,
+                stale: c.stale,
+              }));
+            }
+          } catch {
+            // University content check is non-fatal
           }
 
           // Check for cross-project workspace impact
@@ -1384,6 +1406,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try symphony tools
           if (name.startsWith('paradigm_symphony_')) {
             const result = await handleSymphonyTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try university tools
+          if (name.startsWith('paradigm_university_')) {
+            const result = await handleUniversityTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try platform tools (agent-driven UI)
+          if (name.startsWith('paradigm_platform_')) {
+            const result = await handlePlatformTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

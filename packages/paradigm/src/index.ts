@@ -1508,6 +1508,7 @@ loreCmd
   .option('--body <text>', 'Long-form content (detailed notes, rationale, etc.)')
   .option('--link-lore <ids>', 'Comma-separated lore entry IDs to link')
   .option('--link-commits <shas>', 'Comma-separated git commit SHAs to link')
+  .option('--confidence <number>', 'Confidence in correctness (0.0 to 1.0)')
   .action(async (options) => {
     const { loreRecordCommand } = await import('./commands/lore/record.js');
     await loreRecordCommand(options);
@@ -1523,6 +1524,29 @@ loreCmd
   .action(async (id, options) => {
     const { loreReviewCommand } = await import('./commands/lore/review.js');
     await loreReviewCommand(id, options);
+  });
+
+loreCmd
+  .command('assess <id> <verdict>')
+  .description('Record an assessment verdict on a lore entry (correct/partial/incorrect)')
+  .option('--assessor <name>', 'Assessor name')
+  .option('--notes <text>', 'Assessment notes')
+  .action(async (id, verdict, options) => {
+    const { loreAssessCommand } = await import('./commands/lore/assess.js');
+    await loreAssessCommand(id, verdict, options);
+  });
+
+loreCmd
+  .command('calibration')
+  .description('Show calibration statistics across assessed lore entries')
+  .option('--symbol <symbol>', 'Filter by symbol')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--author <author>', 'Filter by author')
+  .option('--group-by <dimension>', 'Group by: symbol, tag, type')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { loreCalibrationCommand } = await import('./commands/lore/calibration.js');
+    await loreCalibrationCommand(options);
   });
 
 loreCmd
@@ -1592,6 +1616,18 @@ loreCmd
   .action(async (options) => {
     const { loreServeCommand } = await import('./commands/lore/serve.js');
     await loreServeCommand(undefined, options);
+  });
+
+// paradigm serve — unified Platform server
+program
+  .command('serve')
+  .description('Launch Paradigm Platform — unified development management UI')
+  .option('-p, --port <port>', 'Port to run on', '3850')
+  .option('--no-open', "Don't open browser automatically")
+  .option('--sections <list>', 'Comma-separated sections to enable (e.g., lore,graph,git)')
+  .action(async (options) => {
+    const { serveCommand } = await import('./commands/serve.js');
+    await serveCommand(options);
   });
 
 // paradigm graph — interactive symbol graph (with subcommands)
@@ -1760,15 +1796,94 @@ program
     await conductorCommand(options);
   });
 
-// paradigm university - Launch the Paradigm University learning platform
-program
+// paradigm university <command> - Per-project university & global learning platform
+const universityCmd = program
   .command('university')
-  .description('Launch Paradigm University - interactive learning platform & PLSAT certification')
+  .description('Per-project university - knowledge base, quizzes, learning paths & PLSAT certification');
+
+universityCmd
+  .command('serve')
+  .description('Launch Paradigm University learning platform')
   .option('-p, --port <port>', 'Port to run on', '3839')
   .option('--no-open', "Don't open browser automatically")
   .action(async (options) => {
-    const { universityCommand } = await import('./commands/university.js');
-    await universityCommand(undefined, options);
+    const { universityServeCommand } = await import('./commands/university/serve.js');
+    await universityServeCommand(undefined, options);
+  });
+
+universityCmd
+  .command('list')
+  .alias('ls')
+  .description('List university content')
+  .option('--type <type>', 'Filter by type: note, policy, guide, runbook, quiz, path')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--difficulty <level>', 'Filter by difficulty: beginner, intermediate, advanced')
+  .option('--symbol <symbol>', 'Filter by Paradigm symbol')
+  .option('-l, --limit <number>', 'Number of entries', '20')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { universityListCommand } = await import('./commands/university/list.js');
+    await universityListCommand(options);
+  });
+
+universityCmd
+  .command('add <type>')
+  .description('Create university content (note, policy, guide, runbook, quiz)')
+  .option('--title <title>', 'Content title (required)')
+  .option('--body <text>', 'Content body (markdown)')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--symbols <symbols>', 'Comma-separated Paradigm symbols')
+  .option('--difficulty <level>', 'Difficulty: beginner, intermediate, advanced')
+  .option('--minutes <n>', 'Estimated reading time in minutes')
+  .action(async (type, options) => {
+    const { universityAddCommand } = await import('./commands/university/add.js');
+    await universityAddCommand(type, options);
+  });
+
+universityCmd
+  .command('show <id>')
+  .description('Show a content item in full')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { universityShowCommand } = await import('./commands/university/show.js');
+    await universityShowCommand(id, options);
+  });
+
+universityCmd
+  .command('quiz <id>')
+  .description('Take an interactive quiz in the terminal')
+  .action(async (id) => {
+    const { universityQuizCommand } = await import('./commands/university/quiz.js');
+    await universityQuizCommand(id);
+  });
+
+universityCmd
+  .command('status')
+  .description('Show university content overview and completion stats')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { universityStatusCommand } = await import('./commands/university/status.js');
+    await universityStatusCommand(options);
+  });
+
+universityCmd
+  .command('validate')
+  .description('Validate university content integrity')
+  .option('--deep', 'Enable deep cross-reference checks against scan-index')
+  .option('--id <id>', 'Validate a specific content item')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { universityValidateCommand } = await import('./commands/university/validate.js');
+    await universityValidateCommand(options);
+  });
+
+// Default university action: launch server (backward compat with bare `paradigm university`)
+universityCmd
+  .option('-p, --port <port>', 'Port to run on', '3839')
+  .option('--no-open', "Don't open browser automatically")
+  .action(async (options) => {
+    const { universityServeCommand } = await import('./commands/university/serve.js');
+    await universityServeCommand(undefined, options);
   });
 
 // paradigm pipeline <command>

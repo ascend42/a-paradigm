@@ -1,0 +1,21 @@
+version: 2.0.0
+description: |
+  Core lore data model, storage, and filtering. Canonical type definitions
+  for LoreEntry, LoreDecision, LoreAssessment, and LoreFilter.
+
+components:
+  lore-types:
+    description: Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline
+    type: model
+  lore-storage:
+    description: Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry
+    type: service
+  lore-filter:
+    description: Filter engine — applyLoreFilter with hasConfidence/hasAssessment support, searchLoreEntries
+    type: utility
+  lore-normalize:
+    description: Normalizes legacy entry formats to v2 schema
+    type: utility
+  lore-resolve-author:
+    description: Resolves author from env, git config, or OS username
+    type: utility

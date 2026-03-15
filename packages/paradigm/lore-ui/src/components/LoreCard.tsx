@@ -81,6 +81,32 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
             {loc > 0 && <span>{loc} loc</span>}
             {entry.duration_minutes && <span>{entry.duration_minutes}m</span>}
             <VerificationBadge status={entry.verification?.status} />
+            {entry.confidence != null && (
+              <span style={{
+                padding: '1px 5px',
+                background: 'rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: 8,
+                fontSize: 10,
+                color: '#8b5cf6',
+              }}>{(entry.confidence * 100).toFixed(0)}%</span>
+            )}
+            {entry.assessment && (
+              <span style={{
+                padding: '1px 5px',
+                background: entry.assessment.verdict === 'correct' ? 'rgba(52, 211, 153, 0.15)'
+                  : entry.assessment.verdict === 'partial' ? 'rgba(251, 191, 36, 0.15)'
+                  : 'rgba(248, 113, 113, 0.15)',
+                border: `1px solid ${entry.assessment.verdict === 'correct' ? 'rgba(52, 211, 153, 0.3)'
+                  : entry.assessment.verdict === 'partial' ? 'rgba(251, 191, 36, 0.3)'
+                  : 'rgba(248, 113, 113, 0.3)'}`,
+                borderRadius: 8,
+                fontSize: 10,
+                color: entry.assessment.verdict === 'correct' ? '#34d399'
+                  : entry.assessment.verdict === 'partial' ? '#fbbf24'
+                  : '#f87171',
+              }}>{entry.assessment.verdict}</span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {entry.review && <ReviewStars rating={entry.review.quality} />}

@@ -5,6 +5,98 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.41.0] — 2026-03-15
+
+### Added
+
+- **Agent-Driven UI** — AI agents can now drive the Platform browser UI in real-time via 5 new MCP tools, turning the interaction model from "agent responds to text" into "agent and human share a workspace."
+- **MCP tools** — `paradigm_platform_navigate` (switch sections, select symbols), `paradigm_platform_highlight` (pulsing glow on symbols), `paradigm_platform_annotate` (toasts, callouts, badges), `paradigm_platform_observe` (read current UI state), `paradigm_platform_clear` (remove agent effects).
+- **WebSocket infrastructure** — Platform server now supports WebSocket on `/ws` for real-time agent→browser communication. Uses same pattern as Sentinel WS server.
+- **Agent command route** — `POST /api/platform/agent-command` receives MCP commands and broadcasts to all connected browsers.
+- **AgentPresenceManager** — Tracks connected agents by ID, auto-prunes stale agents after 2min idle, deterministic color from agent ID hash.
+- **UserStateTracker** — Accumulates user activity (section, symbol, theme) for the `observe` tool.
+- **Platform bridge** — HTTP helper in paradigm-mcp for MCP→Platform server communication. Resolves port from config.yaml, resolves agent identity from Symphony pattern.
+- **Browser agent store** — Zustand store (`agentStore.ts`) managing agent presence, highlights, annotations, toasts, mute state, and pending navigation.
+- **Agent effect hooks** — `useAgentEffects` (WebSocket→store bridge with auto-reconnect), `useActivityReporter` (reports user section/theme changes to server).
+- **Visual components** — `AgentToast` (severity-colored toasts with robot icon), `AgentCallout` (floating callouts for graph nodes), `AgentNavigationPrompt` (conflict resolution when user is active).
+- **Conflict resolution** — User always wins: idle user → agent navigates immediately; active user → shows "Go there / Dismiss" prompt; muted → all agent effects silently discarded.
+- **Agent CSS** — Highlight pulse animations, dashed selection rings, toast slide-in, callout/nav-prompt animations, presence dots, mute button styles.
+- **Spec update** — Section 21 "Agent-Driven UI" added to `docs/specs/platform.md` with full architecture, tool specs, WS messages, and visual treatment reference.
+- **Expanded SectionId type** — Platform UI now supports `sentinel`, `university`, and `symphony` sections with placeholder pages ("Coming in Platform Phase 2").
+- **University content** — New PARA 501 lesson "Platform & Agent-Driven UI" (5 quiz questions) + 4 PLSAT slots (109-112, 7 question variants) covering the MCP→HTTP→WS pipeline, conflict resolution, observe, highlights, presence pruning.
+- **CLAUDE.md** — Added 5 platform tools to MCP workflow table and token budget reference.
+
+### Fixed
+
+- **Lore section crash** — `tags` field on some lore entries was a string instead of array, causing `.some()` TypeError. Added `Array.isArray()` guard.
+
+Symbols: #PlatformWebSocket, #AgentPresenceManager, #UserStateTracker, #AgentCommandRoute, #PlatformTools, #AgentStore, #AgentToast, #AgentCallout
+
+## [3.40.0] — 2026-03-15
+
+### Added
+
+- **Paradigm Platform Phase 0** — `paradigm serve` launches a unified development management platform in a single browser tab on port 3850.
+- **Unified Express server** — Mounts existing lore routes (`/api/lore`, `/api/info`, `/api/sessions`) and graph routes (`/api/symbols`, `/api/graphs`) under one server process.
+- **Platform-specific endpoints** — `/api/platform/health` (server status + enabled sections), `/api/platform/sections` (available sections list).
+- **Platform UI shell** — React 18 + Zustand SPA with sidebar navigation, header bar, theme toggle (dark/light), and section routing.
+- **Absorbed lore-ui** — Lore section with all 4 views (timeline, session, symbol, author) running inside the Platform shell.
+- **Absorbed graph-ui** — Graph section with full React Flow canvas, symbol panel, toolbar, export/load dialogs running inside the Platform shell.
+- **Overview dashboard** — Landing section with symbol counts and lore entry totals.
+- **Lazy-loaded sections** — Lore and Graph sections code-split for fast initial load.
+- **Section auto-detection** — Sentinel and University sections detected automatically based on installed packages.
+- **Backwards compatible** — `paradigm lore serve` (port 3840) and `paradigm graph serve` (port 3841) continue working unchanged.
+- **Platform spec** — Comprehensive 8-phase spec at `docs/specs/platform.md` (2,334 lines) covering governance, meetings, methodology, and more.
+
+Symbols: #PlatformServer, #PlatformShell, #ServeCommand, #LoreSection, #GraphSection, #OverviewSection
+
+## [3.39.0] — 2026-03-15
+
+### Added
+
+- **Per-Project University** — Every project can maintain its own university at `.paradigm/university/` with structured notes, policies, quizzes, learning paths, and diplomas.
+- **University content types** — Notes (`N-`), Policies (`P-`), Quizzes (`Q-`), Learning Paths (`LP-`), Diplomas (`D-`) with YAML/Markdown schemas.
+- **University config** — `.paradigm/university/config.yaml` with branding (name, tagline, institution), theme (colors, font), content categories, and diploma settings.
+- **9 MCP tools** — `paradigm_university_search`, `paradigm_university_get`, `paradigm_university_create`, `paradigm_university_update`, `paradigm_university_quiz`, `paradigm_university_submit`, `paradigm_university_onboard`, `paradigm_university_diplomas`, `paradigm_university_validate`.
+- **7 CLI commands** — `paradigm university serve|list|add|show|quiz|status|validate`. Bare `paradigm university` defaults to serve (backward compat).
+- **Symbol linking** — `symbols` field on university content is load-bearing: validated against scan-index, surfaced in ripple (`university_content_affected`), and staleness-checked against `.purpose` file modification dates.
+- **Reindex integration** — `paradigm_reindex` rebuilds university index (`.paradigm/university/index.yaml`) alongside scan-index, navigator, flows, etc. Reports `universityStats` in result.
+- **Doctor integration** — `paradigm doctor` checks university content health: validates quiz answers, learning path step references, and reports content count.
+- **2 seed habits** — `university-content-valid` (advisory on-stop, validates content), `university-onboarded` (advisory preflight, opt-in, reminds to call onboard).
+- **PLSAT diploma auto-save** — `POST /api/plsat/diploma` endpoint writes diplomas to `.paradigm/university/diplomas/` when university directory exists. Server accepts `projectDir` option.
+- **Shift template** — `paradigm shift` creates `.paradigm/university/` directory structure with default `config.yaml` using project name as institution.
+- **CLAUDE.md updates** — Project University section, MCP Workflow Protocol entries, token budget entries for university tools.
+- **`quality` habit category** — Added to HabitCategory type for university content validation habits.
+
+Symbols: #UniversityTools, #UniversityStorage, #UniversityCommands, #university-loader, #UniversityTypes
+
+## [3.38.0] — 2026-03-15
+
+### Added
+
+- **Lore Confidence Calibration** — Agents can attach confidence scores (0.0-1.0) to lore entries, and humans can record assessment verdicts (correct/partial/incorrect). The system computes calibration deltas and builds domain-specific reliability maps.
+- **`confidence` field on LoreEntry** — Optional 0.0-1.0 score expressing agent's predicted confidence in correctness. Also available on `LoreDecision`.
+- **`assessment` field on LoreEntry** — Human verdict (`correct`/`partial`/`incorrect`) with assessor, timestamp, and optional notes.
+- **`assessment_delta` field on LoreEntry** — Auto-computed difference between implied outcome score and confidence (positive = under-confident, negative = over-confident).
+- **`paradigm_lore_assess` MCP tool** — Record assessment verdict on a lore entry. Auto-computes delta if confidence was recorded. ~100 tokens.
+- **`paradigm_lore_calibration` MCP tool** — Query calibration statistics across assessed entries. Returns accuracy rate, avg confidence, calibration score, verdict breakdown, groupBy support (symbol/tag/type), and natural-language insights with low-N caveats. ~200 tokens.
+- **`paradigm lore assess <id> <verdict>` CLI** — Record assessment with `--assessor` and `--notes` options. Shows delta and calibration interpretation.
+- **`paradigm lore calibration` CLI** — Show calibration report with `--symbol`, `--tag`, `--author`, `--group-by`, and `--json` options.
+- **`--confidence` flag on `paradigm lore record`** — Attach confidence score when recording entries via CLI.
+- **`confidence` param on `paradigm_lore_record` and `paradigm_lore_update`** — Attach/update confidence via MCP.
+- **`hasConfidence`/`hasAssessment` filters** — New filter fields on LoreFilter, supported in MCP search, core filter, lore-loader, and lore-server query params.
+- **Lore UI: confidence badge** — LoreCard shows purple percentage badge when confidence is set.
+- **Lore UI: assessment indicator** — LoreCard shows colored verdict badge (green/yellow/red) when assessed.
+- **Lore UI: Confidence & Assessment section** — DetailPanel shows full confidence, verdict, assessor, delta with calibration interpretation.
+- **Lore server: `PUT /:id/assess` route** — HTTP endpoint for assessment in lore-ui server.
+- **Lore server: `GET /calibration` route** — HTTP endpoint for calibration stats in lore-ui server.
+- **Wisdom integration** — `paradigm_wisdom_context` now includes `calibration` and `calibration_warnings` for assessed symbols. Low-accuracy symbols (< 60% across 3+ entries) surface warnings like "Low historical accuracy for #X: 40% across 5 entries."
+- **`confidence-on-decisions` seed habit** — Advisory-only reminder on stop to include confidence scores when recording lore. Category: documentation, severity: advisory, never blocks.
+- **CLAUDE.md: Confidence Calibration section** — Documents the record-assess-calibrate workflow, key distinctions between review/assessment/confidence.
+- **CLAUDE.md: MCP Workflow Protocol + Token Budget tables** — Added `paradigm_lore_assess` and `paradigm_lore_calibration` entries.
+
+Symbols: #lore-assess, #lore-calibration, #LoreCard, #DetailPanel, #LoreTools, #WisdomTools
+
 ## [3.37.0] — 2026-03-13
 
 ### Added

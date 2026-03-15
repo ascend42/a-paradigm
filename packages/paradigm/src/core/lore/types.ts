@@ -9,6 +9,16 @@ export interface LoreDecision {
   id: string;
   decision: string;
   rationale: string;
+  confidence?: number; // 0.0 to 1.0
+}
+
+export type AssessmentVerdict = 'correct' | 'partial' | 'incorrect';
+
+export interface LoreAssessment {
+  verdict: AssessmentVerdict;
+  assessed_by: string;
+  assessed_at: string; // ISO 8601
+  notes?: string;
 }
 
 export interface LoreError {
@@ -87,6 +97,11 @@ export interface LoreEntry {
   linked_tasks?: string[];    // Paradigm task IDs
   linked_commits?: string[];  // Git commit SHAs
 
+  // Confidence calibration
+  confidence?: number; // 0.0 to 1.0 — agent's predicted confidence in correctness
+  assessment?: LoreAssessment; // Human verdict on correctness
+  assessment_delta?: number; // impliedScore - confidence (positive = under-confident, negative = over-confident)
+
   // Tags for filtering
   tags?: string[]; // ["phase-1", "sentinel", "sdk", "arc:lore-evolution"]
 
@@ -114,6 +129,8 @@ export interface LoreFilter {
   hasBody?: boolean;
   tags?: string[];
   hasReview?: boolean;
+  hasConfidence?: boolean;
+  hasAssessment?: boolean;
   minCompleteness?: number;
   limit?: number;
   offset?: number;

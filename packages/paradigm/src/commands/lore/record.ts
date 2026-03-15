@@ -4,6 +4,16 @@ import { recordLore, resolveAuthor, type LoreEntry } from '../../core/lore/index
 export async function loreRecordCommand(options: Record<string, unknown>): Promise<void> {
   const rootDir = process.cwd();
 
+  // Parse and validate confidence
+  let confidence: number | undefined;
+  if (options.confidence != null) {
+    confidence = parseFloat(options.confidence as string);
+    if (isNaN(confidence) || confidence < 0 || confidence > 1) {
+      console.error(chalk.red('\n  Error: --confidence must be a number between 0.0 and 1.0\n'));
+      process.exit(1);
+    }
+  }
+
   const entry: LoreEntry = {
     id: '', // auto-generated
     type: (options.type as LoreEntry['type']) || 'human-note',
@@ -22,6 +32,7 @@ export async function loreRecordCommand(options: Record<string, unknown>): Promi
     body: options.body as string || undefined,
     linked_lore: options.linkLore ? (options.linkLore as string).split(',').map(l => l.trim()) : undefined,
     linked_commits: options.linkCommits ? (options.linkCommits as string).split(',').map(c => c.trim()) : undefined,
+    confidence,
     // git_context is auto-captured by recordLore
   };
 

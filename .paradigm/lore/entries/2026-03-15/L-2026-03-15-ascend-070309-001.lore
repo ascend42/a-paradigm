@@ -1,0 +1,49 @@
+id: L-2026-03-15-ascend-070309-001
+type: milestone
+timestamp: '2026-03-15T07:03:09.194Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm Platform spec written
+summary: Wrote the comprehensive platform spec at docs/specs/platform.md (2,334 lines). Defines the vision for unifying all Paradigm tools (Lore, Graph, Sentinel, University, Symphony) into a single `paradigm serve` command and browser tab. 8 implementation phases from unified shell through methodology/certification. Introduces governance primitives (Vote, Promise, Deny), collaborative Graph with Context Panel, Git management UI, and structured meetings.
+symbols_touched:
+  - '#platform-server'
+  - '#platform-ui'
+  - $meeting-flow
+symbols_created:
+  - '#platform-server'
+  - '#platform-ui'
+  - $meeting-flow
+files_created:
+  - docs/specs/platform.md
+lines_added: 2334
+decisions:
+  - id: D-platform-metaphor
+    decision: Use 'The Studio' metaphor extending Symphony's live band
+    rationale: Each tool is a channel on the mixing board, Graph is the live session room — natural extension of existing metaphor
+  - id: D-platform-port
+    decision: Default port 3850, coexist with standalone servers
+    rationale: Don't break existing workflows — users can run both paradigm serve and paradigm lore serve
+  - id: D-governance-primitives
+    decision: 'Three governance primitives: Vote, Promise, Deny'
+    rationale: Minimal but complete set — Vote for decisions, Promise for commitments, Deny for blocks. All create lore entries.
+  - id: D-absorb-not-rewrite
+    decision: Absorb existing UI components rather than rewriting
+    rationale: Lore-ui and graph-ui work well. Copy into platform-ui sections, adapt API paths, delegate theme to shell.
+  - id: D-sentinel-university-optional
+    decision: Sentinel and University are auto-detected optional sections
+    rationale: Not all users have these packages. Platform works without them. Auto-detect via import.
+learnings:
+  - Symphony spec format is 1692 lines with Vision, Architecture, CLI, Components, Phases, Security, Success Criteria — platform.md follows same structure at 2334 lines
+  - Four existing UIs share React 18 + Zustand + Vite + CSS custom properties — consolidation is feasible
+  - Sentinel has 31 UI components and 10 stores — re-export as components is preferred over iframe for same-React-version integration
+tags:
+  - feature
+  - arc:platform
+  - spec
+confidence: 0.9
+git_context:
+  ref: 9b15d3b08edd0ce88781616fed323919999c1365
+  branch: main
+  dirty: true

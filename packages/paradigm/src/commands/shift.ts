@@ -307,6 +307,58 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     fs.mkdirSync(lorePath, { recursive: true });
   }
 
+  // Ensure .paradigm/university/ directory structure exists
+  const uniBase = path.join(cwd, '.paradigm', 'university');
+  for (const subdir of ['content/notes', 'content/policies', 'content/quizzes', 'content/paths', 'diplomas']) {
+    const dirPath = path.join(uniBase, subdir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+  // Write default university config if missing
+  const uniConfigPath = path.join(uniBase, 'config.yaml');
+  if (!fs.existsSync(uniConfigPath)) {
+    let projectName = 'Project';
+    try {
+      const configPath = path.join(cwd, '.paradigm', 'config.yaml');
+      if (fs.existsSync(configPath)) {
+        const configData = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+        if (configData.project && typeof configData.project === 'string') {
+          projectName = configData.project;
+        }
+      }
+    } catch { /* skip */ }
+
+    const uniConfig = {
+      branding: {
+        name: `${projectName} University`,
+        tagline: `Learn the ${projectName} codebase`,
+        institution: projectName,
+      },
+      theme: {
+        primary: '#6366f1',
+        secondary: '#8b5cf6',
+        accent: '#f59e0b',
+        background: '#0f172a',
+        surface: '#1e293b',
+        text: '#f8fafc',
+        textMuted: '#94a3b8',
+        success: '#22c55e',
+        error: '#ef4444',
+        font: 'Inter, system-ui, sans-serif',
+      },
+      content: {
+        categories: [],
+        defaultDifficulty: 'beginner',
+        requireApproval: false,
+      },
+      diplomas: {
+        includeGlobalPLSAT: true,
+      },
+    };
+    fs.writeFileSync(uniConfigPath, yaml.dump(uniConfig, { lineWidth: -1, noRefs: true }), 'utf8');
+  }
+
   // Step 4: Sync all IDEs
   // Always generate both CLAUDE.md and .cursor/rules/ since users often have multiple AI tools
   spinner.start('Step 4/6: Syncing IDE configurations...');

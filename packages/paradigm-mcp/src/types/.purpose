@@ -1,0 +1,10 @@
+purpose: MCP-side type definitions for Paradigm features
+description: >
+  TypeScript type definitions used by MCP tools and loaders.
+  Each file defines types for a major feature: university, personas, etc.
+
+components:
+  UniversityTypes:
+    description: Type definitions for per-project university content
+    type: types
+    tags: [university, schema]

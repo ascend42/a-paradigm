@@ -15,8 +15,10 @@ import {
   recordLoreEntry,
   updateLoreEntry,
   deleteLoreEntry,
+  addLoreAssessment,
   type LoreEntry,
   type LoreFilter,
+  type LoreAssessment,
 } from '../utils/lore-loader.js';
 import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
@@ -104,6 +106,14 @@ export function getLoreToolsList() {
           hasReview: {
             type: 'boolean',
             description: 'Filter for entries with/without reviews',
+          },
+          hasConfidence: {
+            type: 'boolean',
+            description: 'Filter for entries with/without confidence scores',
+          },
+          hasAssessment: {
+            type: 'boolean',
+            description: 'Filter for entries with/without assessment verdicts',
           },
           limit: {
             type: 'number',
@@ -235,6 +245,10 @@ export function getLoreToolsList() {
             items: { type: 'string' },
             description: 'Git commit SHAs related to this entry',
           },
+          confidence: {
+            type: 'number',
+            description: 'Agent confidence in correctness of this work (0.0 to 1.0)',
+          },
         },
         required: ['title', 'summary', 'symbols_touched'],
       },
@@ -336,11 +350,82 @@ export function getLoreToolsList() {
             type: 'array',
             items: { type: 'string' },
           },
+          confidence: {
+            type: 'number',
+            description: 'Agent confidence in correctness (0.0 to 1.0)',
+          },
         },
         required: ['id'],
       },
       annotations: {
         readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_lore_assess',
+      description:
+        'Record a human assessment verdict on a lore entry (correct/partial/incorrect). Computes calibration delta if confidence was recorded. ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Lore entry ID to assess',
+          },
+          verdict: {
+            type: 'string',
+            enum: ['correct', 'partial', 'incorrect'],
+            description: 'Assessment verdict on the decisions/changes made',
+          },
+          notes: {
+            type: 'string',
+            description: 'Optional assessment notes',
+          },
+        },
+        required: ['id', 'verdict'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_lore_calibration',
+      description:
+        'Query calibration statistics across assessed lore entries. Returns accuracy rate, average confidence, calibration score, and verdict breakdown. Supports groupBy for domain-specific reliability maps. ~200 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'Filter by symbol (e.g., "#auth-middleware")',
+          },
+          tag: {
+            type: 'string',
+            description: 'Filter by tag prefix',
+          },
+          author: {
+            type: 'string',
+            description: 'Filter by author',
+          },
+          dateFrom: {
+            type: 'string',
+            description: 'Filter from date (ISO 8601)',
+          },
+          dateTo: {
+            type: 'string',
+            description: 'Filter to date (ISO 8601)',
+          },
+          groupBy: {
+            type: 'string',
+            enum: ['symbol', 'tag', 'type'],
+            description: 'Group calibration stats by dimension',
+          },
+        },
+      },
+      annotations: {
+        readOnlyHint: true,
         destructiveHint: false,
       },
     },
@@ -392,6 +477,8 @@ export async function handleLoreTool(
         hasBody: args.hasBody as boolean | undefined,
         tags: args.tags as string[] | undefined,
         hasReview: args.hasReview as boolean | undefined,
+        hasConfidence: args.hasConfidence as boolean | undefined,
+        hasAssessment: args.hasAssessment as boolean | undefined,
         limit: (args.limit as number) || 20,
         offset: args.offset as number | undefined,
       };
@@ -418,6 +505,7 @@ export async function handleLoreTool(
         decisions, errors_encountered, learnings,
         verification, tags, meta,
         body, linked_lore, linked_tasks, linked_commits,
+        confidence,
       } = args as Partial<LoreEntry> & { meta?: Record<string, unknown> } & {
         title: string;
         summary: string;
@@ -471,6 +559,7 @@ export async function handleLoreTool(
         linked_lore,
         linked_tasks,
         linked_commits,
+        confidence: confidence != null && confidence >= 0 && confidence <= 1 ? confidence : undefined,
       };
 
       const id = await recordLoreEntry(ctx.rootDir, entry);
@@ -592,6 +681,203 @@ export async function handleLoreTool(
       };
     }
 
+    case 'paradigm_lore_assess': {
+      const id = args.id as string;
+      const verdict = args.verdict as LoreAssessment['verdict'];
+      const notes = args.notes as string | undefined;
+
+      // Load entry first to get confidence for delta
+      const entryToAssess = await loadLoreEntry(ctx.rootDir, id);
+      if (!entryToAssess) {
+        return {
+          handled: true,
+          text: JSON.stringify({ error: `Lore entry not found: ${id}` }),
+        };
+      }
+
+      const assessment: LoreAssessment = {
+        verdict,
+        assessed_by: resolveAuthorForMcp(),
+        assessed_at: new Date().toISOString(),
+        notes,
+      };
+
+      const success = await addLoreAssessment(ctx.rootDir, id, assessment);
+
+      // Compute delta for response
+      const impliedScore = verdict === 'correct' ? 1.0 : verdict === 'partial' ? 0.5 : 0.0;
+      const delta = entryToAssess.confidence != null
+        ? impliedScore - entryToAssess.confidence
+        : null;
+
+      const deltaDescription = delta != null
+        ? delta > 0.1 ? 'Under-confident (actual outcome better than predicted)'
+          : delta < -0.1 ? 'Over-confident (actual outcome worse than predicted)'
+          : 'Well-calibrated'
+        : 'No confidence recorded — delta not computed';
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          success,
+          id,
+          verdict,
+          confidence: entryToAssess.confidence ?? null,
+          delta,
+          deltaDescription,
+          message: success
+            ? `Assessment recorded: ${verdict}${delta != null ? ` (delta: ${delta > 0 ? '+' : ''}${delta.toFixed(2)})` : ''}`
+            : `Failed to assess: ${id}`,
+        }),
+      };
+    }
+
+    case 'paradigm_lore_calibration': {
+      const filter: LoreFilter = {
+        symbol: args.symbol as string | undefined,
+        tag: args.tag as string | undefined,
+        author: args.author as string | undefined,
+        dateFrom: args.dateFrom as string | undefined,
+        dateTo: args.dateTo as string | undefined,
+        hasAssessment: true,
+      };
+
+      const entries = await loadLoreEntries(ctx.rootDir, filter);
+      const withConfidence = entries.filter(e => e.confidence != null);
+
+      const totalAssessed = entries.length;
+      const totalWithConfidence = withConfidence.length;
+
+      // Compute verdict breakdown
+      const verdictBreakdown = { correct: 0, partial: 0, incorrect: 0 };
+      let totalImpliedScore = 0;
+      let totalConfidence = 0;
+      let totalAbsDelta = 0;
+
+      for (const e of entries) {
+        const v = e.assessment!.verdict;
+        verdictBreakdown[v]++;
+        const implied = v === 'correct' ? 1.0 : v === 'partial' ? 0.5 : 0.0;
+        totalImpliedScore += implied;
+        if (e.confidence != null) {
+          totalConfidence += e.confidence;
+          totalAbsDelta += Math.abs(implied - e.confidence);
+        }
+      }
+
+      const accuracyRate = totalAssessed > 0 ? totalImpliedScore / totalAssessed : 0;
+      const avgConfidence = totalWithConfidence > 0 ? totalConfidence / totalWithConfidence : null;
+      const avgDelta = totalWithConfidence > 0
+        ? (totalImpliedScore / totalAssessed - totalConfidence / totalWithConfidence)
+        : null;
+      const calibrationScore = totalWithConfidence > 0
+        ? 1 - (totalAbsDelta / totalWithConfidence)
+        : null;
+
+      // Grouping
+      const groupBy = args.groupBy as string | undefined;
+      let groups: Array<Record<string, unknown>> | undefined;
+
+      if (groupBy && totalAssessed > 0) {
+        const groupMap = new Map<string, typeof entries>();
+
+        for (const e of entries) {
+          let keys: string[] = [];
+          if (groupBy === 'symbol') {
+            keys = e.symbols_touched || [];
+          } else if (groupBy === 'tag') {
+            keys = e.tags || [];
+          } else if (groupBy === 'type') {
+            keys = [e.type || 'agent-session'];
+          }
+
+          for (const key of keys) {
+            if (!groupMap.has(key)) groupMap.set(key, []);
+            groupMap.get(key)!.push(e);
+          }
+        }
+
+        groups = Array.from(groupMap.entries())
+          .map(([key, gEntries]) => {
+            const gWithConf = gEntries.filter(e => e.confidence != null);
+            const gBreakdown = { correct: 0, partial: 0, incorrect: 0 };
+            let gImplied = 0;
+            let gConf = 0;
+            let gAbsDelta = 0;
+
+            for (const e of gEntries) {
+              const v = e.assessment!.verdict;
+              gBreakdown[v]++;
+              const implied = v === 'correct' ? 1.0 : v === 'partial' ? 0.5 : 0.0;
+              gImplied += implied;
+              if (e.confidence != null) {
+                gConf += e.confidence;
+                gAbsDelta += Math.abs(implied - e.confidence);
+              }
+            }
+
+            return {
+              key,
+              total: gEntries.length,
+              accuracyRate: gImplied / gEntries.length,
+              avgConfidence: gWithConf.length > 0 ? gConf / gWithConf.length : null,
+              calibrationScore: gWithConf.length > 0 ? 1 - gAbsDelta / gWithConf.length : null,
+              verdictBreakdown: gBreakdown,
+            };
+          })
+          .sort((a, b) => b.total - a.total);
+      }
+
+      // Generate insights
+      const insights: string[] = [];
+      const caveat = totalAssessed < 5
+        ? `Low sample size (N=${totalAssessed}). Stats may not be representative.`
+        : totalAssessed < 15
+          ? `Moderate sample (N=${totalAssessed}). Trends are directional, not conclusive.`
+          : null;
+
+      if (caveat) insights.push(caveat);
+
+      if (calibrationScore != null) {
+        if (calibrationScore >= 0.9) {
+          insights.push('Excellent calibration — confidence predictions closely match outcomes.');
+        } else if (calibrationScore >= 0.7) {
+          insights.push('Good calibration — some room for improvement in confidence estimates.');
+        } else if (calibrationScore >= 0.5) {
+          insights.push('Fair calibration — significant gap between predicted confidence and outcomes.');
+        } else {
+          insights.push('Poor calibration — confidence predictions diverge substantially from outcomes.');
+        }
+      }
+
+      if (avgDelta != null) {
+        if (avgDelta > 0.15) {
+          insights.push('Tendency toward under-confidence — outcomes are better than predicted.');
+        } else if (avgDelta < -0.15) {
+          insights.push('Tendency toward over-confidence — outcomes are worse than predicted.');
+        }
+      }
+
+      if (verdictBreakdown.incorrect > totalAssessed * 0.3 && totalAssessed >= 5) {
+        insights.push(`High error rate: ${verdictBreakdown.incorrect}/${totalAssessed} entries assessed as incorrect.`);
+      }
+
+      return {
+        handled: true,
+        text: JSON.stringify({
+          totalAssessed,
+          totalWithConfidence,
+          accuracyRate: Math.round(accuracyRate * 1000) / 1000,
+          avgConfidence: avgConfidence != null ? Math.round(avgConfidence * 1000) / 1000 : null,
+          avgDelta: avgDelta != null ? Math.round(avgDelta * 1000) / 1000 : null,
+          calibrationScore: calibrationScore != null ? Math.round(calibrationScore * 1000) / 1000 : null,
+          verdictBreakdown,
+          ...(groups ? { groups } : {}),
+          insights,
+        }, null, 2),
+      };
+    }
+
     case 'paradigm_lore_delete': {
       const id = args.id as string;
       const confirm = args.confirm as boolean;
@@ -642,6 +928,9 @@ function summarizeEntry(entry: LoreEntry) {
       completeness: entry.review.completeness,
       quality: entry.review.quality,
     } : null,
+    confidence: entry.confidence ?? null,
+    assessment: entry.assessment ? entry.assessment.verdict : null,
+    assessment_delta: entry.assessment_delta ?? null,
     tags: entry.tags,
   };
 }

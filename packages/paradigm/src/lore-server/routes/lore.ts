@@ -99,7 +99,7 @@ export function createLoreRouter(projectDir: string): Router {
     let entries = loadAllEntries(projectDir);
 
     // Apply filters
-    const { author, authorType, hasAgent, symbol, type, tag, from, to, tags, hasReview, hasBody, limit, offset } = req.query;
+    const { author, authorType, hasAgent, symbol, type, tag, from, to, tags, hasReview, hasBody, hasConfidence, hasAssessment, limit, offset } = req.query;
 
     if (author) {
       entries = entries.filter(e => e.author === author);
@@ -150,6 +150,16 @@ export function createLoreRouter(projectDir: string): Router {
       entries = entries.filter(e => e.review != null);
     } else if (hasReview === 'false') {
       entries = entries.filter(e => e.review == null);
+    }
+    if (hasConfidence === 'true') {
+      entries = entries.filter(e => e.confidence != null);
+    } else if (hasConfidence === 'false') {
+      entries = entries.filter(e => e.confidence == null);
+    }
+    if (hasAssessment === 'true') {
+      entries = entries.filter(e => e.assessment != null);
+    } else if (hasAssessment === 'false') {
+      entries = entries.filter(e => e.assessment == null);
     }
 
     // Sort newest first
@@ -250,6 +260,44 @@ export function createLoreRouter(projectDir: string): Router {
     res.json({ authors });
   });
 
+  // GET /api/lore/calibration - Calibration statistics (MUST be before /:id)
+  router.get('/calibration', (_req: Request, res: Response) => {
+    const entries = loadAllEntries(projectDir).filter(e => e.assessment != null);
+    const withConfidence = entries.filter(e => e.confidence != null);
+
+    const totalAssessed = entries.length;
+    const totalWithConfidence = withConfidence.length;
+
+    const verdictBreakdown = { correct: 0, partial: 0, incorrect: 0 };
+    let totalImpliedScore = 0;
+    let totalConfidence = 0;
+    let totalAbsDelta = 0;
+
+    for (const e of entries) {
+      const v = e.assessment!.verdict as 'correct' | 'partial' | 'incorrect';
+      verdictBreakdown[v]++;
+      const implied = v === 'correct' ? 1.0 : v === 'partial' ? 0.5 : 0.0;
+      totalImpliedScore += implied;
+      if (e.confidence != null) {
+        totalConfidence += e.confidence;
+        totalAbsDelta += Math.abs(implied - e.confidence);
+      }
+    }
+
+    const accuracyRate = totalAssessed > 0 ? totalImpliedScore / totalAssessed : 0;
+    const avgConfidence = totalWithConfidence > 0 ? totalConfidence / totalWithConfidence : null;
+    const calibrationScore = totalWithConfidence > 0 ? 1 - totalAbsDelta / totalWithConfidence : null;
+
+    res.json({
+      totalAssessed,
+      totalWithConfidence,
+      accuracyRate: Math.round(accuracyRate * 1000) / 1000,
+      avgConfidence: avgConfidence != null ? Math.round(avgConfidence * 1000) / 1000 : null,
+      calibrationScore: calibrationScore != null ? Math.round(calibrationScore * 1000) / 1000 : null,
+      verdictBreakdown,
+    });
+  });
+
   // GET /api/lore/:id - Single entry (MUST be after named routes)
   router.get('/:id', (req: Request, res: Response) => {
     const entries = loadAllEntries(projectDir);
@@ -261,6 +309,48 @@ export function createLoreRouter(projectDir: string): Router {
     }
 
     res.json(entry);
+  });
+
+  // PUT /api/lore/:id/assess - Add/update assessment
+  router.put('/:id/assess', (req: Request, res: Response) => {
+    const entryId = req.params.id;
+    const entries = loadAllEntries(projectDir);
+    const entry = entries.find(e => e.id === entryId);
+
+    if (!entry) {
+      res.status(404).json({ error: 'Entry not found' });
+      return;
+    }
+
+    const dateStr = entry.timestamp.slice(0, 10);
+    const entryPath = resolveEntryPath(projectDir, dateStr, entryId);
+
+    if (!entryPath) {
+      res.status(404).json({ error: 'Entry file not found' });
+      return;
+    }
+
+    const verdict = req.body.verdict;
+    if (!['correct', 'partial', 'incorrect'].includes(verdict)) {
+      res.status(400).json({ error: 'Invalid verdict. Must be: correct, partial, incorrect' });
+      return;
+    }
+
+    entry.assessment = {
+      verdict,
+      assessed_by: req.body.assessed_by || 'anonymous',
+      assessed_at: new Date().toISOString(),
+      notes: req.body.notes,
+    };
+
+    // Compute delta if confidence exists
+    if (entry.confidence != null) {
+      const impliedScore = verdict === 'correct' ? 1.0 : verdict === 'partial' ? 0.5 : 0.0;
+      entry.assessment_delta = impliedScore - entry.confidence;
+    }
+
+    fs.writeFileSync(entryPath, yaml.dump(entry, { lineWidth: -1, noRefs: true }));
+    res.json({ success: true, entry });
   });
 
   // PUT /api/lore/:id/review - Add/update review

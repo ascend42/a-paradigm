@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-13T02:06:16.672Z'
+generated: '2026-03-14T03:31:42.683Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -5189,11 +5189,54 @@ by_symbol:
       agent: []
   '#aggregator':
     symbol: '#aggregator'
-    total_changes: 1
-    last_modified: '2026-03-07T22:09:45Z'
+    total_changes: 2
+    last_modified: '2026-03-14T03:10:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_102
+        id: h0169
+        ts: '2026-03-14T03:10:20Z'
+        type: implement
+        symbols:
+          - '#aggregator'
+          - '#config-schema-validator'
+          - '#integrity-command'
+          - '#IntegrityChecker'
+          - '#validator'
+          - ~advisory-first
+        author:
+          type: human
+          id: ascend
+        commit: f6b5dddd305b1815455e8b3bfd6eb4d48f87a395
+        intent: feature
+        files:
+          - .purpose
+          - CHANGELOG.md
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/utils/index-loader.ts
+          - packages/paradigm-mcp/src/utils/integrity-checker.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/doctor/context-audit.ts
+          - packages/paradigm/src/commands/integrity.ts
+          - packages/paradigm/src/core/config-schema.ts
+          - packages/paradigm/src/index.ts
+          - packages/paradigm/src/lore-server/routes/lore.ts
+          - packages/paradigm/src/lore-server/routes/sessions.ts
+          - packages/premise/core/.purpose
+          - packages/premise/core/package.json
+          - packages/premise/core/src/aggregator.ts
+          - packages/premise/core/src/types.ts
+          - packages/purpose/core/.purpose
+          - packages/purpose/core/src/index.ts
+          - packages/purpose/core/src/validator.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#IntegrityChecker): Integrity hardening — self-insurance for Paradigm quality'
       - &ref_72
         id: h0129
         ts: '2026-03-07T22:09:45Z'
@@ -7030,6 +7073,576 @@ by_symbol:
     fragility: low
     recent:
       - *ref_100
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!agent-auto-linked':
+    symbol: '!agent-auto-linked'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_101
+        id: h0168
+        ts: '2026-03-14T02:31:38Z'
+        type: implement
+        symbols:
+          - '!agent-auto-linked'
+          - '!agent-part-created'
+          - '!file-request-received'
+          - '!note-received-live'
+          - '!note-relayed'
+          - '#agent-part-manager'
+          - '#auto-link-coordinator'
+          - '#ConversationStore'
+          - '#ConversationView'
+          - '#file-approval-manager'
+          - '#file-request-notification'
+          - '#note-relay'
+          - '#score-io'
+          - '#symphony-join'
+          - '#symphony-leave'
+          - '#symphony-settings'
+          - '#symphony-types'
+          - '#SymphonyEventBridge'
+          - '#SymphonySchema'
+          - '#thread-list-view'
+          - ^file-request-allowed
+          - ^symphony-enabled
+          - ~file-safety
+          - ~jsonl-compatible
+          - $symphony-auto-link
+          - $symphony-conversation
+          - $symphony-file-approval
+          - $symphony-relay
+          - $symphony-startup
+          - $symphony-voice-approve
+        author:
+          type: human
+          id: ascend
+        commit: fa37bd6cdbfd607d86e9df9cabf539df28f67e07
+        intent: feature
+        files:
+          - .paradigm/docs/commands.md
+          - .paradigm/docs/troubleshooting.md
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - docs/guides/symphony-quickstart.md
+          - docs/specs/symphony.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift
+          - packages/conductor/Sources/Conductor/Models/ConductorAction.swift
+          - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/Symphony/.purpose
+          - packages/conductor/Sources/Conductor/Symphony/AgentPartManager.swift
+          - packages/conductor/Sources/Conductor/Symphony/AutoLinkCoordinator.swift
+          - packages/conductor/Sources/Conductor/Symphony/FileApprovalManager.swift
+          - packages/conductor/Sources/Conductor/Symphony/NoteRelay.swift
+          - packages/conductor/Sources/Conductor/Symphony/ScoreIO.swift
+          - packages/conductor/Sources/Conductor/Symphony/SymphonyTypes.swift
+          - packages/conductor/Sources/Conductor/UI/Views/FileRequestNotificationView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/NotificationBubbleView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SymphonySettingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ThreadListView.swift
+          - packages/conductor/Sources/Conductor/WindowManager/StatusTracker.swift
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/symphony.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/symphony-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/mail/.purpose
+          - packages/paradigm/src/commands/mail/index.ts
+          - packages/paradigm/src/commands/mail/types.ts
+          - packages/paradigm/src/commands/symphony/.purpose
+          - packages/paradigm/src/commands/symphony/index.ts
+          - packages/paradigm/src/commands/symphony/types.ts
+          - packages/paradigm/src/index.ts
+          - packages/sentinel/.purpose
+          - packages/sentinel/package.json
+          - packages/sentinel/src/index.ts
+          - packages/sentinel/src/schema/builtin-symphony.ts
+          - packages/sentinel/src/server/index.ts
+          - packages/sentinel/ui/.purpose
+          - packages/sentinel/ui/src/App.tsx
+          - packages/sentinel/ui/src/main.tsx
+          - packages/sentinel/ui/src/store/conversationStore.ts
+          - packages/sentinel/ui/src/styles/conversation.css
+          - packages/sentinel/ui/src/views/ConversationView.tsx
+          - packages/university/src/content/courses/para-501.json
+          - packages/university/src/content/plsat/v3.0.json
+          - packages/university/src/content/reference.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#symphony): Symphony Phases 1 & 2 — Conductor auto-link + Sentinel ConversationView'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!agent-part-created':
+    symbol: '!agent-part-created'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!file-request-received':
+    symbol: '!file-request-received'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!note-received-live':
+    symbol: '!note-received-live'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!note-relayed':
+    symbol: '!note-relayed'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-part-manager':
+    symbol: '#agent-part-manager'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#auto-link-coordinator':
+    symbol: '#auto-link-coordinator'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ConversationStore':
+    symbol: '#ConversationStore'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ConversationView':
+    symbol: '#ConversationView'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#file-approval-manager':
+    symbol: '#file-approval-manager'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#file-request-notification':
+    symbol: '#file-request-notification'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#note-relay':
+    symbol: '#note-relay'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#score-io':
+    symbol: '#score-io'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-join':
+    symbol: '#symphony-join'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-leave':
+    symbol: '#symphony-leave'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-settings':
+    symbol: '#symphony-settings'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-types':
+    symbol: '#symphony-types'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonyEventBridge':
+    symbol: '#SymphonyEventBridge'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonySchema':
+    symbol: '#SymphonySchema'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#thread-list-view':
+    symbol: '#thread-list-view'
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^file-request-allowed:
+    symbol: ^file-request-allowed
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^symphony-enabled:
+    symbol: ^symphony-enabled
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~file-safety:
+    symbol: ~file-safety
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~jsonl-compatible:
+    symbol: ~jsonl-compatible
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-auto-link:
+    symbol: $symphony-auto-link
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-conversation:
+    symbol: $symphony-conversation
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-file-approval:
+    symbol: $symphony-file-approval
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-relay:
+    symbol: $symphony-relay
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-startup:
+    symbol: $symphony-startup
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $symphony-voice-approve:
+    symbol: $symphony-voice-approve
+    total_changes: 1
+    last_modified: '2026-03-14T02:31:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_101
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#config-schema-validator':
+    symbol: '#config-schema-validator'
+    total_changes: 1
+    last_modified: '2026-03-14T03:10:20Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_102
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#integrity-command':
+    symbol: '#integrity-command'
+    total_changes: 1
+    last_modified: '2026-03-14T03:10:20Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_102
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#IntegrityChecker':
+    symbol: '#IntegrityChecker'
+    total_changes: 3
+    last_modified: '2026-03-14T03:29:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_103
+        id: h0171
+        ts: '2026-03-14T03:29:07Z'
+        type: implement
+        symbols:
+          - '#IntegrityChecker'
+          - ~advisory-first
+        author:
+          type: human
+          id: ascend
+        commit: 4c7cddaa278db35d7b9dc7442316ad23ca331755
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-14/L-2026-03-14-ascend-032857-001.lore
+          - .paradigm/lore/timeline.yaml
+        description: 'docs: record Self-Insurance integrity hardening lore entry'
+      - &ref_104
+        id: h0170
+        ts: '2026-03-14T03:28:00Z'
+        type: implement
+        symbols:
+          - '#IntegrityChecker'
+          - ~anchor-resolution
+        author:
+          type: human
+          id: ascend
+        commit: 660fab049d7a19ce0ff9d17ba6dbcca361af031c
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - .purpose
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/utils/integrity-checker.ts
+          - packages/paradigm/src/commands/integrity.ts
+          - packages/paradigm/src/commands/symphony/.purpose
+          - packages/sentinel/.purpose
+          - packages/sentinel/ui/.purpose
+        description: 'fix(#IntegrityChecker): resolve anchors relative to .purpose file, fix duplicates and OOB'
+      - *ref_102
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#validator':
+    symbol: '#validator'
+    total_changes: 1
+    last_modified: '2026-03-14T03:10:20Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_102
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~advisory-first:
+    symbol: ~advisory-first
+    total_changes: 2
+    last_modified: '2026-03-14T03:29:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_103
+      - *ref_102
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~anchor-resolution:
+    symbol: ~anchor-resolution
+    total_changes: 1
+    last_modified: '2026-03-14T03:28:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_104
     contributors:
       human:
         - ascend

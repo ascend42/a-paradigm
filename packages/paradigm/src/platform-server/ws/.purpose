@@ -1,0 +1,14 @@
+description: WebSocket infrastructure for agent-driven UI — attaches to platform HTTP server, broadcasts agent commands, receives user activity
+components:
+  PlatformWebSocket:
+    description: WebSocket server with client tracking, broadcast, and reconnect handling
+    type: service
+    tags: [feature, agent-ui, server]
+  AgentPresenceManager:
+    description: Tracks connected agents by ID, auto-prunes after 2min idle, deterministic color assignment
+    type: service
+    tags: [feature, agent-ui]
+  UserStateTracker:
+    description: Accumulates user section/symbol/theme state and highlight/annotation state for observe tool
+    type: service
+    tags: [feature, agent-ui]

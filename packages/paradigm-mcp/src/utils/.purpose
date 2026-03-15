@@ -9,3 +9,11 @@ components:
     tags: [feature, symphony]
     anchors:
       - symphony-loader.ts:1-988
+  university-loader:
+    description: "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple"
+    type: loader
+    tags: [feature, university]
+  platform-bridge:
+    description: "HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command."
+    type: loader
+    tags: [feature, platform, agent-ui]

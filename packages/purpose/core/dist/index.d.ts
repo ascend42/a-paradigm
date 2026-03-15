@@ -399,8 +399,22 @@ declare function extractSymbolReferences(parsedFiles: ParsedPurposeFile[]): Extr
  */
 declare function validatePurposeFile(data: PurposeFile, filePath?: string): ValidationResult;
 /**
+ * Cross-file validation: check that symbol references across all .purpose files resolve.
+ *
+ * Checks:
+ *   1. All `parent` references resolve to a defined component
+ *   2. All flow steps referencing symbols point to existing definitions
+ *   3. All component/signal/gate lists reference existing definitions
+ *
+ * Reports as warnings (not errors) since portal.yaml gates aren't in .purpose.
+ */
+declare function validateCrossFile(allFiles: Array<{
+    filePath: string;
+    data: PurposeFile;
+}>): ValidationResult;
+/**
  * Format validation result for console output
  */
 declare function formatValidationResult(result: ValidationResult): string;
 
-export { type AggregatedPurpose, type AspectDefinition, type ExtractedFlow, type ExtractedSymbolRef, type FlowDefinition, type FlowStep, type FlowWithSteps, type GateDefinition, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type PurposeItemArray, type Reference, type Relationship, type SignalDefinition, type StateDefinition, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractAspects, extractComponents, extractFeatures, extractFlows, extractGates, extractSignals, extractStates, extractSymbolReferences, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validatePurposeFile };
+export { type AggregatedPurpose, type AspectDefinition, type ExtractedFlow, type ExtractedSymbolRef, type FlowDefinition, type FlowStep, type FlowWithSteps, type GateDefinition, type GraphData, type GraphEdge, type GraphNode, type ParseError, type ParseResult, type ParsedPurposeFile, type PurposeFile, type PurposeItem, type PurposeItemArray, type Reference, type Relationship, type SignalDefinition, type StateDefinition, type ValidationIssue, type ValidationResult, aggregateForPath, aggregatePurposes, collectPurposeChain, extractAspects, extractComponents, extractFeatures, extractFlows, extractGates, extractSignals, extractStates, extractSymbolReferences, findPurposeFiles, formatValidationResult, getAllPurposeFiles, getDefaultPurposeContent, parsePurposeContent, parsePurposeFile, parsePurposeFileDetailed, serializePurposeFile, validateCrossFile, validatePurposeFile };
