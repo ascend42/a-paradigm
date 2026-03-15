@@ -27,6 +27,10 @@ export function useAgentEffects() {
           if (msg.type?.startsWith('agent:')) {
             handleAgentMessage(msg);
           }
+          // Forward sentinel:* messages to sentinel stores via CustomEvent
+          if (msg.type?.startsWith('sentinel:')) {
+            window.dispatchEvent(new CustomEvent('sentinel-ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed
         }

@@ -44,3 +44,43 @@ components:
     description: Zustand store for agent presence, highlights, annotations, toasts, and mute state
     type: store
     tags: [feature, agent-ui, state]
+  SentinelSection:
+    description: Live observability dashboard with 4 sub-tabs — Logs, Incidents, Events, Flows
+    type: view
+    tags: [feature, sentinel, observability]
+  SentinelLogsStore:
+    description: Zustand store for structured log data with exclusion filters and WS message handling
+    type: store
+    tags: [state, sentinel]
+  SentinelIncidentsStore:
+    description: Zustand store for incident triage with status filtering and resolution
+    type: store
+    tags: [state, sentinel]
+  SentinelEventsStore:
+    description: Zustand store for generic schema-driven events with scope navigation
+    type: store
+    tags: [state, sentinel]
+  SentinelSchemasStore:
+    description: Zustand store for event schema registry
+    type: store
+    tags: [state, sentinel]
+  LogsTab:
+    description: Real-time log viewer with resizable columns, context menu exclusions, and live streaming
+    type: view
+    parent: '#SentinelSection'
+    tags: [feature, sentinel]
+  IncidentsTab:
+    description: Incident list with status filtering and detail panel
+    type: view
+    parent: '#SentinelSection'
+    tags: [feature, sentinel]
+  EventsTab:
+    description: Schema-adaptive event viewer with scope navigation and category filters
+    type: view
+    parent: '#SentinelSection'
+    tags: [feature, sentinel]
+  FlowsTab:
+    description: Flow definition cards with live activity indicators and flow composer
+    type: view
+    parent: '#SentinelSection'
+    tags: [feature, sentinel]

@@ -12,6 +12,7 @@ import './styles/agent.css';
 const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
 const GitSection = lazy(() => import('./sections/git/GitSection'));
+const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection'));
 
 function SectionFallback() {
   return (
@@ -72,7 +73,7 @@ export default function App() {
             {activeSection === 'lore' && <LoreSection />}
             {activeSection === 'graph' && <GraphSection />}
             {activeSection === 'git' && <GitSection />}
-            {activeSection === 'sentinel' && <ComingSoonSection name="Sentinel" icon="◈" description="Live observability dashboard — logs, events, flow visualization" />}
+            {activeSection === 'sentinel' && <SentinelSection />}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
             {activeSection === 'symphony' && <ComingSoonSection name="Symphony" icon="♪" description="Agent-to-agent messaging threads and network status" />}
           </Suspense>

@@ -211,15 +211,29 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
   log.component('platform-server').info('Project directory', { path: options.projectDir });
   log.component('platform-server').info('Sections', { enabled: Array.from(sections).join(', ') });
 
+  const httpServer = http.createServer(app);
+
+  // Attach WebSocket server to the HTTP server
+  const wsContext = attachWebSocket(httpServer);
+
+  // Mount agent command route with WS context
+  app.use('/api/platform/agent-command', createAgentRouter(wsContext));
+
+  // Mount Sentinel routes if section is enabled
+  if (sections.has('sentinel')) {
+    try {
+      const { createSentinelBridge } = await import('./sentinel-bridge.js');
+      const sentinelRouter = await createSentinelBridge(options.projectDir, wsContext.broadcast);
+      if (sentinelRouter) {
+        app.use('/api/sentinel', sentinelRouter);
+        log.component('platform-server').success('Sentinel routes mounted');
+      }
+    } catch {
+      log.component('platform-server').warn('Sentinel not available');
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    const httpServer = http.createServer(app);
-
-    // Attach WebSocket server to the HTTP server
-    const wsContext = attachWebSocket(httpServer);
-
-    // Mount agent command route with WS context
-    app.use('/api/platform/agent-command', createAgentRouter(wsContext));
-
     httpServer.listen(options.port, () => {
       log.component('platform-server').success('Platform running', { url: `http://localhost:${options.port}` });
       log.component('platform-ws').success('WebSocket ready', { url: `ws://localhost:${options.port}/ws` });

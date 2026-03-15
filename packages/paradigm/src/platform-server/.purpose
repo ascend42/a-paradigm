@@ -36,6 +36,7 @@ flows:
       - Mount agent command route (/api/platform/agent-command)
       - Serve platform-ui static files
       - SPA fallback for client-side routing
+      - Mount sentinel bridge (/api/sentinel/*) if sentinel section enabled
   $agent-command:
     description: MCP tool → HTTP POST → server validates → WS broadcast → browser updates
     steps:
@@ -45,3 +46,8 @@ flows:
       - Server checks user mute state
       - Server broadcasts typed WS message to all browser clients
       - Browser agentStore processes message and updates UI
+  SentinelBridge:
+    description: Dynamic import bridge — creates Express Router with all Sentinel routes, storage, and WS broadcast callbacks
+    type: service
+    parent: '#PlatformServer'
+    tags: [feature, sentinel, observability]

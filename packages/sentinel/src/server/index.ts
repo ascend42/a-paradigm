@@ -358,3 +358,29 @@ export { loadSymbolIndex, loadParadigmConfig, getSymbolCount } from './loaders/s
 export { loadGitHistory, getSymbolsAtCommit } from './loaders/git.js';
 export type { SymbolEntry, ParadigmConfig } from './loaders/symbols.js';
 export type { CommitInfo } from './loaders/git.js';
+
+// Route factories (for Platform embedding)
+export { createLogsRouter } from './routes/logs.js';
+export { createServicesRouter, createStateRouter } from './routes/services.js';
+export { createMetricsRouter } from './routes/metrics.js';
+export { createTracesRouter } from './routes/traces.js';
+export { createSchemasRouter } from './routes/schemas.js';
+export { createEventsRouter } from './routes/events.js';
+export { createSymbolsRouter } from './routes/symbols.js';
+export { createInfoRouter } from './routes/info.js';
+export { createCommitsRouter } from './routes/commits.js';
+export { createIncidentsRouter } from './routes/incidents.js';
+export { createPatternsRouter } from './routes/patterns.js';
+export { createAuthMiddleware } from './middleware/auth.js';
+export { createRateLimiter } from './middleware/rate-limit.js';
+export { PARADIGM_SCHEMA } from '../schema/builtin-paradigm.js';
+export { SYMPHONY_SCHEMA } from '../schema/builtin-symphony.js';
+export { SentinelStorage } from '../storage.js';
+export { loadServerConfig } from '../config.js';
+export type { LogsRouterOptions } from './routes/logs.js';
+export type { EventsRouterOptions } from './routes/events.js';
+export type { ServicesRouterOptions } from './routes/services.js';
+export type { MetricsRouterOptions } from './routes/metrics.js';
+export type { TracesRouterOptions } from './routes/traces.js';
+export type { SchemasRouterOptions } from './routes/schemas.js';
+export type { LogEntry, GenericEvent, SentinelServerConfig } from '../types.js';

@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.43.0] — 2026-03-15
+
+### Added
+
+- **Sentinel Platform Section** — Sentinel observability is now embedded as a native Platform section with 4 sub-tabs (Logs, Incidents, Events, Flows), eliminating the need to run a separate sentinel server for observability.
+- **Sentinel Bridge** — `sentinel-bridge.ts` dynamically imports `@a-company/sentinel/server`, initializes storage + builtin schemas, and mounts all 12 route factories under `/api/sentinel/*` with auth + rate limiting.
+- **Real-time WS forwarding** — Platform WS now forwards `sentinel:log`, `sentinel:flow_event`, and `sentinel:event` messages to the browser via CustomEvent, enabling live log streaming and flow activity visualization without a separate WebSocket connection.
+- **4 Zustand stores** — `sentinelLogsStore`, `sentinelIncidentsStore`, `sentinelEventsStore`, `sentinelSchemasStore` ported from Sentinel UI with `/api/sentinel/` prefix and WS message handlers replacing direct WebSocket connections.
+- **4 tab components** — `LogsTab` (resizable columns, context menu exclusions, live streaming), `IncidentsTab` (status filter, detail panel, resolve action), `EventsTab` (schema selector, scope navigator, category filters), `FlowsTab` (flow cards with live activity dots, flow diagram, flow composer).
+- **Sentinel CSS** — ~1000 lines of sentinel styles mapped to Platform design tokens (`--p-*`), scoped under `.sentinel-section` to prevent collisions.
+
+### Changed
+
+- **Sentinel package exports** — Added re-exports for all route factories, middleware, storage, config, builtin schemas, and option types from `@a-company/sentinel/server`.
+- **Platform server** — Sentinel routes mounted before `httpServer.listen()` when sentinel section is enabled. Server initialization restructured to support async sentinel bridge setup.
+
+Symbols: #SentinelBridge, #SentinelSection, #SentinelLogsStore, #SentinelIncidentsStore, #SentinelEventsStore, #SentinelSchemasStore, #LogsTab, #IncidentsTab, #EventsTab, #FlowsTab
+
 ## [3.42.0] — 2026-03-15
 
 ### Added
