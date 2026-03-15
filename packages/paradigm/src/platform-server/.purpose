@@ -30,7 +30,8 @@ flows:
     steps:
       - Mount lore routes (/api/lore, /api/info, /api/sessions)
       - Mount graph routes (/api/symbols, /api/graphs)
-      - Mount platform routes (/api/platform/health, /api/platform/sections)
+      - Mount platform routes (/api/platform/health, /api/platform/sections, /api/platform/overview)
+      - Mount git routes (/api/git/*)
       - Attach WebSocket server on /ws path
       - Mount agent command route (/api/platform/agent-command)
       - Serve platform-ui static files

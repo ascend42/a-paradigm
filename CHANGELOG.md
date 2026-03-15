@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.42.0] — 2026-03-15
+
+### Added
+
+- **Overview Dashboard** — `GET /api/platform/overview` aggregates project info, symbol counts (by type), lore stats, calibration score, task counts, 5 health metrics, and a merged recent-activity feed (git commits + lore entries). Overview section upgraded with 6 stat cards, 5 health progress bars, and scrollable activity feed. Stat cards navigate to relevant sections on click.
+- **Git Management Section** — Full git workflow from the browser via 8 new endpoints (`/api/git/status`, `branches`, `log`, `diff`, `stage`, `unstage`, `commit`, `push`). Browser UI includes branch bar with ahead/behind badges, file list with stage/unstage buttons, CSS-only colored diff viewer with line numbers, commit composer with symbol autocomplete on `#$^!~` triggers, and paginated commit log with symbol badges.
+- **Git section in sidebar** — `git` added to always-on sections, accessible via `⎇` icon in sidebar nav.
+
+### Changed
+
+- **Overview section** — Rewritten from minimal 2-card layout to full health dashboard backed by dedicated `/api/platform/overview` API.
+- **Shell CSS** — Overview styles moved to dedicated `overview.css` for code-split loading.
+
+Symbols: #OverviewHandler, #OverviewStore, #OverviewSection, #GitRouter, #GitSection, #GitStore
+
 ## [3.41.0] — 2026-03-15
 
 ### Added

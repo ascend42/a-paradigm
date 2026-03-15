@@ -11,8 +11,21 @@ components:
     description: Top header bar with project name and section indicator
     type: view
   OverviewSection:
-    description: Dashboard showing symbol counts and lore stats
+    description: Full project health dashboard — 6 stat cards, 5 health bars, merged activity feed from git commits and lore entries
     type: view
+    tags: [feature, dashboard]
+  OverviewStore:
+    description: Zustand store fetching /api/platform/overview aggregation
+    type: store
+    tags: [state, dashboard]
+  GitSection:
+    description: Full git management — branch bar, file list with stage/unstage, diff viewer, commit composer with symbol autocomplete, paginated commit log
+    type: view
+    tags: [feature, git]
+  GitStore:
+    description: Zustand store for git status, branches, log, diff, staging, commit, push operations
+    type: store
+    tags: [state, git]
   LoreSection:
     description: Absorbed lore-ui — timeline, session, symbol, and author views
     type: view

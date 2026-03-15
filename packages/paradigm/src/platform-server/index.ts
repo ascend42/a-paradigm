@@ -19,6 +19,8 @@ import { createSymbolsRouter } from '../graph-server/routes/symbols.js';
 import { createGraphsRouter } from '../graph-server/routes/graphs.js';
 import { attachWebSocket } from './ws/index.js';
 import { createAgentRouter } from './routes/agent.js';
+import { createOverviewHandler } from './routes/overview.js';
+import { createGitRouter } from './routes/git.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,7 +73,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'lore', 'graph'];
+  const always = ['overview', 'lore', 'graph', 'git'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony'];
 
   const enabled = new Set<string>();
@@ -132,6 +134,12 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
   // === Graph routes (always mounted) ===
   app.use('/api/symbols', createSymbolsRouter(options.projectDir));
   app.use('/api/graphs', createGraphsRouter(options.projectDir));
+
+  // === Overview aggregation ===
+  app.get('/api/platform/overview', createOverviewHandler(options.projectDir));
+
+  // === Git management ===
+  app.use('/api/git', createGitRouter(options.projectDir));
 
   // === Platform-specific routes ===
   app.get('/api/platform/health', (_req: Request, res: Response) => {

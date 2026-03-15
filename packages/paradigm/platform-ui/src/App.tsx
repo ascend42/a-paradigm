@@ -11,6 +11,7 @@ import './styles/agent.css';
 
 const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
+const GitSection = lazy(() => import('./sections/git/GitSection'));
 
 function SectionFallback() {
   return (
@@ -47,7 +48,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'sentinel', 'university', 'symphony'];
+      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -70,6 +71,7 @@ export default function App() {
             {activeSection === 'overview' && <OverviewSection />}
             {activeSection === 'lore' && <LoreSection />}
             {activeSection === 'graph' && <GraphSection />}
+            {activeSection === 'git' && <GitSection />}
             {activeSection === 'sentinel' && <ComingSoonSection name="Sentinel" icon="◈" description="Live observability dashboard — logs, events, flow visualization" />}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
             {activeSection === 'symphony' && <ComingSoonSection name="Symphony" icon="♪" description="Agent-to-agent messaging threads and network status" />}

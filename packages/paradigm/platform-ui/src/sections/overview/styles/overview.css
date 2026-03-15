@@ -1,0 +1,197 @@
+/* Overview Dashboard Styles */
+
+.overview {
+  padding: 24px;
+  max-width: 1060px;
+}
+
+.overview__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.overview__cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .overview__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat-card {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 16px;
+  transition: border-color var(--p-transition);
+}
+
+.stat-card--clickable {
+  cursor: pointer;
+}
+
+.stat-card--clickable:hover {
+  border-color: var(--p-border-active);
+}
+
+.stat-card__value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--p-text-primary);
+}
+
+.stat-card__label {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  margin-top: 4px;
+}
+
+.stat-card__detail {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  margin-top: 2px;
+}
+
+/* Section title */
+.overview__section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+/* Health Bars */
+.overview__health {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.health-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.health-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-bar__label {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.health-bar__value {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-bar__track {
+  height: 6px;
+  background: var(--p-bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.health-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* Activity Feed */
+.overview__activity {
+  margin-top: 24px;
+}
+
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.activity-feed__empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.activity-feed__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--p-bg-tertiary);
+}
+
+.activity-feed__item:last-child {
+  border-bottom: none;
+}
+
+.activity-feed__icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.activity-feed__icon--commit {
+  color: var(--p-accent-blue);
+}
+
+.activity-feed__icon--lore {
+  color: var(--p-accent-purple);
+}
+
+.activity-feed__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.activity-feed__summary {
+  font-size: 13px;
+  color: var(--p-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.activity-feed__symbol {
+  font-size: 11px;
+  color: var(--p-accent-blue);
+  background: var(--p-bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.activity-feed__time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}

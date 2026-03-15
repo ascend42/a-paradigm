@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type SectionId = 'overview' | 'lore' | 'graph' | 'sentinel' | 'university' | 'symphony';
+export type SectionId = 'overview' | 'lore' | 'graph' | 'git' | 'sentinel' | 'university' | 'symphony';
 
 export interface PlatformState {
   activeSection: SectionId;
@@ -17,7 +17,7 @@ export interface PlatformState {
 
 export const usePlatformStore = create<PlatformState>((set, get) => ({
   activeSection: 'overview',
-  availableSections: ['overview', 'lore', 'graph'],
+  availableSections: ['overview', 'lore', 'graph', 'git'],
   projectName: '',
   theme: (localStorage.getItem('paradigm-platform-theme') as 'dark' | 'light') || 'dark',
 

@@ -169,62 +169,6 @@ body {
   overflow: auto;
 }
 
-/* === Overview Section === */
-
-.overview {
-  padding: 24px;
-  max-width: 960px;
-}
-
-.overview__title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 20px;
-}
-
-.overview__cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  background: var(--p-bg-secondary);
-  border: 1px solid var(--p-border);
-  border-radius: var(--p-radius);
-  padding: 16px;
-}
-
-.stat-card__value {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--p-text-primary);
-}
-
-.stat-card__label {
-  font-size: 12px;
-  color: var(--p-text-secondary);
-  margin-top: 4px;
-}
-
-.stat-card__detail {
-  font-size: 11px;
-  color: var(--p-text-muted);
-  margin-top: 2px;
-}
-
-.overview__section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--p-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--p-border);
-}
-
 /* === Scrollbar === */
 
 ::-webkit-scrollbar {
