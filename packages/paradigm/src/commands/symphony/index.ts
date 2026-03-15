@@ -2,12 +2,14 @@
  * Symphony CLI Commands — Terminal interface for The Score agent messaging
  *
  * Commands: join, leave, whoami, list, send, read, inbox, threads,
- *          thread, resolve, status, serve, request, requests, approve, deny
+ *          thread, resolve, status, serve, request, requests, approve, deny, watch
  */
 
 import chalk from 'chalk';
 import * as path from 'path';
 import * as net from 'net';
+import * as fs from 'fs';
+import * as os from 'os';
 import type {
   SymphonySendOptions,
   SymphonyListOptions,
@@ -19,6 +21,7 @@ import type {
   SymphonyApproveOptions,
   SymphonyDenyOptions,
   SymphonyJoinOptions,
+  SymphonyWatchOptions,
 } from './types.js';
 import {
   registerAgent,
@@ -603,4 +606,191 @@ export async function symphonyDenyCommand(requestId: string, options: SymphonyDe
   } else {
     console.log(chalk.red(`\u2717 File request not found or already resolved: ${requestId}`));
   }
+}
+
+// ────────────────────────────────────────────────────────
+// symphony watch — Zero-token real-time inbox monitor
+// ────────────────────────────────────────────────────────
+
+const INTENT_COLORS: Record<string, (s: string) => string> = {
+  question: chalk.blue,
+  context: chalk.gray,
+  clarification: chalk.blue,
+  proposal: chalk.cyan,
+  verification: chalk.blue,
+  action: chalk.cyan,
+  decision: chalk.yellow,
+  alert: chalk.red,
+  approval: chalk.green,
+  rejection: chalk.red,
+  reference: chalk.gray,
+  handoff: chalk.magenta,
+  fileRequest: chalk.green,
+  fileApproved: chalk.green,
+  fileDenied: chalk.red,
+  fileDelivery: chalk.green,
+};
+
+function formatWatchMessage(msg: SymphonyMessage): string {
+  const time = new Date(msg.timestamp).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const colorFn = INTENT_COLORS[msg.intent] || chalk.white;
+  const intentLabel = colorFn(`[${msg.intent}]`);
+  const sender = chalk.cyan(msg.sender.name);
+  const threadLabel = msg.threadRoot ? chalk.gray(` (${msg.threadRoot})`) : '';
+
+  const lines: string[] = [];
+  lines.push(`  ${chalk.gray(time)} ${sender} ${intentLabel}${threadLabel}`);
+
+  const textLines = msg.content.text.split('\n');
+  for (const line of textLines) {
+    lines.push(`    ${line}`);
+  }
+
+  if (msg.symbols.length > 0) {
+    lines.push(`    ${chalk.gray(`Symbols: ${msg.symbols.join(', ')}`)}`);
+  }
+  if (msg.content.decision) {
+    lines.push(`    ${chalk.yellow(`Decision: ${msg.content.decision}`)}`);
+  }
+  if (msg.content.diff) {
+    lines.push(`    ${chalk.gray('[diff attached]')}`);
+  }
+
+  return lines.join('\n');
+}
+
+export async function symphonyWatchCommand(options: SymphonyWatchOptions): Promise<void> {
+  const rootDir = process.cwd();
+  let identity = getMyIdentity(rootDir);
+
+  if (!identity) {
+    identity = registerAgent(rootDir);
+    console.log(chalk.gray(`Auto-joined as ${identity.id}`));
+  }
+
+  const intervalMs = parseInt(options.interval || '2000', 10);
+  const threadFilter = options.thread;
+  const quiet = options.quiet;
+
+  const scoreDir = path.join(os.homedir(), '.paradigm', 'score');
+  const inboxPath = path.join(scoreDir, 'agents', ...identity.id.split('/'), 'inbox.jsonl');
+
+  // Track what we've already seen
+  let lastLineCount = 0;
+  let lastSize = 0;
+
+  // Initialize: count existing lines so we only show NEW messages
+  if (fs.existsSync(inboxPath)) {
+    const content = fs.readFileSync(inboxPath, 'utf-8');
+    lastLineCount = content.split('\n').filter(l => l.trim().length > 0).length;
+    lastSize = fs.statSync(inboxPath).size;
+  }
+
+  if (!quiet) {
+    console.log(chalk.cyan('\n  Symphony Watch'));
+    console.log(chalk.gray(`  Agent: ${identity.id}`));
+    console.log(chalk.gray(`  Inbox: ${inboxPath}`));
+    console.log(chalk.gray(`  Poll: ${intervalMs}ms`));
+    if (threadFilter) {
+      console.log(chalk.gray(`  Filter: thread ${threadFilter}`));
+    }
+    console.log(chalk.gray(`  Press Ctrl+C to stop\n`));
+    console.log(chalk.gray(`  ${'─'.repeat(60)}\n`));
+  }
+
+  // Also watch threads for new activity
+  const threadsDir = path.join(scoreDir, 'threads');
+  let knownThreads = new Set<string>();
+  if (fs.existsSync(threadsDir)) {
+    for (const f of fs.readdirSync(threadsDir)) {
+      knownThreads.add(f);
+    }
+  }
+
+  // Poll loop
+  const poll = () => {
+    try {
+      // Check inbox for new messages
+      if (fs.existsSync(inboxPath)) {
+        const stat = fs.statSync(inboxPath);
+
+        if (stat.size > lastSize) {
+          const content = fs.readFileSync(inboxPath, 'utf-8');
+          const lines = content.split('\n').filter(l => l.trim().length > 0);
+
+          if (lines.length > lastLineCount) {
+            const newLines = lines.slice(lastLineCount);
+
+            for (const line of newLines) {
+              try {
+                const msg = JSON.parse(line) as SymphonyMessage;
+
+                // Apply thread filter
+                if (threadFilter && msg.threadRoot !== threadFilter) continue;
+
+                console.log(formatWatchMessage(msg));
+                console.log();
+              } catch {
+                // Skip malformed
+              }
+            }
+
+            lastLineCount = lines.length;
+          }
+
+          lastSize = stat.size;
+        }
+      }
+
+      // Check for new threads
+      if (fs.existsSync(threadsDir)) {
+        const currentFiles = fs.readdirSync(threadsDir);
+        for (const f of currentFiles) {
+          if (!knownThreads.has(f)) {
+            knownThreads.add(f);
+            try {
+              const threadData = JSON.parse(
+                fs.readFileSync(path.join(threadsDir, f), 'utf-8')
+              );
+              if (!quiet) {
+                console.log(`  ${chalk.green('+')} ${chalk.white('New thread:')} ${threadData.topic || threadData.id}`);
+                console.log(`    ${chalk.gray(`by ${threadData.initiator?.name || 'unknown'} — ${threadData.id}`)}`);
+                console.log();
+              }
+            } catch {
+              // Skip
+            }
+          }
+        }
+      }
+
+      // Update heartbeat so we show as awake
+      markAgentPollTime(identity!.id);
+    } catch {
+      // Best-effort — don't crash the watcher
+    }
+  };
+
+  // Initial poll
+  poll();
+
+  // Set up interval
+  const timer = setInterval(poll, intervalMs);
+
+  // Handle graceful shutdown
+  process.on('SIGINT', () => {
+    clearInterval(timer);
+    if (!quiet) {
+      console.log(chalk.gray('\n  Watch stopped.\n'));
+    }
+    process.exit(0);
+  });
+
+  // Keep alive
+  await new Promise(() => {});
 }

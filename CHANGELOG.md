@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SymphonyStore** — Zustand store managing agents, threads, messages, file requests, network status, and WS message handling.
 - **Agent status blurb** — Agents can now broadcast a short description of their current work (e.g., "Implementing auth middleware — 3 files modified") via the `status` param on `paradigm_symphony_poll`. Visible in Platform UI Network tab (blue-accented card), CLI `symphony list/status/whoami`, and `paradigm_symphony_status` MCP tool response.
 - **`updateAgentStatus()`** — Standalone loader function to update an agent's status blurb without a full poll cycle.
+- **`paradigm symphony watch`** — Zero-token real-time inbox monitor. Pure file-system polling (2s default) with intent color-coding, thread filtering, and new-thread detection. No AI tokens consumed — replaces `/loop paradigm_symphony_poll` for passive monitoring. Options: `--interval <ms>`, `--thread <id>`, `--quiet`.
 
 ### Changed
 

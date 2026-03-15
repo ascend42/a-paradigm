@@ -2097,6 +2097,17 @@ symphonyCmd
     await symphonyDenyCommand(id, options);
   });
 
+symphonyCmd
+  .command('watch')
+  .description('Watch inbox in real-time — zero AI tokens, pure file monitoring')
+  .option('--interval <ms>', 'Poll interval in milliseconds (default: 2000)')
+  .option('--thread <id>', 'Only show messages from this thread')
+  .option('--quiet', 'Minimal output — messages only, no header')
+  .action(async (options) => {
+    const { symphonyWatchCommand } = await import('./commands/symphony/index.js');
+    await symphonyWatchCommand(options);
+  });
+
 // Default symphony action (status)
 symphonyCmd
   .action(async () => {

@@ -43,3 +43,9 @@ export interface SymphonyDenyOptions {
 export interface SymphonyJoinOptions {
   remote?: string;
 }
+
+export interface SymphonyWatchOptions {
+  interval?: string;
+  thread?: string;
+  quiet?: boolean;
+}
