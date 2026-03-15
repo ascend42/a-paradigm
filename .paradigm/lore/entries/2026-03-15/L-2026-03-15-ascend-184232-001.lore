@@ -1,0 +1,103 @@
+id: L-2026-03-15-ascend-184232-001
+type: milestone
+timestamp: '2026-03-15T18:42:32.036Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Symphony Platform Section + Agent Status Blurbs (3.44.0)
+summary: 'Implemented the full Symphony Platform section — a live agent-to-agent communication dashboard replacing the "Coming Soon" placeholder. Thread-first UX with 3 sub-tabs (Threads, Network, Files), REST router with 9 endpoints, real-time WS forwarding, intent color-coding, human compose box, and agent status blurbs. Agents can now broadcast what they''re working on via paradigm_symphony_poll({ status: "..." }), visible across Platform UI, CLI, and MCP tools.'
+symbols_touched:
+  - '#SymphonySection'
+  - '#SymphonyStore'
+  - '#SymphonyRouter'
+  - '#ThreadsTab'
+  - '#NetworkTab'
+  - '#FilesTab'
+  - '#PlatformServer'
+symbols_created:
+  - '#SymphonySection'
+  - '#SymphonyStore'
+  - '#SymphonyRouter'
+  - '#ThreadsTab'
+  - '#NetworkTab'
+  - '#FilesTab'
+files_created:
+  - packages/paradigm/src/platform-server/routes/symphony.ts
+  - packages/paradigm/platform-ui/src/sections/symphony/SymphonySection.tsx
+  - packages/paradigm/platform-ui/src/sections/symphony/store/symphonyStore.ts
+  - packages/paradigm/platform-ui/src/sections/symphony/components/ThreadsTab.tsx
+  - packages/paradigm/platform-ui/src/sections/symphony/components/NetworkTab.tsx
+  - packages/paradigm/platform-ui/src/sections/symphony/components/FilesTab.tsx
+  - packages/paradigm/platform-ui/src/sections/symphony/hooks/useSymphonyWs.ts
+  - packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css
+files_modified:
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+  - packages/paradigm-mcp/src/utils/symphony-loader.ts
+  - packages/paradigm-mcp/src/tools/symphony.ts
+  - packages/paradigm/src/commands/symphony/index.ts
+  - CHANGELOG.md
+  - packages/paradigm/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+lines_added: 5944
+lines_removed: 3730
+decisions:
+  - id: no-bridge
+    decision: Direct import of symphony-loader instead of dynamic import bridge
+    rationale: Unlike Sentinel (separate @a-company/sentinel package requiring dynamic import), symphony-loader is already in paradigm-mcp which is a direct dependency. No bridge needed.
+  - id: blurb-on-poll
+    decision: Status blurb piggybacked on poll heartbeat rather than separate endpoint
+    rationale: Agents already call paradigm_symphony_poll regularly via /loop. Adding status param there means zero extra calls. updateAgentStatus() available for standalone use if needed.
+  - id: intent-color-categories
+    decision: 6 intent color categories mapped from Symphony spec visualization hints
+    rationale: Groups 15+ intents into visual categories (dialogue=blue, action=component, outcome=orange, system=red, lifecycle=aspect, transfer=green) for scannable conversation view.
+verification:
+  status: pass
+  details:
+    paradigm-mcp-build: pass
+    paradigm-cli-build: pass
+    platform-ui-build: pass
+    npm-link: pass
+    paradigm-index: pass
+tags:
+  - arc:platform
+  - arc:symphony
+  - milestone
+  - feature
+body: |-
+  ## What shipped
+
+  Symphony is now a first-class Platform section alongside Overview, Lore, Graph, Git, and Sentinel. The implementation follows the same patterns established by the Sentinel section migration (3.43.0): factory router, Zustand store, lazy-loaded section, WS CustomEvent forwarding.
+
+  ### Architecture
+
+  **Server**: `createSymphonyRouter(projectDir, broadcast)` — unlike Sentinel (which needed a dynamic import bridge to a separate package), Symphony's loader is already in paradigm-mcp, so a direct relative import works. 9 endpoints covering agents, threads, messages, file requests, and aggregated status.
+
+  **UI**: SymphonySection with 3 sub-tabs. ThreadsTab is the star — two-panel layout with thread list sidebar (status filter, participant avatars, message counts) and conversation view (chronological messages with intent color-coding, auto-scroll, collapsible diffs, decision callouts). ComposeBox at the bottom of every thread lets humans participate alongside agents.
+
+  **Real-time**: Server broadcasts `symphony:message` and `symphony:thread_resolved` via WS. `useAgentEffects` dispatches as CustomEvent. `useSymphonyWs` hook routes to store. Polling as backup: 3s for active thread, 10s for thread list + network.
+
+  ### Agent Status Blurbs
+
+  Added `statusBlurb` field to AgentIdentity. Updated `markAgentPollTime()` to accept optional blurb. Added `updateAgentStatus()` standalone function. MCP `paradigm_symphony_poll` now accepts `status` param. Blurb displayed in:
+  - Platform UI Network tab (blue-accented card below agent name)
+  - CLI `symphony list` (indented line under each agent)
+  - CLI `symphony status` (inline after awake/asleep)
+  - CLI `symphony whoami` (Status: line)
+  - MCP `paradigm_symphony_status` response JSON
+
+  ### Key design decisions
+
+  1. **No bridge pattern** — Symphony loader already in paradigm-mcp, direct import unlike Sentinel's dynamic import bridge
+  2. **Intent color categories** — 6 categories from Symphony spec: dialogue/action/outcome/system/lifecycle/transfer
+  3. **Human sender identity** — Compose box creates sender as `human/{agentId}` with type "human", distinguishing from agent messages
+  4. **Status blurb on poll** — Piggybacks on existing heartbeat mechanism rather than adding a separate endpoint, since agents already call poll regularly via /loop
+linked_commits:
+  - b530caf1
+confidence: 0.92
+git_context:
+  ref: b530caf1dc1668fe12560bacc52b32af96a1eba0
+  branch: main
+  dirty: true

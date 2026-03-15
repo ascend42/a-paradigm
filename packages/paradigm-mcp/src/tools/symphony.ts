@@ -36,6 +36,8 @@ import {
   cleanStaleAgents,
   garbageCollect,
   updateAgentStatus,
+  peekInbox,
+  recordAckSize,
   type SymphonyMessage,
   type Participant,
   type MessageIntent,
@@ -47,9 +49,27 @@ import {
 export function getSymphonyToolsList() {
   return [
     {
+      name: 'paradigm_symphony_peek',
+      description:
+        'Ultra-cheap inbox check — file stat only, no parsing. Returns { hasNew: true/false }. Use with /loop 10s for near-free monitoring. When hasNew is true, call paradigm_symphony_poll to read messages. ~15 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            description: 'Short status blurb (same as poll). Updates heartbeat.',
+          },
+        },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
       name: 'paradigm_symphony_poll',
       description:
-        'Poll inbox for new notes. Call via /loop for continuous agent messaging. Returns unread notes formatted as markdown with thread context and suggested actions. Updates heartbeat and optional status blurb. ~200 tokens.',
+        'Read inbox notes and process them. Call when paradigm_symphony_peek returns hasNew: true, or directly via /loop for continuous messaging. Returns unread notes formatted as markdown with thread context and suggested actions. Updates heartbeat and optional status blurb. ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -231,6 +251,22 @@ export async function handleSymphonyTool(
   }
 
   switch (name) {
+    case 'paradigm_symphony_peek': {
+      // Ultra-cheap: fs.stat + heartbeat only
+      const peekStatus = args.status as string | undefined;
+      markAgentPollTime(identity.id, peekStatus);
+
+      const { hasNew } = peekInbox(identity.id);
+      const pendingRequests = hasNew ? listFileRequests('pending').length : 0;
+
+      return {
+        handled: true,
+        text: JSON.stringify(hasNew
+          ? { hasNew: true, pendingFileRequests: pendingRequests, action: 'call paradigm_symphony_poll to read' }
+          : { hasNew: false }),
+      };
+    }
+
     case 'paradigm_symphony_poll': {
       // Clean up stale agents and expired file requests
       cleanStaleAgents();
@@ -247,6 +283,7 @@ export async function handleSymphonyTool(
       if (messages.length > 0) {
         const lastId = messages[messages.length - 1].id;
         acknowledgeMessages(identity.id, lastId);
+        recordAckSize(identity.id);
       }
 
       // Garbage collect old messages

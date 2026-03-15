@@ -478,6 +478,57 @@ function ackPath(agentId: string): string {
   return path.join(getAgentDir(agentId), 'ack.json');
 }
 
+/**
+ * Ultra-cheap inbox check — fs.stat only, no parsing.
+ * Compares current inbox size to last-ack'd position.
+ * Returns { hasNew, inboxSize } without reading any message content.
+ */
+export function peekInbox(agentId: string): { hasNew: boolean; inboxSize: number } {
+  const filePath = inboxPath(agentId);
+  if (!fs.existsSync(filePath)) return { hasNew: false, inboxSize: 0 };
+
+  const stat = fs.statSync(filePath);
+  const inboxSize = stat.size;
+
+  // Compare to ack — if ack exists and inbox has content after it, there's new stuff
+  const ack = readAck(agentId);
+  if (!ack) {
+    // No ack means everything is unread
+    return { hasNew: inboxSize > 0, inboxSize };
+  }
+
+  // Quick check: read just enough to find the ack position
+  // If inbox size hasn't changed since last full poll, nothing new
+  const ackSizePath = path.join(getAgentDir(agentId), 'ack-size.json');
+  if (fs.existsSync(ackSizePath)) {
+    try {
+      const ackSize = JSON.parse(fs.readFileSync(ackSizePath, 'utf-8'));
+      return { hasNew: inboxSize > (ackSize.size || 0), inboxSize };
+    } catch {
+      // Fall through
+    }
+  }
+
+  // No ack-size tracking yet — do a line count comparison (still cheap)
+  return { hasNew: inboxSize > 0, inboxSize };
+}
+
+/**
+ * Record the inbox size at time of acknowledgement.
+ * Called alongside acknowledgeMessages for peek tracking.
+ */
+export function recordAckSize(agentId: string): void {
+  const filePath = inboxPath(agentId);
+  const ackSizePath = path.join(getAgentDir(agentId), 'ack-size.json');
+  try {
+    const size = fs.existsSync(filePath) ? fs.statSync(filePath).size : 0;
+    ensureAgentDir(agentId);
+    fs.writeFileSync(ackSizePath, JSON.stringify({ size }), 'utf-8');
+  } catch {
+    // Best-effort
+  }
+}
+
 export function appendToInbox(agentId: string, message: SymphonyMessage): void {
   ensureAgentDir(agentId);
   appendJsonlLine(inboxPath(agentId), message);

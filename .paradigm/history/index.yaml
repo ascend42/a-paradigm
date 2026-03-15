@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-15T18:05:02.124Z'
+generated: '2026-03-15T19:02:27.867Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -8272,6 +8272,146 @@ by_symbol:
         files:
           - packages/sentinel/src/storage.ts
         description: 'fix(#SentinelStorage): add missing resolveIncident method'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#FilesTab':
+    symbol: '#FilesTab'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_110
+        id: h0180
+        ts: '2026-03-15T18:41:51Z'
+        type: implement
+        symbols:
+          - '#FilesTab'
+          - '#NetworkTab'
+          - '#SymphonyRouter'
+          - '#SymphonySection'
+          - '#SymphonyStore'
+          - '#ThreadsTab'
+        author:
+          type: human
+          id: ascend
+        commit: b530caf1dc1668fe12560bacc52b32af96a1eba0
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/symphony.ts
+          - packages/paradigm-mcp/src/utils/symphony-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/platform-ui/.purpose
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+          - packages/paradigm/platform-ui/src/sections/symphony/SymphonySection.tsx
+          - packages/paradigm/platform-ui/src/sections/symphony/components/FilesTab.tsx
+          - packages/paradigm/platform-ui/src/sections/symphony/components/NetworkTab.tsx
+          - packages/paradigm/platform-ui/src/sections/symphony/components/ThreadsTab.tsx
+          - packages/paradigm/platform-ui/src/sections/symphony/hooks/useSymphonyWs.ts
+          - packages/paradigm/platform-ui/src/sections/symphony/store/symphonyStore.ts
+          - packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css
+          - packages/paradigm/src/commands/symphony/index.ts
+          - packages/paradigm/src/platform-server/.purpose
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/symphony.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#SymphonySection): Symphony Platform section — live agent communication dashboard + status blurbs'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#NetworkTab':
+    symbol: '#NetworkTab'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_110
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonyRouter':
+    symbol: '#SymphonyRouter'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_110
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonySection':
+    symbol: '#SymphonySection'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_110
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonyStore':
+    symbol: '#SymphonyStore'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_110
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ThreadsTab':
+    symbol: '#ThreadsTab'
+    total_changes: 1
+    last_modified: '2026-03-15T18:41:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_110
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#SymphonyWatch':
+    symbol: '#SymphonyWatch'
+    total_changes: 1
+    last_modified: '2026-03-15T19:02:22Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0181
+        ts: '2026-03-15T19:02:22Z'
+        type: implement
+        symbols:
+          - '#SymphonyWatch'
+        author:
+          type: human
+          id: ascend
+        commit: e9cfebad6ca155369b7d42c8a04d1a44ab3454f2
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/src/commands/symphony/index.ts
+          - packages/paradigm/src/commands/symphony/types.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#SymphonyWatch): paradigm symphony watch — zero-token real-time inbox monitor'
     contributors:
       human:
         - ascend
