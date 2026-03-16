@@ -689,6 +689,85 @@
           "explanation": "Token cost estimates enable agents to evaluate tool selection before calling. An agent deciding between paradigm_search (~150 tokens) and reading 5 files (~2500 tokens) can make an informed cost/benefit decision. The goal is efficiency, not restriction."
         }
       ]
+    },
+    {
+      "id": "agent-identity",
+      "title": "Agent Identity & Expertise Profiles",
+      "content": "## Agent Identity & Expertise Profiles\n\nEvery Claude session starts blank. The project remembers — via lore, protocols, aspects — but the agent doesn't. An architect that has successfully designed auth systems 14 times has no memory of that expertise. The orchestrator cannot route tasks to the most qualified agent because qualification is not tracked.\n\nAgent identity files (`.agent`) solve this with persistent YAML profiles that track expertise, personality, and cross-project patterns. They **overlay** the existing `agents.yaml` system and are fully backward compatible — when no `.agent` files exist, everything works exactly as before.\n\n### Storage & Merge Priority\n\nProfiles live in two locations:\n\n- **Global** (`~/.paradigm/agents/architect.agent`) — travels across projects\n- **Project** (`.paradigm/agents/builder.agent`) — project-level overrides\n\nMerge priority: **project `.agent` > global `.agent` > `agents.yaml`**. This means a project can override a global agent's default model or focus areas without modifying the shared identity.\n\n### Profile Structure\n\nEach `.agent` file contains:\n\n- **`id`** — Agent identifier (e.g., \"architect\")\n- **`personality`** — Style (deliberate/rapid/exploratory/methodical), risk tolerance (conservative/balanced/aggressive), and verbosity (minimal/concise/detailed)\n- **`expertise`** — Per-symbol entries with confidence (0.0-1.0), session count, and last touch date\n- **`transferable`** — Cross-project patterns with success rates and linked protocols/lore\n- **`contexts`** — Per-project adaptations: focus areas, preferred model, session count\n\n### Expertise Auto-Population\n\nWhen lore is recorded with `paradigm_lore_record`, the relevant agent's expertise scores update automatically via exponential moving average:\n\n```\nFor each symbol in symbols_touched:\n  if existing entry:\n    sessions++\n    confidence = 0.7 * old_confidence + 0.3 * lore_confidence\n  else:\n    create entry with confidence = lore_confidence (or 0.5 default)\n```\n\nAssessment verdicts from `paradigm_lore_assess` also feed into expertise. A verdict of `correct` nudges confidence up, `incorrect` nudges it down.\n\n### Querying Expertise\n\n`paradigm_agent_expertise` takes a symbol and returns agents ranked by confidence:\n\n```\nparadigm_agent_expertise({ symbol: \"#payment-service\" })\n// Returns: [{ agentId: \"architect\", confidence: 0.92, sessions: 14 }, ...]\n```\n\nThis enables **symbol-to-agent routing** — the orchestrator can prefer the agent most experienced with the symbols a task touches.\n\n### Orchestration Enrichment\n\nWhen `paradigm_orchestrate_inline` builds agent prompts, agents with `.agent` profiles receive a preamble:\n\n```markdown\n## Agent Identity: architect\n**Style:** deliberate | **Risk:** conservative | **Verbosity:** concise\n\n## Your Expertise on Relevant Symbols\n- #auth-middleware: confidence 0.92 (14 sessions)\n- $checkout-flow: confidence 0.88 (8 sessions)\n\n## Transferable Patterns\n- portal-gate-pattern: 95% success (learned in a-paradigm, applied in 2 projects)\n```\n\nThis goes BEFORE the role-specific prompt, giving the agent self-awareness about its strengths.\n\n### CLI Commands\n\n- `paradigm agent list` — Show all profiles with top expertise\n- `paradigm agent show <id>` — Full profile with expertise table\n- `paradigm agent create <id> --global` — Create new identity file\n- `paradigm agent sync <id>` — Bootstrap expertise from existing project lore\n\nAgent identities are a foundation for future capabilities: curated notebooks, model cascading, and knowledge graduation across projects.",
+      "keyConcepts": [
+        ".agent files are persistent YAML profiles that overlay agents.yaml — backward compatible",
+        "Two storage scopes: global (~/.paradigm/agents/) and project (.paradigm/agents/), project wins on merge",
+        "Expertise auto-updates via exponential moving average (70/30) from lore recording",
+        "paradigm_agent_expertise enables symbol-to-agent routing for orchestration",
+        "Orchestration enrichment prepends personality and expertise context to agent prompts"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You run `paradigm agent create architect --global`. Where is the file stored?",
+          "choices": {
+            "A": "In the project's .paradigm/agents/architect.agent",
+            "B": "In ~/.paradigm/agents/architect.agent",
+            "C": "In .paradigm/agents.yaml as a new entry",
+            "D": "In ~/.paradigm/score/agents/architect.agent",
+            "E": "In the project's .paradigm/config.yaml under agents section"
+          },
+          "correct": "B",
+          "explanation": "The --global flag stores the .agent file in ~/.paradigm/agents/, the global scope that travels across projects. Without --global, it would go in the project's .paradigm/agents/ directory."
+        },
+        {
+          "id": "q2",
+          "question": "Both ~/.paradigm/agents/builder.agent and .paradigm/agents/builder.agent exist with different defaultModel. Which one wins?",
+          "choices": {
+            "A": "The global one (~/.paradigm/agents/) always takes priority",
+            "B": "The one with the newer 'updated' timestamp wins",
+            "C": "Project-level .paradigm/agents/builder.agent takes priority",
+            "D": "agents.yaml overrides both .agent files",
+            "E": "An error is raised for the conflict"
+          },
+          "correct": "C",
+          "explanation": "Merge priority is: project .agent > global .agent > agents.yaml. Project-level overrides exist specifically so a project can customize model preferences or focus areas without changing the global identity."
+        },
+        {
+          "id": "q3",
+          "question": "An agent records lore with confidence: 0.8 touching #auth-middleware. The agent's existing expertise on that symbol is confidence: 0.9, sessions: 10. What's the new confidence?",
+          "choices": {
+            "A": "0.85 (simple average)",
+            "B": "0.87 (exponential moving average: 0.7 * 0.9 + 0.3 * 0.8)",
+            "C": "0.80 (new value replaces old)",
+            "D": "0.90 (existing value preserved)",
+            "E": "0.88 (weighted by session count)"
+          },
+          "correct": "B",
+          "explanation": "Expertise uses exponential moving average with alpha=0.3: new = 0.7 * old + 0.3 * new_observation. So 0.7 * 0.9 + 0.3 * 0.8 = 0.63 + 0.24 = 0.87. This balances stability (70% old) with responsiveness to new data (30% new)."
+        },
+        {
+          "id": "q4",
+          "question": "You want to find which agent is best qualified to modify #payment-service. Which MCP tool do you call?",
+          "choices": {
+            "A": "paradigm_agent_list and manually compare expertise arrays",
+            "B": "paradigm_agent_get with the symbol name",
+            "C": "paradigm_agent_expertise with symbol: \"#payment-service\"",
+            "D": "paradigm_search with query: \"payment-service agents\"",
+            "E": "paradigm_orchestrate_inline with the task description"
+          },
+          "correct": "C",
+          "explanation": "paradigm_agent_expertise takes a symbol and returns all agents with expertise on that symbol, ranked by confidence score. This is the purpose-built tool for symbol-to-agent routing, costing only ~100 tokens."
+        },
+        {
+          "id": "q5",
+          "question": "A project has agents.yaml with 5 agents but no .agent files. What happens during orchestration?",
+          "choices": {
+            "A": "An error: .agent files are required for orchestration",
+            "B": "agents.yaml is ignored and default agents are used",
+            "C": "Empty .agent files are auto-created for each agent",
+            "D": "Everything works exactly as before — .agent files are a pure overlay",
+            "E": "Orchestration runs but warns about missing profiles"
+          },
+          "correct": "D",
+          "explanation": ".agent files are a pure overlay. No files = no enrichment, same behavior as pre-3.47.0. The system is fully backward compatible — agents.yaml continues to work unchanged, and .agent profiles only add capabilities when present."
+        }
+      ]
     }
   ]
 }

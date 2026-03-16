@@ -506,6 +506,27 @@ async function handleOrchestrateInline(
   }
 
   // Execute mode: return full prompts for each stage
+  // Load .agent profiles for enrichment (non-fatal)
+  let agentProfiles: Map<string, { enrichment: string }> = new Map();
+  try {
+    const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
+    for (const stage of plan.stages) {
+      for (const agentStep of stage.agents) {
+        if (!agentProfiles.has(agentStep.name)) {
+          const profile = loadAgentProfile(ctx.rootDir, agentStep.name);
+          if (profile) {
+            const enrichment = buildProfileEnrichment(profile, symbols);
+            if (enrichment.trim()) {
+              agentProfiles.set(agentStep.name, { enrichment });
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // .agent profile loading is optional — falls back to agents.yaml behavior
+  }
+
   const stagePrompts: Array<{
     stage: number;
     canRunParallel: boolean;
@@ -519,11 +540,13 @@ async function handleOrchestrateInline(
       const agentDef = manifest.agents[agentStep.name];
       if (!agentDef) continue;
 
+      const profileData = agentProfiles.get(agentStep.name);
       const promptResult = buildAgentPromptInternal({
         agent: agentDef,
         task: agentStep.task,
         symbols,
         dependsOn: agentStep.dependsOn,
+        profileEnrichment: profileData?.enrichment,
       });
 
       agentPrompts.push(promptResult);
@@ -624,6 +647,19 @@ async function handleAgentPrompt(
   // Extract symbols from task
   const symbols = extractSymbols(task);
 
+  // Load .agent profile for enrichment (non-fatal)
+  let profileEnrichment: string | undefined;
+  try {
+    const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
+    const profile = loadAgentProfile(ctx.rootDir, agentName);
+    if (profile) {
+      const enrichment = buildProfileEnrichment(profile, symbols);
+      if (enrichment.trim()) profileEnrichment = enrichment;
+    }
+  } catch {
+    // .agent profile loading is optional
+  }
+
   // Build the prompt
   const promptResult = buildAgentPromptInternal({
     agent: agentDef,
@@ -631,6 +667,7 @@ async function handleAgentPrompt(
     symbols,
     handoffContext,
     previousAgent,
+    profileEnrichment,
   });
 
   const result = {
@@ -847,12 +884,21 @@ interface PromptBuildOptions {
   dependsOn?: string[];
   handoffContext?: string;
   previousAgent?: string;
+  /** Pre-built personality + expertise text from .agent profile */
+  profileEnrichment?: string;
 }
 
 function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResult {
   const { agent, task, symbols, handoffContext, previousAgent } = options;
 
   const parts: string[] = [];
+
+  // Agent identity enrichment (from .agent profile if available)
+  if (options.profileEnrichment) {
+    parts.push(options.profileEnrichment);
+    parts.push('---');
+    parts.push('');
+  }
 
   // Role prompt
   const rolePrompt = ROLE_PROMPTS[agent.name] || agent.role || ROLE_PROMPTS.builder;

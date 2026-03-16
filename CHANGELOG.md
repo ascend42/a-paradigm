@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.47.0] — 2026-03-16
+
+### Added
+
+- **Agent Identity Files (Phase 0)** — Persistent `.agent` YAML profiles that track expertise, personality, and cross-project patterns. Stored globally (`~/.paradigm/agents/`) or per-project (`.paradigm/agents/`), with project overriding global.
+- **3 MCP Tools** — `paradigm_agent_list` (~150 tokens), `paradigm_agent_expertise` (~100 tokens), `paradigm_agent_get` (~200 tokens) for querying agent profiles and symbol-to-agent routing.
+- **4 CLI Commands** — `paradigm agent list`, `paradigm agent show <id>`, `paradigm agent create <id>`, `paradigm agent sync <id>` for managing .agent identity files.
+- **Expertise Auto-Update** — When lore is recorded, the relevant agent's per-symbol expertise scores update via exponential moving average (70/30 weight). Assessment verdicts also feed into expertise.
+- **Orchestration Enrichment** — `paradigm_orchestrate_inline` and `paradigm_agent_prompt` now prepend personality preferences and relevant expertise to agent prompts when `.agent` profiles exist.
+
+### Changed
+
+- **Lore recording** — After `paradigm_lore_record`, auto-updates agent expertise if `PARADIGM_AGENT_ID` is set in the environment.
+- **Lore assessment** — After `paradigm_lore_assess`, nudges agent expertise confidence toward the verdict score.
+- **Orchestration prompts** — `buildAgentPromptInternal` accepts optional `profileEnrichment` text prepended before role prompt.
+
+Symbols: #agent-loader, #agent-tools, #agent-types, #AgentCommands, !agent-created, !agent-synced, !expertise-updated, $agent-expertise-flow
+
 ## [3.46.0] — 2026-03-15
 
 ### Added

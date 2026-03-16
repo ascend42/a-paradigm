@@ -21,6 +21,10 @@
   ],
   "activationEvents": [
     "workspaceContains:**/.purpose",
+    "workspaceContains:**/*.persona",
+    "workspaceContains:**/*.lore",
+    "workspaceContains:**/*.agent",
+    "workspaceContains:**/*.notebook",
     "workspaceContains:**/portal.yaml",
     "workspaceContains:**/.paradigm/config.yaml"
   ],
@@ -35,6 +39,46 @@
         ],
         "extensions": [
           ".purpose"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "persona",
+        "aliases": [
+          "Persona"
+        ],
+        "extensions": [
+          ".persona"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "lore",
+        "aliases": [
+          "Lore"
+        ],
+        "extensions": [
+          ".lore"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "agent",
+        "aliases": [
+          "Agent"
+        ],
+        "extensions": [
+          ".agent"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "notebook",
+        "aliases": [
+          "Notebook"
+        ],
+        "extensions": [
+          ".notebook"
         ],
         "configuration": "./language-configuration.json"
       }
@@ -55,7 +99,11 @@
           "source.tsx",
           "source.js",
           "source.jsx",
-          "source.purpose"
+          "source.purpose",
+          "source.persona",
+          "source.lore",
+          "source.agent",
+          "source.notebook"
         ]
       }
     ],

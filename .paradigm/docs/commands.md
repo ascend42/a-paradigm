@@ -1236,3 +1236,47 @@ paradigm symphony serve
 paradigm symphony join --remote 192.168.1.42:3939
 # Enter pairing code when prompted
 ```
+
+## paradigm agent
+
+Agent identity management — persistent `.agent` files with expertise tracking.
+
+### paradigm agent list
+
+List all agent identity profiles from global and project scopes.
+
+```sh
+paradigm agent list              # Table view
+paradigm agent list --json       # JSON output
+paradigm agent list --global     # Only global profiles
+paradigm agent list --project    # Only project-level profiles
+```
+
+### paradigm agent show
+
+Show full agent profile with expertise table, personality, and transferable patterns.
+
+```sh
+paradigm agent show architect
+paradigm agent show builder --json
+```
+
+### paradigm agent create
+
+Create a new `.agent` identity file.
+
+```sh
+paradigm agent create architect --global       # Creates ~/.paradigm/agents/architect.agent
+paradigm agent create builder --role "Code implementation specialist"
+paradigm agent create custom --description "Custom agent for this project"
+```
+
+### paradigm agent sync
+
+Bootstrap expertise from existing project lore history.
+
+```sh
+paradigm agent sync architect           # Rebuild expertise from lore
+paradigm agent sync builder --dry-run   # Preview without writing
+paradigm agent sync tester --json       # JSON output
+```

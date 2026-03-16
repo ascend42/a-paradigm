@@ -1,0 +1,6 @@
+# Paradigm custom extensions — treat as YAML for syntax highlighting and diffs
+*.purpose linguist-language=YAML
+*.persona linguist-language=YAML
+*.lore linguist-language=YAML
+*.agent linguist-language=YAML
+*.notebook linguist-language=YAML

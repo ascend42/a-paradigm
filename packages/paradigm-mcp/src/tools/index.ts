@@ -47,6 +47,7 @@ import { getConductorToolsList, handleConductorTool } from './conductor.js';
 import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getUniversityToolsList, handleUniversityTool } from './university.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
+import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -291,6 +292,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getUniversityToolsList(),
           // Platform agent-driven UI tools
           ...getPlatformToolsList(),
+          // Agent identity tools
+          ...getAgentToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1428,6 +1431,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try platform tools (agent-driven UI)
           if (name.startsWith('paradigm_platform_')) {
             const result = await handlePlatformTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try agent identity tools
+          if (name.startsWith('paradigm_agent_') && name !== 'paradigm_agent_prompt') {
+            const result = await handleAgentTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

@@ -8,3 +8,7 @@ components:
     description: Type definitions for per-project university content
     type: types
     tags: [university, schema]
+  AgentTypes:
+    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentExpertiseEntry, TransferablePattern, AgentProjectContext"
+    type: types
+    tags: [agent-identity, schema]

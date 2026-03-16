@@ -244,6 +244,12 @@ components:
     tags: [course-content, para-401]
     references: ["#orchestration", "#mcp-tools", "#paradigm-sync"]
 
+  para-401-agent-identity:
+    description: "Agent Identity & Expertise — .agent files, personality, expertise auto-population, symbol-to-agent routing, orchestration enrichment"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#agent-loader", "#agent-tools", "#orchestration"]
+
   # PARA 501: Advanced Systems (10 lessons)
 
   para-501-lore-system:

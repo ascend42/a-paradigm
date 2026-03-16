@@ -1,0 +1,26 @@
+version: 2.0.0
+description: |
+  CLI commands for managing persistent agent identity files (.agent).
+  CRUD for profiles, expertise bootstrapping from lore, and profile viewing.
+
+components:
+  AgentCommands:
+    description: "CLI: paradigm agent list, show, create, sync — manages .agent identity files"
+    type: command-group
+    tags: [feature, agent-identity, cli]
+
+signals:
+  agent-created:
+    description: Emitted when a new .agent file is created via paradigm agent create
+    tags: [agent-identity]
+  agent-synced:
+    description: Emitted when agent expertise is rebuilt from project lore history
+    tags: [agent-identity]
+  expertise-updated:
+    description: Emitted when agent expertise auto-updates after lore recording
+    tags: [agent-identity]
+
+flows:
+  $agent-expertise-flow:
+    description: "Lore recorded → expertise updated → profile saved → orchestrator enriched"
+    tags: [agent-identity, orchestration]

@@ -29,3 +29,7 @@ components:
     tags: [feature, symphony, networking]
     anchors:
       - symphony-relay.ts:1-925
+  agent-loader:
+    description: "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history"
+    type: loader
+    tags: [feature, agent-identity]

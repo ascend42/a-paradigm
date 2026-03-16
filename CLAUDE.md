@@ -299,6 +299,9 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Showing toasts/callouts** | `paradigm_platform_annotate` with type + message |
 | **Reading UI state** | `paradigm_platform_observe` for section/symbol/theme/agents |
 | **Clearing agent effects** | `paradigm_platform_clear` to remove highlights/annotations |
+| **Checking agent expertise** | `paradigm_agent_expertise` for symbol-to-agent routing |
+| **Listing agent profiles** | `paradigm_agent_list` for all agent identities |
+| **Getting agent details** | `paradigm_agent_get` for full profile + expertise |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -343,6 +346,9 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_platform_annotate` | ~100 | Show toasts/callouts/badges in UI |
 | `paradigm_platform_observe` | ~150 | Read current Platform UI state |
 | `paradigm_platform_clear` | ~50 | Remove agent effects from UI |
+| `paradigm_agent_list` | ~150 | Listing all agent profiles |
+| `paradigm_agent_expertise` | ~100 | Finding best agent for a symbol |
+| `paradigm_agent_get` | ~200 | Full agent profile detail |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |

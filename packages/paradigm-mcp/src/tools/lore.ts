@@ -565,6 +565,20 @@ export async function handleLoreTool(
       const id = await recordLoreEntry(ctx.rootDir, entry);
       getSessionTracker().setLastLoreEntryId(id);
 
+      // Auto-update agent expertise from lore
+      try {
+        const agentId = process.env.PARADIGM_AGENT_ID;
+        if (agentId && symbols_touched && symbols_touched.length > 0) {
+          const { updateExpertiseFromLore } = await import('../utils/agent-loader.js');
+          updateExpertiseFromLore(ctx.rootDir, agentId, {
+            symbols_touched,
+            confidence: confidence != null && confidence >= 0 && confidence <= 1 ? confidence : undefined,
+          });
+        }
+      } catch {
+        // Agent expertise update is optional
+      }
+
       // Detect protocol-worthy session
       let protocol_suggestion: ReturnType<typeof detectProtocolSuggestion> = null;
       try {
@@ -703,6 +717,20 @@ export async function handleLoreTool(
       };
 
       const success = await addLoreAssessment(ctx.rootDir, id, assessment);
+
+      // Auto-update agent expertise from assessment
+      try {
+        const agentId = process.env.PARADIGM_AGENT_ID;
+        if (agentId && success && entryToAssess.symbols_touched?.length) {
+          const { updateExpertiseFromAssessment } = await import('../utils/agent-loader.js');
+          updateExpertiseFromAssessment(ctx.rootDir, agentId, {
+            symbols_touched: entryToAssess.symbols_touched,
+            verdict,
+          });
+        }
+      } catch {
+        // Agent expertise update is optional
+      }
 
       // Compute delta for response
       const impliedScore = verdict === 'correct' ? 1.0 : verdict === 'partial' ? 0.5 : 0.0;

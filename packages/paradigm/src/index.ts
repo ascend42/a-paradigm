@@ -2153,5 +2153,59 @@ symphonyCmd
     await symphonyStatusCommand({});
   });
 
+// paradigm agent <command> — Agent identity management
+const agentCmd = program
+  .command('agent')
+  .description('Agent identity management — persistent profiles with expertise tracking');
+
+agentCmd
+  .command('list')
+  .alias('ls')
+  .description('List all agent identity profiles')
+  .option('--json', 'Output as JSON')
+  .option('--global', 'Show only global profiles')
+  .option('--project', 'Show only project-level profiles')
+  .action(async (options) => {
+    const { agentListCommand } = await import('./commands/agent/index.js');
+    await agentListCommand(options);
+  });
+
+agentCmd
+  .command('show <id>')
+  .description('Show full agent profile with expertise table')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentShowCommand } = await import('./commands/agent/index.js');
+    await agentShowCommand(id, options);
+  });
+
+agentCmd
+  .command('create <id>')
+  .description('Create a new .agent identity file')
+  .option('-r, --role <role>', 'Agent role description')
+  .option('-d, --description <desc>', 'Extended description')
+  .option('-g, --global', 'Create in global ~/.paradigm/agents/ (default)')
+  .action(async (id, options) => {
+    const { agentCreateCommand } = await import('./commands/agent/index.js');
+    await agentCreateCommand(id, { ...options, global: options.global !== false });
+  });
+
+agentCmd
+  .command('sync <id>')
+  .description('Bootstrap expertise from existing project lore')
+  .option('-n, --dry-run', 'Show what would change without writing')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentSyncCommand } = await import('./commands/agent/index.js');
+    await agentSyncCommand(id, options);
+  });
+
+// Default agent action (list)
+agentCmd
+  .action(async () => {
+    const { agentListCommand } = await import('./commands/agent/index.js');
+    await agentListCommand({});
+  });
+
 // Parse and run
 program.parse();

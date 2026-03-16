@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-15T19:17:32.446Z'
+generated: '2026-03-15T23:46:15.540Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -8489,6 +8489,139 @@ by_symbol:
     fragility: low
     recent:
       - *ref_112
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!peer-connected':
+    symbol: '!peer-connected'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_113
+        id: h0184
+        ts: '2026-03-15T23:46:08Z'
+        type: implement
+        symbols:
+          - '!peer-connected'
+          - '!peer-disconnected'
+          - '#symphony-peers'
+          - '#symphony-peers-forget'
+          - '#symphony-peers-revoke'
+          - '#symphony-relay'
+          - '#symphony-serve'
+        author:
+          type: human
+          id: ascend
+        commit: 89fea682415b483e415378ecf34f7144a0be726e
+        intent: feature
+        files:
+          - .paradigm/docs/commands.md
+          - .paradigm/docs/troubleshooting.md
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-15/L-2026-03-15-ascend-192421-001.lore
+          - .paradigm/lore/entries/2026-03-15/L-2026-03-15-ascend-232403-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - docs/guides/symphony-quickstart.md
+          - docs/specs/symphony.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/symphony.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/symphony-loader.ts
+          - packages/paradigm-mcp/src/utils/symphony-peers.ts
+          - packages/paradigm-mcp/src/utils/symphony-relay.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/symphony/.purpose
+          - packages/paradigm/src/commands/symphony/index.ts
+          - packages/paradigm/src/commands/symphony/peers.ts
+          - packages/paradigm/src/commands/symphony/types.ts
+          - packages/paradigm/src/index.ts
+          - packages/paradigm/src/platform-server/routes/symphony.ts
+          - packages/university/src/content/courses/para-501.json
+        description: 'feat(#SymphonyRelay): Symphony Phase 1 — cross-machine networking via WebSocket relay'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!peer-disconnected':
+    symbol: '!peer-disconnected'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-peers':
+    symbol: '#symphony-peers'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-peers-forget':
+    symbol: '#symphony-peers-forget'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-peers-revoke':
+    symbol: '#symphony-peers-revoke'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-relay':
+    symbol: '#symphony-relay'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#symphony-serve':
+    symbol: '#symphony-serve'
+    total_changes: 1
+    last_modified: '2026-03-15T23:46:08Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_113
     contributors:
       human:
         - ascend
