@@ -48,6 +48,7 @@ import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getUniversityToolsList, handleUniversityTool } from './university.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
+import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -154,6 +155,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                   type: 'string',
                   description: 'Filter components by type (e.g., "view", "service", "tool"). Only applies to #component symbols.',
                 },
+                response_format: {
+                  type: 'string',
+                  enum: ['concise', 'detailed'],
+                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
+                },
               },
               required: ['query'],
             },
@@ -179,6 +185,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 includeWorkspace: {
                   type: 'boolean',
                   description: 'Also check sibling workspace projects for cross-project impact (default: false). Requires workspace configured in config.yaml.',
+                },
+                response_format: {
+                  type: 'string',
+                  enum: ['concise', 'detailed'],
+                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
                 },
               },
               required: ['symbol'],
@@ -211,7 +222,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features. Returns symbol counts by type, project health score, and feature flags. ~100 tokens.',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                response_format: {
+                  type: 'string',
+                  enum: ['concise', 'detailed'],
+                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
+                },
+              },
             },
             annotations: {
               readOnlyHint: true,
@@ -232,6 +249,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                   type: 'string',
                   enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
                   description: 'HTTP method',
+                },
+                response_format: {
+                  type: 'string',
+                  enum: ['concise', 'detailed'],
+                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
                 },
               },
               required: ['route'],
@@ -294,6 +316,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getPlatformToolsList(),
           // Agent identity tools
           ...getAgentToolsList(),
+          // Agent notebook tools
+          ...getNotebookToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -318,6 +342,25 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             annotations: {
               readOnlyHint: false,
               destructiveHint: true,
+            },
+          },
+          // Dynamic tool activation
+          {
+            name: 'paradigm_tool_activate',
+            description: 'Activate an advanced-tier tool module for this session. Advanced tools are not loaded by default to reduce tool count. Call with a feature key to make its tools available. ~50 tokens.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                feature: {
+                  type: 'string',
+                  description: 'Feature key to activate (e.g., "graph", "heatmap", "pipeline", "conductor", "platform")',
+                },
+              },
+              required: ['feature'],
+            },
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
             },
           },
         ],
@@ -350,13 +393,14 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
       switch (name) {
         case 'paradigm_search': {
-          const { query, type, limit = 10, fuzzy = true, includeWorkspace = false, componentType } = args as {
+          const { query, type, limit = 10, fuzzy = true, includeWorkspace = false, componentType, response_format: searchResponseFormat } = args as {
             query: string;
             type?: string;
             limit?: number;
             fuzzy?: boolean;
             includeWorkspace?: boolean;
             componentType?: string;
+            response_format?: 'concise' | 'detailed';
           };
 
           const cacheKey = `search:${query}:${type || ''}:${limit}:${fuzzy}:${includeWorkspace}:${componentType || ''}`;
@@ -434,6 +478,16 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
+          // Trim response for concise mode
+          if (searchResponseFormat === 'concise') {
+            response.results = results.map(s => ({ symbol: s.symbol, type: s.type }));
+            delete response.fuzzyMatched;
+            delete response.fuzzyNote;
+            delete response.suggestions;
+            delete response.workspaceResults;
+            delete response.workspaceCount;
+          }
+
           const text = JSON.stringify(response, null, 2);
 
           trackToolCall(text.length, name);
@@ -446,7 +500,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_ripple': {
-          const { symbol, depth = 2, includeWorkspace = false } = args as { symbol: string; depth?: number; includeWorkspace?: boolean };
+          const { symbol, depth = 2, includeWorkspace = false, response_format: rippleResponseFormat } = args as { symbol: string; depth?: number; includeWorkspace?: boolean; response_format?: 'concise' | 'detailed' };
           const entry = getSymbol(ctx.index, symbol);
 
           if (!entry) {
@@ -693,7 +747,16 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
-          const text = JSON.stringify(response, null, 2);
+          // Trim response for concise mode
+          const rippleOutput = rippleResponseFormat === 'concise'
+            ? {
+                symbol: response.symbol,
+                impact: response.impact,
+                summary: response.summary,
+              }
+            : response;
+
+          const text = JSON.stringify(rippleOutput, null, 2);
 
           trackToolCall(text.length, name);
           return {
@@ -795,6 +858,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_status': {
+          const statusResponseFormat = (args as { response_format?: 'concise' | 'detailed' }).response_format;
           const text = await toolCache.getOrCompute('status', async () => {
             const counts = getSymbolCounts(ctx.index);
             const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -875,17 +939,32 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }, null, 2);
           });
 
-          trackToolCall(text.length, name);
+          // Trim for concise mode (post-cache to avoid cache key complexity)
+          let statusText = text;
+          if (statusResponseFormat === 'concise') {
+            try {
+              const parsed = JSON.parse(text);
+              statusText = JSON.stringify({
+                project: parsed.project,
+                counts: parsed.counts,
+                total: parsed.total,
+              }, null, 2);
+            } catch {
+              // Fall through with full text if parse fails
+            }
+          }
+
+          trackToolCall(statusText.length, name);
           return {
             content: [{
               type: 'text',
-              text,
+              text: statusText,
             }],
           };
         }
 
         case 'paradigm_gates_for_route': {
-          const { route, method = 'GET' } = args;
+          const { route, method = 'GET', response_format: gatesResponseFormat } = args as { route: string; method?: string; response_format?: 'concise' | 'detailed' };
 
           // Get all gates
           const gates = getSymbolsByType(ctx.index, 'gate');
@@ -1064,18 +1143,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             return true;
           });
 
-          const text = JSON.stringify({
-            route,
-            method,
-            suggestions: dedupedSuggestions,
-            availableGates: gates.map(g => ({
-              symbol: g.symbol,
-              description: g.description,
-            })),
-            note: hasResourceId
-              ? 'Resource ID routes should verify the user owns/has access to the specific resource.'
-              : 'These are suggestions based on route patterns. Review your portal.yaml for exact requirements.',
-          }, null, 2);
+          // Build response based on format
+          const gatesOutput = gatesResponseFormat === 'concise'
+            ? {
+                suggestions: dedupedSuggestions.map(s => ({
+                  gate: s.gate,
+                  confidence: s.confidence,
+                })),
+              }
+            : {
+                route,
+                method,
+                suggestions: dedupedSuggestions,
+                availableGates: gates.map(g => ({
+                  symbol: g.symbol,
+                  description: g.description,
+                })),
+                note: hasResourceId
+                  ? 'Resource ID routes should verify the user owns/has access to the specific resource.'
+                  : 'These are suggestions based on route patterns. Review your portal.yaml for exact requirements.',
+              };
+
+          const text = JSON.stringify(gatesOutput, null, 2);
 
           trackToolCall(text.length, name);
           return {
@@ -1161,6 +1250,22 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           trackToolCall(wsReindexText.length, name);
           toolCache.clear();
           return { content: [{ type: 'text', text: wsReindexText }] };
+        }
+
+        case 'paradigm_tool_activate': {
+          const feature = (args as { feature: string }).feature;
+          // For now, all features are auto-detected and loaded. This is a placeholder
+          // for when the tier system is fully wired. Return success with current status.
+          const text = JSON.stringify({
+            action: 'tool_activate',
+            feature,
+            status: 'active',
+            note: 'All tools are currently auto-detected and loaded. Advanced tier activation will be enabled in a future update.',
+          }, null, 2);
+          trackToolCall(text.length, name);
+          return {
+            content: [{ type: 'text', text }],
+          };
         }
 
         default: {
@@ -1442,6 +1547,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try agent identity tools
           if (name.startsWith('paradigm_agent_') && name !== 'paradigm_agent_prompt') {
             const result = await handleAgentTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try notebook tools
+          if (name.startsWith('paradigm_notebook_')) {
+            const result = await handleNotebookTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

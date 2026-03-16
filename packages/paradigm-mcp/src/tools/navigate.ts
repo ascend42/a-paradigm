@@ -43,6 +43,11 @@ export const navigateTool: Tool = {
         description:
           'For "context" intent: describe the task (e.g., "add Apple Pay to checkout")',
       },
+      response_format: {
+        type: 'string',
+        enum: ['concise', 'detailed'],
+        description: 'Response detail level. "concise" returns minimal fields (default: "detailed")',
+      },
     },
     required: ['intent'],
   },
@@ -208,9 +213,27 @@ export async function handleNavigateTool(
     return JSON.stringify(response, null, 2);
   });
 
+  // Trim for concise mode (post-cache to avoid cache key complexity)
+  let navigateText = cachedText;
+  if (args.response_format === 'concise') {
+    try {
+      const parsed = JSON.parse(cachedText);
+      delete parsed.skip;
+      delete parsed.tip;
+      delete parsed.note;
+      delete parsed.recovery;
+      delete parsed.workspaceResults;
+      delete parsed.workspaceContext;
+      delete parsed.auto_generated;
+      navigateText = JSON.stringify(parsed, null, 2);
+    } catch {
+      // Fall through with full text if parse fails
+    }
+  }
+
   return {
     handled: true,
-    text: cachedText,
+    text: navigateText,
   };
 }
 

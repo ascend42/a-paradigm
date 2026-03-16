@@ -30,6 +30,18 @@ components:
     anchors:
       - symphony-relay.ts:1-925
   agent-loader:
-    description: "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history"
+    description: "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification"
     type: loader
-    tags: [feature, agent-identity]
+    tags: [feature, agent-identity, permissions]
+  notebook-loader:
+    description: "CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count"
+    type: loader
+    tags: [feature, notebooks, agent-identity]
+  tool-registry:
+    description: "Tiered tool registration system — core/feature/advanced tiers with auto-detection"
+    type: loader
+    tags: [feature, tool-loading, mcp]
+  compliance-checker:
+    description: "Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality"
+    type: service
+    tags: [feature, review, compliance]

@@ -33,6 +33,10 @@ export interface AgentProfile {
   created: string;
   /** ISO date of last update */
   updated: string;
+  /** Optional permission scoping for controlled access */
+  permissions?: AgentPermissions;
+  /** SHA-256 hash of id+role+permissions for tamper detection */
+  integrityHash?: string;
 }
 
 export interface AgentPersonality {
@@ -92,6 +96,31 @@ export interface AgentProjectContext {
   lastActive?: string;
   /** Number of sessions in this project */
   sessionsInProject?: number;
+}
+
+// ────────────────────────────────────────────────────────
+// Permissions
+// ────────────────────────────────────────────────────────
+
+export interface AgentPermissions {
+  /** File path access control */
+  paths?: {
+    /** Glob patterns the agent can read */
+    read?: string[];
+    /** Glob patterns the agent can write */
+    write?: string[];
+    /** Glob patterns explicitly denied (overrides read/write) */
+    deny?: string[];
+  };
+  /** Tool access control */
+  tools?: {
+    /** Tool name patterns allowed (e.g., ["paradigm_*", "Read"]) */
+    allow?: string[];
+    /** Tool name patterns denied (overrides allow) */
+    deny?: string[];
+  };
+  /** Actions requiring explicit approval */
+  dangerous_actions?: string[];
 }
 
 // ────────────────────────────────────────────────────────

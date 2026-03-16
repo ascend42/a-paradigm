@@ -1039,6 +1039,73 @@
           "explanation": "Internet direct connect uses the connection string format: address:port#code. The --public flag on the hub displays this connection string. The spoke parses the embedded code from after the # character and uses it automatically — no interactive prompt needed. Port 3939 must be reachable from the internet (port forward, VPN, or SSH tunnel)."
         }
       ]
+    },
+    {
+      "id": "review-compliance",
+      "title": "Automated Review Pipeline & Compliance Checking",
+      "content": "## paradigm review\n\nThe automated review pipeline uses a two-stage protocol:\n\n### Stage 1: Spec Compliance (always runs)\n\n- **Purpose coverage**: All touched symbols registered in .purpose files\n- **Portal gate compliance**: Routes declared in portal.yaml with gates\n- **Aspect anchors**: Anchor files still exist, no drift\n- **Broken references**: Parent symbols exist\n- **Route coverage**: New routes have portal.yaml entries\n\n### Stage 2: Code Quality (--deep only)\n\n- **Security**: eval() detection, hardcoded secrets\n- **Convention**: console.log usage (use Paradigm logger)\n- **Test coverage**: Gaps in test files\n\n### ReviewFinding Format\n\nEach finding has:\n- **type**: blocking (must fix), improvement (should fix), note (informational)\n- **category**: purpose-coverage, portal-compliance, aspect-anchors, security, convention\n- **message**: Human-readable description\n- **suggestion**: How to fix it\n\n### Usage\n\n```bash\nparadigm review              # Staged changes\nparadigm review --pr 123     # PR via gh CLI\nparadigm review --ci         # Exit 1 on blocking\nparadigm review --deep       # Include code quality\nparadigm review --json       # JSON output\n```\n\n## Dynamic Tool Loading\n\nTools are organized in three tiers:\n- **Core** (~15 tools): Always loaded (search, ripple, status, navigate, etc.)\n- **Feature**: Auto-detected from filesystem (lore → .paradigm/lore/, etc.)\n- **Advanced**: On-demand via `paradigm_tool_activate`\n\n## Response Format\n\n`response_format: 'concise'` on high-traffic tools strips secondary data:\n- paradigm_search: returns only { symbol, type }\n- paradigm_ripple: returns only { symbol, impact, summary }\n- paradigm_status: returns only { project, counts, total }\n\n## compliance-checker.ts\n\nShared logic extracted from pm.ts postflight. Both `paradigm_pm_postflight` and `paradigm review` use the same compliance checks.",
+      "quiz": [
+        {
+          "id": "Q-501-RC-001",
+          "question": "paradigm review --ci finds 2 blocking and 3 improvement findings. What's the exit code?",
+          "options": [
+            "Exit code 0 — improvements are non-blocking",
+            "Exit code 1 — any blocking findings cause non-zero exit in CI mode",
+            "Exit code 2 — one per blocking finding",
+            "Exit code 5 — total findings count"
+          ],
+          "correct": 1,
+          "explanation": "In CI mode, any blocking findings cause exit code 1. Improvements and notes do not affect the exit code."
+        },
+        {
+          "id": "Q-501-RC-002",
+          "question": "A project has no features: section in config.yaml. How many MCP tools are loaded?",
+          "options": [
+            "Only core tools (~15)",
+            "Core + explicitly enabled features",
+            "All of them — auto-detection is generous, defaulting to current behavior",
+            "None — features must be explicitly configured"
+          ],
+          "correct": 2,
+          "explanation": "No features config + generous auto-detection = all tools loaded, matching pre-4.0 behavior for backward compat."
+        },
+        {
+          "id": "Q-501-RC-003",
+          "question": "You call paradigm_search with response_format: 'concise'. What fields are returned?",
+          "options": [
+            "Full results with descriptions, paths, and fuzzy matches",
+            "Only { symbol, type } per result — descriptions and secondary data stripped",
+            "Only symbol names as a flat array",
+            "Compressed binary format"
+          ],
+          "correct": 1,
+          "explanation": "Concise mode strips results to { symbol, type } per entry and removes fuzzyMatched, fuzzyNote, suggestions, workspace data."
+        },
+        {
+          "id": "Q-501-RC-004",
+          "question": "An agent needs the graph generation tool but it's in the advanced tier. What does it do?",
+          "options": [
+            "Request an admin to enable it in config.yaml",
+            "Call paradigm_tool_activate with feature: 'graph'",
+            "Modify the agent's permissions to include graph tools",
+            "Restart the session with --enable-graph flag"
+          ],
+          "correct": 1,
+          "explanation": "paradigm_tool_activate enables advanced-tier modules for the current session. The tools become available immediately."
+        },
+        {
+          "id": "Q-501-RC-005",
+          "question": "What's the relationship between paradigm review Stage 1 and paradigm_pm_postflight?",
+          "options": [
+            "They are completely independent with different checks",
+            "paradigm review calls paradigm_pm_postflight internally",
+            "They share the same compliance logic extracted into compliance-checker.ts",
+            "paradigm_pm_postflight is deprecated in favor of paradigm review"
+          ],
+          "correct": 2,
+          "explanation": "Both use compliance-checker.ts for shared compliance logic — purpose coverage, portal gates, aspect anchors, and broken refs."
+        }
+      ]
     }
   ]
 }

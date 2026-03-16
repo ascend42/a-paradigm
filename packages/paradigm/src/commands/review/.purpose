@@ -1,0 +1,21 @@
+version: 2.0.0
+description: |
+  CLI command for automated two-stage review pipeline.
+  Stage 1: Spec compliance (purpose, portal, aspects, refs).
+  Stage 2: Code quality (--deep: eval, secrets, console.log).
+
+components:
+  ReviewCommand:
+    description: "paradigm review — two-stage automated review with CI exit codes"
+    type: command
+    tags: [feature, review, compliance, cli]
+
+signals:
+  review-complete:
+    description: Emitted when automated review pipeline finishes
+    tags: [review]
+
+flows:
+  $review-flow:
+    description: "Changes staged -> spec compliance -> code quality -> findings report"
+    tags: [review, compliance]

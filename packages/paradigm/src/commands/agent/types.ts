@@ -16,6 +16,7 @@ export interface AgentCreateOptions {
   role?: string;
   description?: string;
   global?: boolean;
+  denyPaths?: string;
 }
 
 export interface AgentSyncOptions {

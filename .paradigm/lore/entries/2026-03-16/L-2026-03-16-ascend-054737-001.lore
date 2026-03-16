@@ -1,0 +1,59 @@
+id: L-2026-03-16-ascend-054737-001
+type: insight
+timestamp: '2026-03-16T05:47:37.214Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills That Level Up — Graduated Knowledge Architecture
+summary: 'Deep exploration of a 5-level knowledge graduation system (CLAUDE.md → Skills → Protocols → Aspects → Hooks) where knowledge enters expensive and explicit, then graduates to cheaper levels as confidence proves it. Ripple becomes the skill router. Confidence calibration becomes the graduation signal. Core thesis: systems grow in capability without growing in cost when knowledge can be promoted to cheaper enforcement layers.'
+symbols_touched:
+  - '#paradigm-mcp'
+decisions:
+  - id: leveling-framework
+    decision: Knowledge should graduate through 5 levels (CLAUDE.md → Skills → Protocols → Aspects → Hooks) with confidence as the promotion signal
+    rationale: Each level is cheaper to execute. Systems grow in capability without growing in token cost. Confidence calibration already exists — it just needs to become structurally load-bearing.
+  - id: derivation-runtime-split
+    decision: Paradigm owns skill derivation (generating from structure), Claude Code owns skill runtime (execution)
+    rationale: Tight coupling gives symbol-aware routing but risks portability. Owning derivation but not runtime keeps Paradigm as the knowledge graph while letting Claude Code evolve its execution independently.
+tags:
+  - arc:paradigm-future
+  - arc:skills-convergence
+  - arc:leveling-framework
+  - philosophy
+  - architecture
+body: |-
+  ## The Leveling Framework
+
+  ```
+  Level 0: CLAUDE.md (always loaded, shrinks over time)
+  Level 1: Skills (loaded on demand by description/symbol match)
+  Level 2: Protocols (loaded on demand by paradigm_protocol_search)
+  Level 3: Aspects + Gates (enforced structurally, checked by hooks)
+  Level 4: Hooks (zero-token enforcement, no Claude involvement)
+  ```
+
+  Each level is cheaper. Knowledge flows DOWN (explicit → tacit) via confidence-driven graduation, and UP (hooks blocking frequently → missing skill needed) via failure signals.
+
+  ## Key Architectural Points
+
+  1. **Skill Graph** — Skills connected to symbols, not keywords. When touching #auth-middleware, load auth-related skills via symbol proximity, not description matching.
+  2. **Graduated CLAUDE.md** — Shrinks to identity + symbol system + how to start. Everything else lives in skills that load on demand.
+  3. **Confidence-Driven Graduation** — 90%+ protocol success over 10+ invocations → aspect candidate. Aspect never violated in 50+ sessions → hook candidate.
+  4. **Ripple as Skill Router** — `paradigm_ripple` returns `skills_to_load` alongside affected components/flows/gates.
+  5. **Graceful Expansion** — Capability grows without token cost growing. New knowledge enters at L0/L1, graduates to L3/L4 over time.
+
+  ## Derivation vs Runtime Split
+  - Paradigm owns DERIVATION: generating skills from protocols, aspects, flows
+  - Claude Code owns RUNTIME: executing skills, managing context, tool dispatch
+  - Skills are the INTERFACE between knowledge graph and execution engine
+
+  ## Next Thread
+  "Skills that level up" + agent architecture convergence — transferable agent arsenals that adapt per-project while maintaining cross-project expertise.
+linked_lore:
+  - L-2026-03-16-ascend-053307-001
+confidence: 0.8
+git_context:
+  ref: 89fea682415b483e415378ecf34f7144a0be726e
+  branch: main
+  dirty: true

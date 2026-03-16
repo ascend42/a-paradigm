@@ -7,6 +7,7 @@ export * from './history.js';
 export * from './navigator.js';
 export * from './personas.js';
 export * from './agents.js';
+export * from './notebooks.js';
 
 // Re-export workspace types from the loader (canonical location)
 export type {

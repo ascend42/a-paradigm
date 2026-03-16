@@ -15,9 +15,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import type {
   AgentProfile,
+  AgentPermissions,
   AgentExpertiseEntry,
   AgentPersonality,
   AgentProjectContext,
@@ -146,6 +148,12 @@ export function saveAgentProfile(
   }
 
   const filePath = path.join(dir, `${agentId}${AGENT_EXT}`);
+
+  // Auto-compute integrity hash if permissions are set
+  if (profile.permissions) {
+    profile.integrityHash = computeIntegrityHash(profile);
+  }
+
   profile.updated = new Date().toISOString();
 
   const content = yaml.dump(profile, {
@@ -360,7 +368,8 @@ export function mergeAgentProfileWithManifest(
  */
 export function buildProfileEnrichment(
   profile: AgentProfile,
-  relevantSymbols: string[]
+  relevantSymbols: string[],
+  notebookEntries?: Array<{ context: string; snippet: string; concepts: string[] }>
 ): string {
   const parts: string[] = [];
 
@@ -395,6 +404,21 @@ export function buildProfileEnrichment(
       parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success (learned in ${p.learnedIn}${appliedCount > 0 ? `, applied in ${appliedCount} projects` : ''})`);
     }
     parts.push('');
+  }
+
+  // Notebook entries (curated snippets)
+  if (notebookEntries && notebookEntries.length > 0) {
+    parts.push('## Relevant Notebook Entries');
+    for (const nb of notebookEntries.slice(0, 5)) {
+      parts.push(`### ${nb.context}`);
+      parts.push(`Concepts: ${nb.concepts.join(', ')}`);
+      parts.push('```');
+      // Truncate long snippets
+      const snippet = nb.snippet.length > 300 ? nb.snippet.slice(0, 300) + '...' : nb.snippet;
+      parts.push(snippet);
+      parts.push('```');
+      parts.push('');
+    }
   }
 
   return parts.join('\n');
@@ -463,8 +487,128 @@ export async function syncExpertiseFromLore(
 }
 
 // ────────────────────────────────────────────────────────
+// Permission Checking
+// ────────────────────────────────────────────────────────
+
+/**
+ * Check if an agent has permission to access a file path.
+ * Deny patterns always override allow patterns.
+ */
+export function checkPathPermission(
+  profile: AgentProfile,
+  filePath: string,
+  mode: 'read' | 'write'
+): { allowed: boolean; reason?: string } {
+  if (!profile.permissions?.paths) {
+    return { allowed: true }; // No permissions = unrestricted
+  }
+
+  const { read, write, deny } = profile.permissions.paths;
+
+  // Check deny first — deny always wins
+  if (deny && deny.length > 0) {
+    for (const pattern of deny) {
+      if (matchGlob(pattern, filePath)) {
+        return { allowed: false, reason: `Path denied by pattern: ${pattern}` };
+      }
+    }
+  }
+
+  // Check mode-specific patterns
+  const allowPatterns = mode === 'read' ? read : write;
+  if (allowPatterns && allowPatterns.length > 0) {
+    for (const pattern of allowPatterns) {
+      if (matchGlob(pattern, filePath)) {
+        return { allowed: true };
+      }
+    }
+    // Has allow patterns but none matched
+    return { allowed: false, reason: `No ${mode} pattern matches: ${filePath}` };
+  }
+
+  return { allowed: true }; // No allow patterns = unrestricted for this mode
+}
+
+/**
+ * Check if an agent has permission to use a tool.
+ * Deny patterns always override allow patterns.
+ */
+export function checkToolPermission(
+  profile: AgentProfile,
+  toolName: string
+): { allowed: boolean; reason?: string } {
+  if (!profile.permissions?.tools) {
+    return { allowed: true }; // No permissions = unrestricted
+  }
+
+  const { allow, deny } = profile.permissions.tools;
+
+  // Check deny first
+  if (deny && deny.length > 0) {
+    for (const pattern of deny) {
+      if (matchGlob(pattern, toolName)) {
+        return { allowed: false, reason: `Tool denied by pattern: ${pattern}` };
+      }
+    }
+  }
+
+  // Check allow
+  if (allow && allow.length > 0) {
+    for (const pattern of allow) {
+      if (matchGlob(pattern, toolName)) {
+        return { allowed: true };
+      }
+    }
+    return { allowed: false, reason: `Tool not in allow list: ${toolName}` };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Compute integrity hash from profile id, role, and permissions.
+ */
+export function computeIntegrityHash(profile: AgentProfile): string {
+  const payload = JSON.stringify({
+    id: profile.id,
+    role: profile.role,
+    permissions: profile.permissions || null,
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
+/**
+ * Verify profile integrity — stored hash vs computed.
+ */
+export function verifyIntegrity(profile: AgentProfile): { valid: boolean; reason?: string } {
+  if (!profile.integrityHash) {
+    return { valid: true, reason: 'No integrity hash stored (pre-4.0 profile)' };
+  }
+
+  const computed = computeIntegrityHash(profile);
+  if (computed === profile.integrityHash) {
+    return { valid: true };
+  }
+
+  return {
+    valid: false,
+    reason: 'Integrity hash mismatch — profile may have been tampered with',
+  };
+}
+
+// ────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────
+
+/**
+ * Simple glob pattern matching (supports * wildcard).
+ */
+function matchGlob(pattern: string, value: string): boolean {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`).test(value);
+}
 
 function deepMergeProfiles(base: AgentProfile, override: Partial<AgentProfile>): AgentProfile {
   const merged = { ...base };

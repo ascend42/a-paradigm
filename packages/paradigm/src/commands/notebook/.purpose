@@ -1,0 +1,23 @@
+version: 2.0.0
+description: |
+  CLI commands for managing agent notebook entries.
+  Notebooks are curated snippet libraries distilled from lore.
+
+components:
+  NotebookCommands:
+    description: "paradigm notebook list, show, export — manages agent notebook entries"
+    type: command-group
+    tags: [feature, notebooks, agent-identity, cli]
+
+signals:
+  notebook-created:
+    description: Emitted when a new notebook entry is added
+    tags: [notebooks]
+  notebook-promoted:
+    description: Emitted when a lore entry is distilled into a notebook
+    tags: [notebooks, lore]
+
+flows:
+  $notebook-promote-flow:
+    description: "Lore recorded -> pattern detected -> notebook entry extracted -> agent enriched"
+    tags: [notebooks, lore, orchestration]

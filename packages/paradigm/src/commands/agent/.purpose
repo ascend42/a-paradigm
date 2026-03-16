@@ -5,9 +5,9 @@ description: |
 
 components:
   AgentCommands:
-    description: "CLI: paradigm agent list, show, create, sync — manages .agent identity files"
+    description: "CLI: paradigm agent list, show, create, sync — manages .agent identity files with permission scoping (--deny-paths) and permissions display"
     type: command-group
-    tags: [feature, agent-identity, cli]
+    tags: [feature, agent-identity, permissions, cli]
 
 signals:
   agent-created:
@@ -22,5 +22,5 @@ signals:
 
 flows:
   $agent-expertise-flow:
-    description: "Lore recorded → expertise updated → profile saved → orchestrator enriched"
+    description: "Lore recorded → expertise updated → profile saved → notebook entries loaded → orchestrator enriched"
     tags: [agent-identity, orchestration]

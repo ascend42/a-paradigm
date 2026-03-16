@@ -1,0 +1,45 @@
+id: L-2026-03-16-ascend-224600-001
+type: milestone
+timestamp: '2026-03-16T22:46:00.088Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm 4.0 Decision — Context Engineering Framework Rebrand + Agent Maturation
+summary: 'Decision to rebrand Paradigm as "The Context Engineering Framework" and bump to 4.0. Driven by industry cross-study analysis (30+ sources) proving Paradigm is ahead of the field, combined with the agent identity foundation shipped in 3.47.0. 4.0 encompasses: agent notebooks, model cascading, knowledge graduation, dynamic tool loading, agent permissions, context health scoring, specs as symbols, an agent registry (npm-for-agents), automated review pipeline, deep knowledge scan, and integrity checking. Two parallel workstreams: technical (this session) and content/branding (companion session).'
+symbols_touched:
+  - '#paradigm-mcp'
+  - '#agent-loader'
+  - '#agent-tools'
+  - '#sentinel'
+  - '#orchestration-tools'
+files_created:
+  - docs/specs/v4-technical.md
+decisions:
+  - id: v4-rebrand
+    decision: Bump to Paradigm 4.0 with 'Context Engineering Framework' positioning
+    rationale: Industry cross-study proves Paradigm is ahead on context engineering, multi-agent orchestration, and spec-first development. Agent identity layer provides the consumer-facing story. No one owns the 'context engineering framework' positioning yet.
+  - id: v4-agent-registry
+    decision: Build an agent registry (npm-for-agents) as a product at registry.useparadigm.dev
+    rationale: 'Transferable agent profiles, notebooks, and patterns are publishable artifacts. Community sharing at concept level (not raw code) enables an ecosystem without privacy risk. Revenue: free public, paid private team registries.'
+  - id: v4-parallel-tracks
+    decision: 'Split work into two parallel tracks: technical (spec implementation) and content/branding (keynote, website, README, video series)'
+    rationale: Creator needs to own the voice and narrative. Technical depth needs focused implementation. Both converge at 4.0 launch.
+tags:
+  - arc:paradigm-future
+  - arc:agent-identity
+  - arc:v4
+  - milestone
+  - architecture
+linked_lore:
+  - L-2026-03-16-ascend-053307-001
+  - L-2026-03-16-ascend-054737-001
+  - L-2026-03-16-ascend-060217-001
+  - L-2026-03-16-ascend-062151-001
+  - L-2026-03-16-ascend-080227-001
+  - L-2026-03-16-ascend-221725-001
+confidence: 0.88
+git_context:
+  ref: 165e81e14132ca0451d3138d91dde220e064e1af
+  branch: main
+  dirty: true

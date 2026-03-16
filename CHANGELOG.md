@@ -5,6 +5,32 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] — 2026-03-16
+
+### Added
+
+- **Response Format Parameter** — Optional `response_format: 'concise' | 'detailed'` on high-traffic tools (`paradigm_search`, `paradigm_ripple`, `paradigm_status`, `paradigm_gates_for_route`, `paradigm_navigate`, `paradigm_agent_expertise`). Concise mode strips secondary data to save tokens. Default `'detailed'` preserves backward compatibility.
+- **Dynamic Tool Loading** — `tool-registry.ts` with tiered system (core/feature/advanced). Feature-tier tools auto-detect from filesystem (e.g., `.paradigm/lore/` enables lore tools). `paradigm_tool_activate` enables on-demand advanced tools.
+- **Agent Notebooks** — Curated snippet libraries distilled from lore. Storage at `~/.paradigm/notebooks/{agent-id}/` (global) and `.paradigm/notebooks/{agent-id}/` (project). 3 MCP tools: `paradigm_notebook_search`, `paradigm_notebook_add`, `paradigm_notebook_promote`. CLI: `paradigm notebook list|show|export`. Notebook entries enriched into orchestration prompts via `buildProfileEnrichment`.
+- **Agent Permission Scoping** — `AgentPermissions` interface on `.agent` profiles with `paths` (read/write/deny globs), `tools` (allow/deny patterns), `dangerous_actions`. SHA-256 integrity hashing (`integrityHash`) with tamper detection via `verifyIntegrity()`. Permissions surfaced in orchestration prompts as constraints. `paradigm agent create --deny-paths` CLI option. Stop hook Check 12 (advisory).
+- **Automated Review Pipeline** — `paradigm review` CLI with two-stage protocol. Stage 1: spec compliance (purpose coverage, portal gates, aspect anchors, broken refs). Stage 2 (`--deep`): code quality (eval, hardcoded secrets, console.log). Supports `--pr <number>`, `--ci` (exit 1 on blocking), `--json`. Shared logic extracted into `compliance-checker.ts`.
+
+### Changed
+
+- Rebranded from "Structured AI Context" to "The Context Engineering Framework".
+- `buildProfileEnrichment()` now accepts optional `notebookEntries` parameter for orchestration enrichment.
+- Orchestration prompts include permission constraints when agent has `permissions` set.
+- `paradigm_agent_get` now returns `permissions` and `integrity` status in response.
+- `paradigm agent show` displays permissions section.
+- `paradigm-common.sh` now includes Check 12 (agent permission compliance advisory).
+- Both packages bumped to 4.0.0 (`@a-company/paradigm`, `@a-company/paradigm-mcp`).
+
+### Breaking
+
+- Major version bump: 3.47.0 → 4.0.0. No breaking API changes — all new features are additive with backward-compatible defaults. The major bump signals the strategic rebranding to Context Engineering Framework.
+
+Symbols: #tool-registry, #agent-notebooks, #agent-permissions, #compliance-checker, #review-pipeline, $review-flow
+
 ## [3.47.0] — 2026-03-16
 
 ### Added

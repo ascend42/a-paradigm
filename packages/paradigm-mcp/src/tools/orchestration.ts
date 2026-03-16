@@ -515,7 +515,24 @@ async function handleOrchestrateInline(
         if (!agentProfiles.has(agentStep.name)) {
           const profile = loadAgentProfile(ctx.rootDir, agentStep.name);
           if (profile) {
-            const enrichment = buildProfileEnrichment(profile, symbols);
+            let enrichment = buildProfileEnrichment(profile, symbols);
+            // Append permission constraints if set
+            if (profile.permissions) {
+              const constraints: string[] = ['\n## Permission Constraints'];
+              if (profile.permissions.paths?.deny?.length) {
+                constraints.push(`**Denied paths:** ${profile.permissions.paths.deny.join(', ')}`);
+              }
+              if (profile.permissions.paths?.write?.length) {
+                constraints.push(`**Writable paths:** ${profile.permissions.paths.write.join(', ')}`);
+              }
+              if (profile.permissions.tools?.deny?.length) {
+                constraints.push(`**Denied tools:** ${profile.permissions.tools.deny.join(', ')}`);
+              }
+              if (profile.permissions.dangerous_actions?.length) {
+                constraints.push(`**Requires approval for:** ${profile.permissions.dangerous_actions.join(', ')}`);
+              }
+              enrichment += '\n' + constraints.join('\n');
+            }
             if (enrichment.trim()) {
               agentProfiles.set(agentStep.name, { enrichment });
             }
@@ -653,7 +670,24 @@ async function handleAgentPrompt(
     const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
     const profile = loadAgentProfile(ctx.rootDir, agentName);
     if (profile) {
-      const enrichment = buildProfileEnrichment(profile, symbols);
+      let enrichment = buildProfileEnrichment(profile, symbols);
+      // Append permission constraints if set
+      if (profile.permissions) {
+        const constraints: string[] = ['\n## Permission Constraints'];
+        if (profile.permissions.paths?.deny?.length) {
+          constraints.push(`**Denied paths:** ${profile.permissions.paths.deny.join(', ')}`);
+        }
+        if (profile.permissions.paths?.write?.length) {
+          constraints.push(`**Writable paths:** ${profile.permissions.paths.write.join(', ')}`);
+        }
+        if (profile.permissions.tools?.deny?.length) {
+          constraints.push(`**Denied tools:** ${profile.permissions.tools.deny.join(', ')}`);
+        }
+        if (profile.permissions.dangerous_actions?.length) {
+          constraints.push(`**Requires approval for:** ${profile.permissions.dangerous_actions.join(', ')}`);
+        }
+        enrichment += '\n' + constraints.join('\n');
+      }
       if (enrichment.trim()) profileEnrichment = enrichment;
     }
   } catch {

@@ -12,6 +12,7 @@ import {
   loadAllAgentProfiles,
   loadAgentProfile,
   queryExpertise,
+  verifyIntegrity,
 } from '../utils/agent-loader.js';
 
 /**
@@ -48,6 +49,11 @@ export function getAgentToolsList() {
           symbol: {
             type: 'string',
             description: 'Symbol to query (e.g., "#auth-middleware", "$checkout-flow")',
+          },
+          response_format: {
+            type: 'string',
+            enum: ['concise', 'detailed'],
+            description: 'Response detail level. "concise" returns only top agent (default: "detailed")',
           },
         },
         required: ['symbol'],
@@ -127,7 +133,21 @@ export async function handleAgentTool(
 
     case 'paradigm_agent_expertise': {
       const symbol = args.symbol as string;
+      const expertiseResponseFormat = args.response_format as 'concise' | 'detailed' | undefined;
       const results = queryExpertise(ctx.rootDir, symbol);
+
+      if (expertiseResponseFormat === 'concise') {
+        return {
+          handled: true,
+          text: JSON.stringify({
+            symbol,
+            topAgent: results.length > 0 ? {
+              id: results[0].agentId,
+              confidence: parseFloat(results[0].entry.confidence.toFixed(2)),
+            } : null,
+          }, null, 2),
+        };
+      }
 
       return {
         handled: true,
@@ -161,6 +181,8 @@ export async function handleAgentTool(
         };
       }
 
+      const integrityStatus = verifyIntegrity(profile);
+
       return {
         handled: true,
         text: JSON.stringify({
@@ -187,6 +209,8 @@ export async function handleAgentTool(
           contexts: profile.contexts,
           created: profile.created,
           updated: profile.updated,
+          ...(profile.permissions ? { permissions: profile.permissions } : {}),
+          integrity: integrityStatus,
         }, null, 2),
       };
     }

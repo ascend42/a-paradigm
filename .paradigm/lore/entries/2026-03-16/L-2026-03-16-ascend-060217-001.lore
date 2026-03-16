@@ -1,0 +1,53 @@
+id: L-2026-03-16-ascend-060217-001
+type: insight
+timestamp: '2026-03-16T06:02:17.790Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The Iron Man Armory — Persistent Transferable Agent Identities
+summary: 'Proposed .agent files as persistent identity definitions with expertise graphs, cross-project transferability, and confidence-driven behavioral adaptation. Agents specialize through practice (not configuration), transfer patterns across projects, and level up their skills via the graduation framework. Symphony becomes the reputation and collaboration layer. Key insight: agent identity is a new VIEW over existing Paradigm data (lore, confidence, protocols, aspects), not a new system.'
+symbols_touched:
+  - '#paradigm-mcp'
+decisions:
+  - id: agent-identity-layer
+    decision: Agents should have persistent identity files (.agent) with expertise graphs, transferable patterns, and per-project adaptations
+    rationale: Every session starts from zero today. Accumulated expertise should persist and inform future work. Built on existing primitives (lore, confidence, protocols).
+tags:
+  - arc:paradigm-future
+  - arc:skills-convergence
+  - arc:agent-identity
+  - philosophy
+  - architecture
+body: |-
+  ## The Agent Identity Layer
+
+  ### Three Properties
+  1. **Persistence** — Agents accumulate expertise per-symbol via confidence scores. A 0.92 confidence on #auth-middleware after 14 sessions means the agent compresses its approach (fewer tool calls, less exploration).
+  2. **Transferability** — Patterns learned in project A inform work in project B. Not blind copy but informed adaptation. Tracked via success rates per pattern per project.
+  3. **Specialization** — An armory of agents (architect, builder, sentinel, librarian, conductor) with different expertise profiles and behavioral preferences.
+
+  ### Confidence-Driven Behavior
+  - < 0.5: ask for guidance
+  - 0.5–0.8: proceed, flag for review
+  - > 0.8: autonomous, record lore
+  - > 0.95: compressed execution
+
+  ### Cross-Agent Pollination
+  Agents train each other through shared lore. Sentinel flags patterns Builder misses → learning transfers as skill update.
+
+  ### Architecture
+  - `.agent` files at `~/.paradigm/agents/` (global) or `.paradigm/agents/` (project)
+  - Agent expertise graph: sub-graph tracking agent × symbol confidence
+  - Orchestrator routes tasks to agents by expertise match
+
+  ### Built on Existing Primitives
+  Lore, confidence, protocols, Symphony, aspects, ripple, university — all exist. Agent identity is a new view, not a new system.
+linked_lore:
+  - L-2026-03-16-ascend-053307-001
+  - L-2026-03-16-ascend-054737-001
+confidence: 0.8
+git_context:
+  ref: 89fea682415b483e415378ecf34f7144a0be726e
+  branch: main
+  dirty: true

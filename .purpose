@@ -284,7 +284,7 @@ aspects:
       - pattern
       - mcp
     anchors:
-      - packages/paradigm-mcp/src/tools/index.ts:96-212
+      - packages/paradigm-mcp/src/tools/index.ts:97-213
       - packages/paradigm-mcp/src/tools/index.ts:212-886
     applies-to:
       - '#mcp-tools'

@@ -250,6 +250,11 @@ components:
     tags: [course-content, para-401]
     references: ["#agent-loader", "#agent-tools", "#orchestration"]
 
+  para-401-notebooks-permissions:
+    description: "University lesson: Agent Notebooks & Permission Scoping — notebooks, permissions, integrity hashing"
+    type: lesson
+    tags: [university, notebooks, agent-identity, permissions]
+
   # PARA 501: Advanced Systems (10 lessons)
 
   para-501-lore-system:
@@ -317,3 +322,8 @@ components:
     file: para-501.json
     tags: [course-content, para-501]
     references: ["#PlatformServer", "#PlatformWebSocket", "#AgentPresenceManager", "#UserStateTracker", "#AgentCommandRoute", "#PlatformTools", "#AgentStore", "#AgentToast", "#AgentCallout"]
+
+  para-501-review-compliance:
+    description: "University lesson: Automated Review Pipeline — paradigm review, compliance-checker, dynamic tool loading, response format"
+    type: lesson
+    tags: [university, review, compliance, tool-loading]

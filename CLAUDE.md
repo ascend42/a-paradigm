@@ -302,6 +302,11 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Checking agent expertise** | `paradigm_agent_expertise` for symbol-to-agent routing |
 | **Listing agent profiles** | `paradigm_agent_list` for all agent identities |
 | **Getting agent details** | `paradigm_agent_get` for full profile + expertise |
+| **Activating advanced tools** | `paradigm_tool_activate` for on-demand tool modules |
+| **Searching agent notebooks** | `paradigm_notebook_search` by concept/tag/keyword |
+| **Adding notebook entries** | `paradigm_notebook_add` for curated snippets |
+| **Promoting lore to notebook** | `paradigm_notebook_promote` for lore extraction |
+| **Running automated review** | `paradigm review` or `paradigm review --deep --ci` |
 
 **Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
 
@@ -349,6 +354,11 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_agent_list` | ~150 | Listing all agent profiles |
 | `paradigm_agent_expertise` | ~100 | Finding best agent for a symbol |
 | `paradigm_agent_get` | ~200 | Full agent profile detail |
+| `paradigm_notebook_search` | ~150 | Searching notebook entries |
+| `paradigm_notebook_add` | ~100 | Adding a notebook entry |
+| `paradigm_notebook_promote` | ~100 | Promoting lore to notebook |
+| `paradigm_tool_activate` | ~50 | Activating advanced tools |
+| `response_format: 'concise'` | ~50% fewer | On any tool that supports it |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
 | Full .purpose + config | ~1500 | Initial orientation |
@@ -474,6 +484,7 @@ See `.paradigm/specs/logger.md` for full specification.
 - When exploring ideas, add [idea] tag to the symbol
 - When tracking work items, use `paradigm_task_create` (stored in `.paradigm/tasks/`)
 - When recording reflections/decisions, use `paradigm_lore_record` with appropriate tags (stored in `.paradigm/lore/`)
+- When adding a notebook entry, use `paradigm_notebook_add` or `paradigm_notebook_promote`
 - Always update references when renaming symbols
 
 ## Workspaces (Multi-Project)
@@ -764,7 +775,7 @@ automatically via `paradigm shift` or `paradigm hooks install`.
 | **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
 | **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
 
-The stop hook runs 11 compliance checks (shared via `paradigm-common.sh`):
+The stop hook runs 12 compliance checks (shared via `paradigm-common.sh`):
 
 | Check | What it validates | Blocking? |
 |-------|-------------------|-----------|
@@ -779,6 +790,7 @@ The stop hook runs 11 compliance checks (shared via `paradigm-common.sh`):
 | 9 | Purpose-required patterns from config.yaml | Yes |
 | 10 | Aspect drift detection (auto-heals shifts, blocks real drift) | Yes |
 | 11 | Portal gate implementation compliance (undeclared gates) | Yes |
+| 12 | Agent permission compliance (integrityHash) | No (advisory) |
 
 ### Plugin Version Compatibility
 

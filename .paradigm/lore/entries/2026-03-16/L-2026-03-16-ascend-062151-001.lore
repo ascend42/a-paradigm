@@ -1,0 +1,57 @@
+id: L-2026-03-16-ascend-062151-001
+type: insight
+timestamp: '2026-03-16T06:21:51.759Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Agent Notebooks + Model Cascading — The Speed/Cost Revolution
+summary: 'Two breakthrough ideas: (1) Agent notebooks — curated snippet libraries distilled from lore, providing O(1) knowledge retrieval instead of O(n) exploration. Notebooks are transferable across projects with concept-level adaptation. (2) Model cascading — orchestrator computes minimum viable model per task using complexity scoring (novelty, scope, risk, confidence, context quality). Perfect context from notebooks+protocols enables Haiku to produce Opus-quality results. Self-improving: cascade outcomes feed back into scoring. Projected impact: 4x faster, 8x cheaper with same quality for 60%+ of routine tasks.'
+symbols_touched:
+  - '#paradigm-mcp'
+tags:
+  - arc:paradigm-future
+  - arc:skills-convergence
+  - arc:agent-identity
+  - arc:model-cascading
+  - philosophy
+  - architecture
+body: |-
+  ## Agent Notebooks
+  - NOT documentation, NOT Stack Overflow, NOT RAG
+  - Distilled lore: raw experience → extracted reusable snippets
+  - Each entry has: context (when to use), snippet (what to copy), provenance (where learned), applied-count, confidence
+  - Emerge from work: after N similar tasks, pattern detected → auto-extracted
+  - Transferable with adaptation: TypeScript snippet → Rust concept transfer → new entry, cross-linked
+  - Polyglot pattern library growing across every project
+
+  ## Model Cascading
+  ```
+  complexity < 0.3  → haiku (notebook-ready, protocol-clear)
+  complexity 0.3-0.6 → sonnet (protocol exists, moderate scope)
+  complexity 0.6-0.85 → opus (multi-file, architectural)
+  complexity > 0.85 → opus + human review (novel, high-risk)
+  ```
+
+  ### Why it works
+  Lower-tier models succeed when context is PERFECT. Notebooks provide exact snippets. Protocols provide exact steps. Graduated skills are compressed. The system learns WHICH tasks WHICH models can handle — not abstract but specific to THIS codebase with THIS notebook.
+
+  ### Self-improving cascade
+  - Success → complexity score decreases → cheaper model next time
+  - Failure → complexity score increases → notebook flagged as insufficient → better entry written → retry later
+
+  ### Orchestrator as coach
+  Opus doesn't just dispatch — it learns WHAT CONTEXT lower-tier models need to succeed. Builds teaching curriculum for smaller models through experience.
+
+  ## Economics
+  60% haiku + 30% sonnet + 10% opus = avg 2s/$0.006 vs 8s/$0.05
+  4x faster, 8x cheaper, same quality
+linked_lore:
+  - L-2026-03-16-ascend-053307-001
+  - L-2026-03-16-ascend-054737-001
+  - L-2026-03-16-ascend-060217-001
+confidence: 0.8
+git_context:
+  ref: 89fea682415b483e415378ecf34f7144a0be726e
+  branch: main
+  dirty: true

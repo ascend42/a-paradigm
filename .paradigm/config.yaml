@@ -236,3 +236,24 @@ context:
   # Root documentation directory
   docs-path: docs/
 workspace: "../.paradigm-workspace"
+
+# Dynamic tool loading (v4.0) — uncomment to override auto-detection
+# features:
+#   # Explicitly enable/disable feature-tier tool modules
+#   # Omit this section entirely for auto-detection (default behavior)
+#   wisdom: true
+#   history: true
+#   lore: true
+#   habits: true
+#   sentinel: true
+#   flows: true
+#   fixtures: true
+#   orchestration: true
+#   tasks: true
+#   assessment: true
+#   personas: true
+#   protocols: true
+#   symphony: true
+#   university: true
+#   agents: true
+#   notebooks: true

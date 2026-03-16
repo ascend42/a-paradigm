@@ -9,6 +9,10 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentExpertiseEntry, TransferablePattern, AgentProjectContext"
+    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext"
     type: types
-    tags: [agent-identity, schema]
+    tags: [agent-identity, schema, permissions]
+  NotebookTypes:
+    description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
+    type: types
+    tags: [notebooks, schema]

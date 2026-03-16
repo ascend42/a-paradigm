@@ -768,6 +768,73 @@
           "explanation": ".agent files are a pure overlay. No files = no enrichment, same behavior as pre-3.47.0. The system is fully backward compatible — agents.yaml continues to work unchanged, and .agent profiles only add capabilities when present."
         }
       ]
+    },
+    {
+      "id": "notebooks-permissions",
+      "title": "Agent Notebooks & Permission Scoping",
+      "content": "## Agent Notebooks\n\nAgent notebooks are curated snippet libraries distilled from lore entries. They provide reusable knowledge that agents can apply across sessions and projects.\n\n### NotebookEntry Format\n\nEach entry contains:\n- **context**: When to apply this snippet (retrieval key)\n- **snippet**: The reusable code/knowledge\n- **provenance**: Where it came from (lore, manual, transfer)\n- **concepts[]**: Concept tags for retrieval (e.g., [\"auth\", \"middleware\"])\n- **appliedCount**: How many times used in orchestration\n- **confidence**: 0.0-1.0 reliability score\n\n### Storage\n\n- Global: `~/.paradigm/notebooks/{agent-id}/` — travels across projects\n- Project: `.paradigm/notebooks/{agent-id}/` — project-specific\n\n### MCP Tools\n\n- `paradigm_notebook_search` — find entries by concept, tag, or keyword\n- `paradigm_notebook_add` — create a new curated entry\n- `paradigm_notebook_promote` — extract from lore entry with provenance linking\n\n### Orchestration Integration\n\n`buildProfileEnrichment()` appends a \"Relevant Notebook Entries\" section with context + snippet for matching entries. This enriches the orchestration prompt with reusable patterns.\n\n## Agent Permissions\n\nPermission scoping controls what agents can access:\n\n### Permission Fields\n\n- **paths.read/write**: Glob patterns for file access\n- **paths.deny**: Always-deny patterns (overrides read/write)\n- **tools.allow/deny**: Tool name patterns\n- **dangerous_actions**: Actions requiring explicit approval\n\n### Integrity Hashing\n\nSHA-256 hash of `{id, role, permissions}` stored as `integrityHash`. `verifyIntegrity()` detects tampering — agents must never modify their own config.\n\n### In Orchestration\n\nPermissions appear as constraints in orchestration prompts, informing agents of their boundaries.",
+      "quiz": [
+        {
+          "id": "Q-401-NP-001",
+          "question": "Where are global notebook entries stored for the architect agent?",
+          "options": [
+            "~/.paradigm/notebooks/architect/",
+            ".paradigm/notebooks/architect/",
+            "~/.paradigm/agents/architect/notebooks/",
+            ".paradigm/agents/architect.notebooks"
+          ],
+          "correct": 0,
+          "explanation": "Global notebook entries are stored at ~/.paradigm/notebooks/{agent-id}/ and travel across projects."
+        },
+        {
+          "id": "Q-401-NP-002",
+          "question": "An agent has permissions.paths.deny: [\".paradigm/agents/*\"]. What happens if it tries to write to .paradigm/agents/builder.agent?",
+          "options": [
+            "The write succeeds if there's also a write pattern matching it",
+            "The write is flagged as denied — deny patterns always override allow patterns",
+            "The write succeeds but triggers an advisory",
+            "The agent profile is deleted"
+          ],
+          "correct": 1,
+          "explanation": "Deny patterns always override allow patterns. checkPathPermission() checks deny first."
+        },
+        {
+          "id": "Q-401-NP-003",
+          "question": "You want to extract a reusable pattern from lore entry L-2026-03-10-001 into the architect's notebook. Which MCP tool?",
+          "options": [
+            "paradigm_notebook_add with loreEntryId parameter",
+            "paradigm_lore_promote with agentId parameter",
+            "paradigm_notebook_promote with agentId + loreEntryId",
+            "paradigm_agent_notebook with action: 'promote'"
+          ],
+          "correct": 2,
+          "explanation": "paradigm_notebook_promote takes agentId + loreEntryId and creates a distilled notebook entry with provenance link."
+        },
+        {
+          "id": "Q-401-NP-004",
+          "question": "An architect agent has 3 notebook entries matching #auth-middleware. How does orchestration use them?",
+          "options": [
+            "They replace the agent's expertise section in the prompt",
+            "buildProfileEnrichment() appends a 'Relevant Notebook Entries' section with context + snippet",
+            "They are sent as separate tool calls before the main prompt",
+            "They override the agent's personality settings"
+          ],
+          "correct": 1,
+          "explanation": "buildProfileEnrichment() appends notebook entries (up to 5) with context + truncated snippet to the orchestration prompt."
+        },
+        {
+          "id": "Q-401-NP-005",
+          "question": "A .agent file's integrityHash doesn't match the computed hash. What does this indicate?",
+          "options": [
+            "The file was created before v4.0 and needs migration",
+            "The file was modified without going through saveAgentProfile() — possible tampering",
+            "The agent's expertise has been updated since the hash was computed",
+            "The hash algorithm has changed between versions"
+          ],
+          "correct": 1,
+          "explanation": "verifyIntegrity() returns false when the stored hash doesn't match. The hash covers id+role+permissions, so changes to those fields without saveAgentProfile() indicate tampering."
+        }
+      ]
     }
   ]
 }

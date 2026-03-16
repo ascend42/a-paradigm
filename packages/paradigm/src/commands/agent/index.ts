@@ -20,6 +20,12 @@ import type { AgentListOptions, AgentShowOptions, AgentCreateOptions, AgentSyncO
 // Types (duplicated from paradigm-mcp to avoid cross-package import)
 // ============================================================================
 
+interface AgentPermissions {
+  paths?: { read?: string[]; write?: string[]; deny?: string[] };
+  tools?: { allow?: string[]; deny?: string[] };
+  dangerous_actions?: string[];
+}
+
 interface AgentProfile {
   id: string;
   role: string;
@@ -31,6 +37,8 @@ interface AgentProfile {
   contexts: Record<string, { focus: string[]; defaultModel?: string; lastActive?: string; sessionsInProject?: number }>;
   created: string;
   updated: string;
+  permissions?: AgentPermissions;
+  integrityHash?: string;
 }
 
 const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.paradigm', 'agents');
@@ -212,6 +220,19 @@ export async function agentShowCommand(id: string, options: AgentShowOptions = {
     console.log('');
   }
 
+  // Permissions
+  const perms = profile.permissions;
+  if (perms) {
+    console.log(`  ${chalk.white.bold('Permissions')}`);
+    if (perms.paths?.read?.length) console.log(`    Read: ${perms.paths.read.join(', ')}`);
+    if (perms.paths?.write?.length) console.log(`    Write: ${perms.paths.write.join(', ')}`);
+    if (perms.paths?.deny?.length) console.log(`    Deny: ${chalk.red(perms.paths.deny.join(', '))}`);
+    if (perms.tools?.allow?.length) console.log(`    Tools allow: ${perms.tools.allow.join(', ')}`);
+    if (perms.tools?.deny?.length) console.log(`    Tools deny: ${chalk.red(perms.tools.deny.join(', '))}`);
+    if (perms.dangerous_actions?.length) console.log(`    Requires approval: ${perms.dangerous_actions.join(', ')}`);
+    console.log('');
+  }
+
   tracker.success(`Showed agent ${id}`);
 }
 
@@ -252,6 +273,14 @@ export async function agentCreateCommand(id: string, options: AgentCreateOptions
     created: now,
     updated: now,
   };
+
+  // Handle --deny-paths
+  if (options.denyPaths) {
+    const denyPatterns = options.denyPaths.split(',').map(p => p.trim());
+    profile.permissions = {
+      paths: { deny: denyPatterns },
+    };
+  }
 
   const content = yaml.dump(profile, { lineWidth: 120, noRefs: true, sortKeys: false });
   fs.writeFileSync(filePath, content, 'utf-8');

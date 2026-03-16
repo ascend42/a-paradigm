@@ -703,6 +703,19 @@ program
     await integrityCommand(options);
   });
 
+// paradigm review
+program
+  .command('review')
+  .description('Automated two-stage review pipeline — spec compliance + code quality')
+  .option('--pr <number>', 'Review a PR via gh CLI')
+  .option('--ci', 'Exit 1 on blocking findings')
+  .option('--deep', 'Include code quality checks (eval, secrets, console.log)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (options) => {
+    const { reviewCommand } = await import('./commands/review/index.js');
+    await reviewCommand(options);
+  });
+
 // paradigm sweep
 program
   .command('sweep')
@@ -2153,6 +2166,48 @@ symphonyCmd
     await symphonyStatusCommand({});
   });
 
+// paradigm notebook <command> — Agent notebook management
+const notebookCmd = program
+  .command('notebook')
+  .description('Agent notebook management — curated snippet libraries');
+
+notebookCmd
+  .command('list')
+  .alias('ls')
+  .description('List notebook entries')
+  .option('--agent <id>', 'Filter by agent ID')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { notebookListCommand } = await import('./commands/notebook/index.js');
+    await notebookListCommand(options);
+  });
+
+notebookCmd
+  .command('show <id>')
+  .description('Show a specific notebook entry')
+  .option('--agent <id>', 'Agent ID')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { notebookShowCommand } = await import('./commands/notebook/index.js');
+    await notebookShowCommand(id, options);
+  });
+
+notebookCmd
+  .command('export')
+  .description('Export notebook entries')
+  .option('--agent <id>', 'Filter by agent ID')
+  .option('--format <format>', 'Output format: yaml or json (default: yaml)')
+  .action(async (options) => {
+    const { notebookExportCommand } = await import('./commands/notebook/index.js');
+    await notebookExportCommand(options);
+  });
+
+notebookCmd
+  .action(async () => {
+    const { notebookListCommand } = await import('./commands/notebook/index.js');
+    await notebookListCommand({});
+  });
+
 // paradigm agent <command> — Agent identity management
 const agentCmd = program
   .command('agent')
@@ -2185,6 +2240,7 @@ agentCmd
   .option('-r, --role <role>', 'Agent role description')
   .option('-d, --description <desc>', 'Extended description')
   .option('-g, --global', 'Create in global ~/.paradigm/agents/ (default)')
+  .option('--deny-paths <patterns>', 'Comma-separated glob patterns to deny (e.g., ".env*,*.key")')
   .action(async (id, options) => {
     const { agentCreateCommand } = await import('./commands/agent/index.js');
     await agentCreateCommand(id, { ...options, global: options.global !== false });

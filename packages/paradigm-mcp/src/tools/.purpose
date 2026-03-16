@@ -65,6 +65,10 @@ components:
     type: tool-group
     tags: [feature, platform, agent-ui, mcp]
   AgentTools:
-    description: 3 MCP tools for agent identity (paradigm_agent_list, paradigm_agent_expertise, paradigm_agent_get) — persistent profiles with expertise tracking
+    description: 3 MCP tools for agent identity (paradigm_agent_list, paradigm_agent_expertise, paradigm_agent_get) — persistent profiles with expertise tracking, permission display, integrity verification
     type: tool-group
-    tags: [feature, agent-identity, mcp]
+    tags: [feature, agent-identity, permissions, mcp]
+  NotebookTools:
+    description: "3 MCP tools for agent notebooks (paradigm_notebook_search, paradigm_notebook_add, paradigm_notebook_promote) — curated snippet libraries"
+    type: tool-group
+    tags: [feature, notebooks, agent-identity, mcp]
