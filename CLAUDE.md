@@ -19,7 +19,7 @@ v2 uses 5 operational symbols (#, $, ^, !, ~) plus a tag bank for classification
 .paradigm/specs/       → Detailed specifications
 .paradigm/docs/        → Commands, patterns, troubleshooting
 .cursorrules           → IDE instructions (if using Cursor)
-portal.yaml            → Security/auth definitions
+portal.yaml            → Security and auth definitions
 ```
 
 ## Terminal Syntax
@@ -80,7 +80,7 @@ components:
 
 ### Type vs Tag
 - **`type`** = structural role (view, service, tool, router, filter) — one per component
-- **`tags`** = behavioral/domain classification (feature, integration, state, critical) — many per component
+- **`tags`** = behavioral and domain classification (feature, integration, state, critical) — many per component
 
 ### MCP usage
 - `paradigm_search` accepts `componentType` filter to find all components of a given type
@@ -150,7 +150,7 @@ routes:
 
 1. Call `paradigm_gates_for_route` to get suggestions
 2. Add the route to portal.yaml with required gates
-3. Implement the gate checks in your middleware/code
+3. Implement the gate checks in your middleware or route handlers
 4. Test that unauthorized access returns 403
 
 ### Common Gate Patterns
@@ -192,12 +192,12 @@ Before exploring this codebase:
 ### Task Recipes
 
 **Adding a feature:**
-1. Check `navigator.yaml` → `structure.features.paths`
+1. Check `.paradigm/navigator.yaml` → `structure.features.paths`
 2. Read existing feature as template
 3. Create in same location
 
 **Modifying a component:**
-1. Look up symbol in `navigator.yaml` → `symbols`
+1. Look up symbol in `.paradigm/navigator.yaml` → `symbols`
 2. Go directly to the path
 3. Check `paradigm_ripple` for impact
 
@@ -239,7 +239,7 @@ Save checkpoints when transitioning between workflow phases to enable crash reco
 |-------|---------|-----------------|
 | `planning` | After reading requirements / before coding | Plan, approach, key decisions |
 | `implementing` | After starting code changes | Modified files, symbols touched, decisions made |
-| `validating` | After implementation, before tests/review | All modified files, test plan |
+| `validating` | After implementation, before tests or review | All modified files, test plan |
 | `complete` | Task finished | Summary, final file list |
 
 ### Usage
@@ -248,7 +248,7 @@ Save checkpoints when transitioning between workflow phases to enable crash reco
 paradigm_session_checkpoint({
   phase: "implementing",
   context: "Adding JWT auth middleware to /api/projects routes",
-  modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],
+  modifiedFiles: ["packages/paradigm/src/core/portal-compliance.ts", "packages/paradigm/src/platform-server/index.ts"],
   symbolsTouched: ["^authenticated", "#project-routes"],
   decisions: ["Using RS256 for JWT signing", "Storing refresh tokens in httpOnly cookies"]
 })
@@ -479,7 +479,7 @@ See `.paradigm/specs/logger.md` for full specification.
 - Use signals for side effects, not direct mutations
 - Aspects (~) MUST have code anchors - no unanchored aspects
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
-- Use `type` field for structural role (view, service, tool); use tags for behavior/domain
+- Use `type` field for structural role (view, service, tool); use tags for behavior and domain
 - Use `parent` field to establish component hierarchy when relationships are clear
 
 ## When to Update Paradigm Files
@@ -503,7 +503,7 @@ Paradigm supports multi-project workspaces via `.paradigm-workspace` files.
 2. In each additional project: `paradigm shift --workspace "workspace-name"`
 
 That's it — shift creates the workspace file, adds each project as a member,
-configures the local config.yaml link, and reindexes all members.
+configures the local .paradigm/config.yaml link, and reindexes all members.
 
 **Manual alternative** (if needed):
 1. Create workspace: `paradigm workspace init` in the parent directory
@@ -517,11 +517,11 @@ version: "1.0"
 name: my-workspace
 members:
   - name: backend
-    path: ./backend
+    path: ./packages/paradigm
     role: api
     exports: ["#*-api", "^*"]  # Only expose API symbols and gates
   - name: frontend
-    path: ./frontend
+    path: ./packages/site
     role: client
 ```
 
@@ -546,7 +546,7 @@ members:
 ### Key Design Rules
 
 - **`includeWorkspace` defaults to `false`** — workspace search is opt-in per query
-- **Read-only sibling access** — only reads `scan-index.json` + `portal.yaml`
+- **Read-only sibling access** — only reads `.paradigm/scan-index.json` + `portal.yaml`
 - **Namespace prefix** — `{memberName}/` only on cross-project symbols
 - **Graceful degradation** — missing files, indices, or YAML → warn and continue
 
@@ -705,7 +705,7 @@ Every project can maintain its own university at `.paradigm/university/` — a s
 ### Symbol Linking
 
 The `symbols` field on university content is **load-bearing**:
-- `paradigm_university_validate` checks symbol refs against `scan-index.json`
+- `paradigm_university_validate` checks symbol refs against `.paradigm/scan-index.json`
 - `paradigm_ripple` surfaces `university_content_affected` for symbols referenced in content
 - Content staleness is detected when a symbol's `.purpose` file is newer than the content
 
@@ -793,7 +793,7 @@ The stop hook runs 12 compliance checks (shared via `paradigm-common.sh`):
 | 6 | Aspect coverage advisory | No (advisory) |
 | 7 | Lore entry expected for significant sessions (3+ files) | Yes |
 | 8 | Blocking habits not satisfied | Yes |
-| 9 | Purpose-required patterns from config.yaml | Yes |
+| 9 | Purpose-required patterns from .paradigm/config.yaml | Yes |
 | 10 | Aspect drift detection (auto-heals shifts, blocks real drift) | Yes |
 | 11 | Portal gate implementation compliance (undeclared gates) | Yes |
 | 12 | Agent permission compliance (integrityHash) | No (advisory) |
@@ -801,7 +801,7 @@ The stop hook runs 12 compliance checks (shared via `paradigm-common.sh`):
 
 ### Plugin Version Compatibility
 
-When installing hooks via `paradigm hooks install`, the system checks `compatibleVersions` in the plugin's `hooks.json`. If the current paradigm version is outside the compatible range, a warning is displayed but installation proceeds.
+When installing hooks via `paradigm hooks install`, the system checks `compatibleVersions` in the plugin's `plugins/paradigm/hooks/hooks.json`. If the current paradigm version is outside the compatible range, a warning is displayed but installation proceeds.
 
 **If the Stop hook blocks you:**
 1. Update the nearest `.purpose` file for each modified code area
@@ -814,7 +814,7 @@ When installing hooks via `paradigm hooks install`, the system checks `compatibl
 | Issue | Solution |
 |-------|----------|
 | "Symbol not found" | Run `paradigm scan` to rebuild index |
-| "Navigator not found" | Run `paradigm scan` to generate navigator.yaml |
+| "Navigator not found" | Run `paradigm scan` to generate .paradigm/navigator.yaml |
 | Empty search results | Check that .purpose files define symbols |
 | High context usage | Call `paradigm_handoff_prepare` |
 | Gate suggestions missing | Check that portal.yaml exists and defines gates |

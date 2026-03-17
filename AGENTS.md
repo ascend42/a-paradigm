@@ -150,12 +150,12 @@ Before exploring this codebase:
 ### Task Recipes
 
 **Adding a feature:**
-1. Check `navigator.yaml` → `structure.features.paths`
+1. Check `.paradigm/navigator.yaml` → `structure.features.paths`
 2. Read existing feature as template
 3. Create in same location
 
 **Modifying a component:**
-1. Look up symbol in `navigator.yaml` → `symbols`
+1. Look up symbol in `.paradigm/navigator.yaml` → `symbols`
 2. Go directly to the path
 3. Check `paradigm_ripple` for impact
 

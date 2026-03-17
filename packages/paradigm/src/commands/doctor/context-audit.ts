@@ -15,6 +15,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
@@ -158,6 +159,12 @@ async function checkStaleReferences(rootDir: string): Promise<ContextAuditResult
       if (cleaned.startsWith('node_modules/')) continue;
       if (checked.has(cleaned)) continue;
       checked.add(cleaned);
+
+      // Skip parameter/option lists (e.g. "symbol/tag/groupBy", "approve/deny") — require
+      // a file extension, leading dot, or common path prefix to be a real path reference
+      const hasExt = /\.(ts|js|py|rs|go|yaml|yml|json|md|toml)(?:\/|$)/.test(cleaned);
+      const hasPathPrefix = /^(\.|src\/|packages\/|lib\/|app\/|docs\/)/.test(cleaned);
+      if (!hasExt && !hasPathPrefix) continue;
 
       const fullPath = path.join(rootDir, cleaned);
       if (!fs.existsSync(fullPath)) {
@@ -554,8 +561,7 @@ async function checkStalePortal(rootDir: string): Promise<ContextAuditResult[]> 
 
   let portal: { routes?: Record<string, unknown> };
   try {
-    const { parse } = await import('yaml');
-    portal = parse(fs.readFileSync(portalPath, 'utf8'));
+    portal = yaml.load(fs.readFileSync(portalPath, 'utf8')) as { routes?: Record<string, unknown> };
   } catch {
     results.push({
       check: 'stale-portal',

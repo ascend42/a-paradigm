@@ -5,6 +5,25 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.14.1] — 2026-03-17
+
+### Fixed
+
+- **Doctor: YAML parsing** — Switched doctor from `yaml` package to `js-yaml` (matches rest of codebase). Resolves "Dynamic require of process" errors when validating portal.yaml, flows.yaml, and habits.yaml.
+- **Doctor: config schema** — Added `docs` and `features` to KNOWN_TOP_LEVEL_KEYS in config-schema.ts.
+- **Doctor: stale-reference heuristic** — Tightened context-audit to skip parameter lists (e.g. `type/tag/symbol`, `approve/deny`) — require file extension, leading dot, or common path prefix.
+
+### Changed
+
+- **Instruction files** — Fixed 41 stale path references in CLAUDE.md and AGENTS.md (example paths, missing .paradigm/ prefix).
+- **Fixtures** — Created `.paradigm/fixtures.yaml` from standard template.
+
+### Added
+
+- **Lore** — Recorded agent-session entry (Composer 1.5) with cleanup summary and Paradigm framework reflection.
+
+Symbols: #doctor, #config-schema, #context-audit
+
 ## [4.14.0] — 2026-03-17
 
 ### Added

@@ -7,6 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from '../../utils/logger.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
@@ -270,8 +271,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (fs.existsSync(configPath)) {
       try {
         const configContent = fs.readFileSync(configPath, 'utf8');
-        const { parse } = await import('yaml');
-        const config = parse(configContent);
+        const config = yaml.load(configContent) as Record<string, unknown>;
         const purposeRequired = config?.['purpose-required'] as Array<{ pattern?: string; depth?: number }> | undefined;
 
         if (purposeRequired && Array.isArray(purposeRequired)) {
@@ -372,8 +372,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (fs.existsSync(portalPath)) {
       try {
         const portalContent = fs.readFileSync(portalPath, 'utf8');
-        const { parse } = await import('yaml');
-        const portal = parse(portalContent);
+        const portal = yaml.load(portalContent) as Record<string, unknown>;
         if (portal?.version && portal?.gates) {
           const gateCount = Object.keys(portal.gates || {}).length;
           const routeCount = Object.keys(portal.routes || {}).length;
@@ -422,8 +421,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (fs.existsSync(flowsPath)) {
       try {
         const flowsContent = fs.readFileSync(flowsPath, 'utf8');
-        const { parse } = await import('yaml');
-        const flows = parse(flowsContent);
+        const flows = yaml.load(flowsContent) as Record<string, unknown>;
         if (flows?.version && flows?.flows) {
           const flowCount = Object.keys(flows.flows || {}).length;
           const emptyFlows = Object.entries(flows.flows || {}).filter(
@@ -520,8 +518,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           if (fs.existsSync(quizDir)) {
             for (const file of fs.readdirSync(quizDir).filter(f => f.endsWith('.yaml'))) {
               try {
-                const { parse } = await import('yaml');
-                const quiz = parse(fs.readFileSync(path.join(quizDir, file), 'utf8'));
+                const quiz = yaml.load(fs.readFileSync(path.join(quizDir, file), 'utf8')) as Record<string, unknown>;
                 if (quiz?.questions) {
                   for (const q of quiz.questions) {
                     if (q.choices && q.correct && !(q.correct in q.choices)) {
@@ -538,8 +535,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           if (fs.existsSync(pathDir)) {
             for (const file of fs.readdirSync(pathDir).filter(f => f.endsWith('.yaml'))) {
               try {
-                const { parse } = await import('yaml');
-                const lp = parse(fs.readFileSync(path.join(pathDir, file), 'utf8'));
+                const lp = yaml.load(fs.readFileSync(path.join(pathDir, file), 'utf8')) as Record<string, unknown>;
                 if (lp?.steps) {
                   for (const step of lp.steps) {
                     if (step.content && !step.content.startsWith('plsat:')) {
@@ -629,8 +625,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (fs.existsSync(habitsPath)) {
       try {
         const habitsContent = fs.readFileSync(habitsPath, 'utf8');
-        const { parse } = await import('yaml');
-        const habits = parse(habitsContent);
+        const habits = yaml.load(habitsContent) as Record<string, unknown>;
         if (habits?.version && Array.isArray(habits?.habits)) {
           const enabled = habits.habits.filter((h: { enabled?: boolean }) => h.enabled !== false).length;
           results.push({

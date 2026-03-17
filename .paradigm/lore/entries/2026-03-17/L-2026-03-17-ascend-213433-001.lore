@@ -1,0 +1,75 @@
+id: L-2026-03-17-ascend-213433-001
+type: agent-session
+timestamp: '2026-03-17T21:34:33.609Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Doctor cleanup and Paradigm reflection (Composer 1.5)
+summary: 'Composer 1.5 performed a comprehensive Paradigm doctor cleanup: fixed YAML parsing in doctor (js-yaml), config schema validation, 41 stale instruction-file references, and created .paradigm/fixtures.yaml. Doctor went from 5 errors to 0. This entry also records my reflection on Paradigm as a framework.'
+symbols_touched:
+  - '#doctor'
+  - '#config-schema'
+  - '#context-audit'
+  - '#portal-compliance'
+files_created:
+  - .paradigm/fixtures.yaml
+files_modified:
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/commands/doctor/context-audit.ts
+  - packages/paradigm/src/core/config-schema.ts
+  - CLAUDE.md
+  - AGENTS.md
+tags:
+  - arc:cleanup
+  - agent-session
+  - doctor
+  - composer
+meta:
+  agent: Composer 1.5
+  session_date: '2026-03-17'
+body: |-
+  ## Changes Made
+
+  **Agent:** Composer 1.5
+
+  ### 1. YAML Parsing (portal, flows, habits)
+  The doctor command was using `import('yaml')` (the eulermason yaml package), which threw "Dynamic require of process" errors when parsing portal.yaml, flows.yaml, and habits.yaml. Switched to `js-yaml`, which the rest of the codebase already uses. All three files now validate successfully.
+
+  ### 2. Config Schema
+  Added `docs` and `features` to KNOWN_TOP_LEVEL_KEYS in config-schema.ts — the docs section was in use but flagged as unrecognized.
+
+  ### 3. Stale References (41 → 0)
+  - Updated example paths in CLAUDE.md/AGENTS.md to real paths (e.g., packages/paradigm/src/core/portal-compliance.ts)
+  - Fixed parameter-list false positives (type/tag/symbol, approve/deny) by tightening the context-audit heuristic: require file extension, leading dot, or common path prefix
+  - Created .paradigm/fixtures.yaml from the standard template
+
+  ### 4. Hooks
+  Ran paradigm hooks install; Cursor hooks were already in place via the Paradigm plugin.
+
+  **Result:** Doctor went from 5 errors to 0.
+
+  ---
+
+  ## Sentiment on Paradigm as a Framework
+
+  **Is Paradigm delivering on its goal?** Yes, with caveats.
+
+  **What works well:**
+  - The symbol system (#, $, ^, !, ~) creates a shared language between code and AI. When I see `#doctor` or `^authenticated` in a .purpose file, I know what to look for.
+  - The workflow protocol (session_recover, ripple, postflight) is genuinely useful. Calling paradigm_ripple before changing a symbol would have caught dependencies I might have missed.
+  - Doctor catching 41 stale paths in instruction files — that's the kind of "boring but important" quality check that slips through otherwise. The fact that it could improve its own heuristic (filtering param lists) shows the system is extensible.
+  - The MCP-first approach is right. Structured tool responses beat parsing CLI output. The rules push me toward paradigm_navigate over broad file exploration, and it pays off in token efficiency.
+
+  **Friction points:**
+  - The YAML parsing bug (yaml vs js-yaml) was subtle. Two different YAML libs in the same codebase led to runtime errors that weren't obvious from the file content. Consolidating on one parser is the right move.
+  - The stale-reference detector's original regex was overzealous — matching "approve/deny" and "type/tag/symbol" as paths. The fix (require extension or path prefix) is a good heuristic, but it reveals how hard it is to distinguish "path-like" from "parameter-list-like" in prose.
+  - The portal compliance "unused gate" warning for ^local-only is a bit confusing: the gate *is* in the routes in portal.yaml. The check seems to look for code-level gate enforcement (checkGate calls), not YAML declarations. That's a design choice, but the messaging could be clearer.
+
+  **Overall:** Paradigm feels like it's aiming for something real — not just "AI slop" documentation, but structured context that survives handoffs and scales across sessions. The discipline (monorepo config, purpose-required patterns, portal gates) creates guardrails. When it works, it feels like having a persistent project memory. The cleanup session itself was a good test: I could follow the workflow, fix the issues, and the system verified the fixes. That loop — detect, fix, verify — is what I'd want from an AI-assisted development framework.
+
+  **Confidence:** 0.85 — the changes are solid; the reflection is honest.
+git_context:
+  ref: b6474755b97691c40bd1a13f79afe500fca2031c
+  branch: main
+  dirty: true

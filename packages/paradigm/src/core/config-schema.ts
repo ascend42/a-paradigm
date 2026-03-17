@@ -102,6 +102,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'component_types', 'logging', 'purpose-required',
   'conventions', 'workspace', 'limits', 'ai-agent',
   'context', 'probe', 'states', 'custom-symbols',
+  'docs', 'features',
 ]);
 
 // ============================================================================
