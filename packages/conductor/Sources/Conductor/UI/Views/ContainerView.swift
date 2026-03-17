@@ -1,6 +1,6 @@
 // ContainerView.swift — #container-view
 // Root SwiftUI view for the workspace container.
-// Renders tiling cells with chrome overlays and divider handles.
+// Renders tiling cells with chrome overlays, divider handles, and presets.
 
 import SwiftUI
 
@@ -13,6 +13,9 @@ struct ContainerView: View {
     @State private var layoutRoot: TileNode = .cell(.empty())
     @State private var showControlPanel = false
     @State private var controlPanelTab: ControlPanelTab = .workspace
+    @State private var currentPreset: LayoutPreset? = .focused
+    @State private var maximizedCellId: String?
+    @State private var savedLayoutBeforeMaximize: TileNode?
 
     /// The gap between cells.
     private let cellGap: CGFloat = 8
@@ -24,9 +27,9 @@ struct ContainerView: View {
     var body: some View {
         GeometryReader { geo in
             let contentArea = CGRect(
-                x: 0,
-                y: statusBarHeight,
-                width: geo.size.width,
+                x: cellGap,
+                y: 0,
+                width: geo.size.width - cellGap * 2,
                 height: geo.size.height - headerHeight - statusBarHeight
             )
 
@@ -41,24 +44,8 @@ struct ContainerView: View {
                         .frame(height: headerHeight)
 
                     // Tiling area
-                    ZStack {
-                        // Cell chrome overlays
-                        let frames = TilingEngine.computeFrames(root: layoutRoot, area: contentArea, gap: cellGap)
-                        ForEach(frames) { cellFrame in
-                            CellChromeView(
-                                cellFrame: cellFrame,
-                                onSplit: { axis in
-                                    layoutRoot = TilingEngine.splitCell(in: layoutRoot, cellId: cellFrame.id, axis: axis)
-                                },
-                                onClose: {
-                                    layoutRoot = TilingEngine.removeCell(in: layoutRoot, cellId: cellFrame.id)
-                                }
-                            )
-                            .frame(width: cellFrame.frame.width, height: cellFrame.frame.height)
-                            .position(x: cellFrame.frame.midX, y: cellFrame.frame.midY - statusBarHeight)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    tilingArea(contentArea: contentArea)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     // Status bar
                     statusBar
@@ -68,12 +55,72 @@ struct ContainerView: View {
         }
     }
 
+    // MARK: - Tiling Area
+
+    @ViewBuilder
+    private func tilingArea(contentArea: CGRect) -> some View {
+        ZStack {
+            // Cell chrome overlays
+            let frames = TilingEngine.computeFrames(root: layoutRoot, area: contentArea, gap: cellGap)
+            ForEach(frames) { cellFrame in
+                if cellFrame.instanceId == nil {
+                    // Empty cell — show placeholder
+                    EmptyCellView(
+                        onLaunch: { launchInCell(cellFrame.id) },
+                        onDrop: nil
+                    )
+                    .frame(width: cellFrame.frame.width, height: cellFrame.frame.height)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.15), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                    )
+                    .position(x: cellFrame.frame.midX, y: cellFrame.frame.midY)
+                } else {
+                    // Active cell — show chrome
+                    CellChromeView(
+                        cellFrame: cellFrame,
+                        onSplit: { axis in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layoutRoot = TilingEngine.splitCell(in: layoutRoot, cellId: cellFrame.id, axis: axis)
+                                currentPreset = nil
+                            }
+                        },
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layoutRoot = TilingEngine.removeCell(in: layoutRoot, cellId: cellFrame.id)
+                                currentPreset = nil
+                            }
+                        },
+                        onMaximize: {
+                            toggleMaximize(cellId: cellFrame.id)
+                        }
+                    )
+                    .frame(width: cellFrame.frame.width, height: cellFrame.frame.height)
+                    .position(x: cellFrame.frame.midX, y: cellFrame.frame.midY)
+                }
+            }
+
+            // Divider handles
+            let dividers = TilingEngine.computeDividers(root: layoutRoot, area: contentArea, gap: cellGap)
+            ForEach(dividers) { divider in
+                DividerHandle(
+                    divider: divider,
+                    onDrag: { delta in
+                        handleDividerDrag(splitId: divider.id, delta: delta, axis: divider.axis, area: contentArea)
+                    },
+                    onDragEnd: {}
+                )
+                .position(x: divider.frame.midX, y: divider.frame.midY)
+            }
+        }
+    }
+
     // MARK: - Header Bar
 
     private var containerHeader: some View {
         HStack(spacing: 8) {
             // Control panel toggle
-            Button(action: { showControlPanel.toggle() }) {
+            Button(action: { withAnimation { showControlPanel.toggle() } }) {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 14))
                     .foregroundStyle(showControlPanel ? .blue : .secondary)
@@ -84,33 +131,23 @@ struct ContainerView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.system(size: 13, weight: .semibold))
-            Text("v1.0")
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
 
             Spacer()
 
+            // Layout presets strip
+            LayoutPresetsView(currentPreset: $currentPreset) { preset in
+                applyPreset(preset)
+            }
+
+            Divider()
+                .frame(height: 16)
+
             // Instance count
-            let cellCount = TilingEngine.cellCount(layoutRoot)
-            let activeCells = TilingEngine.allCells(layoutRoot).filter { !$0.isEmpty }.count
-            Text("\(activeCells)/\(cellCount) cells")
+            let allCells = TilingEngine.allCells(layoutRoot)
+            let activeCells = allCells.filter { !$0.isEmpty }.count
+            Text("\(activeCells) instance\(activeCells == 1 ? "" : "s")")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-
-            // Layout presets
-            Menu {
-                ForEach(LayoutPreset.allCases, id: \.rawValue) { preset in
-                    Button("⌘\(preset.shortcutIndex) \(preset.rawValue)") {
-                        applyPreset(preset)
-                    }
-                }
-            } label: {
-                Image(systemName: "rectangle.3.group")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 28)
 
             // Status indicator
             Circle()
@@ -149,11 +186,10 @@ struct ContainerView: View {
 
             // Health
             if !agentHealthMonitor.metrics.isEmpty {
-                let total = agentHealthMonitor.metrics.count
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 8))
-                    Text("\(total) agents")
+                    Text("\(agentHealthMonitor.metrics.count) agents")
                         .font(.system(size: 9))
                 }
                 .foregroundStyle(.secondary)
@@ -161,7 +197,8 @@ struct ContainerView: View {
 
             Spacer()
 
-            Text("Conductor v1.0")
+            // Keyboard hint
+            Text("⌘1-6 presets")
                 .font(.system(size: 8))
                 .foregroundStyle(.quaternary)
         }
@@ -173,7 +210,62 @@ struct ContainerView: View {
 
     private func applyPreset(_ preset: LayoutPreset) {
         let existingCells = TilingEngine.allCells(layoutRoot)
-        layoutRoot = TilingEngine.preset(preset, cells: existingCells)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            layoutRoot = TilingEngine.preset(preset, cells: existingCells)
+            maximizedCellId = nil
+            savedLayoutBeforeMaximize = nil
+        }
+    }
+
+    private func handleDividerDrag(splitId: String, delta: CGFloat, axis: SplitAxis, area: CGRect) {
+        // Convert pixel delta to ratio delta
+        let containerSize = axis == .horizontal ? area.width : area.height
+        guard containerSize > 0 else { return }
+        let ratioDelta = delta / containerSize
+
+        // Find current ratio and update
+        // Walk tree to find the split, get its current ratio, add delta
+        if let currentRatio = findSplitRatio(in: layoutRoot, splitId: splitId) {
+            let newRatio = currentRatio + ratioDelta
+            let (snapped, _) = DividerHandle.snapRatio(newRatio, containerSize: containerSize)
+            layoutRoot = TilingEngine.updateRatio(in: layoutRoot, splitId: splitId, ratio: snapped)
+            currentPreset = nil
+        }
+    }
+
+    private func findSplitRatio(in node: TileNode, splitId: String) -> CGFloat? {
+        switch node {
+        case .cell: return nil
+        case .split(let state):
+            if state.id == splitId { return state.ratio }
+            return findSplitRatio(in: state.first, splitId: splitId) ?? findSplitRatio(in: state.second, splitId: splitId)
+        }
+    }
+
+    private func toggleMaximize(cellId: String) {
+        if maximizedCellId == cellId, let saved = savedLayoutBeforeMaximize {
+            // Restore
+            withAnimation(.easeInOut(duration: 0.2)) {
+                layoutRoot = saved
+                maximizedCellId = nil
+                savedLayoutBeforeMaximize = nil
+            }
+        } else {
+            // Maximize: save layout, replace with single focused cell
+            let cell = TilingEngine.allCells(layoutRoot).first { $0.id == cellId }
+            guard let cell else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                savedLayoutBeforeMaximize = layoutRoot
+                layoutRoot = .cell(cell)
+                maximizedCellId = cellId
+            }
+        }
+    }
+
+    private func launchInCell(_ cellId: String) {
+        // TODO: Sprint 19 — show project picker, then assign instance to cell
+        ConductorLog.component("container-view")
+            .info("Launch requested for cell \(cellId)")
     }
 }
 

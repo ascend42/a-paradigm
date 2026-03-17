@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.12.0] — 2026-03-17
+
+### Added
+
+- **Conductor Sprint 18: Drag-to-Resize + Presets + Cell Interactions** — 3 new Swift files, 2 modified.
+  - `DividerHandle.swift` — Draggable resize handles between cells. Snap at 25/33/50/67/75% with visual feedback. Cursor changes (↔/↕) on hover. Smooth drag with 2px minimum distance.
+  - `LayoutPresetsView.swift` — Horizontal preset strip with mini layout diagram icons for each of 6 presets. Active state highlighting with ⌘ shortcut labels.
+  - `CellActionMenu.swift` — Context menu for cells: split horizontal/vertical, maximize/restore, close. `EmptyCellView` placeholder with launch button for empty cells.
+  - `ContainerView` enhanced: divider drag wiring with ratio-to-pixel conversion, maximize/restore toggle (saves/restores layout tree), animated layout transitions (`easeInOut 0.2-0.25s`), preset strip in header.
+
+Symbols: #divider-handle, #layout-presets, #cell-action-menu
+
 ## [4.11.0] — 2026-03-17
 
 ### Added

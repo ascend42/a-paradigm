@@ -51,6 +51,9 @@ context:
   - Sprint 17: TilingEngine (recursive TileNode tree), 6 layout presets, cell split/remove/swap operations
   - Sprint 17: ContainerView with header, tiling area, status bar. CellChromeView with status badges + actions
   - Sprint 17: Menu bar switch between sidebar mode and container mode
+  - Sprint 18: DividerHandle (drag-to-resize with snap at 25/33/50/67/75%), LayoutPresetsView (mini layout icons)
+  - Sprint 18: CellActionMenu (split/maximize/close context menu), EmptyCellView (launch placeholder)
+  - Sprint 18: ContainerView gains divider handles, animated layout transitions, maximize/restore toggle
 
 # ============================================
 # Components (#)
