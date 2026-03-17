@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.0] — 2026-03-17
+
+### Added
+
+- **Conductor Sprint 17: Container Window + Tiling Engine** — 4 new Swift files, 3 modified.
+  - `TilingEngine.swift` — Binary split tree layout engine (`TileNode`, `SplitState`, `CellState`). Recursive frame computation, 6 layout presets (Focused/Split/Main+Side/Grid/Triple/Columns), cell split/remove/swap/ratio operations.
+  - `ContainerWindow.swift` — `NSWindow` subclass replacing `NSPanel` for container mode. Full-screen capable, `.fullSizeContentView` style, 800×600 minimum.
+  - `ContainerView.swift` — Root SwiftUI view: header bar with preset menu, tiling area with cell chrome overlays, status bar with task/sentinel/health indicators.
+  - `CellChromeView.swift` — Per-cell overlay: project label, status badge (idle/implementing/blocked/processing), split/maximize/close action buttons, gaze-targeted border.
+  - `AppDelegate` gains `useContainerMode` flag, `launchContainer()`, menu bar "Switch to Container/Sidebar Mode" items.
+  - Conductor bumped to v0.16.0.
+
+Symbols: #tiling-engine, #container-window, #container-view, #cell-chrome, $workspace-layout
+
 ## [4.10.0] — 2026-03-17
 
 ### Added

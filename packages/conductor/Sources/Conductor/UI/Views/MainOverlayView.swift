@@ -121,7 +121,7 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
-            Text("v0.15.0")
+            Text("v0.16.0")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()

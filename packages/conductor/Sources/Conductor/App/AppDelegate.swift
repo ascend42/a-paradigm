@@ -10,6 +10,9 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
+    private var containerWindow: ContainerWindow?
+    /// Container mode — launched via `paradigm conductor --container`
+    var useContainerMode: Bool = false
     private let permissionsManager = PermissionsManager()
     private lazy var gazeCursor = GazeCursorController()
     private lazy var gestureConfirmation = GestureConfirmationController()
@@ -274,6 +277,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(permItem)
 
         menu.addItem(.separator())
+        let containerItem = NSMenuItem(title: "Switch to Container Mode", action: #selector(switchToContainer), keyEquivalent: "")
+        menu.addItem(containerItem)
+        let sidebarItem = NSMenuItem(title: "Switch to Sidebar Mode", action: #selector(switchToSidebar), keyEquivalent: "")
+        menu.addItem(sidebarItem)
+
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Conductor", action: #selector(quitApp), keyEquivalent: "q")
 
         statusItem?.menu = menu
@@ -284,7 +293,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func checkPermissionsAndLaunch() {
         let status = permissionsManager.checkAll()
 
-        if status.allGranted {
+        if useContainerMode {
+            ConductorLog.app.info("Launching in container mode")
+            launchContainer()
+        } else if status.allGranted {
             ConductorLog.app.info("All permissions granted — launching panel")
             launchPanel()
         } else {
@@ -321,6 +333,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.conductorPanel = panel
     }
 
+    /// Launch the container workspace window.
+    private func launchContainer() {
+        let container = ContainerWindow()
+        container.contentView = NSHostingView(
+            rootView: ContainerView(
+                workspaceManager: workspaceManager,
+                taskStore: taskStore,
+                sentinelClient: sentinelClient,
+                agentHealthMonitor: agentHealthMonitor
+            )
+        )
+        container.makeKeyAndOrderFront(nil)
+        self.containerWindow = container
+
+        ConductorLog.component("container-window")
+            .info("Container workspace launched")
+    }
+
     // MARK: - Actions
 
     @objc private func togglePanel() {
@@ -344,6 +374,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPermissions() {
         launchPanel(showOnboarding: true, permissionStatus: permissionsManager.checkAll())
+    }
+
+    @objc private func switchToContainer() {
+        conductorPanel?.close()
+        conductorPanel = nil
+        useContainerMode = true
+        launchContainer()
+    }
+
+    @objc private func switchToSidebar() {
+        containerWindow?.close()
+        containerWindow = nil
+        useContainerMode = false
+        launchPanel()
     }
 
     @objc private func quitApp() {
