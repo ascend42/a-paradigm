@@ -665,7 +665,7 @@ const VAGUE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\btry to\b/i, label: 'try to' },
   { pattern: /\bmaybe\b/i, label: 'maybe' },
   { pattern: /\bif possible\b/i, label: 'if possible' },
-  { pattern: /\bconsider\b/i, label: 'consider' },
+  { pattern: /\bconsider\b(?!-handoff)/i, label: 'consider' },
   { pattern: /\bmight want to\b/i, label: 'might want to' },
   { pattern: /\byou could\b/i, label: 'you could' },
   { pattern: /\boptionally\b/i, label: 'optionally' },

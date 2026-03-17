@@ -6,6 +6,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import ora from 'ora';
 import open from 'open';
@@ -192,9 +193,8 @@ export async function portalExportCommand(targetPath?: string, options: ExportOp
     process.exit(1);
   }
 
-  const { parse } = await import('yaml');
   const raw = fs.readFileSync(configPath, 'utf8');
-  const config = parse(raw);
+  const config = yaml.load(raw) as Record<string, unknown>;
 
   const gates = config.gates || {};
   const routes = config.routes || {};

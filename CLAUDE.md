@@ -366,7 +366,7 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_graduate_status` | ~200 | View automation tier map |
 | `response_format: 'concise'` | ~50% fewer | On any tool that supports it |
 | File read (small) | ~500 | Need exact code |
-| File read (large) | ~2000+ | Avoid if possible |
+| File read (large) | ~2000+ | Prefer MCP; use sparingly |
 | Full .purpose + config | ~1500 | Initial orientation |
 
 **Tip**: Prefer MCP queries over file reads. Check `paradigm_session_stats` for actual usage.

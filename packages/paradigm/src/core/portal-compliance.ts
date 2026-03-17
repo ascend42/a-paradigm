@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 // ============================================================================
 // Types
@@ -39,6 +39,10 @@ export interface ComplianceReport {
   status: 'compliant' | 'warnings' | 'violations';
   /** Gates declared in portal.yaml but never referenced in code */
   declaredButUnused: string[];
+  /** Unused gates that are attached to routes (documented intent, may be middleware-enforced) */
+  routeAttachedUnused: string[];
+  /** Unused gates declared in gates section only, never in routes (orphans) */
+  orphanUnused: string[];
   /** Gate references found in code but not declared in portal.yaml */
   usedButUndeclared: string[];
   /** Gates that are both declared and used */
@@ -65,6 +69,8 @@ const SKIP_DIRECTORIES = [
   '.paradigm',
   'vendor',
   '__pycache__',
+  '.next',
+  'target',
 ];
 
 // ============================================================================
@@ -118,46 +124,90 @@ export function extractDeclaredGates(config: PortalConfig): string[] {
   return Array.from(gates);
 }
 
+/**
+ * Extract gates that appear in route definitions (documented on routes)
+ */
+function extractRouteAttachedGates(config: PortalConfig): Set<string> {
+  const gates = new Set<string>();
+  if (config.routes) {
+    for (const routeConfig of Object.values(config.routes)) {
+      const gateList = Array.isArray(routeConfig) ? routeConfig : routeConfig.gates || [];
+      for (const gate of gateList) {
+        const gateName = gate.startsWith('^') ? gate.slice(1) : gate;
+        gates.add(gateName);
+      }
+    }
+  }
+  return gates;
+}
+
 // ============================================================================
 // Code Search
 // ============================================================================
+
+/**
+ * Run grep via execFileSync (avoids shell quoting issues with regex patterns).
+ * Prefers ripgrep (rg) when available — much faster on large repos.
+ */
+function runGrep(rootDir: string, pattern: string): string {
+  const options = {
+    encoding: 'utf-8' as const,
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'] as const,
+  };
+
+  // Try ripgrep first (faster on large codebases)
+  try {
+    const globArgs = SKIP_DIRECTORIES.flatMap(d => ['--glob', `!${d}/**`]);
+    const rgArgs = ['-n', '--no-ignore-vcs', ...globArgs, '--engine', 'auto', pattern, rootDir];
+    return execFileSync('rg', rgArgs, options);
+  } catch {
+    // rg not found or error — fall back to grep
+  }
+
+  const skipDirArgs = SKIP_DIRECTORIES.map(d => `--exclude-dir=${d}`);
+  const grepArgs = ['-rn', ...skipDirArgs, '-E', pattern, '--', rootDir];
+
+  try {
+    return execFileSync('grep', grepArgs, options);
+  } catch (err) {
+    // grep exits 1 when no matches; treat as empty
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 1 || (err as NodeJS.ErrnoException)?.status === 1) {
+      return '';
+    }
+    return '';
+  }
+}
 
 /**
  * Find gate references in the codebase using grep
  */
 export function findGateReferences(rootDir: string): GateReference[] {
   const references: GateReference[] = [];
-  const skipDirsArg = SKIP_DIRECTORIES.map(d => `--exclude-dir=${d}`).join(' ');
 
   // Search for Paradigm symbol pattern (^gateName)
-  try {
-    const symbolPattern = '\\^[a-zA-Z][a-zA-Z0-9_-]+';
-    const symbolResult = execSync(
-      `grep -rn ${skipDirsArg} -E "${symbolPattern}" "${rootDir}" 2>/dev/null || true`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-    );
+  const symbolPattern = '\\^[a-zA-Z][a-zA-Z0-9_-]+';
+  const symbolResult = runGrep(rootDir, symbolPattern);
 
-    for (const line of symbolResult.split('\n').filter(Boolean)) {
-      const match = line.match(/^(.+?):(\d+):(.*)$/);
-      if (match) {
-        const [, file, lineNum, context] = match;
-        const gateMatch = context.match(/\^([a-zA-Z][a-zA-Z0-9_-]+)/);
-        if (gateMatch) {
-          references.push({
-            gate: gateMatch[1],
-            file: path.relative(rootDir, file),
-            line: parseInt(lineNum, 10),
-            context: context.trim().slice(0, 100),
-            matchType: 'symbol',
-          });
-        }
+  for (const line of symbolResult.split('\n').filter(Boolean)) {
+    const match = line.match(/^(.+?):(\d+):(.*)$/);
+    if (match) {
+      const [, file, lineNum, context] = match;
+      const gateMatch = context.match(/\^([a-zA-Z][a-zA-Z0-9_-]+)/);
+      if (gateMatch) {
+        references.push({
+          gate: gateMatch[1],
+          file: path.relative(rootDir, file),
+          line: parseInt(lineNum, 10),
+          context: context.trim().slice(0, 100),
+          matchType: 'symbol',
+        });
       }
     }
-  } catch {
-    // Grep not available or error, continue silently
   }
 
-  // Search for function-based gate checks
+  // Search for function-based gate checks (patterns safe with execFileSync - no shell)
   const functionPatterns = [
     { pattern: "checkGate\\s*\\(['\"]([^'\"]+)['\"]", type: 'function' as const },
     { pattern: "requireGate\\s*\\(['\"]([^'\"]+)['\"]", type: 'function' as const },
@@ -166,31 +216,24 @@ export function findGateReferences(rootDir: string): GateReference[] {
   ];
 
   for (const { pattern, type } of functionPatterns) {
-    try {
-      const result = execSync(
-        `grep -rn ${skipDirsArg} -E "${pattern}" "${rootDir}" 2>/dev/null || true`,
-        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-      );
+    const result = runGrep(rootDir, pattern);
 
-      for (const line of result.split('\n').filter(Boolean)) {
-        const match = line.match(/^(.+?):(\d+):(.*)$/);
-        if (match) {
-          const [, file, lineNum, context] = match;
-          const gateMatch = context.match(new RegExp(pattern));
-          if (gateMatch && gateMatch[1]) {
-            const gateName = gateMatch[1].startsWith('^') ? gateMatch[1].slice(1) : gateMatch[1];
-            references.push({
-              gate: gateName,
-              file: path.relative(rootDir, file),
-              line: parseInt(lineNum, 10),
-              context: context.trim().slice(0, 100),
-              matchType: type,
-            });
-          }
+    for (const line of result.split('\n').filter(Boolean)) {
+      const match = line.match(/^(.+?):(\d+):(.*)$/);
+      if (match) {
+        const [, file, lineNum, context] = match;
+        const gateMatch = context.match(new RegExp(pattern));
+        if (gateMatch && gateMatch[1]) {
+          const gateName = gateMatch[1].startsWith('^') ? gateMatch[1].slice(1) : gateMatch[1];
+          references.push({
+            gate: gateName,
+            file: path.relative(rootDir, file),
+            line: parseInt(lineNum, 10),
+            context: context.trim().slice(0, 100),
+            matchType: type,
+          });
         }
       }
-    } catch {
-      // Continue on error
     }
   }
 
@@ -226,6 +269,8 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
       return {
         status: 'compliant',
         declaredButUnused: [],
+        routeAttachedUnused: [],
+        orphanUnused: [],
         usedButUndeclared: [],
         properlyDeclared: [],
         suggestions: ['No portal.yaml found, and no gate references detected in code.'],
@@ -236,6 +281,8 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
     return {
       status: 'violations',
       declaredButUnused: [],
+      routeAttachedUnused: [],
+      orphanUnused: [],
       usedButUndeclared: usedGates,
       properlyDeclared: [],
       suggestions: [
@@ -251,6 +298,7 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
 
   // Extract declared gates and find references
   const declaredGates = extractDeclaredGates(config);
+  const routeAttachedGates = extractRouteAttachedGates(config);
   const references = findGateReferences(rootDir);
   const usedGates = extractUniqueGates(references);
 
@@ -259,16 +307,27 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   const usedSet = new Set(usedGates);
 
   const declaredButUnused = declaredGates.filter(g => !usedSet.has(g));
+  const routeAttachedUnused = declaredButUnused.filter(g => routeAttachedGates.has(g));
+  const orphanUnused = declaredButUnused.filter(g => !routeAttachedGates.has(g));
+
   const usedButUndeclared = usedGates.filter(g => !declaredSet.has(g));
   const properlyDeclared = declaredGates.filter(g => usedSet.has(g));
 
   // Generate suggestions
   const suggestions: string[] = [];
 
-  if (declaredButUnused.length > 0) {
-    suggestions.push('Gates declared but never referenced:');
-    for (const gate of declaredButUnused) {
-      suggestions.push(`  - ^${gate} (consider removing from portal.yaml or implementing)`);
+  if (routeAttachedUnused.length > 0) {
+    suggestions.push('Gates documented on routes but no checkGate/requireGate in code:');
+    for (const gate of routeAttachedUnused) {
+      suggestions.push(`  - ^${gate} (documented on routes; if enforced by middleware, this may be intentional)`);
+    }
+    suggestions.push('');
+  }
+
+  if (orphanUnused.length > 0) {
+    suggestions.push('Orphan gates (declared but never on a route or in code):');
+    for (const gate of orphanUnused) {
+      suggestions.push(`  - ^${gate} (add to a route or remove from portal.yaml)`);
     }
     suggestions.push('');
   }
@@ -292,6 +351,8 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   return {
     status,
     declaredButUnused,
+    routeAttachedUnused,
+    orphanUnused,
     usedButUndeclared,
     properlyDeclared,
     suggestions,
@@ -317,8 +378,11 @@ export function formatComplianceReport(report: ComplianceReport): string {
 
   // Summary counts
   lines.push(`Properly Declared: ${report.properlyDeclared.length}`);
-  if (report.declaredButUnused.length > 0) {
-    lines.push(`Declared but Unused: ${report.declaredButUnused.length}`);
+  if (report.routeAttachedUnused.length > 0) {
+    lines.push(`Route-Attached, No Code: ${report.routeAttachedUnused.length}`);
+  }
+  if (report.orphanUnused.length > 0) {
+    lines.push(`Orphan Gates: ${report.orphanUnused.length}`);
   }
   if (report.usedButUndeclared.length > 0) {
     lines.push(`Used but Undeclared: ${report.usedButUndeclared.length}`);
@@ -334,10 +398,19 @@ export function formatComplianceReport(report: ComplianceReport): string {
     lines.push('');
   }
 
-  // Warnings
-  if (report.declaredButUnused.length > 0) {
-    lines.push('Unused Gates (declared but never referenced):');
-    for (const gate of report.declaredButUnused) {
+  // Route-attached but no code (documented intent)
+  if (report.routeAttachedUnused.length > 0) {
+    lines.push('Route-Attached (no checkGate/requireGate in code):');
+    for (const gate of report.routeAttachedUnused) {
+      lines.push(`  ⚠ ^${gate}`);
+    }
+    lines.push('');
+  }
+
+  // Orphan gates
+  if (report.orphanUnused.length > 0) {
+    lines.push('Orphan Gates (declared but never on route or in code):');
+    for (const gate of report.orphanUnused) {
       lines.push(`  ⚠ ^${gate}`);
     }
     lines.push('');
@@ -386,9 +459,16 @@ export function getComplianceSummary(report: ComplianceReport): {
   }
 
   if (report.status === 'warnings') {
+    const parts: string[] = [];
+    if (report.routeAttachedUnused.length > 0) {
+      parts.push(`${report.routeAttachedUnused.length} route-attached`);
+    }
+    if (report.orphanUnused.length > 0) {
+      parts.push(`${report.orphanUnused.length} orphan`);
+    }
     return {
       status: 'warn',
-      message: `${report.declaredButUnused.length} unused gates`,
+      message: parts.length > 0 ? parts.join(', ') + ' gate(s)' : `${report.declaredButUnused.length} unused gates`,
     };
   }
 

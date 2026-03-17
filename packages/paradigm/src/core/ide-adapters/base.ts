@@ -458,7 +458,7 @@ export function generateHandoffProtocol(): string {
   lines.push('| Usage | Recommendation | Action |');
   lines.push('|-------|----------------|--------|');
   lines.push('| <50% | continue | Keep working |');
-  lines.push('| 50-70% | consider-handoff | Plan a stopping point |');
+  lines.push('| 50-70% | consider-handoff | Plan handoff; prepare summary when ready |');
   lines.push('| 70-85% | handoff-recommended | Prepare handoff soon |');
   lines.push('| >85% | handoff-urgent | Handoff after current task |');
   lines.push('');

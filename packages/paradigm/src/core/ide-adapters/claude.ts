@@ -276,7 +276,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| `paradigm_ripple` | ~300 | Before modifying symbols |');
     sections.push('| `paradigm_gates_for_route` | ~150 | Adding API endpoints |');
     sections.push('| File read (small) | ~500 | Need exact code |');
-    sections.push('| File read (large) | ~2000+ | Avoid if possible |');
+    sections.push('| File read (large) | ~2000+ | Prefer MCP; use sparingly |');
     sections.push('| Full .purpose + config | ~1500 | Initial orientation |');
     sections.push('');
     sections.push('**Tip**: Prefer MCP queries over file reads. Check `paradigm_session_stats` for actual usage.');

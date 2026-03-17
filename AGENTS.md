@@ -235,7 +235,7 @@ Call `paradigm_context_check` every 10-15 tool calls to track context usage.
 | Usage | Recommendation | Action |
 |-------|----------------|--------|
 | <50% | continue | Keep working |
-| 50-70% | consider-handoff | Plan a stopping point |
+| 50-70% | consider-handoff | Plan handoff; prepare summary when ready |
 | 70-85% | handoff-recommended | Prepare handoff soon |
 | >85% | handoff-urgent | Handoff after current task |
 

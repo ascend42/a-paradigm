@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.14.2] — 2026-03-17
+
+### Fixed
+
+- **YAML parser consolidation** — Switched portal/watch.ts from `yaml` package to `js-yaml`. Paradigm CLI now uses js-yaml exclusively.
+- **Grep shell quoting** — Portal compliance used `execSync` with regex patterns that broke shell parsing (`syntax error near unexpected token '('`). Switched to `execFileSync` to avoid shell; prefers ripgrep (rg) when available for speed.
+- **Instruction vagueness** — Generators (claude.ts, base.ts, cursor.ts): "Avoid if possible" → "Prefer MCP; use sparingly"; "Plan a stopping point" → "Plan handoff; prepare summary when ready". Context-audit: exclude `consider-handoff` from vague-phrase check.
+
+### Changed
+
+- **Portal compliance messaging** — Split "declared but unused" into route-attached (documented on routes, no code) vs orphan (gates section only). Clearer suggestions for each.
+- **Instruction files** — CLAUDE.md and AGENTS.md updated with non-vague wording.
+
+Symbols: #doctor, #portal-compliance, #config-schema, #context-audit, #portal-watch
+
 ## [4.14.1] — 2026-03-17
 
 ### Fixed
