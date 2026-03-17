@@ -5,6 +5,25 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] — 2026-03-16
+
+### Added
+
+- **Conductor Sprint 9: Agent Groups + Network View** — 4 new Swift files, 3 modified.
+  - `AgentGroup` + `AgentGroupStore` — Named cross-project agent groups persisted to `~/.paradigm/conductor/groups.json`. CRUD, color-coding, drag-between-groups.
+  - `SymphonyMonitor` — Polls Symphony inboxes/outboxes for grouped agents at 5s interval. Tracks unread counts, last activity, active thread IDs, and indexes thread messages.
+  - `AgentNetworkView` — Primary orchestration dashboard: group panels with agent status badges (running/linked/offline), unread counts, thread access, add/remove agents, stop-group.
+  - `ThreadView` — Chat-like Symphony thread viewer with message compose. Conductor sends messages as "Maestro" (human participant) directly into agent inboxes.
+
+### Changed
+
+- `MainOverlayView` shows `AgentNetworkView` when groups or registered agents exist, falls back to `ThreadListView` otherwise.
+- `AppDelegate` owns `AgentGroupStore` + `SymphonyMonitor` (single-owner pattern).
+- Symphony monitor starts polling grouped agents on app launch.
+- Conductor bumped to 0.8.0.
+
+Symbols: #agent-group, #agent-group-store, #symphony-monitor, #agent-network-view, #thread-view, $group-link
+
 ## [4.1.0] — 2026-03-16
 
 ### Added

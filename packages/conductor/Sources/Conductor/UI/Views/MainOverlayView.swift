@@ -21,10 +21,13 @@ struct MainOverlayView: View {
     var fileApprovalManager: FileApprovalManager
     @ObservedObject var projectStore: ProjectStore
     @ObservedObject var agentProcessManager: AgentProcessManager
+    @ObservedObject var agentGroupStore: AgentGroupStore
+    @ObservedObject var symphonyMonitor: SymphonyMonitor
+    @ObservedObject var agentPartManager: AgentPartManager
 
     @State private var showAddInstance = false
 
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager) {
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager) {
         self._showOnboarding = State(initialValue: showOnboarding)
         self.permissionStatus = permissionStatus
         self.orchestrator = orchestrator
@@ -33,6 +36,9 @@ struct MainOverlayView: View {
         self.fileApprovalManager = fileApprovalManager
         self.projectStore = projectStore
         self.agentProcessManager = agentProcessManager
+        self.agentGroupStore = agentGroupStore
+        self.symphonyMonitor = symphonyMonitor
+        self.agentPartManager = agentPartManager
     }
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -251,8 +257,18 @@ struct MainOverlayView: View {
                 }
             )
 
-            // Symphony: thread list
-            if !noteRelay.activeThreads.isEmpty {
+            // Agent network (groups + Symphony status)
+            if !agentGroupStore.groups.isEmpty || !agentPartManager.registeredAgents.isEmpty {
+                Divider()
+                AgentNetworkView(
+                    groupStore: agentGroupStore,
+                    agentPartManager: agentPartManager,
+                    agentProcessManager: agentProcessManager,
+                    monitor: symphonyMonitor,
+                    relay: noteRelay
+                )
+            } else if !noteRelay.activeThreads.isEmpty {
+                // Fallback to simple thread list when no groups exist
                 Divider()
                 ThreadListView(relay: noteRelay)
             }

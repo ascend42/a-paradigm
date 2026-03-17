@@ -21,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let buffer = BufferEngine()
     let projectStore = ProjectStore()
     let agentProcessManager = AgentProcessManager()
+    let agentGroupStore = AgentGroupStore()
+    let symphonyMonitor = SymphonyMonitor()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
         buffer: buffer,
         gazeRouter: GazeRouter.shared
@@ -81,6 +83,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupSymphony() {
         ScoreIO.ensureScoreDirs()
         agentPartManager.cleanStaleAgents()
+
+        // Start monitoring all grouped agents
+        let allGrouped = agentGroupStore.allGroupedAgents
+        if !allGrouped.isEmpty {
+            symphonyMonitor.startPolling(agents: allGrouped)
+        }
 
         // Auto-link will start monitoring the detector once it's available
         // (after permissions are granted and detection starts)
@@ -228,6 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ConductorLog.app.info("Conductor shutting down")
         autoLinkCoordinator.stop()
         noteRelay.stop()
+        symphonyMonitor.stopPolling()
         hotKeyManager.unregisterAll()
         orchestrator.stop()
         agentProcessManager.cleanup()
@@ -293,7 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 noteRelay: noteRelay,
                 fileApprovalManager: fileApprovalManager,
                 projectStore: projectStore,
-                agentProcessManager: agentProcessManager
+                agentProcessManager: agentProcessManager,
+                agentGroupStore: agentGroupStore,
+                symphonyMonitor: symphonyMonitor,
+                agentPartManager: agentPartManager
             )
         )
         panel.makeKeyAndOrderFront(nil)
