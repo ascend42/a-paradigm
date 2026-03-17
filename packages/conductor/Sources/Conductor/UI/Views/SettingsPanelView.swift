@@ -22,6 +22,8 @@ struct SettingsPanelView: View {
     var customGestureClassifier: CustomGestureClassifier?
     var agentPartManager: AgentPartManager?
     var noteRelay: NoteRelay?
+    var projectStore: ProjectStore?
+    var agentProcessManager: AgentProcessManager?
 
     var body: some View {
         TabView {
@@ -46,6 +48,10 @@ struct SettingsPanelView: View {
             if let partManager = agentPartManager, let relay = noteRelay {
                 SymphonySettingsView(partManager: partManager, relay: relay)
                     .tabItem { Label("Symphony", systemImage: "music.quarternote.3") }
+            }
+            if let store = projectStore, let manager = agentProcessManager {
+                SessionsSettingsView(projectStore: store, agentProcessManager: manager)
+                    .tabItem { Label("Sessions", systemImage: "bolt.fill") }
             }
         }
         .frame(width: 450, height: 400)

@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let workspaceManager = WorkspaceManager()
     let buffer = BufferEngine()
+    let projectStore = ProjectStore()
+    let agentProcessManager = AgentProcessManager()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
         buffer: buffer,
         gazeRouter: GazeRouter.shared
@@ -228,6 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         noteRelay.stop()
         hotKeyManager.unregisterAll()
         orchestrator.stop()
+        agentProcessManager.cleanup()
         workspaceManager.cleanup()
         conductorPanel?.close()
     }
@@ -288,7 +291,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 orchestrator: orchestrator,
                 workspaceManager: workspaceManager,
                 noteRelay: noteRelay,
-                fileApprovalManager: fileApprovalManager
+                fileApprovalManager: fileApprovalManager,
+                projectStore: projectStore,
+                agentProcessManager: agentProcessManager
             )
         )
         panel.makeKeyAndOrderFront(nil)

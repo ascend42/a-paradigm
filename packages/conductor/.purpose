@@ -1,6 +1,6 @@
 purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions + Symphony inter-agent messaging
-version: 0.6.0
-description: Workspace manager that launches and owns CC instances. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator and workspace lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab.
+version: 0.7.0
+description: Workspace manager that launches and owns CC instances. Session manager with recent project persistence, checkpoint reading, and headless agent spawning. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator, workspace, project store, and agent process manager lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab.
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
@@ -18,6 +18,10 @@ context:
   - Symphony: auto-link creates agent parts when CC sessions are detected
   - Symphony: 5s relay poll routes notes between agent inboxes/outboxes
   - Symphony: file approval with trust.yaml, hard-deny patterns, SHA-256 hashing
+  - Sprint 8: Session manager with recent projects, checkpoint reading, headless agent spawning via Process API
+  - Sprint 8: ProjectStore persists to ~/.paradigm/conductor/recent-projects.json (survives reinstall)
+  - Sprint 8: CheckpointReader reads .paradigm/session-checkpoint.json (wire-compat with paradigm-mcp SessionCheckpoint)
+  - Sprint 8: AgentProcessManager spawns claude as child process with stdin/stdout piping
 
 # ============================================
 # Components (#)
@@ -539,6 +543,43 @@ context:
   anchors:
     - Sources/Conductor/UI/Views/SymphonySettingsView.swift:1
 
+# --- Sprint 8: Session Manager Components ---
+
+#project-store:
+  description: Recent project persistence with pin management — stores to ~/.paradigm/conductor/recent-projects.json
+  type: store
+  tags: [session, persistence, projects]
+  anchors:
+    - Sources/Conductor/Models/ProjectStore.swift:1
+
+#checkpoint-reader:
+  description: Reads .paradigm/session-checkpoint.json and pending handoff files — wire-compatible with paradigm-mcp SessionCheckpoint
+  type: service
+  tags: [session, checkpoint, recovery]
+  anchors:
+    - Sources/Conductor/Services/CheckpointReader.swift:1
+
+#agent-process-manager:
+  description: Spawns and manages headless claude child processes with stdin/stdout piping and lifecycle control
+  type: manager
+  tags: [session, agent, process, headless]
+  anchors:
+    - Sources/Conductor/Services/AgentProcessManager.swift:1
+
+#session-manager-view:
+  description: Dashboard view showing recent projects with checkpoint status, running headless agents, log viewer
+  type: view
+  tags: [ui, session, dashboard]
+  anchors:
+    - Sources/Conductor/UI/Views/SessionManagerView.swift:1
+
+#sessions-settings:
+  description: Settings tab for session/agent configuration — default roles, auto-launch, recent project management
+  type: view
+  tags: [ui, settings, session]
+  anchors:
+    - Sources/Conductor/UI/Views/SessionsSettingsView.swift:1
+
 # ============================================
 # Flows ($)
 # ============================================
@@ -686,6 +727,14 @@ flows:
       - "#agent-part-manager"
       - "#auto-link-coordinator"
       - "#note-relay"
+  # --- Sprint 8 Flows ---
+  $session-launch:
+    description: "Select project → read checkpoint → spawn headless agent → monitor output"
+    steps:
+      - "#session-manager-view"
+      - "#project-store"
+      - "#checkpoint-reader"
+      - "#agent-process-manager"
 
 # ============================================
 # Gates (^)
@@ -822,6 +871,16 @@ signals:
   !symphony-relay-started:
     description: Note relay polling loop has started
     emitters: ["#note-relay"]
+  # --- Sprint 8 Signals ---
+  !agent-spawned:
+    description: Headless claude agent process spawned
+    emitters: ["#agent-process-manager"]
+  !agent-stopped:
+    description: Headless agent process stopped or terminated
+    emitters: ["#agent-process-manager"]
+  !agent-exited:
+    description: Agent process exited (normal or error)
+    emitters: ["#agent-process-manager"]
 
 # ============================================
 # Aspects (~)

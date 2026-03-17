@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] — 2026-03-16
+
+### Added
+
+- **Conductor Sprint 8: Session Manager + Agent Launcher** — 5 new Swift files, 3 modified.
+  - `ProjectStore` — Recent project persistence at `~/.paradigm/conductor/recent-projects.json` with pin/sort, survives reinstall.
+  - `CheckpointReader` — Reads `.paradigm/session-checkpoint.json` and pending handoff files (wire-compatible with paradigm-mcp `SessionCheckpoint`).
+  - `AgentProcessManager` — Spawns headless `claude` child processes via `Process` API with stdin/stdout/stderr piping and lifecycle control.
+  - `SessionManagerView` — Dashboard showing project cards with checkpoint phase/context, running agent list with log viewer.
+  - `SessionsSettingsView` — Settings tab for default agent role, auto-launch toggle, agent management.
+
+### Changed
+
+- Conductor `AppDelegate` now owns `ProjectStore` + `AgentProcessManager` (single-owner pattern).
+- `MainOverlayView` embeds `SessionManagerView` between buffer and workspace sections.
+- `SettingsPanelView` gains a "Sessions" tab for agent configuration.
+- Conductor bumped to 0.7.0.
+
+Symbols: #project-store, #checkpoint-reader, #agent-process-manager, #session-manager-view, #sessions-settings, $session-launch
+
 ## [4.0.0] — 2026-03-16
 
 ### Added

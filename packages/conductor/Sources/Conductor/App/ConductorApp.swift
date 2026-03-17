@@ -16,7 +16,11 @@ struct ConductorApp: App {
                 workspaceManager: appDelegate.workspaceManager,
                 actionRegistry: appDelegate.orchestrator.actionRegistry,
                 voiceCommandRegistry: appDelegate.orchestrator.voiceCommandRegistry,
-                customGestureClassifier: appDelegate.orchestrator.customGestureClassifier
+                customGestureClassifier: appDelegate.orchestrator.customGestureClassifier,
+                agentPartManager: appDelegate.agentPartManager,
+                noteRelay: appDelegate.noteRelay,
+                projectStore: appDelegate.projectStore,
+                agentProcessManager: appDelegate.agentProcessManager
             )
         }
     }

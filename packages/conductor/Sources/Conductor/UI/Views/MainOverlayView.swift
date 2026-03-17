@@ -19,16 +19,20 @@ struct MainOverlayView: View {
     @ObservedObject var workspaceManager: WorkspaceManager
     @ObservedObject var noteRelay: NoteRelay
     var fileApprovalManager: FileApprovalManager
+    @ObservedObject var projectStore: ProjectStore
+    @ObservedObject var agentProcessManager: AgentProcessManager
 
     @State private var showAddInstance = false
 
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager) {
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager) {
         self._showOnboarding = State(initialValue: showOnboarding)
         self.permissionStatus = permissionStatus
         self.orchestrator = orchestrator
         self.workspaceManager = workspaceManager
         self.noteRelay = noteRelay
         self.fileApprovalManager = fileApprovalManager
+        self.projectStore = projectStore
+        self.agentProcessManager = agentProcessManager
     }
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -205,6 +209,22 @@ struct MainOverlayView: View {
                 orchestrator: orchestrator,
                 gazeZoneRouter: orchestrator.gazeZoneRouter,
                 onSend: dispatchBuffer
+            )
+
+            Divider()
+
+            // Session manager (recent projects + headless agents)
+            SessionManagerView(
+                projectStore: projectStore,
+                agentManager: agentProcessManager,
+                onLaunchInTerminal: { projectPath in
+                    Task {
+                        try? await workspaceManager.launchInstance(
+                            projectDir: projectPath,
+                            label: CheckpointReader.projectName(for: projectPath)
+                        )
+                    }
+                }
             )
 
             Divider()
