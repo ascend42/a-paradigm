@@ -9,6 +9,10 @@ struct ContainerView: View {
     @ObservedObject var taskStore: TaskStore
     @ObservedObject var sentinelClient: SentinelWSClient
     @ObservedObject var agentHealthMonitor: AgentHealthMonitor
+    @ObservedObject var projectStore: ProjectStore
+    @ObservedObject var agentProcessManager: AgentProcessManager
+    @ObservedObject var agentGroupStore: AgentGroupStore
+    @ObservedObject var symphonyMonitor: SymphonyMonitor
 
     @State private var layoutRoot: TileNode = .cell(.empty())
     @State private var showControlPanel = false
@@ -43,13 +47,37 @@ struct ContainerView: View {
                     containerHeader
                         .frame(height: headerHeight)
 
-                    // Tiling area
-                    tilingArea(contentArea: contentArea)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Tiling area + control panel overlay
+                    ZStack(alignment: .leading) {
+                        tilingArea(contentArea: contentArea)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        // Control panel overlay
+                        ControlPanelContainer(
+                            isVisible: $showControlPanel,
+                            activeTab: $controlPanelTab,
+                            projectStore: projectStore,
+                            agentProcessManager: agentProcessManager,
+                            workspaceManager: workspaceManager,
+                            taskStore: taskStore,
+                            agentGroupStore: agentGroupStore,
+                            symphonyMonitor: symphonyMonitor,
+                            sentinelClient: sentinelClient,
+                            agentHealthMonitor: agentHealthMonitor
+                        )
+                    }
 
                     // Status bar
-                    statusBar
-                        .frame(height: statusBarHeight)
+                    StatusBarView(
+                        taskStore: taskStore,
+                        sentinelClient: sentinelClient,
+                        agentHealthMonitor: agentHealthMonitor,
+                        onSelectTab: { tab in
+                            controlPanelTab = tab
+                            withAnimation { showControlPanel = true }
+                        }
+                    )
+                    .frame(height: statusBarHeight)
                 }
             }
         }
@@ -153,54 +181,6 @@ struct ContainerView: View {
             Circle()
                 .fill(.green)
                 .frame(width: 8, height: 8)
-        }
-        .padding(.horizontal, 12)
-        .background(.ultraThinMaterial)
-    }
-
-    // MARK: - Status Bar
-
-    private var statusBar: some View {
-        HStack(spacing: 16) {
-            // Tasks
-            let activeCount = taskStore.activeTasks.count
-            if activeCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "checklist")
-                        .font(.system(size: 9))
-                    Text("\(activeCount) active")
-                        .font(.system(size: 9))
-                }
-                .foregroundStyle(.secondary)
-            }
-
-            // Sentinel
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(sentinelClient.isConnected ? .green : .gray)
-                    .frame(width: 5, height: 5)
-                Text("\(sentinelClient.recentEvents.count) events")
-                    .font(.system(size: 9))
-            }
-            .foregroundStyle(.secondary)
-
-            // Health
-            if !agentHealthMonitor.metrics.isEmpty {
-                HStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 8))
-                    Text("\(agentHealthMonitor.metrics.count) agents")
-                        .font(.system(size: 9))
-                }
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            // Keyboard hint
-            Text("⌘1-6 presets")
-                .font(.system(size: 8))
-                .foregroundStyle(.quaternary)
         }
         .padding(.horizontal, 12)
         .background(.ultraThinMaterial)

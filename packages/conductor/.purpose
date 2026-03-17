@@ -54,6 +54,8 @@ context:
   - Sprint 18: DividerHandle (drag-to-resize with snap at 25/33/50/67/75%), LayoutPresetsView (mini layout icons)
   - Sprint 18: CellActionMenu (split/maximize/close context menu), EmptyCellView (launch placeholder)
   - Sprint 18: ContainerView gains divider handles, animated layout transitions, maximize/restore toggle
+  - Sprint 19: ControlPanelContainer (4-tab collapsible overlay: Workspace/Orchestrate/Monitor/Settings)
+  - Sprint 19: StatusBarView with clickable sections that open the corresponding control panel tab
 
 # ============================================
 # Components (#)

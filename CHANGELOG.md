@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.13.0] — 2026-03-17
+
+### Added
+
+- **Conductor Sprint 19: Control Panel + Status Bar** — 2 new Swift files, 3 modified.
+  - `ControlPanelContainer.swift` — Collapsible 320px overlay panel with 4 tabs: Workspace (session manager + project launch), Orchestrate (task dashboard + agent groups), Monitor (Sentinel live + agent health), Settings (workspace config + Sentinel status).
+  - `StatusBarView.swift` — Bottom bar with clickable sections (tasks, Sentinel, health) that open the corresponding control panel tab. Keyboard shortcut hints.
+  - `ContainerView` integrates both: control panel as ZStack overlay, status bar replaces inline implementation. Clicking status bar sections opens panel to relevant tab.
+  - `AppDelegate` passes full dependency set (projectStore, agentProcessManager, agentGroupStore, symphonyMonitor) to ContainerView.
+
+Symbols: #control-panel-container, #status-bar
+
 ## [4.12.0] — 2026-03-17
 
 ### Added

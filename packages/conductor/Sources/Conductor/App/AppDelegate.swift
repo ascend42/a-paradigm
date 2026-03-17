@@ -341,7 +341,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 workspaceManager: workspaceManager,
                 taskStore: taskStore,
                 sentinelClient: sentinelClient,
-                agentHealthMonitor: agentHealthMonitor
+                agentHealthMonitor: agentHealthMonitor,
+                projectStore: projectStore,
+                agentProcessManager: agentProcessManager,
+                agentGroupStore: agentGroupStore,
+                symphonyMonitor: symphonyMonitor
             )
         )
         container.makeKeyAndOrderFront(nil)
