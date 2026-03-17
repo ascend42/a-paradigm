@@ -1,5 +1,5 @@
 purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions + Symphony inter-agent messaging
-version: 0.16.0
+version: 1.0.0
 description: "Workspace manager that launches and owns CC instances. Session manager with recent project persistence, checkpoint reading, and headless agent spawning. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator, workspace, project store, and agent process manager lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab."
 context:
   - Native macOS Swift/SwiftUI app
@@ -56,6 +56,8 @@ context:
   - Sprint 18: ContainerView gains divider handles, animated layout transitions, maximize/restore toggle
   - Sprint 19: ControlPanelContainer (4-tab collapsible overlay: Workspace/Orchestrate/Monitor/Settings)
   - Sprint 19: StatusBarView with clickable sections that open the corresponding control panel tab
+  - Sprint 20: CellFooterView (symbols, files, agent status per cell), border pulse animation for processing cells
+  - Sprint 20: 16 TilingEngine tests (cell count, frame computation, presets, split/remove/swap/ratio/dividers)
 
 # ============================================
 # Components (#)

@@ -13,16 +13,25 @@ struct CellChromeView: View {
     var onClose: (() -> Void)?
     var onMaximize: (() -> Void)?
 
+    var symbols: [String] = []
+    var filesModified: Int = 0
+    var agentStatus: String?
+
     /// Height of the cell header bar.
     private let headerHeight: CGFloat = 28
-    /// Height of the optional cell footer.
-    private let footerHeight: CGFloat = 20
+
+    @State private var pulseOpacity: Double = 0.3
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Border
+            // Border with status-based animation
             RoundedRectangle(cornerRadius: 6)
-                .stroke(borderColor, lineWidth: isGazeTargeted ? 2 : 1)
+                .stroke(borderColor, lineWidth: borderWidth)
+                .opacity(status == .processing ? pulseOpacity : 1.0)
+                .animation(status == .processing ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: pulseOpacity)
+                .onAppear {
+                    if status == .processing { pulseOpacity = 0.8 }
+                }
 
             VStack(spacing: 0) {
                 // Header bar
@@ -32,8 +41,25 @@ struct CellChromeView: View {
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6))
 
                 Spacer()
+
+                // Footer bar
+                if !symbols.isEmpty || filesModified > 0 || agentStatus != nil {
+                    CellFooterView(
+                        symbols: symbols,
+                        filesModified: filesModified,
+                        agentStatus: agentStatus
+                    )
+                    .background(.ultraThinMaterial.opacity(0.5))
+                    .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 6, bottomTrailingRadius: 6))
+                }
             }
         }
+    }
+
+    private var borderWidth: CGFloat {
+        if isGazeTargeted { return 2 }
+        if status == .blocked { return 2 }
+        return 1
     }
 
     // MARK: - Header

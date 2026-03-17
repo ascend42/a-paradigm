@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.14.0] — 2026-03-17
+
+### Added
+
+- **Conductor Sprint 20: Polish + Cell Footer + Tiling Tests (v1.0.0)** — 2 new Swift files, 2 modified.
+  - `CellFooterView.swift` — Per-cell status footer: symbol tags (purple, max 3), file modification count, agent status dot.
+  - `TilingEngineTests.swift` — 16 tests: cell count (single/split/nested), frame computation (fills area, horizontal/vertical split totals), preset generation (focused/grid/triple/padding), cell operations (split/remove/swap), ratio update/clamping, divider count.
+  - `CellChromeView` gains footer integration, border pulse animation for processing cells (easeInOut 1.2s repeat), dynamic border width for blocked/gaze states.
+  - Conductor bumped to **v1.0.0** — workspace container feature-complete.
+
+### Changed
+
+- Test count: 160 → 176 (16 new TilingEngine tests).
+
+Symbols: #cell-footer, #tiling-engine
+
 ## [4.13.0] — 2026-03-17
 
 ### Added
