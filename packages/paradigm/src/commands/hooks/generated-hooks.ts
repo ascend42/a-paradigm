@@ -12,11 +12,16 @@ export const COMMON_HOOK = `#!/bin/sh
 #   CWD      — Project root directory (already cd'd into)
 #   MODIFIED — Output of \`git diff --name-only HEAD\`
 #
+# Caller may set:
+#   PARADIGM_AUTO_FIX — Set to "1" to auto-fix trivial violations (missing .purpose stubs, missing lore)
+#
 # Sets:
 #   VIOLATIONS      — Newline-separated violation messages
 #   VIOLATION_COUNT — Number of violations
 #   ADVISORY        — Non-blocking advisory text
 #   SOURCE_COUNT    — Number of modified source files
+#   AUTO_FIXED      — Newline-separated auto-fix actions taken
+#   AUTO_FIX_COUNT  — Number of auto-fixes applied
 #
 # Checks:
 #   1. Source files modified without .purpose updates (threshold: 2+)
@@ -33,6 +38,9 @@ export const COMMON_HOOK = `#!/bin/sh
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
+AUTO_FIXED=""
+AUTO_FIX_COUNT=0
+PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
 
 # --- Check 1: Source files modified without .purpose updates ---
 SOURCE_COUNT=0
@@ -91,11 +99,28 @@ for file in $MODIFIED; do
 done
 
 if [ -n "$DIRS_WITHOUT_PURPOSE" ]; then
-  VIOLATIONS="$VIOLATIONS
+  if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
+    # Auto-fix: create stub .purpose files for directories missing them
+    for dir in $DIRS_WITHOUT_PURPOSE; do
+      dir_basename=$(basename "$dir")
+      cat > "$dir/.purpose" <<PURPOSEEOF
+# Auto-generated .purpose stub — update with real descriptions
+components:
+  $dir_basename:
+    description: "TODO: describe this component"
+    tags: []
+PURPOSEEOF
+      AUTO_FIXED="$AUTO_FIXED
+  - Created stub .purpose in $dir (update descriptions)"
+      AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
+    done
+  else
+    VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose file anywhere in their path:
    $DIRS_WITHOUT_PURPOSE
     Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
-  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
 fi
 
 # --- Check 3: Route patterns added without portal.yaml ---
@@ -248,11 +273,46 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   fi
 
   if [ "$LORE_RECORDED" = false ]; then
-    VIOLATIONS="$VIOLATIONS
+    if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
+      # Auto-fix: create a stub lore entry with modified file info
+      TODAY=$(date -u +"%Y-%m-%d" 2>/dev/null || date +"%Y-%m-%d")
+      LORE_TIMESTAMP=$(date -u +"%H%M%S" 2>/dev/null || date +"%H%M%S")
+      LORE_DIR=".paradigm/lore/entries/$TODAY"
+      mkdir -p "$LORE_DIR" 2>/dev/null
+      LORE_ID="L-\${TODAY}-auto-\${LORE_TIMESTAMP}"
+      LORE_FILE="$LORE_DIR/\${LORE_ID}.yaml"
+
+      # Extract symbols from modified file paths (directory basenames as component names)
+      LORE_SYMBOLS=""
+      for file in $MODIFIED; do
+        case "$file" in
+          .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+        esac
+        sym_dir=$(basename "$(dirname "$file")")
+        case "$LORE_SYMBOLS" in
+          *"#$sym_dir"*) ;;
+          *) LORE_SYMBOLS="$LORE_SYMBOLS \\"#$sym_dir\\"" ;;
+        esac
+      done
+
+      cat > "$LORE_FILE" <<LOREEOF
+id: "$LORE_ID"
+type: agent-session
+title: "Auto-recorded session — $SOURCE_COUNT files modified"
+summary: "Session modified $SOURCE_COUNT source files. Auto-recorded by stop hook."
+symbols_touched: [$(echo $LORE_SYMBOLS | sed 's/^ //')]
+timestamp: "$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")"
+LOREEOF
+      AUTO_FIXED="$AUTO_FIXED
+  - Created stub lore entry $LORE_ID (update with real summary)"
+      AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
+    else
+      VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but recorded no lore entry.
     Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
     Include: type, title, summary, and symbols_touched."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    fi
   fi
 fi
 
@@ -346,11 +406,28 @@ if [ -f "$CONFIG_FILE" ]; then
   fi
 
   if [ -n "$MISSING_REQUIRED" ]; then
-    VIOLATIONS="$VIOLATIONS
+    if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
+      # Auto-fix: create stub .purpose files for required patterns
+      for dir in $MISSING_REQUIRED; do
+        dir_basename=$(basename "$dir")
+        cat > "$dir/.purpose" <<PURPOSEEOF
+# Auto-generated .purpose stub (purpose-required) — update with real descriptions
+components:
+  $dir_basename:
+    description: "TODO: describe this component"
+    tags: []
+PURPOSEEOF
+        AUTO_FIXED="$AUTO_FIXED
+  - Created stub .purpose in $dir (purpose-required pattern)"
+        AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
+      done
+    else
+      VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
     Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    fi
   fi
 fi
 
@@ -496,6 +573,13 @@ fi
 SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
+# --- Report auto-fixes if any ---
+if [ "$AUTO_FIX_COUNT" -gt 0 ]; then
+  echo "" >&2
+  echo "[paradigm] Auto-fixed $AUTO_FIX_COUNT issue(s):" >&2
+  echo "$AUTO_FIXED" >&2
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -514,6 +598,8 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
   echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "" >&2
+  echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
   exit 2
 fi
 
@@ -875,6 +961,13 @@ fi
 SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
+# --- Report auto-fixes if any ---
+if [ "$AUTO_FIX_COUNT" -gt 0 ]; then
+  echo "" >&2
+  echo "[paradigm] Auto-fixed $AUTO_FIX_COUNT issue(s):" >&2
+  echo "$AUTO_FIXED" >&2
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -893,6 +986,8 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
   echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "" >&2
+  echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
 
   # Output followup_message JSON to stdout for Cursor's compliance loop.
   # Cursor auto-submits this as the next user message, creating a retry loop.

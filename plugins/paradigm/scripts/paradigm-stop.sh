@@ -42,6 +42,13 @@ fi
 SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
+# --- Report auto-fixes if any ---
+if [ "$AUTO_FIX_COUNT" -gt 0 ]; then
+  echo "" >&2
+  echo "[paradigm] Auto-fixed $AUTO_FIX_COUNT issue(s):" >&2
+  echo "$AUTO_FIXED" >&2
+fi
+
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "" >&2
@@ -60,6 +67,8 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
   echo "  5. paradigm_lore_record — record session lore entry" >&2
   echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "" >&2
+  echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
   exit 2
 fi
 

@@ -33,6 +33,7 @@ export interface AgentRelay {
   agent: string;
   task: string;
   status: 'success' | 'partial' | 'failed' | 'blocked';
+  completionVerified?: boolean;  // True if relay passed completion confirmation checks
   outputs: {
     artifacts: Array<{ path: string; action: 'created' | 'modified' | 'deleted' }>;
     symbols: string[];           // Symbols touched: @payment, #stripe-client

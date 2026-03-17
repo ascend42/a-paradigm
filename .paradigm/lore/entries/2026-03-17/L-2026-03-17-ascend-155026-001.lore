@@ -1,0 +1,77 @@
+id: L-2026-03-17-ascend-155026-001
+type: milestone
+timestamp: '2026-03-17T15:50:26.459Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Full backlog clearance: Conductor 14-16, Graduation System, Personas CLI, Smart Drift Phase 3'
+summary: 'Cleared the entire project backlog in a single session. Conductor v0.15.0 (Sprints 14-16: task lifecycle, active Sentinel, view decomposition — 160 tests). Automation Tier Graduation system (all 4 phases: retroactive graduation, engine with eligibility checking, auto-demotion in stop hook, CLAUDE.md updates — 99% token reduction in compliance overhead). Personas CLI (7 commands closing the gap between 11 MCP tools and 0 CLI). Smart Drift Detection Phase 3 (content fingerprint search with Levenshtein, sliding window, cross-file rename detection). Branch pruning (6 stale branches deleted). Hook source-of-truth discovered and documented (scripts/*.sh → generate-hooks.mjs → plugins/).'
+symbols_touched:
+  - '#task-archive'
+  - '#task-store'
+  - '#task-detail-view'
+  - '#sentinel-event-detail'
+  - '#sentinel-symbol-filter'
+  - '#sentinel-ws-client'
+  - '#sentinel-live-view'
+  - '#bindings-manager'
+  - '#custom-gesture-bindings'
+  - '#voice-command-bindings'
+  - '#graduation-engine'
+  - '#graduation-store'
+  - '#graduation-types'
+  - '#graduation-tools'
+  - '#graduation-cli'
+  - '#persona-cli'
+  - '#aspect-fingerprint'
+  - $task-archive
+  - $sentinel-investigation
+  - $graduation-flow
+  - '!task-cancelled'
+  - '!task-reassigned'
+  - '!tasks-archived'
+  - '!habit-graduated'
+  - '!habit-demoted'
+decisions:
+  - id: D-hook-source-truth
+    decision: Hook .sh source files live in src/commands/hooks/scripts/, generated via generate-hooks.mjs
+    rationale: Editing plugins/ directly gets overwritten on build. Discovered after 3 failed attempts.
+  - id: D-graduation-system
+    decision: Built 3-tier automation graduation with data-driven promotion and auto-demotion
+    rationale: Agents wasted ~12K tokens/session on compliance checks the stop hook already performs. 5 habits retroactively graduated, saving ~99% of compliance overhead.
+  - id: D-never-graduate-list
+    decision: tool-called check types cannot graduate — they require agent cognition
+    rationale: A hook can verify filesystem state but cannot force an agent to reason about MCP tool output.
+  - id: D-drift-phase3-algorithm
+    decision: '4-signal weighted scoring for content relocation: first/last line (0.4), structural hash (0.3), Levenshtein (0.2), line count (0.1)'
+    rationale: Spec-defined weights balance structural stability (function signatures) with content similarity (variable renames).
+learnings:
+  - Hook scripts in plugins/ are generated from src/commands/hooks/scripts/*.sh — always edit source, run generate-hooks.mjs
+  - 5 of 13 seed habits were already enforced by stop hook checks — marking them graduated eliminates duplicate evaluation
+  - Conductor .purpose YAML context items with colons get parsed as objects by strict YAML parsers — quote them
+  - SentinelEvent needs Hashable for SwiftUI .popover(item:)
+  - Levenshtein on strings >5000 chars should use approximation to avoid O(n*m) blowup
+verification:
+  status: pass
+  details:
+    swift_build: pass
+    swift_tests: 160/160
+    mcp_build: pass
+    cli_build: pass
+    drift_check: pass
+    graduate_status: pass
+    persona_list: pass
+tags:
+  - arc:backlog-clearance
+  - milestone
+  - conductor
+  - graduation
+  - personas
+  - drift-detection
+  - infrastructure
+confidence: 0.92
+git_context:
+  ref: 5aea4b13742b6441f8a1147e5821c03547c194b3
+  branch: main
+  dirty: true

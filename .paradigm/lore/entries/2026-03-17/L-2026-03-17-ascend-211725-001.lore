@@ -1,0 +1,76 @@
+id: L-2026-03-17-ascend-211725-001
+type: insight
+timestamp: '2026-03-17T21:17:25.571Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm Docs Platform — First Live Run + SPA Catch-All Fix
+summary: First live test of `paradigm docs serve` revealed the docs section hanging on "Loading..." — traced to Express 5's SPA catch-all wildcard swallowing `/api/*` requests without calling `next()`. One-line fix. The manifest API now serves 1,179 symbols across 8 groups in ~25ms. The Platform UI docs tab works but needs polish passes on sidebar UX, page layouts, and the custom pages section (currently showing raw docs/ files instead of the handwritten guides).
+symbols_touched:
+  - '#DocsSection'
+  - '#DocsRouter'
+  - '#PlatformServer'
+files_modified:
+  - packages/paradigm/src/platform-server/index.ts
+decisions:
+  - id: D-spa-catchall-next
+    decision: Add next() call to Express 5 SPA catch-all when path starts with /api
+    rationale: Without next(), any API route mounted after the catch-all (via dynamic import in startPlatformServer) would hang forever. This was a latent bug affecting docs, symphony, and sentinel routes.
+errors_encountered:
+  - description: paradigm docs serve showed 'Loading...' forever — /api/docs/manifest hung with no response
+    resolution: SPA catch-all in Express 5 matched /api/* but didn't call next() — added else { next(); } branch
+    time_to_fix: 15 minutes
+learnings:
+  - Express 5 wildcard routes ({*path}) match everything including /api/* — always call next() for paths you don't handle, or the request hangs silently
+  - The docs manifest generates in ~25ms for 1,179 symbols — no performance concern even for large projects
+  - Dynamic route mounting after the SPA fallback requires the fallback to be a proper middleware (call next), not a terminal handler
+verification:
+  status: pass
+  details:
+    manifest_api: pass (1179 symbols, ~25ms)
+    symbol_pages: pass
+    search_api: pass
+    platform_health: pass
+    build: pass
+tags:
+  - arc:paradigm-docs
+  - insight
+  - bugfix
+  - platform
+body: |-
+  # Docs Platform — Current State After First Live Run
+
+  ## What Works
+  - `paradigm docs serve` launches Platform on port 3850 with docs section
+  - Manifest API returns 1,179 symbols in ~25ms: 750 components (28 type subgroups), 76 flows, 18 gates, 120 signals, 215 aspects
+  - Symbol pages load with descriptions, tags, cross-references, related flows
+  - Flow pages show step sequences
+  - Portal page shows gate-route mappings
+  - Search endpoint works across all content
+  - Custom pages from `docs/` directory load
+
+  ## The Bug Found
+  Express 5's SPA catch-all `app.get('{*path}', ...)` matched ALL routes including `/api/*`. The handler checked `if (!req.path.startsWith('/api'))` and skipped sending the HTML — but never called `next()`, so dynamically-mounted routes (docs, symphony, sentinel) that were added AFTER the catch-all in `startPlatformServer()` were unreachable. Requests just hung forever.
+
+  Fix: added `else { next(); }` to the catch-all handler. This was a latent bug that also affected symphony and sentinel routes — they worked previously only because their routes happened to be matched by Express before the catch-all in certain request orderings, but the fix makes all dynamic routes reliable.
+
+  ## What Needs Polish (Future Passes)
+  1. **Custom pages section** — currently shows `aspect-ripple-audit-guide.md` and `README.md` from the repo's `docs/` directory. The config sets `customContent: "docs/"` which points to the project's own docs folder, not handwritten guide pages. For the Platform viewer, this is correct (project docs). For the site, the guides live at `packages/site/src/content/docs/`.
+  2. **Sidebar UX** — subgroups for components (28 type groups) make the sidebar very tall. Could default-collapse subgroups or add a search filter like the site version has.
+  3. **Symbol page layout** — functional but could use visual improvements: better tag rendering, flow step visualization, property tables.
+  4. **Missing "Guides" section population** — university index only has 1 entry (the paradigm-docs note). More university content referencing symbols would populate this section.
+  5. **Welcome page** — currently shows stats but could be richer with quick links and a project summary.
+
+  ## Architecture Note
+  The docs system has three rendering surfaces:
+  1. **Platform UI** (`paradigm docs serve`) — React SPA fetching from `/api/docs/*` endpoints
+  2. **Site** (`useparadigm.dev/docs`) — Next.js SSG reading scan-index at build time
+  3. **Static build** (`paradigm docs build`) — pre-fetched JSON files for offline hosting
+
+  All three share the same data layer (`docs-loader.ts`) but the Platform UI version is the only one that's live/dynamic. The site and static build are pre-rendered snapshots.
+confidence: 0.88
+git_context:
+  ref: b6474755b97691c40bd1a13f79afe500fca2031c
+  branch: main
+  dirty: true

@@ -1,0 +1,123 @@
+id: L-2026-03-17-ascend-211801-001
+type: milestone
+timestamp: '2026-03-17T21:18:01.105Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Backlog Zero — Conductor 1.0, Graduation System, Full Clearance
+summary: 'Single session cleared the entire project backlog — a state previously considered fictional. Conductor went from v0.12.0 to v1.0.0 across Sprints 14-20: task lifecycle completion, active Sentinel, view decomposition, then the full workspace container (tiling engine, drag-to-resize, control panel, status bar, cell chrome with animations). Built the Automation Tier Graduation system from spec to 4-phase implementation (99% compliance token reduction). Shipped Personas CLI (7 commands), Smart Drift Phase 3 (content fingerprint search), pruned 6 stale branches, fixed 8 housekeeping deficiencies, and pushed 14 commits totaling ~35K insertions. 176 tests, zero failures. Nothing remains on the backlog.'
+symbols_touched:
+  - '#tiling-engine'
+  - '#container-window'
+  - '#container-view'
+  - '#cell-chrome'
+  - '#cell-footer'
+  - '#divider-handle'
+  - '#layout-presets'
+  - '#cell-action-menu'
+  - '#control-panel-container'
+  - '#status-bar'
+  - '#task-archive'
+  - '#sentinel-event-detail'
+  - '#sentinel-symbol-filter'
+  - '#graduation-engine'
+  - '#graduation-store'
+  - '#graduation-types'
+  - '#graduation-tools'
+  - '#graduation-cli'
+  - '#persona-cli'
+  - '#aspect-fingerprint'
+  - '#bindings-manager'
+  - '#custom-gesture-bindings'
+  - $workspace-layout
+  - $graduation-flow
+  - $task-archive
+  - $sentinel-investigation
+symbols_created:
+  - '#tiling-engine'
+  - '#container-window'
+  - '#container-view'
+  - '#cell-chrome'
+  - '#cell-footer'
+  - '#divider-handle'
+  - '#layout-presets'
+  - '#cell-action-menu'
+  - '#control-panel-container'
+  - '#status-bar'
+  - '#persona-cli'
+decisions:
+  - id: D-conductor-1.0
+    decision: Container workspace container is the v1.0 milestone for Conductor
+    rationale: The tiling window manager with drag-to-resize, presets, and control panel represents a complete workspace experience — worthy of a 1.0 designation.
+  - id: D-transparency-trick
+    decision: Use AX-positioned terminal windows behind transparent container regions rather than embedded PTY
+    rationale: Preserves native terminal rendering, keyboard shortcuts, scrollback, and terminal-specific features. Embedded PTY is a future option but significantly more engineering.
+  - id: D-backlog-zero
+    decision: Clear everything rather than defer items to next session
+    rationale: User's energy and momentum were high. Each item was bounded and independently shippable. Deferral would have meant context loss across session boundaries.
+learnings:
+  - Binary split trees are the right abstraction for tiling layouts — presets become tree constructors, resize becomes ratio updates, remove becomes sibling promotion
+  - Conductor container mode should coexist with sidebar mode during migration — opt-in then default then deprecate
+  - CellChromeView pulse animation needs onAppear to trigger the opacity change — SwiftUI won't animate on init alone
+  - ControlPanelContainer works best as a ZStack overlay rather than pushing cells — avoids relayout jank
+  - StatusBarView sections that open panel tabs create a natural discovery path for the control panel
+verification:
+  status: pass
+  details:
+    swift_build: pass
+    swift_tests: 176/176
+    mcp_build: pass
+    cli_build: pass
+    git_push: 14 commits pushed to origin/main
+tags:
+  - arc:backlog-zero
+  - arc:conductor-1.0
+  - milestone
+  - historic
+meta:
+  conductor_version: 1.0.0
+  paradigm_version: 4.14.0
+  total_commits: 14
+  lines_inserted: 35000
+  test_count: 176
+  backlog_remaining: 0
+body: |-
+  ## The Session
+
+  This is the session where every open item got shipped. Not deferred, not descoped — shipped.
+
+  ### Track 1: Conductor v0.12.0 → v1.0.0
+
+  **Sprints 14-16** (v0.15.0): Task lifecycle (cancel/reassign/archive), active Sentinel (event detail popover, symbol filter, metadata parsing), view decomposition (BindingsManagerView 302→44 lines, MainOverlayView → 12 named sections).
+
+  **Sprints 17-20** (v1.0.0): The workspace container — a full-screen tiling window manager for Claude Code orchestration. Binary split tree layout engine with 6 presets, drag-to-resize dividers with snap feedback, per-cell chrome (header with status/actions, footer with symbols/files/agent, animated borders for processing state), collapsible 4-tab control panel, clickable status bar, maximize/restore toggle, mode switching via menu bar.
+
+  ### Track 2: Automation Tier Graduation
+
+  From a conversation about `paradigm_reindex` dumping 11K tokens into context, we identified the three-tier automation system (MCP → Habits → Hooks) had no migration mechanism. Built the full system: graduation-types, graduation-store (YAML persistence), graduation-engine (eligibility checking against practice events), 2 MCP tools, 3 CLI commands, auto-demotion in the stop hook (Check 12-13), retroactive graduation of 5 habits, never-graduate list for cognitive habits. Projected savings: ~99% reduction in compliance token overhead.
+
+  ### Track 3: Everything Else
+
+  - **Personas CLI**: 7 commands closing the gap between 11 MCP tools and 0 CLI
+  - **Smart Drift Phase 3**: Content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file rename detection
+  - **Hook source-of-truth discovery**: `.sh` files in `src/commands/hooks/scripts/` → `generate-hooks.mjs` → `plugins/` (3 failed edits before finding the pipeline)
+  - **Branch pruning**: 6 stale branches deleted (4 with merged PRs, 2 squash-merged)
+  - **8 housekeeping deficiencies**: Cursor hook parity, .purpose registrations, graduation tool registrations
+  - **WhisperKit removed as plan item**, Sentinel APT-2 branches pruned
+
+  ### By the Numbers
+
+  - 14 commits pushed to main
+  - ~35,000 lines inserted
+  - 11 new Swift source files (container system)
+  - 7 new TypeScript files (graduation + drift)
+  - 176 tests, 0 failures
+  - Conductor: 0.12.0 → 1.0.0
+  - Paradigm: 4.4.0 → 4.14.0
+  - Backlog items remaining: 0
+confidence: 0.93
+git_context:
+  ref: b6474755b97691c40bd1a13f79afe500fca2031c
+  branch: main
+  dirty: true

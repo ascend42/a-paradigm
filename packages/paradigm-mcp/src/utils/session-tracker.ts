@@ -76,6 +76,7 @@ export interface SessionCheckpoint {
   context: string;  // 1-3 sentences of what's top-of-mind
   timestamp: number;
   sessionId: string;
+  externalId?: string;  // Deterministic ID from external source (e.g. sha256("linear:PROJ-123"))
   plan?: string;
   modifiedFiles?: string[];
   symbolsTouched?: string[];
@@ -294,6 +295,7 @@ class SessionTracker {
   saveCheckpoint(data: {
     phase: SessionCheckpoint['phase'];
     context: string;
+    externalId?: string;
     plan?: string;
     modifiedFiles?: string[];
     symbolsTouched?: string[];
@@ -304,6 +306,7 @@ class SessionTracker {
       context: data.context,
       timestamp: Date.now(),
       sessionId: this.session.sessionId,
+      externalId: data.externalId,
       plan: data.plan,
       modifiedFiles: data.modifiedFiles,
       symbolsTouched: data.symbolsTouched,

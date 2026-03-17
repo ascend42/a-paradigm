@@ -1,0 +1,57 @@
+id: L-2026-03-17-ascend-234356-001
+type: agent-session
+timestamp: '2026-03-17T23:43:56.273Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cross-study: Open SWE patterns adopted into Paradigm'
+summary: 'Analyzed langchain-ai/open-swe repository and identified 3 adoptable patterns. Implemented: (1) completion confirmation in agent-spawner — validates relay output before accepting success, downgrades empty completions to partial; (2) externalId on session checkpoints for deterministic recovery from external issue trackers; (3) stop hook auto-fix mode (PARADIGM_AUTO_FIX=1) that creates stub .purpose files and lore entries for trivial violations.'
+symbols_touched:
+  - '#agent-spawner'
+  - '#agent-provider'
+  - '#session-tracker'
+  - '#paradigm-hooks'
+  - '#paradigm-session-checkpoint'
+files_modified:
+  - packages/paradigm/src/core/agent-provider.ts
+  - packages/paradigm/src/core/agent-spawner.ts
+  - packages/paradigm-mcp/src/utils/session-tracker.ts
+  - packages/paradigm-mcp/src/tools/context.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+  - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+  - .cursor/hooks/paradigm-stop.sh
+  - .cursor/hooks/paradigm-common.sh
+decisions:
+  - id: completion-confirmation-pattern
+    decision: Validate agent relay output before accepting success status — builders must write files, all agents must produce artifacts/decisions/handoff
+    rationale: Open SWE's anti-premature-termination middleware catches agents that claim done without doing work. Paradigm's stop hook catches this post-hoc; in-loop check reduces wasted retry cycles.
+  - id: external-id-session-mapping
+    decision: Add optional externalId to SessionCheckpoint for deterministic recovery from external issue trackers
+    rationale: Open SWE uses sha256 of source identifiers for persistent thread mapping. Same pattern enables automatic session recovery when triggered from the same GitHub issue or Linear ticket.
+  - id: auto-fix-trivial-violations
+    decision: Add PARADIGM_AUTO_FIX=1 env var to stop hook for auto-fixing missing .purpose stubs and missing lore entries
+    rationale: Open SWE auto-opens PRs if agents forget. Paradigm can auto-fix trivial violations while still blocking real compliance issues, reducing friction without sacrificing governance.
+learnings:
+  - Open SWE is ~4500 lines of deployment glue — its value is webhook-to-sandbox-to-PR plumbing, not agent intelligence
+  - 'Paradigm''s weakness is exactly where Open SWE shines: automated task pickup and autonomous PR delivery'
+  - Completion confirmation catches premature termination in-loop rather than post-hoc via stop hook
+  - Deterministic external ID mapping makes session recovery automatic rather than checkpoint-based
+  - Auto-remediation and blocking are complementary strategies, not alternatives
+verification:
+  status: pass
+  details:
+    build_mcp: pass
+    build_cli: pass
+    hooks_generated: pass
+tags:
+  - arc:open-swe-cross-study
+  - cross-pollination
+  - completion-confirmation
+  - auto-fix
+confidence: 0.92
+git_context:
+  ref: b04283623fe8321c2ce08ad4aa7fcc16ddb8edeb
+  branch: main
+  dirty: true

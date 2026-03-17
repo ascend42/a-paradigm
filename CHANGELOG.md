@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.15.0] — 2026-03-17
+
+### Added
+
+- **Completion confirmation** — Agent spawner now validates relay output before accepting `success` status. Builders that wrote no files are downgraded to `partial`; any agent with no artifacts, decisions, handoff, or file writes is flagged. Adds `completionVerified` field to `AgentRelay` for observability. Inspired by Open SWE's anti-premature-termination pattern.
+- **External ID on session checkpoints** — `SessionCheckpoint` and `paradigm_session_checkpoint` MCP tool now accept optional `externalId` field for deterministic session recovery from external sources (e.g. `"linear:PROJ-123"`, `"github:owner/repo#42"`).
+- **Stop hook auto-fix mode** — Set `PARADIGM_AUTO_FIX=1` to auto-fix trivial violations: creates stub `.purpose` files (checks 2 & 9) and stub lore entries (check 7). Reports all auto-fixes taken; real violations still block. All 3 stop hooks (Claude Code, Cursor, `.cursor/hooks/`) updated.
+
+Symbols: #agent-spawner, #agent-provider, #session-tracker, #paradigm-hooks, #paradigm-session-checkpoint
+
 ## [4.14.2] — 2026-03-17
 
 ### Fixed

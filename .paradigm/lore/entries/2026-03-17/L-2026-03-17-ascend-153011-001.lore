@@ -1,0 +1,218 @@
+id: L-2026-03-17-ascend-153011-001
+type: milestone
+timestamp: '2026-03-17T15:30:11.383Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm Docs + Site Content Sprint — The Self-Documenting Framework
+summary: 'Shipped Paradigm Docs (7 phases: extracurricular university system, docs data layer, MCP tools, Platform UI section, CLI commands, site integration, university content) plus a full site content sprint (4 new guide pages, docs UX polish with breadcrumbs/search/code labels, 68 dynamic lesson pages, PLSAT landing page). Resolved all project health issues: 330 untyped components → 0, 10 stale protocols → 0, 2 YAML syntax errors fixed. The site now generates 1276 static pages from the live symbol graph — Paradigm documenting itself, with itself.'
+symbols_touched:
+  - '#DocsLoader'
+  - '#DocsTools'
+  - '#DocsCommands'
+  - '#DocsSection'
+  - '#DocsSidebar'
+  - '#SymbolPage'
+  - '#FlowPage'
+  - '#PortalPage'
+  - '#ContentPage'
+  - '#CategoryListPage'
+  - '#DocsRouter'
+  - '#course-data'
+  - $docs-generation
+symbols_created:
+  - '#DocsLoader'
+  - '#DocsTools'
+  - '#DocsCommands'
+  - '#DocsSection'
+  - '#DocsRouter'
+  - '#course-data'
+files_created:
+  - packages/paradigm-mcp/src/types/docs.ts
+  - packages/paradigm-mcp/src/utils/docs-loader.ts
+  - packages/paradigm-mcp/src/tools/docs.ts
+  - packages/paradigm/src/platform-server/routes/docs.ts
+  - packages/paradigm/src/commands/docs/index.ts
+  - packages/paradigm/src/commands/docs/serve.ts
+  - packages/paradigm/src/commands/docs/build.ts
+  - packages/paradigm/platform-ui/src/sections/docs/DocsSection.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/store/docsStore.ts
+  - packages/paradigm/platform-ui/src/sections/docs/styles/docs.css
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsSidebar.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsCustomPage.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/SymbolLink.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/PropertyTable.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/FlowSteps.tsx
+  - packages/paradigm/platform-ui/src/sections/docs/components/GateChain.tsx
+  - packages/site/src/lib/docs-data.ts
+  - packages/site/src/lib/course-data.ts
+  - packages/site/src/components/docs/DocsSidebar.tsx
+  - packages/site/src/components/docs/SymbolPage.tsx
+  - packages/site/src/components/docs/FlowPage.tsx
+  - packages/site/src/components/docs/PortalPage.tsx
+  - packages/site/src/components/docs/CategoryListPage.tsx
+  - packages/site/src/components/docs/ContentPage.tsx
+  - packages/site/src/content/docs/portal-and-gates.md
+  - packages/site/src/content/docs/flows.md
+  - packages/site/src/content/docs/cli-reference.md
+  - packages/site/src/content/docs/mcp-tools.md
+  - packages/site/src/app/learn/course/[courseId]/page.tsx
+  - packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx
+  - packages/site/src/app/learn/plsat/page.tsx
+  - .paradigm/university/content/notes/N-paradigm-docs-overview.md
+  - .paradigm/university/content/quizzes/Q-paradigm-docs-basics.yaml
+  - .paradigm/university/content/paths/LP-paradigm-docs.yaml
+  - .paradigm/university/config.yaml
+files_modified:
+  - packages/paradigm-mcp/src/types/university.ts
+  - packages/paradigm-mcp/src/types/index.ts
+  - packages/paradigm-mcp/src/utils/university-loader.ts
+  - packages/paradigm-mcp/src/tools/university.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/platform-ui/src/store/platformStore.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+  - packages/site/src/app/learn/page.tsx
+  - packages/site/src/app/docs/layout.tsx
+  - packages/site/src/app/docs/[[...slug]]/page.tsx
+  - packages/site/src/components/docs/DocsSidebar.tsx
+  - packages/site/src/components/docs/ContentPage.tsx
+  - packages/conductor/.purpose
+  - packages/conductor/Sources/Conductor/Symphony/.purpose
+  - .paradigm/config.yaml
+  - CHANGELOG.md
+decisions:
+  - id: D-docs-from-graph
+    decision: Generate docs from scan-index rather than maintaining separate MDX documentation
+    rationale: Every .purpose file already contains structured descriptions and relationships. A separate docs copy would drift. Reading the graph means docs are always current.
+  - id: D-extracurricular-categories
+    decision: Replace nonCredit boolean with category/track system on university content
+    rationale: Categories are a proper abstraction that benefits search, onboarding, and validation. The boolean was a hack that didn't compose.
+  - id: D-type-all-components
+    decision: Add type fields to all 330 untyped components in a single pass
+    rationale: The docs manifest groups components by type. Without types, 330 components land in an '(untyped)' bucket that makes the sidebar useless. Typing them all made the auto-generated docs immediately navigable.
+  - id: D-site-reads-university-json
+    decision: Site lesson pages read university course JSON at build time rather than embedding content
+    rationale: Course content already exists and is maintained in the university package. Duplicating it in the site would create drift. A shared data loader reads from both packages.
+  - id: D-plsat-landing-not-exam
+    decision: Site PLSAT page is informational, not the actual exam
+    rationale: The full PLSAT experience (timer, grading, certificates) runs in the University platform. The site page explains what it is and how to take it. Embedding the exam would require duplicating complex UI state.
+learnings:
+  - Component type fields have compounding value — they're marginal when adding one component but transformative when viewing the full graph as documentation
+  - Unquoted YAML colons and ! prefixes are the most common .purpose file syntax errors — quoting signal keys should be documented as a convention
+  - Building 1276 static pages from the symbol graph is an effective integration test for Paradigm metadata health
+  - The extracurricular/core track distinction maps cleanly onto 'required for onboarding' vs 'optional enrichment' — a useful content architecture pattern
+  - The site and university package have different quiz formats (choices vs options) — the data loader must normalize both
+verification:
+  status: pass
+  details:
+    paradigm-mcp-build: pass
+    paradigm-cli-build: pass
+    platform-ui-build: pass
+    conductor-build: pass
+    site-build: pass (1276 pages)
+    purpose-validation: pass (52/52)
+    protocol-health: pass (37/37 current)
+    untyped-components: pass (0 untyped)
+    scan-index: pass (942 symbols)
+tags:
+  - arc:paradigm-docs
+  - arc:site-content
+  - milestone
+  - feature
+  - docs
+  - university
+  - site
+body: |-
+  # Paradigm Docs + Site Content Sprint
+
+  ## The Big Idea
+
+  This session delivered on a key insight: documentation should be *rendered from* the symbol graph, not maintained as a separate copy that drifts. Every `.purpose` file, flow, gate, and aspect already contains structured descriptions and relationships — Paradigm Docs just reads that graph and produces navigatable documentation automatically.
+
+  The result: any project using Paradigm gets instant, always-current documentation via `paradigm docs serve`. For useparadigm.dev, `/docs` becomes the showcase — Paradigm documenting itself, with itself.
+
+  ## What Shipped
+
+  ### Paradigm Docs (7 Phases)
+
+  **Phase 0 — University Extracurricular System.** Foundation work that benefits all university content. Added `track` (core/extracurricular), `excludeFromOnboarding`, and `validationStrictness` to the category system. Backward-compatible — existing content works identically. Seeded 4 categories in config.yaml. Migrated the site's `/learn` page from the ad-hoc `nonCredit` flag to proper categories.
+
+  **Phase 1 — Docs Data Layer.** `docs-loader.ts` reads 5 data sources (scan-index, flow-index, portal.yaml, university index, custom markdown pages) and produces typed page data. The manifest builder auto-groups components by type (commands, services, views...), creating a sidebar structure that's always in sync with the codebase.
+
+  **Phase 2 — MCP Tools + Platform API.** 3 new MCP tools (`paradigm_docs_manifest`, `paradigm_docs_page`, `paradigm_docs_search`) + 6 REST endpoints. Agents can now query documentation programmatically.
+
+  **Phase 3 — Platform UI.** New "docs" tab in Platform with 10 React components. Two-pane layout: 260px collapsible sidebar with search, scrollable content area. Symbol-colored prefixes and cross-reference navigation.
+
+  **Phase 4 — CLI Commands.** `paradigm docs serve` (launches Platform with docs section, port 3850) and `paradigm docs build` (static export with pre-fetched JSON for 900+ pages).
+
+  **Phase 5 — Site Integration.** `docs-data.ts` reads scan-index at Next.js build time. Dynamic `[[...slug]]` routing with `generateStaticParams` pre-renders 975+ pages. 6 site components with CSS Modules matching the obsidian design system. 3 handwritten guides.
+
+  **Phase 6 — University Content.** Note, quiz (5 questions), learning path for the docs system itself, placed in the extracurricular track.
+
+  ### Site Content Sprint
+
+  **4 new guide pages** filling the content gaps: Portal & Gates, Flows, CLI Reference, MCP Tools Reference. The docs section now covers the full Paradigm learning journey from installation through advanced agent tooling.
+
+  **3 docs UX improvements**: breadcrumbs on every page for navigation context, client-side search in the sidebar for instant filtering across 942 symbols, and code block language badges showing yaml/bash/typescript labels.
+
+  **68 dynamic lesson pages** wired up from existing university course JSON. A unified data loader reads PARA courses from the university package and extracurricular courses from the site content. Each lesson renders full markdown with key concepts callouts, quiz questions, and prev/next navigation.
+
+  **PLSAT landing page** at `/learn/plsat` with exam overview, 5-domain coverage grid, preparation guide, and CLI launch instructions. Updated stats from v2.0 (50 questions, 70% pass) to v3.0 (99 questions, 80% pass).
+
+  ### Project Health Cleanup
+
+  Resolved every doctor recommendation in a single pass:
+  - **330 untyped components → 0**: Added `type` fields across 16 `.purpose` files. The component type breakdown is now fully populated (119 views, 97 commands, 71 services, 40 utilities, etc.)
+  - **10 stale protocols → 0**: All 37 protocols now current.
+  - **2 YAML syntax errors**: Conductor `.purpose` had unquoted colons in a description field and 24 unquoted `!signal` keys across 2 files. Fixed by quoting.
+  - **Missing .purpose files**: Added coverage for new docs component directories.
+  - **Scan index rebuilt**: 942 symbols, clean integrity report.
+
+  ## Architecture Reflections
+
+  ### The Self-Documenting Pattern Works
+
+  The docs system reads the exact same scan-index that powers navigation, ripple analysis, and all other Paradigm features. There's no duplication, no drift. When you update a `.purpose` file, the docs update automatically. When you add a component, it appears in the sidebar. This is the "documentation as a view of the graph" pattern at work.
+
+  ### Component Types Were an Underappreciated Feature
+
+  Typing all 330 untyped components revealed how much richer the docs manifest becomes when every component has a structural role. The sidebar groups ("Commands (97)", "Services (71)", "Views (119)") are far more navigable than a flat list. This was always the intent of the `type` field but it took documenting *all* components to see the payoff.
+
+  ### Extracurricular Categories Clean Up the University
+
+  The `nonCredit: true` flag was a hack. The category system with tracks (core/extracurricular) is the right abstraction. It separates "what you need for onboarding" from "optional enrichment" at the data layer, which means search, onboarding, and validation all benefit.
+
+  ### The Site as Integration Test
+
+  Building 1276 static pages from the live symbol graph is the ultimate integration test for the data layer. Every broken reference, missing field, or malformed YAML would cause a build failure. The fact that it builds clean is confidence that the Paradigm metadata is healthy.
+
+  ## What's Next
+
+  ### Content & Polish (Near-term)
+  - **Blog / Case Studies** — the remaining content gap. Real-world adoption stories would drive credibility.
+  - **Syntax highlighting** in code blocks (currently plain monospace). Could add highlight.js or a lightweight alternative.
+  - **Mobile sidebar** — currently renders inline on small screens. A drawer/modal pattern would be cleaner.
+  - **In-page TOC** for long content pages — heading-based navigation.
+
+  ### Feature Development
+  - **Conductor Sprints 11+** — the task protocol, agent health, and remaining Swift work are ready to continue.
+  - **Symphony Phase 2** — Sentinel live view integration with the relay network.
+  - **Paradigm 5.0** — the features are accumulating toward a major version. The docs system, extracurricular university, and component typing could anchor a 5.0 release.
+
+  ### Infrastructure
+  - **PLSAT in the site** — currently a landing page pointing to the CLI. Could embed the exam directly in the Next.js site using the university API.
+  - **Docs versioning** — as Paradigm evolves, older projects may need docs pinned to their paradigm version.
+  - **Search backend** — client-side filtering works for 942 symbols but a proper search index would scale better.
+confidence: 0.92
+git_context:
+  ref: d7f35973308e9852a54ca84a2ca754ffc0a31289
+  branch: main
+  dirty: true

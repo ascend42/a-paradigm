@@ -257,6 +257,10 @@ export function getContextToolsList() {
             type: 'string',
             description: 'What\'s top-of-mind right now (1-3 sentences)',
           },
+          externalId: {
+            type: 'string',
+            description: 'Optional: deterministic ID from external source for automatic session recovery (e.g. "linear:PROJ-123", "github:owner/repo#42")',
+          },
           plan: {
             type: 'string',
             description: 'Optional: the current plan or approach',
@@ -298,6 +302,10 @@ export function getContextToolsList() {
           context: {
             type: 'string',
             description: 'What\'s top-of-mind right now (1-3 sentences)',
+          },
+          externalId: {
+            type: 'string',
+            description: 'Optional: deterministic ID from external source for automatic session recovery (e.g. "linear:PROJ-123", "github:owner/repo#42")',
           },
           plan: {
             type: 'string',
@@ -637,6 +645,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
 
     const phase = args.phase as SessionCheckpoint['phase'];
     const context = args.context as string;
+    const externalId = args.externalId as string | undefined;
     const plan = args.plan as string | undefined;
     const modifiedFiles = args.modifiedFiles as string[] | undefined;
     const symbolsTouched = args.symbolsTouched as string[] | undefined;
@@ -645,6 +654,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
     const { checkpoint, persisted } = tracker.saveCheckpoint({
       phase,
       context,
+      externalId,
       plan,
       modifiedFiles,
       symbolsTouched,
@@ -662,6 +672,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
           phase: checkpoint.phase,
           context: checkpoint.context,
           sessionId: checkpoint.sessionId,
+          ...(checkpoint.externalId ? { externalId: checkpoint.externalId } : {}),
           timestamp: new Date(checkpoint.timestamp).toISOString(),
           modifiedFiles: checkpoint.modifiedFiles?.length || 0,
           symbolsTouched: checkpoint.symbolsTouched?.length || 0,

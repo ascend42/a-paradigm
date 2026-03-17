@@ -186,6 +186,7 @@ export class AgentSpawner {
       agent: agentName,
       task,
       status: 'success',
+      completionVerified: false,
       outputs: {
         artifacts: [],
         symbols: context.symbols,
@@ -269,6 +270,44 @@ export class AgentSpawner {
       // Record budget usage
       if (this.budgetTracker) {
         this.budgetTracker.recordUsage(agentName, relay.metrics.tokens_used, model);
+      }
+
+      // Completion confirmation: verify agent actually produced work
+      // Inspired by Open SWE's anti-premature-termination pattern
+      if (relay.status === 'success') {
+        const hasArtifacts = relay.outputs.artifacts.length > 0;
+        const hasDecisions = relay.outputs.decisions.length > 0;
+        const hasHandoff = !!relay.handoff;
+        const didFileWork = relay.metrics.files_written > 0;
+
+        // Agent claims success — verify it did something meaningful
+        // Architects may only produce decisions/handoffs (no file writes)
+        // Builders should have written files
+        // Reviewers/testers may only produce decisions
+        const isArchitect = agentName === 'architect';
+        const isBuilder = agentName === 'builder';
+
+        if (isBuilder && !didFileWork && !hasHandoff) {
+          // Builder claimed success but wrote no files and has no handoff
+          relay.status = 'partial';
+        } else if (!hasArtifacts && !hasDecisions && !hasHandoff && !didFileWork) {
+          // No artifacts, no decisions, no handoff, no files — likely premature completion
+          relay.status = 'partial';
+        }
+
+        // Mark that we ran the completion check
+        relay.completionVerified = true;
+
+        if (relay.status === 'partial' && !isArchitect) {
+          // Log the downgrade for observability
+          if (options.onMessage) {
+            options.onMessage({
+              type: 'text',
+              content: `[completion-check] Agent "${agentName}" downgraded from success → partial: no meaningful output detected.`,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
       }
 
       // Log to audit

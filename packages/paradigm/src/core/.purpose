@@ -23,10 +23,11 @@ components:
       - $agent-orchestration-flow
     path: orchestrator.ts
   agent-spawner:
-    description: Spawn individual agents with task, context, and budget constraints
+    description: Spawn individual agents with task, context, and budget constraints. Includes completion confirmation — validates relay output before accepting success status.
     type: service
     aspects:
       - ~provider-cascade
+      - ~completion-confirmation
     path: agent-spawner.ts
   agent-matcher:
     description: Classify tasks and match appropriate agent teams based on triggers
@@ -220,6 +221,15 @@ aspects:
       - portal-compliance.ts:128-198
     applies-to:
       - '#portal-compliance'
+  ~completion-confirmation:
+    description: Agent spawner validates relay output before accepting success — builders must write files, all agents must produce artifacts/decisions/handoff. Failures downgrade to partial with logged message.
+    tags:
+      - orchestration
+      - completion
+    anchors:
+      - agent-spawner.ts:270-300
+    applies-to:
+      - '#agent-spawner'
   ~audit-log-yaml-per-orchestration:
     description: Audit logs are stored as YAML files in .paradigm/orchestrations/ with date-prefixed filenames; each file contains full agent details, token counts, costs, and artifacts
     tags:
