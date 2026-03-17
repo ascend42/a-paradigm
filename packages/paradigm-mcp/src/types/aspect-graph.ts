@@ -149,6 +149,8 @@ export interface DriftResult {
   suggestedEnd?: number;
   /** Whether the anchor was auto-healed */
   autoHealed?: boolean;
+  /** Suggested new file path (for cross-file relocations via content-search) */
+  suggestedPath?: string;
 
   // ── Backwards compat (derived from status) ──
   /** @deprecated Use status !== 'clean' && status !== 'cosmetic' instead */
@@ -158,6 +160,16 @@ export interface DriftResult {
 // ============================================
 // Database Row Types (internal)
 // ============================================
+
+/** Suggested new anchor location from content-search layer */
+export interface DriftSuggestion {
+  suggestedStart: number;
+  suggestedEnd: number;
+  suggestedPath?: string;
+  confidence: number;
+  similarity: number;
+  autoApply: boolean;
+}
 
 /** Raw aspect row from SQLite */
 export interface AspectRow {
@@ -185,6 +197,7 @@ export interface AnchorRow {
   materialized_at_commit: string | null;
   last_verified: string | null;
   drifted: number;
+  original_content: string | null;  // Phase 3: normalized snapshot at materialization
 }
 
 /** Raw edge row from SQLite */

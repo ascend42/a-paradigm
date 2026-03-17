@@ -120,6 +120,26 @@ const SCHEMA_STATEMENTS = [
   )`,
 ];
 
+// Phase 3: Migrations for existing DBs (nullable columns are safe)
+const MIGRATIONS = [
+  `ALTER TABLE anchors ADD COLUMN original_content TEXT`,
+
+  `CREATE TABLE IF NOT EXISTS anchor_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    anchor_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    old_start INTEGER,
+    old_end INTEGER,
+    new_start INTEGER,
+    new_end INTEGER,
+    old_path TEXT,
+    new_path TEXT,
+    confidence REAL,
+    commit_hash TEXT,
+    healed_at TEXT NOT NULL
+  )`,
+];
+
 const FTS_SQL = `CREATE VIRTUAL TABLE IF NOT EXISTS aspects_fts USING fts5(id, description, enforcement, tags)`;
 
 // ─── Query helpers ───────────────────────────────────────────────────
@@ -198,6 +218,15 @@ export async function openAspectGraph(rootDir: string): Promise<Database> {
     db.run(FTS_SQL);
   } catch {
     // FTS5 not available in this sql.js build -- degrade gracefully
+  }
+
+  // Phase 3 migrations (safe: nullable columns, IF NOT EXISTS)
+  for (const migration of MIGRATIONS) {
+    try {
+      db.run(migration);
+    } catch {
+      // Column/table already exists — skip
+    }
   }
 
   return db;
@@ -294,9 +323,9 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
         const hashes = computeAnchorHash(anchor, null);
 
         db.run(
-          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now]
+          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified, original_content)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now, hashes.normalizedContent]
         );
       }
     }
@@ -877,7 +906,79 @@ export function checkDrift(
 
       if (resolvedByGit) continue;
 
-      // Real drift — content genuinely changed (future: Layer 3 content search)
+      // Layer 3: Content fingerprint search (Phase 3)
+      if (anchor.original_content) {
+        const { contentSearch } = require('./aspect-fingerprint.js');
+        const searchResult = contentSearch(rootDir, anchor.file_path, anchor.original_content, autoHeal);
+
+        if (searchResult.found && searchResult.score >= 0.7) {
+          const isAutoHeal = autoHeal && searchResult.score >= 0.85 && !searchResult.suggestedPath;
+
+          if (isAutoHeal && searchResult.suggestedStart && searchResult.suggestedEnd) {
+            // Auto-relocate within same file
+            db.run(
+              'UPDATE anchors SET start_line = ?, end_line = ?, drifted = 0 WHERE id = ?',
+              [searchResult.suggestedStart, searchResult.suggestedEnd, anchor.id]
+            );
+
+            // Record in anchor_history
+            try {
+              db.run(
+                `INSERT INTO anchor_history (anchor_id, action, old_start, old_end, new_start, new_end, confidence, healed_at)
+                 VALUES (?, 'relocated', ?, ?, ?, ?, ?, ?)`,
+                [anchor.id, anchor.start_line, anchor.end_line, searchResult.suggestedStart, searchResult.suggestedEnd, searchResult.score, new Date().toISOString()]
+              );
+            } catch { /* history table optional */ }
+
+            // Heal .purpose file
+            const aspectRow = queryRows<{ defined_in: string }>(
+              db, 'SELECT defined_in FROM aspects WHERE id = ?', [anchor.aspect_id]
+            );
+            if (aspectRow.length > 0) {
+              healAnchorInPurposeFile(
+                rootDir, aspectRow[0].defined_in, anchor.file_path,
+                anchor.start_line, anchor.end_line,
+                searchResult.suggestedStart, searchResult.suggestedEnd,
+              );
+            }
+
+            results.push({
+              aspectId: anchor.aspect_id,
+              path: anchor.file_path,
+              startLine: searchResult.suggestedStart,
+              endLine: searchResult.suggestedEnd,
+              status: 'relocated',
+              resolvedBy: 'content-search',
+              exists: true,
+              similarity: searchResult.similarity,
+              suggestedStart: searchResult.suggestedStart,
+              suggestedEnd: searchResult.suggestedEnd,
+              autoHealed: true,
+              drifted: false,
+            });
+            continue;
+          }
+
+          // Score 0.7-0.85 or cross-file: suggest but don't auto-apply
+          results.push({
+            aspectId: anchor.aspect_id,
+            path: searchResult.suggestedPath || anchor.file_path,
+            startLine: anchor.start_line,
+            endLine: anchor.end_line,
+            status: 'relocated',
+            resolvedBy: 'content-search',
+            exists: true,
+            similarity: searchResult.similarity,
+            suggestedStart: searchResult.suggestedStart,
+            suggestedEnd: searchResult.suggestedEnd,
+            autoHealed: false,
+            drifted: true,
+          });
+          continue;
+        }
+      }
+
+      // Real drift — content genuinely changed, Layer 3 couldn't find it
       db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
 
       results.push({
@@ -1087,14 +1188,14 @@ function normalizeForHash(content: string): string {
  * Compute SHA-256 hashes of an anchor's content for drift detection.
  * Returns both exact and normalized hashes, or null if the file cannot be read.
  */
-function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): { exact: string | null; normalized: string | null } {
-  if (!rootDir) return { exact: null, normalized: null };
+function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): { exact: string | null; normalized: string | null; normalizedContent: string | null } {
+  if (!rootDir) return { exact: null, normalized: null, normalizedContent: null };
 
   const absolutePath = path.isAbsolute(anchor.path)
     ? anchor.path
     : path.join(rootDir, anchor.path);
 
-  if (!fs.existsSync(absolutePath)) return { exact: null, normalized: null };
+  if (!fs.existsSync(absolutePath)) return { exact: null, normalized: null, normalizedContent: null };
 
   try {
     const fileContent = fs.readFileSync(absolutePath, 'utf8');
@@ -1103,11 +1204,12 @@ function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): { exact:
     const startIdx = Math.max(0, startLine - 1);
     const endIdx = Math.min(lines.length, endLine);
     const sliceContent = lines.slice(startIdx, endIdx).join('\n');
+    const normalizedContent = normalizeForHash(sliceContent);
     const exact = crypto.createHash('sha256').update(sliceContent).digest('hex');
-    const normalized = crypto.createHash('sha256').update(normalizeForHash(sliceContent)).digest('hex');
-    return { exact, normalized };
+    const normalized = crypto.createHash('sha256').update(normalizedContent).digest('hex');
+    return { exact, normalized, normalizedContent };
   } catch {
-    return { exact: null, normalized: null };
+    return { exact: null, normalized: null, normalizedContent: null };
   }
 }
 

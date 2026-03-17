@@ -61,3 +61,7 @@ components:
     description: "Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking"
     type: engine
     tags: [feature, graduation, automation]
+  aspect-fingerprint:
+    description: "Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors"
+    type: engine
+    tags: [feature, drift-detection, fingerprint]

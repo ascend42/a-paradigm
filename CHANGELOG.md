@@ -5,6 +5,67 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.10.0] — 2026-03-17
+
+### Added
+
+- **Smart Drift Detection Phase 3: Content Fingerprint Search** — 1 new file, 2 modified.
+  - `aspect-fingerprint.ts` (~320 lines) — Levenshtein distance, sliding window search, structural hashing, cross-file rename detection, sibling file search.
+  - 4-signal scoring: first/last line match (0.4), structural hash (0.3), Levenshtein similarity ≥0.8 (0.2), line count ±20% (0.1).
+  - Thresholds: ≥0.85 auto-relocate, 0.7-0.85 suggest, <0.7 real drift.
+  - Cross-file search: `git log --follow --diff-filter=R` for renames, sibling directory scan (max 10 files).
+  - Schema migration: `original_content` column on anchors table, `anchor_history` table for audit trail.
+  - `materializeAspects()` now stores normalized content snapshot for each anchor at materialization time.
+  - `checkDrift()` Layer 3: after Layers 1-2 fail, searches for relocated content via fingerprint, auto-heals ≥0.85 matches, records history.
+
+### Changed
+
+- `computeAnchorHash()` now returns `normalizedContent` alongside hashes for Phase 3 storage.
+- `AnchorRow` type gains `original_content: string | null` field.
+- `DriftResult` type gains `suggestedPath` field for cross-file relocations.
+
+Symbols: #aspect-fingerprint, $content-search-flow
+
+## [4.9.0] — 2026-03-17
+
+### Added
+
+- **Site Content & Polish** — docs guides, course pages, PLSAT landing, and docs UX improvements.
+
+  **Docs Content Depth** — 4 new handwritten guide pages:
+  - Portal & Gates — portal.yaml structure, gate patterns, route mapping
+  - Flows — flow definition, step types, validation, visualization
+  - CLI Reference — complete command reference organized by category
+  - MCP Tools Reference — all 50+ tools with token budget estimates
+
+  **Docs Polish** — 3 UX improvements:
+  - Breadcrumbs on all docs pages (Docs > Components > PaymentService)
+  - Client-side search input in sidebar with instant filtering
+  - Code block language badges (yaml, bash, typescript labels)
+
+  **Learn Section — Dynamic Course Pages**:
+  - `/learn/course/[courseId]` — course detail with numbered syllabus
+  - `/learn/course/[courseId]/lesson/[lessonId]` — full lesson content with markdown, key concepts, quiz questions, and prev/next navigation
+  - `course-data.ts` — server-side loader reading from university + site content packages
+  - 68 lesson pages pre-rendered at build time across 7 courses
+
+  **PLSAT Landing Page** (`/learn/plsat`):
+  - Exam overview: 99 questions, 90 minutes, 80% pass threshold
+  - Coverage grid showing 5 PARA course domains
+  - Preparation guide and CLI launch instructions
+  - Updated learn page: v3.0 stats (99 questions, 80% pass)
+
+  **Project Health** — all doctor recommendations resolved:
+  - 330 untyped components → 0 untyped (types added across 16 .purpose files)
+  - 10 stale protocols → 0 stale (all 37 refreshed)
+  - 2 YAML errors in conductor .purpose files fixed (unquoted colons + !signals)
+  - .purpose files added for all new docs directories
+  - Scan index rebuilt: 942 symbols, 0 untyped
+
+  **1276 static pages** generated at site build time (up from 983).
+
+Symbols: #DocsSidebar, #SymbolPage, #FlowPage, #PortalPage, #ContentPage, #course-data
+
 ## [4.8.0] — 2026-03-17
 
 ### Added
