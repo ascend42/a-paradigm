@@ -5,6 +5,28 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] — 2026-03-16
+
+### Added
+
+- **Conductor Sprint 10: Task Protocol + Maestro Delegation** — 3 new Swift files, 1 new TS file, 5 modified.
+  - **Task Protocol** — 7 new Symphony message intents: `task`, `task-ack`, `progress`, `approval-request`, `approval-response`, `task-complete`, `task-failed`. Wire-compatible payload types in both TypeScript (`symphony-loader.ts`) and Swift (`SymphonyTypes.swift`).
+  - `TaskComposerView` — Structured task assignment UI: scope, acceptance criteria, priority, external ref. Writes task intent notes to target agent Symphony inboxes.
+  - `ApprovalView` — Notification UI for agent approval requests. Shows summary, modified files, diff preview. Maestro responds with approve/reject/redirect + feedback.
+  - `ApprovalNotificationBanner` — Scans monitor for pending approval-request notes and surfaces them in the overlay.
+  - `task-protocol.ts` — Agent-side protocol prompt generator. Prepended to agent context when a task is received, instructing ack → work → progress → approval → complete workflow.
+
+### Changed
+
+- `paradigm_symphony_send` enum now includes all 7 task protocol intents.
+- `MessageMetadata` gains `task`, `progress`, `approvalRequest`, `approvalResponse` payload fields (TS + Swift).
+- `AgentNetworkView` gains "Send Task" action on group menus.
+- `MainOverlayView` shows `ApprovalNotificationBanner` for pending approval requests.
+- `ThreadView` intent color switch handles all task protocol intents.
+- Conductor bumped to 0.9.0.
+
+Symbols: #task-composer-view, #approval-view, $task-lifecycle
+
 ## [4.2.0] — 2026-03-16
 
 ### Added

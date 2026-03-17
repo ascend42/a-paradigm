@@ -39,6 +39,67 @@ enum MessageIntent: String, Codable, Sendable {
     case fileApproved
     case fileDenied
     case fileDelivery
+    // Task protocol intents (Sprint 10)
+    case task
+    case taskAck = "task-ack"
+    case progress
+    case approvalRequest = "approval-request"
+    case approvalResponse = "approval-response"
+    case taskComplete = "task-complete"
+    case taskFailed = "task-failed"
+}
+
+// MARK: - Task Protocol Payloads
+
+enum TaskPriority: String, Codable, Sendable {
+    case low
+    case normal
+    case high
+    case critical
+}
+
+struct TaskPayload: Codable, Sendable {
+    let taskId: String
+    let scope: String
+    let acceptance: String
+    let priority: TaskPriority
+    var deadline: String?
+    var externalRef: String?
+    var assignedTo: String?
+    var assignedBy: String?
+    var parentTaskId: String?
+    var tags: [String]?
+}
+
+struct ProgressPayload: Codable, Sendable {
+    let taskId: String
+    let percent: Int
+    let summary: String
+    var filesModified: [String]?
+    var symbolsTouched: [String]?
+    var blockers: [String]?
+}
+
+struct ApprovalRequestPayload: Codable, Sendable {
+    let taskId: String
+    let summary: String
+    let filesModified: [String]
+    var diff: String?
+    let question: String
+    let options: [String]
+}
+
+enum ApprovalDecision: String, Codable, Sendable {
+    case approved
+    case rejected
+    case redirected
+}
+
+struct ApprovalResponsePayload: Codable, Sendable {
+    let taskId: String
+    let decision: ApprovalDecision
+    var feedback: String?
+    var redirectTo: String?
 }
 
 // MARK: - Message Content
@@ -69,6 +130,11 @@ struct MessageMetadata: Codable, Sendable {
     var toolCall: String?
     var symbols: [String]?
     var confidence: Double?
+    // Task protocol payloads
+    var task: TaskPayload?
+    var progress: ProgressPayload?
+    var approvalRequest: ApprovalRequestPayload?
+    var approvalResponse: ApprovalResponsePayload?
 }
 
 // MARK: - Symphony Note (SymphonyMessage in TS)

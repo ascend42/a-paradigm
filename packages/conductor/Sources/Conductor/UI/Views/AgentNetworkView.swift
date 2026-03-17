@@ -15,6 +15,7 @@ struct AgentNetworkView: View {
     @State private var newGroupName = ""
     @State private var selectedThread: String?
     @State private var addAgentGroupId: UUID? = nil
+    @State private var taskComposerGroupId: UUID? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -103,6 +104,9 @@ struct AgentNetworkView: View {
 
                 // Group actions menu
                 Menu {
+                    Button("Send Task") {
+                        taskComposerGroupId = group.id
+                    }
                     Button("Add Agent") {
                         addAgentGroupId = group.id
                     }
@@ -170,6 +174,20 @@ struct AgentNetworkView: View {
             set: { if !$0 { addAgentGroupId = nil } }
         )) {
             addAgentSheet(groupId: group.id)
+        }
+        .sheet(isPresented: Binding(
+            get: { taskComposerGroupId == group.id },
+            set: { if !$0 { taskComposerGroupId = nil } }
+        )) {
+            TaskComposerView(
+                groupStore: groupStore,
+                agentPartManager: agentPartManager,
+                isPresented: Binding(
+                    get: { taskComposerGroupId == group.id },
+                    set: { if !$0 { taskComposerGroupId = nil } }
+                ),
+                targetGroupId: group.id
+            )
         }
     }
 

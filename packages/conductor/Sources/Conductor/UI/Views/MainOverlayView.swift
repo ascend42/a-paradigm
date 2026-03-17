@@ -257,6 +257,9 @@ struct MainOverlayView: View {
                 }
             )
 
+            // Approval notification banner (task protocol)
+            ApprovalNotificationBanner(monitor: symphonyMonitor)
+
             // Agent network (groups + Symphony status)
             if !agentGroupStore.groups.isEmpty || !agentPartManager.registeredAgents.isEmpty {
                 Divider()

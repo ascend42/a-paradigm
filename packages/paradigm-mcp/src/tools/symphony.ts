@@ -97,8 +97,11 @@ export function getSymphonyToolsList() {
               'question', 'context', 'clarification', 'proposal',
               'verification', 'action', 'decision', 'alert',
               'approval', 'rejection', 'reference', 'handoff',
+              'task', 'task-ack', 'progress',
+              'approval-request', 'approval-response',
+              'task-complete', 'task-failed',
             ],
-            description: 'Message intent (what kind of message this is)',
+            description: 'Message intent (what kind of message this is). Task protocol intents: task (assignment), task-ack, progress, approval-request, approval-response, task-complete, task-failed.',
           },
           text: {
             type: 'string',

@@ -52,7 +52,55 @@ export type MessageIntent =
   | 'fileRequest'
   | 'fileApproved'
   | 'fileDenied'
-  | 'fileDelivery';
+  | 'fileDelivery'
+  // Task protocol intents (Sprint 10)
+  | 'task'
+  | 'task-ack'
+  | 'progress'
+  | 'approval-request'
+  | 'approval-response'
+  | 'task-complete'
+  | 'task-failed';
+
+// ── Task Protocol Payloads ──────────────────────────────────────
+
+export interface TaskPayload {
+  taskId: string;
+  scope: string;
+  acceptance: string;
+  priority: 'low' | 'normal' | 'high' | 'critical';
+  deadline?: string;
+  externalRef?: string;
+  assignedTo?: string;
+  assignedBy?: string;
+  parentTaskId?: string;
+  tags?: string[];
+}
+
+export interface ProgressPayload {
+  taskId: string;
+  percent: number;
+  summary: string;
+  filesModified?: string[];
+  symbolsTouched?: string[];
+  blockers?: string[];
+}
+
+export interface ApprovalRequestPayload {
+  taskId: string;
+  summary: string;
+  filesModified: string[];
+  diff?: string;
+  question: string;
+  options: string[];
+}
+
+export interface ApprovalResponsePayload {
+  taskId: string;
+  decision: 'approved' | 'rejected' | 'redirected';
+  feedback?: string;
+  redirectTo?: string;
+}
 
 export interface MessageContent {
   text: string;
@@ -71,6 +119,11 @@ export interface MessageMetadata {
   toolCall?: string;
   symbols?: string[];
   confidence?: number;
+  // Task protocol payloads (Sprint 10)
+  task?: TaskPayload;
+  progress?: ProgressPayload;
+  approvalRequest?: ApprovalRequestPayload;
+  approvalResponse?: ApprovalResponsePayload;
 }
 
 export interface SymphonyMessage {

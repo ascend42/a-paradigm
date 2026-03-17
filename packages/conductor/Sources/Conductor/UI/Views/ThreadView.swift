@@ -188,6 +188,14 @@ struct ThreadView: View {
         case .reference: return .gray
         case .handoff: return .orange
         case .fileRequest, .fileApproved, .fileDenied, .fileDelivery: return .indigo
+        // Task protocol intents
+        case .task: return .blue
+        case .taskAck: return .cyan
+        case .progress: return .mint
+        case .approvalRequest: return .orange
+        case .approvalResponse: return .green
+        case .taskComplete: return .green
+        case .taskFailed: return .red
         }
     }
 
