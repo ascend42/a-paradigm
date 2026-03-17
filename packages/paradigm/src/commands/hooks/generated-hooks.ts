@@ -402,6 +402,54 @@ if [ -f "portal.yaml" ]; then
     fi
   fi
 fi
+
+# --- Check 12: Graduation failure tracking ---
+# When violations occur for graduated habits, record failures for auto-demotion.
+if [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
+  GRAD_FAILURES_DIR=".paradigm/.graduation-failures"
+  mkdir -p "$GRAD_FAILURES_DIR" 2>/dev/null
+
+  # Map violations to graduated habit IDs
+  # Check 1/2/5 → purpose-coverage, Check 3/11 → gates-for-routes, Check 7 → record-lore-for-significant
+  NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date +%Y-%m-%dT%H:%M:%SZ)
+
+  # Purpose coverage violations → purpose-coverage habit
+  if echo "$VIOLATIONS" | grep -q "source file.*without .purpose\\|missing .purpose\\|purpose.*stale" 2>/dev/null; then
+    if grep -q "purpose-coverage" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "purpose-coverage" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/purpose-coverage"
+    fi
+  fi
+
+  # Portal gate violations → gates-for-routes habit
+  if echo "$VIOLATIONS" | grep -q "portal.yaml\\|gate.*undeclared\\|gate.*not declared" 2>/dev/null; then
+    if grep -q "gates-for-routes" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "gates-for-routes" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/gates-for-routes"
+    fi
+  fi
+
+  # Lore entry violations → record-lore-for-significant habit
+  if echo "$VIOLATIONS" | grep -q "lore entry expected\\|no lore" 2>/dev/null; then
+    if grep -q "record-lore-for-significant" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "record-lore-for-significant" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/record-lore-for-significant"
+    fi
+  fi
+
+  # Count recent failures and emit advisory if approaching demotion threshold
+  for fail_file in "$GRAD_FAILURES_DIR"/*; do
+    [ -f "$fail_file" ] || continue
+    habit_id=$(basename "$fail_file")
+    fail_count=$(wc -l < "$fail_file" | tr -d ' ')
+    if [ "$fail_count" -ge 3 ]; then
+      ADVISORY="$ADVISORY
+  - Graduated habit '$habit_id' has $fail_count failures — auto-demotion triggered.
+    Run paradigm_graduate_status to review tier changes."
+    elif [ "$fail_count" -ge 2 ]; then
+      ADVISORY="$ADVISORY
+  - Graduated habit '$habit_id' has $fail_count failures (demotion at 3).
+    Fix the underlying issue or it will be demoted to habit tier."
+    fi
+  done
+fi
 `;
 
 export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
@@ -438,8 +486,9 @@ cd "$CWD" || exit 0
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
-  # Clean up pending-review on pass
+  # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
+  rm -f ".paradigm/.session-started"
   exit 0
 fi
 
@@ -475,9 +524,26 @@ if [ -n "$ADVISORY" ]; then
   echo "$ADVISORY" >&2
 fi
 
-# Clean up pending-review on pass
+# Auto-demote graduated habits with 3+ failures
+if [ -d ".paradigm/.graduation-failures" ]; then
+  for fail_file in .paradigm/.graduation-failures/*; do
+    [ -f "$fail_file" ] || continue
+    habit_id=$(basename "$fail_file")
+    fail_count=$(wc -l < "$fail_file" | tr -d ' ')
+    if [ "$fail_count" -ge 3 ]; then
+      if command -v paradigm >/dev/null 2>&1; then
+        paradigm graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
+      fi
+      rm -f "$fail_file"
+      echo "[paradigm] Auto-demoted '$habit_id' after $fail_count failures." >&2
+    fi
+  done
+fi
+
+# Clean up session markers on pass
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
+rm -f ".paradigm/.session-started"
 
 exit 0
 `;
@@ -522,6 +588,15 @@ esac
 # Not a paradigm project — pass
 if [ ! -d ".paradigm" ]; then
   exit 0
+fi
+
+# Pseudo-session-start: first edit of session emits one-time guidance
+if [ ! -f ".paradigm/.session-started" ]; then
+  PREV_PENDING=$(cat .paradigm/.pending-review 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$PREV_PENDING" -gt 0 ] 2>/dev/null; then
+    echo "[paradigm] Session started. $PREV_PENDING uncovered edit(s) from last session." >&2
+  fi
+  touch ".paradigm/.session-started"
 fi
 
 # Convert to relative path (strip project root prefix)
@@ -577,6 +652,11 @@ elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
   echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
   echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
+fi
+
+# Context budget heuristic: suggest handoff check at high edit counts
+if [ "$PENDING_COUNT" -ge 30 ]; then
+  echo "[paradigm] ~$PENDING_COUNT edits this session. Consider preparing handoff." >&2
 fi
 
 exit 0
@@ -785,8 +865,9 @@ fi
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
-  # Clean up pending-review on pass
+  # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
+  rm -f ".paradigm/.session-started"
   exit 0
 fi
 
@@ -829,10 +910,27 @@ if [ -n "$ADVISORY" ]; then
   echo "$ADVISORY" >&2
 fi
 
-# Clean up pending-review and loop guard on pass
+# Auto-demote graduated habits with 3+ failures
+if [ -d ".paradigm/.graduation-failures" ]; then
+  for fail_file in .paradigm/.graduation-failures/*; do
+    [ -f "$fail_file" ] || continue
+    habit_id=$(basename "$fail_file")
+    fail_count=$(wc -l < "$fail_file" | tr -d ' ')
+    if [ "$fail_count" -ge 3 ]; then
+      if command -v paradigm >/dev/null 2>&1; then
+        paradigm graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
+      fi
+      rm -f "$fail_file"
+      echo "[paradigm] Auto-demoted '$habit_id' after $fail_count failures." >&2
+    fi
+  done
+fi
+
+# Clean up session markers and loop guard on pass
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
+rm -f ".paradigm/.session-started"
 
 exit 0
 `;
@@ -1171,6 +1269,15 @@ fi
 
 cd "$CWD" || exit 0
 
+# Pseudo-session-start: first edit of session emits one-time guidance
+if [ ! -f ".paradigm/.session-started" ]; then
+  PREV_PENDING=$(cat .paradigm/.pending-review 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$PREV_PENDING" -gt 0 ] 2>/dev/null; then
+    echo "[paradigm] Session started. $PREV_PENDING uncovered edit(s) from last session." >&2
+  fi
+  touch ".paradigm/.session-started"
+fi
+
 # Convert to relative path
 REL_PATH="$FILE_PATH"
 case "$FILE_PATH" in
@@ -1233,6 +1340,11 @@ elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
   echo "  -> #components, ~aspects (with anchors), !signals, \\$flows, ^gates" >&2
   echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
+fi
+
+# Context budget heuristic: suggest handoff check at high edit counts
+if [ "$PENDING_COUNT" -ge 30 ]; then
+  echo "[paradigm] ~$PENDING_COUNT edits this session. Consider preparing handoff." >&2
 fi
 
 exit 0

@@ -35,6 +35,7 @@ import { getPmToolsList, handlePmTool } from './pm.js';
 import { getReindexToolsList, handleReindexTool } from './reindex.js';
 import { getLoreToolsList, handleLoreTool } from './lore.js';
 import { getHabitsToolsList, handleHabitsTool } from './habits.js';
+import { getGraduationToolsList, handleGraduationTool } from './graduation.js';
 import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.js';
 import { getTasksToolsList, handleTasksTool } from './tasks.js';
 import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
@@ -49,6 +50,7 @@ import { getUniversityToolsList, handleUniversityTool } from './university.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
+import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -291,6 +293,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getLoreToolsList(),
           // Habits tools
           ...getHabitsToolsList(),
+          // Graduation tools
+          ...getGraduationToolsList(),
           // Aspect graph tools
           ...getAspectGraphToolsList(),
           // Task management tools
@@ -318,6 +322,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getAgentToolsList(),
           // Agent notebook tools
           ...getNotebookToolsList(),
+          // Docs (auto-generated documentation) tools
+          ...getDocsToolsList(),
           // Plugin update check
           {
             name: 'paradigm_plugin_check',
@@ -1413,6 +1419,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             }
           }
 
+          // Try graduation tools
+          if (name.startsWith('paradigm_graduate_')) {
+            const result = await handleGraduationTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
           // Try aspect graph tools
           if (name.startsWith('paradigm_aspect_') && name !== 'paradigm_aspect_check') {
             const result = await handleAspectGraphTool(name, args as Record<string, unknown>, ctx);
@@ -1558,6 +1575,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try notebook tools
           if (name.startsWith('paradigm_notebook_')) {
             const result = await handleNotebookTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try docs tools
+          if (name.startsWith('paradigm_docs_')) {
+            const result = await handleDocsTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

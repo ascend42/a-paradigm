@@ -211,11 +211,13 @@ Before exploring this codebase:
 | When | Tool | Purpose |
 |------|------|---------|
 | Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |
-| Finishing any task | `paradigm_pm_postflight` | Check for violations: missing .purpose, missing gates |
+| Finishing any task | _(handled by stop hook)_ | The stop hook runs 12 compliance checks automatically — no need to call `paradigm_pm_postflight` manually |
+
+> **Graduation note:** 5 of 13 habits are enforced by hooks at zero context cost. Call `paradigm_graduate_status` to see the tier map. The stop hook auto-demotes graduated habits that fail 3+ times.
 
 ## Context Monitoring Protocol
 
-**Periodically check context usage** by calling `paradigm_context_check` (every 10-15 tool calls or when user asks).
+**The post-write hook automatically warns at 30+ edits.** For manual checks, call `paradigm_context_check`.
 
 **When recommendation is NOT "continue":**
 1. Inform user: "Context usage is at ~X%. Recommend handoff soon."
@@ -303,6 +305,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | **Listing agent profiles** | `paradigm_agent_list` for all agent identities |
 | **Getting agent details** | `paradigm_agent_get` for full profile + expertise |
 | **Activating advanced tools** | `paradigm_tool_activate` for on-demand tool modules |
+| **Checking graduation eligibility** | `paradigm_graduate_check` for habit→hook promotion |
+| **Viewing automation tiers** | `paradigm_graduate_status` for current tier map |
 | **Searching agent notebooks** | `paradigm_notebook_search` by concept/tag/keyword |
 | **Adding notebook entries** | `paradigm_notebook_add` for curated snippets |
 | **Promoting lore to notebook** | `paradigm_notebook_promote` for lore extraction |
@@ -358,6 +362,8 @@ Keep it lightweight: `phase` + `context` are required, everything else is option
 | `paradigm_notebook_add` | ~100 | Adding a notebook entry |
 | `paradigm_notebook_promote` | ~100 | Promoting lore to notebook |
 | `paradigm_tool_activate` | ~50 | Activating advanced tools |
+| `paradigm_graduate_check` | ~300 | Check graduation eligibility |
+| `paradigm_graduate_status` | ~200 | View automation tier map |
 | `response_format: 'concise'` | ~50% fewer | On any tool that supports it |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Avoid if possible |
@@ -791,6 +797,7 @@ The stop hook runs 12 compliance checks (shared via `paradigm-common.sh`):
 | 10 | Aspect drift detection (auto-heals shifts, blocks real drift) | Yes |
 | 11 | Portal gate implementation compliance (undeclared gates) | Yes |
 | 12 | Agent permission compliance (integrityHash) | No (advisory) |
+| 13 | Graduation failure tracking (auto-demotion at 3 failures) | No (advisory) |
 
 ### Plugin Version Compatibility
 

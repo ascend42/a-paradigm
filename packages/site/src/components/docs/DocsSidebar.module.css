@@ -1,0 +1,100 @@
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.sectionToggle:hover {
+  background: var(--surface-2);
+}
+
+.sectionTitle {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chevron {
+  color: var(--text-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+  display: flex;
+  align-items: center;
+}
+
+.chevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 2px;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px var(--space-1);
+  padding-left: calc(var(--space-1) + 4px);
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  color: var(--text-heading);
+  background: var(--surface-2);
+}
+
+.linkActive {
+  color: var(--text-bright);
+  background: var(--surface-2);
+  font-weight: 500;
+}
+
+.linkLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Symbol prefix colors */
+.prefix {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.component { color: var(--sym-component); }
+.flow      { color: var(--sym-flow); }
+.gate      { color: var(--sym-gate); }
+.signal    { color: var(--sym-signal); }
+.aspect    { color: var(--sym-aspect); }

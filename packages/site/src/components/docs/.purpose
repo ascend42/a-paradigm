@@ -1,0 +1,25 @@
+components:
+  DocsSidebar:
+    description: Client-side collapsible sidebar with active link tracking, symbol prefix badges, and section counts
+    type: view
+    tags: [feature, docs, site]
+  SymbolPage:
+    description: Symbol detail page with badge, metadata row, flow steps, related symbols, and source path
+    type: view
+    tags: [feature, docs, site]
+  FlowPage:
+    description: Flow detail page with step timeline, symbol links, and involved symbols grid
+    type: view
+    tags: [feature, docs, site]
+  PortalPage:
+    description: Portal reference with gate cards and HTTP method-colored route table
+    type: view
+    tags: [feature, docs, site]
+  CategoryListPage:
+    description: Category index page with card grid showing all symbols in a category
+    type: view
+    tags: [feature, docs, site]
+  ContentPage:
+    description: Markdown renderer for handwritten docs pages — headings, code blocks, tables, lists
+    type: view
+    tags: [feature, docs, site]

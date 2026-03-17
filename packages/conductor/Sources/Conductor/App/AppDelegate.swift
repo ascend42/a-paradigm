@@ -23,6 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let agentProcessManager = AgentProcessManager()
     let agentGroupStore = AgentGroupStore()
     let symphonyMonitor = SymphonyMonitor()
+    let taskStore = TaskStore()
+    let sentinelClient = SentinelWSClient()
+    let agentHealthMonitor = AgentHealthMonitor()
+    let hotKeyBindingRegistry = HotKeyBindingRegistry()
+    let eyebrowBindingRegistry = EyebrowBindingRegistry()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
         buffer: buffer,
         gazeRouter: GazeRouter.shared
@@ -84,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScoreIO.ensureScoreDirs()
         agentPartManager.cleanStaleAgents()
 
+        // Wire task store to symphony monitor for task tracking
+        symphonyMonitor.taskStore = taskStore
+
+        // Wire agent health monitor to task store
+        agentHealthMonitor.configure(taskStore: taskStore)
+
         // Start monitoring all grouped agents
         let allGrouped = agentGroupStore.allGroupedAgents
         if !allGrouped.isEmpty {
@@ -109,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupOrchestrator() {
         orchestrator.setWorkspaceManager(workspaceManager)
         orchestrator.fileApprovalManager = fileApprovalManager
+        orchestrator.eyebrowBindingRegistry = eyebrowBindingRegistry
 
         // Read provider preferences and create providers conditionally
         createProvidersFromPreferences()
@@ -215,21 +227,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Register global keyboard shortcuts for video/voice toggles and panel control.
+    /// Register global keyboard shortcuts from the binding registry.
     private func setupHotKeys() {
-        hotKeyManager.register(.toggleVideo) { [weak self] in
+        hotKeyManager.observeRegistry(hotKeyBindingRegistry) { [weak self] action in
             guard let self else { return }
             Task { @MainActor in
-                await self.orchestrator.toggleVideo()
+                await self.orchestrator.executeAction(action)
             }
         }
-        hotKeyManager.register(.toggleVoice) { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.orchestrator.toggleVoice()
-            }
-        }
-        ConductorLog.component("conductor-app").info("Global hotkeys registered (Cmd+Shift+V, Cmd+Shift+M)")
+        ConductorLog.component("conductor-app").info("Global hotkeys registered from registry")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -305,7 +311,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 agentProcessManager: agentProcessManager,
                 agentGroupStore: agentGroupStore,
                 symphonyMonitor: symphonyMonitor,
-                agentPartManager: agentPartManager
+                agentPartManager: agentPartManager,
+                taskStore: taskStore,
+                sentinelClient: sentinelClient,
+                agentHealthMonitor: agentHealthMonitor
             )
         )
         panel.makeKeyAndOrderFront(nil)

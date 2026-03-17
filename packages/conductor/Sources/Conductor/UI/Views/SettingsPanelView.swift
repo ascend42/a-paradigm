@@ -24,6 +24,9 @@ struct SettingsPanelView: View {
     var noteRelay: NoteRelay?
     var projectStore: ProjectStore?
     var agentProcessManager: AgentProcessManager?
+    var sentinelClient: SentinelWSClient?
+    var eyebrowBindingRegistry: EyebrowBindingRegistry?
+    var hotKeyBindingRegistry: HotKeyBindingRegistry?
 
     var body: some View {
         TabView {
@@ -41,7 +44,9 @@ struct SettingsPanelView: View {
                 BindingsManagerView(
                     actionRegistry: registry,
                     voiceCommandRegistry: voiceCmds,
-                    customGestureClassifier: gestureClassifier
+                    customGestureClassifier: gestureClassifier,
+                    eyebrowBindingRegistry: eyebrowBindingRegistry,
+                    hotKeyBindingRegistry: hotKeyBindingRegistry
                 )
                 .tabItem { Label("Bindings", systemImage: "keyboard") }
             }
@@ -52,6 +57,10 @@ struct SettingsPanelView: View {
             if let store = projectStore, let manager = agentProcessManager {
                 SessionsSettingsView(projectStore: store, agentProcessManager: manager)
                     .tabItem { Label("Sessions", systemImage: "bolt.fill") }
+            }
+            if let sentinel = sentinelClient {
+                monitoringTab(sentinel)
+                    .tabItem { Label("Monitoring", systemImage: "antenna.radiowaves.left.and.right") }
             }
         }
         .frame(width: 450, height: 400)
@@ -182,6 +191,49 @@ struct SettingsPanelView: View {
                     Button("Recalibrate…") {
                         NotificationCenter.default.post(name: .conductorRecalibrate, object: nil)
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Monitoring
+
+    @AppStorage("sentinelAutoConnect") private var sentinelAutoConnect: Bool = false
+    @AppStorage("sentinelURL") private var sentinelURL: String = "ws://localhost:3838/ws"
+
+    private func monitoringTab(_ sentinel: SentinelWSClient) -> some View {
+        Form {
+            Section("Sentinel WebSocket") {
+                HStack {
+                    Text("URL")
+                    Spacer()
+                    TextField("ws://...", text: $sentinelURL)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                        .onSubmit {
+                            if let url = URL(string: sentinelURL) {
+                                sentinel.serverURL = url
+                            }
+                        }
+                }
+
+                Toggle("Auto-connect on launch", isOn: $sentinelAutoConnect)
+
+                LabeledContent("Status") {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(sentinel.isConnected ? .green : .red)
+                            .frame(width: 6, height: 6)
+                        Text(sentinel.isConnected ? "Connected" : "Disconnected")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent("Buffered Events") {
+                    Text("\(sentinel.recentEvents.count) / 200")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

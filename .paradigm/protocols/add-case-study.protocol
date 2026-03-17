@@ -27,6 +27,6 @@ steps:
     notes: Ensure lessons are actionable and could inform future protocols or wisdom entries
 recorded_from: L-2026-03-01-protocols-audit
 recorded_at: '2026-03-01T12:00:00Z'
-last_verified: '2026-03-08T06:07:43.924Z'
+last_verified: '2026-03-17T14:25:02.383Z'
 verified_by: claude-opus-4-6
-status: stale
+status: current

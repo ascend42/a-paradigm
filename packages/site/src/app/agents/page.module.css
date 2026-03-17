@@ -1,0 +1,124 @@
+.page {
+  max-width: var(--max-width-marketing);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-3) var(--space-16);
+}
+
+.header {
+  margin-bottom: var(--space-6);
+}
+
+.title {
+  font-size: var(--text-h1);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: var(--space-1);
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+}
+
+.searchBar {
+  margin-top: var(--space-3);
+  max-width: 480px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 16px;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.searchInput:focus {
+  border-color: var(--sym-component);
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.sectionTitle {
+  font-size: var(--text-h2);
+  color: var(--text-heading);
+  margin-bottom: var(--space-4);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.card:hover {
+  border-color: var(--surface-steel);
+}
+
+.cardHeader {
+  margin-bottom: var(--space-1);
+}
+
+.agentName {
+  font-size: var(--text-h4);
+  color: var(--text-heading);
+}
+
+.author {
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+}
+
+.agentDescription {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  flex: 1;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--surface-3);
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--sym-component);
+  padding: 2px 8px;
+  background: var(--tag-component-bg);
+  border: 1px solid var(--tag-component-border);
+  border-radius: var(--radius-pill);
+}
+
+.downloads {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+}

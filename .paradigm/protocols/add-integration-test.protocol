@@ -20,6 +20,6 @@ steps:
     notes: 'Run: cd packages/paradigm && npx vitest run {path}.test.ts'
 recorded_from: L-2026-03-01-protocols-audit
 recorded_at: '2026-03-01T12:00:00Z'
-last_verified: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-17T14:25:14.957Z'
 verified_by: claude-opus-4-6
-status: stale
+status: current

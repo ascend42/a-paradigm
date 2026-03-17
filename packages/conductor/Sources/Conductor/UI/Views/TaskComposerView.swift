@@ -7,6 +7,7 @@ import SwiftUI
 struct TaskComposerView: View {
     @ObservedObject var groupStore: AgentGroupStore
     @ObservedObject var agentPartManager: AgentPartManager
+    var taskStore: TaskStore?
     @Binding var isPresented: Bool
 
     /// Pre-selected target group (optional).
@@ -164,6 +165,9 @@ struct TaskComposerView: View {
         for agentId in targetAgentIds {
             ScoreIO.appendJsonl(note, to: ScoreIO.inboxPath(for: agentId))
         }
+
+        // Track in task store
+        taskStore?.addTask(payload: taskPayload, assignedTo: targetAgentIds)
 
         ConductorLog.flow("task-assign")
             .info("Assigned task \(taskId) to \(targetAgentIds.joined(separator: ", "))")

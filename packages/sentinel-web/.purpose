@@ -3,8 +3,10 @@ description: Zero-dependency browser client for Sentinel schema-driven observabi
 components:
   sentinel-web-client:
     description: Browser SDK for emitting events to Sentinel via HTTP
+    type: service
   ring-buffer:
     description: Fixed-size circular buffer for event batching with backpressure
+    type: utility
 signals:
   events-flushed:
     description: Emitted when buffered events are sent to Sentinel server

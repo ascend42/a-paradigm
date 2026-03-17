@@ -5,6 +5,183 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0] — 2026-03-17
+
+### Added
+
+- **Paradigm Docs — Auto-Generated Documentation from the Symbol Graph** — 40+ new files across 7 phases.
+
+  **Phase 0: University Extracurricular System**
+  - `track`, `excludeFromOnboarding`, `validationStrictness` fields on `UniversityContentCategory`
+  - `category` field on `UniversityFrontmatter`, `UniversityQuiz`, `LearningPath`, `UniversityIndexEntry`, `UniversityFilter`
+  - `paradigm_university_search` gains `category` and `track` filter params
+  - `paradigm_university_create` and `update` gain `category` param
+  - `paradigm_university_onboard` response includes `extracurricular` suggestions array
+  - `.paradigm/university/config.yaml` seeded with 4 categories (paradigm-core, paradigm-advanced, extracurricular, paradigm-docs)
+  - Site `/learn` page migrated from `nonCredit` to `category: 'extracurricular'` with visual grouping
+
+  **Phase 1: Docs Data Layer**
+  - `docs-loader.ts` — reads scan-index, flow-index, portal.yaml, university, and custom markdown pages
+  - `types/docs.ts` — `DocsManifest`, `SymbolPageData`, `FlowPageData`, `PortalPageData`, `CustomPageData`, `SearchResult`
+  - Sidebar manifest with auto-grouped components by type, flows, gates, signals, aspects, portal
+  - Full-text search with relevance scoring across symbols, descriptions, tags, and custom pages
+  - `docs` config section in `.paradigm/config.yaml` (enabled, title, theme, exclude, sidebar, output)
+
+  **Phase 2: MCP Tools + Platform API**
+  - 3 new MCP tools: `paradigm_docs_manifest`, `paradigm_docs_page`, `paradigm_docs_search`
+  - 6 REST endpoints: `/api/docs/manifest`, `/api/docs/symbol/:id`, `/api/docs/flow/:id`, `/api/docs/portal`, `/api/docs/page/:slug`, `/api/docs/search`
+
+  **Phase 3: Platform UI Docs Section**
+  - New "docs" section in Platform with `☰` sidebar icon
+  - Two-pane layout: 260px collapsible sidebar + scrollable content area
+  - 10 components: `DocsSidebar`, `DocsSymbolPage`, `DocsFlowPage`, `DocsPortalPage`, `DocsCustomPage`, `DocsSearch`, `SymbolLink`, `PropertyTable`, `FlowSteps`, `GateChain`
+  - Zustand store with manifest, page selection, search, and sidebar collapse state
+  - Symbol-colored prefixes (#, $, ^, !, ~) and cross-reference navigation
+
+  **Phase 4: CLI Commands**
+  - `paradigm docs serve` — launches Platform with docs section (port 3850, opens browser)
+  - `paradigm docs build` — static export with pre-fetched JSON data for all pages
+
+  **Phase 5: Site Integration (useparadigm.dev)**
+  - `docs-data.ts` — server-side data layer reading scan-index at Next.js build time
+  - Dynamic `[[...slug]]` route with `generateStaticParams` pre-rendering 975+ pages
+  - 6 site components: `DocsSidebar`, `SymbolPage`, `FlowPage`, `PortalPage`, `CategoryListPage`, `ContentPage`
+  - 3 handwritten guides: Getting Started, The Five Symbols, Purpose Files
+
+  **Phase 6: University Content**
+  - `N-paradigm-docs-overview` — note covering data sources, CLI, MCP tools, configuration
+  - `Q-paradigm-docs-basics` — 5-question quiz on docs system fundamentals
+  - `LP-paradigm-docs` — learning path: overview note → basics quiz
+
+Symbols: #DocsLoader, #DocsTools, #DocsCommands, #DocsSection, $docs-generation, !docs-generated
+
+## [4.6.0] — 2026-03-17
+
+### Added
+
+- **Automation Tier Graduation — Phase 1+2: Engine, MCP Tools, CLI** — 7 new files, 7 modified.
+  - Full spec at `docs/specs/automation-graduation.md` covering the 3-tier system (MCP → Habits → Hooks), graduation engine, demotion, and token savings projections.
+  - `graduation-types.ts` — `GraduationState`, `GraduationConfig`, `GraduationTier`, `GraduationCheckResult`, `NON_GRADUATABLE_CHECK_TYPES` (tool-called, context-checked can never graduate).
+  - `graduation-store.ts` — YAML read/write for `.paradigm/graduation.yaml`, state accessors, mutations, 30s cache.
+  - `.paradigm/graduation.yaml` — Seed with 5 retroactively graduated habits and 7 never-graduate habits.
+  - `paradigm graduate status` CLI — Shows habits by tier (hook/habit/mcp) with graduation dates, locks, savings.
+  - `habits-loader.ts` skips graduated habits during evaluation, reports skip count.
+  - `habits.ts` MCP response includes `graduatedToHooks` count when habits are skipped.
+  - Post-write hook gains pseudo-session-start and context budget heuristic (warns at 30+ edits).
+  - Stop hook cleans `.paradigm/.session-started` marker.
+  - `graduation-engine.ts` — Core eligibility logic: queries practice events, checks compliance rate (90%+, 20+ events, 30d window, 5 consecutive sessions, 7d recency), `NON_GRADUATABLE_CHECK_TYPES` enforcement.
+  - `graduation.ts` MCP tools — `paradigm_graduate_check` (eligibility with compliance data), `paradigm_graduate_status` (tier map + savings).
+  - `paradigm graduate promote <id>` / `paradigm graduate demote <id>` CLI — Force-graduate or demote with configurable cooldown.
+  - Hook source files (`src/commands/hooks/scripts/*.sh`) updated with session-start marker and context heuristic; propagated via `generate-hooks.mjs`.
+  - `paradigm-common.sh` Check 12: Graduation failure tracking — maps stop-hook violations to graduated habits, writes failure timestamps, emits advisory near demotion threshold.
+  - `claude-code-stop.sh`: Auto-demotion loop — after compliance checks, scans `.graduation-failures/`, calls `paradigm graduate demote` on habits with 3+ failures.
+  - `CLAUDE.md` updated: removed redundant `paradigm_pm_postflight` guidance (stop hook handles it), added graduation tools to MCP workflow table, Check 13 in enforcement table, context monitoring now hook-driven.
+
+### Changed
+
+- 5 of 13 seed habits now enforced by hooks only — MCP evaluation skipped. ~750 tokens/session saved.
+- `paradigm_pm_postflight` no longer recommended for Claude Code sessions (stop hook covers same checks).
+- Context monitoring: post-write hook warns at 30+ edits (replaces manual `paradigm_context_check` polling).
+- Stop hook compliance checks expanded from 11 to 13 (Check 12: graduation failures, Check 13: agent permissions).
+
+Symbols: #graduation-types, #graduation-store, #graduation-engine, #graduation-tools, #graduation-cli, $graduation-flow, !habit-graduated, !habit-demoted
+
+## [4.5.0] — 2026-03-17
+
+### Added
+
+- **Conductor Sprint 14: Task Lifecycle Completion + Cleanup** — 2 new Swift files, 5 modified.
+  - `TaskArchive.swift` — `TaskArchiveEntry` struct + `TaskArchiveIO` enum: archive/load/count to `~/.paradigm/conductor/tasks-archive.jsonl` JSONL.
+  - `TaskStore` gains `cancelTask(id:)`, `reassignTask(id:to:sendNote:)`, `archiveCompleted(olderThan:)`, `pruneCompleted()`, `archivedCount`.
+  - `TaskDetailView` gains Cancel Task (with `.confirmationDialog`), Re-assign (agent picker sheet), and View Thread action buttons.
+  - `TaskDashboardView` gains archive badge in header, Menu with "Archive Older than 7d" and "Archive All Completed" actions, and `onSendNote` callback.
+  - `MainOverlayView` wires note-sending closure to TaskDashboardView using ScoreIO.appendJsonl.
+  - New timeline icon/color for "cancelled" (xmark.circle, orange) and "reassigned" (arrow.triangle.swap, cyan).
+
+- **Conductor Sprint 15: Active Sentinel + Event Correlation** — 3 new Swift files, 4 modified.
+  - `SentinelEventDetailView` — Popover for single event: full timestamp, level/type badges, copyable symbol, metadata key-value pairs, related tasks with status pills.
+  - `SentinelSymbolFilterView` — Horizontal ScrollView of clickable symbol chips. "All" chip + top 10 symbols by frequency. Purple capsule style with toggle selection.
+  - `SentinelWSClient` gains `metadata: [String: String]?` on events, `@Published activeSymbols`, `symbolCounts` tracking, `events(forSymbol:)` filter, `clearBuffer()`, and `Hashable` conformance on `SentinelEvent`.
+  - `SentinelLiveView` enhanced: symbol filter bar, clickable symbol text in event rows, `.popover` with event detail + related tasks, "Clear" button, filtered/total count.
+  - `MainOverlayView` passes `taskStore` to SentinelLiveView for related task lookup.
+
+- **Conductor Sprint 16: View Decomposition + Polish** — 7 new Swift files, 2 modified.
+  - `Bindings/` subdirectory with 6 extracted views: `CustomGestureBindingsView`, `VoiceCommandBindingsView`, `BuiltInGestureBindingsView`, `EyebrowBindingsView`, `HotkeyBindingsView`, `ActionPickerViews` (shared free functions).
+  - `BindingsManagerView` slimmed from 302 lines to ~44 lines — composes 5 sub-views via Form.
+  - `MainOverlayView.mainContent` decomposed into 12 named computed properties: `calibrationSection`, `inputSection`, `bufferSection`, `sessionSection`, `workspaceSection`, `symphonyNotificationsSection`, `taskSection`, `agentNetworkSection`, `agentHealthSection`, `sentinelSection`.
+
+- **18 new tests** across 4 test files:
+  - `TaskStoreTests` +6: cancelTask, cancelCompletedIsNoOp, reassignTask, archiveCompleted, pruneCompleted, archivedCount.
+  - `TaskArchiveTests` (3): archiveAndLoad, archiveAppends, archiveCountMatchesLoad.
+  - `SentinelWSClientTests` +5: activeSymbolsTracking, clearBuffer, eventsForSymbol, metadataFieldParsed, symbolFrequencyOrder.
+  - `SentinelFilterTests` (3): symbolFilterReturnsMatching, symbolFilterEmptyForUnknown, clearResetsEverything.
+  - `BindingsDecompositionTests` (1): compile-check verifying all sub-views instantiate.
+
+- **University Extracurricular System (Phase 0)** — category-based content organization with core/extracurricular tracks.
+  - `UniversityContentCategory` gains `track`, `excludeFromOnboarding`, and `validationStrictness` fields.
+  - `UniversityFrontmatter`, `UniversityQuiz`, `LearningPath`, and `UniversityIndexEntry` gain optional `category` field.
+  - `UniversityFilter` gains `category` and `track` filter params.
+  - `UniversityConfig.content` gains `defaultCategory` field.
+  - `searchContent()` filters by `category` (direct match) and `track` (resolved via config category definitions).
+  - `getOnboardingSequence()` excludes categories with `excludeFromOnboarding: true` from core suggestions; populates new `extracurricular` array in response.
+  - `rebuildUniversityIndex()` includes `category` from frontmatter/quiz/path in index entries.
+  - `validateUniversityContent()` is category-aware for validation strictness.
+  - MCP tools `paradigm_university_search`, `paradigm_university_create`, and `paradigm_university_update` accept `category` param. Search tool accepts `track` param.
+  - Onboarding response now includes `extracurricular` content array.
+  - Site learn page migrated from `nonCredit` to `category: 'extracurricular'` with separate "Core Curriculum" and "Extracurricular" sections.
+  - Default university config seeded at `.paradigm/university/config.yaml` with 4 categories.
+
+### Changed
+
+- Conductor bumped to 0.15.0 (from 0.12.0).
+- `SentinelWSClient.handleMessage` changed from private to internal for testability.
+- `SentinelEvent` now conforms to `Hashable` (needed for `.popover(item:)`).
+
+Symbols: #task-archive, #sentinel-event-detail, #sentinel-symbol-filter, #custom-gesture-bindings, #voice-command-bindings, #builtin-gesture-bindings, #eyebrow-bindings-view, #hotkey-bindings-view, #action-picker-views, #UniversityTools, #UniversityLoader, $task-archive, $sentinel-investigation, $university-flow, !task-cancelled, !task-reassigned, !tasks-archived
+
+## [4.4.0] — 2026-03-16
+
+### Added
+
+- **Conductor Sprint 11: Task Dashboard + Progress Tracking** — 3 new Swift files, 5 modified.
+  - `TaskRecord.swift` — `TaskStatus` enum (7 states), `TaskTimelineEvent`, `TaskRecord` struct, `TaskStore` (@MainActor ObservableObject) with persistence to `~/.paradigm/conductor/tasks.json`.
+  - `TaskDashboardView` — Kanban-style sidebar dashboard with 4 columns (Active, Blocked, Awaiting Approval, Complete). Priority filter, task cards with progress bars and assignee badges.
+  - `TaskDetailView` — Full task detail sheet: scope, acceptance criteria, timeline with SF Symbol icons, files modified, symbols touched, blockers, external references. Includes custom `FlowLayout` for symbol tags.
+  - `SymphonyMonitor` now routes task-intent notes (`taskAck`, `progress`, `approvalRequest`, `taskComplete`, `taskFailed`) to `TaskStore.handleNote()` with dedup tracking.
+  - `TaskComposerView` calls `taskStore.addTask()` after writing notes to inboxes.
+  - `AgentNetworkView` shows active task count per agent in agent rows.
+
+- **Conductor Sprint 12: Sentinel Live View + Agent Health** — 3 new Swift files, 5 modified.
+  - `AgentHealthMonitor` — Computes per-agent `AgentMetrics` (tasksCompleted, tasksFailed, successRate, avgCompletionTimeMs, recentOutcomes) from TaskStore via Combine subscription. Health thresholds: healthy (>80%), degraded (50-80%), unhealthy (<50%).
+  - `SentinelLiveView` — Collapsible real-time event viewer: connection indicator + reconnect button, text search + level filter (All/Info/Warn/Error), auto-scroll toggle, event count footer.
+  - `AgentHealthView` — Aggregate header (total tasks, overall success rate, best performer) + per-agent cards with health status dot, success rate circle, sparkline (recent outcomes).
+  - `SentinelWSClient` gains `@Published recentEvents: [SentinelEvent]` (200-event buffer), `level` field on `SentinelEvent`, and `Identifiable` conformance.
+  - `SettingsPanelView` gains "Monitoring" tab: Sentinel URL field, auto-connect toggle, event buffer display.
+  - `AgentNetworkView` uses agent health status for dot colors (green/yellow/red).
+
+- **Conductor Sprint 13: User-Customizable Bindings** — 3 new Swift files, 5 modified.
+  - `EyebrowBindingRegistry` — `EyebrowEventKind` enum (4 cases, CaseIterable), user-customizable eyebrow event→action bindings, `useStateMachine` toggle (default true), CRUD + UserDefaults persistence.
+  - `HotKeyBindingRegistry` — User-customizable `HotKeyBinding→ConductorAction` bindings with defaults matching existing hardcoded mappings. Serialization via `"keyCode:modifiers.rawValue"` keys.
+  - `HotKeyRecorder` — NSView-based key combination capture (becomeFirstResponder, keyDown) with SwiftUI `NSViewRepresentable` wrapper.
+  - `BindingsManagerView` — Fully wired with 5 sections: Custom Gestures, Voice Commands, Built-in Gesture Overrides (per-gesture Picker), Eyebrow Bindings (state machine toggle + event→action pickers), Hotkey Bindings (list + HotKeyRecorder + add/remove).
+  - `HotKeyManager` gains `registerFromRegistry()` + `observeRegistry()` for live Combine-based binding updates.
+  - `InputOrchestrator` checks `eyebrowBindingRegistry` before falling through to state machine.
+  - `AppDelegate` refactored: `setupHotKeys()` uses `hotKeyManager.observeRegistry()` instead of hardcoded registrations.
+
+- **35 new tests** across 5 test files:
+  - `TaskStoreTests` (10): addTask, handleAck/progress/approval/complete/failed, timeline accumulation, filesModified union, computed properties, unknown taskId ignored.
+  - `AgentHealthMonitorTests` (11): empty metrics, single completed, mixed outcomes, healthy/degraded/unhealthy thresholds, multi-agent task, recentOutcomes cap, bestPerformer, avgTime, unknown status.
+  - `SentinelWSClientTests` (4): initial state, buffer limit, event identifiable, event level field.
+  - `EyebrowBindingRegistryTests` (6): defaults empty, set/remove/reset, all event kinds, stateMachine flag.
+  - `HotKeyBindingRegistryTests` (5): default bindings, set/remove/reset, binding count.
+
+### Changed
+
+- `ActionRegistry.gestureBindings` is now publicly settable (was `private(set)`) to support BindingsManagerView overrides.
+- Conductor bumped to 0.12.0.
+
+Symbols: #task-record, #task-store, #task-dashboard-view, #task-detail-view, $task-tracking, !task-status-changed, #agent-health-monitor, #sentinel-live-view, #agent-health-view, $agent-health-tracking, !agent-health-changed, #eyebrow-binding-registry, #hotkey-binding-registry, #hotkey-recorder, ~user-configurable
+
 ## [4.3.0] — 2026-03-16
 
 ### Added

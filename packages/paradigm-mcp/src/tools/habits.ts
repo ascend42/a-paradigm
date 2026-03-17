@@ -24,6 +24,7 @@ import {
   removeHabit,
   isSeedHabit,
   invalidateHabitsCache,
+  lastGraduatedSkipCount,
   type HabitTrigger,
   type HabitCategory,
   type HabitDefinition,
@@ -443,7 +444,7 @@ async function handleHabitsCheck(
 
   // Evaluate (MCP = claude or cursor; detect from session context)
   const platform = 'claude';  // MCP calls always come from Claude or Cursor
-  const evaluation = evaluateHabits(habits, trigger, evalContext, platform);
+  const evaluation = evaluateHabits(habits, trigger, evalContext, platform, ctx.rootDir);
 
   // Record practice events if requested
   let recordedIds: string[] = [];
@@ -488,6 +489,9 @@ async function handleHabitsCheck(
     // Marker file is best-effort
   }
 
+  // Include graduation info
+  const graduatedSkipped = lastGraduatedSkipCount;
+
   return JSON.stringify(
     {
       trigger,
@@ -499,6 +503,10 @@ async function handleHabitsCheck(
         blockingViolations: evaluation.summary.blockingViolations,
         blocksCompletion: evaluation.blocksCompletion,
       },
+      ...(graduatedSkipped > 0 ? {
+        graduatedToHooks: graduatedSkipped,
+        graduatedNote: `${graduatedSkipped} habit(s) enforced by hooks (zero context cost). Not re-evaluated here.`,
+      } : {}),
       habits: evaluation.evaluations.map((e) => ({
         id: e.habit.id,
         name: e.habit.name,

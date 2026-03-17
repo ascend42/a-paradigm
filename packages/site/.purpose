@@ -1,0 +1,119 @@
+description: >
+  Public website for useparadigm.dev — Next.js 15 App Router application serving
+  five roles: The Museum (homepage), The Library (docs), The University (learn),
+  The Armory (agent registry), and The Voice (blog).
+
+components:
+  SiteApp:
+    description: Root Next.js application with obsidian dark theme
+    type: app
+    tags: [feature, web, nextjs]
+
+  SiteHeader:
+    description: Global sticky navigation with logo, nav links, GitHub link, and CTA
+    type: view
+    tags: [ui, navigation]
+
+  SiteFooter:
+    description: Site-wide footer with product links, community, and symbol ornament
+    type: view
+    tags: [ui, navigation]
+
+  NodeGraph:
+    description: Animated SVG node graph using Framer Motion, displays five symbol types
+    type: view
+    tags: [ui, animation, brand]
+
+  SymbolBadge:
+    description: Colored pill badge for displaying Paradigm symbol references
+    type: view
+    tags: [ui, symbols]
+
+  CodeBlock:
+    description: Syntax-highlighted code block with Paradigm symbol color highlighting
+    type: view
+    tags: [ui, code]
+
+  LiveIndicator:
+    description: Pulsing LIVE dot shown when streaming, checks API endpoint
+    type: view
+    tags: [ui, streaming]
+
+  ObsidianTheme:
+    description: Core dark design tokens — Void to Snow neutral scale, five symbol colors
+    type: config
+    tags: [design-system, tokens]
+
+  AcademiaTheme:
+    description: University section CSS overrides — parchment, burgundy, gold palette
+    type: config
+    tags: [design-system, tokens, university]
+
+  DocsDataLayer:
+    description: Server-side data functions reading scan-index.json, flow-index.json, and portal.yaml at build time for /docs
+    type: loader
+    tags: [docs, data, build-time]
+
+  DocsSidebar:
+    description: Client component with collapsible sections, active link tracking, and symbol prefix badges
+    type: view
+    tags: [ui, docs, navigation]
+
+  DocsSymbolPage:
+    description: Auto-generated symbol detail page with metadata, related symbols, and flow steps
+    type: view
+    tags: [ui, docs, symbols]
+
+  DocsFlowPage:
+    description: Flow detail page with step timeline visualization and involved symbols
+    type: view
+    tags: [ui, docs, flows]
+
+  DocsPortalPage:
+    description: Portal reference page rendering gate cards and route-gate table from portal.yaml
+    type: view
+    tags: [ui, docs, portal]
+
+  DocsCategoryListPage:
+    description: Category index page with card grid listing all symbols in a category
+    type: view
+    tags: [ui, docs, symbols]
+
+  DocsContentPage:
+    description: Renders handwritten markdown content pages with inline code, tables, and lists
+    type: view
+    tags: [ui, docs, content]
+
+flows:
+  $homepage-experience:
+    description: Scroll-driven immersive homepage — hero, symbols, how-it-works, metrics, CTA
+    steps:
+      - HeroSection with animated node graph
+      - SymbolsSection with five symbol cards
+      - HowItWorksSection with alternating code/text steps
+      - MetricsSection with stats grid
+      - CTASection with get-started prompt
+
+  $docs-site-integration:
+    description: Auto-generated docs from symbol graph — read scan-index at build time, render sidebar + pages
+    steps:
+      - DocsDataLayer reads .paradigm/scan-index.json and flow-index.json
+      - DocsSidebar renders collapsible navigation from manifest
+      - Route resolves slug to page type (index, content, category-list, symbol-detail, portal)
+      - Appropriate component renders (SymbolPage, FlowPage, PortalPage, ContentPage, CategoryListPage)
+      - generateStaticParams pre-renders all 975+ symbol pages at build time
+
+  $university-flow:
+    description: Learning path — course catalog, lessons, quizzes, PLSAT certification. Courses split into Core Curriculum and Extracurricular sections via category field.
+    steps:
+      - Browse courses at /learn (split into Core Curriculum and Extracurricular)
+      - Take lessons at /learn/course/[courseId]
+      - Complete quizzes
+      - Attempt PLSAT at /learn/plsat
+      - View certificate at /learn/certificate
+
+signals:
+  "!course-completed":
+    description: Emitted when a user completes all lessons in a course
+  "!plsat-passed":
+    description: Emitted when a user passes the PLSAT certification exam

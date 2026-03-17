@@ -4,6 +4,7 @@ description: Interactive academia-themed learning platform for the Paradigm fram
 components:
   university-server:
     description: Express server serving static UI and content API endpoints
+    type: service
     file: src/server/index.ts
     tags: [feature]
     endpoints:
@@ -17,14 +18,17 @@ components:
 
   courses-router:
     description: API routes for course listing and individual course/lesson retrieval
+    type: route
     file: src/server/routes/courses.ts
 
   plsat-router:
     description: API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.
+    type: route
     file: src/server/routes/plsat.ts
 
   university-ui:
     description: React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library
+    type: app
     file: ui/src/App.tsx
     tags: [feature]
     components:
@@ -37,65 +41,80 @@ components:
 
   home-view:
     description: Campus landing page with course catalog, progress rings, and quick links
+    type: view
     file: ui/src/views/HomeView.tsx
 
   course-view:
     description: Lesson reader with sidebar navigation, markdown rendering, and quiz links
+    type: view
     file: ui/src/views/CourseView.tsx
 
   quiz-view:
     description: Per-lesson quiz with ABCDE questions and immediate feedback
+    type: view
     file: ui/src/views/QuizView.tsx
 
   plsat-view:
     description: Timed 86-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
+    type: view
     file: ui/src/views/PLSATView.tsx
 
   reference-view:
     description: Quick reference cards for symbols, MCP tools, CLI commands, tags, and workflows
+    type: view
     file: ui/src/views/ReferenceView.tsx
 
   certificate-view:
     description: Printable PLSAT certificate with university seal, score, and version tracking
+    type: view
     file: ui/src/views/CertificateView.tsx
 
   progress-store:
     description: Zustand store with LocalStorage persistence for lesson completion and quiz scores
+    type: store
     file: ui/src/store/progressStore.ts
     tags: [state]
 
   plsat-store:
     description: Zustand store with LocalStorage persistence for PLSAT certificates and student name
+    type: store
     file: ui/src/store/plsatStore.ts
     tags: [state]
 
   courses-store:
     description: Zustand store for fetched course data from API with caching
+    type: store
     file: ui/src/store/coursesStore.ts
     tags: [state]
 
   university-seal:
     description: SVG university seal component — "Universitas Paradigmatica — Lux in Codice"
+    type: view
     file: ui/src/components/Seal.tsx
 
   question-card:
     description: ABCDE question renderer with controlled (PLSAT) and uncontrolled (quiz) modes
+    type: view
     file: ui/src/components/QuestionCard.tsx
 
   plsat-timer:
     description: Countdown timer component for PLSAT exam (86 minutes)
+    type: view
     file: ui/src/components/Timer.tsx
 
   progress-ring:
     description: Circular SVG progress indicator for course completion percentages
+    type: view
     file: ui/src/components/ProgressRing.tsx
 
   university-header:
     description: Navigation bar with university seal, course/PLSAT/reference links, and version badge
+    type: view
     file: ui/src/components/Header.tsx
 
   academia-theme:
     description: CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents
+    type: config
     file: ui/src/styles/academia.css
 
 aspects:

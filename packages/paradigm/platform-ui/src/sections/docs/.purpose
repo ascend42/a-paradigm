@@ -1,0 +1,5 @@
+components:
+  DocsSection:
+    description: Documentation browser in Platform UI — sidebar navigation, symbol pages, flow diagrams, portal reference
+    type: view
+    tags: [feature, docs, platform]

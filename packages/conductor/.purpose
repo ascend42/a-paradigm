@@ -1,6 +1,6 @@
 purpose: Paradigm Conductor — workspace manager + multimodal mission control for Claude Code sessions + Symphony inter-agent messaging
-version: 0.9.0
-description: Workspace manager that launches and owns CC instances. Session manager with recent project persistence, checkpoint reading, and headless agent spawning. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator, workspace, project store, and agent process manager lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab.
+version: 0.15.0
+description: "Workspace manager that launches and owns CC instances. Session manager with recent project persistence, checkpoint reading, and headless agent spawning. Shared camera architecture — single AVCaptureSession feeds both gaze and gesture Vision providers simultaneously. Video/voice toggle controls with keyboard shortcuts. Eyebrow-triggered voice control, custom gesture recording, voice command binding, gaze-to-grid zone targeting, and Paradigm context enrichment. Targeted terminal close (per-window, not kill-all). Native macOS Swift/SwiftUI app launched via paradigm conductor CLI command. Single-owner architecture — AppDelegate owns orchestrator, workspace, project store, and agent process manager lifecycle. Symphony Phase 1-2: auto-detects CC sessions, registers agent parts in The Score (~/.paradigm/score/), relays notes on 5s poll, file approval with trust config, thread list view, file request notification, and Symphony settings tab."
 context:
   - Native macOS Swift/SwiftUI app
   - Ships via paradigm conductor CLI command
@@ -30,6 +30,23 @@ context:
   - Sprint 10: TaskComposerView for structured task assignment to agents/groups
   - Sprint 10: ApprovalView + ApprovalNotificationBanner for approval-request gating
   - Sprint 10: task-protocol.ts agent-side prompt generation for received tasks
+  - Sprint 11: TaskStore persists to ~/.paradigm/conductor/tasks.json, SymphonyMonitor routes task-intent notes
+  - Sprint 11: TaskDashboardView (kanban columns) + TaskDetailView (timeline, files, symbols, blockers)
+  - Sprint 12: AgentHealthMonitor computes per-agent success rate, avg time, sparklines from TaskStore
+  - Sprint 12: SentinelLiveView (real-time event viewer) + AgentHealthView (health dashboard) + Monitoring settings tab
+  - Sprint 12: SentinelWSClient buffers last 200 events with level field and Identifiable conformance
+  - Sprint 13: EyebrowBindingRegistry — user-customizable eyebrow→action with state machine bypass
+  - Sprint 13: HotKeyBindingRegistry + HotKeyRecorder — user-customizable hotkey→action with live Combine observation
+  - Sprint 13: BindingsManagerView fully wired with 5 sections (gestures, voice, built-in, eyebrow, hotkeys)
+  - Sprint 14: Task lifecycle completion — cancel, re-assign, archive. TaskArchive JSONL at ~/.paradigm/conductor/tasks-archive.jsonl
+  - Sprint 14: TaskDetailView gains Cancel, Re-assign, View Thread action buttons with confirmation dialogs
+  - Sprint 14: TaskDashboardView gains archive badge + menu (Archive Older than 7d, Archive All Completed)
+  - Sprint 15: SentinelWSClient gains metadata parsing, activeSymbols tracking (frequency-sorted), symbol filter, clear buffer
+  - Sprint 15: SentinelEventDetailView popover — full timestamp, level/type badges, metadata key-value, related tasks
+  - Sprint 15: SentinelSymbolFilterView — horizontal chip bar for top 10 symbols with toggle selection
+  - Sprint 15: SentinelLiveView enhanced — symbol filter, clickable symbols, event detail popover, clear button, filtered/total counts
+  - Sprint 16: BindingsManagerView decomposed into 6 sub-views in UI/Views/Bindings/ (~30 lines vs 302)
+  - Sprint 16: MainOverlayView mainContent decomposed into 12 named computed properties
 
 # ============================================
 # Components (#)
@@ -430,9 +447,9 @@ context:
     - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
 
 #bindings-manager:
-  description: Settings tab for managing gesture bindings, voice commands, eyebrow bindings
+  description: "Composed settings tab — delegates to 6 sub-views in UI/Views/Bindings/ for gestures, voice, built-in, eyebrow, hotkeys"
   type: view
-  tags: [ui, settings, bindings, customization]
+  tags: [ui, settings, bindings, customization, decomposed]
   anchors:
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
@@ -642,6 +659,164 @@ context:
   anchors:
     - Sources/Conductor/UI/Views/ApprovalView.swift:1
 
+# --- Sprint 11: Task Dashboard Components ---
+
+#task-record:
+  description: Task lifecycle models — TaskStatus enum, TaskTimelineEvent, TaskRecord struct
+  type: model
+  tags: [task, models, lifecycle]
+  anchors:
+    - Sources/Conductor/Models/TaskRecord.swift:1
+
+#task-store:
+  description: Persistent task store tracking lifecycle from assigned→complete/failed — saves to ~/.paradigm/conductor/tasks.json
+  type: store
+  parent: "#task-record"
+  tags: [task, persistence, tracking]
+  anchors:
+    - Sources/Conductor/Models/TaskRecord.swift:55
+
+#task-dashboard-view:
+  description: Kanban-style task dashboard with active/blocked/approval/complete columns, priority filter, and task cards
+  type: view
+  tags: [ui, task, dashboard, kanban]
+  anchors:
+    - Sources/Conductor/UI/Views/TaskDashboardView.swift:1
+
+#task-detail-view:
+  description: "Full task detail — timeline, files, symbols, blockers. Actions: Cancel (with confirm), Re-assign (agent picker sheet), View Thread"
+  type: view
+  parent: "#task-dashboard-view"
+  tags: [ui, task, detail, timeline, actions]
+  anchors:
+    - Sources/Conductor/UI/Views/TaskDetailView.swift:1
+
+# --- Sprint 12: Sentinel + Health Components ---
+
+#agent-health-monitor:
+  description: Computes per-agent health metrics (success rate, avg time, recent outcomes) from TaskStore task records
+  type: service
+  tags: [monitoring, health, metrics, agents]
+  anchors:
+    - Sources/Conductor/Services/AgentHealthMonitor.swift:1
+
+#sentinel-live-view:
+  description: "Real-time Sentinel event viewer — symbol filter bar, clickable symbols, event detail popover with related tasks, search, level filter, clear, auto-scroll"
+  type: view
+  tags: [ui, sentinel, monitoring, live]
+  anchors:
+    - Sources/Conductor/UI/Views/SentinelLiveView.swift:1
+
+#agent-health-view:
+  description: Aggregate and per-agent health dashboard — success rate circles, sparklines, best performer
+  type: view
+  tags: [ui, health, monitoring, dashboard]
+  anchors:
+    - Sources/Conductor/UI/Views/AgentHealthView.swift:1
+
+# --- Sprint 13: Customizable Bindings Components ---
+
+#eyebrow-binding-registry:
+  description: User-customizable eyebrow event→action bindings with state machine bypass toggle
+  type: store
+  parent: "#eyebrow-detector"
+  tags: [input, eyebrow, bindings, customization]
+  anchors:
+    - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
+
+#hotkey-binding-registry:
+  description: User-customizable hotkey→action bindings with persistence and live update observation
+  type: store
+  parent: "#hotkey-manager"
+  tags: [input, hotkeys, bindings, customization]
+  anchors:
+    - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
+
+#hotkey-recorder:
+  description: NSView-based key combination capture with SwiftUI wrapper for custom hotkey assignment
+  type: view
+  parent: "#hotkey-binding-registry"
+  tags: [input, hotkeys, recorder, ui]
+  anchors:
+    - Sources/Conductor/Utils/HotKeyRecorder.swift:1
+
+# --- Sprint 14: Task Lifecycle Components ---
+
+#task-archive:
+  description: JSONL archive for completed/failed tasks at ~/.paradigm/conductor/tasks-archive.jsonl
+  type: utility
+  tags: [task, archive, persistence, jsonl]
+  anchors:
+    - Sources/Conductor/Models/TaskArchive.swift:1
+
+# --- Sprint 15: Active Sentinel Components ---
+
+#sentinel-event-detail:
+  description: Popover for single SentinelEvent showing full metadata, related tasks, and level/type badges
+  type: view
+  parent: "#sentinel-live-view"
+  tags: [ui, sentinel, detail, popover]
+  anchors:
+    - Sources/Conductor/UI/Views/SentinelEventDetailView.swift:1
+
+#sentinel-symbol-filter:
+  description: Horizontal scrollable chip bar for filtering events by symbol — top 10 by frequency
+  type: view
+  parent: "#sentinel-live-view"
+  tags: [ui, sentinel, filter, chips]
+  anchors:
+    - Sources/Conductor/UI/Views/SentinelSymbolFilterView.swift:1
+
+# --- Sprint 16: Decomposed Binding Views ---
+
+#custom-gesture-bindings:
+  description: Extracted from BindingsManagerView — custom gesture template management section
+  type: view
+  parent: "#bindings-manager"
+  tags: [ui, bindings, gestures, decomposed]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/CustomGestureBindingsView.swift:1
+
+#voice-command-bindings:
+  description: Extracted from BindingsManagerView — voice command phrase binding section
+  type: view
+  parent: "#bindings-manager"
+  tags: [ui, bindings, voice, decomposed]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/VoiceCommandBindingsView.swift:1
+
+#builtin-gesture-bindings:
+  description: Extracted from BindingsManagerView — built-in gesture override section
+  type: view
+  parent: "#bindings-manager"
+  tags: [ui, bindings, gestures, decomposed]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/BuiltInGestureBindingsView.swift:1
+
+#eyebrow-bindings-view:
+  description: Extracted from BindingsManagerView — eyebrow event binding section
+  type: view
+  parent: "#bindings-manager"
+  tags: [ui, bindings, eyebrow, decomposed]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/EyebrowBindingsView.swift:1
+
+#hotkey-bindings-view:
+  description: Extracted from BindingsManagerView — hotkey binding section with recorder
+  type: view
+  parent: "#bindings-manager"
+  tags: [ui, bindings, hotkeys, decomposed]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/HotkeyBindingsView.swift:1
+
+#action-picker-views:
+  description: Shared free functions — bindingActionPicker, bindingActionPickerWithNone, gestureDisplayName
+  type: utility
+  parent: "#bindings-manager"
+  tags: [ui, bindings, shared, utility]
+  anchors:
+    - Sources/Conductor/UI/Views/Bindings/ActionPickerViews.swift:1
+
 # ============================================
 # Flows ($)
 # ============================================
@@ -813,6 +988,39 @@ flows:
       - "#agent-network-view"
       - "#symphony-monitor"
       - "#approval-view"
+  # --- Sprint 11 Flows ---
+  $task-tracking:
+    description: "Task assigned → TaskStore tracks → SymphonyMonitor routes notes → dashboard updates → detail view"
+    steps:
+      - "#task-composer-view"
+      - "#task-store"
+      - "#symphony-monitor"
+      - "#task-dashboard-view"
+      - "#task-detail-view"
+  # --- Sprint 12 Flows ---
+  $agent-health-tracking:
+    description: "Task completes/fails → AgentHealthMonitor recomputes → health view updates → dot colors in network view"
+    steps:
+      - "#task-store"
+      - "#agent-health-monitor"
+      - "#agent-health-view"
+      - "#agent-network-view"
+  # --- Sprint 14 Flows ---
+  $task-archive:
+    description: "Completed tasks → archive older than 7d or prune all → JSONL at tasks-archive.jsonl → removed from active store"
+    steps:
+      - "#task-store"
+      - "#task-archive"
+      - "#task-dashboard-view"
+  # --- Sprint 15 Flows ---
+  $sentinel-investigation:
+    description: "Event received → symbol filter → click event → popover detail → view related tasks"
+    steps:
+      - "#sentinel-ws-client"
+      - "#sentinel-symbol-filter"
+      - "#sentinel-live-view"
+      - "#sentinel-event-detail"
+      - "#task-store"
 
 # ============================================
 # Gates (^)
@@ -925,40 +1133,58 @@ signals:
     description: Voice (mic) toggled on or off via UI or hotkey
     emitters: ["#input-orchestrator"]
   # --- Symphony Phase 1-2 Signals ---
-  !agent-part-created:
+  "!agent-part-created":
     description: New agent part registered in The Score
     emitters: ["#agent-part-manager", "#auto-link-coordinator"]
-  !agent-auto-linked:
+  "!agent-auto-linked":
     description: CC session auto-detected and linked as agent part
     emitters: ["#auto-link-coordinator"]
-  !agent-auto-unlinked:
+  "!agent-auto-unlinked":
     description: CC session disappeared and agent part unregistered
     emitters: ["#auto-link-coordinator"]
-  !note-relayed:
+  "!note-relayed":
     description: One or more notes relayed from outboxes to inboxes
     emitters: ["#note-relay"]
-  !file-request-received:
+  "!file-request-received":
     description: Incoming file request detected for approval
     emitters: ["#file-approval-manager"]
-  !file-request-approved:
+  "!file-request-approved":
     description: File request approved and file delivered
     emitters: ["#file-approval-manager"]
-  !file-request-denied:
+  "!file-request-denied":
     description: File request denied by user or trust config
     emitters: ["#file-approval-manager"]
-  !symphony-relay-started:
+  "!symphony-relay-started":
     description: Note relay polling loop has started
     emitters: ["#note-relay"]
   # --- Sprint 8 Signals ---
-  !agent-spawned:
+  "!agent-spawned":
     description: Headless claude agent process spawned
     emitters: ["#agent-process-manager"]
-  !agent-stopped:
+  "!agent-stopped":
     description: Headless agent process stopped or terminated
     emitters: ["#agent-process-manager"]
-  !agent-exited:
+  "!agent-exited":
     description: Agent process exited (normal or error)
     emitters: ["#agent-process-manager"]
+  # --- Sprint 11 Signals ---
+  "!task-status-changed":
+    description: Task status changed (assigned, acknowledged, in-progress, blocked, approval, complete, failed)
+    emitters: ["#task-store"]
+  # --- Sprint 12 Signals ---
+  "!agent-health-changed":
+    description: Agent health metrics recomputed after task completion/failure
+    emitters: ["#agent-health-monitor"]
+  # --- Sprint 14 Signals ---
+  "!task-cancelled":
+    description: Task cancelled by maestro — status set to failed
+    emitters: ["#task-store"]
+  "!task-reassigned":
+    description: Task reassigned to different agents with Symphony note
+    emitters: ["#task-store"]
+  "!tasks-archived":
+    description: Completed/failed tasks archived to JSONL and removed from active store
+    emitters: ["#task-store"]
 
 # ============================================
 # Aspects (~)
@@ -1003,11 +1229,14 @@ signals:
     - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
 
 ~user-configurable:
-  description: All input-to-action mappings are user-overridable via ActionRegistry, VoiceCommandRegistry, and custom gestures
+  description: All input-to-action mappings are user-overridable via ActionRegistry, VoiceCommandRegistry, custom gestures, EyebrowBindingRegistry, and HotKeyBindingRegistry
   anchors:
     - Sources/Conductor/Orchestration/ActionRegistry.swift:1
     - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
     - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
+    - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
+    - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
+    - Sources/Conductor/Utils/HotKeyRecorder.swift:1
 
 # --- Symphony Phase 1-2 Aspects ---
 

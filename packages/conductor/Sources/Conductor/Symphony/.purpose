@@ -132,28 +132,28 @@ gates:
 # ============================================
 
 signals:
-  !agent-part-created:
+  "!agent-part-created":
     description: New agent part registered in The Score
     emitters: ["#agent-part-manager", "#auto-link-coordinator"]
-  !agent-auto-linked:
+  "!agent-auto-linked":
     description: CC session auto-detected and linked as agent part
     emitters: ["#auto-link-coordinator"]
-  !agent-auto-unlinked:
+  "!agent-auto-unlinked":
     description: CC session disappeared and agent part unregistered
     emitters: ["#auto-link-coordinator"]
-  !note-relayed:
+  "!note-relayed":
     description: One or more notes relayed from outboxes to inboxes
     emitters: ["#note-relay"]
-  !file-request-received:
+  "!file-request-received":
     description: Incoming file request detected for approval
     emitters: ["#file-approval-manager"]
-  !file-request-approved:
+  "!file-request-approved":
     description: File request approved and file delivered
     emitters: ["#file-approval-manager"]
-  !file-request-denied:
+  "!file-request-denied":
     description: File request denied by user or trust config
     emitters: ["#file-approval-manager"]
-  !symphony-relay-started:
+  "!symphony-relay-started":
     description: Note relay polling loop has started
     emitters: ["#note-relay"]
 

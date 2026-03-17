@@ -1,0 +1,266 @@
+{
+  "id": "git-fundamentals",
+  "title": "Git Fundamentals for AI-Native Development",
+  "description": "Git as the versioning substrate for AI-assisted development. Learn branching, commit conventions, recovery techniques, and CI/CD integration through the lens of agent workflows and Paradigm's git-powered features.",
+  "nonCredit": true,
+  "lessons": [
+    {
+      "id": "why-git-matters",
+      "title": "Why Git Matters for AI Development",
+      "content": "## Why Git Matters for AI Development\n\nGit is the versioning substrate that makes AI-assisted development safe and auditable. Every change an AI agent makes is tracked, reversible, and attributable. Without version control, letting an agent modify your codebase would be like editing a shared document with no undo history.\n\n### Git as Infrastructure, Not Just a Tool\n\nIn traditional development, git is a collaboration tool. In AI-native development, git becomes **infrastructure** — the foundation that other systems build on:\n\n- **Paradigm hooks** run on every commit to enforce `.purpose` file compliance\n- **History tracking** parses commit messages to build a timeline of symbol changes\n- **Session recovery** uses git state to reconstruct what an agent was working on\n- **Review pipelines** use `git diff` to determine what changed and validate it\n\n### How Paradigm Uses Git\n\nParadigm treats git as a first-class data source:\n\n1. **Post-commit hook**: After every commit, Paradigm parses the `Symbols:` trailer line to record which symbols were touched. This builds a queryable history without manual tracking.\n\n2. **Pre-commit hook**: Before a commit goes through, Paradigm rebuilds its static index (`scan-index.json`) so the index is always in sync with the committed code.\n\n3. **Stop hook**: When an agent session ends, Paradigm checks that `.purpose` files were updated for any modified source directories. If not, the session is blocked until compliance is met.\n\n4. **Git diff in review**: `paradigm review --ci` uses `git diff` to identify changed files and run targeted compliance and quality checks.\n\n### Why Version Control Matters More with AI Agents\n\nHuman developers make incremental, deliberate changes. AI agents can modify dozens of files in a single session. This amplifies both the benefit and the risk:\n\n- **Benefit**: An agent can refactor an entire module in seconds, and git captures the full before/after.\n- **Risk**: A bad agent session could corrupt many files simultaneously. Git makes this fully reversible with a single `git revert`.\n\nWithout git, you would have no way to audit what an agent changed, no way to roll back a bad session, and no way to compare agent A's approach with agent B's approach to the same task.\n\n### The Commit as a Unit of Work\n\nIn AI-native development, a commit represents a **completed unit of agent work**. Each commit should be atomic — it either works completely or can be reverted completely. This is why Paradigm encourages agents to commit after finishing a coherent piece of work, not mid-task.",
+      "keyConcepts": [
+        "Git as versioning substrate for AI development",
+        "Paradigm's three git hooks: post-commit, pre-commit, and stop",
+        "Symbols trailer for automatic history tracking",
+        "Commits as atomic units of agent work"
+      ],
+      "quiz": [
+        {
+          "question": "What does Paradigm's post-commit hook do?",
+          "options": [
+            "A. Blocks the commit if .purpose files are missing",
+            "B. Parses the Symbols: trailer to record which symbols were touched",
+            "C. Runs the full test suite before allowing the commit",
+            "D. Pushes the commit to the remote repository"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Why is version control especially important when AI agents make changes?",
+          "options": [
+            "A. AI agents cannot use git directly",
+            "B. AI agents may modify many files at once, making rollback critical",
+            "C. Git prevents AI agents from making errors",
+            "D. Version control slows down AI agents to a safe speed"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "How does `paradigm review --ci` determine what to check?",
+          "options": [
+            "A. It scans every file in the repository",
+            "B. It reads a manifest file listing changed components",
+            "C. It uses git diff to identify changed files",
+            "D. It asks the agent which files were modified"
+          ],
+          "answer": "C"
+        }
+      ]
+    },
+    {
+      "id": "core-concepts",
+      "title": "Core Concepts",
+      "content": "## Core Concepts\n\nGit tracks the history of your project as a series of snapshots. Understanding three key areas — the working directory, staging area, and repository — gives you a complete mental model for how changes flow through git.\n\n### The Three Areas\n\n```\nWorking Directory  -->  Staging Area  -->  Repository\n   (your files)        (git add)          (git commit)\n```\n\n1. **Working directory**: The files on disk. When an agent edits a file, the change exists only here until staged.\n\n2. **Staging area** (also called the index): A preparation zone. `git add` moves changes here. You can stage some changes and leave others unstaged — this lets you craft focused commits.\n\n3. **Repository**: The permanent history. `git commit` takes everything in the staging area and creates a new snapshot with a unique hash.\n\n### Commits\n\nA commit is a snapshot of every tracked file at a point in time, plus metadata:\n\n- **Hash**: A SHA-1 identifier (e.g., `a1b2c3d`). Immutable — if any bit changes, the hash changes.\n- **Parent(s)**: The commit(s) this one was built on. This creates a directed acyclic graph (DAG).\n- **Author**: Who made the change.\n- **Message**: Why the change was made.\n\nIn AI-native workflows, the author is typically the developer, and the commit message often includes a `Co-Authored-By` trailer for the AI agent.\n\n### HEAD and Refs\n\n- **HEAD**: A pointer to your current position in the commit graph. Usually points to a branch name.\n- **Branch**: A named pointer to a commit. When you commit, the branch pointer moves forward.\n- **Tag**: A named pointer to a commit that does not move. Used for releases.\n\n```\nmain:      A --- B --- C  <-- HEAD\n                  \\\n feature:          D --- E\n```\n\nIn this graph, `main` points to commit C, and `feature` points to commit E. HEAD points to wherever you are currently checked out.\n\n### The Commit Graph\n\nGit's history is a graph, not a line. Every branch creates a fork in the graph. Merges bring forks back together. Understanding this graph is essential for:\n\n- Knowing what a PR contains (commits between branch point and HEAD)\n- Understanding what `git log` shows (walking the graph backward from HEAD)\n- Resolving merge conflicts (two branches modified the same line divergently)\n\n### Staging for AI Workflows\n\nWhen an AI agent finishes work, it should stage specific files rather than using `git add .` or `git add -A`. This prevents accidentally committing sensitive files (like `.env`) or build artifacts. Paradigm's conventions explicitly call for adding files by name:\n\n```bash\ngit add src/auth/login.ts src/auth/.purpose\n```\n\nThis deliberate staging is a safety practice that becomes critical when agents operate with broad file system access.",
+      "keyConcepts": [
+        "Working directory, staging area, and repository",
+        "Commits as immutable snapshots with SHA-1 hashes",
+        "HEAD, branches, and the commit graph",
+        "Deliberate staging by filename for AI agent safety"
+      ],
+      "quiz": [
+        {
+          "question": "What is the staging area in git?",
+          "options": [
+            "A. A backup copy of your repository",
+            "B. A preparation zone where changes are collected before committing",
+            "C. The remote server where code is stored",
+            "D. A log of all previous commits"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Why should AI agents avoid `git add -A` when staging changes?",
+          "options": [
+            "A. It is slower than adding files individually",
+            "B. It does not work on macOS",
+            "C. It may accidentally stage sensitive files like .env or build artifacts",
+            "D. Git does not support the -A flag in automated contexts"
+          ],
+          "answer": "C"
+        },
+        {
+          "question": "What does HEAD point to in a typical git workflow?",
+          "options": [
+            "A. The first commit in the repository",
+            "B. The remote origin",
+            "C. Your current position in the commit graph, usually a branch name",
+            "D. The most recently pushed commit"
+          ],
+          "answer": "C"
+        }
+      ]
+    },
+    {
+      "id": "branching-for-ai-sessions",
+      "title": "Branching for AI Sessions",
+      "content": "## Branching for AI Sessions\n\nBranches are cheap, instant, and essential for safe AI-assisted development. Every AI agent session should work on a branch — never directly on `main`.\n\n### Why Agents Work on Branches\n\nAn AI agent session is exploratory by nature. The agent might:\n\n- Take an approach that needs to be discarded\n- Make changes that need human review before merging\n- Work in parallel with other agents on different tasks\n\nBranches provide isolation. If an agent's work on branch `feat/add-auth` goes wrong, `main` is untouched. You can delete the branch and start over with zero risk.\n\n### Feature Branch Workflow\n\nThe standard AI-native workflow:\n\n1. **Create a branch** from `main`:\n   ```bash\n   git checkout -b feat/add-user-auth\n   ```\n\n2. **Agent works** on the branch, making commits as it completes units of work.\n\n3. **Push the branch** to remote:\n   ```bash\n   git push -u origin feat/add-user-auth\n   ```\n\n4. **Open a Pull Request** for human review. The PR shows the full diff between the branch and `main`.\n\n5. **Merge** after review. The branch is deleted.\n\nThis workflow ensures that every change to `main` has been reviewed. The branch is the agent's workspace; the PR is the handoff point.\n\n### How `paradigm team` Uses Branches\n\nParadigm's multi-agent orchestration (`paradigm team orchestrate`) can spawn multiple agents working in parallel. Each agent gets its own branch:\n\n```\nmain\n  |\n  +-- agent/architect-auth-design\n  +-- agent/builder-auth-impl\n  +-- agent/reviewer-auth-review\n```\n\nThe orchestrator coordinates merges. If agents modify overlapping files, the orchestrator can detect conflicts early through `paradigm_ripple` analysis before branches diverge too far.\n\n### Naming Conventions\n\nConsistent branch names help humans and agents understand what a branch is for:\n\n| Prefix | Purpose | Example |\n|--------|---------|--------|\n| `feat/` | New feature | `feat/add-payment-form` |\n| `fix/` | Bug fix | `fix/login-redirect-loop` |\n| `refactor/` | Code improvement | `refactor/extract-auth-middleware` |\n| `agent/` | Agent-managed branch | `agent/builder-auth-impl` |\n| `test/` | Test additions | `test/add-checkout-e2e` |\n\nUse kebab-case. Include the primary symbol when relevant: `feat/add-#payment-form` or just `feat/payment-form`.\n\n### Branch Hygiene\n\nAfter a PR is merged:\n\n- **Delete the remote branch**: Most git hosts do this automatically on merge.\n- **Delete the local branch**: `git branch -d feat/add-user-auth`\n- **Prune stale remote references**: `git fetch --prune`\n\nStale branches accumulate fast when agents create branches frequently. Regular cleanup keeps the repository navigable.",
+      "keyConcepts": [
+        "Branches provide isolation for agent sessions",
+        "Feature branch to PR workflow",
+        "paradigm team orchestration creates per-agent branches",
+        "Naming conventions: feat/, fix/, refactor/, agent/"
+      ],
+      "quiz": [
+        {
+          "question": "Why should AI agents never commit directly to `main`?",
+          "options": [
+            "A. Git does not allow commits to the main branch",
+            "B. Main is a protected branch on all git hosts",
+            "C. Agent work needs human review before merging, and branches provide isolation",
+            "D. Commits on main cannot be reverted"
+          ],
+          "answer": "C"
+        },
+        {
+          "question": "In `paradigm team orchestrate`, how are parallel agents isolated?",
+          "options": [
+            "A. Each agent runs in a separate Docker container",
+            "B. Each agent works on its own git branch",
+            "C. Agents take turns using a shared working directory",
+            "D. The orchestrator locks files to prevent conflicts"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Which branch naming prefix is used for agent-managed branches?",
+          "options": [
+            "A. ai/",
+            "B. bot/",
+            "C. agent/",
+            "D. auto/"
+          ],
+          "answer": "C"
+        }
+      ]
+    },
+    {
+      "id": "commits-agents-can-parse",
+      "title": "Commits Agents Can Parse",
+      "content": "## Commits Agents Can Parse\n\nCommit messages are not just for humans. In Paradigm, commit messages are **machine-readable data** that power history tracking, ripple analysis, and session recovery. Writing structured commits is essential.\n\n### Conventional Commit Format\n\nParadigm uses a superset of the Conventional Commits standard:\n\n```\ntype(#primary-symbol): short description\n\n- Detail with #component references\n- Gate changes: ^gate-name\n- Signals emitted: !signal-name\n\nSymbols: #symbol-a, #symbol-b, !signal-c\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>\n```\n\n### Breaking It Down\n\n**Subject line**: `type(#symbol): description`\n\n- **type**: The nature of the change — `feat`, `fix`, `refactor`, `test`, `docs`, `chore`\n- **#symbol**: The primary Paradigm symbol affected, in parentheses\n- **description**: A concise summary (imperative mood: \"add\" not \"added\")\n\nExamples:\n```\nfeat(#payment-form): add Apple Pay support\nfix(#auth-middleware): handle expired refresh tokens\nrefactor(#user-service): extract validation into shared utility\ntest(#checkout-flow): add integration tests for cart edge cases\n```\n\n**Body**: Additional details referencing symbols with their prefixes (`#`, `$`, `^`, `!`, `~`). Each symbol prefix tells you the *kind* of thing being referenced.\n\n**Trailers**: Machine-readable metadata at the end.\n\n### The Symbols Trailer\n\nThe `Symbols:` trailer is the most important line for Paradigm:\n\n```\nSymbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added\n```\n\nParadigm's **post-commit hook** parses this line and records which symbols were modified in each commit. This powers:\n\n- **`paradigm_history_fragility`**: Shows which symbols change most frequently (fragile symbols need attention)\n- **`paradigm_ripple`**: Knows the recent change history of a symbol\n- **Session context**: New sessions can see what symbols were recently touched\n\nWithout the `Symbols:` trailer, Paradigm must guess from file paths. With it, the connection between commits and symbols is explicit and reliable.\n\n### Rules for Good Agent Commits\n\n1. **One logical change per commit**. Don't bundle a feature, a refactor, and a bug fix.\n2. **List ALL affected symbols** in the `Symbols:` trailer — not just the primary one.\n3. **Use imperative mood**: \"add feature\" not \"added feature\" or \"adding feature\".\n4. **Include the Co-Authored-By trailer** when an AI agent contributed to the work.\n5. **Reference gates and signals** in the body when authorization or events change.\n\n### What Agents Parse From Commits\n\nWhen an agent starts a new session, `paradigm_session_recover` examines recent commits to understand:\n\n- What was the previous agent working on? (subject lines)\n- Which symbols are \"hot\"? (Symbols trailers)\n- Are there unfinished flows? (references to `$flow` symbols without completion signals)\n\nThis is why commit message quality directly affects the next agent's effectiveness.",
+      "keyConcepts": [
+        "Conventional commit format: type(#symbol): description",
+        "The Symbols: trailer enables automatic history tracking",
+        "Post-commit hook parses trailers for symbol history",
+        "Structured commits improve session recovery for subsequent agents"
+      ],
+      "quiz": [
+        {
+          "question": "What does the `Symbols:` trailer in a commit message do?",
+          "options": [
+            "A. It triggers automated tests for the listed symbols",
+            "B. It is parsed by Paradigm's post-commit hook to record which symbols were modified",
+            "C. It creates new .purpose files for each listed symbol",
+            "D. It sends notifications to the symbol owners"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Which commit subject line follows Paradigm conventions?",
+          "options": [
+            "A. Added the new login page #login-page",
+            "B. feat(#login-page): add email/password authentication",
+            "C. FEAT: login page added with auth",
+            "D. feat - login page (#login-page)"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Why is one logical change per commit important for AI workflows?",
+          "options": [
+            "A. Git cannot handle commits with multiple file changes",
+            "B. It keeps commits small enough for agents to read quickly",
+            "C. Each commit can be independently reverted, reviewed, or understood by the next agent",
+            "D. Paradigm hooks reject commits that touch more than one symbol"
+          ],
+          "answer": "C"
+        }
+      ]
+    },
+    {
+      "id": "recovering-from-mistakes",
+      "title": "Recovering from Mistakes",
+      "content": "## Recovering from Mistakes\n\nMistakes happen — especially when AI agents are making rapid changes across many files. Git provides multiple recovery mechanisms, each suited to different situations.\n\n### git revert: The Safe Undo\n\n`git revert <commit-hash>` creates a **new commit** that undoes the changes from the specified commit. The original commit stays in history.\n\n```bash\ngit revert a1b2c3d\n```\n\n**When to use**: You've already pushed a commit and others may have pulled it. Revert is safe for shared branches because it doesn't rewrite history.\n\n**Agent use case**: An agent's previous session introduced a bug. The new session can `git revert` the bad commit and then fix the issue properly, preserving full traceability.\n\n### git reset: Moving HEAD Backward\n\n`git reset` moves the branch pointer backward. It has three modes:\n\n| Mode | Working Directory | Staging Area | Use Case |\n|------|-------------------|-------------|----------|\n| `--soft` | Unchanged | Unchanged | Recommit with a better message |\n| `--mixed` (default) | Unchanged | Cleared | Unstage changes, keep edits |\n| `--hard` | **Cleared** | Cleared | Discard everything |\n\n```bash\n# Undo last commit, keep changes staged\ngit reset --soft HEAD~1\n\n# Undo last commit, keep changes unstaged\ngit reset HEAD~1\n\n# Discard last commit and all changes entirely\ngit reset --hard HEAD~1\n```\n\n**When to use**: The commit hasn't been pushed yet (local only). Reset rewrites history, which causes problems on shared branches.\n\n**Agent use case**: An agent made a commit with the wrong message or included files it shouldn't have. `git reset --soft HEAD~1` lets it redo the commit.\n\n### git stash: Temporary Shelving\n\n`git stash` saves uncommitted changes and reverts your working directory to a clean state.\n\n```bash\n# Stash current changes\ngit stash\n\n# List stashes\ngit stash list\n\n# Restore most recent stash\ngit stash pop\n\n# Restore without removing from stash list\ngit stash apply\n```\n\n**When to use**: You need to switch branches but have uncommitted work. Or you want to test something on a clean working directory.\n\n**Agent use case**: An agent needs to check the behavior of `main` before continuing its work. Stash, switch, verify, switch back, pop.\n\n### git reflog: The Ultimate Undo\n\n`git reflog` shows every position HEAD has been at — including commits that are no longer on any branch. It's the ultimate safety net.\n\n```bash\n# Show recent HEAD positions\ngit reflog\n\n# Output:\n# a1b2c3d HEAD@{0}: reset: moving to HEAD~1\n# f4e5d6c HEAD@{1}: commit: feat(#auth): add JWT validation\n# 9g8h7i6 HEAD@{2}: checkout: moving from main to feat/auth\n```\n\nEven after a `git reset --hard`, the \"lost\" commit still exists. You can recover it:\n\n```bash\ngit checkout f4e5d6c\n# or\ngit reset --hard f4e5d6c\n```\n\nReflog entries expire after 90 days by default. Until then, **nothing is truly lost in git**.\n\n### Session Checkpoints as a Safety Net\n\nParadigm's `paradigm_session_checkpoint` records the agent's progress at key phases (planning, implementing, validating, complete). If a session crashes:\n\n1. The next agent calls `paradigm_session_recover`\n2. The checkpoint shows what was in progress\n3. Combined with `git reflog` and `git stash list`, the full state can be reconstructed\n\nThis layered approach — git history + reflog + Paradigm checkpoints — means agent work is never truly lost.\n\n### Decision Guide\n\n| Situation | Use |\n|-----------|-----------|\n| Bad commit already pushed | `git revert` |\n| Bad commit not yet pushed | `git reset --soft HEAD~1` |\n| Need to temporarily set aside work | `git stash` |\n| Accidentally deleted a commit | `git reflog` + `git reset` |\n| Agent session crashed mid-work | `paradigm_session_recover` + `git stash list` |",
+      "keyConcepts": [
+        "git revert creates a new commit to undo changes safely",
+        "git reset moves HEAD backward (soft, mixed, hard modes)",
+        "git reflog is the ultimate safety net — nothing is truly lost",
+        "Paradigm session checkpoints complement git recovery"
+      ],
+      "quiz": [
+        {
+          "question": "An agent pushed a bad commit to a shared branch. What is the safest recovery method?",
+          "options": [
+            "A. git reset --hard HEAD~1 and force push",
+            "B. git revert <commit-hash>",
+            "C. Delete the branch and recreate it",
+            "D. git stash the bad changes"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "What does `git reflog` show?",
+          "options": [
+            "A. Only commits on the current branch",
+            "B. Every position HEAD has been at, including commits no longer on any branch",
+            "C. A list of all remote branches",
+            "D. The contents of stashed changes"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "Which `git reset` mode keeps your changes staged for recommitting?",
+          "options": [
+            "A. --hard",
+            "B. --mixed",
+            "C. --soft",
+            "D. --keep"
+          ],
+          "answer": "C"
+        }
+      ]
+    },
+    {
+      "id": "git-in-ci-cd",
+      "title": "Git in CI/CD",
+      "content": "## Git in CI/CD\n\nGit is not just for local development — it powers the continuous integration and delivery pipeline. In Paradigm, git hooks and the review pipeline work together to enforce quality before code reaches `main`.\n\n### Pre-Commit Hooks\n\nPre-commit hooks run before a commit is finalized. If the hook exits with a non-zero code, the commit is blocked.\n\nParadigm installs a pre-commit hook that **rebuilds the static index** (`scan-index.json`) before every commit. This ensures the index is always synchronized with committed code:\n\n```bash\n# What the hook does (simplified):\nparadigm scan --quiet\ngit add .paradigm/scan-index.json\n```\n\nThis is a non-blocking operation — it enhances the commit rather than preventing it.\n\n### Stop Hooks (Session Enforcement)\n\nParadigm's stop hook runs when an agent session ends. It performs 12 compliance checks:\n\n| Check | What It Validates |\n|-------|-------------------|\n| 1 | Source files modified without `.purpose` updates |\n| 2 | Modified directories missing `.purpose` files |\n| 3 | Route patterns added without `portal.yaml` |\n| 4 | Aspect anchor files that no longer exist |\n| 5 | Per-directory `.purpose` freshness |\n| 6 | Aspect coverage (advisory, non-blocking) |\n| 7 | Lore entry expected for significant sessions |\n| 8 | Blocking habits not satisfied |\n| 9 | Purpose-required patterns from config |\n| 10 | Aspect drift detection |\n| 11 | Portal gate implementation compliance |\n| 12 | Agent permission compliance |\n\nIf any blocking check fails, the agent cannot finish until the issue is resolved. This prevents undocumented changes from entering the codebase.\n\n### The Review Pipeline\n\n`paradigm review` runs a two-stage analysis:\n\n**Stage 1 — Compliance**: Checks that Paradigm metadata is complete and consistent.\n- Are all modified directories covered by `.purpose` files?\n- Do new routes have corresponding `portal.yaml` entries?\n- Are aspect anchors still valid?\n\n**Stage 2 — Code Quality**: Analyzes the actual code changes.\n- Uses `git diff` to identify what changed\n- Checks for common issues (console.log instead of Paradigm logger, missing error handling)\n- Validates that commit messages follow conventions\n\n### Running Review in CI\n\n```bash\n# In your CI pipeline (GitHub Actions, etc.):\nparadigm review --ci\n```\n\nThe `--ci` flag outputs machine-readable results and sets the exit code based on findings:\n- Exit 0: All checks pass\n- Exit 1: Blocking issues found\n\nFor deeper analysis:\n```bash\nparadigm review --deep --ci\n```\n\nThe `--deep` flag adds implementation verification — checking that gates declared in `portal.yaml` are actually implemented in code, and that signals declared in `.purpose` files are actually emitted.\n\n### Git Diff as the Source of Truth\n\nThe review pipeline's power comes from `git diff`. Rather than scanning the entire codebase, it focuses on what changed:\n\n```bash\n# What review sees:\ngit diff --name-only HEAD~1   # Which files changed\ngit diff HEAD~1               # What changed in those files\n```\n\nThis makes review fast even in large codebases — it only checks what's relevant to the current change.\n\n### Putting It Together: The Full Pipeline\n\n```\nAgent makes changes\n       |\n       v\ngit add (specific files)\n       |\n       v\ngit commit\n  |-- pre-commit hook: rebuild scan-index.json\n  |-- commit message: type(#symbol): description + Symbols: trailer\n       |\n       v\ngit push\n       |\n       v\nCI runs: paradigm review --ci\n  |-- Stage 1: compliance checks\n  |-- Stage 2: code quality checks\n       |\n       v\nPR review (human)\n       |\n       v\nMerge to main\n```\n\nEach layer catches different issues. Pre-commit hooks catch index staleness. The stop hook catches missing documentation. CI review catches compliance and quality issues. Human review catches design and intent issues. Together, they form a defense-in-depth strategy for AI-assisted codebases.",
+      "keyConcepts": [
+        "Pre-commit hooks rebuild scan-index.json automatically",
+        "Stop hooks enforce 12 compliance checks at session end",
+        "paradigm review --ci runs two-stage analysis using git diff",
+        "Defense-in-depth: hooks, CI review, and human review each catch different issues"
+      ],
+      "quiz": [
+        {
+          "question": "What does Paradigm's pre-commit hook do?",
+          "options": [
+            "A. Blocks commits that lack a Symbols: trailer",
+            "B. Rebuilds the scan-index.json and stages it with the commit",
+            "C. Runs the full test suite",
+            "D. Validates portal.yaml gate implementations"
+          ],
+          "answer": "B"
+        },
+        {
+          "question": "How does `paradigm review --ci` determine which files to check?",
+          "options": [
+            "A. It scans every file in the repository",
+            "B. It reads a configuration file listing important paths",
+            "C. It uses git diff to focus only on changed files",
+            "D. It checks all files matching glob patterns in .paradigm/config.yaml"
+          ],
+          "answer": "C"
+        },
+        {
+          "question": "What happens if a Paradigm stop hook check fails?",
+          "options": [
+            "A. The commit is automatically reverted",
+            "B. A warning is logged but the session continues",
+            "C. The agent session is blocked until the issue is resolved",
+            "D. The changes are stashed for later review"
+          ],
+          "answer": "C"
+        }
+      ]
+    }
+  ]
+}

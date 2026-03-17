@@ -46,6 +46,16 @@ components:
     tags: [integration, symphony, sentinel]
     anchors:
       - symphony.ts:657-756
+  graduation-check:
+    description: "paradigm_graduate_check: check habit graduation eligibility with compliance data and reasoning"
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, graduation, mcp]
+  graduation-status:
+    description: "paradigm_graduate_status: show automation tier map (hook/habit/mcp) with savings estimate"
+    type: tool
+    parent: '#ToolHandlers'
+    tags: [feature, graduation, mcp]
   lore-assess:
     description: "paradigm_lore_assess: record human assessment verdict (correct/partial/incorrect) on a lore entry, auto-compute calibration delta"
     type: tool
@@ -72,3 +82,7 @@ components:
     description: "3 MCP tools for agent notebooks (paradigm_notebook_search, paradigm_notebook_add, paradigm_notebook_promote) — curated snippet libraries"
     type: tool-group
     tags: [feature, notebooks, agent-identity, mcp]
+  DocsTools:
+    description: MCP tools for auto-generated documentation — manifest, page, search
+    type: tool-group
+    tags: [feature, docs]

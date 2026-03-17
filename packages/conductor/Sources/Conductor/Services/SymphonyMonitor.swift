@@ -21,8 +21,14 @@ final class SymphonyMonitor: ObservableObject {
     /// All thread messages loaded from inboxes, keyed by threadRoot.
     @Published var threadMessages: [String: [SymphonyNote]] = [:]
 
+    /// Task store for routing task-intent notes to progress tracking.
+    var taskStore: TaskStore?
+
     private var pollTask: Task<Void, Never>?
     private var monitoredAgentIds: Set<String> = []
+
+    /// Track processed note IDs to avoid duplicate handling.
+    private var processedNoteIds: Set<String> = []
 
     // MARK: - Start/Stop
 
@@ -93,6 +99,15 @@ final class SymphonyMonitor: ObservableObject {
                 lastActivity: lastActivity,
                 activeThreadIds: Array(threadIds)
             )
+
+            // Route task-intent notes to TaskStore
+            let taskIntents: Set<MessageIntent> = [.taskAck, .progress, .approvalRequest, .taskComplete, .taskFailed]
+            for note in inboxNotes {
+                if taskIntents.contains(note.intent) && !processedNoteIds.contains(note.id) {
+                    processedNoteIds.insert(note.id)
+                    taskStore?.handleNote(note)
+                }
+            }
 
             // Index messages by thread
             for note in inboxNotes {

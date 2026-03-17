@@ -10,6 +10,8 @@ struct AgentNetworkView: View {
     @ObservedObject var agentProcessManager: AgentProcessManager
     @ObservedObject var monitor: SymphonyMonitor
     @ObservedObject var relay: NoteRelay
+    var taskStore: TaskStore?
+    var agentHealthMonitor: AgentHealthMonitor?
 
     @State private var showNewGroup = false
     @State private var newGroupName = ""
@@ -182,6 +184,7 @@ struct AgentNetworkView: View {
             TaskComposerView(
                 groupStore: groupStore,
                 agentPartManager: agentPartManager,
+                taskStore: taskStore,
                 isPresented: Binding(
                     get: { taskComposerGroupId == group.id },
                     set: { if !$0 { taskComposerGroupId = nil } }
@@ -198,9 +201,22 @@ struct AgentNetworkView: View {
         let managedAgent = agentProcessManager.runningAgents.first { $0.id == agent.managedAgentId }
         let isRunning = managedAgent?.isAlive == true
 
+        let healthMetrics = agentHealthMonitor?.metrics[agent.symphonyAgentId]
+        let dotColor: Color = {
+            if let health = healthMetrics?.healthStatus {
+                switch health {
+                case .healthy: return .green
+                case .degraded: return .yellow
+                case .unhealthy: return .red
+                case .unknown: return isRunning ? .green : (status?.linked == true ? .yellow : .gray)
+                }
+            }
+            return isRunning ? .green : (status?.linked == true ? .yellow : .gray)
+        }()
+
         return HStack(spacing: 6) {
             Circle()
-                .fill(isRunning ? Color.green : (status?.linked == true ? Color.yellow : Color.gray))
+                .fill(dotColor)
                 .frame(width: 6, height: 6)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -227,6 +243,15 @@ struct AgentNetworkView: View {
                         Text("\(unread) unread")
                             .font(.system(size: 8))
                             .foregroundStyle(.orange)
+                    }
+
+                    if let store = taskStore {
+                        let agentTasks = store.activeTasks.filter { $0.assignedTo.contains(agent.symphonyAgentId) }
+                        if !agentTasks.isEmpty {
+                            Text("\(agentTasks.count) task\(agentTasks.count == 1 ? "" : "s")")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.blue)
+                        }
                     }
                 }
             }

@@ -1,0 +1,176 @@
+id: L-2026-03-17-ascend-064744-001
+type: milestone
+timestamp: '2026-03-17T06:47:44.802Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Conductor Sprints 11-13: The Dashboard Trilogy'
+summary: 'Implemented three sprints in a single session: task dashboard with full lifecycle tracking, Sentinel live view with agent health metrics, and user-customizable bindings for eyebrows and hotkeys. Conductor now has closed-loop task observability — tasks are no longer fire-and-forget. 142 tests, 0 failures, release build clean.'
+symbols_touched:
+  - '#task-record'
+  - '#task-store'
+  - '#task-dashboard-view'
+  - '#task-detail-view'
+  - '#agent-health-monitor'
+  - '#sentinel-live-view'
+  - '#agent-health-view'
+  - '#eyebrow-binding-registry'
+  - '#hotkey-binding-registry'
+  - '#hotkey-recorder'
+  - '#bindings-manager'
+  - '#conductor-app'
+  - '#main-overlay'
+  - '#symphony-monitor'
+  - '#settings-panel'
+  - '#hotkey-manager'
+  - '#input-orchestrator'
+  - '#agent-network-view'
+  - '#task-composer-view'
+  - '#sentinel-ws-client'
+  - '#action-registry'
+symbols_created:
+  - '#task-record'
+  - '#task-store'
+  - '#task-dashboard-view'
+  - '#task-detail-view'
+  - '#agent-health-monitor'
+  - '#sentinel-live-view'
+  - '#agent-health-view'
+  - '#eyebrow-binding-registry'
+  - '#hotkey-binding-registry'
+  - '#hotkey-recorder'
+  - $task-tracking
+  - $agent-health-tracking
+  - '!task-status-changed'
+  - '!agent-health-changed'
+files_created:
+  - packages/conductor/Sources/Conductor/Models/TaskRecord.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TaskDashboardView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TaskDetailView.swift
+  - packages/conductor/Sources/Conductor/Services/AgentHealthMonitor.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SentinelLiveView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/AgentHealthView.swift
+  - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift
+  - packages/conductor/Sources/Conductor/Utils/HotKeyBindingRegistry.swift
+  - packages/conductor/Sources/Conductor/Utils/HotKeyRecorder.swift
+  - packages/conductor/Tests/ConductorTests/TaskStoreTests.swift
+  - packages/conductor/Tests/ConductorTests/AgentHealthMonitorTests.swift
+  - packages/conductor/Tests/ConductorTests/SentinelWSClientTests.swift
+  - packages/conductor/Tests/ConductorTests/EyebrowBindingRegistryTests.swift
+  - packages/conductor/Tests/ConductorTests/HotKeyBindingRegistryTests.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/Services/SymphonyMonitor.swift
+  - packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TaskComposerView.swift
+  - packages/conductor/Sources/Conductor/Integration/SentinelWSClient.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+  - packages/conductor/Sources/Conductor/Utils/HotKeyManager.swift
+  - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+  - packages/conductor/Sources/Conductor/UI/Views/BindingsManagerView.swift
+  - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+  - packages/conductor/.purpose
+  - CHANGELOG.md
+lines_added: 2200
+decisions:
+  - id: D-vertical-kanban
+    decision: Stacked kanban columns vertically instead of horizontal scroll
+    rationale: Sidebar is 320px wide — horizontal kanban columns would be 80px each, unusable. Vertical stacking with section headers reads naturally in a sidebar context.
+  - id: D-combine-health
+    decision: Used Combine $tasks subscription for AgentHealthMonitor instead of polling
+    rationale: TaskStore already publishes changes via @Published. Subscribing via Combine gives instant updates with zero polling overhead. Only recomputes when tasks actually change.
+  - id: D-registry-observe
+    decision: HotKeyManager.observeRegistry() replaces hardcoded register() calls
+    rationale: Makes hotkeys fully dynamic — users can remap without restart. The Combine sink re-registers all bindings on any change. Small risk of brief hotkey gap during re-registration, but CGEvent tap is fast enough that it's imperceptible.
+  - id: D-state-machine-bypass
+    decision: EyebrowBindingRegistry defaults to useStateMachine=true with opt-out
+    rationale: The existing state machine (idle→armed→recording→send) is the right default for voice control. Direct bindings are for power users who want eyebrow raises to trigger arbitrary actions. Defaulting to state machine means zero behavioral change for existing users.
+  - id: D-dedup-set
+    decision: Added processedNoteIds set to SymphonyMonitor to prevent duplicate TaskStore handling
+    rationale: SymphonyMonitor polls every 5 seconds and re-reads full inbox JSONL each time. Without dedup, every task-intent note would be re-handled on every poll cycle, causing duplicate timeline events and incorrect progress.
+errors_encountered:
+  - description: 'TaskDetailView .frame(width: 450, minHeight: 400) — SwiftUI frame modifier doesn''t accept both width and minHeight in one call'
+    resolution: 'Split into two .frame() modifiers: .frame(width: 450).frame(minHeight: 400)'
+    time_to_fix: 1min
+  - description: TaskStore tests failed due to persisted tasks.json from previous test runs contaminating state
+    resolution: Added setUp() that removes ~/.paradigm/conductor/tasks.json before each test
+    time_to_fix: 2min
+  - description: EyebrowBindingRegistry test failed on testDefaultsEmpty because UserDefaults had stale data
+    resolution: Added setUp() that removes the eyebrowBindings and eyebrowUseStateMachine UserDefaults keys
+    time_to_fix: 1min
+  - description: SentinelWSClient tests tried to mutate private(set) recentEvents directly
+    resolution: Rewrote tests to verify public interface (initial state, identifiable conformance, level field) rather than simulating internal buffer behavior
+    time_to_fix: 2min
+learnings:
+  - TaskStore persistence sharing between tests causes cross-contamination — always clean up persisted state in setUp()
+  - SentinelWSClient's private(set) on recentEvents means tests can't directly manipulate the buffer — test the public interface instead of internal state
+  - 14 parameters in MainOverlayView init is the current cost of explicit ownership threading — acceptable but approaching the threshold where EnvironmentObject would trade clarity for brevity
+  - The BindingRegistry pattern (Published dict + CRUD + UserDefaults + actionFromName serialization) appeared twice independently — worth abstracting if a third instance emerges
+  - Combine subscription for cross-component reactivity (AgentHealthMonitor ← TaskStore) is cleaner than the timer-based polling pattern used by SymphonyMonitor
+verification:
+  status: pass
+  details:
+    swift_build_debug: pass
+    swift_build_release: pass
+    swift_test: pass (142/142)
+    npm_build_mcp: pass
+    npm_build_cli: pass
+    paradigm_index: pass
+tags:
+  - arc:conductor
+  - sprint-11
+  - sprint-12
+  - sprint-13
+  - milestone
+  - dashboard
+  - health
+  - bindings
+meta:
+  sprint: 11-13
+  conductor_version: 0.12.0
+  paradigm_version: 4.4.0
+  new_swift_files: 14
+  total_swift_source_files: 113+
+  total_test_count: 142
+  new_test_count: 35
+body: |-
+  ## Where We Are
+
+  Conductor is at **Sprint 13 / v0.12.0** — 113+ Swift source files, somewhere north of 17K LOC. It started as a floating overlay with a text buffer and gaze tracking. Now it's a genuine multi-agent mission control: you can compose structured tasks, assign them to agent groups, watch progress in a kanban dashboard, see per-agent health sparklines, monitor Sentinel events in real-time, and customize every input binding from eyebrow raises to hotkeys.
+
+  The arc from Sprint 0 (an NSPanel with a waveform icon) to Sprint 13 (health-monitored agent orchestration with live telemetry) is striking. Each sprint layered cleanly on the last. The single-owner pattern in AppDelegate has scaled gracefully — we're now threading 14 distinct state objects through to MainOverlayView, which sounds like it should be unwieldy, but each one has a clear lifecycle owner and the view just observes.
+
+  ## Architectural Observations
+
+  **The TaskStore pattern worked well.** Having SymphonyMonitor route task-intent notes into a dedicated store (rather than bolting tracking onto the monitor itself) kept concerns separated. The monitor polls and indexes; the store interprets and persists. The dedup set (`processedNoteIds`) was a last-minute addition that prevented notes from being re-handled on every poll cycle — easy to miss, catastrophic if forgotten.
+
+  **AgentHealthMonitor via Combine subscription** is the cleanest wiring pattern in the codebase. One `$tasks.sink` and the health view stays perfectly in sync. No polling, no manual refresh. This is how all the cross-component data flow should work eventually — the SymphonyMonitor's 5-second poll loop is the last piece still using a timer.
+
+  **Sprint 13's registry pattern** is worth noting: both EyebrowBindingRegistry and HotKeyBindingRegistry follow the same shape (Published bindings dict, CRUD, UserDefaults persistence, actionFromName/nameFromAction serialization). If we add more input binding types, this could be abstracted into a generic `BindingRegistry<Key: Hashable>`. Not worth doing now with only two instances, but the pattern is established.
+
+  **The HotKeyManager refactor** was the riskiest change — replacing hardcoded `register(.toggleVideo)` calls with `observeRegistry()` means hotkeys are now fully dynamic. Users can remap Cmd+Shift+V to `send` instead of `toggleVideo` without restarting. The Combine observation means adding a binding in the Settings UI immediately takes effect.
+
+  ## What's Missing / What's Next
+
+  **No persistence cleanup.** TaskStore grows unboundedly — there's no archival or pruning of completed tasks. For a desktop app this is fine for months, but eventually we'll want a "clear completed" button or automatic 30-day expiry.
+
+  **SentinelLiveView is passive.** It shows events but can't filter by symbol click, can't jump to code, can't correlate with task timelines. The data is there — SentinelEvent has `symbol` and the TaskStore has `symbolsTouched` — but the cross-referencing UI isn't built yet.
+
+  **BindingsManagerView is getting long.** Five sections in a single Form is manageable but we're approaching the point where each section should be its own view. The shared `actionPicker` ViewBuilder is good — it prevents the 12-option Picker from being duplicated 8 times — but the view itself is ~280 lines.
+
+  **The MainOverlayView init signature is 14 parameters.** This is the cost of the single-owner pattern — everything threads through AppDelegate → launchPanel → MainOverlayView. An EnvironmentObject approach would reduce the parameter threading but would obscure the ownership graph. For now the explicit wiring is the right trade-off: you can read the init and know exactly what data flows where.
+
+  ## Confidence Notes
+
+  High confidence on the model/store layer — TaskStore, AgentHealthMonitor, the registries. These are well-tested (35 tests) and the patterns are proven from ProjectStore and AgentGroupStore.
+
+  Medium-high confidence on the views. They follow established patterns from the codebase (VStack/HStack composition, sheet presentation, DisclosureGroup for collapsibles) but I can't visually verify layout without running the app. The TaskDashboardView's kanban columns are stacked vertically (not horizontal scroll) because the sidebar is narrow — this is the right call for a 320px-wide panel but might feel cramped with many tasks.
+
+  The HotKeyRecorder NSView is the lowest-confidence piece. It works on paper (becomeFirstResponder + keyDown override + NSViewRepresentable), but NSView first responder management in a SwiftUI sheet context can be finicky. May need a `DispatchQueue.main.async { window?.makeFirstResponder(self) }` delay if focus doesn't grab immediately.
+confidence: 0.88
+git_context:
+  ref: f97fae46b621c5832f9f337068fba2f1eeb3570b
+  branch: main
+  dirty: true

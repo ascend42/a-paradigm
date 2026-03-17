@@ -4,52 +4,64 @@ description: VS Code extension providing rich IDE support for the Paradigm symbo
 components:
   extension-entry:
     description: Extension activation/deactivation lifecycle, provider registration, and command registration
+    type: app
     file: src/extension.ts
     tags: [feature]
 
   index-service:
     description: Manages SymbolIndex lifecycle — builds from premise-core aggregation, watches .purpose/portal.yaml files, debounced rebuild on change
+    type: service
     file: src/services/index-service.ts
     tags: [state]
 
   hover-provider:
     description: Shows symbol type, description, file path, references, and tags on hover over any Paradigm symbol
+    type: tool
     file: src/providers/hover.ts
 
   definition-provider:
     description: Go-to-definition and find-all-references for Paradigm symbols across all supported file types
+    type: tool
     file: src/providers/definition.ts
 
   diagnostics-provider:
     description: Validates .purpose files on open/save/change — reports YAML errors, schema errors, and undefined symbol references
+    type: tool
     file: src/providers/diagnostics.ts
 
   codelens-provider:
     description: Shows reference count lenses above symbol definitions in .purpose files
+    type: tool
     file: src/providers/codelens.ts
 
   completion-provider:
     description: Symbol autocomplete triggered by prefix characters (# $ ^ ! ~ @ % ? &) with type-aware filtering
+    type: tool
     file: src/providers/completion.ts
 
   quickfix-provider:
     description: Quick fix code actions for undefined symbols — offers to create symbol definition in nearest .purpose file
+    type: tool
     file: src/providers/quickfix.ts
 
   document-symbol-provider:
     description: Document outline for .purpose files showing components, gates, signals, flows, and aspects
+    type: tool
     file: src/providers/symbols.ts
 
   workspace-symbol-provider:
     description: Workspace-wide symbol search across all indexed Paradigm symbols
+    type: tool
     file: src/providers/symbols.ts
 
   purpose-grammar:
     description: TextMate grammar for .purpose file syntax highlighting
+    type: schema
     file: syntaxes/purpose.tmLanguage.json
 
   paradigm-symbols-grammar:
     description: TextMate injection grammar for Paradigm symbol highlighting in YAML, Markdown, TypeScript, and JavaScript
+    type: schema
     file: syntaxes/paradigm-symbols.tmLanguage.json
 
 aspects:

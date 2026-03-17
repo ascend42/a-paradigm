@@ -3,6 +3,7 @@
 
 import AppKit
 import Carbon
+import Combine
 
 /// Manages global keyboard shortcuts for Conductor.
 @MainActor
@@ -16,7 +17,38 @@ final class HotKeyManager: ObservableObject {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
+    private var registryCancellable: AnyCancellable?
+
     // MARK: - Registration
+
+    /// Register all bindings from a registry and observe changes.
+    func registerFromRegistry(_ registry: HotKeyBindingRegistry, actionHandler: @escaping (ConductorAction) -> Void) {
+        // Register current bindings
+        for (binding, action) in registry.bindings {
+            let capturedAction = action
+            register(binding) {
+                actionHandler(capturedAction)
+            }
+        }
+    }
+
+    /// Observe a registry for live binding updates. Re-registers all hotkeys on change.
+    func observeRegistry(_ registry: HotKeyBindingRegistry, actionHandler: @escaping (ConductorAction) -> Void) {
+        registryCancellable = registry.$bindings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newBindings in
+                guard let self else { return }
+                // Unregister all existing
+                self.handlers.removeAll()
+                // Re-register from new bindings
+                for (binding, action) in newBindings {
+                    let capturedAction = action
+                    self.register(binding) {
+                        actionHandler(capturedAction)
+                    }
+                }
+            }
+    }
 
     /// Register a global hotkey.
     func register(_ binding: HotKeyBinding, handler: @escaping () -> Void) {

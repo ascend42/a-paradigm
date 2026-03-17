@@ -38,7 +38,7 @@ final class ActionRegistry: ObservableObject {
 
     // MARK: - Published State
 
-    @Published private(set) var gestureBindings: [String: ConductorAction]
+    @Published var gestureBindings: [String: ConductorAction]
 
     // MARK: - Init
 

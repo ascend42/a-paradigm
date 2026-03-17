@@ -1,0 +1,65 @@
+.container {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-steel);
+  background: var(--surface-void);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--surface-3);
+  background: var(--surface-2);
+}
+
+.filename {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+}
+
+.language {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.pre {
+  margin: 0;
+  padding: 16px 0;
+  overflow-x: auto;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+.line {
+  display: inline;
+}
+
+.lineNumber {
+  display: inline-block;
+  width: 3ch;
+  margin-right: 16px;
+  padding-left: 16px;
+  text-align: right;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.lineContent {
+  color: var(--text-primary);
+}
+
+/* Symbol highlighting */
+.symComponent { color: var(--sym-component); }
+.symFlow { color: var(--sym-flow); }
+.symGate { color: var(--sym-gate); }
+.symSignal { color: var(--sym-signal); }
+.symAspect { color: var(--sym-aspect); }

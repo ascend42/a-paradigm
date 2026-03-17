@@ -1783,6 +1783,37 @@ habitsCmd
     await habitsListCommand({});
   });
 
+// paradigm graduate - Automation tier graduation
+const graduateCmd = program
+  .command('graduate')
+  .description('Automation tier graduation — migrate habits to hooks');
+
+graduateCmd
+  .command('status', { isDefault: true })
+  .description('Show current automation tier of every habit')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { graduateStatusCommand } = await import('./commands/graduate/index.js');
+    await graduateStatusCommand(options);
+  });
+
+graduateCmd
+  .command('promote <habitId>')
+  .description('Graduate a habit to hook tier (skip MCP evaluation)')
+  .action(async (habitId) => {
+    const { graduatePromoteCommand } = await import('./commands/graduate/index.js');
+    await graduatePromoteCommand(habitId);
+  });
+
+graduateCmd
+  .command('demote <habitId>')
+  .description('Demote a habit from hook back to habit tier')
+  .option('--cooldown <days>', 'Cooldown period in days before re-graduation', '14')
+  .action(async (habitId, options) => {
+    const { graduateDemoteCommand } = await import('./commands/graduate/index.js');
+    await graduateDemoteCommand(habitId, options);
+  });
+
 // paradigm sentinel defend - Launch the unified codebase intelligence UI
 const sentinelCmd = program
   .command('sentinel')
@@ -1897,6 +1928,37 @@ universityCmd
   .action(async (options) => {
     const { universityServeCommand } = await import('./commands/university/serve.js');
     await universityServeCommand(undefined, options);
+  });
+
+// paradigm docs <command> - Auto-generated documentation from the symbol graph
+const docsCmd = program
+  .command('docs')
+  .description('Auto-generated documentation from the symbol graph');
+
+docsCmd
+  .command('serve')
+  .description('Launch interactive docs viewer in browser')
+  .option('-p, --port <port>', 'Port number (default: 3850)')
+  .option('--no-open', 'Do not open browser automatically')
+  .action(async (options) => {
+    const { docsServeCommand } = await import('./commands/docs/index.js');
+    await docsServeCommand(options);
+  });
+
+docsCmd
+  .command('build')
+  .description('Build static documentation site')
+  .option('-o, --output <dir>', 'Output directory (default: from config or .paradigm/docs-site)')
+  .action(async (options) => {
+    const { docsBuildCommand } = await import('./commands/docs/index.js');
+    await docsBuildCommand(options);
+  });
+
+// Default docs action: launch serve (bare `paradigm docs`)
+docsCmd
+  .action(async () => {
+    const { docsServeCommand } = await import('./commands/docs/index.js');
+    await docsServeCommand({});
   });
 
 // paradigm pipeline <command>

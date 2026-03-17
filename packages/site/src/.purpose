@@ -1,0 +1,70 @@
+description: Auto-generated purpose file for packages/site/src
+components:
+  philosophy-page:
+    description: PhilosophyPage component
+    type: view
+  agents-page:
+    description: AgentsPage component
+    type: view
+  blog-page:
+    description: BlogPage component
+    type: view
+  docs-layout:
+    description: DocsLayout component
+    type: view
+  root-layout:
+    description: RootLayout component
+    type: view
+  learn-layout:
+    description: LearnLayout component
+    type: view
+  learn-page:
+    description: LearnPage component
+    type: view
+  home-page:
+    description: HomePage component
+    type: view
+  ctasection:
+    description: CTASection component
+    type: view
+  hero-section:
+    description: HeroSection component
+    type: view
+  how-it-works-section:
+    description: HowItWorksSection component
+    type: view
+  metrics-section:
+    description: MetricsSection component
+    type: view
+  symbols-section:
+    description: SymbolsSection component
+    type: view
+  code-block:
+    description: CodeBlock component
+    type: view
+  live-indicator:
+    description: LiveIndicator component
+    type: view
+  node-graph:
+    description: NodeGraph component
+    type: view
+  site-footer:
+    description: SiteFooter component
+    type: view
+  site-header:
+    description: SiteHeader component
+    type: view
+  symbol-badge:
+    description: SymbolBadge component
+    type: view
+flows:
+  (marketing)-philosophy-page:
+    description: 'Page route: /(marketing)/philosophy'
+  agents-page:
+    description: 'Page route: /agents'
+  blog-page:
+    description: 'Page route: /blog'
+  docs-[...slug]-page:
+    description: 'Page route: /docs/:[...slug]'
+  learn-page:
+    description: 'Page route: /learn'

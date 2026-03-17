@@ -33,6 +33,6 @@ steps:
     notes: 'Test: trigger the hook condition and verify it blocks/advises correctly'
 recorded_from: L-2026-03-01-protocols-audit
 recorded_at: '2026-03-01T12:00:00Z'
-last_verified: '2026-03-08T06:07:44.807Z'
+last_verified: '2026-03-17T14:26:16.633Z'
 verified_by: claude-opus-4-6
 status: stale

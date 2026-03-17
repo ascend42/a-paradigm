@@ -1,0 +1,143 @@
+.article {
+  max-width: var(--max-width-content);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.title {
+  font-size: var(--text-h1);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.description {
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-3);
+}
+
+.definedIn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.definedLabel {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.definedPath {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-sm);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle {
+  font-size: var(--text-h3);
+  color: var(--text-heading);
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--surface-3);
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: flex;
+  gap: var(--space-2);
+  min-height: 64px;
+}
+
+.stepTrack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 20px;
+}
+
+.stepDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--sym-flow);
+  box-shadow: 0 0 8px var(--glow-flow);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.stepLine {
+  width: 2px;
+  flex: 1;
+  background: var(--surface-steel);
+  margin-top: 4px;
+}
+
+.stepBody {
+  flex: 1;
+  padding-bottom: var(--space-2);
+}
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: 4px;
+}
+
+.stepIndex {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--sym-flow);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stepAction {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* ── Symbol grid ─────────────────────────────────────────────────────────── */
+
+.symbolGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.symbolLink {
+  text-decoration: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.symbolLink:hover {
+  opacity: 0.8;
+}

@@ -74,7 +74,7 @@ function isPackageAvailable(packageName: string): boolean {
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
   const always = ['overview', 'lore', 'graph', 'git'];
-  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony'];
+  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
 
   const enabled = new Set<string>();
   for (const section of requested) {
@@ -241,6 +241,17 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
       log.component('platform-server').success('Symphony routes mounted');
     } catch (err) {
       log.component('platform-server').warn('Symphony routes failed to mount');
+    }
+  }
+
+  // Mount Docs routes if section is enabled
+  if (sections.has('docs')) {
+    try {
+      const { createDocsRouter } = await import('./routes/docs.js');
+      app.use('/api/docs', createDocsRouter(options.projectDir));
+      log.component('platform-server').success('Docs routes mounted');
+    } catch (err) {
+      log.component('platform-server').warn('Docs routes failed to mount');
     }
   }
 

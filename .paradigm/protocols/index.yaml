@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-15T23:23:33.522Z'
+generated: '2026-03-17T14:25:54.220Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -17,8 +17,8 @@ protocols:
       - agent
   - id: P-add-aspect-with-anchors
     name: Add an aspect with code anchors
-    status: stale
-    last_verified: '2026-03-08T06:07:43.418Z'
+    status: current
+    last_verified: '2026-03-17T14:24:58.587Z'
     trigger:
       - add aspect
       - new aspect
@@ -30,8 +30,8 @@ protocols:
       - cross-cutting
   - id: P-add-case-study
     name: Add a case study
-    status: stale
-    last_verified: '2026-03-08T06:07:43.924Z'
+    status: current
+    last_verified: '2026-03-17T14:25:02.383Z'
     trigger:
       - case study
       - project journey
@@ -95,7 +95,7 @@ protocols:
   - id: P-add-hook-script
     name: Add a Claude Code hook script
     status: stale
-    last_verified: '2026-03-08T06:07:44.807Z'
+    last_verified: '2026-03-17T14:25:06.586Z'
     trigger:
       - add hook
       - new hook
@@ -120,8 +120,8 @@ protocols:
       - sync
   - id: P-add-integration-test
     name: Add an integration test
-    status: stale
-    last_verified: '2026-03-01T12:00:00Z'
+    status: current
+    last_verified: '2026-03-17T14:25:14.957Z'
     trigger:
       - integration test
       - e2e test
@@ -157,8 +157,8 @@ protocols:
       - status
   - id: P-add-mcp-tool
     name: Add a new MCP tool
-    status: stale
-    last_verified: '2026-03-08T06:07:45.738Z'
+    status: current
+    last_verified: '2026-03-17T14:25:22.371Z'
     trigger:
       - add tool
       - new mcp tool
@@ -183,8 +183,8 @@ protocols:
       - typescript
   - id: P-add-plsat-question
     name: Add a PLSAT exam question
-    status: stale
-    last_verified: '2026-03-08T07:07:21.965Z'
+    status: current
+    last_verified: '2026-03-17T14:25:26.865Z'
     trigger:
       - plsat question
       - add exam question
@@ -314,8 +314,8 @@ protocols:
       - orchestration
   - id: P-add-tool-with-reindex-integration
     name: Add an MCP tool with reindex integration
-    status: stale
-    last_verified: '2026-03-08T06:07:48.485Z'
+    status: current
+    last_verified: '2026-03-17T14:25:31.090Z'
     trigger:
       - tool with reindex
       - reindex integration
@@ -364,8 +364,8 @@ protocols:
       - unit
   - id: P-add-university-course
     name: Add a University course
-    status: stale
-    last_verified: '2026-03-08T07:07:22.410Z'
+    status: current
+    last_verified: '2026-03-17T14:25:36.187Z'
     trigger:
       - add course
       - new course
@@ -377,8 +377,8 @@ protocols:
       - learning
   - id: P-add-university-quiz
     name: Add a University quiz
-    status: stale
-    last_verified: '2026-03-08T07:07:22.768Z'
+    status: current
+    last_verified: '2026-03-17T14:25:39.931Z'
     trigger:
       - add quiz
       - new quiz
@@ -455,8 +455,8 @@ protocols:
       - history
   - id: P-update-changelog
     name: Update changelog and version
-    status: stale
-    last_verified: '2026-03-08T06:07:50.707Z'
+    status: current
+    last_verified: '2026-03-17T14:25:45.957Z'
     trigger:
       - update changelog
       - bump version
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 27
-  stale: 10
+  current: 36
+  stale: 1
   broken: 0

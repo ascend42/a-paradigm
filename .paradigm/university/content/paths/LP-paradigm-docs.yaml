@@ -1,0 +1,19 @@
+id: LP-paradigm-docs
+title: "Paradigm Docs"
+description: "Learn how Paradigm auto-generates documentation from the symbol graph."
+author: paradigm
+created: "2026-03-17"
+updated: "2026-03-17"
+tags:
+  - docs
+  - paradigm
+ordered: true
+category: paradigm-docs
+steps:
+  - content: N-paradigm-docs-overview
+    required: true
+    note: "Start with the overview to understand data sources and architecture"
+  - content: Q-paradigm-docs-basics
+    required: true
+    passRequired: true
+    note: "Test your understanding of the docs system"

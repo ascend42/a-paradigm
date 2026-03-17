@@ -6,19 +6,25 @@ description: |
 components:
   pipeline-start:
     description: Create a new pipeline from a template or custom gate config
+    type: handler
     path: index.ts
   pipeline-status:
     description: Show pipeline status — current stage, progress, gate config
+    type: handler
     path: index.ts
   pipeline-advance:
     description: Advance pipeline past the current gate
+    type: handler
     path: index.ts
   pipeline-configure:
     description: Change gate modes on an active pipeline
+    type: handler
     path: index.ts
   pipeline-abort:
     description: Cancel and archive an active pipeline
+    type: handler
     path: index.ts
   pipeline-list:
     description: List all active pipelines with progress
+    type: handler
     path: index.ts

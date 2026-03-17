@@ -24,10 +24,13 @@ struct MainOverlayView: View {
     @ObservedObject var agentGroupStore: AgentGroupStore
     @ObservedObject var symphonyMonitor: SymphonyMonitor
     @ObservedObject var agentPartManager: AgentPartManager
+    @ObservedObject var taskStore: TaskStore
+    @ObservedObject var sentinelClient: SentinelWSClient
+    @ObservedObject var agentHealthMonitor: AgentHealthMonitor
 
     @State private var showAddInstance = false
 
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager) {
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager, taskStore: TaskStore, sentinelClient: SentinelWSClient, agentHealthMonitor: AgentHealthMonitor) {
         self._showOnboarding = State(initialValue: showOnboarding)
         self.permissionStatus = permissionStatus
         self.orchestrator = orchestrator
@@ -39,6 +42,9 @@ struct MainOverlayView: View {
         self.agentGroupStore = agentGroupStore
         self.symphonyMonitor = symphonyMonitor
         self.agentPartManager = agentPartManager
+        self.taskStore = taskStore
+        self.sentinelClient = sentinelClient
+        self.agentHealthMonitor = agentHealthMonitor
     }
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -115,7 +121,7 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
-            Text("v0.5.2")
+            Text("v0.15.0")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -193,89 +199,19 @@ struct MainOverlayView: View {
 
     private var mainContent: some View {
         VStack(spacing: 12) {
-            // Gaze calibration prompt
-            if gazeEnabled && !gazeCalibrated {
-                calibrationBanner
-            }
-
-            // Live input status monitor
-            InputStatusView(orchestrator: orchestrator)
-
-            // Voice control HUD (shows when eyebrow control is active)
-            if orchestrator.eyebrowEnabled {
-                VoiceControlHUD(coordinator: orchestrator.voiceCoordinator)
-            }
-
+            calibrationSection
+            inputSection
             Divider()
-
-            // Buffer area
-            BufferView(
-                buffer: orchestrator.buffer,
-                gazeRouter: gazeRouter,
-                orchestrator: orchestrator,
-                gazeZoneRouter: orchestrator.gazeZoneRouter,
-                onSend: dispatchBuffer
-            )
-
+            bufferSection
             Divider()
-
-            // Session manager (recent projects + headless agents)
-            SessionManagerView(
-                projectStore: projectStore,
-                agentManager: agentProcessManager,
-                onLaunchInTerminal: { projectPath in
-                    Task {
-                        try? await workspaceManager.launchInstance(
-                            projectDir: projectPath,
-                            label: CheckpointReader.projectName(for: projectPath)
-                        )
-                    }
-                }
-            )
-
+            sessionSection
             Divider()
-
-            // Workspace view (managed instances + external)
-            WorkspaceView(
-                workspaceManager: workspaceManager,
-                gazeRouter: gazeRouter,
-                externalInstances: externalInstances,
-                onAddInstance: { showAddInstance = true }
-            )
-
-            // Symphony: file request notifications
-            FileRequestNotificationView(
-                requests: noteRelay.pendingFileRequests,
-                onApprove: { id in
-                    _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath)
-                },
-                onDeny: { id in
-                    fileApprovalManager.deny(id)
-                },
-                onApproveRedacted: { id in
-                    _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath, redact: true)
-                }
-            )
-
-            // Approval notification banner (task protocol)
-            ApprovalNotificationBanner(monitor: symphonyMonitor)
-
-            // Agent network (groups + Symphony status)
-            if !agentGroupStore.groups.isEmpty || !agentPartManager.registeredAgents.isEmpty {
-                Divider()
-                AgentNetworkView(
-                    groupStore: agentGroupStore,
-                    agentPartManager: agentPartManager,
-                    agentProcessManager: agentProcessManager,
-                    monitor: symphonyMonitor,
-                    relay: noteRelay
-                )
-            } else if !noteRelay.activeThreads.isEmpty {
-                // Fallback to simple thread list when no groups exist
-                Divider()
-                ThreadListView(relay: noteRelay)
-            }
-
+            workspaceSection
+            symphonyNotificationsSection
+            taskSection
+            agentNetworkSection
+            agentHealthSection
+            sentinelSection
             Spacer(minLength: 0)
         }
         .padding(12)
@@ -285,6 +221,119 @@ struct MainOverlayView: View {
                 isPresented: $showAddInstance
             )
         }
+    }
+
+    // MARK: - Content Sections
+
+    @ViewBuilder
+    private var calibrationSection: some View {
+        if gazeEnabled && !gazeCalibrated {
+            calibrationBanner
+        }
+    }
+
+    @ViewBuilder
+    private var inputSection: some View {
+        InputStatusView(orchestrator: orchestrator)
+        if orchestrator.eyebrowEnabled {
+            VoiceControlHUD(coordinator: orchestrator.voiceCoordinator)
+        }
+    }
+
+    private var bufferSection: some View {
+        BufferView(
+            buffer: orchestrator.buffer,
+            gazeRouter: gazeRouter,
+            orchestrator: orchestrator,
+            gazeZoneRouter: orchestrator.gazeZoneRouter,
+            onSend: dispatchBuffer
+        )
+    }
+
+    private var sessionSection: some View {
+        SessionManagerView(
+            projectStore: projectStore,
+            agentManager: agentProcessManager,
+            onLaunchInTerminal: { projectPath in
+                Task {
+                    try? await workspaceManager.launchInstance(
+                        projectDir: projectPath,
+                        label: CheckpointReader.projectName(for: projectPath)
+                    )
+                }
+            }
+        )
+    }
+
+    private var workspaceSection: some View {
+        WorkspaceView(
+            workspaceManager: workspaceManager,
+            gazeRouter: gazeRouter,
+            externalInstances: externalInstances,
+            onAddInstance: { showAddInstance = true }
+        )
+    }
+
+    @ViewBuilder
+    private var symphonyNotificationsSection: some View {
+        FileRequestNotificationView(
+            requests: noteRelay.pendingFileRequests,
+            onApprove: { id in
+                _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath)
+            },
+            onDeny: { id in
+                fileApprovalManager.deny(id)
+            },
+            onApproveRedacted: { id in
+                _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath, redact: true)
+            }
+        )
+        ApprovalNotificationBanner(monitor: symphonyMonitor)
+    }
+
+    @ViewBuilder
+    private var taskSection: some View {
+        if !taskStore.tasks.isEmpty {
+            Divider()
+            TaskDashboardView(taskStore: taskStore, onSendNote: { note in
+                for r in (note.recipients ?? []) {
+                    ScoreIO.appendJsonl(note, to: ScoreIO.inboxPath(for: r.id))
+                }
+            })
+        }
+    }
+
+    @ViewBuilder
+    private var agentNetworkSection: some View {
+        if !agentGroupStore.groups.isEmpty || !agentPartManager.registeredAgents.isEmpty {
+            Divider()
+            AgentNetworkView(
+                groupStore: agentGroupStore,
+                agentPartManager: agentPartManager,
+                agentProcessManager: agentProcessManager,
+                monitor: symphonyMonitor,
+                relay: noteRelay,
+                taskStore: taskStore,
+                agentHealthMonitor: agentHealthMonitor
+            )
+        } else if !noteRelay.activeThreads.isEmpty {
+            Divider()
+            ThreadListView(relay: noteRelay)
+        }
+    }
+
+    @ViewBuilder
+    private var agentHealthSection: some View {
+        if !agentHealthMonitor.metrics.isEmpty {
+            Divider()
+            AgentHealthView(healthMonitor: agentHealthMonitor)
+        }
+    }
+
+    @ViewBuilder
+    private var sentinelSection: some View {
+        Divider()
+        SentinelLiveView(sentinelClient: sentinelClient, taskStore: taskStore)
     }
 
     private var calibrationBanner: some View {

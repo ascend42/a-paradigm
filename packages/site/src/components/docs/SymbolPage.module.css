@@ -1,0 +1,196 @@
+.article {
+  max-width: var(--max-width-content);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.title {
+  font-size: var(--text-h1);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.description {
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-4);
+}
+
+/* ── Metadata ────────────────────────────────────────────────────────────── */
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metaLabel {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metaValue {
+  font-size: var(--text-small);
+  color: var(--sym-component);
+  text-decoration: none;
+}
+
+.metaValue:hover {
+  text-decoration: underline;
+}
+
+.metaCode {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-heading);
+  padding: 2px 6px;
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  font-size: var(--text-micro);
+  padding: 2px 8px;
+  background: var(--surface-3);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle {
+  font-size: var(--text-h3);
+  color: var(--text-heading);
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--surface-3);
+}
+
+/* ── Flow Steps ──────────────────────────────────────────────────────────── */
+
+.flowSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.flowStep {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  position: relative;
+  padding-bottom: var(--space-2);
+}
+
+.stepNumber {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--sym-flow);
+  background: var(--tag-flow-bg);
+  border: 1px solid var(--tag-flow-border);
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.stepContent {
+  flex: 1;
+  padding-top: 3px;
+}
+
+.stepAction {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.stepConnector {
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: 0;
+  width: 2px;
+  background: var(--surface-3);
+}
+
+/* ── Related ─────────────────────────────────────────────────────────────── */
+
+.relatedGroup {
+  margin-bottom: var(--space-2);
+}
+
+.relatedLabel {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.relatedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.symbolRef {
+  text-decoration: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.symbolRef:hover {
+  opacity: 0.8;
+}
+
+/* ── Source ───────────────────────────────────────────────────────────────── */
+
+.sourcePath {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-void);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-md);
+  display: block;
+  overflow-x: auto;
+}

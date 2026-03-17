@@ -1,0 +1,290 @@
+{
+  "id": "agile-development",
+  "title": "Agile Development for AI-Native Teams",
+  "description": "Agile practices reimagined for teams working with AI agents. Covers stories, sprint planning, reviews, continuous improvement, and multi-agent collaboration using Paradigm tools.",
+  "nonCredit": true,
+  "lessons": [
+    {
+      "id": "agile-in-the-age-of-ai",
+      "title": "Agile in the Age of AI",
+      "content": "## Agile in the Age of AI\n\nThe Agile Manifesto (2001) introduced four values that transformed software development:\n\n- **Individuals and interactions** over processes and tools\n- **Working software** over comprehensive documentation\n- **Customer collaboration** over contract negotiation\n- **Responding to change** over following a plan\n\nThese values remain sound, but AI fundamentally changes how we practice them.\n\n### How AI Changes Iteration Speed\n\nTraditional agile assumes human-speed iteration: a developer writes code over hours or days, reviews happen in meetings, and feedback loops span sprints. With AI agents capable of generating working code in minutes, the bottleneck shifts.\n\nA two-week sprint that once delivered 5-10 features can now deliver 20-50 when AI handles implementation. But faster output is not the same as faster progress. Without proper context, AI produces plausible but misaligned code. The iteration loop becomes: plan precisely, generate quickly, review thoroughly.\n\n### Human Leverage Shifts\n\nWhen AI handles implementation, human value concentrates in three areas:\n\n1. **Planning** -- Defining what to build and why. Ambiguous requirements produce ambiguous code, and AI amplifies ambiguity rather than resolving it.\n2. **Review** -- Evaluating whether generated code actually solves the problem. AI can write syntactically correct code that misses the point entirely.\n3. **Decision-making** -- Choosing between alternatives, resolving trade-offs, and making judgment calls that require domain knowledge.\n\nThis is not a diminishment of the human role. It is a concentration of it. Planning, review, and decision-making are the highest-leverage activities in software development.\n\n### Context Engineering in Agile\n\nContext engineering is the practice of structuring project knowledge so that AI agents can act effectively. In agile terms, it replaces the tribal knowledge that traditional teams carry in their heads.\n\nParadigm provides the infrastructure for context engineering:\n\n- **`.purpose` files** capture what each component does and why it exists\n- **Symbols** (`#component`, `^gate`, `$flow`, `!signal`, `~aspect`) create a shared vocabulary between humans and agents\n- **Flows** document multi-step processes that span components\n- **Wisdom entries** record antipatterns and hard-won lessons\n\nWhen context is well-engineered, an AI agent can pick up a task, understand the surrounding system, and deliver aligned work. When context is poor, every AI interaction starts from scratch -- the opposite of agile's emphasis on sustainable pace.\n\n### Key Insight\n\nAgile with AI is not about going faster. It is about going faster in the right direction. Context engineering is what keeps the direction aligned.",
+      "keyConcepts": [
+        "Agile Manifesto's four values and twelve principles",
+        "AI shifts the bottleneck from implementation to planning and review",
+        "Context engineering as the foundation for effective AI-assisted agile",
+        "Human leverage concentrates in planning, review, and decision-making",
+        "Paradigm symbols and .purpose files as shared context infrastructure"
+      ],
+      "quiz": [
+        {
+          "question": "When AI agents handle implementation, where does human leverage concentrate?",
+          "options": [
+            { "label": "A", "text": "Writing more code faster to maximize output" },
+            { "label": "B", "text": "Planning, review, and decision-making" },
+            { "label": "C", "text": "Managing AI agent configuration files" },
+            { "label": "D", "text": "Eliminating the need for sprint ceremonies" }
+          ],
+          "answer": "B",
+          "explanation": "AI handles implementation speed, so humans provide the most value through precise planning, thorough review, and judgment-based decision-making -- the activities AI cannot reliably do on its own."
+        },
+        {
+          "question": "What is the primary purpose of context engineering in an agile workflow?",
+          "options": [
+            { "label": "A", "text": "Replacing all documentation with AI-generated summaries" },
+            { "label": "B", "text": "Structuring project knowledge so AI agents can act effectively" },
+            { "label": "C", "text": "Automating sprint planning entirely" },
+            { "label": "D", "text": "Reducing the number of team members needed" }
+          ],
+          "answer": "B",
+          "explanation": "Context engineering structures project knowledge (via .purpose files, symbols, flows, and wisdom) so that AI agents understand the system and produce aligned work rather than starting from scratch each time."
+        },
+        {
+          "question": "How does AI change the agile iteration loop?",
+          "options": [
+            { "label": "A", "text": "It eliminates the need for iterations entirely" },
+            { "label": "B", "text": "It makes planning less important since AI can explore all options" },
+            { "label": "C", "text": "It compresses implementation time but demands more precise planning and review" },
+            { "label": "D", "text": "It replaces retrospectives with automated metrics" }
+          ],
+          "answer": "C",
+          "explanation": "AI dramatically speeds up implementation, but ambiguous plans produce ambiguous output. The loop becomes: plan precisely, generate quickly, review thoroughly."
+        }
+      ]
+    },
+    {
+      "id": "stories-and-tasks",
+      "title": "Stories and Tasks",
+      "content": "## Stories and Tasks\n\nUser stories are the atomic unit of agile work. They capture what a user needs in a format that drives implementation without dictating how.\n\n### User Story Format\n\nThe classic format remains effective:\n\n> As a [role], I want [capability] so that [benefit].\n\nFor AI-native teams, stories gain precision when they include Paradigm symbols:\n\n> As an admin, I want to archive projects (`#project-archive`) so that inactive projects don't clutter the dashboard, gated by `^project-admin`.\n\nThe symbols tell both human developers and AI agents exactly which components, gates, and flows are involved.\n\n### Acceptance Criteria\n\nAcceptance criteria define when a story is done. For AI-assisted development, they serve double duty: they guide the human reviewer AND constrain the AI implementer.\n\nGood acceptance criteria for an AI-native team:\n\n- **Specific**: \"Returns 403 when user lacks `^project-admin` gate\" (not \"handles unauthorized access\")\n- **Observable**: \"Emits `!project-archived` signal\" (not \"notifies the system\")\n- **Testable**: \"Archived projects excluded from `GET /api/projects` response\" (not \"works correctly\")\n\n### Paradigm Tasks as Agile Work Items\n\nParadigm provides `paradigm_task_create` for tracking work items directly in the project context:\n\n```\nparadigm_task_create({\n  title: \"Add project archival endpoint\",\n  description: \"POST /api/projects/:id/archive with ^project-admin gate\",\n  symbols: [\"#project-archive\", \"^project-admin\", \"!project-archived\"],\n  priority: \"medium\"\n})\n```\n\nTasks live in `.paradigm/tasks/` and are visible to all agents working on the project. Unlike external issue trackers, they carry symbol references that Paradigm tools can query and cross-reference.\n\nUse `paradigm_task_list` to see open tasks, filter by symbol, and understand what work is in progress.\n\n### Using Symbols in Stories\n\nSymbols turn vague stories into precise specifications:\n\n| Symbol | Role in Stories | Example |\n|--------|----------------|---------|\n| `#component` | What to build or modify | \"Update `#user-profile` to include avatar\" |\n| `^gate` | Authorization requirements | \"Require `^authenticated` and `^profile-owner`\" |\n| `$flow` | Multi-step processes | \"Add step to `$onboarding-flow`\" |\n| `!signal` | Events to emit | \"Emit `!avatar-updated` on success\" |\n| `~aspect` | Cross-cutting concerns | \"Apply `~audit-required` to all mutations\" |\n\n### Definition of Done\n\nFor AI-native teams, the Definition of Done extends beyond code:\n\n1. **Code complete** -- Implementation matches acceptance criteria\n2. **Tests pass** -- Unit and integration tests cover the new behavior\n3. **`.purpose` updated** -- New components documented with symbols and descriptions\n4. **`portal.yaml` updated** -- New routes have declared gates\n5. **Review passed** -- `paradigm review` reports no violations\n6. **Lore recorded** -- Significant decisions captured via `paradigm_lore_record`\n\nItems 3-6 are enforced by Paradigm's stop hook. If you skip them, the hook blocks your session from completing.",
+      "keyConcepts": [
+        "User stories enriched with Paradigm symbols for precision",
+        "Acceptance criteria that guide both humans and AI agents",
+        "paradigm_task_create for project-embedded work items",
+        "Symbol types in stories: #component, ^gate, $flow, !signal, ~aspect",
+        "Definition of Done includes .purpose, portal.yaml, review, and lore"
+      ],
+      "quiz": [
+        {
+          "question": "Why should user stories include Paradigm symbols like #component and ^gate?",
+          "options": [
+            { "label": "A", "text": "Symbols are required by the Agile Manifesto" },
+            { "label": "B", "text": "They make stories precise enough for both humans and AI agents to act on" },
+            { "label": "C", "text": "They replace the need for acceptance criteria" },
+            { "label": "D", "text": "They are only needed for documentation purposes" }
+          ],
+          "answer": "B",
+          "explanation": "Paradigm symbols embed structural references directly in stories, telling both human developers and AI agents exactly which components, gates, and flows are involved. This precision reduces ambiguity in implementation."
+        },
+        {
+          "question": "What is the advantage of paradigm_task_create over an external issue tracker?",
+          "options": [
+            { "label": "A", "text": "It sends notifications to team members" },
+            { "label": "B", "text": "Tasks carry symbol references that Paradigm tools can query and cross-reference" },
+            { "label": "C", "text": "It automatically assigns tasks to the right developer" },
+            { "label": "D", "text": "It generates code from task descriptions" }
+          ],
+          "answer": "B",
+          "explanation": "Paradigm tasks live in .paradigm/tasks/ with symbol references, making them visible to AI agents and queryable through tools like paradigm_task_list. External trackers lack this symbol-level integration."
+        },
+        {
+          "question": "Which of the following is NOT part of the AI-native Definition of Done?",
+          "options": [
+            { "label": "A", "text": "Tests pass and .purpose files are updated" },
+            { "label": "B", "text": "portal.yaml updated for new routes with gates" },
+            { "label": "C", "text": "All code is written without AI assistance" },
+            { "label": "D", "text": "paradigm review reports no violations" }
+          ],
+          "answer": "C",
+          "explanation": "The AI-native Definition of Done explicitly expects AI involvement. It focuses on completeness: code, tests, .purpose updates, portal.yaml, review, and lore -- not on who wrote the code."
+        }
+      ]
+    },
+    {
+      "id": "sprint-planning-with-ai",
+      "title": "Sprint Planning with AI",
+      "content": "## Sprint Planning with AI\n\nTraditional sprint planning involves a team estimating stories, breaking them into tasks, and committing to a sprint goal. With AI agents, planning becomes both more powerful and more critical.\n\n### paradigm_orchestrate_inline as Sprint Planning\n\nParadigm's `paradigm_orchestrate_inline` tool functions as an AI-native sprint planner. When called with `mode: \"plan\"`, it analyzes a task and produces:\n\n- **Task decomposition** -- Breaking work into agent-sized pieces\n- **Agent role assignments** -- Which agent type handles each piece\n- **Dependency ordering** -- What must complete before what\n- **Symbol impact analysis** -- Which existing components are affected\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add project archival with admin-only access and audit trail\",\n  mode: \"plan\"\n})\n```\n\nThis replaces the whiteboard session where a team would decompose a feature. The output is a structured plan that agents can execute.\n\n### Task Decomposition\n\nEffective decomposition for AI agents follows different rules than for humans:\n\n**Human tasks** are sized by time (\"this is a 3-point story\"). **Agent tasks** are sized by context (\"this requires reading 5 files and modifying 2\").\n\nGood agent task decomposition:\n\n1. **Single responsibility** -- Each task modifies one concern (e.g., \"add the database migration\" vs. \"add the endpoint and migration and tests\")\n2. **Clear inputs and outputs** -- What files to read, what files to produce\n3. **Explicit dependencies** -- Task B needs Task A's output\n4. **Context boundaries** -- Each task should fit within an agent's context window\n\n### Agent Role Assignment\n\nDifferent tasks suit different agent roles:\n\n| Role | Best For | Model Tier |\n|------|----------|------------|\n| Architect | API design, data modeling, system structure | High (Opus-class) |\n| Builder | Implementation, following specs | Medium (Sonnet-class) |\n| Tester | Test writing, edge case discovery | Medium (Sonnet-class) |\n| Reviewer | Code review, compliance checking | High (Opus-class) |\n| Security | Auth gates, input validation, threat modeling | High (Opus-class) |\n\nParadigm's `paradigm team agents suggest` previews which agents fit a task before you commit to a plan.\n\n### Model Cascading\n\nNot every task needs the most capable model. Model cascading matches task complexity to model capability:\n\n- **Simple tasks** (rename a variable, add a log line, update a config value) -- Use the fastest, cheapest model\n- **Standard tasks** (implement a CRUD endpoint from a clear spec) -- Use a mid-tier model\n- **Complex tasks** (design an API, resolve a subtle concurrency bug, review security implications) -- Use the most capable model\n\nThis is the AI equivalent of not sending a senior engineer to fix a typo. Match the capability to the challenge.\n\n### Estimating with AI\n\nTraditional story points estimate human effort. With AI, estimation shifts to:\n\n- **Context size** -- How many files does the agent need to read?\n- **Ambiguity level** -- How much interpretation is required?\n- **Integration surface** -- How many existing components are touched?\n- **Review burden** -- How much human review will the output need?\n\nA \"1-point\" AI task: clear spec, single file, no integration. A \"13-point\" AI task: vague requirements, cross-cutting changes, security implications requiring expert review.\n\n### Sprint Goal with AI\n\nThe sprint goal remains human-driven. AI does not decide what matters to users. The team sets the goal, decomposes it into agent-executable tasks, and uses `paradigm_orchestrate_inline` to validate that the decomposition is complete and the dependencies are sound.",
+      "keyConcepts": [
+        "paradigm_orchestrate_inline with mode: plan for AI-native sprint planning",
+        "Agent tasks sized by context (files to read/modify) not time",
+        "Agent roles: architect, builder, tester, reviewer, security",
+        "Model cascading: match model capability to task complexity",
+        "Estimation shifts to context size, ambiguity, integration surface, and review burden"
+      ],
+      "quiz": [
+        {
+          "question": "How should agent tasks be sized compared to traditional human tasks?",
+          "options": [
+            { "label": "A", "text": "By time estimates in hours" },
+            { "label": "B", "text": "By story points using Fibonacci sequence" },
+            { "label": "C", "text": "By context requirements -- files to read, files to modify, dependencies" },
+            { "label": "D", "text": "By the number of lines of code expected" }
+          ],
+          "answer": "C",
+          "explanation": "Agent tasks are bounded by context, not time. A task that requires reading 5 files and modifying 2 is well-scoped. A task spanning 50 files exceeds context limits and should be decomposed further."
+        },
+        {
+          "question": "What is model cascading?",
+          "options": [
+            { "label": "A", "text": "Running the same task through progressively larger models until one succeeds" },
+            { "label": "B", "text": "Matching task complexity to model capability -- simpler tasks get cheaper models" },
+            { "label": "C", "text": "Using multiple models simultaneously and picking the best output" },
+            { "label": "D", "text": "Training custom models for each project" }
+          ],
+          "answer": "B",
+          "explanation": "Model cascading assigns simple tasks (config changes, renames) to fast, cheap models and reserves capable models (Opus-class) for complex work (architecture, security review). It optimizes cost and speed without sacrificing quality."
+        },
+        {
+          "question": "What does paradigm_orchestrate_inline with mode: 'plan' produce?",
+          "options": [
+            { "label": "A", "text": "A completed implementation of the feature" },
+            { "label": "B", "text": "Task decomposition, agent assignments, dependencies, and symbol impact analysis" },
+            { "label": "C", "text": "A Gantt chart with timeline estimates" },
+            { "label": "D", "text": "A list of bugs in the current codebase" }
+          ],
+          "answer": "B",
+          "explanation": "In plan mode, paradigm_orchestrate_inline analyzes a task and outputs a structured plan: how to break it down, which agent roles handle each piece, what depends on what, and which existing symbols are affected."
+        }
+      ]
+    },
+    {
+      "id": "reviews-and-retrospectives",
+      "title": "Reviews and Retrospectives",
+      "content": "## Reviews and Retrospectives\n\nIn traditional agile, reviews demonstrate working software and retrospectives improve the process. In AI-native teams, these ceremonies gain new tools and new urgency.\n\n### paradigm review as Code Review\n\nParadigm provides a two-stage automated review pipeline via `paradigm review`:\n\n**Stage 1: Spec Compliance**\n- Are `.purpose` files updated for modified components?\n- Does `portal.yaml` declare gates for new routes?\n- Are aspect anchors still valid?\n- Do flows reference existing symbols?\n\n**Stage 2: Code Quality**\n- Does the implementation match the specification?\n- Are there missing error handlers at system boundaries?\n- Is the Paradigm logger used instead of raw `console.log`?\n- Are tests present for new functionality?\n\nRun `paradigm review` after implementation and before committing. For CI integration, use `paradigm review --deep --ci` which exits with a non-zero code on violations.\n\nAutomated review does not replace human review. It handles the mechanical checks so human reviewers can focus on design decisions, edge cases, and whether the code actually solves the right problem.\n\n### Lore as Retrospective Records\n\nTraditional retrospectives produce action items on sticky notes that often get lost. Paradigm's lore system (`paradigm_lore_record`) creates persistent, searchable retrospective records:\n\n```\nparadigm_lore_record({\n  title: \"Auth middleware ordering matters\",\n  summary: \"Discovered that rate-limit must run before auth to prevent\n            timing attacks. Reordered middleware chain.\",\n  symbols_touched: [\"^rate-limit\", \"^authenticated\"],\n  tags: [\"arc:security\", \"arc:middleware\"],\n  type: \"insight\",\n  confidence: 0.9\n})\n```\n\nLore entries support several types relevant to retrospectives:\n\n- **`insight`** -- A lesson learned or pattern discovered\n- **`retro`** -- A retrospective observation about process or outcome\n- **`decision`** -- A choice made with rationale\n\nThe `arc:*` tag prefix groups related entries into thematic arcs. Over time, arcs like `arc:security` or `arc:performance` build a narrative of how the team's understanding evolved.\n\n### Assessment Verdicts\n\nAfter the fact, humans assess whether decisions and implementations were correct:\n\n```\nparadigm_lore_assess({ id: \"L-2026-03-15-...\", verdict: \"correct\" })\n```\n\nThree verdicts:\n\n| Verdict | Score | Meaning |\n|---------|-------|---------|\n| `correct` | 1.0 | The decision or implementation was right |\n| `partial` | 0.5 | Partly right, needed adjustment |\n| `incorrect` | 0.0 | Wrong approach, had to redo |\n\nAssessments feed into calibration scores (`paradigm_lore_calibration`), which reveal patterns: Is the team over-confident in security changes? Under-confident in refactors? This data drives targeted improvement.\n\n### The Two-Stage Review Pattern\n\nThe two-stage pattern applies beyond `paradigm review`:\n\n1. **Mechanical check** -- Did we follow the process? (automated)\n2. **Judgment check** -- Did we solve the right problem? (human)\n\nApply this pattern to sprint reviews:\n\n- **Stage 1**: Run `paradigm review --deep` on all sprint deliverables. Fix any violations.\n- **Stage 2**: Demo to stakeholders. Does the working software match their intent?\n\nAnd to retrospectives:\n\n- **Stage 1**: Review calibration data (`paradigm_lore_calibration`). Where are we miscalibrated?\n- **Stage 2**: Discuss why. What process changes would improve accuracy?\n\n### Sprint Review Checklist\n\n1. All tasks show `complete` in `paradigm_task_list`\n2. `paradigm review --deep` passes with no violations\n3. New components have `.purpose` coverage\n4. New routes declared in `portal.yaml`\n5. Lore recorded for significant decisions\n6. Demo working software to stakeholders",
+      "keyConcepts": [
+        "paradigm review runs two-stage checks: spec compliance then code quality",
+        "Lore entries (insight, retro, decision) serve as persistent retrospective records",
+        "Assessment verdicts (correct/partial/incorrect) track decision quality over time",
+        "Calibration scores reveal systematic over- or under-confidence",
+        "Two-stage pattern: mechanical check (automated) then judgment check (human)"
+      ],
+      "quiz": [
+        {
+          "question": "What are the two stages of paradigm review?",
+          "options": [
+            { "label": "A", "text": "Syntax checking and performance profiling" },
+            { "label": "B", "text": "Spec compliance (purpose, portal, anchors) and code quality (implementation, tests, logging)" },
+            { "label": "C", "text": "Unit testing and integration testing" },
+            { "label": "D", "text": "Human review and stakeholder approval" }
+          ],
+          "answer": "B",
+          "explanation": "Stage 1 checks spec compliance (are .purpose files updated, portal.yaml current, aspect anchors valid). Stage 2 checks code quality (does implementation match spec, are tests present, is the logger used correctly)."
+        },
+        {
+          "question": "How do assessment verdicts contribute to team improvement?",
+          "options": [
+            { "label": "A", "text": "They automatically fix incorrect code" },
+            { "label": "B", "text": "They feed calibration scores that reveal patterns of over- or under-confidence" },
+            { "label": "C", "text": "They replace the need for sprint retrospectives" },
+            { "label": "D", "text": "They assign blame for mistakes" }
+          ],
+          "answer": "B",
+          "explanation": "Assessment verdicts (correct/partial/incorrect) combined with confidence scores produce calibration data. Patterns like 'consistently over-confident on security changes' drive targeted process improvements."
+        },
+        {
+          "question": "What lore type is most appropriate for recording a retrospective observation?",
+          "options": [
+            { "label": "A", "text": "insight -- for lessons learned" },
+            { "label": "B", "text": "retro -- for retrospective observations about process or outcome" },
+            { "label": "C", "text": "decision -- for choices with rationale" },
+            { "label": "D", "text": "Any of these could be appropriate depending on the content" }
+          ],
+          "answer": "D",
+          "explanation": "All three types serve retrospective purposes. Use 'retro' for process observations, 'insight' for lessons learned, and 'decision' for choices you want to track. The type helps with filtering, but the content determines the right choice."
+        }
+      ]
+    },
+    {
+      "id": "continuous-improvement",
+      "title": "Continuous Improvement",
+      "content": "## Continuous Improvement\n\nAgile's core promise is not speed -- it is learning. Each sprint should make the team better at delivering value. AI-native teams have unique mechanisms for continuous improvement that compound over time.\n\n### Knowledge Graduation\n\nProject knowledge matures through five levels:\n\n| Level | Name | Description | Storage |\n|-------|------|-------------|---------|\n| L0 | Discovery | Raw observations during work | Chat context (ephemeral) |\n| L1 | Captured | Recorded as lore entries | `.paradigm/lore/` |\n| L2 | Validated | Assessed with verdicts | Lore with assessments |\n| L3 | Curated | Promoted to notebooks | `.paradigm/notebooks/` |\n| L4 | Institutional | Encoded in university content | `.paradigm/university/` |\n\nKnowledge that stays at L0 is lost when the session ends. Knowledge at L4 trains every future agent that works on the project. The improvement loop is: discover, capture, validate, curate, institutionalize.\n\nTools for each level:\n\n- **L0 to L1**: `paradigm_lore_record` -- Capture the insight before the session ends\n- **L1 to L2**: `paradigm_lore_assess` -- Have a human verify correctness\n- **L2 to L3**: `paradigm_notebook_promote` -- Extract validated lore into curated snippets\n- **L3 to L4**: `paradigm_university_create` -- Formalize into lessons and quizzes\n\n### Protocols from Repeated Work\n\nWhen you notice yourself (or an agent) repeating the same sequence of steps, that is a protocol waiting to be recorded:\n\n```\nparadigm_protocol_record({\n  name: \"add-crud-endpoint\",\n  triggers: [\"add endpoint\", \"create API route\", \"new REST resource\"],\n  tags: [\"api\", \"crud\"],\n  steps: [\n    { action: \"Read existing route file for patterns\", tool: \"Read\" },\n    { action: \"Create route handler with gates\", tool: \"Write\" },\n    { action: \"Update portal.yaml with new route\", tool: \"Edit\" },\n    { action: \"Create .purpose entry for new component\", tool: \"Edit\" },\n    { action: \"Write tests for new endpoint\", tool: \"Write\" },\n    { action: \"Run paradigm review\", tool: \"Bash\" }\n  ]\n})\n```\n\nRecorded protocols are found by `paradigm_protocol_search`. When a future agent gets a task that matches the trigger phrases, it finds the protocol and follows the steps instead of rediscovering the pattern. This is institutional memory that survives across sessions and agents.\n\n### Wisdom Antipatterns\n\nThe wisdom system (`.paradigm/wisdom/antipatterns.yaml`) records patterns that should be avoided:\n\n```yaml\nantipatterns:\n  - id: raw-sql-in-handlers\n    description: \"Never write raw SQL in route handlers\"\n    instead: \"Use the query builder in #database-service\"\n    symbols: [\"#database-service\"]\n  - id: auth-after-validation\n    description: \"Never validate input before checking authentication\"\n    instead: \"Gate checks (^authenticated) must come first in middleware chain\"\n    symbols: [\"^authenticated\"]\n```\n\nAgents check `paradigm_wisdom_context` before modifying symbols. If a symbol has associated antipatterns, the agent sees them and avoids the mistake. This turns one developer's hard-won lesson into protection for every future session.\n\n### Calibration Scores\n\nCalibration measures how well confidence predictions match actual outcomes:\n\n```\nparadigm_lore_calibration({ groupBy: \"symbol\" })\n```\n\nOutput includes:\n\n- **Accuracy rate** -- What fraction of assessed entries were correct?\n- **Average confidence** -- How confident were agents on average?\n- **Calibration score** -- 1.0 means confidence perfectly predicts accuracy. Below 1.0 means miscalibrated.\n- **Verdict breakdown** -- How many correct, partial, incorrect?\n\nCalibration data is actionable:\n\n- **High confidence, low accuracy** (over-confident) -- Add more review gates, require human sign-off\n- **Low confidence, high accuracy** (under-confident) -- Trust the process more, reduce unnecessary review overhead\n- **Low confidence, low accuracy** -- The area needs better specs, more context, or human expertise\n\n### The Improvement Flywheel\n\n1. **Work** produces lore entries with confidence scores\n2. **Assessment** produces verdicts that validate or challenge the work\n3. **Calibration** reveals systematic patterns\n4. **Protocols** encode what works into repeatable procedures\n5. **University content** trains future agents\n6. **Better-trained agents** produce better work\n\nEach cycle through this flywheel makes the project more resilient and the team more effective. This is continuous improvement with compound interest.",
+      "keyConcepts": [
+        "Knowledge graduation: L0 discovery through L4 institutional knowledge",
+        "Protocols capture repeated work patterns for future agents",
+        "Wisdom antipatterns prevent known mistakes across all sessions",
+        "Calibration scores reveal over- and under-confidence patterns",
+        "The improvement flywheel: work, assess, calibrate, encode, train"
+      ],
+      "quiz": [
+        {
+          "question": "What is the correct order of knowledge graduation levels?",
+          "options": [
+            { "label": "A", "text": "Captured, Discovery, Validated, Institutional, Curated" },
+            { "label": "B", "text": "Discovery, Captured, Validated, Curated, Institutional" },
+            { "label": "C", "text": "Institutional, Curated, Validated, Captured, Discovery" },
+            { "label": "D", "text": "Discovery, Validated, Captured, Curated, Institutional" }
+          ],
+          "answer": "B",
+          "explanation": "Knowledge graduates from L0 Discovery (ephemeral context) to L1 Captured (lore), L2 Validated (assessed), L3 Curated (notebooks), and L4 Institutional (university content)."
+        },
+        {
+          "question": "When should you record a protocol with paradigm_protocol_record?",
+          "options": [
+            { "label": "A", "text": "Before every task, as a planning document" },
+            { "label": "B", "text": "When you notice a repeatable sequence of steps being performed across tasks" },
+            { "label": "C", "text": "Only when the project lead requests it" },
+            { "label": "D", "text": "After every commit, regardless of the work done" }
+          ],
+          "answer": "B",
+          "explanation": "Protocols encode repeatable patterns. When you or an agent repeat the same steps (e.g., adding a CRUD endpoint always follows the same 6 steps), record a protocol so future agents can find and follow it automatically."
+        },
+        {
+          "question": "What does a calibration score of high confidence with low accuracy indicate?",
+          "options": [
+            { "label": "A", "text": "The team is performing well and can reduce oversight" },
+            { "label": "B", "text": "The system needs more review gates and human sign-off in that area" },
+            { "label": "C", "text": "Calibration data is unreliable and should be ignored" },
+            { "label": "D", "text": "The area has too many protocols" }
+          ],
+          "answer": "B",
+          "explanation": "High confidence with low accuracy means over-confidence -- agents think they are right but are often wrong. The remedy is more review gates, human sign-off, or better specs to reduce the gap between confidence and correctness."
+        }
+      ]
+    },
+    {
+      "id": "multi-agent-as-a-team",
+      "title": "Multi-Agent as a Team",
+      "content": "## Multi-Agent as a Team\n\nA team of AI agents is not a metaphor. When properly orchestrated, multiple agents function as specialized team members with defined roles, communication channels, and handoff protocols.\n\n### Agent Roles Map to Team Roles\n\nParadigm defines agent roles that mirror traditional development team roles:\n\n| Agent Role | Team Equivalent | Responsibilities |\n|-----------|-----------------|------------------|\n| **Architect** | Tech Lead / System Designer | API design, data modeling, system structure, spec writing |\n| **Builder** | Developer | Implementation following specs, writing code, updating .purpose |\n| **Tester** | QA Engineer | Test writing, edge case discovery, regression testing |\n| **Reviewer** | Senior Developer | Code review, compliance checking, quality gates |\n| **Security** | Security Engineer | Auth gates, input validation, threat modeling |\n\nEach role has different strengths. The Architect excels at making decisions with incomplete information. The Builder excels at following precise specs. Assigning the wrong role to a task produces suboptimal results, just like asking a QA engineer to design a database schema.\n\nParadigm's `paradigm team agents suggest` analyzes a task and recommends which roles should be involved, before any work begins.\n\n### Symphony as Standup Communication\n\nParadigm Symphony provides agent-to-agent messaging, functioning as an asynchronous standup:\n\n```\nparadigm_symphony_send({\n  to: \"backend/builder\",\n  subject: \"API schema finalized\",\n  body: \"The /api/projects endpoint uses the schema in #project-model. Ready for frontend integration.\",\n  thread: \"thr-project-api\"\n})\n```\n\nAgents check their inbox via `paradigm_symphony_poll` or the near-free `paradigm_symphony_peek`. Threads group related messages so agents can follow a conversation across sessions.\n\nSymphony supports several communication patterns:\n\n- **Broadcast** -- Architect notifies all agents of a design decision\n- **Handoff** -- Builder completes work and notifies the Reviewer\n- **Request** -- Tester requests a file from another project via `paradigm_symphony_request_file`\n- **Thread resolution** -- A thread concludes and its insights are saved to lore\n\nFor cross-machine teams, `paradigm symphony serve` runs a WebSocket relay that connects agents across different machines using 6-digit pairing codes.\n\n### Workspace as Cross-Team Collaboration\n\nParadigm Workspaces (`.paradigm-workspace`) enable multi-project awareness:\n\n```yaml\nversion: \"1.0\"\nname: my-platform\nmembers:\n  - name: backend\n    path: ./backend\n    role: api\n    exports: [\"#*-api\", \"^*\"]\n  - name: frontend\n    path: ./frontend\n    role: client\n```\n\nWith workspaces:\n\n- `paradigm_search` with `includeWorkspace: true` finds symbols across projects\n- `paradigm_ripple` with `includeWorkspace: true` shows cross-project impact\n- `paradigm_navigate` automatically falls back to sibling projects when a symbol is not found locally\n- `paradigm_gates_for_route` learns gate patterns from sibling `portal.yaml` files\n\nThis mirrors how real teams work across repositories. The backend team defines APIs that the frontend team consumes. Workspaces make these cross-team dependencies explicit and queryable.\n\n### Handoffs Between Agents\n\nClean handoffs prevent context loss between agents:\n\n1. **Prepare**: The completing agent calls `paradigm_handoff_prepare` with a summary and next steps\n2. **Transfer**: The summary includes modified files, symbols touched, decisions made, and open questions\n3. **Accept**: The receiving agent calls `paradigm team accept` and gets full context\n4. **Verify**: The receiving agent reads the handoff summary and confirms understanding before proceeding\n\nHandoffs are critical when:\n\n- Context usage exceeds 80% (agent running low on working memory)\n- A task transitions between roles (Architect hands off to Builder)\n- Work spans multiple sessions (end of day, resuming tomorrow)\n\nSession checkpoints (`paradigm_session_checkpoint`) provide crash recovery. If an agent session terminates unexpectedly, the next session can call `paradigm_session_recover` to resume from the last checkpoint.\n\n### Orchestration Patterns\n\n**Sequential**: Architect designs, then Builder implements, then Tester validates, then Reviewer approves. Simple and predictable.\n\n**Parallel**: Multiple Builders implement independent components simultaneously. Faster but requires clear boundaries.\n\n**Pipeline**: Each agent handles one stage and passes work to the next. Good for repeatable workflows like deploy pipelines.\n\n**Consensus**: Multiple agents propose solutions and a human (or senior agent) selects the best. Good for design decisions with multiple valid approaches.\n\nUse `paradigm team orchestrate` to coordinate agents automatically, or `paradigm team spawn` for manual control over individual agents.",
+      "keyConcepts": [
+        "Agent roles (architect, builder, tester, reviewer, security) map to team roles",
+        "Symphony provides agent-to-agent messaging as async standup",
+        "Workspaces enable cross-project symbol awareness and collaboration",
+        "Clean handoffs with paradigm_handoff_prepare prevent context loss",
+        "Orchestration patterns: sequential, parallel, pipeline, consensus"
+      ],
+      "quiz": [
+        {
+          "question": "Which agent role should handle API design and system structure decisions?",
+          "options": [
+            { "label": "A", "text": "Builder -- they write the most code" },
+            { "label": "B", "text": "Architect -- they excel at design decisions with incomplete information" },
+            { "label": "C", "text": "Tester -- they understand how the system should behave" },
+            { "label": "D", "text": "Security -- they understand system boundaries" }
+          ],
+          "answer": "B",
+          "explanation": "The Architect role maps to Tech Lead / System Designer. They excel at making design decisions, defining APIs, and structuring systems -- tasks that require judgment with incomplete information."
+        },
+        {
+          "question": "What is the purpose of Paradigm Workspaces in a multi-agent team?",
+          "options": [
+            { "label": "A", "text": "They provide a shared IDE for all agents" },
+            { "label": "B", "text": "They enable cross-project symbol awareness so agents can find and reference symbols across repositories" },
+            { "label": "C", "text": "They replace the need for version control" },
+            { "label": "D", "text": "They automatically deploy code across projects" }
+          ],
+          "answer": "B",
+          "explanation": "Workspaces (.paradigm-workspace) connect multiple projects so paradigm_search and paradigm_ripple can find symbols and assess impact across project boundaries, mirroring how real teams collaborate across repositories."
+        },
+        {
+          "question": "When should an agent prepare a handoff?",
+          "options": [
+            { "label": "A", "text": "Only at the end of the project" },
+            { "label": "B", "text": "When context usage exceeds 80%, when transitioning between roles, or when spanning sessions" },
+            { "label": "C", "text": "After every single tool call" },
+            { "label": "D", "text": "Only when explicitly told to by the user" }
+          ],
+          "answer": "B",
+          "explanation": "Handoffs are critical at three points: when context usage is high (agent running out of working memory), when work transitions between roles (Architect to Builder), and when work spans sessions (end of day). These are the moments where context loss causes rework."
+        }
+      ]
+    }
+  ]
+}

@@ -43,6 +43,15 @@ fi
 
 cd "$CWD" || exit 0
 
+# Pseudo-session-start: first edit of session emits one-time guidance
+if [ ! -f ".paradigm/.session-started" ]; then
+  PREV_PENDING=$(cat .paradigm/.pending-review 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$PREV_PENDING" -gt 0 ] 2>/dev/null; then
+    echo "[paradigm] Session started. $PREV_PENDING uncovered edit(s) from last session." >&2
+  fi
+  touch ".paradigm/.session-started"
+fi
+
 # Convert to relative path
 REL_PATH="$FILE_PATH"
 case "$FILE_PATH" in
@@ -105,6 +114,11 @@ elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "[paradigm] $PENDING_COUNT source file(s) modified. Update $found_purpose:" >&2
   echo "  -> #components, ~aspects (with anchors), !signals, \$flows, ^gates" >&2
   echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
+fi
+
+# Context budget heuristic: suggest handoff check at high edit counts
+if [ "$PENDING_COUNT" -ge 30 ]; then
+  echo "[paradigm] ~$PENDING_COUNT edits this session. Consider preparing handoff." >&2
 fi
 
 exit 0

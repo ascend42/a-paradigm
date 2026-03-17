@@ -14,6 +14,7 @@ const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
 const GitSection = lazy(() => import('./sections/git/GitSection'));
 const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection'));
 const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection'));
+const DocsSection = lazy(() => import('./sections/docs/DocsSection'));
 
 function SectionFallback() {
   return (
@@ -50,7 +51,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony'];
+      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -77,6 +78,7 @@ export default function App() {
             {activeSection === 'sentinel' && <SentinelSection />}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
             {activeSection === 'symphony' && <SymphonySection />}
+            {activeSection === 'docs' && <DocsSection />}
           </Suspense>
         </div>
       </div>

@@ -28,12 +28,16 @@ features:
 components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from portal.yaml'
+    type: utility
   gate-schemas:
     description: '#gate-schemas: Zod schemas for GateConfig, Gate, Lock, Key'
+    type: schema
   validator:
     description: '#validator: Validates gate configuration'
+    type: utility
   topology-checker:
     description: '#topology-checker: Checks for circular dependencies in gates'
+    type: utility
 signals:
   parse-success:
     description: '!parse-success: portal.yaml parsed successfully'

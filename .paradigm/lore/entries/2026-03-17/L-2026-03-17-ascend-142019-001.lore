@@ -1,0 +1,180 @@
+id: L-2026-03-17-ascend-142019-001
+type: milestone
+timestamp: '2026-03-17T14:20:19.677Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Sprints 14-16 + Automation Tier Graduation System
+summary: 'Massive dual-track session: (1) Conductor v0.15.0 with task lifecycle completion (cancel/reassign/archive), active Sentinel (event detail, symbol filter, metadata), and view decomposition (BindingsManagerView 302→44 lines, MainOverlayView into 12 sections). (2) Full Automation Tier Graduation system — a data-driven pipeline for migrating agent behaviors from expensive MCP tool calls to zero-cost hooks, with 5 habits retroactively graduated, graduation engine with eligibility checking, auto-demotion at 3 failures, and ~99% reduction in compliance token overhead.'
+symbols_touched:
+  - '#task-archive'
+  - '#task-store'
+  - '#task-detail-view'
+  - '#task-dashboard-view'
+  - '#sentinel-ws-client'
+  - '#sentinel-live-view'
+  - '#sentinel-event-detail'
+  - '#sentinel-symbol-filter'
+  - '#bindings-manager'
+  - '#custom-gesture-bindings'
+  - '#voice-command-bindings'
+  - '#builtin-gesture-bindings'
+  - '#eyebrow-bindings-view'
+  - '#hotkey-bindings-view'
+  - '#action-picker-views'
+  - '#graduation-engine'
+  - '#graduation-store'
+  - '#graduation-types'
+  - '#graduation-tools'
+  - '#graduation-cli'
+  - $task-archive
+  - $sentinel-investigation
+  - $graduation-flow
+  - '!task-cancelled'
+  - '!task-reassigned'
+  - '!tasks-archived'
+  - '!habit-graduated'
+  - '!habit-demoted'
+symbols_created:
+  - '#task-archive'
+  - '#sentinel-event-detail'
+  - '#sentinel-symbol-filter'
+  - '#custom-gesture-bindings'
+  - '#voice-command-bindings'
+  - '#builtin-gesture-bindings'
+  - '#eyebrow-bindings-view'
+  - '#hotkey-bindings-view'
+  - '#action-picker-views'
+  - '#graduation-engine'
+  - '#graduation-store'
+  - '#graduation-types'
+  - '#graduation-tools'
+  - '#graduation-cli'
+  - $task-archive
+  - $sentinel-investigation
+  - $graduation-flow
+  - '!task-cancelled'
+  - '!task-reassigned'
+  - '!tasks-archived'
+  - '!habit-graduated'
+  - '!habit-demoted'
+files_created:
+  - packages/conductor/Sources/Conductor/Models/TaskArchive.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SentinelEventDetailView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SentinelSymbolFilterView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/ActionPickerViews.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/CustomGestureBindingsView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/VoiceCommandBindingsView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/BuiltInGestureBindingsView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/EyebrowBindingsView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Bindings/HotkeyBindingsView.swift
+  - packages/conductor/Tests/ConductorTests/TaskArchiveTests.swift
+  - packages/conductor/Tests/ConductorTests/SentinelFilterTests.swift
+  - packages/conductor/Tests/ConductorTests/BindingsDecompositionTests.swift
+  - packages/paradigm-mcp/src/utils/graduation-types.ts
+  - packages/paradigm-mcp/src/utils/graduation-store.ts
+  - packages/paradigm-mcp/src/utils/graduation-engine.ts
+  - packages/paradigm-mcp/src/tools/graduation.ts
+  - packages/paradigm/src/commands/graduate/index.ts
+  - .paradigm/graduation.yaml
+  - docs/specs/automation-graduation.md
+files_modified:
+  - packages/conductor/Sources/Conductor/Models/TaskRecord.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TaskDetailView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TaskDashboardView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SentinelLiveView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/BindingsManagerView.swift
+  - packages/conductor/Sources/Conductor/Integration/SentinelWSClient.swift
+  - packages/conductor/Tests/ConductorTests/TaskStoreTests.swift
+  - packages/conductor/Tests/ConductorTests/SentinelWSClientTests.swift
+  - packages/paradigm-mcp/src/utils/habits-loader.ts
+  - packages/paradigm-mcp/src/tools/habits.ts
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-postwrite.sh
+  - CLAUDE.md
+  - CHANGELOG.md
+  - packages/conductor/.purpose
+decisions:
+  - id: D-graduation-tiers
+    decision: Three-tier automation system with data-driven graduation
+    rationale: MCP tools cost ~100-11K tokens per call. Habits cost ~200 tokens. Hooks cost zero. Moving behaviors down the tier stack as compliance data proves consistency saves massive token overhead.
+  - id: D-never-graduate
+    decision: tool-called and context-checked check types can never graduate to hooks
+    rationale: These require the agent to call an MCP tool and reason about the OUTPUT. A hook can verify filesystem state but cannot force cognition.
+  - id: D-retroactive-graduation
+    decision: 5 seed habits retroactively marked as graduated since stop hook already enforces them
+    rationale: purpose-coverage, gates-for-routes, record-lore-for-significant, verify-before-done, and postflight-compliance were duplicated between MCP habits evaluation and the 11-check stop hook. Marking them graduated eliminates the duplication.
+  - id: D-hook-source-of-truth
+    decision: Hook .sh files in src/commands/hooks/scripts/ are the source of truth, not plugins/
+    rationale: The build runs generate-hooks.mjs which copies .sh source files to plugins/ and embeds them in generated-hooks.ts. Editing plugins/ directly gets overwritten on every build.
+  - id: D-auto-demotion
+    decision: Auto-demote graduated habits after 3 failures in 7 days with 14-day cooldown
+    rationale: Graduation must be reversible for safety. If a hook starts failing, the behavior needs to return to agent-visible habit evaluation so the agent can fix the root cause.
+  - id: D-view-decomposition
+    decision: Decompose BindingsManagerView into 6 sub-views and MainOverlayView into 12 named sections
+    rationale: BindingsManagerView at 302 lines was the largest monolith in Conductor. MainOverlayView's mainContent was 100+ lines of inline views. Both needed structural cleanup for maintainability.
+errors_encountered:
+  - description: Hook scripts in plugins/ kept reverting after every edit
+    resolution: 'Discovered generate-hooks.mjs pipeline: source is src/commands/hooks/scripts/*.sh, not plugins/. Edit source, run generator, then build.'
+    time_to_fix: 3 attempts before discovering the pipeline
+  - description: Context budget heuristic using ${PENDING_COUNT} in template literal was interpreted as JS expression
+    resolution: Used $PENDING_COUNT without braces — shell doesn't need them when no ambiguity exists
+    time_to_fix: 2 attempts
+learnings:
+  - Hook shell scripts in plugins/ are auto-generated from src/commands/hooks/scripts/*.sh via generate-hooks.mjs — always edit source .sh files then run the generator
+  - Template literals in generated-hooks.ts interpret ${} as JS expressions — use $VAR not ${VAR} for shell variables in embedded hooks
+  - The stop hook already checks 11 compliance items that overlap with 5 of 13 seed habits — graduating these eliminates ~750 tokens/session of duplicate evaluation
+  - SentinelEvent needed Hashable conformance for SwiftUI .popover(item:) — added == and hash(into:) based on id field
+  - Context budget can be estimated heuristically by edit count in the post-write hook — 30+ edits correlates with high context usage, zero token cost vs ~600 tokens for manual paradigm_context_check polling
+verification:
+  status: pass
+  details:
+    swift_build: pass
+    swift_tests: 160 pass, 0 fail
+    mcp_build: pass
+    cli_build: pass
+    graduate_status: pass
+    promote_demote_cycle: pass
+tags:
+  - arc:conductor-sprints
+  - arc:automation-graduation
+  - milestone
+  - infrastructure
+  - token-optimization
+meta:
+  conductor_version: 0.15.0
+  paradigm_version: 4.6.0
+  test_count: 160
+  new_files: 19
+  modified_files: 20
+body: |-
+  ## Two-Track Session
+
+  ### Track 1: Conductor Sprints 14-16
+
+  Sprint 14 closes the task lifecycle gap — TaskDetailView previously only had a Close button. Now it has Cancel (with confirmation dialog), Re-assign (agent picker sheet), and View Thread. TaskStore gains archival to JSONL at ~/.paradigm/conductor/tasks-archive.jsonl, preventing unbounded growth.
+
+  Sprint 15 transforms SentinelLiveView from passive to active — events are now clickable (detail popover with metadata, related tasks), symbols are clickable (filter by symbol), and a horizontal chip bar shows top 10 symbols by frequency. SentinelWSClient now parses arbitrary metadata fields from events and tracks symbol frequency.
+
+  Sprint 16 is pure structural cleanup. BindingsManagerView was the last 300-line monolith — decomposed into 6 focused sub-views in a Bindings/ subdirectory. MainOverlayView's mainContent decomposed into 12 named computed properties (calibrationSection, inputSection, etc.).
+
+  ### Track 2: Automation Tier Graduation
+
+  The insight that triggered this: `paradigm_reindex` dumps ~11K tokens into context when the pre-commit hook already does the same thing at zero cost. This led to discovering that 5 of 13 seed habits are checked by BOTH the MCP evaluation AND the stop hook — pure waste.
+
+  The graduation system formalizes the three tiers and provides a data-driven pipeline for moving behaviors from expensive to cheap. Key design decision: `tool-called` check types can NEVER graduate because the agent needs to reason about the tool's output, not just verify it was called.
+
+  The auto-demotion mechanism (Check 12 in paradigm-common.sh) ensures safety: if a graduated hook starts failing, it gets demoted back to habit tier so the agent sees it again. 14-day cooldown prevents promote/demote churn.
+
+  Total token savings estimate: ~12K → ~120 tokens/session for compliance overhead (99% reduction). This is the single largest efficiency improvement in the project's history.
+confidence: 0.9
+git_context:
+  ref: f97fae46b621c5832f9f337068fba2f1eeb3570b
+  branch: main
+  dirty: true

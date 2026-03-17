@@ -54,9 +54,21 @@ description: |
     - "#WorkspaceLoader"
     - "#LoreTools"
     - "#HabitsTools"
+    - "#GraduationTools"
     - "#GraphTools"
     - "#ConductorTools"
     - "#SymphonyTools"
+    - "#UniversityTools"
+
+#GraduationTools:
+  description: "Automation tier graduation tools (graduate_check, graduate_status) — data-driven migration from habits to hooks"
+  type: tool
+  tags: [mcp, graduation, automation]
+  anchors:
+    - src/tools/graduation.ts:1
+    - src/utils/graduation-engine.ts:1
+    - src/utils/graduation-store.ts:1
+    - src/utils/graduation-types.ts:1
 
 #SymphonyTools:
   description: "The Score: agent-to-agent messaging tools (poll, send, status, thread, file requests) with Sentinel event bridge"
@@ -294,6 +306,23 @@ description: |
     - src/utils/aspect-graph.ts:1-821
   components:
     - "#IndexLoader"
+
+#UniversityTools:
+  description: MCP tool handlers for university content — search, create, update, quiz, submit, onboard, validate, diplomas. Supports category/track filtering and extracurricular content tracks.
+  type: service
+  tags: [feature, university, mcp]
+  anchors:
+    - src/tools/university.ts:1-730
+  components:
+    - "#UniversityLoader"
+
+#UniversityLoader:
+  description: Reads/writes per-project university content (notes, policies, quizzes, paths, diplomas). Supports category-based content organization, extracurricular track filtering, and onboarding sequence generation with core/extracurricular separation.
+  type: loader
+  tags: [feature, university]
+  anchors:
+    - src/utils/university-loader.ts:1-850
+    - src/types/university.ts:1-210
 
 # ============================================
 # Flows ($)

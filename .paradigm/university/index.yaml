@@ -1,0 +1,47 @@
+version: '1.0'
+generatedAt: '2026-03-17T14:25:54.222Z'
+totalContent: 3
+entries:
+  - id: N-paradigm-docs-overview
+    title: 'Paradigm Docs: Auto-Generated Documentation'
+    type: note
+    author: paradigm
+    created: '2026-03-17'
+    updated: '2026-03-17'
+    tags:
+      - docs
+      - paradigm
+      - documentation
+    symbols:
+      - '#DocsLoader'
+      - '#DocsCommands'
+      - '#DocsSection'
+    difficulty: beginner
+    file: content/notes/N-paradigm-docs-overview.md
+  - id: Q-paradigm-docs-basics
+    title: Paradigm Docs Basics
+    type: quiz
+    author: paradigm
+    created: '2026-03-17'
+    updated: '2026-03-17'
+    tags:
+      - docs
+      - paradigm
+      - documentation
+    symbols:
+      - '#DocsLoader'
+      - '#DocsCommands'
+    difficulty: beginner
+    file: content/quizzes/Q-paradigm-docs-basics.yaml
+  - id: LP-paradigm-docs
+    title: Paradigm Docs
+    type: path
+    author: paradigm
+    created: '2026-03-17'
+    updated: '2026-03-17'
+    tags:
+      - docs
+      - paradigm
+    symbols: []
+    file: content/paths/LP-paradigm-docs.yaml
+diplomaCount: 0

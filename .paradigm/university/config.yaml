@@ -1,0 +1,21 @@
+# University Configuration
+# Categories define content tracks for organizing knowledge
+
+content:
+  categories:
+    - id: paradigm-core
+      label: Core Curriculum
+      track: core
+    - id: paradigm-advanced
+      label: Advanced Topics
+      track: core
+    - id: extracurricular
+      label: Extracurricular
+      track: extracurricular
+      excludeFromOnboarding: true
+      validationStrictness: relaxed
+    - id: paradigm-docs
+      label: Paradigm Docs
+      track: extracurricular
+      excludeFromOnboarding: true
+  defaultCategory: paradigm-core

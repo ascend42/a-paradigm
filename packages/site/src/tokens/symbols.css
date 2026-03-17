@@ -1,0 +1,50 @@
+/* ==========================================================================
+   SYMBOLS — Five symbol colors shared across all sections
+   These NEVER change between obsidian and academia themes.
+   ========================================================================== */
+
+:root {
+  /* ── Component (#) — Green ───────────────────────────────────────────── */
+  --sym-component: #22c55e;
+  --sym-component-dark: #166534;
+  --sym-component-light: #86efac;
+
+  /* ── Flow ($) — Violet ───────────────────────────────────────────────── */
+  --sym-flow: #8b5cf6;
+  --sym-flow-dark: #5b21b6;
+  --sym-flow-light: #c4b5fd;
+
+  /* ── Gate (^) — Red ──────────────────────────────────────────────────── */
+  --sym-gate: #ef4444;
+  --sym-gate-dark: #991b1b;
+  --sym-gate-light: #fca5a5;
+
+  /* ── Signal (!) — Amber ──────────────────────────────────────────────── */
+  --sym-signal: #eab308;
+  --sym-signal-dark: #92400e;
+  --sym-signal-light: #fde68a;
+
+  /* ── Aspect (~) — Gray ───────────────────────────────────────────────── */
+  --sym-aspect: #6b7280;
+  --sym-aspect-dark: #374151;
+  --sym-aspect-light: #d1d5db;
+
+  /* ── Tag / Badge backgrounds (15% opacity) ───────────────────────────── */
+  --tag-component-bg: rgba(34, 197, 94, 0.08);
+  --tag-component-border: rgba(34, 197, 94, 0.19);
+  --tag-flow-bg: rgba(139, 92, 246, 0.08);
+  --tag-flow-border: rgba(139, 92, 246, 0.19);
+  --tag-gate-bg: rgba(239, 68, 68, 0.08);
+  --tag-gate-border: rgba(239, 68, 68, 0.19);
+  --tag-signal-bg: rgba(234, 179, 8, 0.08);
+  --tag-signal-border: rgba(234, 179, 8, 0.19);
+  --tag-aspect-bg: rgba(107, 114, 128, 0.08);
+  --tag-aspect-border: rgba(107, 114, 128, 0.19);
+
+  /* ── Glow colors (for node graph) ────────────────────────────────────── */
+  --glow-component: rgba(34, 197, 94, 0.4);
+  --glow-flow: rgba(139, 92, 246, 0.4);
+  --glow-gate: rgba(239, 68, 68, 0.4);
+  --glow-signal: rgba(234, 179, 8, 0.4);
+  --glow-aspect: rgba(107, 114, 128, 0.4);
+}

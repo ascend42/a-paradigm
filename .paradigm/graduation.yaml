@@ -1,0 +1,70 @@
+config:
+  demotion:
+    cooldownDays: 14
+    failureThreshold: 3
+    failureWindowDays: 7
+  enabled: true
+  neverGraduate:
+    - explore-before-implement
+    - ripple-before-modify
+    - check-fragility
+    - wisdom-before-implement
+    - confidence-on-decisions
+    - university-onboarded
+    - university-content-valid
+  thresholds:
+    minComplianceRate: 90
+    minConsecutiveSessions: 5
+    minEvents: 20
+    recencyDays: 7
+    timeWindowDays: 30
+states:
+  check-fragility:
+    neverGraduate: true
+    tier: habit
+  confidence-on-decisions:
+    neverGraduate: true
+    tier: habit
+  explore-before-implement:
+    neverGraduate: true
+    tier: habit
+  gates-for-routes:
+    complianceAtGraduation: 100
+    graduatedAt: '2026-03-17T00:00:00Z'
+    neverGraduate: false
+    tier: hook
+  postflight-compliance:
+    complianceAtGraduation: 100
+    graduatedAt: '2026-03-17T00:00:00Z'
+    neverGraduate: false
+    tier: hook
+  purpose-coverage:
+    complianceAtGraduation: 100
+    graduatedAt: '2026-03-17T00:00:00Z'
+    neverGraduate: false
+    tier: hook
+  record-lore-for-significant:
+    complianceAtGraduation: 100
+    graduatedAt: '2026-03-17T00:00:00Z'
+    neverGraduate: false
+    tier: hook
+  ripple-before-modify:
+    neverGraduate: true
+    tier: habit
+  test-new-components:
+    tier: habit
+  university-content-valid:
+    neverGraduate: true
+    tier: habit
+  university-onboarded:
+    neverGraduate: true
+    tier: habit
+  verify-before-done:
+    complianceAtGraduation: 100
+    graduatedAt: '2026-03-17T00:00:00Z'
+    neverGraduate: false
+    tier: hook
+  wisdom-before-implement:
+    neverGraduate: true
+    tier: habit
+version: '1.0'

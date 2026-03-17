@@ -1,0 +1,203 @@
+.article {
+  max-width: var(--max-width-content);
+}
+
+.title {
+  font-size: var(--text-h1);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.intro {
+  margin-top: var(--space-1);
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-4);
+}
+
+.sectionHeading {
+  font-size: var(--text-h3);
+  color: var(--text-heading);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Quick Links ─────────────────────────────────────────────────────────── */
+
+.quickLinks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.quickLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.quickLink:hover {
+  border-color: var(--surface-steel);
+  background: var(--surface-3);
+}
+
+.quickIcon {
+  font-size: var(--text-h4);
+  color: var(--sym-component);
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.quickLink div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quickTitle {
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.quickDesc {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+}
+
+/* ── Stats Grid ──────────────────────────────────────────────────────────── */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-1);
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: transform var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+}
+
+.statCount {
+  font-size: var(--text-h2);
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.statLabel {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Category colors */
+.component {
+  background: var(--tag-component-bg);
+  border: 1px solid var(--tag-component-border);
+}
+.component .statCount,
+.component .statLabel { color: var(--sym-component); }
+
+.flow {
+  background: var(--tag-flow-bg);
+  border: 1px solid var(--tag-flow-border);
+}
+.flow .statCount,
+.flow .statLabel { color: var(--sym-flow); }
+
+.gate {
+  background: var(--tag-gate-bg);
+  border: 1px solid var(--tag-gate-border);
+}
+.gate .statCount,
+.gate .statLabel { color: var(--sym-gate); }
+
+.signal {
+  background: var(--tag-signal-bg);
+  border: 1px solid var(--tag-signal-border);
+}
+.signal .statCount,
+.signal .statLabel { color: var(--sym-signal); }
+
+.aspect {
+  background: var(--tag-aspect-bg);
+  border: 1px solid var(--tag-aspect-border);
+}
+.aspect .statCount,
+.aspect .statLabel { color: var(--sym-aspect); }
+
+/* ── Portal Link ─────────────────────────────────────────────────────────── */
+
+.portalLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--tag-gate-bg);
+  border: 1px solid var(--tag-gate-border);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.portalLink:hover {
+  border-color: var(--sym-gate);
+}
+
+.portalIcon {
+  font-family: var(--font-mono);
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--sym-gate);
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.portalLink div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.portalLink .quickTitle {
+  color: var(--sym-gate-light);
+}
+
+.portalLink .quickDesc {
+  color: var(--text-secondary);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

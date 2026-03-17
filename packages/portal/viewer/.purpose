@@ -37,24 +37,34 @@ features:
 components:
   websocket-server:
     description: '#websocket-server: WebSocket server for real-time events'
+    type: service
   event-stream:
     description: '#event-stream: Streams gate events to clients'
+    type: service
   session-tracker:
     description: '#session-tracker: Tracks active sessions'
+    type: service
   journey-recorder:
     description: '#journey-recorder: Records entity paths through gates'
+    type: service
   timeline-component:
     description: '#timeline-component: React component for event timeline'
+    type: view
   event-renderer:
     description: '#event-renderer: Renders individual timeline events'
+    type: view
   checklist-component:
     description: '#checklist-component: React component for test checklist'
+    type: view
   test-runner:
     description: '#test-runner: Executes gate tests'
+    type: tool
   palette-component:
     description: '#palette-component: React component for command palette'
+    type: view
   command-generator:
     description: '#command-generator: Generates contextual CLI commands'
+    type: utility
 aspects:
   ~viewer-ws-port-42196:
     description: WebSocket server defaults to port 42196 (marathon + 1); UI defaults to 42195

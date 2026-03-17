@@ -257,3 +257,15 @@ workspace: "../.paradigm-workspace"
 #   university: true
 #   agents: true
 #   notebooks: true
+
+# Documentation generation — auto-generates docs from the symbol graph
+docs:
+  enabled: true
+  title: null
+  theme: dark
+  customContent: "docs/"
+  exclude:
+    tags: [deprecated, test]
+  sidebar:
+    collapsed: [aspects, signals]
+  output: ".paradigm/docs-site"

@@ -514,16 +514,38 @@ export function removeHabit(rootDir: string, id: string): { removed: boolean; re
 // EVALUATOR
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Count of habits skipped because they are graduated to hooks.
+ * Set during evaluateHabits() and read by callers for reporting.
+ */
+export let lastGraduatedSkipCount = 0;
+
 export function evaluateHabits(
   habits: HabitDefinition[],
   trigger: HabitTrigger,
   context: EvaluationContext,
-  platform?: string
+  platform?: string,
+  rootDir?: string
 ): EvaluationResult {
   let activeHabits = getHabitsByTrigger(habits, trigger);
   if (platform) {
     activeHabits = activeHabits.filter((h) => !h.platforms || h.platforms.includes(platform));
   }
+
+  // Skip habits that have been graduated to hooks (zero context cost)
+  let graduatedCount = 0;
+  if (rootDir) {
+    try {
+      const { isGraduated } = require('./graduation-store.js');
+      const beforeCount = activeHabits.length;
+      activeHabits = activeHabits.filter((h) => !isGraduated(rootDir, h.id));
+      graduatedCount = beforeCount - activeHabits.length;
+    } catch {
+      // graduation-store not available — evaluate all habits
+    }
+  }
+  lastGraduatedSkipCount = graduatedCount;
+
   const evaluations: HabitEvaluation[] = activeHabits.map((h) => evaluateHabit(h, context));
 
   const followed = evaluations.filter((e) => e.result === 'followed').length;

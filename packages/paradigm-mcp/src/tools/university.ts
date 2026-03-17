@@ -99,6 +99,15 @@ export function getUniversityToolsList() {
             type: 'string',
             description: 'Free-text search in title and tags',
           },
+          category: {
+            type: 'string',
+            description: 'Filter by category ID (e.g., "paradigm-core", "extracurricular")',
+          },
+          track: {
+            type: 'string',
+            enum: ['core', 'extracurricular'],
+            description: 'Filter by track',
+          },
           limit: {
             type: 'number',
             description: 'Maximum results (default: 20)',
@@ -171,6 +180,10 @@ export function getUniversityToolsList() {
             items: { type: 'string' },
             description: 'IDs of prerequisite content items',
           },
+          category: {
+            type: 'string',
+            description: 'Category ID for the content (default: project defaultCategory)',
+          },
           // Quiz-specific fields
           passThreshold: {
             type: 'number',
@@ -213,6 +226,7 @@ export function getUniversityToolsList() {
           symbols: { type: 'array', items: { type: 'string' }, description: 'New symbols' },
           difficulty: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
           estimatedMinutes: { type: 'number' },
+          category: { type: 'string', description: 'Category ID for the content' },
         },
         required: ['id'],
       },
@@ -345,6 +359,8 @@ export async function handleUniversityTool(
       difficulty: args.difficulty as Difficulty | undefined,
       symbol: args.symbol as string | undefined,
       query: args.query as string | undefined,
+      category: args.category as string | undefined,
+      track: args.track as 'core' | 'extracurricular' | undefined,
       limit: args.limit as number | undefined,
     });
 
@@ -438,6 +454,7 @@ export async function handleUniversityTool(
         estimatedMinutes: args.estimatedMinutes as number | undefined,
         passThreshold: (args.passThreshold as number) ?? 0.7,
         questions: (args.questions as UniversityQuiz['questions']) || [],
+        ...(args.category ? { category: args.category as string } : {}),
       };
 
       saveQuiz(ctx.rootDir, quiz);
@@ -460,6 +477,7 @@ export async function handleUniversityTool(
         tags: (args.tags as string[]) || [],
         ordered: (args.ordered as boolean) ?? true,
         steps: (args.steps as LearningPath['steps']) || [],
+        ...(args.category ? { category: args.category as string } : {}),
       };
 
       savePath(ctx.rootDir, lp);
@@ -485,6 +503,7 @@ export async function handleUniversityTool(
       difficulty: (args.difficulty as Difficulty) || 'beginner',
       estimatedMinutes: args.estimatedMinutes as number | undefined,
       prerequisites: (args.prerequisites as string[]) || [],
+      ...(args.category ? { category: args.category as string } : {}),
     };
 
     saveNote(ctx.rootDir, frontmatter, (args.body as string) || '');
@@ -512,6 +531,7 @@ export async function handleUniversityTool(
       if (args.symbols) fm.symbols = args.symbols as string[];
       if (args.difficulty) fm.difficulty = args.difficulty as Difficulty;
       if (args.estimatedMinutes !== undefined) fm.estimatedMinutes = args.estimatedMinutes as number;
+      if (args.category !== undefined) fm.category = args.category as string;
       fm.updated = today;
 
       const body = (args.body as string) ?? note.body;
@@ -530,6 +550,7 @@ export async function handleUniversityTool(
       if (args.tags) quiz.tags = args.tags as string[];
       if (args.symbols) quiz.symbols = args.symbols as string[];
       if (args.difficulty) quiz.difficulty = args.difficulty as Difficulty;
+      if (args.category !== undefined) quiz.category = args.category as string;
       quiz.updated = today;
 
       saveQuiz(ctx.rootDir, quiz);
@@ -545,6 +566,7 @@ export async function handleUniversityTool(
     if (lp) {
       if (args.title) lp.title = args.title as string;
       if (args.tags) lp.tags = args.tags as string[];
+      if (args.category !== undefined) lp.category = args.category as string;
       lp.updated = today;
 
       savePath(ctx.rootDir, lp);

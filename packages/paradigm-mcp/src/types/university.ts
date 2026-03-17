@@ -25,6 +25,7 @@ export interface UniversityFrontmatter {
   difficulty: Difficulty;
   estimatedMinutes?: number;
   prerequisites: string[];  // IDs of prerequisite content
+  category?: string;
 }
 
 export interface UniversityNote {
@@ -55,6 +56,7 @@ export interface UniversityQuiz {
   estimatedMinutes?: number;
   passThreshold: number;    // 0.0 to 1.0
   questions: QuizQuestion[];
+  category?: string;
 }
 
 // ── Learning Path ────────────────────────────────────────
@@ -76,6 +78,7 @@ export interface LearningPath {
   tags: string[];
   ordered: boolean;
   steps: LearningPathStep[];
+  category?: string;
 }
 
 // ── Diploma ──────────────────────────────────────────────
@@ -106,6 +109,7 @@ export interface UniversityIndexEntry {
   symbols: string[];
   difficulty?: Difficulty;
   file: string;             // Relative path from university dir
+  category?: string;
 }
 
 export interface UniversityIndex {
@@ -125,6 +129,8 @@ export interface UniversityFilter {
   symbol?: string;
   author?: string;
   query?: string;           // Free-text search in title/description
+  category?: string;
+  track?: 'core' | 'extracurricular';
   limit?: number;
 }
 
@@ -156,6 +162,9 @@ export interface UniversityContentCategory {
   label: string;
   icon?: string;
   description?: string;
+  track?: 'core' | 'extracurricular';  // default: 'core'
+  excludeFromOnboarding?: boolean;
+  validationStrictness?: 'standard' | 'relaxed';
 }
 
 export interface UniversityConfig {
@@ -165,6 +174,7 @@ export interface UniversityConfig {
     categories: UniversityContentCategory[];
     defaultDifficulty: Difficulty;
     requireApproval: boolean;
+    defaultCategory?: string;
   };
   diplomas: {
     includeGlobalPLSAT: boolean;

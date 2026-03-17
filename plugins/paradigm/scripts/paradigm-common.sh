@@ -396,3 +396,51 @@ if [ -f "portal.yaml" ]; then
     fi
   fi
 fi
+
+# --- Check 12: Graduation failure tracking ---
+# When violations occur for graduated habits, record failures for auto-demotion.
+if [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
+  GRAD_FAILURES_DIR=".paradigm/.graduation-failures"
+  mkdir -p "$GRAD_FAILURES_DIR" 2>/dev/null
+
+  # Map violations to graduated habit IDs
+  # Check 1/2/5 → purpose-coverage, Check 3/11 → gates-for-routes, Check 7 → record-lore-for-significant
+  NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date +%Y-%m-%dT%H:%M:%SZ)
+
+  # Purpose coverage violations → purpose-coverage habit
+  if echo "$VIOLATIONS" | grep -q "source file.*without .purpose\|missing .purpose\|purpose.*stale" 2>/dev/null; then
+    if grep -q "purpose-coverage" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "purpose-coverage" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/purpose-coverage"
+    fi
+  fi
+
+  # Portal gate violations → gates-for-routes habit
+  if echo "$VIOLATIONS" | grep -q "portal.yaml\|gate.*undeclared\|gate.*not declared" 2>/dev/null; then
+    if grep -q "gates-for-routes" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "gates-for-routes" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/gates-for-routes"
+    fi
+  fi
+
+  # Lore entry violations → record-lore-for-significant habit
+  if echo "$VIOLATIONS" | grep -q "lore entry expected\|no lore" 2>/dev/null; then
+    if grep -q "record-lore-for-significant" ".paradigm/graduation.yaml" 2>/dev/null && grep -A1 "record-lore-for-significant" ".paradigm/graduation.yaml" | grep -q "tier: hook" 2>/dev/null; then
+      echo "$NOW" >> "$GRAD_FAILURES_DIR/record-lore-for-significant"
+    fi
+  fi
+
+  # Count recent failures and emit advisory if approaching demotion threshold
+  for fail_file in "$GRAD_FAILURES_DIR"/*; do
+    [ -f "$fail_file" ] || continue
+    habit_id=$(basename "$fail_file")
+    fail_count=$(wc -l < "$fail_file" | tr -d ' ')
+    if [ "$fail_count" -ge 3 ]; then
+      ADVISORY="$ADVISORY
+  - Graduated habit '$habit_id' has $fail_count failures — auto-demotion triggered.
+    Run paradigm_graduate_status to review tier changes."
+    elif [ "$fail_count" -ge 2 ]; then
+      ADVISORY="$ADVISORY
+  - Graduated habit '$habit_id' has $fail_count failures (demotion at 3).
+    Fix the underlying issue or it will be demoted to habit tier."
+    fi
+  done
+fi

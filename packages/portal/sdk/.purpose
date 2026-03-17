@@ -26,16 +26,22 @@ features:
 components:
   evaluator:
     description: '#evaluator: Evaluates gate keys against context'
+    type: utility
   context-resolver:
     description: '#context-resolver: Resolves user context for evaluation'
+    type: utility
   gate-decorator:
     description: '#gate-decorator: @Gate() decorator for methods'
+    type: utility
   require-decorator:
     description: '#require-decorator: @Require() decorator for properties'
+    type: utility
   portal-client:
     description: '#portal-client: High-level client for portal operations'
+    type: service
   gate-client:
     description: '#gate-client: Low-level gate checking client'
+    type: service
 gates:
   gate-check:
     description: '^gate-check: Internal gate for SDK validation'

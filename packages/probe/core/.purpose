@@ -18,12 +18,16 @@ features:
 components:
   generator:
     description: '#generator: Generates scan-index.json'
+    type: service
   component-scanner:
     description: '#component-scanner: Scans for UI components'
+    type: service
   protocol-handler:
     description: '#protocol-handler: Handles probe protocol requests'
+    type: service
   matcher:
     description: '#matcher: Matches images to components'
+    type: utility
 aspects:
   ~visual-tag-inference-patterns:
     description: Component names are matched against 30+ regex patterns (button, form, modal, nav, etc.) to infer visual tags for image-to-code mapping

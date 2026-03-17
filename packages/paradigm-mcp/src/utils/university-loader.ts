@@ -102,6 +102,7 @@ export function loadUniversityConfig(rootDir: string): UniversityConfig {
         categories: data.content?.categories || [],
         defaultDifficulty: data.content?.defaultDifficulty || 'beginner',
         requireApproval: data.content?.requireApproval ?? false,
+        defaultCategory: data.content?.defaultCategory,
       },
       diplomas: {
         includeGlobalPLSAT: data.diplomas?.includeGlobalPLSAT ?? true,
@@ -309,6 +310,20 @@ export function searchContent(rootDir: string, filter: UniversityFilter): Univer
       e.tags.some(t => t.toLowerCase().includes(q)),
     );
   }
+  if (filter.category) {
+    results = results.filter(e => e.category === filter.category);
+  }
+  if (filter.track) {
+    const config = loadUniversityConfig(rootDir);
+    const categoryTrackMap = new Map<string, string>();
+    for (const cat of config.content.categories) {
+      categoryTrackMap.set(cat.id, cat.track || 'core');
+    }
+    results = results.filter(e => {
+      const entryTrack = e.category ? (categoryTrackMap.get(e.category) || 'core') : 'core';
+      return entryTrack === filter.track;
+    });
+  }
 
   const limit = filter.limit || 20;
   return results.slice(0, limit);
@@ -347,6 +362,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             symbols: Array.isArray(fm.symbols) ? fm.symbols : [],
             difficulty: (fm.difficulty as Difficulty) || 'beginner',
             file: `${CONTENT_DIR}/${subdir}/${file}`,
+            ...(fm.category ? { category: fm.category as string } : {}),
           });
         } catch {
           // Skip malformed
@@ -378,6 +394,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             symbols: quiz.symbols || [],
             difficulty: quiz.difficulty || 'beginner',
             file: `${CONTENT_DIR}/${QUIZZES_DIR}/${file}`,
+            ...(quiz.category ? { category: quiz.category } : {}),
           });
         } catch {
           // Skip malformed
@@ -408,6 +425,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             tags: lp.tags || [],
             symbols: [],
             file: `${CONTENT_DIR}/${PATHS_DIR}/${file}`,
+            ...(lp.category ? { category: lp.category } : {}),
           });
         } catch {
           // Skip malformed
@@ -492,11 +510,16 @@ export function validateUniversityContent(
 
     // Deep checks: symbol references
     if (knownSymbols && entry.symbols.length > 0) {
+      // Look up category validation strictness
+      const config = loadUniversityConfig(rootDir);
+      const entryCat = config.content.categories.find(c => c.id === entry.category);
+      const isRelaxed = entryCat?.validationStrictness === 'relaxed';
+
       for (const sym of entry.symbols) {
         if (!knownSymbols.has(sym)) {
           issues.push({
             contentId: entry.id,
-            severity: 'warning',
+            severity: isRelaxed ? 'warning' : 'warning',
             check: 'broken-symbol-ref',
             message: `Symbol "${sym}" not found in scan-index`,
             fix: `Remove or update the symbol reference in ${entry.id}`,
@@ -657,6 +680,7 @@ export function getAffectedUniversityContent(rootDir: string, symbol: string): A
 export interface OnboardingSequence {
   paths: Array<{ id: string; title: string; steps: number; completed: boolean }>;
   suggestedContent: UniversityIndexEntry[];
+  extracurricular: UniversityIndexEntry[];
   diplomaCount: number;
   totalContent: number;
 }
@@ -664,11 +688,24 @@ export interface OnboardingSequence {
 export function getOnboardingSequence(rootDir: string, student?: string): OnboardingSequence {
   const index = loadUniversityIndex(rootDir);
   if (!index) {
-    return { paths: [], suggestedContent: [], diplomaCount: 0, totalContent: 0 };
+    return { paths: [], suggestedContent: [], extracurricular: [], diplomaCount: 0, totalContent: 0 };
   }
 
-  // Find learning paths
-  const pathEntries = index.entries.filter(e => e.type === 'path');
+  // Load config to determine which categories exclude from onboarding
+  const config = loadUniversityConfig(rootDir);
+  const excludedCategories = new Set<string>();
+  for (const cat of config.content.categories) {
+    if (cat.excludeFromOnboarding) {
+      excludedCategories.add(cat.id);
+    }
+  }
+
+  // Partition entries into core and extracurricular
+  const coreEntries = index.entries.filter(e => !e.category || !excludedCategories.has(e.category));
+  const extracurricularEntries = index.entries.filter(e => e.category && excludedCategories.has(e.category));
+
+  // Find learning paths (core only)
+  const pathEntries = coreEntries.filter(e => e.type === 'path');
   const diplomas = student ? loadDiplomas(rootDir, { student }) : [];
   const diplomaSourceIds = new Set(diplomas.map(d => d.source));
 
@@ -682,14 +719,15 @@ export function getOnboardingSequence(rootDir: string, student?: string): Onboar
     };
   });
 
-  // Suggest beginner content for onboarding
-  const suggestedContent = index.entries
+  // Suggest beginner content for onboarding (core only)
+  const suggestedContent = coreEntries
     .filter(e => e.type !== 'path' && (e.difficulty === 'beginner' || e.tags.includes('onboarding')))
     .slice(0, 10);
 
   return {
     paths,
     suggestedContent,
+    extracurricular: extracurricularEntries,
     diplomaCount: diplomas.length,
     totalContent: index.totalContent,
   };
@@ -724,6 +762,7 @@ function normalizeFrontmatter(fm: UniversityFrontmatter): UniversityFrontmatter 
     difficulty: fm.difficulty || 'beginner',
     estimatedMinutes: fm.estimatedMinutes,
     prerequisites: Array.isArray(fm.prerequisites) ? fm.prerequisites : [],
+    ...(fm.category ? { category: fm.category as string } : {}),
   };
 }
 

@@ -46,6 +46,9 @@ final class InputOrchestrator: ObservableObject {
     // Symphony — file approval
     var fileApprovalManager: FileApprovalManager?
 
+    // Eyebrow binding registry (Sprint 13 — user-customizable bindings)
+    var eyebrowBindingRegistry: EyebrowBindingRegistry?
+
     // Dispatch
     let dispatchTarget: AXDispatchTarget
 
@@ -288,6 +291,21 @@ final class InputOrchestrator: ObservableObject {
             guard let self else { return }
             for await event in self.eyebrowDetector.eventStream {
                 guard !Task.isCancelled else { break }
+
+                // Check eyebrow binding registry first (when not using state machine)
+                if let registry = self.eyebrowBindingRegistry,
+                   !registry.useStateMachine,
+                   let action = registry.actionForEvent(event) {
+                    self.lastRecognizedGesture = RecognizedGesture(
+                        source: "eyebrow",
+                        name: Self.eyebrowEventName(event),
+                        actionName: ActionRegistry.nameFromAction(action)
+                    )
+                    await self.executeAction(action)
+                    continue
+                }
+
+                // Fall through to state machine
                 if let action = self.eyebrowStateMachine.process(event) {
                     self.lastRecognizedGesture = RecognizedGesture(
                         source: "eyebrow",

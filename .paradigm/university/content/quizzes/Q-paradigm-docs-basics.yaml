@@ -1,0 +1,67 @@
+id: Q-paradigm-docs-basics
+title: "Paradigm Docs Basics"
+description: "Test your understanding of the Paradigm Docs auto-generation system."
+author: paradigm
+created: "2026-03-17"
+updated: "2026-03-17"
+tags:
+  - docs
+  - paradigm
+  - documentation
+symbols:
+  - "#DocsLoader"
+  - "#DocsCommands"
+difficulty: beginner
+estimatedMinutes: 5
+passThreshold: 0.6
+category: paradigm-docs
+questions:
+  - id: docs-q1
+    question: "What is the PRIMARY data source for Paradigm Docs page generation?"
+    choices:
+      A: "README.md files in each directory"
+      B: ".paradigm/scan-index.json (the symbol graph)"
+      C: "JSDoc comments in source code"
+      D: "A separate docs/ database"
+    correct: B
+    explanation: "Paradigm Docs reads the scan-index.json which is built from .purpose files — the same symbol graph used for navigation, ripple analysis, and all other Paradigm features."
+
+  - id: docs-q2
+    question: "Which CLI command launches the interactive docs viewer?"
+    choices:
+      A: "paradigm serve --docs"
+      B: "paradigm docs build"
+      C: "paradigm docs serve"
+      D: "paradigm docs start"
+    correct: C
+    explanation: "paradigm docs serve launches the Platform server with the docs section enabled, defaulting to port 3850."
+
+  - id: docs-q3
+    question: "How does the docs system detect that documentation is stale?"
+    choices:
+      A: "Manual version numbers in each doc page"
+      B: ".purpose file mtime compared to docs output mtime"
+      C: "Git commit hashes"
+      D: "It doesn't — docs are always regenerated fresh"
+    correct: D
+    explanation: "Paradigm Docs generates documentation on-demand from the live symbol graph. There is no cached output that can go stale — every request reads the current scan-index."
+
+  - id: docs-q4
+    question: "What happens to symbols tagged with 'deprecated' in the default docs config?"
+    choices:
+      A: "They are highlighted with a warning banner"
+      B: "They are excluded from the generated documentation"
+      C: "They appear normally like any other symbol"
+      D: "They are moved to an archive section"
+    correct: B
+    explanation: "The default docs config excludes symbols with 'deprecated' and 'test' tags via the exclude.tags setting."
+
+  - id: docs-q5
+    question: "Where does Paradigm Docs content live in the University system?"
+    choices:
+      A: "Core curriculum — required for onboarding"
+      B: "Extracurricular track — optional enrichment"
+      C: "Advanced track — prerequisite required"
+      D: "Not in the University at all"
+    correct: B
+    explanation: "Paradigm Docs university content uses the 'paradigm-docs' category which is on the extracurricular track, meaning it's excluded from default onboarding but discoverable via search."

@@ -1,6 +1,7 @@
 components:
   paradigm-hooks:
     description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 8 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
+    type: command
     signals:
       - '!compliance-violation'
       - '!hook-installed'

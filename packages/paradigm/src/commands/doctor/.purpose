@@ -5,9 +5,11 @@ description: |
 components:
   doctor-handler:
     description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits
+    type: handler
     file: index.ts
   context-audit:
     description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+    type: utility
     file: context-audit.ts
     tags: [feature, context-quality]
 features:

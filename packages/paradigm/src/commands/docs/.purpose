@@ -1,0 +1,5 @@
+components:
+  DocsCommands:
+    description: CLI commands for auto-generated documentation — serve and build
+    type: command-group
+    tags: [feature, docs, cli]

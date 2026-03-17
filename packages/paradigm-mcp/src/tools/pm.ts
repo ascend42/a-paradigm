@@ -242,7 +242,7 @@ async function runPreflightCheck(task: string, ctx: ProjectContext) {
       taskDescription: task,
     });
 
-    const evalResult = evaluateHabits(habits, 'preflight', evalContext);
+    const evalResult = evaluateHabits(habits, 'preflight', evalContext, undefined, ctx.rootDir);
     habitsEvaluation = {
       total: evalResult.summary.total,
       followed: evalResult.summary.followed,
@@ -557,7 +557,7 @@ function runPostflightCheck(
       gitClean,
     });
 
-    const evalResult = evaluateHabits(habits, 'postflight', evalContext);
+    const evalResult = evaluateHabits(habits, 'postflight', evalContext, undefined, ctx.rootDir);
     habitsEvaluation = {
       trigger: 'postflight',
       total: evalResult.summary.total,

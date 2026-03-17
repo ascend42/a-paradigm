@@ -22,3 +22,15 @@ components:
   MigrateCommand:
     description: paradigm migrate — version-aware project migration
     type: command
+  DocsServeCommand:
+    description: paradigm docs serve — launches the Platform with docs section enabled
+    type: command
+    tags: [feature, docs]
+  DocsBuildCommand:
+    description: paradigm docs build — static export of symbol-graph documentation
+    type: command
+    tags: [feature, docs]
+  GraduateCommand:
+    description: "paradigm graduate — automation tier graduation CLI (status, promote, demote)"
+    type: command-group
+    tags: [feature, graduation, automation]

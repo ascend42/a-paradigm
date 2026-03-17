@@ -12,3 +12,7 @@ components:
     description: /api/git/* — 8 endpoints for git status, branches, log, diff, stage, unstage, commit, push
     type: router
     tags: [feature, git]
+  DocsRouter:
+    description: /api/docs/* — 6 endpoints for manifest, symbol pages, flow pages, portal, custom pages, and search
+    type: router
+    tags: [feature, docs]

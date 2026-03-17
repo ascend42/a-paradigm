@@ -45,3 +45,19 @@ components:
     description: "Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality"
     type: service
     tags: [feature, review, compliance]
+  DocsLoader:
+    description: Reads scan-index, .purpose files, portal.yaml, and flows.yaml to produce structured documentation page data
+    type: loader
+    tags: [feature, docs]
+  graduation-types:
+    description: "Type definitions for the automation tier graduation system — GraduationState, GraduationConfig, GraduationTier, NON_GRADUATABLE_CHECK_TYPES"
+    type: types
+    tags: [feature, graduation, automation]
+  graduation-store:
+    description: "YAML read/write for .paradigm/graduation.yaml — state accessors, mutations, 30s cache"
+    type: store
+    tags: [feature, graduation, persistence]
+  graduation-engine:
+    description: "Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking"
+    type: engine
+    tags: [feature, graduation, automation]

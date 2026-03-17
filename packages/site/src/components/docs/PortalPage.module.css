@@ -1,0 +1,203 @@
+.article {
+  max-width: var(--max-width-content);
+}
+
+.title {
+  font-size: var(--text-h1);
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.description {
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-6);
+}
+
+.inlineCode {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 2px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-sm);
+  color: var(--sym-gate);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-6);
+}
+
+.sectionTitle {
+  font-size: var(--text-h2);
+  color: var(--text-heading);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--surface-3);
+}
+
+/* ── Gate Cards ──────────────────────────────────────────────────────────── */
+
+.gateGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.gateCard {
+  padding: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+}
+
+.gateHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.gateType {
+  font-size: var(--text-micro);
+  padding: 2px 8px;
+  background: var(--surface-3);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gateDescription {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: var(--space-1);
+}
+
+.gateCheck {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  padding: var(--space-1);
+  background: var(--surface-void);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-1);
+}
+
+.gateRequires {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-1);
+}
+
+.requiresLabel {
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Route Table ─────────────────────────────────────────────────────────── */
+
+.tableWrapper {
+  overflow-x: auto;
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--surface-3);
+}
+
+.tr {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.tr:hover {
+  background: var(--surface-2);
+}
+
+.tr:not(:last-child) {
+  border-bottom: 1px solid var(--surface-3);
+}
+
+.td {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: middle;
+}
+
+.method {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+}
+
+.methodGET {
+  color: var(--sym-component);
+  background: var(--tag-component-bg);
+}
+
+.methodPOST {
+  color: var(--sym-flow);
+  background: var(--tag-flow-bg);
+}
+
+.methodPUT {
+  color: var(--sym-signal);
+  background: var(--tag-signal-bg);
+}
+
+.methodDELETE {
+  color: var(--sym-gate);
+  background: var(--tag-gate-bg);
+}
+
+.methodPATCH {
+  color: var(--sym-aspect);
+  background: var(--tag-aspect-bg);
+}
+
+.routePath {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-primary);
+}
+
+.routeGates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+}
