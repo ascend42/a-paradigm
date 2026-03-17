@@ -1814,6 +1814,79 @@ graduateCmd
     await graduateDemoteCommand(habitId, options);
   });
 
+// paradigm persona - Actor-driven journey testing
+const personaCmd = program
+  .command('persona')
+  .description('Personas — actor-driven journey testing');
+
+personaCmd
+  .command('list', { isDefault: true })
+  .alias('ls')
+  .description('List all personas')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--trigger <type>', 'Filter by trigger type (root, invitation, signup, api)')
+  .option('--gate <gate>', 'Filter by gate usage')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { personaListCommand } = await import('./commands/persona/index.js');
+    await personaListCommand(options);
+  });
+
+personaCmd
+  .command('show <id>')
+  .description('Show full persona detail')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { personaShowCommand } = await import('./commands/persona/index.js');
+    await personaShowCommand(id, options);
+  });
+
+personaCmd
+  .command('validate [id]')
+  .description('Validate persona schema and cross-references')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { personaValidateCommand } = await import('./commands/persona/index.js');
+    await personaValidateCommand(id, options);
+  });
+
+personaCmd
+  .command('coverage')
+  .description('Coverage report — routes and gates with/without persona coverage')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { personaCoverageCommand } = await import('./commands/persona/index.js');
+    await personaCoverageCommand(options);
+  });
+
+personaCmd
+  .command('run <id>')
+  .description('Execute persona journey against a running server')
+  .requiredOption('--base-url <url>', 'Base URL (e.g. http://localhost:3000)')
+  .option('--dry-run', 'Show steps without making HTTP requests')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { personaRunCommand } = await import('./commands/persona/index.js');
+    await personaRunCommand(id, options);
+  });
+
+personaCmd
+  .command('affected <symbol>')
+  .description('Show which personas reference a given symbol (gate, flow, signal)')
+  .option('--json', 'Output as JSON')
+  .action(async (symbol, options) => {
+    const { personaAffectedCommand } = await import('./commands/persona/index.js');
+    await personaAffectedCommand(symbol, options);
+  });
+
+personaCmd
+  .command('delete <id>')
+  .description('Delete a persona')
+  .action(async (id) => {
+    const { personaDeleteCommand } = await import('./commands/persona/index.js');
+    await personaDeleteCommand(id);
+  });
+
 // paradigm sentinel defend - Launch the unified codebase intelligence UI
 const sentinelCmd = program
   .command('sentinel')

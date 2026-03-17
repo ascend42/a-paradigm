@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0] — 2026-03-17
+
+### Added
+
+- **Personas CLI** — 7 commands closing the CLI gap (11 MCP tools existed, 0 CLI).
+  - `paradigm persona list` — List all personas with `--tag`, `--trigger`, `--gate` filters.
+  - `paradigm persona show <id>` — Full detail: traits, fixtures, journey steps with gates/routes/produces/spawns.
+  - `paradigm persona validate [<id>]` — Schema validation + cross-refs (gates vs portal.yaml, spawn targets).
+  - `paradigm persona coverage` — Coverage report from persona index (gate/route coverage, uncovered routes).
+  - `paradigm persona run <id> --base-url <url>` — Execute journey against running server with template interpolation. `--dry-run` mode.
+  - `paradigm persona affected <symbol>` — Which personas reference a gate, flow, or signal.
+  - `paradigm persona delete <id>` — Delete with spawn-chain warnings.
+
+Symbols: #persona-cli
+
 ## [4.7.0] — 2026-03-17
 
 ### Added

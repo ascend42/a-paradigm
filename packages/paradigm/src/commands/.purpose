@@ -34,3 +34,7 @@ components:
     description: "paradigm graduate — automation tier graduation CLI (status, promote, demote)"
     type: command-group
     tags: [feature, graduation, automation]
+  PersonaCommand:
+    description: "paradigm persona — actor-driven journey testing CLI (list, show, validate, coverage, run, affected, delete)"
+    type: command-group
+    tags: [feature, personas, testing]
