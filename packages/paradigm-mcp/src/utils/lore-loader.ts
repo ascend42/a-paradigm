@@ -186,9 +186,6 @@ function normalizeLoreEntry(raw: Record<string, unknown>): LoreEntry {
 // Author resolution (inlined from core)
 // ────────────────────────────────────────────────────────
 
-import { execSync } from 'child_process';
-import * as os from 'os';
-
 function sanitizeAuthor(name: string): string {
   return name
     .toLowerCase()

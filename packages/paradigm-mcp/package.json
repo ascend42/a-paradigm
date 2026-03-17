@@ -11,7 +11,9 @@
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "paradigm",
@@ -21,12 +23,12 @@
     "context"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
     "@a-company/probe-core": "*",
     "@a-company/purpose-core": "*",
-    "@a-company/portal-core": "*",
     "@a-company/sentinel": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "js-yaml": "^4.1.0",
     "sql.js": "^1.10.3",
     "ws": "^8.19.0",
@@ -35,7 +37,8 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.0"
   },
   "publishConfig": {
     "access": "public"
