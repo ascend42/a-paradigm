@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Platform server SPA fallback** — API routes (`/api/*`) now pass through to `next()` instead of being caught by the SPA fallback and served `index.html`.
+- **Docs content accuracy** — flows.md: corrected non-existent `paradigm flow validate` CLI to `paradigm flow diagram`; noted flows can live in `.paradigm/flows.yaml` or `.purpose` files. mcp-tools.md: corrected tool count from 50+ to 90+. portal-and-gates.md: documented optional gate fields (`type`, `location`, `prizes`).
 
 Symbols: #DocsBreadcrumbs, #DocsSidebarFilter, #CourseDataLoader, #CoursePage, #LessonPage, #PlsatPage, #DocsContentPage, #DocsSidebar, #platform-server
 
