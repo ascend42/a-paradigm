@@ -31,7 +31,9 @@ Every gate has three parts:
 |-------|----------|-------------|
 | description | Yes | Human-readable explanation of the check |
 | check | No | Pseudocode expression for the authorization logic |
-| type | No | Classification (e.g., "auth", "ownership", "role") |
+| type | No | Classification (e.g., "auth", "ownership", "role", "network") |
+| location | No | Where the gate is enforced (e.g., "middleware", "express-bind") |
+| prizes | No | Empty array `[]` — reserved for future gate reward tracking |
 
 Gates use the `^` prefix: `^authenticated`, `^project-admin`, `^comment-author`.
 

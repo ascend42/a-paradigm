@@ -17,9 +17,14 @@ Create a flow when your feature:
 - Emits events that trigger side effects
 - Needs clear documentation of the "happy path"
 
-## Defining Flows in .purpose
+## Defining Flows
 
-Flows live in `.purpose` files alongside the components they orchestrate:
+Flows can be defined in two places:
+
+- **`.paradigm/flows.yaml`** — project-wide flow definitions
+- **`.purpose` files** — alongside the components they orchestrate
+
+Here's an example flow definition:
 
 ```yaml
 flows:
@@ -54,14 +59,11 @@ flows:
 Paradigm validates flows to catch issues early:
 
 ```bash
-# Validate a specific flow
-paradigm flow validate $checkout-flow
-
-# Validate all flows
-paradigm flow validate
+# Generate a Mermaid diagram of a flow
+paradigm flow diagram $checkout-flow
 ```
 
-MCP tools:
+MCP tools (available to AI agents):
 - `paradigm_flow_validate` — check flow completeness and broken references
 - `paradigm_flows_affected` — see which flows are impacted when you modify a symbol
 
