@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.15.1] — 2026-03-17
+
+### Fixed
+
+- **Conductor .purpose YAML error** — Quoted context line containing embedded `overlay: Workspace` colon that broke YAML parsing (line 57). All 53 .purpose files now validate clean.
+- **3 stale protocols refreshed** — `P-add-hook-script`, `P-add-ide-adapter`, `P-update-changelog` re-verified after exemplar modifications.
+
+Symbols: #conductor-app
+
 ## [4.15.0] — 2026-03-17
 
 ### Added
