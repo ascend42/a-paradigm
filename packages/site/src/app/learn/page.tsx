@@ -6,7 +6,7 @@ const COURSES = [
     id: 'para-101',
     title: 'PARA 101: Foundations',
     description: 'Core concepts, symbol system, .purpose files, and project setup.',
-    lessons: 8,
+    lessons: 9,
     difficulty: 'Beginner',
     tags: ['paradigm', 'core'],
   },
@@ -14,7 +14,7 @@ const COURSES = [
     id: 'para-201',
     title: 'PARA 201: Intermediate',
     description: 'Flows, gates, signals, and navigation. Building connected systems.',
-    lessons: 8,
+    lessons: 11,
     difficulty: 'Intermediate',
     tags: ['paradigm', 'symbols'],
   },
@@ -22,7 +22,7 @@ const COURSES = [
     id: 'para-301',
     title: 'PARA 301: Advanced',
     description: 'Aspects, ripple analysis, wisdom system, and multi-agent orchestration.',
-    lessons: 8,
+    lessons: 11,
     difficulty: 'Advanced',
     tags: ['paradigm', 'advanced'],
   },
@@ -30,7 +30,7 @@ const COURSES = [
     id: 'para-401',
     title: 'PARA 401: Operational',
     description: 'Sentinel observability, deployment, CI/CD integration, and production workflows.',
-    lessons: 8,
+    lessons: 11,
     difficulty: 'Advanced',
     tags: ['paradigm', 'operations'],
   },
@@ -38,7 +38,7 @@ const COURSES = [
     id: 'para-501',
     title: 'PARA 501: Advanced Systems',
     description: 'Lore system, session intelligence, hook enforcement, and platform mastery.',
-    lessons: 8,
+    lessons: 14,
     difficulty: 'Expert',
     tags: ['paradigm', 'systems'],
   },
@@ -134,10 +134,10 @@ export default function LearnPage() {
         <h2 className={styles.sectionTitle}>PLSAT Certification</h2>
         <div className={styles.plsatCard}>
           <div className={styles.plsatContent}>
-            <h3>Paradigm Learning Standards Assessment Test</h3>
+            <h3>Paradigm Licensure Standardized Assessment Test</h3>
             <p>
-              Demonstrate your mastery of context engineering. 50 randomized questions
-              from the PARA 101-501 curriculum. 90 minutes. 70% to pass.
+              Demonstrate your mastery of context engineering. 99 randomized questions
+              from the PARA 101-501 curriculum. 90 minutes. 80% to pass.
             </p>
             <Link href="/learn/plsat" className={styles.plsatCta}>
               Take the PLSAT

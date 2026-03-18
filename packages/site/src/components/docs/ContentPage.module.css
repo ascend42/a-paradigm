@@ -75,16 +75,18 @@
 /* ── Code Blocks ─────────────────────────────────────────────────────────── */
 
 .codeBlock {
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--surface-steel);
-  background: var(--surface-void);
-  overflow: hidden;
+  position: relative;
+  margin: var(--space-2) 0;
 }
 
 .codeHeader {
+  display: flex;
+  align-items: center;
   padding: 6px 16px;
-  border-bottom: 1px solid var(--surface-3);
-  background: var(--surface-2);
+  background: var(--surface-graphite, var(--surface-2));
+  border: 1px solid var(--surface-steel);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 .codeLanguage {
@@ -92,12 +94,22 @@
   font-size: var(--text-micro);
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .pre {
   margin: 0;
   padding: 16px;
   overflow-x: auto;
+  background: var(--surface-void);
+  border: 1px solid var(--surface-steel);
+  border-radius: var(--radius-md);
+}
+
+.codeBlock .pre {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .pre code {

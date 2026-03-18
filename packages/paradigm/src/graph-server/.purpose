@@ -6,10 +6,12 @@ description: |
 components:
   graph-server:
     description: Express server serving graph UI static files and symbol API routes
+    type: service
     path: index.ts
     tags: [feature, server]
 
   symbols-route:
     description: API route returning symbol data from scan-index for the graph UI
+    type: route
     path: routes/symbols.ts
     tags: [api]

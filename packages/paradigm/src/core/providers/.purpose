@@ -6,31 +6,37 @@ description: |
 components:
   claude-provider:
     description: Anthropic API direct — requires ANTHROPIC_API_KEY environment variable
+    type: service
     path: claude.ts
     aspects: ["~provider-cascade"]
 
   claude-code-provider:
     description: Claude Code Task tool — requires Max subscription
+    type: service
     path: claude-code.ts
     aspects: ["~provider-cascade"]
 
   claude-code-teams-provider:
     description: Parallel agent execution via Claude Code teams (experimental)
+    type: service
     path: claude-code-teams.ts
     aspects: ["~provider-cascade"]
 
   cursor-cli-provider:
     description: Cursor agent CLI — auto-detected when running in Cursor IDE
+    type: service
     path: cursor-cli.ts
     aspects: ["~provider-cascade"]
 
   claude-cli-provider:
     description: Spawn claude CLI processes directly
+    type: service
     path: claude-cli.ts
     aspects: ["~provider-cascade"]
 
   manual-provider:
     description: File-based handoffs — always available as ultimate fallback
+    type: service
     path: manual.ts
     aspects: ["~provider-cascade"]
 

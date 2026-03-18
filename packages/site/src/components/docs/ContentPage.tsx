@@ -120,10 +120,11 @@ function MarkdownSection({ section }: { section: SectionNode }) {
     case 'paragraph':
       return <p className={styles.paragraph}><InlineMarkdown text={section.text} /></p>;
 
-    case 'code':
+    case 'code': {
+      const hasLang = section.language && section.language !== 'text';
       return (
-        <div className={styles.codeBlock}>
-          {section.language && (
+        <div className={hasLang ? styles.codeBlock : undefined}>
+          {hasLang && (
             <div className={styles.codeHeader}>
               <span className={styles.codeLanguage}>{section.language}</span>
             </div>
@@ -133,6 +134,7 @@ function MarkdownSection({ section }: { section: SectionNode }) {
           </pre>
         </div>
       );
+    }
 
     case 'list':
       return (

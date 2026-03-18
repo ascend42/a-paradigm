@@ -21,16 +21,47 @@ interface DocsSidebarProps {
 export function DocsSidebar({ sections }: DocsSidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState('');
 
   function toggle(title: string) {
     setCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
   }
 
+  const lowerFilter = filter.toLowerCase();
+
   return (
     <nav className={styles.nav} aria-label="Documentation navigation">
+      <div className={styles.searchBox}>
+        <div className={styles.searchWrap}>
+          <input
+            type="text"
+            className={styles.searchInput}
+            placeholder="Filter docs..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            aria-label="Filter documentation"
+          />
+          {filter && (
+            <button
+              className={styles.searchClear}
+              onClick={() => setFilter('')}
+              aria-label="Clear filter"
+              type="button"
+            >
+              &times;
+            </button>
+          )}
+        </div>
+      </div>
       {sections.map(section => {
-        const isCollapsed = collapsed[section.title] ?? false;
-        const hasActive = section.items.some(item => pathname === item.href);
+        const filteredItems = lowerFilter
+          ? section.items.filter(item => item.label.toLowerCase().includes(lowerFilter))
+          : section.items;
+
+        if (filteredItems.length === 0) return null;
+
+        const isCollapsed = !lowerFilter && (collapsed[section.title] ?? false);
+        const hasActive = filteredItems.some(item => pathname === item.href);
 
         return (
           <div key={section.title} className={styles.section}>
@@ -46,7 +77,7 @@ export function DocsSidebar({ sections }: DocsSidebarProps) {
             </button>
             {!isCollapsed && (
               <ul className={styles.links}>
-                {section.items.map(item => {
+                {filteredItems.map(item => {
                   const isActive = pathname === item.href;
                   return (
                     <li key={item.href}>

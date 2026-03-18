@@ -84,6 +84,36 @@ components:
     type: view
     tags: [ui, docs, content]
 
+  DocsBreadcrumbs:
+    description: Breadcrumb navigation component built from slug segments, rendered above docs content pages
+    type: view
+    tags: [ui, docs, navigation]
+
+  DocsSidebarFilter:
+    description: Text input filter in DocsSidebar that narrows sidebar items by label match
+    type: view
+    tags: [ui, docs, search]
+
+  CourseDataLoader:
+    description: Server-side course data layer — reads university + extracurricular JSON at build time, normalizes quiz formats
+    type: loader
+    tags: [university, data, build-time]
+
+  CoursePage:
+    description: Dynamic course overview page with breadcrumbs, syllabus list, and lesson navigation
+    type: view
+    tags: [ui, university, course]
+
+  LessonPage:
+    description: Lesson content page with markdown rendering, key concepts, quiz display, and prev/next navigation
+    type: view
+    tags: [ui, university, lesson]
+
+  PlsatPage:
+    description: PLSAT certification landing page with exam details, coverage grid, and preparation guide
+    type: view
+    tags: [ui, university, plsat]
+
 flows:
   $homepage-experience:
     description: Scroll-driven immersive homepage — hero, symbols, how-it-works, metrics, CTA
@@ -104,11 +134,13 @@ flows:
       - generateStaticParams pre-renders all 975+ symbol pages at build time
 
   $university-flow:
-    description: Learning path — course catalog, lessons, quizzes, PLSAT certification. Courses split into Core Curriculum and Extracurricular sections via category field.
+    description: Learning path — course catalog, course overview, lesson content with quizzes, PLSAT certification
     steps:
-      - Browse courses at /learn (split into Core Curriculum and Extracurricular)
-      - Take lessons at /learn/course/[courseId]
-      - Complete quizzes
+      - Browse courses at /learn (Core Curriculum + Extracurricular sections)
+      - CourseDataLoader reads university JSON + extracurricular JSON at build time
+      - View course overview at /learn/course/[courseId] with syllabus
+      - Read lesson content at /learn/course/[courseId]/lesson/[lessonId]
+      - Review quiz questions displayed inline with lesson content
       - Attempt PLSAT at /learn/plsat
       - View certificate at /learn/certificate
 

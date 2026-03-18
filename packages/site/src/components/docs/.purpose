@@ -1,6 +1,6 @@
 components:
   DocsSidebar:
-    description: Client-side collapsible sidebar with active link tracking, symbol prefix badges, and section counts
+    description: Client-side collapsible sidebar with active link tracking, symbol prefix badges, text filter, and section counts
     type: view
     tags: [feature, docs, site]
   SymbolPage:
@@ -20,6 +20,6 @@ components:
     type: view
     tags: [feature, docs, site]
   ContentPage:
-    description: Markdown renderer for handwritten docs pages — headings, code blocks, tables, lists
+    description: Markdown renderer for handwritten docs pages — headings, code blocks with language headers, tables, inline code, bold, links
     type: view
     tags: [feature, docs, site]

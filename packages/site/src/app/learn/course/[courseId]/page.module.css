@@ -1,0 +1,166 @@
+.page {
+  max-width: var(--max-width-marketing);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-3) var(--space-16);
+}
+
+/* ── Breadcrumbs ────────────────────────────────────────────────────────── */
+
+.breadcrumbs {
+  font-size: var(--text-small);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.breadcrumbs a {
+  color: var(--burgundy, var(--sym-component));
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbSep {
+  margin: 0 var(--space-1);
+  color: var(--text-muted);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.header {
+  margin-bottom: var(--space-6);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge[data-variant="core"] {
+  color: var(--burgundy, var(--sym-gate));
+  background: var(--burgundy-bg, var(--tag-gate-bg));
+}
+
+.badge[data-variant="extra"] {
+  color: var(--text-muted);
+  background: var(--tag-aspect-bg);
+}
+
+.lessonCount {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading, var(--font-sans));
+  font-size: var(--text-display);
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.description {
+  margin-top: var(--space-2);
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 640px;
+}
+
+/* ── Syllabus ───────────────────────────────────────────────────────────── */
+
+.syllabus {
+  margin-bottom: var(--space-6);
+}
+
+.syllabusTitle {
+  font-family: var(--font-heading, var(--font-sans));
+  font-size: var(--text-h2);
+  color: var(--text-heading);
+  margin-bottom: var(--space-3);
+}
+
+.lessonList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--surface-4);
+  border: 1px solid var(--surface-4);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.lessonItem {
+  background: var(--surface-2);
+}
+
+.lessonLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.lessonLink:hover {
+  background: var(--surface-3);
+  color: inherit;
+}
+
+.lessonNumber {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-muted);
+  min-width: 28px;
+}
+
+.lessonTitle {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.lessonArrow {
+  font-size: var(--text-small);
+  color: var(--text-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.lessonLink:hover .lessonArrow {
+  transform: translateX(3px);
+  color: var(--burgundy, var(--sym-component));
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.footer {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--surface-4);
+}
+
+.backLink {
+  font-size: var(--text-small);
+  color: var(--burgundy, var(--sym-component));
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}

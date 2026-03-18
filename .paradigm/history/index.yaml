@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-15T23:46:15.540Z'
+generated: '2026-03-17T21:13:33.431Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -8622,6 +8622,1330 @@ by_symbol:
     fragility: low
     recent:
       - *ref_113
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!agent-created':
+    symbol: '!agent-created'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_114
+        id: h0185
+        ts: '2026-03-16T08:43:29Z'
+        type: implement
+        symbols:
+          - '!agent-created'
+          - '!agent-synced'
+          - '!expertise-updated'
+          - '#agent-loader'
+          - '#agent-tools'
+          - '#agent-types'
+          - '#AgentCommands'
+          - $agent-expertise-flow
+        author:
+          type: human
+          id: ascend
+        commit: 165e81e14132ca0451d3138d91dde220e064e1af
+        intent: feature
+        files:
+          - .gitattributes
+          - .paradigm/docs/commands.md
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - CLAUDE.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/agents.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/lore.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/types/.purpose
+          - packages/paradigm-mcp/src/types/agents.ts
+          - packages/paradigm-mcp/src/types/index.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/agent-loader.ts
+          - packages/paradigm-vscode/package.json
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/agent/.purpose
+          - packages/paradigm/src/commands/agent/index.ts
+          - packages/paradigm/src/commands/agent/types.ts
+          - packages/paradigm/src/index.ts
+          - packages/university/src/content/courses/.purpose
+          - packages/university/src/content/courses/para-401.json
+        description: 'feat(#agent-loader): Agent Identity Files — Phase 0: persistent .agent profiles with expertise tracking'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!agent-synced':
+    symbol: '!agent-synced'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!expertise-updated':
+    symbol: '!expertise-updated'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-loader':
+    symbol: '#agent-loader'
+    total_changes: 2
+    last_modified: '2026-03-17T00:21:05Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_116
+        id: h0187
+        ts: '2026-03-17T00:21:05Z'
+        type: implement
+        symbols:
+          - '#agent-loader'
+          - '#compliance-checker'
+          - '#notebook-loader'
+          - '#tool-registry'
+        author:
+          type: human
+          id: ascend
+        commit: 54845ce65957bc0796dc80d715a4f7588791c572
+        intent: feature
+        files:
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/utils/agent-loader.test.ts
+          - packages/paradigm-mcp/src/utils/compliance-checker.test.ts
+          - packages/paradigm-mcp/src/utils/lore-loader.ts
+          - packages/paradigm-mcp/src/utils/notebook-loader.test.ts
+          - packages/paradigm-mcp/src/utils/tool-registry.test.ts
+          - packages/paradigm-mcp/vitest.config.ts
+        description: 'test(#paradigm-mcp): add 131 tests for 4.0.0 — permissions, notebooks, registry, compliance'
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-tools':
+    symbol: '#agent-tools'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-types':
+    symbol: '#agent-types'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#AgentCommands':
+    symbol: '#AgentCommands'
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $agent-expertise-flow:
+    symbol: $agent-expertise-flow
+    total_changes: 1
+    last_modified: '2026-03-16T08:43:29Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_114
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!notebook-created':
+    symbol: '!notebook-created'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_115
+        id: h0186
+        ts: '2026-03-16T23:39:31Z'
+        type: implement
+        symbols:
+          - '!notebook-created'
+          - '!notebook-promoted'
+          - '!review-complete'
+          - '#compliance-checker'
+          - '#notebook-loader'
+          - '#NotebookCommands'
+          - '#NotebookTools'
+          - '#NotebookTypes'
+          - '#ReviewCommand'
+          - '#tool-registry'
+          - $notebook-promote-flow
+          - $review-flow
+        author:
+          type: human
+          id: ascend
+        commit: a12665179a96b927b95442f3bb0c4e322a349157
+        intent: feature
+        files:
+          - .paradigm/config.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-053307-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-054737-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-060217-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-062151-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-080227-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-221725-001.lore
+          - .paradigm/lore/entries/2026-03-16/L-2026-03-16-ascend-224600-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .purpose
+          - CHANGELOG.md
+          - CLAUDE.md
+          - docs/specs/v4-technical.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/agents.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/navigate.ts
+          - packages/paradigm-mcp/src/tools/notebooks.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/types/.purpose
+          - packages/paradigm-mcp/src/types/agents.ts
+          - packages/paradigm-mcp/src/types/index.ts
+          - packages/paradigm-mcp/src/types/notebooks.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/agent-loader.ts
+          - packages/paradigm-mcp/src/utils/compliance-checker.ts
+          - packages/paradigm-mcp/src/utils/notebook-loader.ts
+          - packages/paradigm-mcp/src/utils/tool-registry.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/agent/.purpose
+          - packages/paradigm/src/commands/agent/index.ts
+          - packages/paradigm/src/commands/agent/types.ts
+          - packages/paradigm/src/commands/notebook/.purpose
+          - packages/paradigm/src/commands/notebook/index.ts
+          - packages/paradigm/src/commands/review/.purpose
+          - packages/paradigm/src/commands/review/index.ts
+          - packages/paradigm/src/index.ts
+          - packages/university/src/content/courses/.purpose
+          - packages/university/src/content/courses/para-401.json
+          - packages/university/src/content/courses/para-501.json
+        description: 'feat(#tool-registry): Paradigm 4.0.0 — The Context Engineering Framework'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!notebook-promoted':
+    symbol: '!notebook-promoted'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!review-complete':
+    symbol: '!review-complete'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#compliance-checker':
+    symbol: '#compliance-checker'
+    total_changes: 2
+    last_modified: '2026-03-17T00:21:05Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_116
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#notebook-loader':
+    symbol: '#notebook-loader'
+    total_changes: 2
+    last_modified: '2026-03-17T00:21:05Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_116
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#NotebookCommands':
+    symbol: '#NotebookCommands'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#NotebookTools':
+    symbol: '#NotebookTools'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#NotebookTypes':
+    symbol: '#NotebookTypes'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ReviewCommand':
+    symbol: '#ReviewCommand'
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#tool-registry':
+    symbol: '#tool-registry'
+    total_changes: 2
+    last_modified: '2026-03-17T00:21:05Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_116
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $notebook-promote-flow:
+    symbol: $notebook-promote-flow
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $review-flow:
+    symbol: $review-flow
+    total_changes: 1
+    last_modified: '2026-03-16T23:39:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_115
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!habit-demoted':
+    symbol: '!habit-demoted'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_117
+        id: h0188
+        ts: '2026-03-17T14:28:58Z'
+        type: implement
+        symbols:
+          - '!habit-demoted'
+          - '!habit-graduated'
+          - '!task-cancelled'
+          - '!task-reassigned'
+          - '!tasks-archived'
+          - '#action-picker-views'
+          - '#agent-health-monitor'
+          - '#agent-health-view'
+          - '#builtin-gesture-bindings'
+          - '#custom-gesture-bindings'
+          - '#eyebrow-binding-registry'
+          - '#eyebrow-bindings-view'
+          - '#graduation-cli'
+          - '#graduation-engine'
+          - '#graduation-store'
+          - '#graduation-tools'
+          - '#graduation-types'
+          - '#hotkey-binding-registry'
+          - '#hotkey-bindings-view'
+          - '#hotkey-recorder'
+          - '#sentinel-event-detail'
+          - '#sentinel-live-view'
+          - '#sentinel-symbol-filter'
+          - '#task-archive'
+          - '#task-dashboard-view'
+          - '#task-detail-view'
+          - '#task-record'
+          - '#task-store'
+          - '#voice-command-bindings'
+          - $graduation-flow
+          - $sentinel-investigation
+          - $task-archive
+        author:
+          type: human
+          id: ascend
+        commit: f83c3fa1f9224116170dd16592db63975ea918e4
+        intent: feature
+        files:
+          - .paradigm/config.yaml
+          - .paradigm/flow-index.json
+          - .paradigm/graduation.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-03-17/L-2026-03-17-ascend-064744-001.lore
+          - .paradigm/lore/entries/2026-03-17/L-2026-03-17-ascend-142019-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/add-aspect-with-anchors.protocol
+          - .paradigm/protocols/add-case-study.protocol
+          - .paradigm/protocols/add-hook-script.protocol
+          - .paradigm/protocols/add-integration-test.protocol
+          - .paradigm/protocols/add-mcp-tool.protocol
+          - .paradigm/protocols/add-plsat-question.protocol
+          - .paradigm/protocols/add-tool-with-reindex-integration.protocol
+          - .paradigm/protocols/add-university-course.protocol
+          - .paradigm/protocols/add-university-quiz.protocol
+          - .paradigm/protocols/index.yaml
+          - .paradigm/protocols/update-changelog.protocol
+          - .paradigm/scan-index.json
+          - .paradigm/university/config.yaml
+          - .paradigm/university/content/notes/N-paradigm-docs-overview.md
+          - .paradigm/university/content/paths/LP-paradigm-docs.yaml
+          - .paradigm/university/content/quizzes/Q-paradigm-docs-basics.yaml
+          - .paradigm/university/index.yaml
+          - CHANGELOG.md
+          - CLAUDE.md
+          - docs/specs/automation-graduation.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift
+          - packages/conductor/Sources/Conductor/Integration/SentinelWSClient.swift
+          - packages/conductor/Sources/Conductor/Models/TaskArchive.swift
+          - packages/conductor/Sources/Conductor/Models/TaskRecord.swift
+          - packages/conductor/Sources/Conductor/Orchestration/ActionRegistry.swift
+          - packages/conductor/Sources/Conductor/Orchestration/InputOrchestrator.swift
+          - packages/conductor/Sources/Conductor/Services/AgentHealthMonitor.swift
+          - packages/conductor/Sources/Conductor/Services/SymphonyMonitor.swift
+          - packages/conductor/Sources/Conductor/Symphony/.purpose
+          - packages/conductor/Sources/Conductor/UI/Views/AgentHealthView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/ActionPickerViews.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/BuiltInGestureBindingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/CustomGestureBindingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/EyebrowBindingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/HotkeyBindingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/Bindings/VoiceCommandBindingsView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/BindingsManagerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SentinelEventDetailView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SentinelLiveView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SentinelSymbolFilterView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/SettingsPanelView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/TaskComposerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/TaskDashboardView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/TaskDetailView.swift
+          - packages/conductor/Sources/Conductor/Utils/HotKeyBindingRegistry.swift
+          - packages/conductor/Sources/Conductor/Utils/HotKeyManager.swift
+          - packages/conductor/Sources/Conductor/Utils/HotKeyRecorder.swift
+          - packages/conductor/Tests/ConductorTests/AgentHealthMonitorTests.swift
+          - packages/conductor/Tests/ConductorTests/BindingsDecompositionTests.swift
+          - packages/conductor/Tests/ConductorTests/EyebrowBindingRegistryTests.swift
+          - packages/conductor/Tests/ConductorTests/HotKeyBindingRegistryTests.swift
+          - packages/conductor/Tests/ConductorTests/SentinelFilterTests.swift
+          - packages/conductor/Tests/ConductorTests/SentinelWSClientTests.swift
+          - packages/conductor/Tests/ConductorTests/TaskArchiveTests.swift
+          - packages/conductor/Tests/ConductorTests/TaskStoreTests.swift
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm-mcp/src/tools/docs.ts
+          - packages/paradigm-mcp/src/tools/graduation.ts
+          - packages/paradigm-mcp/src/tools/habits.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/pm.ts
+          - packages/paradigm-mcp/src/tools/university.ts
+          - packages/paradigm-mcp/src/types/docs.ts
+          - packages/paradigm-mcp/src/types/index.ts
+          - packages/paradigm-mcp/src/types/university.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/docs-loader.ts
+          - packages/paradigm-mcp/src/utils/graduation-engine.ts
+          - packages/paradigm-mcp/src/utils/graduation-store.ts
+          - packages/paradigm-mcp/src/utils/graduation-types.ts
+          - packages/paradigm-mcp/src/utils/habits-loader.ts
+          - packages/paradigm-mcp/src/utils/university-loader.ts
+          - packages/paradigm-vscode/.purpose
+          - packages/paradigm/graph-ui/.purpose
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/.purpose
+          - packages/paradigm/platform-ui/src/sections/docs/DocsSection.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsCustomPage.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsSidebar.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/FlowSteps.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/GateChain.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/PropertyTable.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/components/SymbolLink.tsx
+          - packages/paradigm/platform-ui/src/sections/docs/store/docsStore.ts
+          - packages/paradigm/platform-ui/src/sections/docs/styles/docs.css
+          - packages/paradigm/platform-ui/src/store/platformStore.ts
+          - packages/paradigm/src/commands/.purpose
+          - packages/paradigm/src/commands/docs/.purpose
+          - packages/paradigm/src/commands/docs/build.ts
+          - packages/paradigm/src/commands/docs/index.ts
+          - packages/paradigm/src/commands/docs/serve.ts
+          - packages/paradigm/src/commands/doctor/.purpose
+          - packages/paradigm/src/commands/graduate/index.ts
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-postwrite.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-posttooluse.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+          - packages/paradigm/src/commands/pipeline/.purpose
+          - packages/paradigm/src/commands/sweep/.purpose
+          - packages/paradigm/src/index.ts
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/docs.ts
+          - packages/portal/core/.purpose
+          - packages/portal/sdk/.purpose
+          - packages/portal/viewer/.purpose
+          - packages/probe/core/.purpose
+          - packages/sentinel-web/.purpose
+          - packages/site/.gitignore
+          - packages/site/.purpose
+          - packages/site/next.config.ts
+          - packages/site/package.json
+          - packages/site/src/.purpose
+          - packages/site/src/app/(marketing)/philosophy/page.module.css
+          - packages/site/src/app/(marketing)/philosophy/page.tsx
+          - packages/site/src/app/agents/page.module.css
+          - packages/site/src/app/agents/page.tsx
+          - packages/site/src/app/blog/page.module.css
+          - packages/site/src/app/blog/page.tsx
+          - packages/site/src/app/docs/[[...slug]]/page.module.css
+          - packages/site/src/app/docs/[[...slug]]/page.tsx
+          - packages/site/src/app/docs/layout.module.css
+          - packages/site/src/app/docs/layout.tsx
+          - packages/site/src/app/fonts/GeistMonoVF.woff2
+          - packages/site/src/app/fonts/GeistVF.woff2
+          - packages/site/src/app/globals.css
+          - packages/site/src/app/layout.tsx
+          - packages/site/src/app/learn/layout.tsx
+          - packages/site/src/app/learn/page.module.css
+          - packages/site/src/app/learn/page.tsx
+          - packages/site/src/app/page.module.css
+          - packages/site/src/app/page.tsx
+          - packages/site/src/app/sections/CTASection.module.css
+          - packages/site/src/app/sections/CTASection.tsx
+          - packages/site/src/app/sections/HeroSection.module.css
+          - packages/site/src/app/sections/HeroSection.tsx
+          - packages/site/src/app/sections/HowItWorksSection.module.css
+          - packages/site/src/app/sections/HowItWorksSection.tsx
+          - packages/site/src/app/sections/MetricsSection.module.css
+          - packages/site/src/app/sections/MetricsSection.tsx
+          - packages/site/src/app/sections/SymbolsSection.module.css
+          - packages/site/src/app/sections/SymbolsSection.tsx
+          - packages/site/src/components/CodeBlock.module.css
+          - packages/site/src/components/CodeBlock.tsx
+          - packages/site/src/components/LiveIndicator.module.css
+          - packages/site/src/components/LiveIndicator.tsx
+          - packages/site/src/components/NodeGraph/NodeGraph.module.css
+          - packages/site/src/components/NodeGraph/NodeGraph.tsx
+          - packages/site/src/components/NodeGraph/index.ts
+          - packages/site/src/components/SiteFooter.module.css
+          - packages/site/src/components/SiteFooter.tsx
+          - packages/site/src/components/SiteHeader.module.css
+          - packages/site/src/components/SiteHeader.tsx
+          - packages/site/src/components/SymbolBadge.module.css
+          - packages/site/src/components/SymbolBadge.tsx
+          - packages/site/src/components/docs/.purpose
+          - packages/site/src/components/docs/CategoryListPage.module.css
+          - packages/site/src/components/docs/CategoryListPage.tsx
+          - packages/site/src/components/docs/ContentPage.module.css
+          - packages/site/src/components/docs/ContentPage.tsx
+          - packages/site/src/components/docs/DocsSidebar.module.css
+          - packages/site/src/components/docs/DocsSidebar.tsx
+          - packages/site/src/components/docs/FlowPage.module.css
+          - packages/site/src/components/docs/FlowPage.tsx
+          - packages/site/src/components/docs/PortalPage.module.css
+          - packages/site/src/components/docs/PortalPage.tsx
+          - packages/site/src/components/docs/SymbolPage.module.css
+          - packages/site/src/components/docs/SymbolPage.tsx
+          - packages/site/src/components/docs/index.ts
+          - packages/site/src/content/courses/agile-development.json
+          - packages/site/src/content/courses/git-fundamentals.json
+          - packages/site/src/content/docs/concepts.md
+          - packages/site/src/content/docs/getting-started.md
+          - packages/site/src/content/docs/purpose-files.md
+          - packages/site/src/lib/docs-data.ts
+          - packages/site/src/tokens/academia.css
+          - packages/site/src/tokens/obsidian.css
+          - packages/site/src/tokens/symbols.css
+          - packages/site/tsconfig.json
+          - packages/university/.purpose
+          - packages/university/ui/.purpose
+          - plugins/paradigm-cursor/scripts/paradigm-common.sh
+          - plugins/paradigm-cursor/scripts/paradigm-posttooluse.sh
+          - plugins/paradigm-cursor/scripts/paradigm-stop.sh
+          - plugins/paradigm/scripts/paradigm-common.sh
+          - plugins/paradigm/scripts/paradigm-postwrite.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+        description: 'feat(#conductor,#graduation): Sprints 11-16, Docs System, Automation Tier Graduation'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!habit-graduated':
+    symbol: '!habit-graduated'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!task-cancelled':
+    symbol: '!task-cancelled'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!task-reassigned':
+    symbol: '!task-reassigned'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!tasks-archived':
+    symbol: '!tasks-archived'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#action-picker-views':
+    symbol: '#action-picker-views'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-health-monitor':
+    symbol: '#agent-health-monitor'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#agent-health-view':
+    symbol: '#agent-health-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#builtin-gesture-bindings':
+    symbol: '#builtin-gesture-bindings'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#custom-gesture-bindings':
+    symbol: '#custom-gesture-bindings'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#eyebrow-binding-registry':
+    symbol: '#eyebrow-binding-registry'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#eyebrow-bindings-view':
+    symbol: '#eyebrow-bindings-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#graduation-cli':
+    symbol: '#graduation-cli'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#graduation-engine':
+    symbol: '#graduation-engine'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#graduation-store':
+    symbol: '#graduation-store'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#graduation-tools':
+    symbol: '#graduation-tools'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#graduation-types':
+    symbol: '#graduation-types'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hotkey-binding-registry':
+    symbol: '#hotkey-binding-registry'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hotkey-bindings-view':
+    symbol: '#hotkey-bindings-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#hotkey-recorder':
+    symbol: '#hotkey-recorder'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-event-detail':
+    symbol: '#sentinel-event-detail'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-live-view':
+    symbol: '#sentinel-live-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sentinel-symbol-filter':
+    symbol: '#sentinel-symbol-filter'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-archive':
+    symbol: '#task-archive'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-dashboard-view':
+    symbol: '#task-dashboard-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-detail-view':
+    symbol: '#task-detail-view'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-record':
+    symbol: '#task-record'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-store':
+    symbol: '#task-store'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#voice-command-bindings':
+    symbol: '#voice-command-bindings'
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $graduation-flow:
+    symbol: $graduation-flow
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $sentinel-investigation:
+    symbol: $sentinel-investigation
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $task-archive:
+    symbol: $task-archive
+    total_changes: 1
+    last_modified: '2026-03-17T14:28:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_117
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#persona-cli':
+    symbol: '#persona-cli'
+    total_changes: 1
+    last_modified: '2026-03-17T14:45:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0189
+        ts: '2026-03-17T14:45:49Z'
+        type: implement
+        symbols:
+          - '#persona-cli'
+        author:
+          type: human
+          id: ascend
+        commit: d7f35973308e9852a54ca84a2ca754ffc0a31289
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm/src/commands/.purpose
+          - packages/paradigm/src/commands/persona/index.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#persona-cli): paradigm persona list/show/validate/coverage/run/affected/delete'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#aspect-fingerprint':
+    symbol: '#aspect-fingerprint'
+    total_changes: 1
+    last_modified: '2026-03-17T15:36:00Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0190
+        ts: '2026-03-17T15:36:00Z'
+        type: implement
+        symbols:
+          - '#aspect-fingerprint'
+        author:
+          type: human
+          id: ascend
+        commit: 5aea4b13742b6441f8a1147e5821c03547c194b3
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/types/aspect-graph.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/aspect-fingerprint.ts
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+        description: 'feat(#aspect-fingerprint): Smart Drift Detection Phase 3 — content fingerprint search'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#instance-cell':
+    symbol: '#instance-cell'
+    total_changes: 1
+    last_modified: '2026-03-17T17:13:32Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_118
+        id: h0191
+        ts: '2026-03-17T17:13:32Z'
+        type: implement
+        symbols:
+          - '#instance-cell'
+          - '#tiling-engine'
+          - '#workspace-container'
+        author:
+          type: human
+          id: ascend
+        commit: 467cbf4a3afa68eba87d626a06563a19b24ebe9b
+        intent: feature
+        files:
+          - docs/specs/conductor-workspace-container.md
+        description: 'docs(#workspace-container): Conductor Workspace Container spec — tiling engine, container window, cell chrome'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#tiling-engine':
+    symbol: '#tiling-engine'
+    total_changes: 3
+    last_modified: '2026-03-17T18:01:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_122
+        id: h0195
+        ts: '2026-03-17T18:01:52Z'
+        type: implement
+        symbols:
+          - '#cell-footer'
+          - '#tiling-engine'
+        author:
+          type: human
+          id: ascend
+        commit: b6474755b97691c40bd1a13f79afe500fca2031c
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/UI/Views/CellChromeView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/CellFooterView.swift
+          - packages/conductor/Tests/ConductorTests/TilingEngineTests.swift
+        description: 'feat(#conductor): Sprint 20 — Cell Footer, Border Animations, Tiling Tests (v1.0.0)'
+      - &ref_119
+        id: h0192
+        ts: '2026-03-17T17:30:47Z'
+        type: implement
+        symbols:
+          - '#cell-chrome'
+          - '#container-view'
+          - '#container-window'
+          - '#tiling-engine'
+          - $workspace-layout
+        author:
+          type: human
+          id: ascend
+        commit: 99b1b5b2d55cb025036c4cfd3e2c491f83baa5d1
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/App/ContainerWindow.swift
+          - packages/conductor/Sources/Conductor/UI/Views/CellChromeView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/Workspace/TilingEngine.swift
+        description: 'feat(#conductor): Sprint 17 — Container Window + Tiling Engine (v0.16.0)'
+      - *ref_118
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#workspace-container':
+    symbol: '#workspace-container'
+    total_changes: 1
+    last_modified: '2026-03-17T17:13:32Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_118
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cell-chrome':
+    symbol: '#cell-chrome'
+    total_changes: 1
+    last_modified: '2026-03-17T17:30:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_119
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#container-view':
+    symbol: '#container-view'
+    total_changes: 1
+    last_modified: '2026-03-17T17:30:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_119
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#container-window':
+    symbol: '#container-window'
+    total_changes: 1
+    last_modified: '2026-03-17T17:30:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_119
+    contributors:
+      human:
+        - ascend
+      agent: []
+  $workspace-layout:
+    symbol: $workspace-layout
+    total_changes: 1
+    last_modified: '2026-03-17T17:30:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_119
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cell-action-menu':
+    symbol: '#cell-action-menu'
+    total_changes: 1
+    last_modified: '2026-03-17T17:57:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_120
+        id: h0193
+        ts: '2026-03-17T17:57:07Z'
+        type: implement
+        symbols:
+          - '#cell-action-menu'
+          - '#divider-handle'
+          - '#layout-presets'
+        author:
+          type: human
+          id: ascend
+        commit: 995135a07c66ac3b72340e999d4e8bd3a9dfe3ec
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/UI/Views/CellActionMenu.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/DividerHandle.swift
+          - packages/conductor/Sources/Conductor/UI/Views/LayoutPresetsView.swift
+        description: 'feat(#conductor): Sprint 18 — Drag-to-Resize, Layout Presets, Cell Actions'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#divider-handle':
+    symbol: '#divider-handle'
+    total_changes: 1
+    last_modified: '2026-03-17T17:57:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_120
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#layout-presets':
+    symbol: '#layout-presets'
+    total_changes: 1
+    last_modified: '2026-03-17T17:57:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_120
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#control-panel-container':
+    symbol: '#control-panel-container'
+    total_changes: 1
+    last_modified: '2026-03-17T17:59:35Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_121
+        id: h0194
+        ts: '2026-03-17T17:59:35Z'
+        type: implement
+        symbols:
+          - '#control-panel-container'
+          - '#status-bar'
+        author:
+          type: human
+          id: ascend
+        commit: b38184fd75dfd3961afb81d11f75ae114481be11
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - packages/conductor/.purpose
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ControlPanelContainer.swift
+          - packages/conductor/Sources/Conductor/UI/Views/StatusBarView.swift
+        description: 'feat(#conductor): Sprint 19 — Control Panel + Status Bar'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#status-bar':
+    symbol: '#status-bar'
+    total_changes: 1
+    last_modified: '2026-03-17T17:59:35Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_121
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#cell-footer':
+    symbol: '#cell-footer'
+    total_changes: 1
+    last_modified: '2026-03-17T18:01:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_122
     contributors:
       human:
         - ascend

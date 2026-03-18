@@ -173,9 +173,11 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
     app.use(express.static(uiDistPath));
 
     // SPA fallback (Express 5 requires named wildcard param)
-    app.get('{*path}', (req: Request, res: Response) => {
+    app.get('{*path}', (req: Request, res: Response, next: NextFunction) => {
       if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(uiDistPath, 'index.html'));
+      } else {
+        next();
       }
     });
   } else {

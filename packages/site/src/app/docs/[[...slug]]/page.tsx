@@ -67,19 +67,31 @@ export default async function DocsPage({
   const { slug: slugParts } = await params;
   const resolved = resolveDocsSlug(slugParts || []);
 
+  const breadcrumbs = buildBreadcrumbs(slugParts || []);
+
   switch (resolved.type) {
     case 'index':
       return <DocsIndex />;
 
     case 'content':
-      return <ContentPage page={resolved.data as ContentPageData} />;
+      return (
+        <>
+          <Breadcrumbs items={breadcrumbs} />
+          <ContentPage page={resolved.data as ContentPageData} />
+        </>
+      );
 
     case 'category-list': {
       const { category, entries } = resolved.data as {
         category: SymbolCategory;
         entries: SymbolEntry[];
       };
-      return <CategoryListPage category={category} entries={entries} />;
+      return (
+        <>
+          <Breadcrumbs items={breadcrumbs} />
+          <CategoryListPage category={category} entries={entries} />
+        </>
+      );
     }
 
     case 'symbol-detail': {
@@ -88,18 +100,77 @@ export default async function DocsPage({
         flow: FlowEntry | null;
         category: SymbolCategory;
       };
-      if (category === 'flows' && flow) {
-        return <FlowPage flow={flow} />;
-      }
-      return <SymbolPage entry={entry} category={category} flow={flow} />;
+      return (
+        <>
+          <Breadcrumbs items={breadcrumbs} />
+          {category === 'flows' && flow
+            ? <FlowPage flow={flow} />
+            : <SymbolPage entry={entry} category={category} flow={flow} />
+          }
+        </>
+      );
     }
 
     case 'portal':
-      return <PortalPage data={resolved.data as PortalData} />;
+      return (
+        <>
+          <Breadcrumbs items={breadcrumbs} />
+          <PortalPage data={resolved.data as PortalData} />
+        </>
+      );
 
     default:
       notFound();
   }
+}
+
+/* ── Breadcrumbs ─────────────────────────────────────────────────────────── */
+
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+function formatSegment(segment: string): string {
+  // Capitalize first letter and replace hyphens with spaces
+  return segment
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function buildBreadcrumbs(slugParts: string[]): BreadcrumbItem[] {
+  const items: BreadcrumbItem[] = [{ label: 'Docs', href: '/docs' }];
+
+  for (let i = 0; i < slugParts.length; i++) {
+    const isLast = i === slugParts.length - 1;
+    const href = '/docs/' + slugParts.slice(0, i + 1).join('/');
+    items.push({
+      label: formatSegment(slugParts[i]),
+      href: isLast ? undefined : href,
+    });
+  }
+
+  return items;
+}
+
+function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+  if (items.length <= 1) return null;
+
+  return (
+    <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+      {items.map((item, i) => (
+        <span key={i}>
+          {i > 0 && <span className={styles.breadcrumbSep} aria-hidden="true">/</span>}
+          {item.href ? (
+            <Link href={item.href}>{item.label}</Link>
+          ) : (
+            <span>{item.label}</span>
+          )}
+        </span>
+      ))}
+    </nav>
+  );
 }
 
 /* ── Docs Index Page ─────────────────────────────────────────────────────── */

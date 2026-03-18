@@ -5,6 +5,29 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.0] — 2026-03-18
+
+### Added
+
+- **Docs breadcrumb navigation** — Breadcrumb trail above all docs content pages, auto-built from URL slug segments.
+- **Docs sidebar filter** — Text input in DocsSidebar for live filtering sidebar items by label match. Sections with no matches are hidden; active filter disables collapse.
+- **4 new documentation pages** — CLI Reference, Flows, MCP Tools Reference, and Portal & Gates handwritten markdown guides at `/docs/cli-reference`, `/docs/flows`, `/docs/mcp-tools`, `/docs/portal-and-gates`.
+- **Course system** — `CourseDataLoader` reads university + extracurricular course JSON at build time. Dynamic course overview pages with syllabus at `/learn/course/[courseId]`. Lesson pages with markdown rendering, key concepts, inline quiz display, and prev/next navigation at `/learn/course/[courseId]/lesson/[lessonId]`.
+- **PLSAT certification page** — Landing page at `/learn/plsat` with exam details, coverage grid, preparation guide, and CLI launch instructions.
+- **2 extracurricular courses** — Git Fundamentals (6 lessons) and Agile Development (6 lessons) with quizzes, served from `packages/site/src/content/courses/`.
+- **Learn page updates** — Course catalog split into Core Curriculum and Extracurricular sections.
+
+### Changed
+
+- **ContentPage code blocks** — Code blocks with a language specifier now render a header bar showing the language label. Plain code blocks remain unstyled.
+- **Learn page** — Updated lesson counts and added PLSAT section with direct link.
+
+### Fixed
+
+- **Platform server SPA fallback** — API routes (`/api/*`) now pass through to `next()` instead of being caught by the SPA fallback and served `index.html`.
+
+Symbols: #DocsBreadcrumbs, #DocsSidebarFilter, #CourseDataLoader, #CoursePage, #LessonPage, #PlsatPage, #DocsContentPage, #DocsSidebar, #platform-server
+
 ## [4.15.1] — 2026-03-17
 
 ### Fixed

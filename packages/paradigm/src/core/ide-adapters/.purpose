@@ -7,36 +7,43 @@ description: |
 components:
   adapter-base:
     description: Shared generation helpers — symbol table, logger spec, navigation, context sections
+    type: utility
     path: base.ts
     aspects: ["~ide-adapter-pattern"]
 
   cursor-adapter:
     description: Generate .cursor/rules/*.mdc files with frontmatter and rule sections
+    type: service
     path: cursor.ts
     aspects: ["~ide-adapter-pattern"]
 
   claude-adapter:
     description: Generate CLAUDE.md markdown file with full project context
+    type: service
     path: claude.ts
     aspects: ["~ide-adapter-pattern"]
 
   copilot-adapter:
     description: Generate .github/copilot-instructions.md for GitHub Copilot
+    type: service
     path: copilot.ts
     aspects: ["~ide-adapter-pattern"]
 
   windsurf-adapter:
     description: Generate .windsurfrules file for Windsurf IDE
+    type: service
     path: windsurf.ts
     aspects: ["~ide-adapter-pattern"]
 
   agents-adapter:
     description: Generate AGENTS.md universal AI agent instruction file (cross-IDE standard)
+    type: service
     path: agents.ts
     aspects: ["~ide-adapter-pattern"]
 
   adapter-registry:
     description: IDE adapter discovery, selection, and factory
+    type: service
     path: index.ts
 
 flows:
