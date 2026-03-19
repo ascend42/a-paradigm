@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.2] — 2026-03-18
+
+### Added
+
+- **Hero scenario rotation** — 4 project scenarios (E-Commerce, SaaS Platform, API Backend, Mobile App) cycle every ~19.5s with distinct node labels, types, and terminal scripts.
+- **Growth animation** — Nodes spring in one-by-one from a seed following a `growthOrder` array with back-ease-out overshoot. Edges draw as both endpoints appear. ~4s growth phase per scenario.
+- **Dissolve transition** — Nodes and edges shrink/fade with ease-in quadratic over 1.5s before the next scenario grows.
+- **Faux terminal overlay** — macOS-style window chrome with typewriter effect, synced to growth progress via shared ref. 5 line styles (command, output, thought, success, dimmed). Hidden on mobile (<768px). Backdrop blur with semi-transparent background.
+- **Phase state machine** — `growing (4s) → active (14s) → dissolving (1.5s) → next scenario` loop in LiveGraph canvas, with `onPhaseChange` callback for external sync.
+
+Symbols: #LiveGraph, #FauxTerminal, #HeroSection
+
 ## [4.16.1] — 2026-03-18
 
 ### Added

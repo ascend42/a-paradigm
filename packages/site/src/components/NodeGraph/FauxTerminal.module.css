@@ -1,0 +1,100 @@
+.terminal {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  background: color-mix(in srgb, var(--surface-0) 90%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-3);
+  border-radius: 10px;
+  overflow: hidden;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.8s ease-out;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+.terminal[data-phase="dissolving"] {
+  opacity: 0;
+}
+
+/* ── Chrome (traffic lights) ── */
+
+.chrome {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  border-bottom: 1px solid var(--surface-3);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot[data-color="red"] { background: #ff5f57; }
+.dot[data-color="yellow"] { background: #febc2e; }
+.dot[data-color="green"] { background: #28c840; }
+
+/* ── Body ── */
+
+.body {
+  padding: 12px 14px;
+  min-height: 100px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.line {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Line styles ── */
+
+.command {
+  color: #4ade80;
+}
+
+.output {
+  color: var(--text-secondary);
+}
+
+.thought {
+  color: var(--sym-flow);
+}
+
+.success {
+  color: #facc15;
+}
+
+.dimmed {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+/* ── Cursor ── */
+
+.cursor {
+  color: var(--sym-component);
+  font-size: 10px;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .terminal {
+    display: none;
+  }
+}

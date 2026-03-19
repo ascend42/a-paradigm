@@ -1,16 +1,30 @@
 'use client';
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { NodeGraph } from '@/components/NodeGraph';
+import { LiveGraph, SCENARIOS } from '@/components/NodeGraph/LiveGraph';
+import type { ScenarioPhase } from '@/components/NodeGraph/LiveGraph';
+import { FauxTerminal } from '@/components/NodeGraph/FauxTerminal';
 import styles from './HeroSection.module.css';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
+const TERMINAL_LINES = SCENARIOS.map(s => s.terminalLines);
 
 export function HeroSection() {
+  const scenarioRef = useRef({ phase: 'growing' as ScenarioPhase, progress: 0, scenarioIndex: 0 });
+
   return (
     <section className={styles.hero}>
-      <NodeGraph className={styles.graph} animated interactive={false} />
+      <div className={styles.graph}>
+        <LiveGraph
+          onPhaseChange={(phase, progress, scenarioIndex) => {
+            scenarioRef.current = { phase, progress, scenarioIndex };
+          }}
+        />
+      </div>
+
+      <FauxTerminal scenarioRef={scenarioRef} terminalLines={TERMINAL_LINES} />
 
       <div className={styles.content}>
         <motion.p
@@ -28,8 +42,8 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
         >
-          Structure your codebase{' '}
-          <span className={styles.gradient}>so AI agents understand it</span>
+          Structure your codebase so{' '}
+          <span className={styles.gradient}>AI&nbsp;agents understand&nbsp;it</span>
         </motion.h1>
 
         <motion.p
@@ -38,8 +52,9 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2, ease: EASE }}
         >
-          Five symbols. Structured context. AI agents that actually know your codebase.
-          Paradigm turns your project into a living map that every tool can read.
+          Five symbols. Structured context. AI&nbsp;agents that actually know
+          your codebase. Paradigm turns your project into a&nbsp;living map
+          that every tool can&nbsp;read.
         </motion.p>
 
         <motion.div
