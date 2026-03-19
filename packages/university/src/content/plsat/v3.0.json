@@ -3,9 +3,9 @@
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
   "totalSlots": 112,
-  "passThreshold": 0.8,
+  "passThreshold": 0.9,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
-  "description": "99 questions. 90 minutes. 80% to pass. Good luck, scholar.",
+  "description": "99 questions. 90 minutes. 90% to pass. Good luck, scholar.",
   "items": [
     {
       "type": "standalone",

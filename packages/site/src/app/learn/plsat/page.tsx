@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { UniversitySeal } from '@/components/UniversitySeal';
 import styles from './page.module.css';
 
 export const metadata: Metadata = {
   title: 'PLSAT — Paradigm Licensure Standardized Assessment Test',
   description:
-    '99 randomized questions from the PARA 101-501 curriculum. 90 minutes. 80% to pass. Demonstrate your mastery of context engineering.',
+    '99 randomized questions from the PARA 101-501 curriculum. 90 minutes. 90% to pass. Demonstrate your mastery of context engineering.',
 };
 
 export default function PlsatPage() {
@@ -19,12 +20,12 @@ export default function PlsatPage() {
 
       <header className={styles.header}>
         <div className={styles.seal}>
-          <PlsatSeal />
+          <UniversitySeal size={100} />
         </div>
         <h1 className={styles.title}>PLSAT</h1>
         <p className={styles.subtitle}>Paradigm Licensure Standardized Assessment Test</p>
         <p className={styles.tagline}>
-          99 randomized questions. 90 minutes. 80% to pass.
+          99 randomized questions. 90 minutes. 90% to pass.
         </p>
       </header>
 
@@ -86,7 +87,7 @@ export default function PlsatPage() {
             <span className={styles.statLabel}>Minutes</span>
           </div>
           <div className={styles.stat}>
-            <span className={styles.statValue}>80%</span>
+            <span className={styles.statValue}>90%</span>
             <span className={styles.statLabel}>Pass Threshold</span>
           </div>
           <div className={styles.stat}>
@@ -179,34 +180,3 @@ function CoverageCard({
   );
 }
 
-function PlsatSeal() {
-  return (
-    <svg width="100" height="100" viewBox="0 0 200 200" aria-hidden="true">
-      <circle cx="100" cy="100" r="95" fill="none" stroke="var(--gold, var(--sym-signal))" strokeWidth="2.5" />
-      <circle cx="100" cy="100" r="88" fill="none" stroke="var(--gold, var(--sym-signal))" strokeWidth="1" />
-      <circle cx="100" cy="100" r="82" fill="none" stroke="var(--gold, var(--sym-signal))" strokeWidth="0.5" opacity="0.5" />
-      {/* Five symbol dots in arc */}
-      <circle cx="70" cy="70" r="5" fill="var(--sym-component)" />
-      <circle cx="85" cy="62" r="5" fill="var(--sym-flow)" />
-      <circle cx="100" cy="58" r="5" fill="var(--sym-gate)" />
-      <circle cx="115" cy="62" r="5" fill="var(--sym-signal)" />
-      <circle cx="130" cy="70" r="5" fill="var(--sym-aspect)" />
-      {/* Shield / scroll icon */}
-      <path
-        d="M85 85 L100 80 L115 85 L115 120 C115 128 100 135 100 135 C100 135 85 128 85 120 Z"
-        fill="none"
-        stroke="var(--burgundy, var(--sym-gate))"
-        strokeWidth="2"
-      />
-      {/* Check mark inside shield */}
-      <path
-        d="M93 105 L98 112 L108 98"
-        fill="none"
-        stroke="var(--gold, var(--sym-signal))"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

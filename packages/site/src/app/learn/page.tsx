@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UniversitySeal } from '@/components/UniversitySeal';
 import styles from './page.module.css';
 
 const COURSES = [
@@ -70,7 +71,7 @@ export default function LearnPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.seal}>
-          <UniversitySeal />
+          <UniversitySeal size={80} />
         </div>
         <h1 className={styles.title}>Paradigm University</h1>
         <p className={styles.subtitle}>
@@ -137,7 +138,7 @@ export default function LearnPage() {
             <h3>Paradigm Licensure Standardized Assessment Test</h3>
             <p>
               Demonstrate your mastery of context engineering. 99 randomized questions
-              from the PARA 101-501 curriculum. 90 minutes. 80% to pass.
+              from the PARA 101-501 curriculum. 90 minutes. 90% to pass.
             </p>
             <Link href="/learn/plsat" className={styles.plsatCta}>
               Take the PLSAT
@@ -149,20 +150,3 @@ export default function LearnPage() {
   );
 }
 
-function UniversitySeal() {
-  return (
-    <svg width="80" height="80" viewBox="0 0 200 200" aria-hidden="true">
-      <circle cx="100" cy="100" r="95" fill="none" stroke="var(--gold, var(--sym-signal))" strokeWidth="2" />
-      <circle cx="100" cy="100" r="88" fill="none" stroke="var(--gold, var(--sym-signal))" strokeWidth="1" />
-      {/* Five symbol dots */}
-      <circle cx="80" cy="80" r="4" fill="var(--sym-component)" />
-      <circle cx="90" cy="80" r="4" fill="var(--sym-flow)" />
-      <circle cx="100" cy="80" r="4" fill="var(--sym-gate)" />
-      <circle cx="110" cy="80" r="4" fill="var(--sym-signal)" />
-      <circle cx="120" cy="80" r="4" fill="var(--sym-aspect)" />
-      {/* Book icon */}
-      <path d="M85 95 L100 90 L115 95 L115 125 L100 120 L85 125 Z" fill="none" stroke="var(--burgundy, var(--sym-gate))" strokeWidth="2" />
-      <line x1="100" y1="90" x2="100" y2="120" stroke="var(--burgundy, var(--sym-gate))" strokeWidth="1" />
-    </svg>
-  );
-}

@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.5] — 2026-03-19
+
+### Changed
+
+- **PLSAT pass threshold** — Raised from 80% to 90% across all exam data (v2.0, v3.0), site pages (learn, PLSAT), and README.
+- **University seal** — Site learn and PLSAT pages now use the full university seal (laurel wreath, open book, Latin text arcs) matching the served platform, via shared `UniversitySeal` component.
+- **PLSAT coverage cards** — Stacked single-column layout instead of 4-column grid.
+
+### Fixed
+
+- **`paradigm university serve`** — Fixed broken path resolution for bundled UI and content assets. The serve command used `../university-ui` (parent of dist) instead of `./university-ui` (inside dist), causing 404 on all pages.
+
+Symbols: #UniversitySeal, #PLSATPage, #LearnPage, #university-server
+
 ## [4.16.4] — 2026-03-19
 
 ### Changed

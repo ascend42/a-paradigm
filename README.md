@@ -321,7 +321,7 @@ paradigm university        # Launch the learning platform
 
 ### PLSAT Certification
 
-The **Paradigm Licensure Standardized Assessment Test** — 99 questions, 90 minutes, 80% to pass. Covers symbol identification, flow design, gate configuration, scanning, stack presets, and real-world scenarios. Generates a printable certificate.
+The **Paradigm Licensure Standardized Assessment Test** — 99 questions, 90 minutes, 90% to pass. Covers symbol identification, flow design, gate configuration, scanning, stack presets, and real-world scenarios. Generates a printable certificate.
 
 Runs locally with no auth or external dependencies.
 

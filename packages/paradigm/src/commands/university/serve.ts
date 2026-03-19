@@ -23,9 +23,9 @@ export async function universityServeCommand(_path: string | undefined, options:
   try {
     const { startServer } = await import('@a-company/university/server');
 
-    // Resolve asset paths relative to this file (works when bundled)
-    const contentDir = path.resolve(__dirname, '../university-content');
-    const uiDistPath = path.resolve(__dirname, '../university-ui');
+    // Resolve asset paths relative to this file (sibling dirs in dist/)
+    const contentDir = path.resolve(__dirname, 'university-content');
+    const uiDistPath = path.resolve(__dirname, 'university-ui');
 
     console.log(chalk.gray(`Port: ${port}`));
     console.log();
