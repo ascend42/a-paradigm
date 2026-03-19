@@ -30,9 +30,15 @@ export function SiteFooter() {
           <p className={styles.tagline}>
             The context engineering framework
           </p>
-          <p className={styles.copyright}>
-            Built by A Company
-          </p>
+          <a
+            href="https://a-company.org"
+            className={styles.builtBy}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Built by{' '}
+            <img src="/a-company-logo.png" alt="A Company" className={styles.companyLogo} />
+          </a>
         </div>
 
         <div className={styles.links}>

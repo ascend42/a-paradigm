@@ -28,7 +28,7 @@ components:
     description: CTASection component
     type: view
   hero-section:
-    description: HeroSection with scenario rotation, growth animation, and faux terminal overlay
+    description: HeroSection with scenario rotation, growth animation, faux terminal overlay, and animated gradient
     type: view
   how-it-works-section:
     description: HowItWorksSection component

@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.4] — 2026-03-19
+
+### Changed
+
+- **Site polish pass** — Widened hero content (860px), symbols subheading (680px), and CTA section (860px) so headlines and subtitles fit on fewer lines.
+- **Animated gradient** — Hero gradient text drifts through all 5 symbol colors on a 10s ease-in-out cycle.
+- **Symbol cards** — 5-column single-row layout with equal-height cards, simplified descriptions.
+- **Copy tweaks** — Setup time `<2min` → `<1min`, removed "for individual developers" from CTA, updated install time to "under one minute".
+- **Footer "Built by"** — A Company logo (18px) links to a-company.org, replaces plain text.
+- **Getting started scenarios** — Replaced manual `.purpose` tutorial with two agent-driven scenarios: "Starting a New Project" (plan with symbols) and "Mapping an Existing Codebase" (retroactive discovery), each with copy-pasteable prompts.
+
+Symbols: #HeroSection, #SymbolsSection, #CTASection, #SiteFooter, #MetricsSection
+
 ## [4.16.3] — 2026-03-19
 
 ### Changed

@@ -7,7 +7,7 @@ const METRICS = [
   { value: '5', label: 'Symbols', detail: 'Cover every concept' },
   { value: '100+', label: 'MCP Tools', detail: 'For AI agents' },
   { value: '90%', label: 'Less context', detail: 'Tokens saved vs file reads' },
-  { value: '<2min', label: 'Setup time', detail: 'paradigm shift' },
+  { value: '<1min', label: 'Setup time', detail: 'paradigm shift' },
 ];
 
 const container = {

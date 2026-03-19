@@ -10,7 +10,7 @@ const SYMBOLS = [
     prefix: '#',
     shape: '●',
     name: 'Component',
-    description: 'The building blocks. Services, views, utilities, models. Every named piece of your system.',
+    description: 'Services, views, models. Every named piece of your system.',
     example: '#auth-middleware',
     color: 'var(--sym-component)',
   },
@@ -19,7 +19,7 @@ const SYMBOLS = [
     prefix: '$',
     shape: '◆',
     name: 'Flow',
-    description: 'Multi-step processes that span components. Checkout, onboarding, deployment pipelines.',
+    description: 'Multi-step processes that span components. Checkout, onboard, etc.',
     example: '$checkout-flow',
     color: 'var(--sym-flow)',
   },
@@ -28,7 +28,7 @@ const SYMBOLS = [
     prefix: '^',
     shape: '■',
     name: 'Gate',
-    description: 'Authorization checkpoints. Who can do what. Authentication, roles, ownership.',
+    description: 'Auth checkpoints. Who can do what. Roles, ownership, access.',
     example: '^authenticated',
     color: 'var(--sym-gate)',
   },
@@ -37,7 +37,7 @@ const SYMBOLS = [
     prefix: '!',
     shape: '▲',
     name: 'Signal',
-    description: 'Events that ripple through the system. Notifications, webhooks, side effects.',
+    description: 'Events that ripple through the system. Webhooks, notifications.',
     example: '!payment-complete',
     color: 'var(--sym-signal)',
   },
@@ -46,7 +46,7 @@ const SYMBOLS = [
     prefix: '~',
     shape: '◇',
     name: 'Aspect',
-    description: 'Cross-cutting concerns anchored to code. Audit trails, logging policies, compliance.',
+    description: 'Cross-cutting concerns anchored to code. Audit, logging, compliance.',
     example: '~audit-required',
     color: 'var(--sym-aspect)',
   },
@@ -71,8 +71,8 @@ export function SymbolsSection() {
         <div className={styles.header}>
           <h2 className={styles.heading}>Five symbols. That's it.</h2>
           <p className={styles.subheading}>
-            Every concept in your codebase maps to one of five symbols.
-            Agents use them to navigate, reason, and make changes with full context.
+            Every concept in your codebase maps to one of five&nbsp;symbols.<br />
+            Agents use them to navigate, reason, and make changes with full&nbsp;context.
           </p>
         </div>
 

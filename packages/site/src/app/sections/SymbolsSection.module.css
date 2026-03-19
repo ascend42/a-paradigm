@@ -24,18 +24,20 @@
   margin-top: var(--space-2);
   font-size: var(--text-h4);
   color: var(--text-secondary);
-  max-width: 540px;
+  max-width: 680px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--space-3);
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
   padding: var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--surface-3);

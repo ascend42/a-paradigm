@@ -30,10 +30,31 @@
   color: var(--text-muted);
 }
 
-.copyright {
+.builtBy {
   margin-top: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-micro);
   color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.builtBy:hover {
+  color: var(--text-secondary);
+}
+
+.companyLogo {
+  height: 18px;
+  width: 18px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.builtBy:hover .companyLogo {
+  opacity: 1;
 }
 
 .links {

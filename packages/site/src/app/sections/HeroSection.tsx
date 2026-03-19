@@ -54,8 +54,8 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.2, ease: EASE }}
         >
           Five symbols. Structured context. AI&nbsp;agents that actually know
-          your codebase. Paradigm turns your project into a&nbsp;living map
-          that every tool can&nbsp;read.
+          your&nbsp;codebase.<br />Paradigm turns your project into a&nbsp;living
+          map that every tool can&nbsp;read.
         </motion.p>
 
         <motion.div

@@ -9,7 +9,9 @@
 }
 
 .graph {
-  opacity: 0.25;
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
   z-index: 0;
 }
 
@@ -17,8 +19,15 @@
   position: relative;
   z-index: 1;
   text-align: center;
-  max-width: 720px;
-  padding: var(--space-4) var(--space-3);
+  max-width: 860px;
+  padding: var(--space-8) var(--space-4);
+  background: radial-gradient(
+    ellipse 110% 80% at 50% 50%,
+    color-mix(in srgb, var(--surface-1) 92%, transparent) 0%,
+    color-mix(in srgb, var(--surface-1) 60%, transparent) 60%,
+    transparent 100%
+  );
+  border-radius: var(--radius-xl);
 }
 
 .eyebrow {
@@ -33,28 +42,39 @@
   font-size: clamp(2.25rem, 5vw, 3.5rem);
   line-height: 1.15;
   font-weight: 700;
-  color: var(--text-bright);
+  color: var(--text-white);
   letter-spacing: -0.025em;
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--surface-1) 50%, transparent);
 }
 
 .gradient {
   background: linear-gradient(
-    135deg,
-    var(--sym-component) 0%,
-    var(--sym-flow) 50%,
-    var(--sym-signal) 100%
+    90deg,
+    var(--sym-component),
+    var(--sym-flow),
+    var(--sym-signal),
+    var(--sym-gate),
+    var(--sym-aspect),
+    var(--sym-component)
   );
+  background-size: 250% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: gradientDrift 10s ease-in-out infinite;
+}
+
+@keyframes gradientDrift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .subtitle {
   margin-top: var(--space-3);
   font-size: var(--text-h4);
   line-height: var(--leading-h4);
-  color: var(--text-secondary);
-  max-width: 580px;
+  color: var(--text-primary);
+  max-width: 680px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -73,7 +93,7 @@
   padding: 12px 28px;
   font-size: var(--text-body);
   font-weight: 600;
-  color: var(--surface-void);
+  color: #fff;
   background: var(--sym-component);
   border-radius: var(--radius-md);
   text-decoration: none;
@@ -83,7 +103,7 @@
 
 .primaryCta:hover {
   background: var(--sym-component-light);
-  color: var(--surface-void);
+  color: #fff;
   transform: translateY(-1px);
 }
 

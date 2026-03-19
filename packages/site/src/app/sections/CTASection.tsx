@@ -7,7 +7,7 @@ export function CTASection() {
       <div className={styles.inner}>
         <h2 className={styles.heading}>Ready to give your AI agents real context?</h2>
         <p className={styles.subtitle}>
-          Install Paradigm in under two minutes. Open source. Free forever for individual developers.
+          Install Paradigm in under one minute. Open source. Free forever.
         </p>
         <div className={styles.actions}>
           <Link href="/docs/getting-started" className={styles.primaryCta}>
