@@ -3,24 +3,32 @@
    Applied via [data-section="university"] on /learn layout wrapper.
    Remaps surface and text tokens to parchment/burgundy/gold palette.
    Symbol colors remain constant (imported from symbols.css).
+
+   Dark/light is driven by [data-theme] on <html>:
+     - data-theme="light" → light academia
+     - data-theme="dark"  → dark academia
+     - no attribute / default → dark (matches obsidian base)
    ========================================================================== */
 
+/* ── Academia-specific tokens (shared across both modes) ─────────────── */
 [data-section="university"] {
-  /* ── Surface overrides ───────────────────────────────────────────────── */
+  --font-heading: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+}
+
+/* ── Light mode academia ─────────────────────────────────────────────── */
+[data-theme="light"] [data-section="university"] {
   --surface-0: #F5F1E8;          /* Parchment */
   --surface-1: #FDF8F0;          /* Cream */
   --surface-2: #ffffff;          /* White cards */
   --surface-3: #FAF3E6;          /* Cream hover */
   --surface-4: #E8E0D0;          /* Parchment dark (borders) */
 
-  /* ── Text overrides ──────────────────────────────────────────────────── */
   --text-primary: #2C1810;       /* Ink */
   --text-secondary: #4A3728;     /* Ink light */
   --text-muted: #8B7355;         /* Ink muted */
   --text-heading: #2C1810;       /* Ink for headings */
   --text-bright: #2C1810;        /* Same as primary in light theme */
 
-  /* ── Academia-specific tokens ────────────────────────────────────────── */
   --burgundy: #6B1C23;
   --burgundy-light: #8B2E38;
   --burgundy-dark: #4A1118;
@@ -38,39 +46,46 @@
   --warning: #B8860B;
   --warning-bg: rgba(184, 134, 11, 0.09);
 
-  /* ── Typography overrides ────────────────────────────────────────────── */
-  --font-heading: 'Crimson Pro', Georgia, 'Times New Roman', serif;
-
-  /* ── Border & shadow overrides ───────────────────────────────────────── */
   --border-color: var(--surface-4);
   --shadow-card: 0 1px 3px rgba(44, 24, 16, 0.08), 0 4px 12px rgba(44, 24, 16, 0.05);
   --glow-subtle: none;
   --glow-node: none;
 }
 
-/* Dark mode for university (respects system preference) */
-@media (prefers-color-scheme: dark) {
-  [data-section="university"][data-theme="auto"] {
-    --surface-0: #1a1614;
-    --surface-1: #221e1b;
-    --surface-2: #2a2522;
-    --surface-3: #332d29;
-    --surface-4: #3d3530;
+/* ── Dark mode academia ──────────────────────────────────────────────── */
+[data-section="university"],
+[data-theme="dark"] [data-section="university"] {
+  --surface-0: #1a1614;
+  --surface-1: #221e1b;
+  --surface-2: #2a2522;
+  --surface-3: #332d29;
+  --surface-4: #3d3530;
 
-    --text-primary: #E8E0D0;
-    --text-secondary: #B8A88A;
-    --text-muted: #8B7355;
-    --text-heading: #F5F1E8;
-    --text-bright: #FDF8F0;
+  --text-primary: #E8E0D0;
+  --text-secondary: #B8A88A;
+  --text-muted: #8B7355;
+  --text-heading: #F5F1E8;
+  --text-bright: #FDF8F0;
 
-    --burgundy: #C4515C;
-    --burgundy-light: #D4727B;
-    --burgundy-dark: #8B2E38;
-    --burgundy-bg: rgba(196, 81, 92, 0.12);
+  --burgundy: #C4515C;
+  --burgundy-light: #D4727B;
+  --burgundy-dark: #8B2E38;
+  --burgundy-bg: rgba(196, 81, 92, 0.12);
 
-    --gold: #D4BA8E;
-    --gold-light: #E2CCB0;
-    --gold-dark: #C5A572;
-    --gold-bg: rgba(212, 186, 142, 0.12);
-  }
+  --gold: #D4BA8E;
+  --gold-light: #E2CCB0;
+  --gold-dark: #C5A572;
+  --gold-bg: rgba(212, 186, 142, 0.12);
+
+  --success: #6BBF7D;
+  --success-bg: rgba(107, 191, 125, 0.12);
+  --error: #D4727B;
+  --error-bg: rgba(212, 114, 123, 0.12);
+  --warning: #D4BA8E;
+  --warning-bg: rgba(212, 186, 142, 0.12);
+
+  --border-color: var(--surface-4);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+  --glow-subtle: none;
+  --glow-node: none;
 }

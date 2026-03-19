@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ThemeToggle } from './ThemeToggle';
 import styles from './SiteHeader.module.css';
 
 const NAV_ITEMS = [
@@ -31,6 +32,7 @@ export function SiteHeader() {
         </nav>
 
         <div className={styles.actions}>
+          <ThemeToggle />
           <a
             href="https://github.com/ascend42/a-paradigm"
             className={styles.githubLink}

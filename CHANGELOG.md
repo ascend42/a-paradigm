@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.1] — 2026-03-18
+
+### Added
+
+- **Light/dark mode toggle** — Sun/moon icon in the site header. Persists to localStorage with a blocking script to prevent flash of wrong theme on load. Dark mode remains the default.
+- **Light theme tokens** — Full inverted palette in `obsidian.css` with adjusted symbol colors for contrast on white backgrounds.
+
+### Fixed
+
+- **Academia dark mode** — University section was applying light-mode palette (dark brown text on dark background) because the CSS required `data-theme="auto"` which was never set. Reworked `academia.css` to default to dark with light gated behind `data-theme="light"`.
+- **Header in light mode** — Hardcoded `rgba(17, 17, 19, 0.8)` background replaced with `color-mix(in srgb, var(--surface-1) 85%, transparent)` so the translucent glass effect adapts to theme.
+- **CTA button text** — "Get Started" button text now uses `#fff` instead of `--surface-void` which inverts in light mode.
+
+Symbols: #ThemeToggle, #SiteHeader, #ObsidianTheme, #AcademiaTheme
+
 ## [4.16.0] — 2026-03-18
 
 ### Added

@@ -97,3 +97,74 @@
   --btn-padding: 10px 20px;
   --btn-font-size: var(--text-small);
 }
+
+/* ==========================================================================
+   LIGHT THEME — Inverted palette for light mode
+   Applied via [data-theme="light"] on <html>
+   ========================================================================== */
+
+[data-theme="light"] {
+  --surface-void: #ffffff;
+  --surface-obsidian: #f9fafb;
+  --surface-carbon: #f3f4f6;
+  --surface-graphite: #e5e7eb;
+  --surface-steel: #d1d5db;
+
+  --surface-0: var(--surface-void);
+  --surface-1: var(--surface-obsidian);
+  --surface-2: var(--surface-carbon);
+  --surface-3: var(--surface-graphite);
+  --surface-4: var(--surface-steel);
+
+  --text-slate: #9ca3af;
+  --text-silver: #6b7280;
+  --text-cloud: #374151;
+  --text-mist: #1f2937;
+  --text-snow: #111827;
+  --text-white: #030712;
+
+  --text-muted: var(--text-slate);
+  --text-secondary: var(--text-silver);
+  --text-primary: var(--text-cloud);
+  --text-heading: var(--text-mist);
+  --text-bright: var(--text-snow);
+
+  --border-color: var(--surface-steel);
+  --glow-subtle: none;
+  --glow-node: 0 0 12px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* Light mode symbol adjustments — slightly deeper for contrast on white */
+[data-theme="light"] {
+  --sym-component: #16a34a;
+  --sym-component-dark: #14532d;
+  --sym-component-light: #166534;
+
+  --sym-flow: #7c3aed;
+  --sym-flow-dark: #4c1d95;
+  --sym-flow-light: #5b21b6;
+
+  --sym-gate: #dc2626;
+  --sym-gate-dark: #7f1d1d;
+  --sym-gate-light: #991b1b;
+
+  --sym-signal: #ca8a04;
+  --sym-signal-dark: #713f12;
+  --sym-signal-light: #854d0e;
+
+  --sym-aspect: #4b5563;
+  --sym-aspect-dark: #1f2937;
+  --sym-aspect-light: #374151;
+
+  --tag-component-bg: rgba(22, 163, 74, 0.08);
+  --tag-component-border: rgba(22, 163, 74, 0.2);
+  --tag-flow-bg: rgba(124, 58, 237, 0.08);
+  --tag-flow-border: rgba(124, 58, 237, 0.2);
+  --tag-gate-bg: rgba(220, 38, 38, 0.08);
+  --tag-gate-border: rgba(220, 38, 38, 0.2);
+  --tag-signal-bg: rgba(202, 138, 4, 0.08);
+  --tag-signal-border: rgba(202, 138, 4, 0.2);
+  --tag-aspect-bg: rgba(75, 85, 99, 0.08);
+  --tag-aspect-border: rgba(75, 85, 99, 0.2);
+}
