@@ -1,0 +1,70 @@
+id: L-2026-03-19-ascend-061342-001
+type: agent-session
+timestamp: '2026-03-19T06:13:42.449Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Hero terminal scripts rewritten as Claude Code agentic loops
+summary: 'Replaced 4 generic paradigm-command terminal scenarios with 3 realistic Claude Code agentic loops: "New App" (user asks to build a recipe app, Claude plans and scaffolds), "Resume Session" (checkpoint recovery, aspect drift detection, auto-heal), and "Symphony Collab" (two agents on related Linear tickets messaging via Symphony). Added dual-terminal rendering for the Symphony scenario — two stacked panes with independent typewriter states. Added ''input'' line style for user prompts in bright white.'
+symbols_touched:
+  - '#LiveGraph'
+  - '#FauxTerminal'
+  - '#HeroSection'
+files_modified:
+  - packages/site/src/components/NodeGraph/LiveGraph.tsx
+  - packages/site/src/components/NodeGraph/FauxTerminal.tsx
+  - packages/site/src/components/NodeGraph/FauxTerminal.module.css
+  - packages/site/src/app/sections/HeroSection.tsx
+decisions:
+  - id: three-not-four
+    decision: Reduce from 4 scenarios to 3
+    rationale: 'Each scenario gets more screen time per cycle. Three covers the full range: greenfield build, maintenance/recovery, and multi-agent collaboration.'
+  - id: dual-pane-approach
+    decision: Two independent typewriter states with shared phase sync
+    rationale: Both panes need to advance at the same rate (synced to graph progress) but track their own revealed/charPos state independently. Extracting advancePane as a pure function made this clean.
+  - id: input-style
+    decision: Add 6th terminal line style for user prompts
+    rationale: User prompts need to visually stand out as the 'human voice' — bright white at font-weight 500 contrasts clearly against green commands and muted output lines.
+verification:
+  status: pass
+  details:
+    build: pass
+    visual: untested
+tags:
+  - site
+  - hero
+  - terminal
+  - symphony
+  - arc:site-polish
+body: |-
+  ## Concept & Approach
+
+  The original hero terminal showed paradigm CLI commands being run in isolation — `paradigm scan`, `paradigm_navigate`, `paradigm_ripple`. These read like documentation examples, not like something a developer would actually experience. The new scenarios flip the perspective: you're watching a Claude Code session from the user's point of view.
+
+  **Scenario 1 ("New App")** opens with a natural-language prompt: `> Build a recipe sharing app with image uploads and search`. This is the first thing a new visitor sees — immediately communicating that Paradigm works inside an agentic coding loop, not as a standalone CLI. Claude reads the project, plans components and flows, scaffolds files, and wires up gates and flows. The graph nodes match the story (RecipeService, SearchIndex, publish-flow, authenticated gate).
+
+  **Scenario 2 ("Resume Session")** shows the session recovery workflow — something no competing tool advertises. `> Pick up where I left off` triggers checkpoint recovery, aspect drift detection (`~idempotent anchor drifted L41→58`), and auto-healing. This demonstrates Paradigm's statefulness and self-healing capabilities in a way that feels lived-in rather than demo'd.
+
+  **Scenario 3 ("Symphony Collab")** is the showpiece. Two terminals stacked vertically, each running a different agent (frontend/notifications, backend/notifications) working on related Linear tickets (ENG-142, ENG-143). They message each other via Symphony mid-task (`✉ backend: "WS schema ready?"`), showing real-time multi-agent collaboration. This required the biggest technical change: the FauxTerminal component now supports dual-pane mode with independent typewriter state machines, a divider, and a "symphony" label in the chrome bar.
+
+  ## Technical Decisions
+
+  1. **`advancePane` extraction** — Factored the typewriter logic into a pure function that processes one pane's state, making dual-mode trivial (call it twice with separate state).
+
+  2. **MAX_VISIBLE_SPLIT = 5** — Each pane in dual mode shows 5 lines instead of 8, keeping the terminal compact. The scripts are 10 lines each so early lines scroll off naturally.
+
+  3. **`'input'` line style** — Bright white (#f8fafc) with font-weight 500. Stands out as the "human voice" against green commands and muted output. This is the 6th terminal line style.
+
+  4. **Scenario count 4→3** — Fewer scenarios means each gets more screen time per cycle (~19.5s each). Three is enough to show the range: greenfield, maintenance, and multi-agent.
+
+  5. **Unicode envelope ✉ (U+2709)** — Used for Symphony messages instead of an emoji. Renders consistently in monospace at 12px.
+
+  ## What I Like About This
+
+  The old scenarios were interchangeable — swap the node labels and they'd all feel the same. The new ones each tell a distinct story with a clear protagonist action. The Symphony dual-terminal is genuinely novel as a marketing visual — I haven't seen any dev tool site show two agent terminals collaborating in real-time in their hero section.
+confidence: 0.88
+git_context:
+  ref: 01f70d5e6f6d875905b44844ef54d32d2e3f44ab
+  branch: main
+  dirty: true

@@ -1,5 +1,5 @@
 version: '1.0'
-generatedAt: '2026-03-17T14:25:54.222Z'
+generatedAt: '2026-03-19T06:14:12.267Z'
 totalContent: 3
 entries:
   - id: N-paradigm-docs-overview
@@ -18,6 +18,7 @@ entries:
       - '#DocsSection'
     difficulty: beginner
     file: content/notes/N-paradigm-docs-overview.md
+    category: paradigm-docs
   - id: Q-paradigm-docs-basics
     title: Paradigm Docs Basics
     type: quiz
@@ -33,6 +34,7 @@ entries:
       - '#DocsCommands'
     difficulty: beginner
     file: content/quizzes/Q-paradigm-docs-basics.yaml
+    category: paradigm-docs
   - id: LP-paradigm-docs
     title: Paradigm Docs
     type: path
@@ -44,4 +46,5 @@ entries:
       - paradigm
     symbols: []
     file: content/paths/LP-paradigm-docs.yaml
+    category: paradigm-docs
 diplomaCount: 0

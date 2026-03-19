@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.3] — 2026-03-19
+
+### Changed
+
+- **Hero terminal scripts → Claude Code agentic loops** — Replaced 4 generic paradigm-command scenarios with 3 realistic Claude Code sessions: "New App" (user prompt → plan → scaffold), "Resume Session" (checkpoint recovery → drift detection → auto-heal), "Symphony Collab" (two agents on related Linear tickets messaging via Symphony).
+- **Dual terminal pane** — Symphony scenario renders two stacked terminal panes with independent typewriter states, thin divider, and "symphony" chrome label.
+- **`input` line style** — 6th terminal line style for user-typed prompts (bright white, font-weight 500). User prompts now start with `>` and visually stand out as the human voice.
+
+Symbols: #LiveGraph, #FauxTerminal, #HeroSection
+
 ## [4.16.2] — 2026-03-18
 
 ### Added

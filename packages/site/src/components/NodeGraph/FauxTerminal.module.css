@@ -27,6 +27,7 @@
   padding: 10px 14px;
   background: color-mix(in srgb, var(--surface-1) 80%, transparent);
   border-bottom: 1px solid var(--surface-3);
+  align-items: center;
 }
 
 .dot {
@@ -38,6 +39,14 @@
 .dot[data-color="red"] { background: #ff5f57; }
 .dot[data-color="yellow"] { background: #febc2e; }
 .dot[data-color="green"] { background: #28c840; }
+
+.chromeLabel {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
 
 /* ── Body ── */
 
@@ -78,6 +87,11 @@
   opacity: 0.5;
 }
 
+.input {
+  color: #f8fafc;
+  font-weight: 500;
+}
+
 /* ── Cursor ── */
 
 .cursor {
@@ -89,6 +103,22 @@
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* ── Dual terminal (split panes) ── */
+
+.pane {
+  padding: 10px 14px;
+  min-height: 72px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.divider {
+  height: 1px;
+  background: var(--surface-3);
+  margin: 0 14px;
 }
 
 /* ── Responsive ── */

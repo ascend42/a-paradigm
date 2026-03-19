@@ -1,0 +1,55 @@
+id: L-2026-03-19-ascend-011333-001
+type: agent-session
+timestamp: '2026-03-19T01:13:33.243Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Light/dark theme system and academia dark mode fix
+summary: Added site-wide light/dark mode toggle with localStorage persistence and flash-prevention script. Fixed academia (university) theme which was applying light-mode palette (cream/parchment text colors) on dark backgrounds because the dark variant required a data-theme="auto" attribute that was never set. Reworked academia.css to default to dark, with light mode gated behind data-theme="light". Fixed header background using hardcoded rgba instead of theme tokens.
+symbols_touched:
+  - '#SiteHeader'
+  - '#ObsidianTheme'
+  - '#AcademiaTheme'
+  - '#SiteApp'
+symbols_created:
+  - '#ThemeToggle'
+files_created:
+  - packages/site/src/components/ThemeToggle.tsx
+files_modified:
+  - packages/site/src/tokens/obsidian.css
+  - packages/site/src/tokens/academia.css
+  - packages/site/src/components/SiteHeader.tsx
+  - packages/site/src/components/SiteHeader.module.css
+  - packages/site/src/app/layout.tsx
+decisions:
+  - id: D-dark-default
+    decision: Dark mode is the default, not system preference
+    rationale: The site identity is built around the obsidian dark theme. Light mode is opt-in via toggle, not auto-detected from OS preference.
+  - id: D-blocking-script
+    decision: Use blocking inline script to set data-theme before paint
+    rationale: Prevents flash of wrong theme on page load. The script reads localStorage synchronously before React hydrates.
+  - id: D-color-mix
+    decision: Use CSS color-mix for header transparency instead of hardcoded rgba
+    rationale: Header background needs to adapt to theme. color-mix(in srgb, var(--surface-1) 85%, transparent) gives the translucent glass effect in both modes.
+learnings:
+  - Academia theme dark mode was broken since creation — the CSS required data-theme='auto' which nothing ever set
+  - Hardcoded rgba values in CSS are theme-breaking landmines — always use token variables
+  - color-mix() is well-supported and perfect for translucent theme-aware backgrounds
+verification:
+  status: pass
+  details:
+    build: pass
+    dark_mode: verified
+    light_mode: verified
+    header_fix: verified
+tags:
+  - arc:site-evolution
+  - theming
+  - dark-mode
+  - ux
+confidence: 0.9
+git_context:
+  ref: b92683304ff11f4e1740035e7ba57f84362e1d1e
+  branch: main
+  dirty: true

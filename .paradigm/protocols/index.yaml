@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-17T14:25:54.220Z'
+generated: '2026-03-19T06:14:12.267Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -30,7 +30,7 @@ protocols:
       - cross-cutting
   - id: P-add-case-study
     name: Add a case study
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:02.383Z'
     trigger:
       - case study
@@ -95,7 +95,7 @@ protocols:
   - id: P-add-hook-script
     name: Add a Claude Code hook script
     status: stale
-    last_verified: '2026-03-17T14:25:06.586Z'
+    last_verified: '2026-03-18T00:41:55.099Z'
     trigger:
       - add hook
       - new hook
@@ -108,7 +108,7 @@ protocols:
   - id: P-add-ide-adapter
     name: Add an IDE adapter
     status: current
-    last_verified: '2026-03-01T12:00:00Z'
+    last_verified: '2026-03-18T00:41:55.618Z'
     trigger:
       - ide adapter
       - new ide
@@ -455,8 +455,8 @@ protocols:
       - history
   - id: P-update-changelog
     name: Update changelog and version
-    status: current
-    last_verified: '2026-03-17T14:25:45.957Z'
+    status: stale
+    last_verified: '2026-03-18T00:41:55.866Z'
     trigger:
       - update changelog
       - bump version
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 36
-  stale: 1
+  current: 34
+  stale: 3
   broken: 0

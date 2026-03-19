@@ -49,10 +49,10 @@ components:
     description: NodeGraph component
     type: view
   live-graph:
-    description: Canvas-based animated graph with 4 rotating project scenarios, growth/dissolve state machine, and agent traversal
+    description: Canvas-based animated graph with 3 agentic scenarios (New App, Resume Session, Symphony Collab), growth/dissolve state machine, and agent traversal
     type: view
   faux-terminal:
-    description: macOS-style terminal overlay with typewriter effect synced to graph growth phase
+    description: macOS-style terminal overlay with typewriter effect, dual-pane mode for Symphony scenario, 6 line styles including user input
     type: view
   site-footer:
     description: SiteFooter component

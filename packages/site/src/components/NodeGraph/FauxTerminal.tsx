@@ -13,6 +13,7 @@ interface ScenarioState {
 interface FauxTerminalProps {
   scenarioRef: { current: ScenarioState };
   terminalLines: TerminalLine[][];
+  terminalLinesB?: (TerminalLine[] | undefined)[];
 }
 
 interface DisplayLine {
@@ -22,16 +23,73 @@ interface DisplayLine {
 }
 
 const MAX_VISIBLE = 8;
+const MAX_VISIBLE_SPLIT = 5;
 const POLL_MS = 100;
 const CHARS_PER_TICK = 4;
 
-export function FauxTerminal({ scenarioRef, terminalLines }: FauxTerminalProps) {
-  const [display, setDisplay] = useState<{ lines: DisplayLine[]; phase: ScenarioPhase }>({
-    lines: [],
+function advancePane(
+  script: TerminalLine[],
+  revealed: number,
+  charPos: number,
+  progress: number,
+  phase: ScenarioPhase,
+  maxVisible: number,
+): { lines: DisplayLine[]; revealed: number; charPos: number } {
+  const target = phase === 'active'
+    ? script.length
+    : script.filter(l => l.syncAt <= progress).length;
+
+  if (target <= 0) return { lines: [], revealed, charPos };
+
+  // Fast-forward older lines if we're 2+ behind
+  while (revealed < target - 1 && revealed < script.length) {
+    revealed++;
+    charPos = 0;
+  }
+
+  // Typewriter on current line
+  if (revealed < target && revealed < script.length) {
+    charPos += CHARS_PER_TICK;
+    if (charPos >= script[revealed].text.length) {
+      revealed++;
+      charPos = 0;
+    }
+  }
+
+  // Build display lines
+  const lines: DisplayLine[] = [];
+  for (let i = 0; i < revealed && i < script.length; i++) {
+    lines.push({ text: script[i].text, style: script[i].style, chars: script[i].text.length });
+  }
+  if (revealed < target && revealed < script.length) {
+    lines.push({
+      text: script[revealed].text,
+      style: script[revealed].style,
+      chars: charPos,
+    });
+  }
+
+  return { lines: lines.slice(-maxVisible), revealed, charPos };
+}
+
+export function FauxTerminal({ scenarioRef, terminalLines, terminalLinesB }: FauxTerminalProps) {
+  const [display, setDisplay] = useState<{
+    linesA: DisplayLine[];
+    linesB: DisplayLine[];
+    phase: ScenarioPhase;
+    isDual: boolean;
+  }>({
+    linesA: [],
+    linesB: [],
     phase: 'growing',
+    isDual: false,
   });
 
-  const internalRef = useRef({ lastScenario: -1, revealed: 0, charPos: 0 });
+  const internalRef = useRef({
+    lastScenario: -1,
+    revealedA: 0, charPosA: 0,
+    revealedB: 0, charPosB: 0,
+  });
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -39,15 +97,19 @@ export function FauxTerminal({ scenarioRef, terminalLines }: FauxTerminalProps) 
       if (!snap) return;
 
       const { phase, progress, scenarioIndex } = snap;
-      const script = terminalLines[scenarioIndex] ?? [];
+      const scriptA = terminalLines[scenarioIndex] ?? [];
+      const scriptB = terminalLinesB?.[scenarioIndex];
+      const isDual = !!scriptB && scriptB.length > 0;
       const ir = internalRef.current;
 
       // Scenario changed — reset
       if (scenarioIndex !== ir.lastScenario) {
         ir.lastScenario = scenarioIndex;
-        ir.revealed = 0;
-        ir.charPos = 0;
-        setDisplay({ lines: [], phase });
+        ir.revealedA = 0;
+        ir.charPosA = 0;
+        ir.revealedB = 0;
+        ir.charPosB = 0;
+        setDisplay({ linesA: [], linesB: [], phase, isDual });
         return;
       }
 
@@ -57,49 +119,34 @@ export function FauxTerminal({ scenarioRef, terminalLines }: FauxTerminalProps) 
         return;
       }
 
-      // Target: how many lines should be fully revealed
-      const target = phase === 'active'
-        ? script.length
-        : script.filter(l => l.syncAt <= progress).length;
+      const maxVis = isDual ? MAX_VISIBLE_SPLIT : MAX_VISIBLE;
 
-      if (target <= 0) {
-        setDisplay({ lines: [], phase });
-        return;
-      }
+      // Advance pane A
+      const resultA = advancePane(scriptA, ir.revealedA, ir.charPosA, progress, phase, maxVis);
+      ir.revealedA = resultA.revealed;
+      ir.charPosA = resultA.charPos;
 
-      // Fast-forward older lines if we're 2+ behind
-      while (ir.revealed < target - 1 && ir.revealed < script.length) {
-        ir.revealed++;
-        ir.charPos = 0;
+      // Advance pane B (if dual)
+      if (isDual && scriptB) {
+        const resultB = advancePane(scriptB, ir.revealedB, ir.charPosB, progress, phase, maxVis);
+        ir.revealedB = resultB.revealed;
+        ir.charPosB = resultB.charPos;
+        setDisplay({ linesA: resultA.lines, linesB: resultB.lines, phase, isDual: true });
+      } else {
+        setDisplay({ linesA: resultA.lines, linesB: [], phase, isDual: false });
       }
-
-      // Typewriter on current line
-      if (ir.revealed < target && ir.revealed < script.length) {
-        ir.charPos += CHARS_PER_TICK;
-        if (ir.charPos >= script[ir.revealed].text.length) {
-          ir.revealed++;
-          ir.charPos = 0;
-        }
-      }
-
-      // Build display lines
-      const lines: DisplayLine[] = [];
-      for (let i = 0; i < ir.revealed && i < script.length; i++) {
-        lines.push({ text: script[i].text, style: script[i].style, chars: script[i].text.length });
-      }
-      if (ir.revealed < target && ir.revealed < script.length) {
-        lines.push({
-          text: script[ir.revealed].text,
-          style: script[ir.revealed].style,
-          chars: ir.charPos,
-        });
-      }
-
-      setDisplay({ lines: lines.slice(-MAX_VISIBLE), phase });
     }, POLL_MS);
 
     return () => clearInterval(tick);
-  }, [scenarioRef, terminalLines]);
+  }, [scenarioRef, terminalLines, terminalLinesB]);
+
+  const renderLines = (lines: DisplayLine[]) =>
+    lines.map((line, i) => (
+      <div key={i} className={`${styles.line} ${styles[line.style]}`}>
+        {line.text.slice(0, line.chars)}
+        {line.chars < line.text.length && <span className={styles.cursor}>&#x2588;</span>}
+      </div>
+    ));
 
   return (
     <div className={styles.terminal} data-phase={display.phase}>
@@ -107,15 +154,23 @@ export function FauxTerminal({ scenarioRef, terminalLines }: FauxTerminalProps) 
         <span className={styles.dot} data-color="red" />
         <span className={styles.dot} data-color="yellow" />
         <span className={styles.dot} data-color="green" />
+        {display.isDual && <span className={styles.chromeLabel}>symphony</span>}
       </div>
-      <div className={styles.body}>
-        {display.lines.map((line, i) => (
-          <div key={i} className={`${styles.line} ${styles[line.style]}`}>
-            {line.text.slice(0, line.chars)}
-            {line.chars < line.text.length && <span className={styles.cursor}>&#x2588;</span>}
+      {display.isDual ? (
+        <>
+          <div className={styles.pane}>
+            {renderLines(display.linesA)}
           </div>
-        ))}
-      </div>
+          <div className={styles.divider} />
+          <div className={styles.pane}>
+            {renderLines(display.linesB)}
+          </div>
+        </>
+      ) : (
+        <div className={styles.body}>
+          {renderLines(display.linesA)}
+        </div>
+      )}
     </div>
   );
 }

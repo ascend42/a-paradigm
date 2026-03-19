@@ -10,6 +10,7 @@ import styles from './HeroSection.module.css';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 const TERMINAL_LINES = SCENARIOS.map(s => s.terminalLines);
+const TERMINAL_LINES_B = SCENARIOS.map(s => s.terminalLinesB);
 
 export function HeroSection() {
   const scenarioRef = useRef({ phase: 'growing' as ScenarioPhase, progress: 0, scenarioIndex: 0 });
@@ -24,7 +25,7 @@ export function HeroSection() {
         />
       </div>
 
-      <FauxTerminal scenarioRef={scenarioRef} terminalLines={TERMINAL_LINES} />
+      <FauxTerminal scenarioRef={scenarioRef} terminalLines={TERMINAL_LINES} terminalLinesB={TERMINAL_LINES_B} />
 
       <div className={styles.content}>
         <motion.p

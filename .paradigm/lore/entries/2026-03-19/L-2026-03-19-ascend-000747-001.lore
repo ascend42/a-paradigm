@@ -1,0 +1,121 @@
+id: L-2026-03-19-ascend-000747-001
+type: milestone
+timestamp: '2026-03-19T00:07:47.612Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Site v4.16.0 — Docs polish, course system, and the moment it clicked
+summary: The Paradigm site crossed from "placeholder docs viewer" to a genuinely compelling product surface. Added breadcrumb navigation, sidebar filtering, 4 handwritten docs pages (CLI Reference, Flows, MCP Tools, Portal & Gates), a full course system with lesson rendering and quiz display, PLSAT certification page, and 2 extracurricular courses. The site now serves all five roles it was designed for — Museum, Library, University, Armory, Voice — with Library and University substantially fleshed out.
+symbols_touched:
+  - '#DocsBreadcrumbs'
+  - '#DocsSidebarFilter'
+  - '#CourseDataLoader'
+  - '#CoursePage'
+  - '#LessonPage'
+  - '#PlsatPage'
+  - '#DocsContentPage'
+  - '#DocsSidebar'
+  - '#platform-server'
+  - '#SiteApp'
+symbols_created:
+  - '#DocsBreadcrumbs'
+  - '#DocsSidebarFilter'
+  - '#CourseDataLoader'
+  - '#CoursePage'
+  - '#LessonPage'
+  - '#PlsatPage'
+files_created:
+  - packages/site/src/lib/course-data.ts
+  - packages/site/src/app/learn/course/[courseId]/page.tsx
+  - packages/site/src/app/learn/course/[courseId]/page.module.css
+  - packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx
+  - packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css
+  - packages/site/src/app/learn/plsat/page.tsx
+  - packages/site/src/app/learn/plsat/page.module.css
+  - packages/site/src/content/docs/cli-reference.md
+  - packages/site/src/content/docs/flows.md
+  - packages/site/src/content/docs/mcp-tools.md
+  - packages/site/src/content/docs/portal-and-gates.md
+files_modified:
+  - packages/site/.purpose
+  - packages/site/src/app/docs/[[...slug]]/page.tsx
+  - packages/site/src/app/docs/[[...slug]]/page.module.css
+  - packages/site/src/app/learn/page.tsx
+  - packages/site/src/components/docs/DocsSidebar.tsx
+  - packages/site/src/components/docs/DocsSidebar.module.css
+  - packages/site/src/components/docs/ContentPage.tsx
+  - packages/site/src/components/docs/ContentPage.module.css
+  - packages/site/src/components/docs/.purpose
+  - packages/paradigm/src/platform-server/index.ts
+decisions:
+  - id: D-content-page-parser
+    decision: Use simple regex-based markdown parser instead of MDX
+    rationale: Keeps build fast, no heavy dependency, code stays understandable. The parser handles headings, code blocks, tables, lists, and inline formatting — covers 95% of doc needs.
+  - id: D-dual-course-sources
+    decision: Load courses from two directories — university package and site-local content
+    rationale: Core PARA courses are a shared package used by the CLI university platform. Extracurricular courses are site-only content that doesn't need to ship in the npm package.
+  - id: D-quiz-display-only
+    decision: Display quiz questions inline without answer interaction
+    rationale: The graded quiz experience belongs in the University platform (paradigm university serve). The site shows questions for review/study, not assessment.
+learnings:
+  - Auto-generated + handwritten docs is the right architecture — neither alone is sufficient
+  - Sidebar filter is a small feature with outsized UX impact on large doc sets (1200+ pages)
+  - Content verification caught a real error (non-existent CLI command) — always verify docs against codebase
+  - Quiz format normalization (choices/correct vs options/answer) was needed because PARA and extracurricular courses evolved independently
+verification:
+  status: pass
+  details:
+    build: pass
+    static_generation: 1286 pages
+    docs_accuracy: verified and corrected
+    purpose_coverage: all new components registered
+tags:
+  - arc:site-evolution
+  - milestone
+  - university
+  - docs
+  - feature
+body: |-
+  ## What changed
+
+  This session took the site from "auto-generated symbol reference" to a real documentation + learning platform. The key additions:
+
+  ### Library (Docs)
+  - **Breadcrumbs** built from URL slugs — simple but makes navigation feel professional
+  - **Sidebar filter** — live text narrowing, sections auto-hide when empty, filter disables collapse. Small feature, big UX impact.
+  - **4 handwritten content pages** — These complement the auto-generated symbol pages. CLI Reference, Flows, MCP Tools, Portal & Gates. Verified against actual codebase (caught `paradigm flow validate` which doesn't exist as a CLI command).
+  - **Code block language headers** — Code blocks with a language specifier get a styled header bar. Subtle polish.
+
+  ### University (Learn)
+  - **CourseDataLoader** — reads from two sources: core PARA courses (from `packages/university/`) and extracurricular courses (from `packages/site/src/content/courses/`). Normalizes different quiz formats (PARA uses `choices/correct`, extracurricular uses `options/answer`).
+  - **Course overview pages** — syllabus with numbered lesson links, core vs extracurricular badges
+  - **Lesson pages** — full markdown rendering (reuses ContentPage pattern but adds ordered lists and italic), key concepts sidebar, inline quiz display, prev/next navigation
+  - **PLSAT page** — certification landing with coverage grid, exam stats, prep guide
+  - **2 extracurricular courses** — Git Fundamentals and Agile Development, 6 lessons each with quizzes
+
+  ### Infrastructure
+  - **Platform server SPA fix** — API routes were being caught by the wildcard `sendFile(index.html)` fallback. Now `/api/*` routes pass through to `next()`.
+
+  ## What's next
+
+  The site is genuinely good now. Areas to expand:
+  - **More handwritten docs** — Getting Started guide, Purpose Files deep-dive, Aspects guide
+  - **Interactive elements** — Quiz taking with answer reveal, progress tracking
+  - **Search** — Full-text search across docs + university content
+  - **More extracurricular courses** — TypeScript patterns, testing strategies, CI/CD
+  - **Blog content** — The Voice role is still empty
+  - **Agents Registry** — The Armory role needs its marketplace UI
+
+  ## Reflection
+
+  The pattern of auto-generated docs (from scan-index) + handwritten guides (from markdown files) is the right architecture. Neither alone is sufficient — auto-generated gives completeness, handwritten gives narrative and teaching. The ContentPage markdown parser is deliberately simple (no MDX dependency) which keeps the build fast and the code understandable.
+linked_commits:
+  - a384d23e
+  - a073237a
+  - b9268330
+confidence: 0.92
+git_context:
+  ref: b92683304ff11f4e1740035e7ba57f84362e1d1e
+  branch: main
+  dirty: true
