@@ -1332,6 +1332,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handleSentinelTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              if (name === 'paradigm_sentinel_record') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'error-encountered', source: 'mcp-tool-call', tool: name, severity: (a.severity as string) || 'warning', context: `Sentinel: ${a.title || a.summary || 'incident recorded'}` }); } catch {}
+              }
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -1503,6 +1507,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handlePersonaTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              if (name === 'paradigm_persona_run') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: `Persona run: ${a.persona || 'unknown'}` }); } catch {}
+              }
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -1514,6 +1522,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handleProtocolsTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              if (name === 'paradigm_protocol_record') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: `Protocol recorded: ${a.name || a.id || 'unknown'}` }); } catch {}
+              }
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -1645,6 +1657,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const reload = reloadContext || (async () => {});
             const result = await handleReindexTool(name, args as Record<string, unknown>, ctx, reload);
             if (result.handled) {
+              try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: 'Index rebuilt' }, { skipNominations: true }); } catch {}
               return {
                 content: [{ type: 'text', text: result.text }],
               };

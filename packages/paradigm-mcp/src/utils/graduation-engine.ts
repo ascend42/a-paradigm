@@ -52,6 +52,47 @@ export async function checkGraduationEligibility(
 }
 
 /**
+ * Check if an agent's nomination behavior qualifies for graduation.
+ * An agent that consistently produces accepted nominations could have its
+ * pattern graduated from "nomination" to "hook" (automated check).
+ *
+ * Returns graduation candidates: agents with >80% accept rate over 10+ nominations.
+ */
+export function checkAmbientGraduationCandidates(
+  rootDir: string
+): Array<{ agentId: string; acceptRate: number; total: number; suggestion: string }> {
+  let getNominationStats: (rootDir: string, agentId: string) => { total: number; accepted: number; dismissed: number; deferred: number; pending: number; acceptRate: number };
+  let loadAllAgentProfiles: (rootDir: string) => Array<{ id: string; attention?: { threshold?: number } }>;
+
+  try {
+    // Dynamic import to avoid circular deps
+    const nomEngine = require('./nomination-engine.js');
+    const agentLoader = require('./agent-loader.js');
+    getNominationStats = nomEngine.getNominationStats;
+    loadAllAgentProfiles = agentLoader.loadAllAgentProfiles;
+  } catch {
+    return [];
+  }
+
+  const profiles = loadAllAgentProfiles(rootDir);
+  const candidates: Array<{ agentId: string; acceptRate: number; total: number; suggestion: string }> = [];
+
+  for (const profile of profiles) {
+    const stats = getNominationStats(rootDir, profile.id);
+    if (stats.total >= 10 && stats.acceptRate >= 0.8) {
+      candidates.push({
+        agentId: profile.id,
+        acceptRate: stats.acceptRate,
+        total: stats.total,
+        suggestion: `Agent "${profile.id}" has ${(stats.acceptRate * 100).toFixed(0)}% accept rate over ${stats.total} nominations — consider graduating its top nomination patterns to automated hooks.`,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/**
  * Check a single habit for graduation eligibility.
  */
 async function checkHabitEligibility(

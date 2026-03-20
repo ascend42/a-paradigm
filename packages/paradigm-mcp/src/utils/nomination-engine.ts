@@ -11,6 +11,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type {
   StreamEvent,
@@ -472,6 +473,12 @@ export function emitAndProcess(
   }
 
   const { nominations, debates } = processEvent(rootDir, emitted);
+
+  // Forward to Symphony relay if configured
+  if (nominations.length > 0) {
+    forwardNominationsToRelay(rootDir, nominations);
+  }
+
   return { event: emitted, nominations, debates };
 }
 
@@ -571,4 +578,216 @@ export function getNominationStats(
     pending,
     acceptRate: engaged > 0 ? accepted / engaged : 0,
   };
+}
+
+/**
+ * Forward nominations to Symphony relay for cross-machine delivery.
+ * Only forwards if Symphony is configured and relay is running.
+ * Fire-and-forget — relay failure does not block local processing.
+ */
+export function forwardNominationsToRelay(
+  rootDir: string,
+  nominations: Nomination[]
+): void {
+  if (nominations.length === 0) return;
+
+  // Check if Symphony outbox exists (indicates relay is configured)
+  const outboxDir = path.join(os.homedir(), '.paradigm', 'score', 'outbox');
+  if (!fs.existsSync(outboxDir)) return;
+
+  try {
+    // Write nominations as a Symphony outbox message for relay pickup
+    const outboxFile = path.join(outboxDir, `nom-${Date.now()}.json`);
+    const message = {
+      type: 'nomination_forward',
+      nominations: nominations.map(n => ({ ...n })),
+      origin: detectLocalProject(rootDir),
+      timestamp: new Date().toISOString(),
+    };
+    fs.writeFileSync(outboxFile, JSON.stringify(message), 'utf8');
+  } catch {
+    // Non-fatal
+  }
+}
+
+function detectLocalProject(rootDir: string): string {
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      const match = content.match(/project:\s*(.+)/);
+      if (match) return match[1].trim();
+    }
+  } catch { /* fall through */ }
+  return path.basename(rootDir);
+}
+
+// ── Journal-to-Notebook Auto-Promotion ──
+
+/**
+ * Scan an agent's journal for high-confidence pattern discoveries
+ * and auto-promote them to notebook entries.
+ *
+ * Criteria: trigger === 'pattern_discovered' AND confidence_after >= 0.8
+ * AND not already promoted (promoted_to_notebook is unset).
+ *
+ * Returns the number of entries promoted.
+ */
+export function autoPromoteJournalEntries(
+  rootDir: string,
+  agentId: string
+): { promoted: number; entries: Array<{ journalId: string; notebookId: string }> } {
+  let loadJournalEntries: (agentId: string, filter: Record<string, unknown>) => Array<Record<string, unknown>>;
+  let addNotebookEntry: (agentId: string, entry: Record<string, unknown>, scope: string, rootDir?: string) => { entry: { id: string } };
+
+  try {
+    const journalMod = require('./journal-loader.js');
+    const notebookMod = require('./notebook-loader.js');
+    loadJournalEntries = journalMod.loadJournalEntries;
+    addNotebookEntry = notebookMod.addNotebookEntry;
+  } catch {
+    return { promoted: 0, entries: [] };
+  }
+
+  const journal = loadJournalEntries(agentId, {
+    trigger: 'pattern_discovered',
+    limit: 100,
+  }) as Array<{
+    id: string;
+    insight: string;
+    confidence_after?: number;
+    promoted_to_notebook?: string;
+    pattern?: { id: string; applies_when: string; correct_approach: string };
+    tags?: string[];
+    project: string;
+  }>;
+
+  const promoted: Array<{ journalId: string; notebookId: string }> = [];
+
+  for (const entry of journal) {
+    // Skip already-promoted or low-confidence entries
+    if (entry.promoted_to_notebook) continue;
+    if ((entry.confidence_after ?? 0) < 0.8) continue;
+
+    try {
+      const { entry: nbEntry } = addNotebookEntry(
+        agentId,
+        {
+          context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
+          snippet: entry.pattern?.correct_approach || entry.insight,
+          concepts: entry.tags || [entry.pattern?.id || 'learned-pattern'],
+          provenance: {
+            source: 'journal-auto-promote',
+            sourceId: entry.id,
+            createdBy: agentId,
+          },
+        },
+        'global',
+        rootDir
+      );
+
+      promoted.push({ journalId: entry.id, notebookId: nbEntry.id });
+
+      // Mark the journal entry as promoted (update in-place via YAML rewrite)
+      try {
+        const journalDir = path.join(os.homedir(), '.paradigm', 'agents', agentId, 'journal');
+        if (fs.existsSync(journalDir)) {
+          const files = fs.readdirSync(journalDir).filter(f => f.endsWith('.yaml'));
+          for (const file of files) {
+            const filePath = path.join(journalDir, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            if (content.includes(entry.id)) {
+              const updated = content.replace(
+                /promoted_to_notebook:.*$/m,
+                `promoted_to_notebook: "${nbEntry.id}"`
+              );
+              if (updated === content) {
+                // Field didn't exist — append it
+                const lines = content.trimEnd().split('\n');
+                lines.push(`promoted_to_notebook: "${nbEntry.id}"`);
+                fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf8');
+              } else {
+                fs.writeFileSync(filePath, updated, 'utf8');
+              }
+              break;
+            }
+          }
+        }
+      } catch {
+        // Marking promoted is non-fatal
+      }
+    } catch {
+      // Skip individual promotion failures
+    }
+  }
+
+  return { promoted: promoted.length, entries: promoted };
+}
+
+// ── Surfacing Config ──
+
+import type { SurfacingConfig, NominationUrgencyLevel as UrgencyLevel } from '../types/ambient.js';
+
+const SURFACING_FILE = '.paradigm/surfacing.yaml';
+
+/**
+ * Load surfacing configuration from .paradigm/surfacing.yaml.
+ * Returns defaults if the file doesn't exist.
+ */
+export function loadSurfacingConfig(rootDir: string): SurfacingConfig {
+  const filePath = path.join(rootDir, SURFACING_FILE);
+
+  const defaults: SurfacingConfig = {
+    default_min_urgency: 'low',
+    enable_debates: true,
+  };
+
+  if (!fs.existsSync(filePath)) return defaults;
+
+  try {
+    const yaml = require('js-yaml');
+    const content = fs.readFileSync(filePath, 'utf8');
+    const parsed = yaml.load(content) as Partial<SurfacingConfig>;
+    return { ...defaults, ...parsed };
+  } catch {
+    return defaults;
+  }
+}
+
+/**
+ * Apply surfacing rules to a set of nominations.
+ * Filters out nominations below the configured urgency threshold
+ * and respects per-agent muting.
+ */
+export function applySurfacingRules(
+  nominations: Nomination[],
+  config: SurfacingConfig
+): Nomination[] {
+  const urgencyOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const minUrgency = urgencyOrder[config.default_min_urgency || 'low'] ?? 3;
+
+  return nominations.filter(n => {
+    const nomUrgency = urgencyOrder[n.urgency] ?? 3;
+
+    // Check per-agent preferences
+    if (config.preferences) {
+      const agentPref = config.preferences.find(p => p.agent === n.agent);
+      if (agentPref) {
+        if (agentPref.always_show) return true;
+        if (agentPref.mute_unless?.length) {
+          // Muted unless specific conditions — check urgency types
+          const matchesMute = agentPref.mute_unless.some(condition =>
+            n.urgency === condition || n.type === condition
+          );
+          if (!matchesMute) return false;
+        }
+        if (agentPref.min_urgency) {
+          const agentMin = urgencyOrder[agentPref.min_urgency] ?? 3;
+          return nomUrgency <= agentMin;
+        }
+      }
+    }
+
+    return nomUrgency <= minUrgency;
+  });
 }

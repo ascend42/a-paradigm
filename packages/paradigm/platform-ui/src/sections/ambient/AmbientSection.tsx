@@ -151,6 +151,7 @@ export default function AmbientSection() {
     fetchNominations,
     engageNomination,
     setEventFilter,
+    connectSSE,
   } = useAmbientStore();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -159,12 +160,16 @@ export default function AmbientSection() {
     fetchEvents();
     fetchNominations();
 
+    // Connect to SSE for real-time event updates
+    const cleanupSSE = connectSSE();
+
+    // Poll nominations only (events come via SSE)
     intervalRef.current = setInterval(() => {
-      fetchEvents();
       fetchNominations();
     }, 10_000);
 
     return () => {
+      cleanupSSE();
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);

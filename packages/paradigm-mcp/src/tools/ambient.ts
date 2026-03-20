@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats } from '../utils/nomination-engine.js';
+import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries } from '../utils/nomination-engine.js';
 import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
@@ -98,6 +98,21 @@ export function getAmbientToolsList() {
       },
     },
     {
+      name: 'paradigm_ambient_promote',
+      description: 'Auto-promote high-confidence pattern discoveries from an agent\'s learning journal to its notebook. Promotes entries with trigger=pattern_discovered and confidence_after >= 0.8. ~100 tokens.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent: { type: 'string', description: 'Agent ID whose journal to scan' },
+        },
+        required: ['agent'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
       name: 'paradigm_ambient_learn',
       description: 'Analyze an agent\'s nomination acceptance/dismissal history and adjust its attention threshold. If >60% dismissed → raise threshold (less noise). If >80% accepted → lower threshold (contribute more). Also returns engagement stats. ~100 tokens.',
       inputSchema: {
@@ -144,12 +159,16 @@ export async function handleAmbientTool(
       const pendingOnly = args.pending_only !== false; // default true
       const limit = (args.limit as number) || 20;
 
-      const nominations = loadNominations(ctx.rootDir, {
+      let nominations = loadNominations(ctx.rootDir, {
         agent: args.agent as string | undefined,
         urgency: args.urgency as NominationUrgencyLevel | undefined,
         pending_only: pendingOnly,
-        limit,
+        limit: limit + 20, // fetch extra before filtering
       });
+
+      // Apply surfacing rules from .paradigm/surfacing.yaml
+      const surfacingConfig = loadSurfacingConfig(ctx.rootDir);
+      nominations = applySurfacingRules(nominations, surfacingConfig).slice(0, limit);
 
       // Mark returned nominations as surfaced (write back)
       const nominationsPath = path.join(ctx.rootDir, '.paradigm/events/nominations.jsonl');
@@ -341,6 +360,19 @@ export async function handleAmbientTool(
             journal: includeJournal,
             nominations: includeNominations,
           },
+        }),
+        handled: true,
+      };
+    }
+
+    case 'paradigm_ambient_promote': {
+      const agentId = args.agent as string;
+      const result = autoPromoteJournalEntries(ctx.rootDir, agentId);
+      return {
+        text: json({
+          agent: agentId,
+          promoted: result.promoted,
+          entries: result.entries,
         }),
         handled: true,
       };

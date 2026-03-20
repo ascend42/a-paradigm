@@ -15,6 +15,7 @@
  * connections.
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -81,6 +82,8 @@ export type RelayFrame =
   | { type: 'message_ack'; messageId: string }
   | { type: 'agent_joined'; agent: AgentSummary; peerId: string }
   | { type: 'agent_left'; agentId: string; peerId: string }
+  | { type: 'nomination_forward'; nomination: Record<string, unknown>; origin: string }
+  | { type: 'nomination_ack'; nominationId: string }
   | { type: 'peer_leaving' }
   | { type: 'ping' }
   | { type: 'pong' };
@@ -470,6 +473,10 @@ export class SymphonyRelay {
         // Acks are informational — no action needed beyond dedup
         break;
 
+      case 'nomination_forward':
+        this.handleNominationForward(ws, frame.nomination, frame.origin);
+        break;
+
       case 'agents_sync':
         this.handleAgentsSync(ws, frame.agents);
         break;
@@ -575,6 +582,43 @@ export class SymphonyRelay {
 
     // ── Ack ──
     sendFrame(senderWs, { type: 'message_ack', messageId: message.id });
+  }
+
+  /**
+   * Forward a nomination from a remote agent to local nomination storage.
+   * Remote nominations are stored in the same nominations.jsonl but tagged with origin.
+   */
+  private handleNominationForward(
+    senderWs: WebSocket,
+    nomination: Record<string, unknown>,
+    origin: string,
+  ): void {
+    if (!nomination?.id) return;
+
+    // Tag with remote origin
+    const tagged = { ...nomination, remote_origin: origin, forwarded_at: new Date().toISOString() };
+
+    // Append to local nominations file
+    try {
+      const eventsDir = path.join(os.homedir(), '.paradigm', 'events');
+      fs.mkdirSync(eventsDir, { recursive: true });
+      const nomPath = path.join(eventsDir, 'nominations.jsonl');
+      fs.appendFileSync(nomPath, JSON.stringify(tagged) + '\n', 'utf8');
+    } catch {
+      // Non-fatal — remote nomination storage failure
+    }
+
+    // In server mode, relay to other connected peers
+    if (this.mode === 'server') {
+      for (const [peerId, peerWs] of this.connectedPeers) {
+        if (peerWs !== senderWs && peerWs.readyState === WebSocket.OPEN) {
+          sendFrame(peerWs, { type: 'nomination_forward', nomination: tagged, origin });
+        }
+      }
+    }
+
+    // Ack
+    sendFrame(senderWs, { type: 'nomination_ack', nominationId: nomination.id as string });
   }
 
   /**

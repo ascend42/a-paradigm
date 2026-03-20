@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0] — 2026-03-20
+
+### Added
+
+- **Symphony nomination relay** — Nominations now forward to remote machines via Symphony outbox files. Relay handles `nomination_forward` frame type with dedup, local storage, and peer relay in server mode.
+- **Graduation ambient candidates** — `checkAmbientGraduationCandidates` identifies agents with >80% accept rate over 10+ nominations as candidates for graduating nomination patterns to automated hooks.
+- **Journal-to-notebook auto-promotion** — `autoPromoteJournalEntries` scans journal for `pattern_discovered` entries with confidence >= 0.8, promotes to notebook, marks journal entries as promoted. Exposed via `paradigm_ambient_promote` MCP tool.
+- **Surfacing config** — `.paradigm/surfacing.yaml` controls per-agent nomination surfacing: `min_urgency`, `always_show`, `mute_unless`, `batch`, `enable_debates`. `applySurfacingRules` filters nominations before returning from `paradigm_ambient_nominations`.
+- **Platform SSE hook** — Ambient store `connectSSE()` establishes `EventSource` connection to `/api/ambient/stream` for real-time event updates. Component uses SSE for events, polls only for nominations.
+- **Expanded event emission** — 4 new emission points: `paradigm_reindex` (work-completed), `paradigm_persona_run` (work-completed), `paradigm_protocol_record` (work-completed), `paradigm_sentinel_record` (error-encountered with severity). Total: 9 emission points.
+
+### Changed
+
+- **Ambient nominations filtered by surfacing config** — `paradigm_ambient_nominations` loads surfacing rules and applies per-agent preferences before returning results.
+- **Ambient tools count** — 5 → 7 MCP tools (added `paradigm_ambient_promote`, `paradigm_ambient_learn`).
+
 ## [5.2.0] — 2026-03-20
 
 ### Added

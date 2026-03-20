@@ -44,6 +44,7 @@ interface AmbientState {
   fetchNominations: () => Promise<void>;
   engageNomination: (id: string, response: 'accepted' | 'dismissed' | 'deferred') => Promise<void>;
   setEventFilter: (filter: { type?: string; since?: string }) => void;
+  connectSSE: () => () => void;
 }
 
 export const useAmbientStore = create<AmbientState>((set, get) => ({
@@ -108,5 +109,30 @@ export const useAmbientStore = create<AmbientState>((set, get) => ({
   setEventFilter: (filter) => {
     set({ eventFilter: filter });
     get().fetchEvents(filter);
+  },
+
+  /**
+   * Connect to the SSE stream for real-time event updates.
+   * Returns a cleanup function to close the connection.
+   */
+  connectSSE: () => {
+    const eventSource = new EventSource('/api/ambient/stream');
+
+    eventSource.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data) as StreamEvent;
+        set((s) => ({
+          events: [event, ...s.events].slice(0, 200),
+        }));
+      } catch {
+        // Skip malformed SSE data
+      }
+    };
+
+    eventSource.onerror = () => {
+      // SSE will auto-reconnect; no action needed
+    };
+
+    return () => eventSource.close();
   },
 }));
