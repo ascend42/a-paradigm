@@ -9,10 +9,22 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext"
+    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination"
     type: types
-    tags: [agent-identity, schema, permissions]
+    tags: [agent-identity, schema, permissions, attention, learning, collaboration]
   NotebookTypes:
     description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
     type: types
     tags: [notebooks, schema]
+  AmbientTypes:
+    description: "Type definitions for ambient coordination — StreamEvent, AttentionScore, Nomination, Debate, SurfacingConfig"
+    type: types
+    tags: [ambient, coordination, event-stream, schema]
+  KnowledgeStreamTypes:
+    description: "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream"
+    type: types
+    tags: [knowledge-streams, work-log, journal, decisions, schema]
+  DataPolicyTypes:
+    description: "Type definitions for data sovereignty — TrustRing, DataPolicy, ObservationRules, EnforcementResult, AuditEntry"
+    type: types
+    tags: [data-policy, trust-rings, sovereignty, schema]

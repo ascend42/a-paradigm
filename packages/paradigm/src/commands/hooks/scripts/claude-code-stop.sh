@@ -51,6 +51,10 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
+  # Emit compliance-violation event (fire-and-forget)
+  if command -v paradigm >/dev/null 2>&1; then
+    paradigm event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+  fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
   echo "$VIOLATIONS" >&2

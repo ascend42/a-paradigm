@@ -294,6 +294,55 @@
           "description": "Approve or deny a pending file request. Called by the owning agent after the human confirms via Conductor prompt or CLI. Supports approve, deny, and approve-redacted actions.",
           "when": "When a human has reviewed a file request and made a decision. The agent calls this tool to execute the approval or denial.",
           "example": "paradigm_symphony_approve_file({ requestId: 'req-abc123', action: 'approve' })"
+        },
+        {
+          "id": "paradigm-ambient-nominations",
+          "name": "paradigm_ambient_nominations",
+          "description": "Get pending agent nominations — agents that self-nominated based on recent events. Marks returned nominations as surfaced.",
+          "when": "When you want to see what agents noticed and want to contribute.",
+          "example": "paradigm_ambient_nominations({ pending_only: true })"
+        },
+        {
+          "id": "paradigm-ambient-events",
+          "name": "paradigm_ambient_events",
+          "description": "Query the ambient event stream — recent tool calls, file edits, gate checks, and other project activity.",
+          "when": "When you need to understand recent project activity or debug event flow.",
+          "example": "paradigm_ambient_events({ since: '1h', limit: 20 })"
+        },
+        {
+          "id": "paradigm-ambient-engage",
+          "name": "paradigm_ambient_engage",
+          "description": "Accept, dismiss, or defer a nomination. Optionally resolves a debate.",
+          "when": "When responding to an agent's self-nominated contribution.",
+          "example": "paradigm_ambient_engage({ nomination_id: 'nom-...', response: 'accepted' })"
+        },
+        {
+          "id": "paradigm-context-compose",
+          "name": "paradigm_context_compose",
+          "description": "Compose full agent session context: profile enrichment + decisions + journal insights + nominations.",
+          "when": "When building a rich context block for an agent session or orchestration.",
+          "example": "paradigm_context_compose({ agent: 'security', symbols: ['^authenticated'] })"
+        },
+        {
+          "id": "paradigm-work-log-record",
+          "name": "paradigm_work_log_record",
+          "description": "Record a work log entry — what got done. Auto-attached to sprint boards.",
+          "when": "After completing a work task, to log the outcome and files modified.",
+          "example": "paradigm_work_log_record({ agent: 'builder', summary: 'Added auth', outcome: 'pass' })"
+        },
+        {
+          "id": "paradigm-journal-record",
+          "name": "paradigm_journal_record",
+          "description": "Record a learning journal entry — what an agent learned. Agent-private, travels across projects.",
+          "when": "When an agent has a learning moment (correction, pattern discovery, failure analysis).",
+          "example": "paradigm_journal_record({ agent: 'security', trigger: 'pattern_discovered', insight: '...', project: 'my-app', transferable: true })"
+        },
+        {
+          "id": "paradigm-decision-record",
+          "name": "paradigm_decision_record",
+          "description": "Record a team decision — what we decided and why. Institutional memory with rationale.",
+          "when": "When a significant architectural or design decision is made.",
+          "example": "paradigm_decision_record({ title: 'Use Redis', decision: 'Redis over Memcached', rationale: 'Need persistence', participants: [...] })"
         }
       ]
     },
@@ -708,6 +757,48 @@
           "name": "Search Weight Decay",
           "description": "When a search result is confirmed, the selected aspect gets +1.0 weight while all other results for the same query decay by *0.95. This self-correcting mechanism prevents stale mappings.",
           "when": "Automatic — happens on every paradigm_aspect_confirm call."
+        }
+      ]
+    },
+    {
+      "id": "ambient",
+      "title": "Ambient Coordination",
+      "cards": [
+        {
+          "id": "event-stream",
+          "name": "Event Stream",
+          "description": "Append-only JSONL log of project activity — tool calls, file edits, gate checks, decisions. Foundation for ambient coordination.",
+          "when": "Events are emitted automatically by MCP tool calls and hooks. Query with paradigm_ambient_events."
+        },
+        {
+          "id": "attention-scoring",
+          "name": "Attention Scoring",
+          "description": "Four-dimension relevance scoring (symbol, path, concept, signal) that determines which agents notice which events. Max-based scoring with configurable threshold.",
+          "when": "Happens automatically when events are processed. Configure via agent attention patterns in .agent files."
+        },
+        {
+          "id": "nominations",
+          "name": "Nominations",
+          "description": "Self-nominated agent contributions triggered by high attention scores. Include brief, urgency, type, and evidence. Surfaced to humans via paradigm_ambient_nominations.",
+          "when": "Agents above their attention threshold automatically generate nominations. Engage with paradigm_ambient_engage."
+        },
+        {
+          "id": "knowledge-streams",
+          "name": "Knowledge Streams",
+          "description": "Three distinct data streams: Work Log (what got done), Learning Journal (what I learned), Team Decisions (what we decided). Different audiences, lifecycles, and storage.",
+          "when": "Record with paradigm_work_log_record, paradigm_journal_record, paradigm_decision_record."
+        },
+        {
+          "id": "trust-rings",
+          "name": "Trust Rings",
+          "description": "Four concentric data sovereignty levels: project-locked → user-scoped → creator-upstream → network-public. Configured in .paradigm/data-policy.yaml.",
+          "when": "Applied automatically at enforcement boundaries. All data is project-locked by default."
+        },
+        {
+          "id": "data-policy",
+          "name": "Data Policy",
+          "description": "YAML-configured rules controlling what agents can observe, what content reaches each stream, and what flows upstream. Per-agent overrides supported.",
+          "when": "Create .paradigm/data-policy.yaml to customize. DEFAULT_DATA_POLICY applies when no file exists."
         }
       ]
     }

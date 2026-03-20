@@ -327,3 +327,53 @@ components:
     description: "University lesson: Automated Review Pipeline — paradigm review, compliance-checker, dynamic tool loading, response format"
     type: lesson
     tags: [university, review, compliance, tool-loading]
+
+  # PARA 601: Ambient Coordination (8 lessons)
+
+  para-601-event-stream:
+    description: "Event Stream — append-only JSONL activity log, event types, automatic emission from MCP tools and hooks"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#event-stream"]
+
+  para-601-attention-scoring:
+    description: "Attention Scoring — four-dimension relevance scoring (symbol, path, concept, signal), max-based scoring, configurable thresholds"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#agent-loader", "#event-stream"]
+
+  para-601-nominations:
+    description: "Nominations — self-nominated agent contributions, brief/urgency/type/evidence, surfacing and engagement workflow"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#nomination-engine", "#agent-loader"]
+
+  para-601-knowledge-streams:
+    description: "Knowledge Streams — Work Log, Learning Journal, Team Decisions; different audiences, lifecycles, and storage"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#event-stream"]
+
+  para-601-trust-rings:
+    description: "Trust Rings — four concentric data sovereignty levels, project-locked default, enforcement boundaries"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#data-policy"]
+
+  para-601-data-policy:
+    description: "Data Policy — YAML-configured rules, observation control, stream filtering, per-agent overrides, DEFAULT_DATA_POLICY"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#data-policy"]
+
+  para-601-context-composition:
+    description: "Context Composition — paradigm_context_compose, profile enrichment, decisions, journal insights, nominations into session context"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#agent-loader", "#nomination-engine"]
+
+  para-601-ambient-review:
+    description: "Ambient Review — comprehensive review of PARA 601 ambient coordination concepts"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#event-stream", "#nomination-engine", "#data-policy", "#agent-loader"]

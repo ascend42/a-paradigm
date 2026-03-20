@@ -19,35 +19,9 @@ v2 uses 5 operational symbols (#, $, ^, !, ~) plus a tag bank for classification
 .paradigm/specs/       → Detailed specifications
 .paradigm/docs/        → Commands, patterns, troubleshooting
 .cursorrules           → IDE instructions (if using Cursor)
-portal.yaml            → Security and auth definitions
+portal.yaml            → Security/auth definitions
+.paradigm/lore/        → Project timeline and history
 ```
-
-## Terminal Syntax
-
-This project runs on **macOS**. Use appropriate syntax:
-
-| Operation | Unix Syntax |
-|-----------|-------------|
-| Chain commands | `cmd1 && cmd2` (stop on error) or `cmd1 ; cmd2` (always continue) |
-| Path separator | `/` (forward slash) |
-| Environment vars | `$VAR` or `${VAR}` |
-| Null device | `/dev/null` |
-| List files | `ls` |
-| Remove files | `rm` |
-
-**IMPORTANT:** Do NOT use Windows-style commands like `dir`, `del`, or `%VAR%`.
-
-## Agent Onboarding
-
-**First Session:**
-1. Call `paradigm_status` for project overview
-2. Read `.paradigm/config.yaml` for conventions
-3. Check if `portal.yaml` exists (for auth gates)
-
-**Before Each Task:**
-1. `paradigm_wisdom_context` for symbols you'll modify
-2. `paradigm_ripple` to check impact
-3. `paradigm_history_fragility` for stability warnings
 
 ## Symbol System
 
@@ -61,412 +35,6 @@ Use these prefixes in documentation and commits:
 | `!` | Signal | `!login-success` |
 | `~` | Aspect | `~audit-required` |
 
-## Component Types
-
-Components (#) support an optional `type` field that describes their structural role (what the code IS) and an optional `parent` field for hierarchy. Types are open strings defined per project in `component_types` glossary in `.paradigm/config.yaml`.
-
-### .purpose file example
-```yaml
-components:
-  GazeRouter:
-    description: Maps gaze coordinates to dispatch targets
-    type: router
-    parent: "#InputOrchestrator"
-  KalmanFilter2D:
-    description: Smooths noisy gaze signal
-    type: filter
-    parent: "#GazeRouter"
-```
-
-### Type vs Tag
-- **`type`** = structural role (view, service, tool, router, filter) — one per component
-- **`tags`** = behavioral and domain classification (feature, integration, state, critical) — many per component
-
-### MCP usage
-- `paradigm_search` accepts `componentType` filter to find all components of a given type
-- `paradigm_status` shows component type breakdown
-- `paradigm_purpose_add_component` accepts `type` and `parent` parameters
-
-## First Actions for New Sessions
-
-**Resuming a session:** Call `paradigm_session_recover` for previous session context.
-
-1. **Orient:** Call `paradigm_status` to see project overview and available symbols
-2. **Verify:** Check `.paradigm/config.yaml` for discipline and conventions
-3. **Locate:** Use `paradigm_navigate` with "context" intent for your task
-4. **Review:** Read the nearest `.purpose` file before making changes
-5. **Check:** Call `paradigm_gates_for_route` before adding API endpoints
-
-## Before Implementing (Every Task)
-
-0. **Check for a protocol first** → Call `paradigm_protocol_search` with your task description. If a matching protocol exists, follow its steps — skip exploration.
-1. **Is this task complex?** (3+ files, security + implementation, multiple features)
-   → Call `paradigm_orchestrate_inline` with mode="plan" BEFORE writing code
-2. **Does it affect existing symbols?** → Call `paradigm_ripple`
-3. **Does it add API endpoints?** → Call `paradigm_gates_for_route`
-
-## After Completing Repeatable Work
-
-If you created new files following existing patterns, record a protocol:
-1. Call `paradigm_protocol_record` with the steps you followed
-2. Include trigger phrases, tags, exemplar, and step details
-3. Future agents will find this protocol instead of re-discovering the pattern
-
-## Portal Protocol (Authorization)
-
-**Portal.yaml is REQUIRED when the project has protected routes.**
-
-### When to Create portal.yaml
-
-Create `portal.yaml` in project root when:
-- Adding any endpoint that requires authentication
-- Adding role-based access (admin, member, owner)
-- Adding resource ownership checks (user can only edit their own data)
-
-### Portal.yaml Structure
-
-```yaml
-version: "1.0"
-gates:
-  ^authenticated:
-    description: User must be logged in
-    check: req.user != null
-  ^project-admin:
-    description: User must be admin of the project
-    check: project.admins.includes(req.user.id)
-  ^comment-author:
-    description: User must be the comment author
-    check: comment.authorId === req.user.id
-
-routes:
-  "GET /api/projects/:id": [^authenticated, ^project-member]
-  "PUT /api/projects/:id": [^authenticated, ^project-admin]
-  "DELETE /api/comments/:id": [^authenticated, ^comment-author]
-```
-
-### When Adding New Endpoints
-
-**ALWAYS update portal.yaml when adding routes:**
-
-1. Call `paradigm_gates_for_route` to get suggestions
-2. Add the route to portal.yaml with required gates
-3. Implement the gate checks in your middleware or route handlers
-4. Test that unauthorized access returns 403
-
-### Common Gate Patterns
-
-| Pattern | Gate Name | Description |
-|---------|-----------|-------------|
-| Any logged-in user | `^authenticated` | Basic auth check |
-| Resource membership | `^{resource}-member` | User is member of resource |
-| Resource admin | `^{resource}-admin` | User is admin of resource |
-| Resource owner | `^{resource}-owner` | User owns the resource |
-| Author only | `^{resource}-author` | User created the resource |
-
-## Context Discovery
-
-**Before making changes:**
-
-1. Check `.paradigm/config.yaml` for project configuration
-2. Read the `.purpose` file in the directory you're modifying
-3. Check `portal.yaml` for existing auth gates
-4. Check `.paradigm/docs/patterns.md` for coding patterns
-
-## Paradigm Navigation
-
-Before exploring this codebase:
-
-1. Read `.paradigm/navigator.yaml` for structure map
-2. Query by symbol - lookup paths directly
-3. Respect skip patterns (node_modules, dist, etc.)
-
-### Exploration Protocol
-
-**INSTEAD OF:** Broad exploration (expensive token usage)
-
-**DO THIS:**
-1. Read `.paradigm/navigator.yaml` for structure map
-2. Find relevant symbol → go to path
-3. Read only needed files
-
-### Task Recipes
-
-**Adding a feature:**
-1. Check `.paradigm/navigator.yaml` → `structure.features.paths`
-2. Read existing feature as template
-3. Create in same location
-
-**Modifying a component:**
-1. Look up symbol in `.paradigm/navigator.yaml` → `symbols`
-2. Go directly to the path
-3. Check `paradigm_ripple` for impact
-
-**Using MCP Tools:**
-- `paradigm_navigate({ intent: "find", target: "#checkout" })` - locate symbol
-- `paradigm_navigate({ intent: "explore", target: "auth" })` - browse area
-- `paradigm_navigate({ intent: "context", task: "add login" })` - task context
-
-### PM Governance (Before/After Tasks)
-
-| When | Tool | Purpose |
-|------|------|---------|
-| Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |
-| Finishing any task | _(handled by stop hook)_ | The stop hook runs 12 compliance checks automatically — no need to call `paradigm_pm_postflight` manually |
-
-> **Graduation note:** 5 of 13 habits are enforced by hooks at zero context cost. Call `paradigm_graduate_status` to see the tier map. The stop hook auto-demotes graduated habits that fail 3+ times.
-
-## Context Monitoring Protocol
-
-**The post-write hook automatically warns at 30+ edits.** For manual checks, call `paradigm_context_check`.
-
-**When recommendation is NOT "continue":**
-1. Inform user: "Context usage is at ~X%. Recommend handoff soon."
-2. Offer to prepare handoff summary
-3. If urgent (>85%), prioritize completing current task then handoff
-
-**To handoff:**
-1. Call `paradigm_handoff_prepare` with summary and next steps
-2. User runs: `paradigm team handoff --to <agent> --summary "..."`
-3. New session accepts with: `paradigm team accept <id>`
-
-## Session Checkpoints
-
-**Auto-recovery**: Recovery data is automatically surfaced on your first Paradigm tool call — no action needed to receive it.
-
-Save checkpoints when transitioning between workflow phases to enable crash recovery:
-
-| Phase | Trigger | What to Capture |
-|-------|---------|-----------------|
-| `planning` | After reading requirements / before coding | Plan, approach, key decisions |
-| `implementing` | After starting code changes | Modified files, symbols touched, decisions made |
-| `validating` | After implementation, before tests or review | All modified files, test plan |
-| `complete` | Task finished | Summary, final file list |
-
-### Usage
-
-```
-paradigm_session_checkpoint({
-  phase: "implementing",
-  context: "Adding JWT auth middleware to /api/projects routes",
-  modifiedFiles: ["packages/paradigm/src/core/portal-compliance.ts", "packages/paradigm/src/platform-server/index.ts"],
-  symbolsTouched: ["^authenticated", "#project-routes"],
-  decisions: ["Using RS256 for JWT signing", "Storing refresh tokens in httpOnly cookies"]
-})
-```
-
-Keep it lightweight: `phase` + `context` are required, everything else is optional.
-
-## MCP Workflow Protocol
-
-**Query before modifying** - Use MCP tools for token-efficient, fresh data:
-
-| Before doing this... | Call this tool |
-|---------------------|----------------|
-| **Implementing a common pattern** | `paradigm_protocol_search` for existing protocol |
-| **Completed repeatable work** | `paradigm_protocol_record` to capture the pattern |
-| Modifying a symbol | `paradigm_ripple` with the symbol |
-| Understanding code | `paradigm_navigate` with explore intent |
-| Checking dependencies | `paradigm_related` for connections |
-| Getting oriented | `paradigm_status` for project overview |
-| **Adding API endpoint** | `paradigm_gates_for_route` for auth gates |
-| **Validating changes** | `paradigm_flows_affected` for flow impact |
-| **Getting test data** | `paradigm_test_fixtures` for fixtures |
-| **Building a feature (3+ files)** | `paradigm_orchestrate_inline` mode="plan" |
-| **Task involves security + code** | `paradigm_orchestrate_inline` mode="plan" |
-| **Tracking work items** | `paradigm_task_create` / `paradigm_task_list` for persistent tasks |
-| **Recording reflections** | `paradigm_lore_record` with `arc:*` tags for thematic grouping |
-| **Recording with confidence** | `paradigm_lore_record` with `confidence: 0.0-1.0` |
-| **Reviewing progress** | `paradigm_lore_search` with tag filter for `arc:*` entries |
-| **Assessing correctness** | `paradigm_lore_assess` with verdict (correct/partial/incorrect) |
-| **Checking calibration** | `paradigm_lore_calibration` with optional symbol/tag/groupBy |
-| **Sending message to agents** | `paradigm_symphony_send` to compose + route |
-| **Checking agent messages** | `paradigm_symphony_poll` for inbox (via /loop) |
-| **Quick inbox check** | `paradigm_symphony_peek` for near-free stat check |
-| **Watching inbox live** | `paradigm symphony watch` for zero-token real-time monitoring |
-| **Viewing agent network** | `paradigm_symphony_status` for linked agents |
-| **Reviewing conversation** | `paradigm_symphony_thread` for full thread |
-| **Requesting cross-project files** | `paradigm_symphony_request_file` for file pipeline |
-| **Approving file transfers** | `paradigm_symphony_approve_file` to approve/deny |
-| **Managing remote peers** | `paradigm symphony peers` for peer list/revoke/forget |
-| **Starting relay server** | `paradigm symphony serve` for cross-machine networking |
-| **Finishing work session** | `paradigm_reindex` to rebuild static index |
-| **Cross-project impact** | `paradigm_ripple` with `includeWorkspace: true` |
-| **Cross-project search** | `paradigm_search` with `includeWorkspace: true` |
-| **Reindex workspace** | `paradigm_workspace_reindex` to rebuild all members |
-| **Finding project knowledge** | `paradigm_university_search` by type/tag/symbol |
-| **Onboarding to project** | `paradigm_university_onboard` for learning sequence |
-| **Validating university content** | `paradigm_university_validate` with `deep: true` |
-| **Navigating Platform UI** | `paradigm_platform_navigate` with section/symbol/loreId |
-| **Highlighting symbols in UI** | `paradigm_platform_highlight` with symbols + color/label |
-| **Showing toasts/callouts** | `paradigm_platform_annotate` with type + message |
-| **Reading UI state** | `paradigm_platform_observe` for section/symbol/theme/agents |
-| **Clearing agent effects** | `paradigm_platform_clear` to remove highlights/annotations |
-| **Checking agent expertise** | `paradigm_agent_expertise` for symbol-to-agent routing |
-| **Listing agent profiles** | `paradigm_agent_list` for all agent identities |
-| **Getting agent details** | `paradigm_agent_get` for full profile + expertise |
-| **Activating advanced tools** | `paradigm_tool_activate` for on-demand tool modules |
-| **Checking graduation eligibility** | `paradigm_graduate_check` for habit→hook promotion |
-| **Viewing automation tiers** | `paradigm_graduate_status` for current tier map |
-| **Searching agent notebooks** | `paradigm_notebook_search` by concept/tag/keyword |
-| **Adding notebook entries** | `paradigm_notebook_add` for curated snippets |
-| **Promoting lore to notebook** | `paradigm_notebook_promote` for lore extraction |
-| **Running automated review** | `paradigm review` or `paradigm review --deep --ci` |
-
-**Benefits**: ~100 tokens per query vs ~2000 for reading files. Always fresh data from live index.
-
-**Authorization workflow:**
-1. Adding endpoint? → Call `paradigm_gates_for_route`
-2. Get suggested gates → Add them to `portal.yaml`
-3. Implement gate checks → Test 403 responses
-
-## Token Budget Reference
-
-| Operation | Typical Tokens | Use When |
-|-----------|---------------|----------|
-| `paradigm_status` | ~100 | Starting a session |
-| `paradigm_search` | ~150 | Looking for symbols |
-| `paradigm_navigate` | ~200 | Finding code locations |
-| `paradigm_ripple` | ~300 | Before modifying symbols |
-| `paradigm_gates_for_route` | ~150 | Adding API endpoints |
-| `paradigm_task_create` | ~100 | Creating a work item |
-| `paradigm_task_list` | ~200 | Checking open tasks |
-| `paradigm_lore_record` | ~150 | Adding a lore entry (reflections, decisions, arcs) |
-| `paradigm_lore_search` | ~200 | Search lore by tag, symbol, or type |
-| `paradigm_lore_assess` | ~100 | Recording human assessment verdict on an entry |
-| `paradigm_lore_calibration` | ~200 | Calibration stats (accuracy, confidence, delta) |
-| `paradigm_workspace_reindex` | ~200 | Reindex workspace members |
-| `paradigm_symphony_peek` | ~15 | Near-free inbox check (file stat only) |
-| `paradigm_symphony_poll` | ~200 | Polling inbox via /loop |
-| `paradigm_symphony_send` | ~100 | Sending message to agents |
-| `paradigm_symphony_status` | ~150 | Checking agent network + peers |
-| `paradigm_symphony_thread` | ~200 | Viewing thread conversation |
-| `paradigm_symphony_request_file` | ~100 | Requesting cross-project file |
-| `paradigm_symphony_approve_file` | ~100 | Approving/denying file request |
-| `paradigm_university_search` | ~150 | Search project university content |
-| `paradigm_university_get` | ~300 | Fetch content item by ID |
-| `paradigm_university_create` | ~100 | Create note/policy/quiz/path |
-| `paradigm_university_onboard` | ~200 | Get onboarding sequence |
-| `paradigm_university_validate` | ~200 | Validate content integrity |
-| `paradigm_protocol_search` | ~200 | Search for matching protocol |
-| `paradigm_protocol_record` | ~100 | Record a new protocol |
-| `paradigm_protocol_validate` | ~200 | Validate protocol references |
-| `paradigm_platform_navigate` | ~100 | Navigate Platform UI sections/symbols |
-| `paradigm_platform_highlight` | ~100 | Highlight symbols in Platform UI |
-| `paradigm_platform_annotate` | ~100 | Show toasts/callouts/badges in UI |
-| `paradigm_platform_observe` | ~150 | Read current Platform UI state |
-| `paradigm_platform_clear` | ~50 | Remove agent effects from UI |
-| `paradigm_agent_list` | ~150 | Listing all agent profiles |
-| `paradigm_agent_expertise` | ~100 | Finding best agent for a symbol |
-| `paradigm_agent_get` | ~200 | Full agent profile detail |
-| `paradigm_notebook_search` | ~150 | Searching notebook entries |
-| `paradigm_notebook_add` | ~100 | Adding a notebook entry |
-| `paradigm_notebook_promote` | ~100 | Promoting lore to notebook |
-| `paradigm_tool_activate` | ~50 | Activating advanced tools |
-| `paradigm_graduate_check` | ~300 | Check graduation eligibility |
-| `paradigm_graduate_status` | ~200 | View automation tier map |
-| `response_format: 'concise'` | ~50% fewer | On any tool that supports it |
-| File read (small) | ~500 | Need exact code |
-| File read (large) | ~2000+ | Prefer MCP; use sparingly |
-| Full .purpose + config | ~1500 | Initial orientation |
-
-**Tip**: Prefer MCP queries over file reads. Check `paradigm_session_stats` for actual usage.
-
-### When to Use MCP vs File Reads
-
-| Need | Use MCP | Use File Read |
-|------|---------|---------------|
-| Find symbol | `paradigm_navigate` | Never |
-| Check impact | `paradigm_ripple` | Never |
-| Read implementation | MCP first | Then specific file |
-| Write code | N/A | Existing patterns |
-| Check team wisdom | `paradigm_wisdom_context` | Never |
-
-**Rule**: MCP for discovery, files for implementation.
-
-### MCP Tool Caching
-
-Paradigm caches results for `paradigm_search`, `paradigm_status`, and `paradigm_navigate` with a 30-second TTL. This means:
-- Repeated calls within 30 seconds return cached results (faster, zero recomputation)
-- After `paradigm_reindex`, the cache is cleared
-- Configure TTL via `limits.toolCacheTtlMs` in `.paradigm/config.yaml`
-
-## MCP Resources (On-Demand Content)
-
-Reference content is served via MCP resources instead of being stored locally:
-
-| Resource | URI | Content |
-|----------|-----|---------|
-| Prompts | `paradigm://prompts` | Task templates (add-feature, refactor, etc.) |
-| Commands | `paradigm://docs/commands` | CLI command reference |
-| Queries | `paradigm://docs/queries` | jq query examples |
-| Disciplines | `paradigm://specs/disciplines` | Symbol mappings by domain |
-| Scan | `paradigm://specs/scan` | Visual discovery protocol |
-
-**Usage**: Read resources with `paradigm://prompts/{name}` (e.g., `paradigm://prompts/add-feature`).
-
-**Session Tracking**: Call `paradigm_session_stats` to see token usage and cost breakdown.
-
-## Directory Structure
-
-`.purpose` files exist in:
-- `src/*`
-- `lib/*`
-- `packages/*`
-
-## Paradigm Logging
-
-**IMPORTANT:** Use the Paradigm logger instead of raw console.log/print.
-
-```
-// Use this pattern:
-log.component('#login-handler').info('Starting login', { email });
-log.component('#database').debug('Query executed', { duration });
-log.gate('^authenticated').warn('Access denied', { userId });
-log.signal('!login-success').info('User authenticated');
-```
-
-### Symbol Mapping by Directory
-
-| Directory | Symbol | Logger Method |
-|-----------|--------|---------------|
-| `features/**` | `#` | `log.component()` |
-| `routes/**` | `#` | `log.component()` |
-| `api/**` | `#` | `log.component()` |
-| `endpoints/**` | `#` | `log.component()` |
-| `commands/**` | `#` | `log.component()` |
-| `models/**` | `#` | `log.component()` |
-| `components/**` | `#` | `log.component()` |
-| `lib/**` | `#` | `log.component()` |
-| `utils/**` | `#` | `log.component()` |
-| `services/**` | `#` | `log.component()` |
-| `core/**` | `#` | `log.component()` |
-| `drivers/**` | `#` | `log.component()` |
-| `systems/**` | `#` | `log.component()` |
-| `integrations/**` | `#` | `log.component()` |
-| `external/**` | `#` | `log.component()` |
-| `vendors/**` | `#` | `log.component()` |
-| `stores/**` | `#` | `log.component()` |
-| `state/**` | `#` | `log.component()` |
-| `reducers/**` | `#` | `log.component()` |
-| `config/**` | `#` | `log.component()` |
-| `middleware/**` | `^` | `log.gate()` |
-| `auth/**` | `^` | `log.gate()` |
-| `guards/**` | `^` | `log.gate()` |
-| `policies/**` | `^` | `log.gate()` |
-| `events/**` | `!` | `log.signal()` |
-| `handlers/**` | `!` | `log.signal()` |
-| `listeners/**` | `!` | `log.signal()` |
-| `hooks/**` | `!` | `log.signal()` |
-| `flows/**` | `$` | `log.flow()` |
-| `sagas/**` | `$` | `log.flow()` |
-| `workflows/**` | `$` | `log.flow()` |
-| `pipelines/**` | `$` | `log.flow()` |
-| `aspects/**` | `~` | `log.aspect()` |
-| `rules/**` | `~` | `log.aspect()` |
-| `constraints/**` | `~` | `log.aspect()` |
-
-See `.paradigm/specs/logger.md` for full specification.
-
 ## Conventions
 
 - Use kebab-case for symbol IDs (#feature-name, not #featureName)
@@ -479,169 +47,6 @@ See `.paradigm/specs/logger.md` for full specification.
 - Use signals for side effects, not direct mutations
 - Aspects (~) MUST have code anchors - no unanchored aspects
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
-- Use `type` field for structural role (view, service, tool); use tags for behavior and domain
-- Use `parent` field to establish component hierarchy when relationships are clear
-
-## When to Update Paradigm Files
-
-- When adding a feature, create/update .purpose with #name and tags: [feature]
-- When adding authorization, update portal.yaml with ^gate
-- When adding cross-cutting rules, create ~aspect with required anchors
-- When exploring ideas, add [idea] tag to the symbol
-- When tracking work items, use `paradigm_task_create` (stored in `.paradigm/tasks/`)
-- When recording reflections/decisions, use `paradigm_lore_record` with appropriate tags (stored in `.paradigm/lore/`)
-- When adding a notebook entry, use `paradigm_notebook_add` or `paradigm_notebook_promote`
-- Always update references when renaming symbols
-
-## Workspaces (Multi-Project)
-
-Paradigm supports multi-project workspaces via `.paradigm-workspace` files.
-
-### Setup
-
-1. In your first project: `paradigm shift --workspace "workspace-name"`
-2. In each additional project: `paradigm shift --workspace "workspace-name"`
-
-That's it — shift creates the workspace file, adds each project as a member,
-configures the local .paradigm/config.yaml link, and reindexes all members.
-
-**Manual alternative** (if needed):
-1. Create workspace: `paradigm workspace init` in the parent directory
-2. In each project's `.paradigm/config.yaml`, add: `workspace: "../.paradigm-workspace"`
-3. Run `paradigm workspace reindex` to build all indices
-
-### .paradigm-workspace Format
-
-```yaml
-version: "1.0"
-name: my-workspace
-members:
-  - name: backend
-    path: ./packages/paradigm
-    role: api
-    exports: ["#*-api", "^*"]  # Only expose API symbols and gates
-  - name: frontend
-    path: ./packages/site
-    role: client
-```
-
-### Cross-Project MCP Tools
-
-| Tool | Workspace Parameter | Behavior |
-|------|-------------------|----------|
-| `paradigm_search` | `includeWorkspace: true` | Search sibling indices, results prefixed with `{member}/` |
-| `paradigm_ripple` | `includeWorkspace: true` | Adds `workspaceImpact` section with cross-project references |
-| `paradigm_navigate` | Automatic | Falls back to siblings when symbol not found locally |
-| `paradigm_gates_for_route` | Automatic | Learns gate patterns from sibling `portal.yaml` files |
-| `paradigm_workspace_reindex` | N/A | Reindex all workspace members |
-
-### CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `paradigm workspace init` | Create `.paradigm-workspace` from sibling projects |
-| `paradigm workspace status` | Show member status and symbol counts |
-| `paradigm workspace reindex` | Rebuild indices for all members |
-
-### Key Design Rules
-
-- **`includeWorkspace` defaults to `false`** — workspace search is opt-in per query
-- **Read-only sibling access** — only reads `.paradigm/scan-index.json` + `portal.yaml`
-- **Namespace prefix** — `{memberName}/` only on cross-project symbols
-- **Graceful degradation** — missing files, indices, or YAML → warn and continue
-
-## Multi-Agent Orchestration
-
-Paradigm supports multi-agent orchestration via `paradigm team` commands:
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `paradigm team spawn <agent> --task "..."` | Spawn a single agent |
-| `paradigm team orchestrate "task"` | AI orchestrator coordinates agents |
-| `paradigm team orchestrate "task" --solo` | Single Claude mode (no splitting) |
-| `paradigm team orchestrate "task" --compare` | A/B test solo vs faceted |
-| `paradigm team agents suggest "task"` | Suggest agents based on task triggers |
-| `paradigm team providers` | Show available providers |
-| `paradigm team providers --set X` | Set preferred provider |
-| `paradigm team models` | View/configure agent model assignments |
-| `paradigm team models --refresh` | Re-discover models from environment |
-
-### Agent Suggestions
-
-Before orchestrating, you can preview which agents will be involved:
-
-```bash
-paradigm team agents suggest "Add user authentication with JWT"
-```
-
-Or via MCP (returns `suggestedAgents` in plan mode):
-```
-paradigm_orchestrate_inline({ task: "...", mode: "plan" })
-```
-
-## Flow-First Development
-
-**Define flows BEFORE implementing features that span multiple steps.**
-
-### When to Define Flows
-
-Create a flow ($symbol) when your feature:
-- Has multiple authorization gates
-- Spans multiple components or services
-- Emits events that trigger other actions
-- Needs clear documentation of the "happy path"
-
-### Flow Definition
-
-Define flows in `.paradigm/flows.yaml`:
-
-```yaml
-version: "1.0"
-flows:
-  $task-creation:
-    name: Task Creation Flow
-    trigger: "POST /api/tasks"
-    steps:
-      - type: gate
-        symbol: ^authenticated
-      - type: gate
-        symbol: ^project-member
-      - type: action
-        symbol: "#create-task"
-      - type: signal
-        symbol: "!task-created"
-    successSignal: "!task-created"
-```
-
-### Flow-First Protocol
-
-1. **Define the flow first** - What gates, actions, and signals?
-2. **Validate** - Call `paradigm_flow_validate` to check completeness
-3. **Implement** - Each step becomes a clear implementation target
-
-## Flow Validation
-
-**Validate flows before and after implementing:**
-
-```
-# Validate specific flow
-paradigm_flow_validate({ flowId: "$task-creation" })
-
-# Validate all flows
-paradigm_flow_validate({})
-
-# Deep check (verify implementation exists)
-paradigm_flow_validate({ checkImplementation: true })
-```
-
-**After modifying symbols, check affected flows:**
-
-```
-# Check what flows are affected by #tasks
-paradigm_flows_affected({ symbol: "#tasks" })
-```
 
 ## Commit Messages
 
@@ -676,181 +81,73 @@ feat(#payment-form): add Apple Pay support
 Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 ```
 
-## Project University
+## Agent Onboarding
 
-Every project can maintain its own university at `.paradigm/university/` — a structured knowledge base with notes, policies, quizzes, learning paths, and diplomas.
+**First session:** Call `paradigm_status` → read `.paradigm/config.yaml` → check `portal.yaml`
 
-### Content Types
+**Before each task:** `paradigm_ripple` for impact, `paradigm_gates_for_route` for new endpoints
 
-| Type | Prefix | Format | Purpose |
-|------|--------|--------|---------|
-| Note | `N-` | Markdown + YAML frontmatter | Architecture docs, guides, runbooks |
-| Policy | `P-` | Markdown + YAML frontmatter | Code review process, deployment checklists |
-| Quiz | `Q-` | YAML | Knowledge checks with grading |
-| Learning Path | `LP-` | YAML | Ordered sequences of content + quizzes |
-| Diploma | `D-` | YAML (auto-generated) | Completion records |
+**Resuming:** Call `paradigm_session_recover`
 
-### Key MCP Tools
+## Before Implementing
 
-| Tool | Description |
-|------|-------------|
-| `paradigm_university_search` | Search content by type, tag, difficulty, symbol |
-| `paradigm_university_get` | Fetch full content by ID |
-| `paradigm_university_create` | Create new content (agent-authored) |
-| `paradigm_university_quiz` | Get quiz questions (no answers) for taking |
-| `paradigm_university_submit` | Submit answers, auto-grade, save diploma |
-| `paradigm_university_onboard` | Get recommended onboarding sequence |
-| `paradigm_university_validate` | Validate content integrity + symbol coverage |
+0. Call `paradigm_protocol_search` — if a protocol matches, follow it
+1. Complex task (3+ files)? → `paradigm_orchestrate_inline` mode="plan"
+2. Affects symbols? → `paradigm_ripple`
+3. Adds endpoints? → `paradigm_gates_for_route`
 
-### Symbol Linking
+## Automatic Enforcement (Hooks)
 
-The `symbols` field on university content is **load-bearing**:
-- `paradigm_university_validate` checks symbol refs against `.paradigm/scan-index.json`
-- `paradigm_ripple` surfaces `university_content_affected` for symbols referenced in content
-- Content staleness is detected when a symbol's `.purpose` file is newer than the content
+The stop hook **BLOCKS** if source files were modified without .purpose updates.
 
-### CLI Commands
+| Hook | Behavior |
+|------|----------|
+| **Stop** | Blocks on: missing .purpose, missing portal.yaml gates, aspect drift, stale purposes |
+| **Pre-commit** | Auto-rebuilds index — never blocks |
+| **Post-write** | Advisory reminder for .purpose coverage |
 
-```
-paradigm university list [--type X] [--tag Y]
-paradigm university add <type> --title "..."
-paradigm university show <id>
-paradigm university quiz <id>        # Interactive terminal quiz
-paradigm university status           # Content overview + diplomas
-paradigm university validate [--deep]
-paradigm university serve            # Launch learning platform UI
-```
-
-## Confidence Calibration
-
-Lore entries support a confidence-assessment loop that builds domain-specific reliability maps over time.
-
-### Recording Confidence
-
-When recording lore, attach a confidence score (0.0–1.0) expressing how confident you are that the work is correct:
-
-```
-paradigm_lore_record({
-  title: "...", summary: "...", symbols_touched: [...],
-  confidence: 0.85
-})
-```
-
-CLI: `paradigm lore record --title "..." --summary "..." --symbols "#x" --confidence 0.85`
-
-### Assessing Correctness
-
-After the fact, humans assess whether the work was correct:
-
-```
-paradigm_lore_assess({ id: "L-2026-03-15-...", verdict: "correct" })
-```
-
-Verdicts: `correct` (1.0), `partial` (0.5), `incorrect` (0.0). The system computes `assessment_delta = impliedScore - confidence`. Positive delta = under-confident, negative = over-confident.
-
-CLI: `paradigm lore assess <id> <correct|partial|incorrect> [--notes "..."]`
-
-### Querying Calibration
-
-View calibration statistics across assessed entries:
-
-```
-paradigm_lore_calibration({ symbol: "#auth-middleware", groupBy: "symbol" })
-```
-
-Returns: accuracy rate, avg confidence, calibration score (1.0 = perfect), verdict breakdown, and natural-language insights with low-N caveats.
-
-CLI: `paradigm lore calibration [--symbol #X] [--tag Y] [--group-by symbol] [--json]`
-
-### Key Distinctions
-
-- **`review`** = meta-quality of the *work session* (completeness 1-5, quality 1-5)
-- **`assessment`** = correctness verdict on the *decisions/changes made* (correct/partial/incorrect)
-- **`confidence`** = agent's predicted probability of being correct (0.0–1.0)
-
-All three coexist independently. Confidence recording is encouraged, never enforced.
-
-## Automatic Enforcement (Claude Code Hooks)
-
-This project uses Claude Code hooks for paradigm compliance. These are installed
-automatically via `paradigm shift` or `paradigm hooks install`.
-
-| Hook | Type | Behavior |
-|------|------|----------|
-| **Stop hook** | Stop | **BLOCKS** you from finishing if source files were modified without .purpose updates |
-| **Pre-commit hook** | PreToolUse (Bash) | Auto-rebuilds index before `git commit` — never blocks |
-| **Post-write hook** | PostToolUse (Edit/Write) | Advisory reminder when editing files without .purpose coverage |
-
-The stop hook runs 12 compliance checks (shared via `paradigm-common.sh`):
-
-| Check | What it validates | Blocking? |
-|-------|-------------------|-----------|
-| 1 | Source files modified without .purpose updates (2+ files) | Yes |
-| 2 | Modified source directories missing .purpose files | Yes |
-| 3 | Route patterns added without portal.yaml | Yes |
-| 4 | Aspect anchor files that no longer exist | Yes |
-| 5 | Per-directory .purpose freshness | Yes |
-| 6 | Aspect coverage advisory | No (advisory) |
-| 7 | Lore entry expected for significant sessions (3+ files) | Yes |
-| 8 | Blocking habits not satisfied | Yes |
-| 9 | Purpose-required patterns from .paradigm/config.yaml | Yes |
-| 10 | Aspect drift detection (auto-heals shifts, blocks real drift) | Yes |
-| 11 | Portal gate implementation compliance (undeclared gates) | Yes |
-| 12 | Agent permission compliance (integrityHash) | No (advisory) |
-| 13 | Graduation failure tracking (auto-demotion at 3 failures) | No (advisory) |
-
-### Plugin Version Compatibility
-
-When installing hooks via `paradigm hooks install`, the system checks `compatibleVersions` in the plugin's `plugins/paradigm/hooks/hooks.json`. If the current paradigm version is outside the compatible range, a warning is displayed but installation proceeds.
-
-**If the Stop hook blocks you:**
-1. Update the nearest `.purpose` file for each modified code area
-2. Update `portal.yaml` if you added routes or gates
-3. Call `paradigm_reindex` to rebuild the static index
-4. Then finish your session
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "Symbol not found" | Run `paradigm scan` to rebuild index |
-| "Navigator not found" | Run `paradigm scan` to generate .paradigm/navigator.yaml |
-| Empty search results | Check that .purpose files define symbols |
-| High context usage | Call `paradigm_handoff_prepare` |
-| Gate suggestions missing | Check that portal.yaml exists and defines gates |
-| "Flow index not found" | Run `paradigm scan` and add flows to .purpose files |
-| "Fixtures not found" | Create `.paradigm/fixtures.yaml` with test data |
-| Aspect anchors drifted | Run `paradigm drift check --auto-heal` to fix shifted anchors |
-| Undeclared gates in code | Run `paradigm portal check` to find and declare missing gates |
-| Purpose-required violation | Create `.purpose` files in directories matching config patterns |
+**If blocked:** Update .purpose files → update portal.yaml if needed → `paradigm_reindex` → finish
 
 ## Maintaining Paradigm Files
 
-**You MUST update Paradigm files when making code changes. The Stop hook will block you if you don't:**
+**You MUST update Paradigm files when making code changes:**
 
-| Change Type | Action Required |
-|-------------|-----------------|
-| Add feature | Create `.purpose` in feature directory |
-| Add ANY protected route | Create/update `portal.yaml` with gates |
-| Add ownership check | Add `^{resource}-owner` gate to `portal.yaml` |
-| Add role-based access | Add `^{role}` gate to `portal.yaml` |
-| Add signal/event | Add to emitting feature's `.purpose` |
-| Add multi-step flow | Document as `$flow` in `.purpose` |
-| Rename/delete symbol | Update all `.purpose` references |
-| Learn antipattern | Add to `.paradigm/wisdom/antipatterns.yaml` |
+- Add feature → create `.purpose` in directory
+- Add protected route → update `portal.yaml` with gates
+- Add signal/event → add to `.purpose`
+- Add multi-step flow → document as `$flow`
+- Rename/delete symbol → update all references
+- Record lore via `paradigm_lore_record` for sessions modifying 3+ files
+- Use Paradigm logger (`log.component()`, `log.gate()`, etc.) — never raw console.log
 
-**CRITICAL: Authorization requires portal.yaml**
+**Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.
 
-If your code has ANY of these, `portal.yaml` MUST exist:
-- JWT/session authentication
-- Role checks (admin, member, etc.)
-- Ownership checks (user can only edit own resources)
-- Protected API endpoints
+## On-Demand Guidance
 
-**Validation**: Run `paradigm doctor` to check for inconsistencies.
+Detailed guidance is available via MCP resources — load only what you need:
 
-See `.paradigm/docs/ai-maintenance-protocol.md` for detailed guidance.
+| Topic | Resource |
+|-------|----------|
+| Logging rules & directory mapping | `paradigm://guidance/logging` |
+| Portal protocol & gate patterns | `paradigm://guidance/portal` |
+| MCP workflow & token budgets | `paradigm://guidance/mcp-workflow` |
+| Flow-first development | `paradigm://guidance/flows` |
+| Multi-agent orchestration | `paradigm://guidance/orchestration` |
+| Workspaces (multi-project) | `paradigm://guidance/workspaces` |
+| University (knowledge base) | `paradigm://guidance/university` |
+| Confidence calibration | `paradigm://guidance/calibration` |
+| Session checkpoints | `paradigm://guidance/checkpoints` |
+| Navigation & task recipes | `paradigm://guidance/navigation` |
+| Component types & hierarchy | `paradigm://guidance/component-types` |
+| Troubleshooting | `paradigm://guidance/troubleshooting` |
+
+## Directory Structure
+
+`.purpose` files exist in:
+- `src/*`
+- `lib/*`
+- `packages/*`
 
 ---
 
-*See `.cursorrules` for IDE-specific instructions, `.paradigm/specs/` for detailed specifications.*
+*See `.paradigm/specs/` for specifications. Run `paradigm sync` to regenerate.*

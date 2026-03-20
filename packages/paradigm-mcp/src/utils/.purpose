@@ -65,3 +65,33 @@ components:
     description: "Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors"
     type: engine
     tags: [feature, drift-detection, fingerprint]
+  event-stream:
+    description: "Ambient event stream — emit, store (JSONL), query, and attention-score events for ambient coordination. Append-only with automatic pruning."
+    type: engine
+    tags: [feature, ambient, event-stream]
+    anchors:
+      - event-stream.ts:1-199
+  data-policy-loader:
+    description: "Data policy loader — reads .paradigm/data-policy.yaml, merges with defaults, enforces trust rings, observation rules, content redaction, and per-agent overrides."
+    type: loader
+    tags: [feature, data-policy, sovereignty]
+    anchors:
+      - data-policy-loader.ts:1-195
+  work-log-loader:
+    description: "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/"
+    type: loader
+    tags: [feature, knowledge-streams, work-log]
+  journal-loader:
+    description: "Learning Journal CRUD — record/search/stats for agent learnings. Agent-private YAML in ~/.paradigm/agents/{id}/journal/"
+    type: loader
+    tags: [feature, knowledge-streams, journal]
+  decision-loader:
+    description: "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/"
+    type: loader
+    tags: [feature, knowledge-streams, decisions]
+  nomination-engine:
+    description: "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Storage: .paradigm/events/nominations.jsonl and debates.jsonl."
+    type: engine
+    tags: [feature, ambient, nominations, debates]
+    anchors:
+      - nomination-engine.ts:1-350

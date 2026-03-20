@@ -29,6 +29,8 @@ export interface LoreError {
 
 export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
 
+export type KnowledgeStream = 'work-log' | 'journal' | 'decision' | 'auto';
+
 export interface LoreEntry {
   id: string; // "L-2026-03-02-ascend-143025-001"
   type?: LoreType;
@@ -105,6 +107,9 @@ export interface LoreEntry {
   // Tags for filtering
   tags?: string[]; // ["phase-1", "sentinel", "sdk", "arc:lore-evolution"]
 
+  // Knowledge stream classification (v5.0 — lore split)
+  stream?: KnowledgeStream;
+
   // Project-defined metadata (open-ended key-value pairs)
   meta?: Record<string, unknown>;
 
@@ -125,6 +130,7 @@ export interface LoreFilter {
   dateFrom?: string;
   dateTo?: string;
   type?: LoreType;
+  stream?: KnowledgeStream;
   tag?: string; // Filter by tag prefix (e.g., "arc:lore-evolution")
   hasBody?: boolean;
   tags?: string[];

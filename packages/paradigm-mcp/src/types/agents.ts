@@ -37,6 +37,21 @@ export interface AgentProfile {
   permissions?: AgentPermissions;
   /** SHA-256 hash of id+role+permissions for tamper detection */
   integrityHash?: string;
+
+  // ── Renaissance Extensions (v5.0) ──
+
+  /** Ambient attention patterns — what this agent notices */
+  attention?: AgentAttention;
+  /** Learning protocol — how this agent improves over time */
+  learning?: AgentLearning;
+  /** Context contributions — what this agent adds to shared context */
+  context?: AgentContext;
+  /** Work reporting — how this agent logs work and learnings */
+  reporting?: AgentReporting;
+  /** Collaboration stance — how this agent interacts with others */
+  collaboration?: AgentCollaboration;
+  /** Self-nomination — when this agent speaks up in ambient mode */
+  nomination?: AgentNomination;
 }
 
 export interface AgentPersonality {
@@ -124,6 +139,210 @@ export interface AgentPermissions {
 }
 
 // ────────────────────────────────────────────────────────
+// Attention Patterns (ambient relevance filtering)
+// ────────────────────────────────────────────────────────
+
+export interface AttentionSignal {
+  /** Event type to listen for (e.g., "gate-added", "route-created") */
+  type: string;
+}
+
+export interface AgentAttention {
+  /** Symbol patterns that fire attention (e.g., ["^*", "#*-middleware"]) */
+  symbols?: string[];
+  /** File path patterns (e.g., ["middleware/**", "auth/**"]) */
+  paths?: string[];
+  /** Semantic concept triggers (e.g., ["permission", "JWT", "RBAC"]) */
+  concepts?: string[];
+  /** Event signals from other agents */
+  signals?: AttentionSignal[];
+  /** Confidence threshold to self-nominate (0.0-1.0, default 0.6) */
+  threshold?: number;
+}
+
+// ────────────────────────────────────────────────────────
+// Learning Protocol (dual-layer)
+// ────────────────────────────────────────────────────────
+
+export interface IntrinsicLearning {
+  feedback?: {
+    /** Ask for assessment after completing work */
+    after_work?: boolean;
+    /** Ask if recommendation was followed */
+    after_recommendation?: boolean;
+    /** Which agents' feedback matters */
+    from_agents?: string[];
+    /** Accept human assessment */
+    from_humans?: boolean;
+  };
+  adaptation?: {
+    /** EMA alpha for confidence adjustment (default 0.3) */
+    confidence_ema_alpha?: number;
+    /** Auto-promote learnings to notebook */
+    notebook_auto_promote?: boolean;
+    /** Extract transferable patterns */
+    pattern_extraction?: boolean;
+  };
+  reflection?: {
+    /** Record what went wrong on failure */
+    on_failure?: boolean;
+    /** Record when human corrected approach */
+    on_correction?: boolean;
+    /** Record when another agent's approach was chosen */
+    on_debate_loss?: boolean;
+  };
+  calibration?: {
+    /** Target accuracy rate (default 0.85) */
+    target_accuracy?: number;
+    /** Alert threshold for overconfidence delta (default 0.15) */
+    overconfidence_alert?: number;
+  };
+}
+
+export interface PlatformLearning {
+  /** Always true — cannot be disabled */
+  feedback_required: true;
+  /** Metrics collected for marketplace quality signal */
+  collect?: Array<'work_outcome' | 'helpfulness' | 'would_use_again'>;
+  /** Feedback flows to creator anonymized */
+  anonymized_upstream?: boolean;
+  /** Stats grouping strategy */
+  aggregation?: 'per-offering' | 'per-session' | 'per-project';
+}
+
+export interface AgentLearning {
+  /** Agent's own drive to improve (optional for downloaded agents) */
+  intrinsic?: IntrinsicLearning;
+  /** Marketplace quality signal (mandated for all agents) */
+  platform?: PlatformLearning;
+}
+
+// ────────────────────────────────────────────────────────
+// Context Contributions
+// ────────────────────────────────────────────────────────
+
+export interface ContextContribution {
+  /** Section name in composed context */
+  section: string;
+  /** Inline content (mutually exclusive with content_ref) */
+  content?: string;
+  /** MCP resource URI for on-demand content */
+  content_ref?: string;
+  /** Priority for inclusion (high = always, low = on-demand) */
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface ContextRequirement {
+  /** File path or section name required */
+  file?: string;
+  section?: string;
+}
+
+export interface AgentContext {
+  /** Sections this agent contributes when active */
+  contributions?: ContextContribution[];
+  /** Context this agent needs loaded */
+  requires?: ContextRequirement[];
+}
+
+// ────────────────────────────────────────────────────────
+// Work Reporting
+// ────────────────────────────────────────────────────────
+
+export interface WorkLogConfig {
+  /** Automatically log completed work */
+  auto_record?: boolean;
+  /** Structured fields to include */
+  structure?: Array<'task_ref' | 'files_modified' | 'symbols_touched' | 'next_steps' | 'blockers'>;
+  /** Destination stream */
+  destination?: 'work-log';
+}
+
+export interface LearningJournalConfig {
+  /** Automatically record learning moments */
+  auto_record?: boolean;
+  /** Events that trigger journal entries */
+  triggers?: Array<'correction_received' | 'confidence_miss' | 'pattern_discovered'>;
+  /** Destination stream (agent-private) */
+  destination?: 'journal';
+}
+
+export interface AgentReporting {
+  /** How the agent logs its work */
+  work_log?: WorkLogConfig;
+  /** How the agent records learnings (personal journal) */
+  learning_journal?: LearningJournalConfig;
+}
+
+// ────────────────────────────────────────────────────────
+// Collaboration Stance
+// ────────────────────────────────────────────────────────
+
+export type CollaborationStance = 'lead' | 'advisory' | 'supportive' | 'observer' | 'peer';
+
+export interface AgentRelationship {
+  /** Stance with this specific agent */
+  stance?: CollaborationStance;
+  /** Can contradict this agent */
+  can_contradict?: boolean;
+  /** Review this agent's output */
+  review_output?: boolean;
+  /** Debate style (evidence-based, authority, etc.) */
+  debate_style?: 'evidence' | 'authority' | 'consensus';
+}
+
+export interface DebateConfig {
+  /** Will push back on other agents */
+  will_challenge?: boolean;
+  /** Must cite specific code/patterns */
+  evidence_required?: boolean;
+  /** If debate doesn't resolve, ask human */
+  escalate_to_human?: boolean;
+}
+
+export interface AgentCollaboration {
+  /** Default stance */
+  stance?: CollaborationStance;
+  /** Per-agent relationship overrides */
+  with?: Record<string, AgentRelationship>;
+  /** Multi-agent debate dynamics */
+  debate?: DebateConfig;
+}
+
+// ────────────────────────────────────────────────────────
+// Self-Nomination
+// ────────────────────────────────────────────────────────
+
+export type NominationUrgency = 'security_risk' | 'breaking_change' | 'gate_missing' | 'test_failure' | 'performance_risk';
+
+export interface AgentNomination {
+  speak_when?: {
+    /** Attention score threshold (default 0.6) */
+    relevance_above?: number;
+    /** Always speak for these urgency types */
+    urgency?: NominationUrgency[];
+    /** Always respond to direct questions */
+    asked_directly?: boolean;
+  };
+  quiet_when?: {
+    /** Don't speak below this relevance */
+    relevance_below?: number;
+    /** Stay quiet if another agent is handling it */
+    another_agent_handling?: boolean;
+    /** Stay quiet if human explicitly excluded this agent */
+    human_explicitly_excluded?: boolean;
+  };
+  contribution_style?: {
+    /** Start with a short take, elaborate if asked */
+    brief_first?: boolean;
+    /** Reference specific code/patterns */
+    cite_sources?: boolean;
+    /** Offer concrete actions, not just observations */
+    offer_action?: boolean;
+  };
+}
+
+// ────────────────────────────────────────────────────────
 // Defaults
 // ────────────────────────────────────────────────────────
 
@@ -133,4 +352,20 @@ export const DEFAULT_PERSONALITIES: Record<string, AgentPersonality> = {
   tester: { style: 'methodical', risk: 'conservative', verbosity: 'concise' },
   reviewer: { style: 'deliberate', risk: 'conservative', verbosity: 'detailed' },
   security: { style: 'methodical', risk: 'conservative', verbosity: 'detailed' },
+};
+
+export const DEFAULT_ATTENTION: Record<string, AgentAttention> = {
+  architect: { symbols: ['$*', '#*'], concepts: ['architecture', 'design', 'pattern', 'refactor'], threshold: 0.5 },
+  builder: { paths: ['src/**', 'lib/**', 'packages/**'], threshold: 0.7 },
+  reviewer: { concepts: ['code quality', 'bug', 'smell', 'convention'], threshold: 0.6 },
+  tester: { paths: ['**/*.test.*', '**/*.spec.*'], concepts: ['test', 'coverage', 'assertion'], signals: [{ type: 'error-encountered' }], threshold: 0.5 },
+  security: { symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**', 'guards/**'], concepts: ['permission', 'JWT', 'session', 'RBAC', 'XSS', 'injection'], signals: [{ type: 'gate-added' }, { type: 'route-created' }], threshold: 0.4 },
+};
+
+export const DEFAULT_COLLABORATION: Record<string, AgentCollaboration> = {
+  architect: { stance: 'lead', debate: { will_challenge: true, evidence_required: true, escalate_to_human: true } },
+  builder: { stance: 'supportive', with: { architect: { stance: 'supportive', can_contradict: false } } },
+  reviewer: { stance: 'advisory', debate: { will_challenge: true, evidence_required: true, escalate_to_human: true } },
+  tester: { stance: 'supportive', debate: { will_challenge: false, evidence_required: true, escalate_to_human: false } },
+  security: { stance: 'advisory', with: { architect: { stance: 'peer', can_contradict: true }, builder: { stance: 'advisory', review_output: true } }, debate: { will_challenge: true, evidence_required: true, escalate_to_human: true } },
 };

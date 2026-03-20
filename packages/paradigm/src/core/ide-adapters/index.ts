@@ -180,6 +180,32 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     }
   }
   
+  // Load agent profiles for context contributions
+  let agents: ParadigmFiles['agents'] = undefined;
+  const agentsDir = path.join(rootDir, '.paradigm', 'agents');
+  if (fs.existsSync(agentsDir)) {
+    try {
+      const agentFiles = fs.readdirSync(agentsDir).filter(f => f.endsWith('.agent'));
+      const loaded: NonNullable<ParadigmFiles['agents']> = [];
+      for (const file of agentFiles) {
+        try {
+          const content = fs.readFileSync(path.join(agentsDir, file), 'utf8');
+          const profile = yaml.load(content) as Record<string, unknown>;
+          if (profile?.id) {
+            loaded.push({
+              id: profile.id as string,
+              role: profile.role as string | undefined,
+              context: profile.context as {
+                contributions?: Array<{ section: string; content?: string; priority: string }>;
+              } | undefined,
+            });
+          }
+        } catch { /* skip invalid */ }
+      }
+      if (loaded.length > 0) agents = loaded;
+    } catch { /* non-fatal */ }
+  }
+
   // Load workspace info if configured
   let workspace: ParadigmFiles['workspace'] = undefined;
   const rawConfig = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
@@ -211,6 +237,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     docs,
     projectName: path.basename(rootDir),
     workspace,
+    agents,
   };
 }
 

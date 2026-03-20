@@ -47,6 +47,8 @@ export interface LoreError {
 
 export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
 
+export type KnowledgeStream = 'work-log' | 'journal' | 'decision' | 'auto';
+
 export interface LoreEntry {
   id: string;
   type?: LoreType;
@@ -95,6 +97,7 @@ export interface LoreEntry {
   assessment?: LoreAssessment;
   assessment_delta?: number;
   tags?: string[];
+  stream?: KnowledgeStream;
   meta?: Record<string, unknown>;
   git_context?: {
     ref: string;
@@ -112,6 +115,7 @@ export interface LoreFilter {
   dateFrom?: string;
   dateTo?: string;
   type?: LoreType;
+  stream?: KnowledgeStream;
   tag?: string;
   hasBody?: boolean;
   tags?: string[];

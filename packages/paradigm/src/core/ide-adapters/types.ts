@@ -43,6 +43,17 @@ export interface ParadigmFiles {
       exports?: string[];
     }>;
   };
+  agents?: Array<{
+    id: string;
+    role?: string;
+    context?: {
+      contributions?: Array<{
+        section: string;
+        content?: string;
+        priority: string;
+      }>;
+    };
+  }>;
 }
 
 /**

@@ -369,7 +369,12 @@ export function mergeAgentProfileWithManifest(
 export function buildProfileEnrichment(
   profile: AgentProfile,
   relevantSymbols: string[],
-  notebookEntries?: Array<{ context: string; snippet: string; concepts: string[] }>
+  notebookEntries?: Array<{ context: string; snippet: string; concepts: string[] }>,
+  ambientContext?: {
+    recentDecisions?: Array<{ title: string; decision: string }>;
+    journalInsights?: Array<{ trigger: string; insight: string }>;
+    pendingNominations?: Array<{ urgency: string; brief: string }>;
+  }
 ): string {
   const parts: string[] = [];
 
@@ -418,6 +423,90 @@ export function buildProfileEnrichment(
       parts.push(snippet);
       parts.push('```');
       parts.push('');
+    }
+  }
+
+  // Attention patterns (what this agent notices)
+  if (profile.attention) {
+    const att = profile.attention;
+    const attParts: string[] = [];
+    if (att.symbols?.length) attParts.push(`Symbols: ${att.symbols.join(', ')}`);
+    if (att.paths?.length) attParts.push(`Paths: ${att.paths.join(', ')}`);
+    if (att.concepts?.length) attParts.push(`Concepts: ${att.concepts.join(', ')}`);
+    if (att.signals?.length) attParts.push(`Signals: ${att.signals.map(s => s.type).join(', ')}`);
+    if (attParts.length > 0) {
+      parts.push('');
+      parts.push('### Attention');
+      parts.push(`Threshold: ${att.threshold ?? 0.6}`);
+      parts.push(attParts.join(' | '));
+    }
+  }
+
+  // Collaboration stance
+  if (profile.collaboration) {
+    const collab = profile.collaboration;
+    parts.push('');
+    parts.push('### Collaboration');
+    parts.push(`Default stance: ${collab.stance || 'supportive'}`);
+    if (collab.with) {
+      for (const [agent, rel] of Object.entries(collab.with)) {
+        const relParts: string[] = [`${agent}: ${rel.stance || 'peer'}`];
+        if (rel.can_contradict) relParts.push('can contradict');
+        if (rel.review_output) relParts.push('reviews output');
+        parts.push(`- ${relParts.join(', ')}`);
+      }
+    }
+    if (collab.debate) {
+      const d = collab.debate;
+      const traits: string[] = [];
+      if (d.will_challenge) traits.push('challenges');
+      if (d.evidence_required) traits.push('evidence-based');
+      if (d.escalate_to_human) traits.push('escalates to human');
+      if (traits.length) parts.push(`Debate: ${traits.join(', ')}`);
+    }
+  }
+
+  // Nomination preferences
+  if (profile.nomination) {
+    const nom = profile.nomination;
+    parts.push('');
+    parts.push('### Nomination');
+    if (nom.speak_when?.urgency?.length) {
+      parts.push(`Always speaks on: ${nom.speak_when.urgency.join(', ')}`);
+    }
+    if (nom.contribution_style) {
+      const style: string[] = [];
+      if (nom.contribution_style.brief_first) style.push('brief first');
+      if (nom.contribution_style.cite_sources) style.push('cites sources');
+      if (nom.contribution_style.offer_action) style.push('offers action');
+      if (style.length) parts.push(`Style: ${style.join(', ')}`);
+    }
+  }
+
+  // Ambient context sections (recent decisions, journal insights, pending nominations)
+  if (ambientContext) {
+    if (ambientContext.recentDecisions?.length) {
+      parts.push('');
+      parts.push('## Recent Team Decisions');
+      for (const d of ambientContext.recentDecisions.slice(0, 5)) {
+        parts.push(`- **${d.title}**: ${d.decision.slice(0, 150)}${d.decision.length > 150 ? '...' : ''}`);
+      }
+    }
+
+    if (ambientContext.journalInsights?.length) {
+      parts.push('');
+      parts.push('## Transferable Insights');
+      for (const j of ambientContext.journalInsights.slice(0, 5)) {
+        parts.push(`- [${j.trigger}] ${j.insight.slice(0, 150)}${j.insight.length > 150 ? '...' : ''}`);
+      }
+    }
+
+    if (ambientContext.pendingNominations?.length) {
+      parts.push('');
+      parts.push('## Pending Nominations');
+      for (const n of ambientContext.pendingNominations.slice(0, 10)) {
+        parts.push(`- [${n.urgency}] ${n.brief}`);
+      }
     }
   }
 

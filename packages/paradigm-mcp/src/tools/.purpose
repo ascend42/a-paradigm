@@ -86,3 +86,11 @@ components:
     description: MCP tools for auto-generated documentation — manifest, page, search
     type: tool-group
     tags: [feature, docs]
+  StreamsTools:
+    description: "6 MCP tools for the three knowledge streams — paradigm_work_log_record/search, paradigm_journal_record/search, paradigm_decision_record/search"
+    type: tool-group
+    tags: [feature, knowledge-streams, work-log, journal, decisions, mcp]
+  AmbientTools:
+    description: "4 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage, paradigm_context_compose"
+    type: tool-group
+    tags: [feature, ambient, nominations, events, context-composition, mcp]

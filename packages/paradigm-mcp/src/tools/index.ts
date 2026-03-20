@@ -51,6 +51,8 @@ import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getDocsToolsList, handleDocsTool } from './docs.js';
+import { getStreamsToolsList, handleStreamsTool } from './streams.js';
+import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences, FallbackReference } from './fallback-grep.js';
 import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
@@ -60,6 +62,7 @@ import { getAffectedUniversityContent } from '../utils/university-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
+import { emitAndProcess } from '../utils/nomination-engine.js';
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -291,6 +294,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           ...getReindexToolsList(),
           // Lore tools
           ...getLoreToolsList(),
+          // Knowledge streams (work log, journal, decisions)
+          ...getStreamsToolsList(),
+          // Ambient coordination tools (nominations, events, context)
+          ...getAmbientToolsList(),
           // Habits tools
           ...getHabitsToolsList(),
           // Graduation tools
@@ -1173,6 +1180,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const text = JSON.stringify(gatesOutput, null, 2);
 
           trackToolCall(text.length, name);
+          try { emitAndProcess(ctx.rootDir, { type: 'gate-checked', source: 'mcp-tool-call', tool: 'paradigm_gates_for_route', symbols: dedupedSuggestions.map(s => s.gate), context: `Gate check for ${method} ${route}` }); } catch {}
           return {
             content: [{
               type: 'text',
@@ -1391,6 +1399,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handlePurposePortalTool(name, args as Record<string, unknown>, ctx, reload);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              if (name.includes('_add_') || name.includes('_update_') || name.includes('_remove_')) {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'file-modified', source: 'mcp-tool-call', tool: name, symbols: a.id ? [`#${a.id}`] : a.symbol ? [String(a.symbol)] : [], context: `Purpose/portal update via ${name}` }); } catch {}
+              }
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -1402,6 +1414,29 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             const result = await handleLoreTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
+              if (name === 'paradigm_lore_record') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols_touched) ? a.symbols_touched.map(String) : [], context: `Lore recorded: ${a.title || 'untitled'}` }); } catch {}
+              }
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try knowledge streams tools (work log, journal, decisions)
+          if (name.startsWith('paradigm_work_log_') || name.startsWith('paradigm_journal_') || name.startsWith('paradigm_decision_')) {
+            const result = await handleStreamsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              if (name === 'paradigm_work_log_record' || name === 'paradigm_journal_record') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols) ? a.symbols.map(String) : [], context: `Work logged: ${a.summary || a.title || 'entry'}` }); } catch {}
+              }
+              if (name === 'paradigm_decision_record') {
+                const a = args as Record<string, unknown>;
+                try { emitAndProcess(ctx.rootDir, { type: 'decision-made', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols) ? a.symbols.map(String) : [], context: `Decision: ${a.title || a.summary || 'recorded'}` }); } catch {}
+              }
               return {
                 content: [{ type: 'text', text: result.text }],
               };
@@ -1586,6 +1621,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           // Try docs tools
           if (name.startsWith('paradigm_docs_')) {
             const result = await handleDocsTool(name, args as Record<string, unknown>, ctx);
+            if (result.handled) {
+              trackToolCall(result.text.length, name);
+              return {
+                content: [{ type: 'text', text: result.text }],
+              };
+            }
+          }
+
+          // Try ambient coordination tools
+          if (name.startsWith('paradigm_ambient_') || name === 'paradigm_context_compose') {
+            const result = await handleAmbientTool(name, args as Record<string, unknown>, ctx);
             if (result.handled) {
               trackToolCall(result.text.length, name);
               return {

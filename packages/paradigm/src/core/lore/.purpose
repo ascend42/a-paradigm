@@ -5,7 +5,7 @@ description: |
 
 components:
   lore-types:
-    description: Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline
+    description: "Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta, stream), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline, KnowledgeStream"
     type: model
   lore-storage:
     description: Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry

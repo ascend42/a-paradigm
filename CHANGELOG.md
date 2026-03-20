@@ -5,6 +5,55 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] — 2026-03-20
+
+### Added
+
+- **Nomination Engine** — `nomination-engine.ts`: processes events into agent nominations and debates. Core loop: event → attention scoring → nomination generation → debate detection → surfacing. Storage in `.paradigm/events/nominations.jsonl` (bounded at 500) and `debates.jsonl` (bounded at 200).
+- **`emitAndProcess` unified emitter** — Replaces bare `emitEvent` calls with policy check → event emission → nomination processing in one shot. All 5 existing emission points in `tools/index.ts` now use this.
+- **4 ambient MCP tools** — `paradigm_ambient_nominations` (get pending nominations, marks as surfaced), `paradigm_ambient_events` (query event stream with relative time filters like "1h"), `paradigm_ambient_engage` (accept/dismiss/defer nominations, resolve debates), `paradigm_context_compose` (compose full agent session context with profile + decisions + journal + nominations).
+- **Data policy enforcement on knowledge streams** — Work log summaries, journal insights, and decision content are now filtered through `filterContent()` with stream-specific redaction before recording. Secrets matching `data-policy.yaml` patterns are redacted.
+- **`paradigm event emit` CLI command** — Fire-and-forget event emission for hook integration (~100ms). Writes directly to `stream.jsonl` with no nomination processing (deferred to next MCP tool call).
+- **Hook event integration** — Stop hook emits `compliance-violation` events with severity on failure. Post-write hook emits `file-modified` events. Both fire-and-forget with `&`.
+- **Agent contributions in CLAUDE.md** — `generate()` now includes an "Agent Contributions" section with high-priority context contributions from loaded `.agent` profiles.
+- **`agents` field on `ParadigmFiles`** — IDE adapter types extended with agent profile data. `loadParadigmFiles()` loads `.paradigm/agents/*.agent` profiles.
+- **Extended `buildProfileEnrichment`** — Accepts optional `ambientContext` param with recent decisions, journal insights, and pending nominations. Appends 3 new sections to enrichment output.
+- **PARA 601: Paradigm Ambient** — 8-lesson university course covering learning loop, knowledge streams, event stream, attention scoring, nominations/debates, data sovereignty, agent manifest renaissance, and context composition.
+- **16 PLSAT slots (113-128)** — New assessment items for PARA 601 covering knowledge stream classification, attention scoring, trust rings, CLAUDE.md content audit, nomination urgency, data policy enforcement, event anatomy, context composition, and the learning loop.
+- **Ambient reference cards** — 6 new reference cards (event stream, attention scoring, nominations, knowledge streams, trust rings, data policy) plus 7 new tool cards for ambient and stream tools.
+
+### Changed
+
+- **Event emission → nomination processing** — All `emitEvent` calls in tool dispatch replaced with `emitAndProcess` from nomination engine, activating the full ambient pipeline.
+- **Knowledge stream recording** — `paradigm_work_log_record`, `paradigm_journal_record`, `paradigm_decision_record` now apply data policy content filtering before persisting.
+
+## [5.0.0] — 2026-03-19
+
+### Added
+
+- **Agent Learning Loop architecture** — Closes the observation→adaptation gap. Paradigm now has types and infrastructure for agents to learn from experience and adapt behavior across sessions.
+- **Slim CLAUDE.md** — Generator rewritten to produce ~150 lines (down from ~856). Core identity, session lifecycle, hooks enforcement, and authoring rules stay inline. Everything else moves to on-demand MCP resources.
+- **`paradigm://guidance/{topic}` MCP resources** — 12 on-demand guidance topics (logging, portal, mcp-workflow, flows, orchestration, workspaces, university, calibration, checkpoints, navigation, component-types, troubleshooting) served via MCP instead of baked into CLAUDE.md.
+- **Agent manifest renaissance** — `AgentProfile` extended with 6 new dimensions: `attention` (ambient relevance filtering), `learning` (dual-layer intrinsic + platform), `context` (composed contributions), `reporting` (work log + learning journal), `collaboration` (inter-agent stances), `nomination` (self-selection in ambient mode). Includes `DEFAULT_ATTENTION` and `DEFAULT_COLLABORATION` for all 5 standard agents.
+- **Knowledge streams types** — Lore split into three streams: `WorkLogEntry` (project-scoped, ephemeral), `JournalEntry` (agent-private, durable), `TeamDecision` (project-scoped, institutional). Includes `KnowledgeStream` type, stream classification, lore-to-stream migration mapping, and per-stream filters.
+- **`stream` field on LoreEntry** — All 4 duplicated `LoreEntry` interfaces gain `stream?: KnowledgeStream` for forward-compatible classification. `LoreFilter` gains `stream` filter.
+- **Ambient coordination types** — `StreamEvent`, `AttentionScore`, `Nomination`, `Debate`, `SurfacingConfig`, `EventStreamConfig` — the primitives for agents to observe a shared event stream and self-nominate contributions.
+- **Data sovereignty types** — `DataPolicy`, `TrustRing` (4 concentric rings), `ObservationRules`, `StreamContentRules`, `UpstreamRules`, `EnforcementResult`, `AuditEntry` — framework for controlling what data agents can observe, record, and transmit. `DEFAULT_DATA_POLICY` provides secure defaults (project-locked, upstream denied code/paths/identity).
+- **Knowledge stream loaders** — Full CRUD for all three streams: `work-log-loader.ts` (date-partitioned YAML in `.paradigm/work-log/{date}/`), `journal-loader.ts` (agent-private YAML in `~/.paradigm/agents/{id}/journal/`), `decision-loader.ts` (institutional YAML in `.paradigm/decisions/`). Each provides record, search, and summary functions.
+- **6 knowledge stream MCP tools** — `paradigm_work_log_record`, `paradigm_work_log_search`, `paradigm_journal_record`, `paradigm_journal_search`, `paradigm_decision_record`, `paradigm_decision_search`. Full filter support, summary mode, and cross-agent journal search.
+- **Event stream engine** — `event-stream.ts` with `emitEvent`, `queryEvents`, `scoreEventForAgent`. JSONL append-only storage in `.paradigm/events/stream.jsonl` with automatic pruning at 1000 events. Attention scoring evaluates 4 dimensions (symbol, path, concept, signal match) against `AgentAttention` patterns.
+- **Data policy loader** — `data-policy-loader.ts` reads `.paradigm/data-policy.yaml`, merges user policy over `DEFAULT_DATA_POLICY` (deny lists are additive), provides `canObservePath`, `filterContent`, `isRingAllowed`, and `enforce` functions across 4 enforcement boundaries.
+- **Stream auto-classification on `paradigm_lore_record`** — New `stream` parameter (`work-log | journal | decision | auto`). When specified, the lore entry is recorded as before AND automatically routed to the appropriate knowledge stream. `auto` classifies based on content heuristics (task_ref → work-log, learnings → journal, decisions → decision).
+- **Ambient event emission** — 5 tool dispatch points now emit events to the stream: `paradigm_gates_for_route` (gate-checked), purpose/portal add tools (file-modified), `paradigm_lore_record` (work-completed), stream record tools (work-completed/decision-made). All wrapped in try/catch for non-fatal emission.
+- **Agent enrichment with renaissance fields** — `buildProfileEnrichment` now includes attention patterns, collaboration stance, and nomination preferences in agent prompt enrichment for orchestration.
+
+### Changed
+
+- **CLAUDE.md output** — 82% reduction in base context tokens. Portal protocol, logging tables, MCP workflow tables, token budgets, flow development, orchestration, workspaces, university, calibration, checkpoints, troubleshooting, and navigation recipes all moved to `paradigm://guidance/` resources.
+- **claude.ts imports** — Trimmed from 8 base.ts imports to 2 (`generateConventions`, `generateCommitConvention`).
+
+Symbols: #claude-adapter, #GuidanceResources, #AgentTypes, #AmbientTypes, #KnowledgeStreamTypes, #DataPolicyTypes, #lore-types, #event-stream, #data-policy-loader, #work-log-loader, #journal-loader, #decision-loader, #StreamsTools
+
 ## [4.16.5] — 2026-03-19
 
 ### Changed

@@ -2,7 +2,7 @@
   "version": "3.0",
   "frameworkVersion": "2.0",
   "timeLimit": 5400,
-  "totalSlots": 112,
+  "totalSlots": 128,
   "passThreshold": 0.9,
   "title": "The PLSAT \u2014 Paradigm Licensure Standardized Assessment Test",
   "description": "99 questions. 90 minutes. 90% to pass. Good luck, scholar.",
@@ -2886,6 +2886,566 @@
           },
           "correct": "C",
           "explanation": "useAgentEffects is the WebSocket→store bridge. It establishes a WebSocket connection to ws://localhost:{port}/ws, listens for messages whose type starts with 'agent:', and dispatches them to agentStore.handleAgentMessage. It also handles auto-reconnect (3s delay on close). useActivityReporter (B) handles the opposite direction — reporting user actions TO the server. AgentToast (D) only renders; it reads from the store but doesn't handle WebSocket."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-113",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-113",
+          "scenario": "A builder agent finishes implementing a new REST endpoint. It modified 4 files, resolved 1 blocker, and the tests pass. The agent needs to record this somewhere in the knowledge streams.",
+          "question": "Which knowledge stream is the correct destination for this entry?",
+          "choices": {
+            "A": "Learning Journal — the agent learned how to build the endpoint",
+            "B": "Team Decision — the team decided to add an endpoint",
+            "C": "Work Log — it records what got done, files modified, outcome, and next steps",
+            "D": "Event Stream — it is an event that happened during work",
+            "E": "Lore — all project history goes into lore entries"
+          },
+          "correct": "C",
+          "explanation": "The Work Log stream answers 'what got done.' It captures the agent, summary, files_modified, symbols_touched, outcome (pass/fail/partial/blocked), and next_steps. It is project-scoped and ephemeral — designed for sprint boards and standup summaries. The Learning Journal is for personal insights the agent gains, not task completion. Team Decisions record rationale and alternatives for institutional choices."
+        },
+        {
+          "id": "plsat-113b",
+          "scenario": "An agent spent 45 minutes debugging a flaky test in the CI pipeline. It turned out to be a race condition in the database setup. The agent fixed it, and the test suite passes now. The agent wants to log this work.",
+          "question": "Which knowledge stream should this entry go into?",
+          "choices": {
+            "A": "Team Decision — the team needs to know about flaky tests",
+            "B": "Work Log — it captures what was done, duration, outcome, and what was fixed",
+            "C": "Learning Journal — the agent discovered a race condition pattern",
+            "D": "Event Stream — file-modified events are emitted automatically",
+            "E": "Both Work Log and Learning Journal equally — there is no distinction"
+          },
+          "correct": "B",
+          "explanation": "The Work Log is the correct primary destination — it records what got done (fixed flaky test), the outcome (pass), duration (45 min), and files modified. The agent might also record a Learning Journal entry about the race condition pattern it discovered, but the work itself belongs in the Work Log. These are separate entries in separate streams — the journal entry would link back to the work log via linked_work_log."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-114",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-114",
+          "scenario": "During a code review, the architect agent points out that the builder's approach to token refresh will cause a race condition under concurrent requests. The builder realizes its mental model of the refresh flow was wrong and adjusts its confidence from 0.8 to 0.5 on `#token-refresh`.",
+          "question": "Which knowledge stream captures this learning moment?",
+          "choices": {
+            "A": "Work Log — the builder did work (reviewed code)",
+            "B": "Team Decision — the team decided to change the approach",
+            "C": "Learning Journal — the builder received a correction and adjusted its confidence, which is a personal learning event",
+            "D": "Event Stream — the correction is a 'compliance-violation' event",
+            "E": "Work Log with outcome 'fail' — the original approach failed review"
+          },
+          "correct": "C",
+          "explanation": "The Learning Journal captures 'what I learned.' The trigger is 'correction_received', the insight is the corrected mental model, confidence_before is 0.8, confidence_after is 0.5, and the entry is agent-private (stored in ~/.paradigm/agents/{id}/journal/). It may or may not be transferable to other projects. The Work Log would separately record the review activity, but the learning itself belongs in the journal."
+        },
+        {
+          "id": "plsat-114b",
+          "scenario": "A security agent reviewed an authentication module and predicted with 0.9 confidence that the session handling was secure. A penetration test later revealed a session fixation vulnerability. The security agent needs to record this calibration miss.",
+          "question": "Which knowledge stream is appropriate for this entry?",
+          "choices": {
+            "A": "Team Decision — the team needs to decide how to fix the vulnerability",
+            "B": "Work Log — the penetration test results are work output",
+            "C": "Event Stream — emit an 'error-encountered' event",
+            "D": "Learning Journal — the agent had a confidence miss and needs to record the corrected understanding",
+            "E": "Both Work Log and Team Decision — the journal is only for minor insights"
+          },
+          "correct": "D",
+          "explanation": "The Learning Journal is the right stream for calibration misses. The trigger is 'confidence_miss', with confidence_before: 0.9 and confidence_after adjusted downward. The journal is agent-private, stored in ~/.paradigm/agents/{id}/journal/, and travels with the agent across projects if marked transferable. A separate Team Decision might record the fix approach, but the personal calibration adjustment belongs in the journal."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-115",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-115",
+          "scenario": "The team holds a design discussion about whether to use WebSockets or Server-Sent Events for real-time updates. The architect proposes WebSockets, the builder supports it, and the reviewer dissents (preferring SSE for simplicity). They go with WebSockets. The rationale and alternatives need to be preserved.",
+          "question": "Which knowledge stream captures this?",
+          "choices": {
+            "A": "Work Log — a design discussion is work",
+            "B": "Learning Journal — everyone learned something from the debate",
+            "C": "Team Decision — it records the choice, rationale, participants with stances, and alternatives considered",
+            "D": "Event Stream — emit a 'decision-made' event and the stream captures it",
+            "E": "Lore entry with type 'decision' — the legacy system handles decisions"
+          },
+          "correct": "C",
+          "explanation": "Team Decisions capture institutional memory: the title, decision text, rationale, participants (with stances like 'proposed', 'supported', 'dissented'), alternatives_considered (with rejected_because), and affected symbols. They are project-scoped and long-lived (status: active/superseded/deprecated). The event stream might emit a 'decision-made' event, but that is a notification — the decision record itself lives in the Team Decisions stream at .paradigm/decisions/."
+        },
+        {
+          "id": "plsat-115b",
+          "scenario": "After a production incident, the team decides to add rate limiting to all public API endpoints. The security agent proposed it, the architect supported it, and the builder abstained. They considered IP-based limiting vs token-bucket and chose token-bucket. This needs to be recorded for future reference.",
+          "question": "Which knowledge stream should hold this record?",
+          "choices": {
+            "A": "Work Log — an incident response is work that was done",
+            "B": "Team Decision — it preserves the choice, who participated, their stances, and why token-bucket was chosen over IP-based",
+            "C": "Learning Journal — the team learned from the incident",
+            "D": "All three streams equally — incidents generate entries everywhere",
+            "E": "Event Stream — the decision is an event type 'decision-made'"
+          },
+          "correct": "B",
+          "explanation": "Team Decisions are the institutional record for choices like this. The entry includes participants (security: proposed, architect: supported, builder: abstained), alternatives_considered (IP-based: rejected because it fails behind proxies), symbols_affected (#rate-limiter, #api-gateway), and status: active. The incident itself might generate work log entries and journal entries, but the decision about the approach belongs in the Team Decisions stream."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-116",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-116",
+          "scenario": "A security agent has attention patterns configured as: symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**'], concepts: ['permission', 'JWT', 'RBAC'], signals: [{ type: 'gate-added' }, { type: 'route-created' }], threshold: 0.4. A new event arrives: type: 'file-modified', path: 'src/utils/date-formatter.ts', symbols: ['#date-formatter'], keywords: ['formatting', 'locale'].",
+          "question": "Will the security agent self-nominate for this event?",
+          "choices": {
+            "A": "Yes — the agent's threshold is low (0.4), so it nominates for most events",
+            "B": "No — the symbol '#date-formatter' does not match '^*', '#*-auth', or '#*-middleware'; the path 'src/utils/' does not match 'auth/**' or 'middleware/**'; the keywords have no concept overlap; and no signal matches. All four scores are 0, which is below 0.4",
+            "C": "Yes — '#date-formatter' matches '#*' because * is a wildcard for any suffix",
+            "D": "No — the agent only responds to signals, not file modifications",
+            "E": "Yes — every agent nominates for every event to ensure nothing is missed"
+          },
+          "correct": "B",
+          "explanation": "Attention scoring evaluates four dimensions: symbolMatch (does '#date-formatter' match '^*', '#*-auth', or '#*-middleware'? No — it would need to end with '-auth' or '-middleware'), pathMatch ('src/utils/date-formatter.ts' doesn't match 'auth/**' or 'middleware/**'), conceptMatch (no overlap between ['formatting', 'locale'] and ['permission', 'JWT', 'RBAC']), and signalMatch (event type 'file-modified' is not 'gate-added' or 'route-created'). The final score is max(0, 0, 0, 0) = 0, which is below the 0.4 threshold."
+        },
+        {
+          "id": "plsat-116b",
+          "scenario": "A tester agent has attention patterns: paths: ['**/*.test.*', '**/*.spec.*'], concepts: ['test', 'coverage', 'assertion'], signals: [{ type: 'error-encountered' }], threshold: 0.5. An event arrives: type: 'file-modified', path: 'src/services/payment.ts', symbols: ['#payment-service'], keywords: ['refactor', 'extract method'].",
+          "question": "Will the tester agent self-nominate?",
+          "choices": {
+            "A": "Yes — any file modification could break tests, so the tester is always relevant",
+            "B": "Yes — the threshold of 0.5 is met because 'refactor' is similar to 'test'",
+            "C": "No — the path does not match '**/*.test.*' or '**/*.spec.*', no concept overlap ('refactor' and 'extract method' do not match 'test', 'coverage', or 'assertion'), and the event type 'file-modified' is not 'error-encountered'. Score is 0",
+            "D": "No — tester agents can only observe test files, not source files",
+            "E": "Yes — '#payment-service' triggers the tester because payments need testing"
+          },
+          "correct": "C",
+          "explanation": "The tester's attention has no symbol patterns, so symbolMatch is 0. The path 'src/services/payment.ts' doesn't match '**/*.test.*' or '**/*.spec.*', so pathMatch is 0. The keywords ['refactor', 'extract method'] have no overlap with ['test', 'coverage', 'assertion'], so conceptMatch is 0. The event type 'file-modified' is not 'error-encountered', so signalMatch is 0. Final score: max(0, 0, 0, 0) = 0, below the 0.5 threshold."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-117",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-117",
+          "scenario": "An architect agent has attention: symbols: ['$*', '#*'], concepts: ['architecture', 'design', 'pattern'], threshold: 0.5. An event arrives: type: 'flow-modified', symbols: ['$checkout-flow', '#cart-service'], keywords: ['added step', 'validation'], context: 'New payment validation step added to checkout flow'.",
+          "question": "Will the architect self-nominate, and what is the approximate attention score?",
+          "choices": {
+            "A": "No — the architect only cares about design documents, not flow changes",
+            "B": "Yes — '$checkout-flow' matches '$*' giving symbolMatch=1.0, and the score exceeds the 0.5 threshold",
+            "C": "Yes — but only because the keyword 'validation' triggers a concept match",
+            "D": "No — the threshold of 0.5 requires at least two dimensions to match",
+            "E": "Yes — every event with symbols triggers every agent that has symbol patterns"
+          },
+          "correct": "B",
+          "explanation": "The architect's symbol pattern '$*' matches '$checkout-flow' (any symbol starting with $), giving symbolMatch=1.0. Additionally '#*' matches '#cart-service' (already capped at 1.0). The final score is max(symbolMatch, pathMatch, conceptMatch, signalMatch) = max(1.0, 0, partial, 0) = 1.0, well above the 0.5 threshold. The agent will self-nominate. Note that conceptMatch might also contribute ('pattern' could partial-match against context), but symbolMatch alone is sufficient."
+        },
+        {
+          "id": "plsat-117b",
+          "scenario": "A reviewer agent has attention: concepts: ['code quality', 'bug', 'smell', 'convention'], threshold: 0.6. An event arrives: type: 'error-encountered', keywords: ['null pointer', 'uncaught exception', 'bug'], context: 'TypeError: Cannot read properties of undefined in auth middleware', severity: 'error'.",
+          "question": "Will the reviewer self-nominate?",
+          "choices": {
+            "A": "No — the reviewer has no symbol or path patterns, so it cannot score above 0",
+            "B": "No — 'error-encountered' events are only for tester agents",
+            "C": "Yes — the keyword 'bug' matches the concept 'bug', giving conceptMatch of at least 0.25 (1 of 4 concepts). Since max score uses the highest dimension, this gives 0.25 which is below 0.6, so actually no",
+            "D": "Yes — 'bug' matches concept 'bug' (1/4 = 0.25 conceptMatch), but the score is max(0, 0, 0.25, 0) = 0.25, which is below the 0.6 threshold, so the agent stays quiet",
+            "E": "Yes — the severity 'error' automatically forces all agents to nominate"
+          },
+          "correct": "D",
+          "explanation": "The reviewer has no symbol patterns (symbolMatch=0), no path patterns (pathMatch=0), and no signal patterns (signalMatch=0). For concepts, 'bug' matches 1 of 4 concepts, giving conceptMatch = 1/4 = 0.25. The final score is max(0, 0, 0.25, 0) = 0.25, which is below the 0.6 threshold. The agent's quietReason would be 'below-threshold'. Severity does not override the attention threshold — agents only speak when their specific attention patterns fire strongly enough."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-118",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-118",
+          "scenario": "A learning journal entry contains: insight: 'When JWT tokens use RS256 with the PAYMENTS_SIGNING_KEY, rotation requires coordinating across 3 services.' The data policy has learning_journal ring: 'user-scoped' with redaction patterns: [{ pattern: '\\\\b[A-Z_]{2,}_KEY\\\\b' }, { pattern: 'password|secret|token' }].",
+          "question": "Which trust ring does the learning journal belong to, and what happens to the content?",
+          "choices": {
+            "A": "Ring 1 (project-locked) — journals never leave the project",
+            "B": "Ring 2 (user-scoped) — the journal travels across the user's projects, but 'PAYMENTS_SIGNING_KEY' is redacted by the [A-Z_]{2,}_KEY pattern and 'token' is redacted by the password|secret|token pattern",
+            "C": "Ring 3 (creator-upstream) — journal insights flow to agent creators anonymized",
+            "D": "Ring 2 (user-scoped) — but no redaction occurs because journals are already private",
+            "E": "Ring 4 (network-public) — aggregated learning patterns are shared publicly"
+          },
+          "correct": "B",
+          "explanation": "The learning journal's ring is 'user-scoped' (Ring 2), meaning it travels across the user's own projects but never beyond. The data policy's redaction patterns are applied at the 'journal-recording' enforcement boundary. The regex '\\b[A-Z_]{2,}_KEY\\b' matches 'PAYMENTS_SIGNING_KEY', and 'password|secret|token' matches 'token' in 'JWT tokens'. Both are redacted before storage. Trust rings are concentric — data classified as Ring 2 can be read in Ring 1 (project) and Ring 2 (user) contexts, but never reaches Ring 3 (upstream) or Ring 4 (network)."
+        },
+        {
+          "id": "plsat-118b",
+          "scenario": "A work log entry records: summary: 'Fixed database connection pooling for the POSTGRES_SECRET_URL endpoint, updated #db-pool configuration.' The data policy has work_log ring: 'project-locked' with deny_content: ['code_snippets', 'file_contents', 'diff_content'] and no redaction patterns.",
+          "question": "What trust ring contains this work log, and is the content filtered?",
+          "choices": {
+            "A": "Ring 1 (project-locked) — the content stays in the project; deny_content blocks code snippets but the summary text is allowed because 'file_paths' and 'symbol_names' are in allow_content",
+            "B": "Ring 2 (user-scoped) — work logs travel with the user across projects",
+            "C": "Ring 1 (project-locked) — but 'POSTGRES_SECRET_URL' should be redacted",
+            "D": "Ring 1 (project-locked) — the entire entry is blocked because it mentions a secret URL",
+            "E": "Ring 3 (creator-upstream) — work logs are feedback for agent creators"
+          },
+          "correct": "A",
+          "explanation": "Work logs default to Ring 1 (project-locked) — they never leave the project. The allow_content list includes 'file_paths', 'symbol_names', and 'outcome', so the summary mentioning '#db-pool' and describing the fix is fine. The deny_content blocks 'code_snippets', 'file_contents', and 'diff_content', but a summary paragraph is not a code snippet. Note that 'POSTGRES_SECRET_URL' is not redacted because the work_log stream has no redaction patterns in the default policy — it relies on project-locked ring containment instead."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-119",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-119",
+          "scenario": "A project's CLAUDE.md has grown to 850 lines. It includes: the symbol table (5 symbols), commit conventions, agent onboarding steps, a 200-line logging guide with directory mapping tables, a 150-line portal protocol specification, and 100 lines of MCP workflow details. The team wants to reduce base context cost.",
+          "question": "Using Paradigm's guidance resource model, what should stay inline in CLAUDE.md and what should move?",
+          "choices": {
+            "A": "Everything stays in CLAUDE.md — agents need all context upfront to avoid errors",
+            "B": "Move everything to guidance resources — CLAUDE.md should only have the project name",
+            "C": "The symbol table, commit conventions, and agent onboarding steps stay inline (~150 lines). The logging guide, portal protocol, and MCP workflow move to on-demand guidance resources (paradigm://guidance/logging, paradigm://guidance/portal, paradigm://guidance/mcp-workflow)",
+            "D": "Only the symbol table stays inline. Everything else, including commit conventions, moves to guidance resources",
+            "E": "Keep the logging guide inline (agents need it every session) and move everything else to guidance"
+          },
+          "correct": "C",
+          "explanation": "Paradigm's guidance resource model splits CLAUDE.md into two tiers: (1) always-loaded base context (~150 lines) containing the symbol system, conventions, and onboarding steps that every session needs, and (2) on-demand guidance resources loaded via MCP resource URIs only when relevant. The logging guide, portal protocol, and MCP workflow are reference material — an agent building a React component doesn't need the portal spec. Moving them to paradigm://guidance/* reduces base context from ~850 to ~150 lines while keeping all guidance one tool call away."
+        },
+        {
+          "id": "plsat-119b",
+          "scenario": "A developer notices that their CLAUDE.md includes a detailed multi-agent orchestration section (120 lines), a flow-first development guide (80 lines), a workspace configuration reference (60 lines), and the core symbol system with conventions (100 lines). They want to follow Paradigm's context efficiency pattern.",
+          "question": "What is the correct split between inline CLAUDE.md and on-demand guidance?",
+          "choices": {
+            "A": "Keep everything — 360 lines is acceptable for CLAUDE.md",
+            "B": "The core symbol system and conventions stay inline. Orchestration, flow-first, and workspace references become guidance resources loaded via paradigm://guidance/orchestration, paradigm://guidance/flows, and paradigm://guidance/workspaces",
+            "C": "Move everything to guidance resources and leave CLAUDE.md empty",
+            "D": "Keep orchestration inline because multi-agent work is common; move only workspaces",
+            "E": "Split each section in half — keep summaries inline, details in guidance"
+          },
+          "correct": "B",
+          "explanation": "The core symbol system (# $ ^ ! ~) and project conventions are needed in every session — they stay inline. Orchestration, flow-first development, and workspace configuration are situational: you only need orchestration when running multi-agent tasks, flows when documenting a complex process, and workspaces when working across projects. These become on-demand resources. The CLAUDE.md even includes a resource table mapping topics to URIs so agents know what is available without loading the full content."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-120",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-120",
+          "scenario": "A builder agent modifies `src/auth/jwt-verify.ts` and adds a new gate `^token-valid`. The event stream emits: type: 'gate-added', source: 'post-write-hook', symbols: ['^token-valid', '#jwt-verify'], path: 'src/auth/jwt-verify.ts', keywords: ['JWT', 'validation', 'gate', 'authentication']. A security agent has attention: symbols: ['^*', '#*-auth', '#*-middleware'], concepts: ['permission', 'JWT', 'RBAC'], signals: [{ type: 'gate-added' }], threshold: 0.4.",
+          "question": "What urgency level should the security agent's nomination use?",
+          "choices": {
+            "A": "Low — gate additions are routine maintenance",
+            "B": "Medium — any security-related change warrants moderate urgency",
+            "C": "High or Critical — a new gate in the auth layer is a security-sensitive change; the agent's nomination.speak_when.urgency likely includes 'gate_missing' and 'security_risk', and the signal match on 'gate-added' directly triggers the security review pattern",
+            "D": "The urgency is always 'medium' unless the event severity is 'critical'",
+            "E": "No nomination — the security agent only reviews when asked directly"
+          },
+          "correct": "C",
+          "explanation": "The security agent's attention fires on three dimensions simultaneously: symbolMatch ('^token-valid' matches '^*'), conceptMatch ('JWT' and 'authentication' match concepts), and signalMatch ('gate-added' matches a signal). With a threshold of 0.4 and a score of 1.0, the agent clearly self-nominates. For urgency, gate additions in authentication code are security-sensitive changes — the nomination.speak_when.urgency array typically includes 'gate_missing' and 'security_risk'. A new gate needs review to verify it is correctly implemented and not bypassed."
+        },
+        {
+          "id": "plsat-120b",
+          "scenario": "A builder agent updates a CSS file: type: 'file-modified', path: 'src/styles/button.css', symbols: ['#button-styles'], keywords: ['padding', 'border-radius', 'color']. A security agent has attention: symbols: ['^*', '#*-auth'], paths: ['auth/**', 'middleware/**'], concepts: ['permission', 'JWT'], signals: [{ type: 'gate-added' }], threshold: 0.4.",
+          "question": "What happens with the security agent's nomination for this event?",
+          "choices": {
+            "A": "The security agent nominates with urgency 'low' — all changes get reviewed",
+            "B": "The security agent does not nominate — score is 0 across all dimensions (no symbol match, path is not auth/middleware, no concept overlap, no signal match), and quietReason is 'below-threshold'",
+            "C": "The security agent nominates because the low threshold (0.4) catches most events",
+            "D": "The security agent nominates with urgency 'medium' — CSS could affect security UI",
+            "E": "The security agent defers — it waits to see if other agents nominate first"
+          },
+          "correct": "B",
+          "explanation": "The security agent's attention patterns produce zero matches: '#button-styles' does not match '^*' or '#*-auth'; 'src/styles/button.css' does not match 'auth/**' or 'middleware/**'; ['padding', 'border-radius', 'color'] have no overlap with ['permission', 'JWT']; and event type 'file-modified' is not 'gate-added'. The score is max(0, 0, 0, 0) = 0, far below the 0.4 threshold. The agent stays quiet with quietReason: 'below-threshold'. A low threshold does not mean the agent nominates for everything — it means the agent is more sensitive to weak matches in its attention domain."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-121",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-121",
+          "scenario": "A security agent nominates with urgency 'critical' after detecting a missing gate on a payment endpoint. At the same time, a reviewer agent nominates with urgency 'low' about a variable naming convention issue in the same file. Both nominations target overlapping symbols.",
+          "question": "How should the urgency levels affect surfacing to the human?",
+          "choices": {
+            "A": "Both are shown equally — urgency is just metadata with no behavioral effect",
+            "B": "Only the critical nomination is shown — low urgency nominations are always suppressed",
+            "C": "The critical nomination is surfaced immediately; the low urgency nomination may be batched or deferred based on the SurfacingConfig's min_urgency setting for the reviewer agent",
+            "D": "They are merged into a single nomination with urgency 'high' (the average)",
+            "E": "The reviewer's nomination is upgraded to 'critical' because it touches the same symbols"
+          },
+          "correct": "C",
+          "explanation": "SurfacingConfig controls how nominations reach the human. Each agent can have a min_urgency setting — if the reviewer's SurfacingPreference has min_urgency: 'medium', the 'low' urgency naming convention issue would be batched or suppressed until the human is less busy. The security agent's 'critical' nomination exceeds any reasonable min_urgency threshold and is surfaced immediately. Nominations are not merged or averaged — they are independent contributions that may be grouped as a 'complementary' Debate if they touch overlapping symbols."
+        },
+        {
+          "id": "plsat-121b",
+          "scenario": "An event fires: type: 'route-created' for a new `/api/admin/users` endpoint. The security agent nominates with urgency 'high' (missing gate review). The architect agent nominates with urgency 'medium' (suggesting a different URL structure). The builder agent scores below threshold and stays quiet.",
+          "question": "What nomination urgency behavior is correct here?",
+          "choices": {
+            "A": "The architect's nomination is suppressed because the security agent already nominated",
+            "B": "Both nominations surface: security at 'high' urgency (shows first) and architect at 'medium' urgency. They may be grouped into a Debate because they target the same route symbol. The builder's quietReason is 'below-threshold'",
+            "C": "All three agents must nominate — staying quiet is not an option",
+            "D": "The urgency levels are recalculated based on the number of agents that nominate",
+            "E": "Only the highest urgency nomination surfaces; others are queued for later"
+          },
+          "correct": "B",
+          "explanation": "Each agent independently scores the event and decides whether to nominate. The security and architect agents exceeded their thresholds and nominated with different urgency levels. Both are surfaced (high shows before medium in priority order). Because they target the same route/symbols, the system may group them as a Debate (type: 'complementary' since they address different concerns). The builder agent scored below its threshold and stays quiet with quietReason: 'below-threshold' — this is correct behavior, not a failure."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-122",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-122",
+          "scenario": "A project's data policy has: upstream ring: 'creator-upstream', allowed: ['task_type', 'outcome', 'helpfulness', 'duration_bucket', 'error_category'], denied: ['code_of_any_kind', 'file_paths', 'symbol_names', 'conversation_content', 'user_identity']. An agent creator's analytics dashboard requests feedback data.",
+          "question": "Which data reaches the agent creator?",
+          "choices": {
+            "A": "Everything the agent produced — the creator needs full visibility to improve the agent",
+            "B": "Only the allowed fields: task_type ('feature implementation'), outcome ('pass'), helpfulness ('high'), duration_bucket ('30-60min'), error_category (null). No code, file paths, symbol names, conversation content, or user identity is transmitted",
+            "C": "A summary of the agent's work log entries",
+            "D": "Nothing — the 'denied' list overrides the 'allowed' list entirely",
+            "E": "Only 'outcome' and 'helpfulness' — those are the minimum required fields"
+          },
+          "correct": "B",
+          "explanation": "The upstream rules at Ring 3 (creator-upstream) define exactly what flows to agent creators. The 'allowed' list enumerates the specific fields that can be transmitted: task_type, outcome, helpfulness, duration_bucket, and error_category. The 'denied' list explicitly blocks code_of_any_kind, file_paths, symbol_names, conversation_content, and user_identity. These two lists work together — only allowed fields pass, and denied fields are hard-blocked even if they would otherwise be inferred. The creator sees anonymized quality metrics, never the user's actual code or identity."
+        },
+        {
+          "id": "plsat-122b",
+          "scenario": "A team decision entry contains: decision: 'Use PostgreSQL with pgvector for embeddings', rationale: 'Lower latency than Pinecone for our dataset size', symbols_affected: ['#embedding-store', '#search-service']. The data policy has team_decisions ring: 'project-locked', deny_content: ['implementation_details']. An agent from another user project requests this data.",
+          "question": "What happens when the cross-project request arrives?",
+          "choices": {
+            "A": "The decision is shared — team decisions are public knowledge",
+            "B": "Only the rationale is shared — the decision text contains implementation details",
+            "C": "The request is blocked entirely — team decisions are in Ring 1 (project-locked), which means they never leave the project regardless of what the requesting agent needs",
+            "D": "The decision title is shared but the rationale is redacted",
+            "E": "The data is shared if the other project is in the same workspace"
+          },
+          "correct": "C",
+          "explanation": "Team decisions default to Ring 1 (project-locked). The trust ring system is the primary enforcement boundary — data classified in Ring 1 never leaves the project, period. The 'cross-project-transfer' enforcement boundary checks the ring before any content filtering. Even though the deny_content only blocks 'implementation_details', the ring restriction prevents the entire entry from being transmitted. Workspaces do not override ring restrictions — they enable symbol awareness across projects, not data sharing."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-123",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-123",
+          "scenario": "The data policy's default ring is 'project-locked'. The observation rules are: allow: ['src/**', '.paradigm/**', 'portal.yaml'], deny: ['.env*', '**/*.key', '**/*.pem', '**/secrets/**']. A builder agent tries to read '.env.production' to check a database URL.",
+          "question": "What happens at the observation enforcement boundary?",
+          "choices": {
+            "A": "The read succeeds — '.env.production' matches 'src/**' because it starts with a dot",
+            "B": "The read is blocked — '.env.production' matches the deny pattern '.env*', and deny overrides allow. The agent is prevented from observing the file contents",
+            "C": "The read succeeds but the content is redacted — only the file name is returned",
+            "D": "The read is blocked only if the file contains actual secrets; the policy checks content",
+            "E": "The read succeeds because the default ring is 'project-locked', which means all project files are accessible"
+          },
+          "correct": "B",
+          "explanation": "The observation rules control what agents can see. The deny list takes precedence over the allow list — '.env.production' matches the deny glob '.env*', so the read is blocked at the 'event-emission' enforcement boundary. This is a hard deny, not a content-aware filter. The default ring being 'project-locked' means data stays within the project, but observation deny patterns prevent agents from accessing sensitive files regardless of ring level. The agent would need the deny pattern removed from the data policy to read this file."
+        },
+        {
+          "id": "plsat-123b",
+          "scenario": "The observation rules allow: ['src/**', '.paradigm/**'], deny: ['**/*.key', '**/*.pem', '**/secrets/**']. A security agent wants to audit the file 'src/config/secrets/api-keys.json' to check for hardcoded credentials.",
+          "question": "What does the data policy enforce?",
+          "choices": {
+            "A": "The read is allowed — 'src/**' matches and the security agent has special override privileges",
+            "B": "The read is allowed — 'src/config/secrets/api-keys.json' matches 'src/**' in allow",
+            "C": "The read is blocked — 'src/config/secrets/api-keys.json' matches '**/secrets/**' in deny, which overrides the 'src/**' allow pattern",
+            "D": "The read is partially allowed — the file name is visible but contents are redacted",
+            "E": "The read depends on the agent's permissions.paths.read setting, not the data policy"
+          },
+          "correct": "C",
+          "explanation": "Deny patterns override allow patterns in observation rules. While 'src/config/secrets/api-keys.json' does match 'src/**' in the allow list, it also matches '**/secrets/**' in the deny list. The deny takes precedence. This is a deliberate security design — even well-intentioned audit access to secrets directories is blocked. If the security agent needs to verify no hardcoded secrets exist, it would need a different approach (e.g., a human-run audit) or a per-agent override in agent_overrides that explicitly allows that path."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-124",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-124",
+          "scenario": "An event is emitted by the post-write hook after a file save. You need to understand the anatomy of the StreamEvent object.",
+          "question": "Which fields are ALWAYS present on every StreamEvent, regardless of the event type or source?",
+          "choices": {
+            "A": "id, type, source, timestamp, path, symbols, agent",
+            "B": "id, type, source, timestamp — these four are required. Fields like path, symbols, keywords, context, agent, tool, severity, and data are all optional and depend on the event type",
+            "C": "id, timestamp, and agent — the agent is always set because events come from agents",
+            "D": "All fields are always present — optional fields default to empty arrays or null",
+            "E": "type and timestamp only — the id is generated lazily when the event is queried"
+          },
+          "correct": "B",
+          "explanation": "A StreamEvent has four required fields: id (auto-generated like 'ev-1711000000000-0042'), type (an EventType like 'file-modified', 'gate-added', 'error-encountered'), source (an EventSource like 'post-write-hook', 'mcp-tool-call', 'conversation'), and timestamp (ISO 8601). All other fields are optional: path is present for file events, symbols for Paradigm-aware events, agent for agent-originated events, tool for MCP tool calls, severity for compliance/error events, and data for arbitrary structured metadata."
+        },
+        {
+          "id": "plsat-124b",
+          "scenario": "You are debugging an event that arrived in the stream: { id: 'ev-1711036800000-0317', type: 'gate-checked', source: 'mcp-tool-call', timestamp: '2026-03-21T12:00:00Z', symbols: ['^admin-only'], tool: 'paradigm_gates_for_route', context: 'Checking gates for /api/admin/config' }.",
+          "question": "Which fields on this event are the optional ones (not present on every event)?",
+          "choices": {
+            "A": "All fields shown are required — this is the minimum event structure",
+            "B": "Only 'context' is optional — everything else is always present",
+            "C": "symbols, tool, and context are the optional fields. id, type, source, and timestamp are the four required fields present on every event",
+            "D": "id is optional — some events are anonymous",
+            "E": "source and tool are both optional — they are redundant"
+          },
+          "correct": "C",
+          "explanation": "The four required fields are id, type, source, and timestamp. In this event, symbols (['^admin-only']), tool ('paradigm_gates_for_route'), and context ('Checking gates for /api/admin/config') are all optional fields that happen to be populated. Other events might lack these — for example, a 'file-modified' event from 'post-write-hook' would have path instead of tool, and might not have symbols at all if the file is not covered by a .purpose file."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-125",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-125",
+          "scenario": "A builder agent starts a new session on project 'acme-api'. You call `paradigm_context_compose` with agent: 'builder', symbols: ['#api-gateway', '#rate-limiter'], include_nominations: true, include_decisions: true, include_journal: true.",
+          "question": "What sections does the composed context include?",
+          "choices": {
+            "A": "Only the agent's profile — context compose just returns the .agent file",
+            "B": "The full CLAUDE.md, all .purpose files, and the complete event stream",
+            "C": "Profile enrichment (personality, relevant expertise for the given symbols, transferable patterns), recent active team decisions, transferable journal entries for this agent, and pending nominations — four distinct sections composed into a markdown block",
+            "D": "Only nominations and decisions — the profile is loaded separately",
+            "E": "The agent's attention patterns and learning configuration — context compose is about ambient setup"
+          },
+          "correct": "C",
+          "explanation": "paradigm_context_compose builds a session context from four sources: (1) Profile enrichment — the agent's personality, expertise entries matching the given symbols, and transferable patterns; (2) Recent team decisions with status 'active' (up to max_decisions, default 5); (3) Transferable journal entries for this agent (insights that apply across projects, up to max_journal, default 5); (4) Pending nominations that haven't been surfaced yet. Each section can be toggled via include_* flags. The result is a markdown string for prompt injection, not raw data."
+        },
+        {
+          "id": "plsat-125b",
+          "scenario": "A security agent calls `paradigm_context_compose` with agent: 'security', include_decisions: true, include_journal: true, include_nominations: false, max_decisions: 3, max_journal: 10.",
+          "question": "What does the composed context contain?",
+          "choices": {
+            "A": "All 4 sections are always included — the include_* flags are just suggestions",
+            "B": "Profile enrichment for the security agent, up to 3 recent active team decisions, up to 10 transferable journal entries, and NO nominations section (because include_nominations is false)",
+            "C": "Only the journal entries — security agents do not get profile enrichment",
+            "D": "The full event stream filtered to security-relevant events",
+            "E": "Profile, decisions, and journal — but max_journal caps at 5 regardless of the parameter"
+          },
+          "correct": "B",
+          "explanation": "The include_* flags control which sections appear in the composed context. With include_nominations: false, that section is skipped entirely. Profile enrichment is always included (it is the base). max_decisions: 3 limits team decisions to the 3 most recent active ones (instead of the default 5). max_journal: 10 allows up to 10 transferable journal entries (overriding the default 5). The result is a markdown context block with three sections: profile enrichment, decisions, and journal — ready for prompt injection."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-126",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-126",
+          "scenario": "The data policy network rules are: ring: 'network-public', opt_in: false, if_opted_in: ['aggregated_task_success_rates', 'anonymized_pattern_frequency']. A network aggregation service requests data from this project.",
+          "question": "What data flows to the network?",
+          "choices": {
+            "A": "aggregated_task_success_rates and anonymized_pattern_frequency — the if_opted_in list defines what is shared",
+            "B": "Nothing — opt_in is false, so no data reaches Ring 4 (network-public) regardless of the if_opted_in list. The user must explicitly set opt_in: true before any data flows",
+            "C": "Only anonymized_pattern_frequency — success rates could identify the project",
+            "D": "Aggregated statistics are always shared — opt_in only controls detailed data",
+            "E": "The data is shared but with a 30-day delay for privacy"
+          },
+          "correct": "B",
+          "explanation": "The network rules require explicit opt-in. With opt_in: false, the 'network-aggregation' enforcement boundary blocks ALL data from reaching Ring 4 (network-public). The if_opted_in list only takes effect when opt_in is true — it defines which specific metrics would be shared if the user chooses to participate. This is a deliberate design: no data flows to the network by default. The user must consciously enable it, and even then, only the listed metric types (aggregated task success rates and anonymized pattern frequency) are transmitted."
+        },
+        {
+          "id": "plsat-126b",
+          "scenario": "An upstream rule has: ring: 'creator-upstream', allowed: ['task_type', 'outcome'], denied: ['code_of_any_kind', 'file_paths', 'symbol_names', 'conversation_content', 'user_identity']. The agent generates a work log entry that mentions file paths and symbol names in the summary. This entry is allowed at Ring 1. Now the upstream boundary is checked.",
+          "question": "What reaches the agent creator?",
+          "choices": {
+            "A": "The full work log entry — it was allowed at Ring 1 so it passes all rings",
+            "B": "Only the task_type and outcome fields. Even though the summary mentions file paths and symbols, the upstream boundary enforces the denied list. File paths, symbol names, and any code are stripped. Only the enumerated allowed fields pass through to Ring 3",
+            "C": "The summary with file paths and symbol names redacted inline",
+            "D": "Nothing — the denied list cancels out the allowed list",
+            "E": "The work log ID and timestamp only — those are always transmitted"
+          },
+          "correct": "B",
+          "explanation": "The upstream enforcement boundary operates on specific fields, not on the text content of entries. The 'allowed' list names exactly which fields pass: task_type and outcome. The 'denied' list provides an additional hard block on categories like file_paths, symbol_names, and code_of_any_kind. Data that was allowed at Ring 1 (project-locked) does not automatically flow to Ring 3 (creator-upstream) — each ring's enforcement boundary re-evaluates what passes. The creator receives structured, enumerated fields only — never free-text summaries that might leak sensitive information."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-127",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-127",
+          "scenario": "A new project is set up with Paradigm Ambient. The CLAUDE.md mentions a 'learning loop' where agents improve over time. A junior developer asks about the sequence of steps in the ambient learning loop.",
+          "question": "What is the correct order of the ambient learning loop?",
+          "choices": {
+            "A": "Observe → Learn → Act → Record",
+            "B": "Act → Record → Learn → Apply",
+            "C": "Event emitted → Attention scoring → Self-nomination → Surfacing → Human engagement → Feedback → Journal recording → Confidence adjustment → Pattern extraction → Context enrichment (next session)",
+            "D": "Record everything → Filter later → Show on demand",
+            "E": "Human assigns → Agent acts → Agent reports → Human reviews"
+          },
+          "correct": "C",
+          "explanation": "The ambient learning loop is a 10-step cycle: (1) An event is emitted (file save, tool call, error). (2) Each agent scores it against their attention patterns. (3) Agents that exceed their threshold self-nominate with a type and urgency. (4) Nominations are surfaced to the human based on SurfacingConfig. (5) The human engages (accepts, dismisses, defers). (6) The response becomes feedback. (7) The agent records insights in its Learning Journal. (8) Confidence scores are adjusted via exponential moving average. (9) Transferable patterns are extracted for cross-project use. (10) Next session, paradigm_context_compose injects the updated patterns and insights."
+        },
+        {
+          "id": "plsat-127b",
+          "scenario": "A team is evaluating whether Paradigm Ambient's learning loop actually improves agent performance over time. They want to understand the mechanism.",
+          "question": "Which sequence correctly describes how an agent's future behavior improves from a single learning event?",
+          "choices": {
+            "A": "The agent's code is retrained on the new data point",
+            "B": "The correction is stored but only used if the exact same scenario recurs",
+            "C": "Feedback → Journal entry (trigger + insight + confidence adjustment) → Pattern extraction (if transferable) → Notebook promotion (if auto-promote enabled) → Context compose injects the pattern in future sessions → Agent's expertise scores are updated",
+            "D": "The human writes a rule in the data policy and the agent follows it",
+            "E": "The agent's threshold is lowered so it speaks up more often"
+          },
+          "correct": "C",
+          "explanation": "Agent improvement follows a structured path: (1) Feedback from human engagement triggers a journal entry with the specific trigger type (correction_received, confidence_miss, etc.), the insight, and confidence adjustment (before/after). (2) If the learning is transferable, a pattern is extracted with applies_when and correct_approach. (3) If notebook_auto_promote is enabled in the agent's learning config, the pattern promotes to the agent's notebook. (4) In future sessions, paradigm_context_compose loads transferable journal entries and patterns into the agent's context. (5) The agent's expertise scores (EMA) are updated, shifting future attention scoring. The agent is not retrained — it improves through richer context injection."
+        }
+      ]
+    },
+    {
+      "type": "standalone",
+      "slot": "slot-128",
+      "course": "para-601",
+      "variants": [
+        {
+          "id": "plsat-128",
+          "scenario": "An architect agent has attention: symbols: ['$*', '#*'], concepts: ['architecture', 'design', 'pattern', 'refactor'], threshold: 0.5. An event arrives: type: 'concept-mentioned', source: 'conversation', keywords: ['refactor', 'extract', 'design pattern', 'strategy pattern'], context: 'Discussing whether to refactor the notification system using the strategy pattern.'",
+          "question": "What is the architect's conceptMatch score, and does it self-nominate?",
+          "choices": {
+            "A": "conceptMatch = 0.25 (1 of 4 concepts), score = 0.25, does not nominate (below 0.5)",
+            "B": "conceptMatch = 1.0 — any concept match gives full score",
+            "C": "conceptMatch = 0.75 — 'architecture' does not appear but 'design', 'pattern', and 'refactor' all match, giving 3 of 4 concepts matched. Score = max(0, 0, 0.75, 0) = 0.75, which exceeds 0.5, so the agent self-nominates",
+            "D": "conceptMatch = 0.5 — only exact keyword matches count, and only 'refactor' and 'pattern' are exact matches (2 of 4)",
+            "E": "The architect does not nominate because 'concept-mentioned' is not in its signals list"
+          },
+          "correct": "C",
+          "explanation": "Concept matching joins the event's context, keywords, and type into a single lowercase string, then checks how many of the agent's concepts appear. The combined text includes 'refactor', 'extract', 'design pattern', 'strategy pattern', 'concept-mentioned'. Against the agent's concepts ['architecture', 'design', 'pattern', 'refactor']: 'design' matches, 'pattern' matches, 'refactor' matches. 'architecture' does not appear. That is 3 out of 4 = 0.75. The final score is max(symbolMatch, pathMatch, conceptMatch, signalMatch). With no symbols or path on this event, symbolMatch and pathMatch are 0. signalMatch is 0 (no signal patterns configured). Score = 0.75, above the 0.5 threshold. The architect self-nominates."
+        },
+        {
+          "id": "plsat-128b",
+          "scenario": "A security agent has attention: symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**'], concepts: ['permission', 'JWT', 'RBAC', 'XSS', 'injection'], signals: [{ type: 'gate-added' }, { type: 'route-created' }], threshold: 0.4. An event arrives: type: 'route-created', source: 'post-write-hook', path: 'src/routes/admin.ts', symbols: ['#admin-routes'], keywords: ['new endpoint', 'admin panel', 'user management'].",
+          "question": "What is the security agent's overall score and should it nominate?",
+          "choices": {
+            "A": "Score = 0 — '#admin-routes' does not match any symbol pattern",
+            "B": "Score = 0.4 — only the path partially matches, barely meeting threshold",
+            "C": "Score = 1.0 — signalMatch is 1.0 because 'route-created' matches signals. symbolMatch is 0 ('#admin-routes' does not match '^*', '#*-auth', or '#*-middleware'). pathMatch is 0 ('src/routes/admin.ts' does not match 'auth/**' or 'middleware/**'). The final score is max(0, 0, 0, 1.0) = 1.0, well above the 0.4 threshold",
+            "D": "Score = 0.2 — partial matches across dimensions are averaged",
+            "E": "Score = 1.0 — all four dimensions fire because admin is security-related"
+          },
+          "correct": "C",
+          "explanation": "The scoring uses max() across four dimensions, not an average. symbolMatch: '#admin-routes' does not end with '-auth' or '-middleware' and does not start with '^', so 0. pathMatch: 'src/routes/admin.ts' does not match 'auth/**' or 'middleware/**', so 0. conceptMatch: keywords ['new endpoint', 'admin panel', 'user management'] do not contain 'permission', 'JWT', 'RBAC', 'XSS', or 'injection', so 0. signalMatch: the event type 'route-created' matches the signal { type: 'route-created' }, so 1.0. Final score: max(0, 0, 0, 1.0) = 1.0. The security agent self-nominates — new route creation is exactly the kind of event that warrants security review."
         }
       ]
     }

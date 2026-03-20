@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "4.0.0",
+  "version": "5.1.0",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",

@@ -153,3 +153,9 @@ components:
     file: v3.0.json
     tags: [plsat, para-501]
     references: ["#PlatformWebSocket", "#AgentPresenceManager", "#UserStateTracker", "#PlatformTools", "#AgentStore"]
+
+  plsat-questions-ambient:
+    description: "PLSAT questions testing ambient coordination — knowledge streams, attention scoring, nominations, trust rings, data policy, context composition (slots 113-128, para-601)"
+    file: v3.0.json
+    tags: [plsat, para-601]
+    references: ["#nomination-engine", "#event-stream", "#data-policy", "#agent-loader"]

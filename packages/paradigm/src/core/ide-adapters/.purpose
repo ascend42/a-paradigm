@@ -18,7 +18,7 @@ components:
     aspects: ["~ide-adapter-pattern"]
 
   claude-adapter:
-    description: Generate CLAUDE.md markdown file with full project context
+    description: "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, and agent contributions section from high-priority .agent context"
     type: service
     path: claude.ts
     aspects: ["~ide-adapter-pattern"]

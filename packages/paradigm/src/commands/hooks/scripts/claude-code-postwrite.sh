@@ -61,6 +61,11 @@ case "$REL_PATH" in
   /*) exit 0 ;;
 esac
 
+# Emit file-modified event (fire-and-forget)
+if command -v paradigm >/dev/null 2>&1; then
+  paradigm event emit --type file-modified --source post-write-hook --path "$REL_PATH" &
+fi
+
 # Track: append to .paradigm/.pending-review (deduplicated)
 PENDING_FILE=".paradigm/.pending-review"
 if [ -f "$PENDING_FILE" ]; then

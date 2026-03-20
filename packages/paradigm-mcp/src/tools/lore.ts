@@ -249,6 +249,11 @@ export function getLoreToolsList() {
             type: 'number',
             description: 'Agent confidence in correctness of this work (0.0 to 1.0)',
           },
+          stream: {
+            type: 'string',
+            enum: ['work-log', 'journal', 'decision', 'auto'],
+            description: 'Knowledge stream classification. "auto" classifies based on content. Default: stores in lore (backward compatible).',
+          },
         },
         required: ['title', 'summary', 'symbols_touched'],
       },
@@ -593,6 +598,57 @@ export async function handleLoreTool(
         // Protocol suggestion is optional
       }
 
+      // Stream routing — if stream is specified, also record in the appropriate knowledge stream
+      let streamRouted: string | undefined;
+      if (args.stream) {
+        const stream = args.stream as string;
+        const resolvedStream = stream === 'auto' ? classifyStream(args) : stream;
+
+        try {
+          if (resolvedStream === 'work-log') {
+            const { recordWorkLog } = await import('../utils/work-log-loader.js');
+            recordWorkLog(ctx.rootDir, {
+              agent: entry.agent?.model || 'unknown',
+              summary: entry.summary,
+              outcome: entry.verification?.status === 'pass' ? 'pass' : entry.verification?.status === 'fail' ? 'fail' : 'partial',
+              files_modified: entry.files_modified,
+              symbols_touched: entry.symbols_touched,
+              commit: entry.commit,
+              linked_lore: entry.id || id,
+            });
+            streamRouted = 'work-log';
+          } else if (resolvedStream === 'journal' && entry.learnings?.length) {
+            const { recordJournalEntry } = await import('../utils/journal-loader.js');
+            for (const learning of entry.learnings) {
+              recordJournalEntry(entry.agent?.model || 'unknown', {
+                trigger: 'self_reflection',
+                insight: learning,
+                project: ctx.projectName || 'unknown',
+                transferable: false,
+                linked_work_log: entry.id || id,
+              });
+            }
+            streamRouted = 'journal';
+          } else if (resolvedStream === 'decision' && entry.decisions?.length) {
+            const { recordDecision } = await import('../utils/decision-loader.js');
+            for (const decision of entry.decisions) {
+              recordDecision(ctx.rootDir, {
+                title: decision.decision.slice(0, 100),
+                decision: decision.decision,
+                rationale: decision.rationale,
+                participants: [{ id: `agent/${entry.agent?.model || 'unknown'}`, role: 'agent' as const, stance: 'proposed' as const }],
+                symbols_affected: entry.symbols_touched,
+                status: 'active',
+                linked_lore: entry.id || id,
+              });
+            }
+            streamRouted = 'decision';
+          }
+        } catch {
+          // Stream routing failure is non-fatal — lore entry already saved
+        }
+      }
+
       return {
         handled: true,
         text: JSON.stringify({
@@ -601,6 +657,7 @@ export async function handleLoreTool(
           type,
           title,
           message: 'Lore entry recorded successfully',
+          ...(streamRouted ? { stream: streamRouted } : {}),
           ...(protocol_suggestion ? { protocol_suggestion } : {}),
         }),
       };
@@ -935,6 +992,25 @@ export async function handleLoreTool(
     default:
       return { handled: false, text: '' };
   }
+}
+
+/**
+ * Classify which knowledge stream a lore entry belongs to based on its content.
+ * Used when stream is set to 'auto'.
+ */
+function classifyStream(args: Record<string, unknown>): string {
+  // Has task_ref or is primarily about work done → work-log
+  if (args.task_ref || args.files_modified || args.commit) return 'work-log';
+
+  // Has learnings or confidence data → journal
+  if (args.learnings || args.confidence !== undefined) return 'journal';
+
+  // Has decisions with rationale → decision
+  const decisions = args.decisions as Array<{ rationale?: string }> | undefined;
+  if (decisions?.some(d => d.rationale)) return 'decision';
+
+  // Default: work-log (most common)
+  return 'work-log';
 }
 
 /**

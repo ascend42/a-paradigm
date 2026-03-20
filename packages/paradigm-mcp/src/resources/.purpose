@@ -1,0 +1,38 @@
+purpose: MCP resource handlers serving on-demand content via paradigm:// URIs
+description: >
+  Each module serves a category of read-only content as MCP resources.
+  Resources are listed via ListResourcesRequest and read via ReadResourceRequest.
+
+components:
+  ResourceIndex:
+    description: Main resource dispatcher — registers all resource handlers with the MCP server
+    type: router
+    tags: [mcp, resources]
+  GuidanceResources:
+    description: "On-demand behavioral guidance — 12 topics previously baked into CLAUDE.md, now served via paradigm://guidance/{topic}"
+    type: service
+    tags: [mcp, resources, guidance, claude-md, context-engineering]
+  DocsResources:
+    description: Reference documentation served from package templates (commands, queries)
+    type: service
+    tags: [mcp, resources, docs]
+  PromptsResources:
+    description: Task prompt templates served from package templates
+    type: service
+    tags: [mcp, resources, prompts]
+  SpecsResources:
+    description: Reference specs served from package templates (disciplines, scan, context-tracking)
+    type: service
+    tags: [mcp, resources, specs]
+  WisdomResources:
+    description: Team wisdom — preferences, antipatterns, decisions, expertise
+    type: service
+    tags: [mcp, resources, wisdom]
+  HistoryResources:
+    description: Symbol history — per-symbol changes, fragility, co-changes
+    type: service
+    tags: [mcp, resources, history]
+  ContextResources:
+    description: Session context — agent protocol, session stats, handoff guide
+    type: service
+    tags: [mcp, resources, context]

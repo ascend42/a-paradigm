@@ -23,6 +23,7 @@ import { getContextResourcesList, handleContextResource } from './context.js';
 import { getPromptsResourcesList, handlePromptsResource } from './prompts.js';
 import { getSpecsResourcesList, handleSpecsResource } from './specs.js';
 import { getDocsResourcesList, handleDocsResource } from './docs.js';
+import { getGuidanceResourcesList, handleGuidanceResource } from './guidance.js';
 
 /**
  * Register all MCP resources
@@ -98,6 +99,8 @@ export function registerResources(server: Server, getContext: () => ProjectConte
           ...getPromptsResourcesList(),
           ...getSpecsResourcesList(),
           ...getDocsResourcesList(),
+          // Guidance resources (on-demand behavioral guidance)
+          ...getGuidanceResourcesList(),
         ],
       };
     }
@@ -328,6 +331,20 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       // Try docs resources
       if (resourcePath === 'docs' || resourcePath.startsWith('docs/')) {
         const result = await handleDocsResource(resourcePath, ctx);
+        if (result.handled) {
+          return {
+            contents: [{
+              uri,
+              mimeType: result.mimeType,
+              text: result.text,
+            }],
+          };
+        }
+      }
+
+      // Try guidance resources
+      if (resourcePath === 'guidance' || resourcePath.startsWith('guidance/')) {
+        const result = await handleGuidanceResource(resourcePath, ctx);
         if (result.handled) {
           return {
             contents: [{

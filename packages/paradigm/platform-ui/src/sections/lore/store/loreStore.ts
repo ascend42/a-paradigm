@@ -31,6 +31,7 @@ export interface LoreEntry {
   linked_tasks?: string[];
   linked_commits?: string[];
   tags?: string[];
+  stream?: 'work-log' | 'journal' | 'decision' | 'auto';
   meta?: Record<string, unknown>;
   git_context?: { ref: string; branch: string; dirty: boolean };
 }

@@ -93,6 +93,25 @@ program
     console.log(chalk.gray(`  ${presets.length} presets available. Auto-detected when --stack is omitted.\n`));
   });
 
+// paradigm event emit — fire-and-forget event for hook integration
+const eventCmd = program
+  .command('event')
+  .description('Ambient event stream commands');
+
+eventCmd
+  .command('emit')
+  .description('Emit an event to the ambient event stream (fast, for hook integration)')
+  .requiredOption('--type <type>', 'Event type (e.g., file-modified, compliance-violation)')
+  .requiredOption('--source <source>', 'Event source (e.g., post-write-hook, stop-hook)')
+  .option('--path <path>', 'File path (if applicable)')
+  .option('--symbols <symbols...>', 'Paradigm symbols referenced')
+  .option('--context <context>', 'Brief context snippet')
+  .option('--severity <severity>', 'Severity: info, warning, error, critical')
+  .action(async (options) => {
+    const { eventEmitCommand } = await import('./commands/event.js');
+    await eventEmitCommand(options);
+  });
+
 // paradigm setup
 program
   .command('setup [path]')
