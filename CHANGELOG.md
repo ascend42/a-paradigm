@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] — 2026-03-20
+
+### Added
+
+- **Platform Ambient section** — Full browser UI for ambient coordination: event stream (live list with type badges, relative timestamps, symbol pills), nominations panel (urgency-sorted with accept/dismiss), debates grouping, 3 stat cards, 10-second auto-refresh. CSS uses platform theme variables with responsive breakpoints.
+- **Platform ambient API routes** — 5 REST endpoints: `GET /api/ambient/events` (filtered query), `GET /api/ambient/nominations` (pending with debates), `POST /api/ambient/nominations/:id/engage` (accept/dismiss/defer with WebSocket broadcast), `GET /api/ambient/stream` (SSE with incremental byte reads), `GET /api/ambient/policy` (data-policy.yaml or defaults).
+- **Cross-session nomination surfacing** — Recovery preamble now includes critical/high pending nominations from the ambient system, surfaced automatically on first tool call of a new session.
+- **Learning feedback loop** — `adjustAttentionFromFeedback` analyzes nomination engagement history: >60% dismissed → raise threshold (less noise), >80% accepted → lower threshold (contribute more). `getNominationStats` provides per-agent engagement metrics.
+- **`paradigm_ambient_learn` MCP tool** — Analyze and adjust an agent's attention threshold from nomination feedback. Supports dry-run mode for preview without modification.
+- **Substantive nomination briefs** — `generateBrief` now produces role-aware, event-contextual summaries instead of mechanical match descriptions (e.g., "Security agent: New route needs gate assignment" vs "symbol match on ^auth").
+
+### Changed
+
+- **Ambient section always enabled** — Added to the `always` array in platform server section resolver alongside overview, lore, graph, git.
+- **Recovery preamble** — Extended with ambient nominations section (critical/high urgency, max 5).
+
 ## [5.1.0] — 2026-03-20
 
 ### Added

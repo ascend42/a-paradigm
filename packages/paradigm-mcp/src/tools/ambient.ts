@@ -5,13 +5,14 @@
  * - paradigm_ambient_nominations: Get pending nominations
  * - paradigm_ambient_events: Query event stream
  * - paradigm_ambient_engage: Accept/dismiss/defer a nomination
+ * - paradigm_ambient_learn: Adjust agent attention from nomination feedback
  * - paradigm_context_compose: Compose agent session context
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadNominations, loadDebates, engageNomination, resolveDebate } from '../utils/nomination-engine.js';
+import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats } from '../utils/nomination-engine.js';
 import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
@@ -93,6 +94,22 @@ export function getAmbientToolsList() {
       },
       annotations: {
         readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_ambient_learn',
+      description: 'Analyze an agent\'s nomination acceptance/dismissal history and adjust its attention threshold. If >60% dismissed → raise threshold (less noise). If >80% accepted → lower threshold (contribute more). Also returns engagement stats. ~100 tokens.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent: { type: 'string', description: 'Agent ID to analyze and adjust' },
+          dry_run: { type: 'boolean', description: 'If true, return stats without adjusting (default: false)' },
+        },
+        required: ['agent'],
+      },
+      annotations: {
+        readOnlyHint: false,
         destructiveHint: false,
       },
     },
@@ -324,6 +341,38 @@ export async function handleAmbientTool(
             journal: includeJournal,
             nominations: includeNominations,
           },
+        }),
+        handled: true,
+      };
+    }
+
+    case 'paradigm_ambient_learn': {
+      const agentId = args.agent as string;
+      const dryRun = args.dry_run === true;
+
+      const stats = getNominationStats(ctx.rootDir, agentId);
+
+      if (dryRun) {
+        return {
+          text: json({
+            agent: agentId,
+            dry_run: true,
+            stats,
+            note: stats.total < 5
+              ? 'Insufficient data for threshold adjustment (need 5+ engaged nominations)'
+              : `Accept rate: ${(stats.acceptRate * 100).toFixed(0)}% — ${stats.acceptRate > 0.8 ? 'would lower threshold' : stats.acceptRate < 0.4 ? 'would raise threshold' : 'no adjustment needed'}`,
+          }),
+          handled: true,
+        };
+      }
+
+      const result = adjustAttentionFromFeedback(ctx.rootDir, agentId);
+
+      return {
+        text: json({
+          agent: agentId,
+          ...result,
+          stats,
         }),
         handled: true,
       };

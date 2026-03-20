@@ -10,6 +10,7 @@ const SECTION_ICONS: Record<string, string> = {
   university: '▣',
   symphony: '♪',
   docs: '☰',
+  ambient: '◌',
   meetings: '●',
 };
 

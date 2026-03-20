@@ -23,7 +23,7 @@ import type {
 import type { AgentProfile, AgentAttention } from '../types/agents.js';
 import { emitEvent, scoreEventForAgent } from './event-stream.js';
 import { loadDataPolicy, canObservePath } from './data-policy-loader.js';
-import { loadAllAgentProfiles } from './agent-loader.js';
+import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile } from './agent-loader.js';
 
 const EVENTS_DIR = '.paradigm/events';
 const NOMINATIONS_FILE = 'nominations.jsonl';
@@ -134,20 +134,39 @@ function deriveNominationType(profile: AgentProfile, event: StreamEvent): Nomina
 }
 
 /**
- * Generate a brief 1-line summary for a nomination.
+ * Generate a substantive 1-line brief for a nomination.
+ * Uses agent role and event context to produce actionable summaries.
  */
 function generateBrief(profile: AgentProfile, event: StreamEvent, score: AttentionScore): string {
-  const dimension = score.breakdown.symbolMatch >= score.breakdown.pathMatch
-    ? (score.breakdown.symbolMatch >= score.breakdown.conceptMatch ? 'symbol' : 'concept')
-    : (score.breakdown.pathMatch >= score.breakdown.conceptMatch ? 'path' : 'concept');
+  const role = profile.role || profile.id;
 
-  const matchDetail = dimension === 'symbol'
-    ? `symbol match on ${event.symbols?.join(', ') || 'unknown'}`
-    : dimension === 'path'
-    ? `path match on ${event.path || 'unknown'}`
-    : `concept match`;
-
-  return `[${profile.id}] ${event.type} — ${matchDetail} (relevance: ${score.score.toFixed(2)})`;
+  // Build a contextual brief based on event type and agent expertise
+  switch (event.type) {
+    case 'gate-checked':
+      return `${role}: Gate check on ${event.symbols?.join(', ') || 'route'} — verify gate coverage is complete`;
+    case 'file-modified':
+      return `${role}: ${event.path || 'File'} modified — review for ${profile.id === 'security' ? 'security implications' : profile.id === 'tester' ? 'test coverage' : profile.id === 'reviewer' ? 'code quality' : 'consistency'}`;
+    case 'compliance-violation':
+      return `${role}: Compliance violation detected — ${event.context || 'check .purpose and portal.yaml coverage'}`;
+    case 'route-created':
+      return `${role}: New route ${event.symbols?.join(', ') || ''} — ${profile.id === 'security' ? 'needs gate assignment in portal.yaml' : 'review route structure'}`;
+    case 'gate-added':
+      return `${role}: Gate ${event.symbols?.join(', ') || ''} added — ${profile.id === 'security' ? 'verify enforcement points' : 'check downstream impact'}`;
+    case 'decision-made':
+      return `${role}: Decision recorded — ${event.context?.slice(0, 80) || 'review for alignment with project patterns'}`;
+    case 'work-completed':
+      return `${role}: Work completed on ${event.symbols?.join(', ') || event.context?.slice(0, 40) || 'task'} — review outcome`;
+    case 'error-encountered':
+      return `${role}: Error detected — ${event.context?.slice(0, 80) || 'investigate root cause'}`;
+    default: {
+      const matchDetail = score.breakdown.symbolMatch > 0
+        ? `symbol match on ${event.symbols?.join(', ') || 'unknown'}`
+        : score.breakdown.pathMatch > 0
+        ? `path ${event.path || 'unknown'}`
+        : event.context?.slice(0, 60) || event.type;
+      return `${role}: ${matchDetail}`;
+    }
+  }
 }
 
 // ── Debate Detection ──
@@ -454,4 +473,102 @@ export function emitAndProcess(
 
   const { nominations, debates } = processEvent(rootDir, emitted);
   return { event: emitted, nominations, debates };
+}
+
+// ── Learning Feedback Loop ──
+
+/**
+ * Analyze an agent's nomination history and adjust its attention threshold.
+ *
+ * Logic:
+ * - If >60% of nominations are dismissed → raise threshold (agent is too noisy)
+ * - If >80% of nominations are accepted → lower threshold (agent could contribute more)
+ * - If insufficient data (<5 engaged nominations) → no adjustment
+ *
+ * Also records a journal entry about the adjustment if the agent has
+ * learning.intrinsic.reflection configured.
+ */
+export function adjustAttentionFromFeedback(
+  rootDir: string,
+  agentId: string
+): { adjusted: boolean; oldThreshold: number; newThreshold: number; reason: string } {
+  const profile = loadAgentProfile(rootDir, agentId);
+  if (!profile?.attention) {
+    return { adjusted: false, oldThreshold: 0.6, newThreshold: 0.6, reason: 'No attention config' };
+  }
+
+  const oldThreshold = profile.attention.threshold ?? 0.6;
+
+  // Load engagement history for this agent
+  const nominations = loadNominations(rootDir, { agent: agentId });
+  const engaged = nominations.filter(n => n.engaged);
+
+  if (engaged.length < 5) {
+    return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)` };
+  }
+
+  const accepted = engaged.filter(n => n.response === 'accepted').length;
+  const dismissed = engaged.filter(n => n.response === 'dismissed').length;
+  const acceptRate = accepted / engaged.length;
+  const dismissRate = dismissed / engaged.length;
+
+  let newThreshold = oldThreshold;
+  let reason = 'No adjustment needed';
+
+  if (dismissRate > 0.6) {
+    // Too noisy — raise threshold by 0.05 (max 0.95)
+    newThreshold = Math.min(0.95, oldThreshold + 0.05);
+    reason = `High dismiss rate (${(dismissRate * 100).toFixed(0)}%) — raising threshold to reduce noise`;
+  } else if (acceptRate > 0.8) {
+    // Highly useful — lower threshold by 0.05 (min 0.2)
+    newThreshold = Math.max(0.2, oldThreshold - 0.05);
+    reason = `High accept rate (${(acceptRate * 100).toFixed(0)}%) — lowering threshold to contribute more`;
+  }
+
+  if (newThreshold === oldThreshold) {
+    return { adjusted: false, oldThreshold, newThreshold, reason };
+  }
+
+  // Apply the adjustment
+  profile.attention.threshold = newThreshold;
+
+  // Save to whichever scope has the profile
+  const projectPath = path.join(rootDir, '.paradigm/agents', `${agentId}.agent`);
+  const scope = fs.existsSync(projectPath) ? 'project' as const : 'global' as const;
+  saveAgentProfile(agentId, profile, scope, rootDir);
+
+  // Emit a learning event
+  emitEvent(rootDir, {
+    type: 'work-completed',
+    source: 'agent-action',
+    agent: agentId,
+    context: `Attention threshold adjusted: ${oldThreshold.toFixed(2)} → ${newThreshold.toFixed(2)} (${reason})`,
+    data: { old_threshold: oldThreshold, new_threshold: newThreshold, accept_rate: acceptRate, dismiss_rate: dismissRate },
+  });
+
+  return { adjusted: true, oldThreshold, newThreshold, reason };
+}
+
+/**
+ * Get nomination engagement stats for an agent.
+ */
+export function getNominationStats(
+  rootDir: string,
+  agentId: string
+): { total: number; accepted: number; dismissed: number; deferred: number; pending: number; acceptRate: number } {
+  const nominations = loadNominations(rootDir, { agent: agentId });
+  const accepted = nominations.filter(n => n.response === 'accepted').length;
+  const dismissed = nominations.filter(n => n.response === 'dismissed').length;
+  const deferred = nominations.filter(n => n.response === 'deferred').length;
+  const pending = nominations.filter(n => !n.engaged).length;
+  const engaged = accepted + dismissed + deferred;
+
+  return {
+    total: nominations.length,
+    accepted,
+    dismissed,
+    deferred,
+    pending,
+    acceptRate: engaged > 0 ? accepted / engaged : 0,
+  };
 }

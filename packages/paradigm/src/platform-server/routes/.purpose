@@ -1,4 +1,4 @@
-description: Platform-specific HTTP routes for agent-driven UI, overview aggregation, and git management
+description: Platform-specific HTTP routes for agent-driven UI, overview aggregation, git management, and ambient coordination
 components:
   AgentCommandRoute:
     description: POST /api/platform/agent-command — receives navigate/highlight/annotate/observe/clear commands, broadcasts via WS
@@ -16,3 +16,8 @@ components:
     description: /api/docs/* — 6 endpoints for manifest, symbol pages, flow pages, portal, custom pages, and search
     type: router
     tags: [feature, docs]
+  AmbientRouter:
+    description: /api/ambient/* — 5 endpoints for event stream queries, nomination management, SSE real-time streaming, and data policy
+    type: router
+    tags: [feature, ambient]
+    signals: [!ambient:event, !ambient:nomination]

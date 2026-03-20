@@ -792,6 +792,26 @@ export async function buildRecoveryPreamble(rootDir: string): Promise<string | n
     // Lore not initialized yet — skip
   }
 
+  // Surface critical/high nominations from the ambient system
+  try {
+    const { loadNominations } = await import('../utils/nomination-engine.js');
+    const urgent = loadNominations(rootDir, { pending_only: true })
+      .filter(n => n.urgency === 'critical' || n.urgency === 'high');
+
+    if (urgent.length > 0) {
+      lines.push('');
+      lines.push('Ambient nominations (urgent):');
+      for (const n of urgent.slice(0, 5)) {
+        lines.push(`  [${n.urgency}] ${n.brief}`);
+      }
+      if (urgent.length > 5) {
+        lines.push(`  ... and ${urgent.length - 5} more. Use paradigm_ambient_nominations to see all.`);
+      }
+    }
+  } catch {
+    // Nomination engine not initialized — skip
+  }
+
   lines.push('');
   lines.push('IMPORTANT: Present a brief summary of this recovery data to the user, then ask what they would like to do: (1) Continue — pick up where the last session left off, (2) Discard — ignore the previous session and start fresh, or (3) let them describe what they want to work on instead. Do NOT automatically continue without asking.');
   lines.push('---');

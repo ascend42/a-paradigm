@@ -1,0 +1,343 @@
+/* Ambient Section Styles */
+
+.ambient {
+  padding: 24px;
+  max-width: 1200px;
+}
+
+.ambient__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.ambient__cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .ambient__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.ambient__grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .ambient__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Section titles */
+.ambient__section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.ambient__section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.ambient__section-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Filter select */
+.ambient__filter-select {
+  font-size: 12px;
+  color: var(--p-text-primary);
+  background: var(--p-bg-tertiary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.ambient__filter-select:focus {
+  border-color: var(--p-accent);
+}
+
+/* Event stream */
+.ambient__events {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.ambient__events-empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.ambient__event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--p-bg-tertiary);
+}
+
+.ambient__event-item:last-child {
+  border-bottom: none;
+}
+
+.ambient__event-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ambient__event-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ambient__event-context {
+  font-size: 13px;
+  color: var(--p-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambient__event-path {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambient__event-symbols {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.ambient__event-symbol {
+  font-size: 11px;
+  color: var(--p-accent-blue);
+  background: var(--p-bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.ambient__event-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}
+
+/* Type badge */
+.ambient__type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ambient__type-badge--file_change {
+  color: var(--p-accent-blue);
+  background: color-mix(in srgb, var(--p-accent-blue) 15%, transparent);
+}
+
+.ambient__type-badge--tool_call {
+  color: var(--p-accent-purple);
+  background: color-mix(in srgb, var(--p-accent-purple) 15%, transparent);
+}
+
+.ambient__type-badge--sentinel {
+  color: var(--p-accent-orange);
+  background: color-mix(in srgb, var(--p-accent-orange) 15%, transparent);
+}
+
+.ambient__type-badge--agent {
+  color: var(--p-accent-green);
+  background: color-mix(in srgb, var(--p-accent-green) 15%, transparent);
+}
+
+.ambient__type-badge--default {
+  color: var(--p-text-secondary);
+  background: var(--p-bg-tertiary);
+}
+
+/* Nominations */
+.ambient__nominations {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ambient__nominations-empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.ambient__nom-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--p-bg-tertiary);
+  background: var(--p-bg-secondary);
+  border-radius: var(--p-radius);
+  margin-bottom: 4px;
+}
+
+.ambient__nom-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ambient__nom-agent {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.ambient__nom-type {
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
+
+.ambient__nom-brief {
+  font-size: 13px;
+  color: var(--p-text-primary);
+  line-height: 1.4;
+}
+
+.ambient__nom-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ambient__nom-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--p-radius);
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-tertiary);
+  color: var(--p-text-primary);
+  cursor: pointer;
+  transition: border-color var(--p-transition), background var(--p-transition);
+}
+
+.ambient__nom-btn:hover {
+  border-color: var(--p-border-active);
+}
+
+.ambient__nom-btn--accept {
+  background: color-mix(in srgb, var(--p-accent-green) 15%, transparent);
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+}
+
+.ambient__nom-btn--accept:hover {
+  background: color-mix(in srgb, var(--p-accent-green) 25%, transparent);
+}
+
+.ambient__nom-btn--dismiss {
+  color: var(--p-text-muted);
+}
+
+/* Urgency badge */
+.ambient__urgency-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.ambient__urgency-badge--critical {
+  color: #ff4d4f;
+  background: color-mix(in srgb, #ff4d4f 15%, transparent);
+}
+
+.ambient__urgency-badge--high {
+  color: var(--p-accent-orange);
+  background: color-mix(in srgb, var(--p-accent-orange) 15%, transparent);
+}
+
+.ambient__urgency-badge--medium {
+  color: #faad14;
+  background: color-mix(in srgb, #faad14 15%, transparent);
+}
+
+.ambient__urgency-badge--low {
+  color: var(--p-text-muted);
+  background: var(--p-bg-tertiary);
+}
+
+/* Debates */
+.ambient__debates {
+  margin-top: 16px;
+}
+
+.ambient__debate-item {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.ambient__debate-topic {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  margin-bottom: 4px;
+}
+
+.ambient__debate-meta {
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
