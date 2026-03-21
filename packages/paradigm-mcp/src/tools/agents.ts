@@ -11,6 +11,7 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import {
   loadAllAgentProfiles,
   loadAgentProfile,
+  saveAgentProfile,
   queryExpertise,
   verifyIntegrity,
 } from '../utils/agent-loader.js';
@@ -82,6 +83,44 @@ export function getAgentToolsList() {
         destructiveHint: false,
       },
     },
+    {
+      name: 'paradigm_agent_bench',
+      description:
+        'Bench an agent — Maestro will skip this agent during orchestration and nomination scoring. Use when an agent is noisy or unhelpful. ~50 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Agent ID to bench (e.g., "architect")',
+          },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_agent_activate',
+      description:
+        'Activate a benched agent — restore it to active Maestro orchestration. ~50 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Agent ID to activate (e.g., "architect")',
+          },
+        },
+        required: ['id'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
   ];
 }
 
@@ -115,6 +154,8 @@ export async function handleAgentTool(
           agents: profiles.map(p => ({
             id: p.id,
             role: p.role,
+            nickname: p.nickname,
+            benched: p.benched || false,
             personality: p.personality,
             topExpertise: (p.expertise || [])
               .sort((a, b) => b.confidence - a.confidence)
@@ -126,6 +167,7 @@ export async function handleAgentTool(
               })),
             projectContexts: Object.keys(p.contexts || {}),
             transferableCount: (p.transferable || []).length,
+            ...(p.attention?.threshold != null ? { threshold: p.attention.threshold } : {}),
           })),
         }, null, 2),
       };
@@ -211,6 +253,50 @@ export async function handleAgentTool(
           updated: profile.updated,
           ...(profile.permissions ? { permissions: profile.permissions } : {}),
           integrity: integrityStatus,
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_agent_bench': {
+      const benchId = args.id as string;
+      const benchProfile = loadAgentProfile(ctx.rootDir, benchId);
+      if (!benchProfile) {
+        return {
+          handled: true,
+          text: JSON.stringify({ error: `Agent "${benchId}" not found` }, null, 2),
+        };
+      }
+      benchProfile.benched = true;
+      benchProfile.updated = new Date().toISOString();
+      saveAgentProfile(benchId, benchProfile, 'global');
+      return {
+        handled: true,
+        text: JSON.stringify({
+          id: benchId,
+          benched: true,
+          note: `${benchId} is now benched. Maestro will skip this agent during orchestration.`,
+        }, null, 2),
+      };
+    }
+
+    case 'paradigm_agent_activate': {
+      const activateId = args.id as string;
+      const activateProfile = loadAgentProfile(ctx.rootDir, activateId);
+      if (!activateProfile) {
+        return {
+          handled: true,
+          text: JSON.stringify({ error: `Agent "${activateId}" not found` }, null, 2),
+        };
+      }
+      activateProfile.benched = false;
+      activateProfile.updated = new Date().toISOString();
+      saveAgentProfile(activateId, activateProfile, 'global');
+      return {
+        handled: true,
+        text: JSON.stringify({
+          id: activateId,
+          benched: false,
+          note: `${activateId} is now active. Maestro will include this agent in orchestration.`,
         }, null, 2),
       };
     }

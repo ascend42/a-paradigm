@@ -404,8 +404,166 @@ export async function agentSyncCommand(id: string, options: AgentSyncOptions = {
 }
 
 // ============================================================================
+// paradigm agent roster
+// ============================================================================
+
+export async function agentRosterCommand(options: { json?: boolean } = {}) {
+  const cwd = process.cwd();
+  const tracker = log.command('agent-roster').start('Agent roster', { cwd });
+
+  const profiles: AgentProfile[] = [];
+
+  // Load global
+  if (fs.existsSync(GLOBAL_AGENTS_DIR)) {
+    for (const file of fs.readdirSync(GLOBAL_AGENTS_DIR).filter(f => f.endsWith(AGENT_EXT))) {
+      try {
+        const p = yaml.load(fs.readFileSync(path.join(GLOBAL_AGENTS_DIR, file), 'utf-8')) as AgentProfile;
+        if (p?.id) profiles.push(p);
+      } catch { /* skip */ }
+    }
+  }
+
+  // Load project (overrides)
+  const projectDir = path.join(cwd, PROJECT_AGENTS_DIR);
+  if (fs.existsSync(projectDir)) {
+    for (const file of fs.readdirSync(projectDir).filter(f => f.endsWith(AGENT_EXT))) {
+      try {
+        const p = yaml.load(fs.readFileSync(path.join(projectDir, file), 'utf-8')) as AgentProfile;
+        if (p?.id) {
+          const idx = profiles.findIndex(e => e.id === p.id);
+          if (idx >= 0) profiles[idx] = p;
+          else profiles.push(p);
+        }
+      } catch { /* skip */ }
+    }
+  }
+
+  const active = profiles.filter(p => !(p as any).benched);
+  const benched = profiles.filter(p => (p as any).benched);
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      active: active.map(rosterSummarize),
+      benched: benched.map(rosterSummarize),
+    }, null, 2));
+    tracker.success(`${active.length} active, ${benched.length} benched`);
+    return;
+  }
+
+  console.log(chalk.blue('\n┌─────────────────────────────────────────────────┐'));
+  console.log(chalk.blue('│') + chalk.white.bold('  Agent Roster                                    ') + chalk.blue('│'));
+  console.log(chalk.blue('└─────────────────────────────────────────────────┘\n'));
+
+  if (active.length > 0) {
+    console.log(chalk.green.bold('  Active'));
+    for (const p of active) {
+      printRosterRow(p);
+    }
+  }
+
+  if (benched.length > 0) {
+    console.log(chalk.gray.bold('\n  Benched'));
+    for (const p of benched) {
+      printRosterRow(p, true);
+    }
+  }
+
+  if (profiles.length === 0) {
+    console.log(chalk.yellow('  No agents found.\n'));
+  } else {
+    console.log('');
+  }
+
+  tracker.success(`${active.length} active, ${benched.length} benched`);
+}
+
+function printRosterRow(p: AgentProfile, dimmed = false) {
+  const expertise = (p.expertise || []).sort((a, b) => b.confidence - a.confidence);
+  const topSymbol = expertise[0] ? `${expertise[0].symbol} (${(expertise[0].confidence * 100).toFixed(0)}%)` : chalk.gray('—');
+  const color = dimmed ? chalk.gray : chalk.white;
+  const nickname = (p as any).nickname ? ` (${(p as any).nickname})` : '';
+  const threshold = (p as any).attention?.threshold;
+  const thresholdStr = threshold != null ? ` | thr: ${threshold.toFixed(2)}` : '';
+
+  console.log(`    ${color.bold(p.id)}${chalk.gray(nickname)} — ${chalk.gray(p.role)}`);
+  console.log(`      Top: ${topSymbol} | ${expertise.length} symbols${thresholdStr}`);
+}
+
+function rosterSummarize(p: AgentProfile) {
+  const expertise = (p.expertise || []).sort((a, b) => b.confidence - a.confidence);
+  return {
+    id: p.id,
+    role: p.role,
+    nickname: (p as any).nickname,
+    benched: (p as any).benched || false,
+    expertiseCount: expertise.length,
+    topExpertise: expertise.slice(0, 3).map(e => ({
+      symbol: e.symbol,
+      confidence: parseFloat(e.confidence.toFixed(2)),
+    })),
+    threshold: (p as any).attention?.threshold,
+  };
+}
+
+// ============================================================================
+// paradigm agent bench / activate
+// ============================================================================
+
+export async function agentBenchCommand(id: string) {
+  const cwd = process.cwd();
+  const tracker = log.command('agent-bench').start(`Benching agent ${id}`, { cwd });
+
+  const profile = loadProfile(cwd, id);
+  if (!profile) {
+    console.log(chalk.red(`\n  Agent "${id}" not found.\n`));
+    tracker.error('Not found');
+    return;
+  }
+
+  (profile as any).benched = true;
+  profile.updated = new Date().toISOString();
+  saveProfile(cwd, id, profile);
+
+  console.log(chalk.yellow(`\n  ⏸ Agent "${id}" is now benched.`));
+  console.log(chalk.gray('  Maestro will skip this agent during orchestration.\n'));
+  tracker.success(`Benched ${id}`);
+}
+
+export async function agentActivateCommand(id: string) {
+  const cwd = process.cwd();
+  const tracker = log.command('agent-activate').start(`Activating agent ${id}`, { cwd });
+
+  const profile = loadProfile(cwd, id);
+  if (!profile) {
+    console.log(chalk.red(`\n  Agent "${id}" not found.\n`));
+    tracker.error('Not found');
+    return;
+  }
+
+  (profile as any).benched = false;
+  profile.updated = new Date().toISOString();
+  saveProfile(cwd, id, profile);
+
+  console.log(chalk.green(`\n  ▶ Agent "${id}" is now active.`));
+  console.log(chalk.gray('  Maestro will include this agent in orchestration.\n'));
+  tracker.success(`Activated ${id}`);
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
+
+function saveProfile(rootDir: string, id: string, profile: AgentProfile) {
+  const projectPath = path.join(rootDir, PROJECT_AGENTS_DIR, `${id}${AGENT_EXT}`);
+  if (fs.existsSync(projectPath)) {
+    fs.writeFileSync(projectPath, yaml.dump(profile, { lineWidth: 120, noRefs: true, sortKeys: false }), 'utf-8');
+    return;
+  }
+  const globalPath = path.join(GLOBAL_AGENTS_DIR, `${id}${AGENT_EXT}`);
+  const dir = GLOBAL_AGENTS_DIR;
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(globalPath, yaml.dump(profile, { lineWidth: 120, noRefs: true, sortKeys: false }), 'utf-8');
+}
 
 function loadProfile(rootDir: string, id: string): AgentProfile | null {
   const projectPath = path.join(rootDir, PROJECT_AGENTS_DIR, `${id}${AGENT_EXT}`);

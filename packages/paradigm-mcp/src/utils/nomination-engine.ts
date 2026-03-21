@@ -62,6 +62,7 @@ export function processEvent(
 
   for (const profile of profiles) {
     if (!profile.attention) continue;
+    if (profile.benched) continue; // Skip benched agents
 
     // Data policy check: skip agents denied observation of this path
     if (event.path && !canObservePath(policy, event.path, profile.id)) {

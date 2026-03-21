@@ -527,6 +527,9 @@ async function handleOrchestrateInline(
         if (!agentProfiles.has(agentStep.name)) {
           const profile = loadAgentProfile(ctx.rootDir, agentStep.name);
           if (profile) {
+            // Skip benched agents — Maestro does not consult them
+            if (profile.benched) continue;
+
             // Load per-agent journal insights
             const journalInsights = loadJournalEntries(agentStep.name, {
               transferable: true,

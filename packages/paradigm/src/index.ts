@@ -2410,6 +2410,31 @@ agentCmd
     await agentSyncCommand(id, options);
   });
 
+agentCmd
+  .command('roster')
+  .description('Show agent roster with active/benched status')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { agentRosterCommand } = await import('./commands/agent/index.js');
+    await agentRosterCommand(options);
+  });
+
+agentCmd
+  .command('bench <id>')
+  .description('Bench an agent — Maestro will skip it during orchestration')
+  .action(async (id) => {
+    const { agentBenchCommand } = await import('./commands/agent/index.js');
+    await agentBenchCommand(id);
+  });
+
+agentCmd
+  .command('activate <id>')
+  .description('Activate a benched agent — restore to Maestro orchestration')
+  .action(async (id) => {
+    const { agentActivateCommand } = await import('./commands/agent/index.js');
+    await agentActivateCommand(id);
+  });
+
 // Default agent action (list)
 agentCmd
   .action(async () => {

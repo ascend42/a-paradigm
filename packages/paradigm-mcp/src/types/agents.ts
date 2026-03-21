@@ -54,6 +54,8 @@ export interface AgentProfile {
   collaboration?: AgentCollaboration;
   /** Self-nomination — when this agent speaks up in ambient mode */
   nomination?: AgentNomination;
+  /** Whether this agent is benched (skipped by Maestro orchestration) */
+  benched?: boolean;
 }
 
 export interface AgentPersonality {
