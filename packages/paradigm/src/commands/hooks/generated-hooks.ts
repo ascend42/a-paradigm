@@ -647,17 +647,23 @@ export const CLAUDE_CODE_POSTWRITE_HOOK = `#!/bin/sh
 #
 # Hook type: PostToolUse (matcher: Edit,Write)
 # Exit 0 always (never blocks — advisory only)
+#
+# NOTE: stdin JSON can be 8KB+ (tool_response includes full file contents).
+# Using echo "$INPUT" | jq corrupts the JSON via shell string handling.
+# Fix: write stdin to temp file, use jq < file for all extractions.
 
-# Read JSON from stdin (hook input)
-INPUT=$(cat)
+# Save stdin to temp file — avoids echo corruption on large JSON
+TMPINPUT=$(mktemp)
+trap 'rm -f "$TMPINPUT"' EXIT
+cat > "$TMPINPUT"
 
 # Extract the file path from tool_input
 if command -v jq >/dev/null 2>&1; then
-  FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // empty' 2>/dev/null)
+  FILE_PATH=$(jq -r '.tool_input.file_path // .tool_input.filePath // empty' < "$TMPINPUT" 2>/dev/null)
 else
-  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  FILE_PATH=$(grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$TMPINPUT" | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
   if [ -z "$FILE_PATH" ]; then
-    FILE_PATH=$(echo "$INPUT" | grep -o '"filePath"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"filePath"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+    FILE_PATH=$(grep -o '"filePath"[[:space:]]*:[[:space:]]*"[^"]*"' "$TMPINPUT" | head -1 | sed 's/.*"filePath"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
   fi
 fi
 
@@ -665,11 +671,11 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Extract cwd from input (like stop hook does)
+# Extract cwd from input
 if command -v jq >/dev/null 2>&1; then
-  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+  CWD=$(jq -r '.cwd // empty' < "$TMPINPUT" 2>/dev/null)
 else
-  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  CWD=$(grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' "$TMPINPUT" | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
 fi
 if [ -n "$CWD" ]; then
   cd "$CWD" || exit 0

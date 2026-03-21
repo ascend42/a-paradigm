@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries } from '../utils/nomination-engine.js';
+import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries, processPendingEvents } from '../utils/nomination-engine.js';
 import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
@@ -156,6 +156,9 @@ export async function handleAmbientTool(
 
   switch (name) {
     case 'paradigm_ambient_nominations': {
+      // Catch-up: process any un-scored events from hooks before returning nominations
+      const catchUp = processPendingEvents(ctx.rootDir);
+
       const pendingOnly = args.pending_only !== false; // default true
       const limit = (args.limit as number) || 20;
 

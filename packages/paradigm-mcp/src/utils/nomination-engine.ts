@@ -460,6 +460,66 @@ export function resolveDebate(
   }
 }
 
+// ── Catch-Up Processing ──
+
+/**
+ * Process un-scored events from the stream (e.g., from hook emissions).
+ * Tracks the last-processed event ID in .paradigm/events/.last-processed.
+ * Called lazily when nominations are queried.
+ */
+export function processPendingEvents(rootDir: string): { processed: number; nominations: Nomination[] } {
+  const lastProcessedPath = path.join(rootDir, EVENTS_DIR, '.last-processed');
+  let lastProcessedId = '';
+  try {
+    if (fs.existsSync(lastProcessedPath)) {
+      lastProcessedId = fs.readFileSync(lastProcessedPath, 'utf8').trim();
+    }
+  } catch { /* start from beginning */ }
+
+  // Load all events from stream
+  const streamPath = path.join(rootDir, EVENTS_DIR, 'stream.jsonl');
+  if (!fs.existsSync(streamPath)) return { processed: 0, nominations: [] };
+
+  let events: StreamEvent[] = [];
+  try {
+    const content = fs.readFileSync(streamPath, 'utf8');
+    events = content.trim().split('\n')
+      .filter(line => line.trim())
+      .map(line => { try { return JSON.parse(line) as StreamEvent; } catch { return null; } })
+      .filter((e): e is StreamEvent => e !== null);
+  } catch {
+    return { processed: 0, nominations: [] };
+  }
+
+  // Find events after the last processed ID
+  let startIdx = 0;
+  if (lastProcessedId) {
+    const idx = events.findIndex(e => e.id === lastProcessedId);
+    if (idx >= 0) startIdx = idx + 1;
+  }
+
+  const pending = events.slice(startIdx);
+  if (pending.length === 0) return { processed: 0, nominations: [] };
+
+  // Process each pending event (limit to 50 to avoid blocking)
+  const allNominations: Nomination[] = [];
+  const toProcess = pending.slice(0, 50);
+
+  for (const event of toProcess) {
+    const { nominations } = processEvent(rootDir, event);
+    allNominations.push(...nominations);
+  }
+
+  // Update last-processed marker
+  const lastEvent = toProcess[toProcess.length - 1];
+  try {
+    fs.mkdirSync(path.join(rootDir, EVENTS_DIR), { recursive: true });
+    fs.writeFileSync(lastProcessedPath, lastEvent.id, 'utf8');
+  } catch { /* non-fatal */ }
+
+  return { processed: toProcess.length, nominations: allNominations };
+}
+
 // ── Unified Emit ──
 
 /**
