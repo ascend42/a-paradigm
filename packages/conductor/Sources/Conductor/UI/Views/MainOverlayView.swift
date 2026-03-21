@@ -27,10 +27,11 @@ struct MainOverlayView: View {
     @ObservedObject var taskStore: TaskStore
     @ObservedObject var sentinelClient: SentinelWSClient
     @ObservedObject var agentHealthMonitor: AgentHealthMonitor
+    @ObservedObject var threadWatcher: SymphonyThreadWatcher
 
     @State private var showAddInstance = false
 
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager, taskStore: TaskStore, sentinelClient: SentinelWSClient, agentHealthMonitor: AgentHealthMonitor) {
+    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager, taskStore: TaskStore, sentinelClient: SentinelWSClient, agentHealthMonitor: AgentHealthMonitor, threadWatcher: SymphonyThreadWatcher) {
         self._showOnboarding = State(initialValue: showOnboarding)
         self.permissionStatus = permissionStatus
         self.orchestrator = orchestrator
@@ -45,6 +46,7 @@ struct MainOverlayView: View {
         self.taskStore = taskStore
         self.sentinelClient = sentinelClient
         self.agentHealthMonitor = agentHealthMonitor
+        self.threadWatcher = threadWatcher
     }
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -208,6 +210,7 @@ struct MainOverlayView: View {
             Divider()
             workspaceSection
             symphonyNotificationsSection
+            teamThreadSection
             taskSection
             agentNetworkSection
             agentHealthSection
@@ -289,6 +292,17 @@ struct MainOverlayView: View {
             }
         )
         ApprovalNotificationBanner(monitor: symphonyMonitor)
+    }
+
+    @ViewBuilder
+    private var teamThreadSection: some View {
+        if !threadWatcher.teamThreads.isEmpty {
+            Divider()
+            TeamThreadView(
+                threadWatcher: threadWatcher,
+                monitor: symphonyMonitor
+            )
+        }
     }
 
     @ViewBuilder

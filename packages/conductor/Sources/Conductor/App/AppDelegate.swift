@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let taskStore = TaskStore()
     let sentinelClient = SentinelWSClient()
     let agentHealthMonitor = AgentHealthMonitor()
+    let threadWatcher = SymphonyThreadWatcher()
     let hotKeyBindingRegistry = HotKeyBindingRegistry()
     let eyebrowBindingRegistry = EyebrowBindingRegistry()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
@@ -102,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let allGrouped = agentGroupStore.allGroupedAgents
         if !allGrouped.isEmpty {
             symphonyMonitor.startPolling(agents: allGrouped)
+            threadWatcher.startWatching(agentIds: allGrouped.map(\.symphonyAgentId))
         }
 
         // Auto-link will start monitoring the detector once it's available
@@ -246,6 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         autoLinkCoordinator.stop()
         noteRelay.stop()
         symphonyMonitor.stopPolling()
+        threadWatcher.stopWatching()
         hotKeyManager.unregisterAll()
         orchestrator.stop()
         agentProcessManager.cleanup()
@@ -326,7 +329,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 agentPartManager: agentPartManager,
                 taskStore: taskStore,
                 sentinelClient: sentinelClient,
-                agentHealthMonitor: agentHealthMonitor
+                agentHealthMonitor: agentHealthMonitor,
+                threadWatcher: threadWatcher
             )
         )
         panel.makeKeyAndOrderFront(nil)
