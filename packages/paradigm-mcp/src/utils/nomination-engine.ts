@@ -78,8 +78,22 @@ export function processEvent(
     return { nominations: [], debates: [] };
   }
 
+  // Dedup: check if same agent already nominated for same path/symbols in last 30 seconds
+  const recentNominations = loadNominations(rootDir, { since: new Date(Date.now() - 30_000).toISOString() });
+  const deduped = scores.filter(({ profile }) => {
+    const recent = recentNominations.find(n =>
+      n.agent === profile.id &&
+      n.brief === generateBrief(profile, event, { ...scores.find(s => s.profile.id === profile.id)!.score })
+    );
+    return !recent;
+  });
+
+  if (deduped.length === 0) {
+    return { nominations: [], debates: [] };
+  }
+
   // Generate nominations
-  const nominations: Nomination[] = scores.map(({ profile, score }) => {
+  const nominations: Nomination[] = deduped.map(({ profile, score }) => {
     const urgency = deriveUrgency(event, score);
     const type = deriveNominationType(profile, event);
 

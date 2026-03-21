@@ -183,7 +183,10 @@ export function scoreEventForAgent(
     }
   }
 
-  const score = Math.max(symbolMatch, pathMatch, conceptMatch, signalMatch);
+  // Weighted scoring: primary dimension gets 0.5 weight, secondary dimensions contribute 0.15 each
+  // This prevents every match from being 1.0 and creates gradient between partial and full matches
+  const dimensions = [symbolMatch, pathMatch, conceptMatch, signalMatch].sort((a, b) => b - a);
+  const score = dimensions[0] * 0.5 + dimensions[1] * 0.2 + dimensions[2] * 0.15 + dimensions[3] * 0.15;
   const threshold = attention.threshold ?? 0.6;
 
   return {
