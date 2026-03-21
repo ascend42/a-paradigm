@@ -108,6 +108,32 @@ paradigm_habits_check({
 Include the results in the compliance report below. If any habits were skipped,
 note the recommendations.
 
+## Step 8b: Agent Learning Loop
+
+If any agents contributed during this session (check if orchestration was used
+or if agent-attributed messages appeared), run the ambient learning loop for
+each contributing agent:
+
+1. **Adjust attention thresholds** — call `paradigm_ambient_learn` for each agent:
+   ```
+   paradigm_ambient_learn({ agent: "architect" })
+   paradigm_ambient_learn({ agent: "security" })
+   ```
+   This adjusts the agent's self-nomination threshold based on acceptance/dismissal rates.
+
+2. **Promote journal patterns** — call `paradigm_ambient_promote` for each agent:
+   ```
+   paradigm_ambient_promote({ agent: "architect" })
+   paradigm_ambient_promote({ agent: "security" })
+   ```
+   This auto-promotes high-confidence journal entries to the agent's notebook.
+
+3. **Record contributions via Symphony** — if not already done during execution,
+   call `paradigm_symphony_send` for each agent contribution with the orchestration
+   thread ID so the team conversation is preserved for Conductor display.
+
+Include the learning results (threshold adjustments, promotions) in the report.
+
 ## Step 9: Compile Report
 
 Present a structured compliance report:

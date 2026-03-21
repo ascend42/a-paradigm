@@ -141,6 +141,8 @@ interface AgentPromptResult {
   prompt: string;
   taskDescription: string;
   subagentType: string;
+  /** Display prefix for attributed responses: "[nickname (role)]" or "[role]" */
+  attribution: string;
   focusAreas: {
     reads: string[];
     writes: string[];
@@ -506,16 +508,37 @@ async function handleOrchestrateInline(
   }
 
   // Execute mode: return full prompts for each stage
-  // Load .agent profiles for enrichment (non-fatal)
-  let agentProfiles: Map<string, { enrichment: string }> = new Map();
+  // Load .agent profiles with full ambient context for enrichment (non-fatal)
+  let agentProfiles: Map<string, { enrichment: string; nickname?: string }> = new Map();
   try {
     const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
+    const { loadDecisions } = await import('../utils/decision-loader.js');
+    const { loadJournalEntries } = await import('../utils/journal-loader.js');
+    const { loadNominations } = await import('../utils/nomination-engine.js');
+
+    // Load ambient context once (shared across all agents)
+    const recentDecisions = loadDecisions(ctx.rootDir, { status: 'active', limit: 5 })
+      .map(d => ({ title: d.title, decision: d.decision.slice(0, 150) }));
+    const pendingNominations = loadNominations(ctx.rootDir, { pending_only: true, limit: 10 })
+      .map(n => ({ urgency: n.urgency, brief: n.brief }));
+
     for (const stage of plan.stages) {
       for (const agentStep of stage.agents) {
         if (!agentProfiles.has(agentStep.name)) {
           const profile = loadAgentProfile(ctx.rootDir, agentStep.name);
           if (profile) {
-            let enrichment = buildProfileEnrichment(profile, symbols);
+            // Load per-agent journal insights
+            const journalInsights = loadJournalEntries(agentStep.name, {
+              transferable: true,
+              limit: 5,
+            }).map(j => ({ trigger: j.trigger, insight: j.insight.slice(0, 150) }));
+
+            let enrichment = buildProfileEnrichment(profile, symbols, undefined, {
+              recentDecisions,
+              journalInsights,
+              pendingNominations,
+            });
+
             // Append permission constraints if set
             if (profile.permissions) {
               const constraints: string[] = ['\n## Permission Constraints'];
@@ -534,7 +557,10 @@ async function handleOrchestrateInline(
               enrichment += '\n' + constraints.join('\n');
             }
             if (enrichment.trim()) {
-              agentProfiles.set(agentStep.name, { enrichment });
+              agentProfiles.set(agentStep.name, {
+                enrichment,
+                nickname: profile.nickname,
+              });
             }
           }
         }
@@ -564,6 +590,7 @@ async function handleOrchestrateInline(
         symbols,
         dependsOn: agentStep.dependsOn,
         profileEnrichment: profileData?.enrichment,
+        nickname: profileData?.nickname,
       });
 
       agentPrompts.push(promptResult);
@@ -595,7 +622,9 @@ async function handleOrchestrateInline(
       'Execute stages in order (stage 0, then stage 1, etc.)',
       'Agents within a stage can be run in parallel if your environment supports it',
       'Pass handoff context between stages',
-      'After each phase, summarize what was done before starting the next',
+      'Present each agent response as an attributed message using the attribution prefix (e.g., "[architect] Rate limiter should go before ^authenticated")',
+      'Do NOT synthesize agent responses — show them as distinct contributions from each agent',
+      'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
 
     // Claude Code: Use Task tool for parallel agent spawning
@@ -626,6 +655,25 @@ async function handleOrchestrateInline(
       method: 'paradigm team orchestrate',
       command: `paradigm team orchestrate "${task}"`,
       note: 'Spawns independent agent processes — works from any terminal',
+    },
+
+    // Symphony: Record agent contributions as team thread messages
+    symphony: {
+      enabled: true,
+      orchestrationThread: `thr-${orchestrationId}`,
+      instructions: [
+        'After each agent completes, call paradigm_symphony_send to record the contribution',
+        'Use intent "context" for analysis, "proposal" for recommendations, "decision" for decisions made',
+        `Set threadRoot to "thr-${orchestrationId}" so all contributions are in one thread`,
+        'Include the symbols array from the agent relay output',
+        'This creates a visible team thread that Conductor and other sessions can observe',
+      ],
+      exampleCall: {
+        intent: 'context',
+        text: '[architect] Rate limiter should be placed before ^authenticated gate to prevent unauthenticated flood',
+        threadRoot: `thr-${orchestrationId}`,
+        symbols: ['#rate-limiter', '^authenticated'],
+      },
     },
   };
 
@@ -664,13 +712,33 @@ async function handleAgentPrompt(
   // Extract symbols from task
   const symbols = extractSymbols(task);
 
-  // Load .agent profile for enrichment (non-fatal)
+  // Load .agent profile with ambient context for enrichment (non-fatal)
   let profileEnrichment: string | undefined;
+  let nickname: string | undefined;
   try {
     const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
+    const { loadDecisions } = await import('../utils/decision-loader.js');
+    const { loadJournalEntries } = await import('../utils/journal-loader.js');
+    const { loadNominations } = await import('../utils/nomination-engine.js');
+
     const profile = loadAgentProfile(ctx.rootDir, agentName);
     if (profile) {
-      let enrichment = buildProfileEnrichment(profile, symbols);
+      nickname = profile.nickname;
+
+      // Load ambient context
+      const recentDecisions = loadDecisions(ctx.rootDir, { status: 'active', limit: 5 })
+        .map(d => ({ title: d.title, decision: d.decision.slice(0, 150) }));
+      const journalInsights = loadJournalEntries(agentName, { transferable: true, limit: 5 })
+        .map(j => ({ trigger: j.trigger, insight: j.insight.slice(0, 150) }));
+      const pendingNominations = loadNominations(ctx.rootDir, { pending_only: true, limit: 10 })
+        .map(n => ({ urgency: n.urgency, brief: n.brief }));
+
+      let enrichment = buildProfileEnrichment(profile, symbols, undefined, {
+        recentDecisions,
+        journalInsights,
+        pendingNominations,
+      });
+
       // Append permission constraints if set
       if (profile.permissions) {
         const constraints: string[] = ['\n## Permission Constraints'];
@@ -702,12 +770,14 @@ async function handleAgentPrompt(
     handoffContext,
     previousAgent,
     profileEnrichment,
+    nickname,
   });
 
   const result = {
     agent: agentName,
     model: promptResult.model,
     prompt: promptResult.prompt,
+    attribution: promptResult.attribution,
     taskToolParams: {
       description: promptResult.taskDescription,
       prompt: promptResult.prompt,
@@ -715,7 +785,7 @@ async function handleAgentPrompt(
       model: promptResult.model,
     },
     focusAreas: promptResult.focusAreas,
-    usage: 'Use the Task tool with the taskToolParams to spawn this agent',
+    usage: 'Use the Task tool with the taskToolParams to spawn this agent. Present the response with the attribution prefix.',
   };
 
   const text = JSON.stringify(result, null, 2);
@@ -920,6 +990,8 @@ interface PromptBuildOptions {
   previousAgent?: string;
   /** Pre-built personality + expertise text from .agent profile */
   profileEnrichment?: string;
+  /** Optional display nickname from .agent profile */
+  nickname?: string;
 }
 
 function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResult {
@@ -1000,12 +1072,18 @@ This structured output helps track progress and pass context between agents.`);
   const prompt = parts.join('\n');
   const model = agent.defaultModel || DEFAULT_MODELS[agent.name] || 'sonnet';
 
+  // Build attribution prefix: "[nickname (role)]" or "[role]"
+  const attribution = options.nickname
+    ? `[${options.nickname} (${agent.name})]`
+    : `[${agent.name}]`;
+
   return {
     agent: agent.name,
     model,
     prompt,
     taskDescription: `${agent.name}: ${task.slice(0, 50)}${task.length > 50 ? '...' : ''}`,
     subagentType: 'general-purpose',
+    attribution,
     focusAreas: agent.focus,
   };
 }

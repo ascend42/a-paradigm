@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0] — 2026-03-20
+
+### Added
+
+- **Maestro Phase 1: Visible Team Orchestration** — `paradigm_orchestrate_inline` and `paradigm_agent_prompt` now inject full ambient context (recent decisions, journal insights, pending nominations) into agent profiles before spawning. Agents receive complete team awareness, not just symbol expertise.
+- **Attributed agent responses** — Orchestration output includes `attribution` field per agent (`[nickname (role)]` or `[role]`), with execution instructions to present subagent responses as distinct attributed messages instead of synthesized summaries.
+- **Symphony team thread recording** — Orchestration result includes `symphony` section with thread ID and instructions for recording each agent contribution as a Symphony message, creating a visible team conversation thread for Conductor display.
+- **Agent nickname support** — `AgentProfile.nickname` optional field for personalized agent attribution (e.g., "George" for the architect).
+- **Postflight learning loop** — Postflight skill now runs `paradigm_ambient_learn` (threshold adjustment) and `paradigm_ambient_promote` (journal-to-notebook promotion) for each contributing agent after task completion.
+- **Handoff agent summary** — Handoff skill now includes agent performance summary (contributions, threshold adjustments, promotions) for cross-session continuity.
+
+### Changed
+
+- **Orchestration context injection** — `buildProfileEnrichment()` `ambientContext` parameter is now populated in both `handleOrchestrateInline()` and `handleAgentPrompt()`. Previously existed but was always empty.
+- **Execution instructions** — Updated to emphasize attributed presentation and stage reconciliation over simple summarization.
+
 ## [5.3.2] — 2026-03-20
 
 ### Fixed

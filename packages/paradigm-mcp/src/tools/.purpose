@@ -94,3 +94,7 @@ components:
     description: "7 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage, paradigm_ambient_learn, paradigm_ambient_promote, paradigm_context_compose, plus surfacing config from .paradigm/surfacing.yaml"
     type: tool-group
     tags: [feature, ambient, nominations, events, context-composition, learning, mcp]
+  OrchestrationTools:
+    description: "2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording) and paradigm_agent_prompt (single agent with full context injection)"
+    type: tool-group
+    tags: [feature, orchestration, maestro, agents, symphony, mcp]

@@ -45,6 +45,16 @@ List any decisions made during this session:
 - Trade-offs considered
 - Patterns chosen over alternatives
 
+## Step 3b: Agent Performance Summary
+
+If agents were used during this session (orchestration, subagents), summarize:
+1. Which agents contributed and what they did
+2. Any threshold adjustments from `paradigm_ambient_learn`
+3. Journal entries promoted to notebooks via `paradigm_ambient_promote`
+4. Agent acceptance/dismissal rates if available
+
+Include this in the handoff so the next session knows which agents are warmed up.
+
 ## Step 4: Note Risks & Gotchas
 
 1. What could go wrong if the next session isn't careful?

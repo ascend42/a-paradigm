@@ -9,9 +9,9 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile, AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination"
+    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination"
     type: types
-    tags: [agent-identity, schema, permissions, attention, learning, collaboration]
+    tags: [agent-identity, schema, permissions, attention, learning, collaboration, maestro]
   NotebookTypes:
     description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
     type: types

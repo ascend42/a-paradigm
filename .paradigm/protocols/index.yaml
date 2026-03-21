@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-19T06:14:12.267Z'
+generated: '2026-03-21T06:36:54.258Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -157,7 +157,7 @@ protocols:
       - status
   - id: P-add-mcp-tool
     name: Add a new MCP tool
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:22.371Z'
     trigger:
       - add tool
@@ -183,7 +183,7 @@ protocols:
       - typescript
   - id: P-add-plsat-question
     name: Add a PLSAT exam question
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:26.865Z'
     trigger:
       - plsat question
@@ -364,7 +364,7 @@ protocols:
       - unit
   - id: P-add-university-course
     name: Add a University course
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:36.187Z'
     trigger:
       - add course
@@ -377,7 +377,7 @@ protocols:
       - learning
   - id: P-add-university-quiz
     name: Add a University quiz
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:39.931Z'
     trigger:
       - add quiz
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 34
-  stale: 3
+  current: 30
+  stale: 7
   broken: 0

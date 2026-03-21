@@ -17,6 +17,8 @@ export interface AgentProfile {
   id: string;
   /** Human-readable role description */
   role: string;
+  /** Optional display nickname (e.g., "George") for attributed responses */
+  nickname?: string;
   /** Extended description of capabilities */
   description: string;
   /** Profile schema version */
