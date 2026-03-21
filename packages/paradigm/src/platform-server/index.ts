@@ -22,6 +22,7 @@ import { createAgentRouter } from './routes/agent.js';
 import { createOverviewHandler } from './routes/overview.js';
 import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
+import { createTeamRouter } from './routes/team.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,7 +75,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'lore', 'graph', 'git', 'ambient'];
+  const always = ['overview', 'lore', 'graph', 'git', 'ambient', 'team'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
 
   const enabled = new Set<string>();
@@ -224,6 +225,9 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
 
   // Mount ambient coordination routes (always available)
   app.use('/api/ambient', createAmbientRouter(options.projectDir, wsContext));
+
+  // Mount team routes (always available — Maestro orchestration display)
+  app.use('/api/team', createTeamRouter(options.projectDir));
 
   // Mount Sentinel routes if section is enabled
   if (sections.has('sentinel')) {

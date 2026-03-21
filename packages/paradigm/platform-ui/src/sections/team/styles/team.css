@@ -1,0 +1,249 @@
+.team {
+  padding: 1.5rem;
+}
+
+.team__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: var(--p-text-primary);
+}
+
+/* ── Roster ─────────────────────────────────── */
+
+.team__roster {
+  margin-bottom: 2rem;
+}
+
+.team__roster-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.team__roster-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.team__roster-count {
+  font-size: 0.75rem;
+  color: var(--p-text-muted);
+  background: var(--p-bg-subtle);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.team__agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.team__agent-card {
+  background: var(--p-bg-card);
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  transition: border-color 0.15s;
+}
+
+.team__agent-card:hover {
+  border-color: var(--p-accent);
+}
+
+.team__agent-card--benched {
+  opacity: 0.5;
+}
+
+.team__agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.team__agent-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.team__agent-nickname {
+  font-size: 0.75rem;
+  color: var(--p-text-muted);
+  margin-left: 0.25rem;
+}
+
+.team__agent-role {
+  font-size: 0.75rem;
+  color: var(--p-text-secondary);
+}
+
+.team__agent-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--p-text-muted);
+  margin-top: 0.25rem;
+}
+
+.team__agent-stat--good {
+  color: var(--p-green);
+}
+
+.team__bench-btn {
+  font-size: 0.7rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--p-border);
+  background: transparent;
+  color: var(--p-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.team__bench-btn:hover {
+  background: var(--p-bg-subtle);
+  color: var(--p-text-primary);
+}
+
+/* ── Benched Section ────────────────────────── */
+
+.team__benched {
+  margin-top: 1rem;
+}
+
+.team__benched-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--p-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+/* ── Threads ────────────────────────────────── */
+
+.team__threads {
+  margin-top: 1.5rem;
+}
+
+.team__threads-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.team__thread-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.team__thread-tab {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--p-border);
+  background: transparent;
+  color: var(--p-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.team__thread-tab:hover {
+  background: var(--p-bg-subtle);
+}
+
+.team__thread-tab--active {
+  background: var(--p-accent);
+  color: white;
+  border-color: var(--p-accent);
+}
+
+/* ── Messages ───────────────────────────────── */
+
+.team__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.team__message {
+  background: var(--p-bg-card);
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.team__message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+
+.team__message-sender {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.team__message-time {
+  font-size: 0.7rem;
+  color: var(--p-text-muted);
+}
+
+.team__message-intent {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  margin-bottom: 0.25rem;
+}
+
+.team__message-symbols {
+  font-size: 0.7rem;
+  color: var(--p-text-muted);
+  margin-left: 0.5rem;
+}
+
+.team__message-text {
+  font-size: 0.8rem;
+  color: var(--p-text-primary);
+  line-height: 1.4;
+}
+
+.team__message-diff {
+  font-size: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: var(--p-bg-subtle);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-top: 0.375rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.team__message-decision {
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: rgba(234, 179, 8, 0.1);
+  border-radius: 4px;
+  padding: 0.375rem 0.5rem;
+  margin-top: 0.375rem;
+}
+
+.team__empty {
+  text-align: center;
+  color: var(--p-text-muted);
+  padding: 2rem;
+  font-size: 0.875rem;
+}

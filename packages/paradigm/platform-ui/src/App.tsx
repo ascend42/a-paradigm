@@ -16,6 +16,7 @@ const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection')
 const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection'));
 const DocsSection = lazy(() => import('./sections/docs/DocsSection'));
 const AmbientSection = lazy(() => import('./sections/ambient/AmbientSection'));
+const TeamSection = lazy(() => import('./sections/team/TeamSection'));
 
 function SectionFallback() {
   return (
@@ -81,6 +82,7 @@ export default function App() {
             {activeSection === 'symphony' && <SymphonySection />}
             {activeSection === 'docs' && <DocsSection />}
             {activeSection === 'ambient' && <AmbientSection />}
+            {activeSection === 'team' && <TeamSection />}
           </Suspense>
         </div>
       </div>

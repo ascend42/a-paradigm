@@ -11,6 +11,7 @@ const SECTION_ICONS: Record<string, string> = {
   symphony: '♪',
   docs: '☰',
   ambient: '◌',
+  team: '◫',
   meetings: '●',
 };
 
