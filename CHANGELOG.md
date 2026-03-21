@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.1] — 2026-03-21
+
+### Fixed
+
+- **BUG-1/2: orchestrate_inline execute mode + agent_prompt crash** — `Cannot read properties of undefined (reading 'reads')` when agent definition missing `focus` field. Now provides fallback `{ reads: ['**/*'], writes: ['**/*'] }` for agents not in manifest (e.g., documentor). Null-safe access in `buildAgentPromptInternal` and return value.
+- **BUG-3: security misclassification** — Task classifier missed security-sensitive operations like "ownership transfer." Added 12 keywords: ownership, transfer, privilege, escalation, impersonation, takeover, rbac, acl, role, guard, session, csrf, xss, injection, sanitize.
+- **BUG-4: gates_for_route empty suggestions for tRPC routes** — `calculateRouteSimilarity` only split on `/`, failing for dot-notation routes (`servers.transferOwnership`). Now splits on `.` for tRPC routes and does prefix matching — `servers.transferOwnership` correctly matches `servers.update` gates.
+- **BUG-5: gates_for_route defaults to GET** — Now auto-detects tRPC routes (dot notation) and defaults to POST instead of GET.
+
 ## [5.6.0] — 2026-03-21
 
 ### Added

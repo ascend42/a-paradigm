@@ -613,8 +613,15 @@ async function handleOrchestrateInline(
     const agentPrompts: AgentPromptResult[] = [];
 
     for (const agentStep of stage.agents) {
-      const agentDef = manifest.agents[agentStep.name];
-      if (!agentDef) continue;
+      const agentDef: AgentDefinition = manifest.agents[agentStep.name] || {
+        name: agentStep.name,
+        role: ROLE_PROMPTS[agentStep.name] || `${agentStep.name} agent`,
+        focus: { reads: ['**/*'], writes: ['**/*'] },
+        defaultModel: DEFAULT_MODELS[agentStep.name] || 'sonnet',
+      };
+      if (!agentDef.focus) {
+        agentDef.focus = { reads: ['**/*'], writes: ['**/*'] };
+      }
 
       const profileData = agentProfiles.get(agentStep.name);
       const promptResult = buildAgentPromptInternal({
@@ -1108,11 +1115,13 @@ function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResul
   }
 
   // Focus areas
-  parts.push('## Focus Areas');
-  parts.push('');
-  parts.push(`**Read from:** ${agent.focus.reads.join(', ')}`);
-  parts.push(`**Write to:** ${agent.focus.writes.join(', ')}`);
-  parts.push('');
+  if (agent.focus?.reads || agent.focus?.writes) {
+    parts.push('## Focus Areas');
+    parts.push('');
+    parts.push(`**Read from:** ${agent.focus?.reads?.join(', ') || '**/*'}`);
+    parts.push(`**Write to:** ${agent.focus?.writes?.join(', ') || '**/*'}`);
+    parts.push('');
+  }
 
   // Output format
   parts.push(`## Output Format
@@ -1150,7 +1159,7 @@ This structured output helps track progress and pass context between agents.`);
     taskDescription: `${agent.name}: ${task.slice(0, 50)}${task.length > 50 ? '...' : ''}`,
     subagentType: 'general-purpose',
     attribution,
-    focusAreas: agent.focus,
+    focusAreas: agent.focus || { reads: ['**/*'], writes: ['**/*'] },
   };
 }
 
@@ -1212,6 +1221,9 @@ const REFACTOR_KEYWORDS = [
 const SECURITY_KEYWORDS = [
   'auth', 'permission', 'admin', 'delete', 'purge', 'password',
   'credential', 'token', 'secret', 'key', 'encrypt', 'decrypt',
+  'ownership', 'transfer', 'privilege', 'escalation', 'impersonation',
+  'takeover', 'rbac', 'acl', 'role', 'guard', 'middleware',
+  'session', 'cookie', 'csrf', 'xss', 'injection', 'sanitize',
 ];
 
 /**

@@ -77,13 +77,40 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
   // Exact match
   if (r1 === r2) return 1.0;
 
-  // Split into segments
-  const seg1 = r1.split('/').filter(Boolean);
-  const seg2 = r2.split('/').filter(Boolean);
+  // Detect tRPC-style dot notation (e.g., "servers.transferOwnership")
+  const isDotNotation = (r: string) => !r.includes('/') && r.includes('.');
 
-  // Compare segment by segment
+  // Split into segments — handle both REST (/) and tRPC (.) routes
+  const splitRoute = (r: string): string[] => {
+    if (isDotNotation(r)) return r.split('.');
+    return r.split('/').filter(Boolean);
+  };
+
+  const seg1 = splitRoute(r1);
+  const seg2 = splitRoute(r2);
+
+  // For dot-notation: prefix match gives high similarity
+  // e.g., "servers.transferOwnership" vs "servers.update" share "servers" prefix
+  if (isDotNotation(r1) || isDotNotation(r2)) {
+    const s1 = isDotNotation(r1) ? r1.split('.') : r1.split('/').filter(Boolean);
+    const s2 = isDotNotation(r2) ? r2.split('.') : r2.split('/').filter(Boolean);
+
+    // Count shared prefix segments
+    let shared = 0;
+    for (let i = 0; i < Math.min(s1.length, s2.length); i++) {
+      if (s1[i] === s2[i]) shared++;
+      else break;
+    }
+
+    if (shared > 0) {
+      // Shared prefix → high similarity (e.g., "servers.*" routes share "servers")
+      return Math.min(1.0, 0.5 + (shared / Math.max(s1.length, s2.length)) * 0.5);
+    }
+    return 0;
+  }
+
+  // REST route comparison: segment by segment
   let matches = 0;
-  let paramMatches = 0;
   const maxLen = Math.max(seg1.length, seg2.length);
 
   for (let i = 0; i < maxLen; i++) {
@@ -91,18 +118,12 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
     const s2 = seg2[i] || '';
 
     if (s1 === s2) {
-      // Exact segment match
       matches++;
     } else if (s1.startsWith(':') && s2.startsWith(':')) {
-      // Both are parameters
       matches += 0.9;
-      paramMatches++;
     } else if (s1.startsWith(':') || s2.startsWith(':')) {
-      // One is a parameter - partial match
       matches += 0.7;
-      paramMatches++;
     } else if (
-      // Check for resource plural/singular match (e.g., notes vs note)
       s1.replace(/s$/, '') === s2.replace(/s$/, '') ||
       s2.replace(/s$/, '') === s1.replace(/s$/, '')
     ) {
@@ -110,10 +131,7 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
     }
   }
 
-  // Calculate base similarity
   const baseSimilarity = matches / maxLen;
-
-  // Bonus for having the same structure (same number of segments)
   const structureBonus = seg1.length === seg2.length ? 0.1 : 0;
 
   return Math.min(1.0, baseSimilarity + structureBonus);
@@ -977,7 +995,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_gates_for_route': {
-          const { route, method = 'GET', response_format: gatesResponseFormat } = args as { route: string; method?: string; response_format?: 'concise' | 'detailed' };
+          const { route, response_format: gatesResponseFormat } = args as { route: string; method?: string; response_format?: 'concise' | 'detailed' };
+          // For tRPC-style routes (dot notation), method is meaningless — all are POST
+          const isTrpc = typeof route === 'string' && !route.includes('/') && route.includes('.');
+          const method = isTrpc ? 'POST' : ((args as any).method || 'GET');
 
           // Get all gates
           const gates = getSymbolsByType(ctx.index, 'gate');
