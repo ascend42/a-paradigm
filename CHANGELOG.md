@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.0] — 2026-03-21
+
+### Added
+
+- **`/paradigm:agents` skill** — unified agent management: roster display, onboard missing agents (create + sync), bench/activate, show detail, install from `github:user/repo` or `@namespace/agent` (nevr.land).
+- **`/paradigm:team` skill** — session team summary: who contributed, what was accepted/dismissed, learning results from session work log, health snapshot, recommendations.
+- **`/paradigm:teach` skill** — teach an agent a new behavior by writing a high-confidence journal entry with pattern extraction, auto-promotes to notebook immediately.
+- **`/paradigm:health` skill** — Neverland health dashboard: per-agent acceptance rates, thresholds, expertise, notebooks, progress visualization, actionable recommendations.
+- **Plugin content hash cache invalidation** — `computePluginContentHash()` hashes plugin directory contents (skills, scripts, configs). Detects changes even when semver hasn't been bumped. `hasCacheStale` now triggers on content drift, not just version mismatch. Update notice shows hash diff.
+
 ## [5.5.0] — 2026-03-21
 
 ### Added

@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { exec } from 'child_process';
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -26,6 +27,12 @@ export interface PluginUpdateResult {
   marketplacePath: string;
   hasRemoteUpdate: boolean;
   hasCacheStale: boolean;
+  /** Content hash of marketplace plugin directory — detects changes even without version bump */
+  marketplaceContentHash: string;
+  /** Content hash of cached (installed) plugin directory */
+  cachedContentHash: string;
+  /** True if marketplace content differs from cached content */
+  hasContentDrift: boolean;
 }
 
 export interface PluginUpdateCheckState {
@@ -78,6 +85,51 @@ function isThrottled(): boolean {
   return elapsed < THROTTLE_HOURS * 3600 * 1000;
 }
 
+// ─── Content Hash ───────────────────────────────────────────────────
+
+/**
+ * Compute a SHA-256 hash of plugin directory contents (skills, scripts, plugin.json).
+ * This detects changes even when semver hasn't been bumped.
+ * Only hashes text files relevant to plugin behavior — skips .git, node_modules, etc.
+ */
+function computePluginContentHash(pluginDir: string): string {
+  const hash = crypto.createHash('sha256');
+  const relevantExts = new Set(['.md', '.json', '.sh', '.yaml', '.yml', '.ts', '.js']);
+  const skipDirs = new Set(['.git', 'node_modules', '.cache']);
+
+  function walkDir(dir: string): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch { return; }
+
+    // Sort for deterministic hashing
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      if (skipDirs.has(entry.name)) continue;
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        walkDir(fullPath);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (relevantExts.has(ext)) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            // Hash relative path + content for position-aware hashing
+            const relPath = path.relative(pluginDir, fullPath);
+            hash.update(relPath + '\0' + content);
+          } catch { /* skip unreadable */ }
+        }
+      }
+    }
+  }
+
+  walkDir(pluginDir);
+  return hash.digest('hex').slice(0, 12); // Short hash, 12 chars
+}
+
 // ─── Core Logic ─────────────────────────────────────────────────────
 
 /**
@@ -94,6 +146,10 @@ interface DiscoveredPlugin {
   installedSha: string;
   marketplacePath: string;
   localVersion: string;
+  /** Path to the plugin dir inside the marketplace clone */
+  pluginSourceDir: string;
+  /** Path to the cached plugin dir */
+  pluginCacheDir: string;
 }
 
 function discoverPlugins(): DiscoveredPlugin[] {
@@ -196,6 +252,10 @@ function discoverPlugins(): DiscoveredPlugin[] {
         installedSha,
         marketplacePath,
         localVersion,
+        pluginSourceDir: path.join(pluginsSubdir, pluginName),
+        pluginCacheDir: fs.existsSync(pluginCacheDir) && installedVersion !== 'unknown'
+          ? path.join(pluginCacheDir, installedVersion)
+          : '',
       });
     }
   }
@@ -232,6 +292,13 @@ async function checkPlugin(plugin: DiscoveredPlugin): Promise<PluginUpdateResult
   const hasCacheStale = plugin.localVersion !== plugin.installedVersion &&
     plugin.installedVersion !== 'unknown';
 
+  // Content hash comparison — detects changes even without version bump
+  const marketplaceContentHash = computePluginContentHash(plugin.pluginSourceDir);
+  const cachedContentHash = plugin.pluginCacheDir
+    ? computePluginContentHash(plugin.pluginCacheDir)
+    : '';
+  const hasContentDrift = cachedContentHash !== '' && marketplaceContentHash !== cachedContentHash;
+
   return {
     repo: plugin.repo,
     plugin: plugin.plugin,
@@ -241,7 +308,10 @@ async function checkPlugin(plugin: DiscoveredPlugin): Promise<PluginUpdateResult
     remoteSha,
     marketplacePath: plugin.marketplacePath,
     hasRemoteUpdate,
-    hasCacheStale,
+    hasCacheStale: hasCacheStale || hasContentDrift,
+    marketplaceContentHash,
+    cachedContentHash,
+    hasContentDrift,
   };
 }
 
@@ -271,6 +341,9 @@ export function getPluginUpdateNotice(): string | null {
         : 'newer commits available';
       lines.push(`  - ${r.plugin} (${r.repo}): ${versionInfo}`);
       pullCmds.push(`git -C ${r.marketplacePath} pull origin main`);
+      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
+    } else if (r.hasContentDrift) {
+      lines.push(`  - ${r.plugin} (${r.repo}): content changed (hash ${r.cachedContentHash} → ${r.marketplaceContentHash}, reinstall needed)`);
       reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
     } else if (r.hasCacheStale) {
       lines.push(`  - ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (reinstall needed)`);
