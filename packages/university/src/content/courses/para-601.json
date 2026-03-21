@@ -603,6 +603,88 @@
           "explanation": "The primary benefit is context window efficiency. A 856-line CLAUDE.md consumes thousands of tokens every session, most of which are irrelevant to the current task. The slim CLAUDE.md (~150 lines) provides universal orientation at minimal token cost, and guidance resources are loaded on demand only when needed. An agent working on test coverage does not pay the token cost for portal conventions, logging rules, or orchestration patterns. This leaves more of the context window available for actual code, tool results, and conversation."
         }
       ]
+    },
+    {
+      "id": "maestro-team-collab",
+      "title": "Maestro: Visible Team Orchestration",
+      "content": "## From Synthesized Summaries to Attributed Conversations\n\nTraditional multi-agent orchestration has a visibility problem. An orchestrator spawns three agents, waits for their responses, synthesizes a summary, and presents it to the human. The human sees one voice — the orchestrator's — and loses all nuance from individual agent perspectives. If the architect disagreed with the security agent, you would never know. If the builder had a novel approach, it gets flattened into a consensus view.\n\nThe Maestro model inverts this pattern. Every agent speaks for itself.\n\n## The Maestro Model\n\nMaestro is not a separate system — it is a behavior pattern for the active Claude Code session. When you ask a complex question that benefits from multiple perspectives, Maestro:\n\n1. **Evaluates expertise** — Which agents have the highest confidence scores on the relevant symbols?\n2. **Loads ambient context** — Recent team decisions, journal insights, pending nominations are injected into each agent's prompt via `buildProfileEnrichment()`.\n3. **Spawns subagents** — Each agent receives its full profile: personality, expertise history, transferable patterns, notebook entries, and the ambient context.\n4. **Presents attributed responses** — Each agent's response appears with a `[role]` or `[nickname (role)]` prefix. You see exactly who said what.\n5. **Records to Symphony** — Each contribution is written as a Symphony message, creating a persistent team thread visible in Conductor and the Platform dashboard.\n6. **Learns from feedback** — At session end, `paradigm_ambient_learn` adjusts each agent's attention threshold based on acceptance/dismissal rates.\n\n## Agent Profiles and Nicknames\n\nEach agent has an `.agent` YAML file in `~/.paradigm/agents/` with:\n\n- **personality** — style (deliberate/rapid/exploratory/methodical), risk tolerance, verbosity\n- **expertise** — per-symbol confidence scores, exponential moving average from lore\n- **attention** — threshold, symbol/path/concept/signal subscriptions\n- **collaboration** — default stance toward other agents, debate behavior\n- **nomination** — urgency patterns, communication style\n- **nickname** — optional display name (e.g., \"George\" for the architect)\n- **benched** — if true, Maestro skips this agent entirely\n\nThe `nickname` field makes agents feel like team members. Terminal output shows `[George (architect)]` instead of the generic `[architect]`.\n\n## Bench and Activate\n\nNot every agent should speak on every task. The bench system lets you silence noisy agents:\n\n- `paradigm agent bench security` — security agent stops nominating and is excluded from orchestration\n- `paradigm agent activate security` — restore to active status\n- `paradigm agent roster` — see who is active vs benched with stats\n\nBenched agents are skipped in both `paradigm_orchestrate_inline` and the nomination engine's `processEvent`. Their profiles remain intact — bench is a pause, not a delete.\n\n## Symphony Team Threads\n\nEvery orchestration creates a thread prefixed `thr-orch-`. Maestro writes each agent contribution as a Symphony message from the agent's identity (`{project}/{role}`). This creates:\n\n- **Persistent record** — The team conversation survives session restarts\n- **Conductor visibility** — The TeamThreadView shows messages with colored role prefixes\n- **Platform dashboard** — The Team section displays the same thread in a browser\n- **Recovery context** — Next session's handoff includes which agents contributed and what they said\n\n## The Neverland Test\n\nNamed after the validation criteria in the spec, the Neverland test tracks whether agent learning actually works across sessions:\n\n- **Sessions 1-3**: Agents accumulate — touching symbols, recording lore, discovering patterns\n- **Sessions 4-5**: Maestro routes based on learned confidence scores\n- **Sessions 6-10**: Accepted suggestions lower threshold (agent speaks more). Dismissed suggestions raise it (agent speaks less).\n\nMeasurable targets:\n- By session 10, Maestro routes to the right agent >80% of the time\n- Agent acceptance rate improves from ~50% (cold start) to >70%\n\nTrack progress with `paradigm_ambient_neverland` — returns per-agent stats and overall health status (cold-start → accumulating → calibrating → mature).\n\n## Postflight Learning Loop\n\nThe postflight skill closes the feedback loop after every task:\n\n1. **Step 8b** runs `paradigm_ambient_learn` for each contributing agent — adjusts attention thresholds based on accept/dismiss rates\n2. Runs `paradigm_ambient_promote` — auto-promotes high-confidence journal patterns to the agent's notebook\n3. Records contributions via Symphony if not already done during execution\n\nThis ensures every session makes agents incrementally smarter. The handoff skill captures agent performance summaries so the next session inherits this knowledge.",
+      "keyConcepts": [
+        "Maestro is a behavior pattern, not a separate system — the active session decides who to consult",
+        "Attributed responses: [nickname (role)] prefix makes agents visible as distinct team members",
+        "Agent profiles carry expertise, personality, attention patterns, and ambient context across sessions",
+        "Bench/activate controls which agents participate — bench is a pause, not a delete",
+        "Symphony team threads (thr-orch-*) persist the conversation for Conductor and Platform display",
+        "Neverland test: measurable learning validation — >80% routing accuracy by session 10",
+        "Postflight learning loop: paradigm_ambient_learn + paradigm_ambient_promote after every task",
+        "Context injection: decisions, journal insights, nominations fed to agents via buildProfileEnrichment()"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the primary difference between Maestro and traditional multi-agent orchestration?",
+          "choices": {
+            "A": "Maestro uses more agents per task",
+            "B": "Maestro presents each agent's response as an attributed message rather than synthesizing a single summary",
+            "C": "Maestro runs agents in parallel instead of sequentially",
+            "D": "Maestro eliminates the need for human approval",
+            "E": "Maestro uses persistent background agents"
+          },
+          "correct": "B",
+          "explanation": "Maestro's key innovation is visibility. Instead of synthesizing agent responses into a single voice, each agent speaks for itself with an attribution prefix like [architect]. This preserves individual perspectives and lets the human see disagreements, novel approaches, and the reasoning behind each contribution."
+        },
+        {
+          "id": "q2",
+          "question": "When a security agent is consistently dismissed by the user (>60% dismissal rate), what happens at postflight?",
+          "choices": {
+            "A": "The agent is automatically deleted",
+            "B": "The agent is moved to a different project",
+            "C": "paradigm_ambient_learn raises the agent's attention threshold, making it nominate less",
+            "D": "The agent's expertise scores are reset to zero",
+            "E": "Nothing changes — threshold adjustment is manual"
+          },
+          "correct": "C",
+          "explanation": "The learning loop is automatic. When dismissal rate exceeds 60%, paradigm_ambient_learn raises the agent's attention threshold by 0.05, meaning it requires higher relevance scores before nominating. This self-tunes the agent to speak less when it is being noisy. Conversely, >80% acceptance lowers the threshold, encouraging the agent to contribute more."
+        },
+        {
+          "id": "q3",
+          "question": "What ambient context is injected into agent profiles before Maestro spawns them?",
+          "choices": {
+            "A": "Only the agent's expertise scores",
+            "B": "The full project codebase",
+            "C": "Recent team decisions, transferable journal insights, and pending nominations",
+            "D": "The complete git history",
+            "E": "Nothing — agents start fresh each session"
+          },
+          "correct": "C",
+          "explanation": "buildProfileEnrichment() accepts an ambientContext parameter containing recent team decisions (from decision-loader), transferable journal insights (from journal-loader), and pending nominations (from nomination-engine). This gives each agent awareness of what the team has decided, what patterns have been discovered, and what issues are outstanding — creating genuine team intelligence rather than isolated tool execution."
+        },
+        {
+          "id": "q4",
+          "question": "What does the Neverland test health status 'calibrating' indicate?",
+          "choices": {
+            "A": "No agents have been created yet",
+            "B": "Agents have fewer than 10 total nominations",
+            "C": "Average acceptance rate is between 50% and 70% — agents are learning but haven't reached target",
+            "D": "All agents have been benched",
+            "E": "The system has reached maturity and needs no further adjustment"
+          },
+          "correct": "C",
+          "explanation": "The Neverland health statuses are: cold-start (<10 nominations), accumulating (<50% accept rate), calibrating (50-70% accept rate), and mature (>70%). 'Calibrating' means agents are past the initial noise phase and their thresholds are actively being tuned by the learning loop, but haven't yet reached the 70% target. This typically occurs around sessions 4-7."
+        },
+        {
+          "id": "q5",
+          "question": "How does benching an agent differ from deleting it?",
+          "choices": {
+            "A": "There is no difference — bench removes the agent profile",
+            "B": "Benching sets benched=true — the profile stays intact but Maestro and the nomination engine skip it",
+            "C": "Benching only affects CLI commands, not MCP tools",
+            "D": "Benching removes expertise but keeps the profile",
+            "E": "Benching is permanent while deletion can be undone"
+          },
+          "correct": "B",
+          "explanation": "Benching is a reversible pause. The agent's .agent file remains with all expertise, journal entries, notebooks, and transferable patterns intact. Both paradigm_orchestrate_inline and processEvent check profile.benched and skip the agent if true. paradigm agent activate restores the agent immediately with all its accumulated learning preserved."
+        }
+      ]
     }
   ]
 }
