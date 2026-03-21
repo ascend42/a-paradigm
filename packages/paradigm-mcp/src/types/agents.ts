@@ -356,6 +356,7 @@ export const DEFAULT_PERSONALITIES: Record<string, AgentPersonality> = {
   tester: { style: 'methodical', risk: 'conservative', verbosity: 'concise' },
   reviewer: { style: 'deliberate', risk: 'conservative', verbosity: 'detailed' },
   security: { style: 'methodical', risk: 'conservative', verbosity: 'detailed' },
+  documentor: { style: 'methodical', risk: 'conservative', verbosity: 'concise' },
 };
 
 export const DEFAULT_ATTENTION: Record<string, AgentAttention> = {
@@ -364,6 +365,7 @@ export const DEFAULT_ATTENTION: Record<string, AgentAttention> = {
   reviewer: { concepts: ['code quality', 'bug', 'smell', 'convention'], signals: [{ type: 'compliance-violation' }], threshold: 0.6 },
   tester: { paths: ['**/*.test.*', '**/*.spec.*'], concepts: ['test', 'coverage', 'assertion'], signals: [{ type: 'error-encountered' }, { type: 'test-result' }], threshold: 0.5 },
   security: { symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**', 'guards/**'], concepts: ['permission', 'JWT', 'session', 'RBAC', 'XSS', 'injection'], signals: [{ type: 'gate-added' }, { type: 'route-created' }, { type: 'gate-checked' }, { type: 'compliance-violation' }], threshold: 0.4 },
+  documentor: { paths: ['**/.purpose', '**/portal.yaml', '.paradigm/**'], concepts: ['purpose', 'portal', 'symbol', 'documentation', 'component', 'gate', 'flow'], signals: [{ type: 'file-modified' }, { type: 'compliance-violation' }, { type: 'work-completed' }], threshold: 0.3 },
 };
 
 export const DEFAULT_COLLABORATION: Record<string, AgentCollaboration> = {
@@ -372,4 +374,5 @@ export const DEFAULT_COLLABORATION: Record<string, AgentCollaboration> = {
   reviewer: { stance: 'advisory', debate: { will_challenge: true, evidence_required: true, escalate_to_human: true } },
   tester: { stance: 'supportive', debate: { will_challenge: false, evidence_required: true, escalate_to_human: false } },
   security: { stance: 'advisory', with: { architect: { stance: 'peer', can_contradict: true }, builder: { stance: 'advisory', review_output: true } }, debate: { will_challenge: true, evidence_required: true, escalate_to_human: true } },
+  documentor: { stance: 'supportive', with: { architect: { stance: 'supportive' }, builder: { stance: 'supportive' }, reviewer: { stance: 'supportive' }, security: { stance: 'supportive' } }, debate: { will_challenge: false, evidence_required: false, escalate_to_human: false } },
 };

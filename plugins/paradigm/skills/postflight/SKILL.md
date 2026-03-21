@@ -108,31 +108,119 @@ paradigm_habits_check({
 Include the results in the compliance report below. If any habits were skipped,
 note the recommendations.
 
-## Step 8b: Agent Learning Loop
+## Step 8b: Maestro Learning Pass
 
-If any agents contributed during this session (check if orchestration was used
-or if agent-attributed messages appeared), run the ambient learning loop for
-each contributing agent:
+You are the Teacher. Read the session work log and write targeted learning
+feedback for each agent that contributed this session.
 
-1. **Adjust attention thresholds** — call `paradigm_ambient_learn` for each agent:
+### 8b.1: Read Session Work Log
+
+Read the session work log:
+!`cat .paradigm/events/session-log.jsonl 2>/dev/null`
+
+If empty or missing, skip to Step 8b.4 (threshold-only learning).
+
+### 8b.2: Cross-Reference Contributions with Verdicts
+
+For each agent that has entries in the session work log:
+1. Collect all `agent-contribution` entries for that agent
+2. Collect all `user-verdict` entries for that agent
+3. Pair contributions with verdicts where possible
+
+### 8b.3: Write Targeted Journal Entries
+
+For each agent with paired contribution-verdict data, call `paradigm_journal_record`
+with specific, contextual feedback. Be SPECIFIC — reference actual file names,
+symbol names, and what the change was. Do NOT write generic insights.
+
+**If verdict = accepted:**
+```
+paradigm_journal_record({
+  agent: "{agent-id}",
+  trigger: "human_feedback",
+  insight: "User accepted {describe specific contribution}. {What this confirms about the agent's understanding}.",
+  project: "{project-name from config.yaml}",
+  transferable: true,
+  confidence_before: 0.6,
+  confidence_after: 0.85,
+  pattern: {
+    id: "{domain-pattern-id}",
+    applies_when: "{when this pattern applies}",
+    correct_approach: "{what the agent recommended that was confirmed correct}"
+  },
+  tags: ["{relevant-paradigm-tags}"]
+})
+```
+
+**If verdict = dismissed:**
+```
+paradigm_journal_record({
+  agent: "{agent-id}",
+  trigger: "correction_received",
+  insight: "User dismissed: {nomination brief}. Reason: {dismiss reason from verdict, or infer from context}. {What the agent should do differently next time}.",
+  project: "{project-name}",
+  transferable: true,
+  confidence_before: 0.7,
+  confidence_after: 0.4,
+  pattern: {
+    id: "{correction-pattern-id}",
+    applies_when: "{the condition the agent mistakenly flagged}",
+    correct_approach: "{what the agent should do instead}"
+  },
+  tags: ["{relevant-tags}", "correction"]
+})
+```
+
+**If verdict = revised (accepted but user changed something):**
+```
+paradigm_journal_record({
+  agent: "{agent-id}",
+  trigger: "correction_received",
+  insight: "User accepted {agent}'s proposal but revised: {describe what changed}. {What this teaches about the correct approach}.",
+  project: "{project-name}",
+  transferable: true,
+  confidence_before: 0.6,
+  confidence_after: 0.65,
+  pattern: {
+    id: "{revision-pattern-id}",
+    applies_when: "{context where this applies}",
+    correct_approach: "{what the user actually did}"
+  },
+  tags: ["{relevant-tags}", "revision"]
+})
+```
+
+**Rules for writing journal entries:**
+- Be SPECIFIC — reference actual file names, symbol names, change descriptions
+- Include the WHY — don't just say "dismissed", explain what was wrong
+- Extract actionable patterns — `applies_when` + `correct_approach` are what get promoted to notebooks
+- Set confidence_after: accepted=0.8-0.9, dismissed=0.3-0.5, revised=0.6-0.7
+- Mark `transferable: true` when the lesson applies beyond this specific project
+
+### 8b.4: Threshold Adjustment + Promotion
+
+After writing journal entries (or if no session work log exists), run the
+existing mechanical learning loop:
+
+For each contributing agent (or all agents if no work log):
+
+1. **Adjust attention thresholds**:
    ```
-   paradigm_ambient_learn({ agent: "architect" })
-   paradigm_ambient_learn({ agent: "security" })
+   paradigm_ambient_learn({ agent: "{agent-id}" })
    ```
-   This adjusts the agent's self-nomination threshold based on acceptance/dismissal rates.
 
-2. **Promote journal patterns** — call `paradigm_ambient_promote` for each agent:
+2. **Promote journal patterns to notebooks**:
    ```
-   paradigm_ambient_promote({ agent: "architect" })
-   paradigm_ambient_promote({ agent: "security" })
+   paradigm_ambient_promote({ agent: "{agent-id}" })
    ```
-   This auto-promotes high-confidence journal entries to the agent's notebook.
 
-3. **Record contributions via Symphony** — if not already done during execution,
-   call `paradigm_symphony_send` for each agent contribution with the orchestration
-   thread ID so the team conversation is preserved for Conductor display.
+### 8b.5: Report Learning Results
 
-Include the learning results (threshold adjustments, promotions) in the report.
+Include in the compliance report:
+- Number of journal entries written per agent
+- Any patterns extracted (applies_when → correct_approach)
+- Threshold adjustments made (old → new, reason)
+- Number of notebook promotions
 
 ## Step 9: Compile Report
 

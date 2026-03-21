@@ -67,7 +67,7 @@ export function getAmbientToolsList() {
           nomination_id: { type: 'string', description: 'Nomination ID to engage with' },
           response: { type: 'string', enum: ['accepted', 'dismissed', 'deferred'], description: 'How to respond' },
           resolve_debate: { type: 'string', description: 'Optional debate ID to resolve by choosing this nomination' },
-          reason: { type: 'string', description: 'Optional reason (used when resolving debates)' },
+          reason: { type: 'string', description: 'Reason for response — stored on nomination for learning feedback. Especially valuable for dismissals.' },
         },
         required: ['nomination_id', 'response'],
       },
@@ -272,7 +272,25 @@ export async function handleAmbientTool(
       const nominationId = args.nomination_id as string;
       const response = args.response as 'accepted' | 'dismissed' | 'deferred';
 
-      const engaged = engageNomination(ctx.rootDir, nominationId, response);
+      const reason = args.reason as string | undefined;
+      const engaged = engageNomination(ctx.rootDir, nominationId, response, reason);
+
+      // Log verdict to session work log for Maestro's postflight learning pass
+      if (engaged) {
+        try {
+          const { appendSessionWorkEntry } = await import('../utils/session-work-log.js');
+          const noms = loadNominations(ctx.rootDir, { limit: 500 });
+          const nom = noms.find(n => n.id === nominationId);
+          appendSessionWorkEntry(ctx.rootDir, {
+            timestamp: new Date().toISOString(),
+            type: 'user-verdict',
+            agent: nom?.agent,
+            nominationId,
+            verdict: response,
+            reason,
+          });
+        } catch { /* non-fatal */ }
+      }
 
       let debateResolved = false;
       if (args.resolve_debate && engaged) {

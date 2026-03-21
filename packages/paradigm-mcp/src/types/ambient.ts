@@ -124,6 +124,8 @@ export interface Nomination {
   engaged?: boolean;
   /** Human's response (if any) */
   response?: 'accepted' | 'dismissed' | 'deferred';
+  /** Reason for the response — stored for learning feedback, especially valuable for dismissals */
+  reason?: string;
 }
 
 export interface NominationEvidence {

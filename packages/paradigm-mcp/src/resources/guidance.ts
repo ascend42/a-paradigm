@@ -265,35 +265,108 @@ paradigm_flows_affected({ symbol: "#tasks" })
   },
 
   'orchestration': {
-    description: 'Multi-agent orchestration — team commands, agent suggestions, faceted/solo modes',
-    generate: () => `# Multi-Agent Orchestration
+    description: 'Maestro team orchestration — attributed responses, ambient context, learning loop, bench/activate, documentor agent',
+    generate: () => `# Maestro Team Orchestration
 
-Paradigm supports multi-agent orchestration via \`paradigm team\` commands.
+The Maestro model: the active Claude Code session orchestrates domain-specific subagents, makes their contributions visible as distinct attributed messages, and learns from feedback to improve agent performance over time.
 
-## Commands
+## How Maestro Works
 
-| Command | Description |
-|---------|-------------|
-| \`paradigm team spawn <agent> --task "..."\` | Spawn a single agent |
-| \`paradigm team orchestrate "task"\` | AI orchestrator coordinates agents |
-| \`paradigm team orchestrate "task" --solo\` | Single Claude mode (no splitting) |
-| \`paradigm team orchestrate "task" --compare\` | A/B test solo vs faceted |
-| \`paradigm team agents suggest "task"\` | Suggest agents based on task triggers |
-| \`paradigm team providers\` | Show available providers |
-| \`paradigm team models\` | View/configure agent model assignments |
+1. **Evaluate expertise** — Which agents have the highest confidence scores on relevant symbols?
+2. **Load ambient context** — Recent team decisions, journal insights, and pending nominations are injected into each agent's prompt via \`buildProfileEnrichment()\`.
+3. **Spawn subagents** — Each agent receives its full profile: personality, expertise history, transferable patterns, notebook entries, and ambient context.
+4. **Present attributed responses** — Each agent's response appears with a \`[role]\` or \`[nickname (role)]\` prefix. Do NOT synthesize — show distinct contributions.
+5. **Record to Symphony** — Each contribution is written as a Symphony message to \`thr-orch-*\` thread for Conductor/Platform visibility.
+6. **Learn from feedback** — At session end, Maestro reads the session work log and writes targeted journal entries per agent.
 
-## Agent Suggestions
+## Attributed Responses
 
-Before orchestrating, preview which agents will be involved:
+When presenting agent responses, use the \`attribution\` field from orchestration output:
+- \`[architect]\` — default format
+- \`[George (architect)]\` — if agent has a \`nickname\` in its profile
 
-\`\`\`bash
-paradigm team agents suggest "Add user authentication with JWT"
-\`\`\`
+Do NOT combine or summarize multiple agents into one response. Each agent speaks for itself.
 
-Or via MCP (returns \`suggestedAgents\` in plan mode):
-\`\`\`
-paradigm_orchestrate_inline({ task: "...", mode: "plan" })
-\`\`\``,
+## Agent Roster
+
+| Agent | Model | Role |
+|-------|-------|------|
+| architect | opus | Design, specifications, file plans |
+| builder | haiku | Implementation from specs |
+| security | opus | Auth, permissions, vulnerability review |
+| reviewer | sonnet | Code quality, patterns, conventions |
+| tester | haiku | Test coverage, assertions |
+| documentor | haiku | .purpose, portal.yaml, symbol updates (always final stage) |
+
+### Bench / Activate
+
+Silence a noisy agent without deleting its profile:
+- \`paradigm agent bench security\` — Maestro and nomination engine skip this agent
+- \`paradigm agent activate security\` — restore to active orchestration
+- \`paradigm agent roster\` — see active vs benched with stats
+
+### Documentor Agent
+
+The documentor always runs as the **final orchestration stage**. It:
+- Reviews what other agents changed
+- Updates .purpose files, portal.yaml, and symbol registrations
+- Uses only \`paradigm_purpose_*\` and \`paradigm_portal_*\` MCP tools
+- Runs \`paradigm_reindex\` when done
+- Never modifies source code
+
+This relieves all other agents of Paradigm file maintenance.
+
+## Session Work Log
+
+During a session, a running log captures:
+- **Agent contributions** — what each agent was asked to do (from orchestration)
+- **User verdicts** — accepted / dismissed / revised, with reason (from ambient engage)
+
+Stored at \`.paradigm/events/session-log.jsonl\`. Read by Maestro at postflight.
+
+## Learning Loop
+
+At session end (via postflight skill Step 8b):
+
+1. **Read session work log** — cross-reference contributions with verdicts
+2. **Write journal entries** — targeted feedback per agent:
+   - Accepted → \`human_feedback\` trigger, high confidence, extractable pattern
+   - Dismissed → \`correction_received\` trigger, low confidence, explains what was wrong
+   - Revised → \`correction_received\` trigger, medium confidence, includes delta
+3. **Adjust thresholds** — \`paradigm_ambient_learn\` per agent
+4. **Promote to notebooks** — \`paradigm_ambient_promote\` auto-promotes high-confidence journal entries
+
+Journal entries with patterns flow through to notebooks, which appear in future \`buildProfileEnrichment()\` calls. This is how agents accumulate domain knowledge.
+
+## Training New Behaviors
+
+To teach an agent a new skill (e.g., "documentor should also draft CHANGELOG entries"):
+1. Tell the agent during the session — Maestro records the instruction
+2. The postflight pass writes a \`human_feedback\` journal entry with the new behavior
+3. On promotion, it becomes a notebook entry
+4. Next session, \`buildProfileEnrichment()\` injects that knowledge into the agent's context
+
+No configuration needed — the learning pipeline IS the training mechanism.
+
+## Neverland Validation
+
+Track learning progress with \`paradigm_ambient_neverland\`:
+- Per-agent: acceptance rate, threshold, expertise count, notebook count
+- Aggregate: average accept rate, total expertise, total notebooks
+- Health status: cold-start → accumulating → calibrating → mature
+- Target: >80% routing accuracy by session 10, >70% acceptance rate
+
+## MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| \`paradigm_orchestrate_inline\` | Plan (mode=plan) or execute (mode=execute) multi-agent orchestration |
+| \`paradigm_agent_prompt\` | Get enriched prompt for a single agent |
+| \`paradigm_agent_list\` | List all agents with expertise + bench status |
+| \`paradigm_agent_bench\` | Bench an agent |
+| \`paradigm_agent_activate\` | Activate a benched agent |
+| \`paradigm_ambient_neverland\` | Neverland validation metrics |
+| \`paradigm_context_compose\` | Compose full ambient context for an agent |`,
   },
 
   'workspaces': {

@@ -346,7 +346,8 @@ export function loadDebates(rootDir: string): Debate[] {
 export function engageNomination(
   rootDir: string,
   nominationId: string,
-  response: 'accepted' | 'dismissed' | 'deferred'
+  response: 'accepted' | 'dismissed' | 'deferred',
+  reason?: string
 ): boolean {
   const filePath = getNominationsPath(rootDir);
   if (!fs.existsSync(filePath)) return false;
@@ -362,6 +363,7 @@ export function engageNomination(
         if (nom.id === nominationId) {
           nom.engaged = true;
           nom.response = response;
+          if (reason) nom.reason = reason;
           found = true;
           return JSON.stringify(nom);
         }
@@ -581,9 +583,13 @@ export function adjustAttentionFromFeedback(
 
   const oldThreshold = profile.attention.threshold ?? 0.6;
 
-  // Load engagement history for this agent
-  const nominations = loadNominations(rootDir, { agent: agentId });
-  const engaged = nominations.filter(n => n.engaged);
+  // Load engagement history for this agent (exclude stale pending nominations)
+  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const allNominations = loadNominations(rootDir, { agent: agentId });
+  const active = allNominations.filter(n =>
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < STALE_THRESHOLD_MS)
+  );
+  const engaged = active.filter(n => n.engaged);
 
   if (engaged.length < 5) {
     return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)` };
@@ -638,7 +644,12 @@ export function getNominationStats(
   rootDir: string,
   agentId: string
 ): { total: number; accepted: number; dismissed: number; deferred: number; pending: number; acceptRate: number } {
-  const nominations = loadNominations(rootDir, { agent: agentId });
+  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const allNominations = loadNominations(rootDir, { agent: agentId });
+  // Filter out stale pending nominations (>7 days, not engaged) to prevent diluting stats
+  const nominations = allNominations.filter(n =>
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < STALE_THRESHOLD_MS)
+  );
   const accepted = nominations.filter(n => n.response === 'accepted').length;
   const dismissed = nominations.filter(n => n.response === 'dismissed').length;
   const deferred = nominations.filter(n => n.response === 'deferred').length;
@@ -813,10 +824,10 @@ export function autoPromoteJournalEntries(
     return { promoted: 0, entries: [] };
   }
 
-  const journal = loadJournalEntries(agentId, {
-    trigger: 'pattern_discovered',
-    limit: 100,
-  }) as Array<{
+  // Load both pattern_discovered and human_feedback entries for promotion
+  const patternEntries = loadJournalEntries(agentId, { trigger: 'pattern_discovered', limit: 100 });
+  const feedbackEntries = loadJournalEntries(agentId, { trigger: 'human_feedback', limit: 100 });
+  const journal = ([...patternEntries, ...feedbackEntries]) as Array<{
     id: string;
     insight: string;
     confidence_after?: number;

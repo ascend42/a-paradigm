@@ -161,6 +161,7 @@ const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
   reviewer: 'sonnet',
   builder: 'haiku',
   tester: 'haiku',
+  documentor: 'haiku',
 };
 
 const AGENT_TOKEN_ESTIMATES: Record<string, { min: number; max: number }> = {
@@ -335,6 +336,35 @@ You flag issues but do NOT implement fixes - hand to Builder for that.
 - Implement security fixes yourself
 - Skip checking ^gate routes
 - Approve code with known vulnerabilities`,
+
+  documentor: `You are the DOCUMENTOR agent.
+
+## Your Role
+You maintain Paradigm metadata files after other agents complete their work.
+You are the ONLY agent responsible for .purpose files, portal.yaml, and symbol registrations.
+Other agents focus on their domain — you handle all Paradigm compliance.
+
+## Key Responsibilities
+1. Review what other agents changed (read git diff, session work log)
+2. Update .purpose files for modified directories (paradigm_purpose_init, paradigm_purpose_add_component)
+3. Update portal.yaml with new routes and gates (paradigm_portal_add_route, paradigm_portal_add_gate)
+4. Register new signals, flows, and states (paradigm_purpose_add_signal, paradigm_purpose_add_flow)
+5. Run paradigm_reindex when done to rebuild the symbol index
+6. Ask peers via Symphony what symbols they touched if unclear
+
+## What You ONLY Use
+- paradigm_purpose_init / paradigm_purpose_add_component / paradigm_purpose_add_flow
+- paradigm_purpose_add_gate / paradigm_purpose_add_signal / paradigm_purpose_add_state
+- paradigm_portal_add_route / paradigm_portal_add_gate
+- paradigm_reindex
+- paradigm_search (to find existing symbols)
+- paradigm_ripple (to check impact)
+
+## What You NEVER Do
+- Modify source code (.ts, .js, .py, .rs files)
+- Write implementation code
+- Change application logic
+- Skip .purpose coverage for new code directories`,
 };
 
 // ============================================================================
@@ -611,6 +641,23 @@ async function handleOrchestrateInline(
 
   // Log to orchestrations directory
   logOrchestration(ctx.rootDir, orchestrationId, task, plan);
+
+  // Log agent contributions to session work log
+  try {
+    const { appendSessionWorkEntry } = await import('../utils/session-work-log.js');
+    for (const stage of stagePrompts) {
+      for (const agent of stage.agents) {
+        appendSessionWorkEntry(ctx.rootDir, {
+          timestamp: new Date().toISOString(),
+          type: 'agent-contribution',
+          agent: agent.agent,
+          contribution: agent.taskDescription?.slice(0, 200) || task.slice(0, 200),
+          attribution: agent.attribution,
+          symbols,
+        });
+      }
+    }
+  } catch { /* non-fatal */ }
 
   const result = {
     orchestrationId,
@@ -961,6 +1008,19 @@ function planAgentSequence(
     });
   }
 
+  // Always add documentor as the final stage (updates .purpose, portal.yaml, symbols)
+  const lastStageNum = sortedStages.length > 0 ? sortedStages[sortedStages.length - 1] + 1 : 0;
+  stages.push({
+    stage: lastStageNum,
+    agents: [{
+      name: 'documentor',
+      task: 'Review all changes made by previous agents. Update .purpose files, portal.yaml, and symbol registrations using only paradigm_purpose_* and paradigm_portal_* MCP tools. Run paradigm_reindex when done. Do NOT modify source code.',
+      dependsOn: plannedAgents.map(a => a.name),
+      required: true,
+    }],
+    canRunParallel: false,
+  });
+
   // Estimate tokens
   let minTokens = 0;
   let maxTokens = 0;
@@ -969,13 +1029,16 @@ function planAgentSequence(
     minTokens += estimate.min;
     maxTokens += estimate.max;
   }
+  // Add documentor estimate
+  minTokens += 2000;
+  maxTokens += 8000;
 
   return {
     task,
     mode: 'faceted',
     stages,
     symbols,
-    estimatedAgents: plannedAgents.length,
+    estimatedAgents: plannedAgents.length + 1, // +1 for documentor
     estimatedTokens: { min: minTokens, max: maxTokens },
   };
 }

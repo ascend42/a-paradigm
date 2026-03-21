@@ -161,6 +161,11 @@ class SessionTracker {
    */
   setRootDir(rootDir: string): void {
     this.rootDir = rootDir;
+    // Clear previous session's work log on new session start
+    try {
+      const { clearSessionWorkLog } = require('./session-work-log.js');
+      clearSessionWorkLog(rootDir);
+    } catch { /* non-fatal — session work log is optional */ }
   }
 
   private createNewSession(): SessionStats {
