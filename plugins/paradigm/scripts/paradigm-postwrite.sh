@@ -25,6 +25,16 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+# Extract cwd from input (like stop hook does)
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+if [ -n "$CWD" ]; then
+  cd "$CWD" || exit 0
+fi
+
 # Skip non-source files
 case "$FILE_PATH" in
   *.purpose|portal.yaml|*.md|*.lock|*.log|*.json|*.yaml|*.yml|.gitignore|.env*) exit 0 ;;

@@ -355,11 +355,11 @@ export const DEFAULT_PERSONALITIES: Record<string, AgentPersonality> = {
 };
 
 export const DEFAULT_ATTENTION: Record<string, AgentAttention> = {
-  architect: { symbols: ['$*', '#*'], concepts: ['architecture', 'design', 'pattern', 'refactor'], threshold: 0.5 },
-  builder: { paths: ['src/**', 'lib/**', 'packages/**'], threshold: 0.7 },
-  reviewer: { concepts: ['code quality', 'bug', 'smell', 'convention'], threshold: 0.6 },
-  tester: { paths: ['**/*.test.*', '**/*.spec.*'], concepts: ['test', 'coverage', 'assertion'], signals: [{ type: 'error-encountered' }], threshold: 0.5 },
-  security: { symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**', 'guards/**'], concepts: ['permission', 'JWT', 'session', 'RBAC', 'XSS', 'injection'], signals: [{ type: 'gate-added' }, { type: 'route-created' }], threshold: 0.4 },
+  architect: { symbols: ['$*', '#*'], concepts: ['architecture', 'design', 'pattern', 'refactor'], signals: [{ type: 'flow-modified' }, { type: 'compliance-violation' }], threshold: 0.5 },
+  builder: { paths: ['src/**', 'lib/**', 'packages/**'], signals: [{ type: 'file-modified' }, { type: 'error-encountered' }], threshold: 0.7 },
+  reviewer: { concepts: ['code quality', 'bug', 'smell', 'convention'], signals: [{ type: 'compliance-violation' }], threshold: 0.6 },
+  tester: { paths: ['**/*.test.*', '**/*.spec.*'], concepts: ['test', 'coverage', 'assertion'], signals: [{ type: 'error-encountered' }, { type: 'test-result' }], threshold: 0.5 },
+  security: { symbols: ['^*', '#*-auth', '#*-middleware'], paths: ['auth/**', 'middleware/**', 'guards/**'], concepts: ['permission', 'JWT', 'session', 'RBAC', 'XSS', 'injection'], signals: [{ type: 'gate-added' }, { type: 'route-created' }, { type: 'gate-checked' }, { type: 'compliance-violation' }], threshold: 0.4 },
 };
 
 export const DEFAULT_COLLABORATION: Record<string, AgentCollaboration> = {
