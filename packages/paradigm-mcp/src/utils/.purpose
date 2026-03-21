@@ -90,8 +90,14 @@ components:
     type: loader
     tags: [feature, knowledge-streams, decisions]
   nomination-engine:
-    description: "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion, Symphony relay forwarding, and surfacing config."
+    description: "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (pattern_discovered + human_feedback triggers), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config."
     type: engine
-    tags: [feature, ambient, nominations, debates, learning, surfacing]
+    tags: [feature, ambient, nominations, debates, learning, surfacing, neverland]
     anchors:
-      - nomination-engine.ts:1-750
+      - nomination-engine.ts:1
+  session-work-log:
+    description: "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start."
+    type: loader
+    tags: [feature, maestro, learning, session]
+    anchors:
+      - session-work-log.ts:1

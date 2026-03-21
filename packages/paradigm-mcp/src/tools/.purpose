@@ -91,10 +91,10 @@ components:
     type: tool-group
     tags: [feature, knowledge-streams, work-log, journal, decisions, mcp]
   AmbientTools:
-    description: "7 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage, paradigm_ambient_learn, paradigm_ambient_promote, paradigm_context_compose, plus surfacing config from .paradigm/surfacing.yaml"
+    description: "8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_neverland (validation metrics), paradigm_context_compose, plus surfacing config"
     type: tool-group
-    tags: [feature, ambient, nominations, events, context-composition, learning, mcp]
+    tags: [feature, ambient, nominations, events, context-composition, learning, neverland, mcp]
   OrchestrationTools:
-    description: "2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording) and paradigm_agent_prompt (single agent with full context injection)"
+    description: "2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage) and paradigm_agent_prompt (single agent with full context injection)"
     type: tool-group
-    tags: [feature, orchestration, maestro, agents, symphony, mcp]
+    tags: [feature, orchestration, maestro, agents, symphony, documentor, mcp]

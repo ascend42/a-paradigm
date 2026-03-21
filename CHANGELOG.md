@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Postflight learning loop** — Step 8b: `paradigm_ambient_learn` + `paradigm_ambient_promote` for each contributing agent.
 - **Handoff agent summary** — Step 3b: agent contributions, threshold adjustments, promotions.
 - **University** — PARA 601 lesson: "Maestro: Visible Team Orchestration" with 8 key concepts, 5 quiz questions.
+- **Session Work Log** — JSONL append log at `.paradigm/events/session-log.jsonl` captures agent contributions and user verdicts (accepted/dismissed/revised with reason) during each session. Maestro reads this at postflight to write targeted learning feedback.
+- **Documentor Agent** — 6th core agent dedicated to Paradigm file maintenance. Always runs as final orchestration stage. Updates .purpose, portal.yaml, symbol registrations via MCP tools only. Other agents relieved of Paradigm compliance.
+- **Maestro Learning Pass** — Postflight Step 8b rewritten: reads session work log, writes targeted journal entries per agent (human_feedback for accepted, correction_received for dismissed/revised). Extracts patterns for notebook promotion.
+- **Nomination reason storage** — `Nomination.reason` field stored on engage, not just debate resolution. Enables learning from dismiss reasons.
+- **Stale nomination expiry** — Pending nominations >7 days excluded from `getNominationStats` and `adjustAttentionFromFeedback`. Unblocks learning for agents with old stale nominations.
+- **Journal auto-promote expanded** — `autoPromoteJournalEntries` now promotes both `pattern_discovered` and `human_feedback` journal entries to notebooks.
+- **Orchestration guidance rewrite** — `paradigm://guidance/orchestration` fully documents Maestro model: attributed responses, ambient context, learning loop, bench/activate, documentor, Neverland test.
 
 ### Changed
 
