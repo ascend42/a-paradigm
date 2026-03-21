@@ -1262,6 +1262,29 @@ signals:
   anchors:
     - Sources/Conductor/Symphony/FileApprovalManager.swift:1
 
+# --- Maestro Phase 2: Team Display Components ---
+
+#symphony-thread-watcher:
+  description: Polls mailbox JSONL for thr-orch-* team threads at 3s intervals — feeds TeamThreadView
+  type: service
+  tags: [symphony, maestro, threads, polling]
+  anchors:
+    - Sources/Conductor/Services/SymphonyThreadWatcher.swift:1
+
+#team-thread-view:
+  description: Chat-style display of Maestro orchestration threads — colored role prefixes, intent badges, code diffs, decision highlights, thread picker
+  type: view
+  tags: [ui, maestro, threads, team]
+  anchors:
+    - Sources/Conductor/UI/Views/TeamThreadView.swift:1
+
+#agent-roster-view:
+  description: Agent roster with active/benched sections — acceptance rates, expertise counts, threshold display, bench/activate toggle buttons
+  type: view
+  tags: [ui, maestro, roster, agents]
+  anchors:
+    - Sources/Conductor/UI/Views/AgentRosterView.swift:1
+
 tags:
   - conductor
   - macos
@@ -1271,3 +1294,4 @@ tags:
   - gaze
   - overlay
   - symphony
+  - maestro

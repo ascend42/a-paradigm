@@ -5,21 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.4.0] — 2026-03-20
+## [5.4.0] — 2026-03-21
 
 ### Added
 
-- **Maestro Phase 1: Visible Team Orchestration** — `paradigm_orchestrate_inline` and `paradigm_agent_prompt` now inject full ambient context (recent decisions, journal insights, pending nominations) into agent profiles before spawning. Agents receive complete team awareness, not just symbol expertise.
-- **Attributed agent responses** — Orchestration output includes `attribution` field per agent (`[nickname (role)]` or `[role]`), with execution instructions to present subagent responses as distinct attributed messages instead of synthesized summaries.
-- **Symphony team thread recording** — Orchestration result includes `symphony` section with thread ID and instructions for recording each agent contribution as a Symphony message, creating a visible team conversation thread for Conductor display.
-- **Agent nickname support** — `AgentProfile.nickname` optional field for personalized agent attribution (e.g., "George" for the architect).
-- **Postflight learning loop** — Postflight skill now runs `paradigm_ambient_learn` (threshold adjustment) and `paradigm_ambient_promote` (journal-to-notebook promotion) for each contributing agent after task completion.
-- **Handoff agent summary** — Handoff skill now includes agent performance summary (contributions, threshold adjustments, promotions) for cross-session continuity.
+- **Maestro Phase 1: Visible Team Orchestration** — `paradigm_orchestrate_inline` and `paradigm_agent_prompt` inject full ambient context (decisions, journal insights, nominations) into agent profiles before spawning. Attribution prefix (`[nickname (role)]`) on every response. Symphony team thread recording (`thr-orch-*`) for Conductor visibility.
+- **Maestro Phase 2: Conductor Views** — `TeamThreadView.swift` (chat-style orchestration thread with colored role prefixes, intent badges, code diffs, decision highlights), `AgentRosterView.swift` (active/benched sections with acceptance rates and bench toggles), `SymphonyThreadWatcher.swift` (3s poll for thr-orch-* threads).
+- **Maestro Phase 3: Agent Roster + Bench** — `AgentProfile.benched` field; orchestration and nomination engine skip benched agents. MCP: `paradigm_agent_bench` / `paradigm_agent_activate`. CLI: `paradigm agent roster/bench/activate`. Agent list now returns nickname, bench status, threshold.
+- **Maestro Phase 4: Platform Team Dashboard** — New Team section in `paradigm serve` web dashboard. `TeamSection.tsx` with agent roster grid + thread viewer. `teamStore.ts` (Zustand). REST API: `/api/team/roster`, `/api/team/threads`, `/api/team/agents/:id/bench`. Always-on section.
+- **Maestro Phase 5: Neverland Validation** — `getNeverlandMetrics()` aggregates acceptance rates, threshold drift, expertise growth, notebook counts, cross-project transfer. Health classifier: cold-start → accumulating → calibrating → mature. `paradigm_ambient_neverland` MCP tool.
+- **Agent nickname support** — `AgentProfile.nickname` optional field for personalized attribution.
+- **Postflight learning loop** — Step 8b: `paradigm_ambient_learn` + `paradigm_ambient_promote` for each contributing agent.
+- **Handoff agent summary** — Step 3b: agent contributions, threshold adjustments, promotions.
+- **University** — PARA 601 lesson: "Maestro: Visible Team Orchestration" with 8 key concepts, 5 quiz questions.
 
 ### Changed
 
-- **Orchestration context injection** — `buildProfileEnrichment()` `ambientContext` parameter is now populated in both `handleOrchestrateInline()` and `handleAgentPrompt()`. Previously existed but was always empty.
-- **Execution instructions** — Updated to emphasize attributed presentation and stage reconciliation over simple summarization.
+- **Orchestration context injection** — `buildProfileEnrichment()` `ambientContext` parameter now populated in both orchestration paths. Previously existed but was always empty.
+- **Execution instructions** — Emphasize attributed presentation and stage reconciliation over synthesized summaries.
 
 ## [5.3.2] — 2026-03-20
 
