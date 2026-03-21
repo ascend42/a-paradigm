@@ -656,6 +656,95 @@ export function getNominationStats(
 }
 
 /**
+ * Neverland Validation Metrics — aggregate learning metrics across all agents.
+ * Tracks the measurable success criteria from the Maestro spec:
+ * - Agent routing accuracy (>80% by session 10)
+ * - Acceptance rate per agent (>70% from ~50% cold start)
+ * - Threshold drift (self-tuning direction)
+ * - Notebook growth (journal → notebook promotions)
+ * - Cross-project transfer (transferable patterns applied)
+ */
+export function getNeverlandMetrics(
+  rootDir: string
+): {
+  agents: Array<{
+    id: string;
+    acceptRate: number;
+    threshold: number;
+    expertiseCount: number;
+    notebookCount: number;
+    transferableCount: number;
+    totalNominations: number;
+  }>;
+  aggregate: {
+    avgAcceptRate: number;
+    avgThreshold: number;
+    totalExpertise: number;
+    totalNotebooks: number;
+    totalTransferable: number;
+  };
+  healthStatus: 'cold-start' | 'accumulating' | 'calibrating' | 'mature';
+} {
+  const profiles = loadAllAgentProfiles(rootDir);
+  const agentMetrics = profiles
+    .filter(p => !p.benched)
+    .map(p => {
+      const stats = getNominationStats(rootDir, p.id);
+
+      // Count notebook entries (check file existence)
+      let notebookCount = 0;
+      try {
+        const nbDir = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
+        if (fs.existsSync(nbDir)) {
+          notebookCount = fs.readdirSync(nbDir).filter(f => f.endsWith('.yaml')).length;
+        }
+      } catch { /* skip */ }
+
+      return {
+        id: p.id,
+        acceptRate: stats.acceptRate,
+        threshold: p.attention?.threshold ?? 0.5,
+        expertiseCount: (p.expertise || []).length,
+        notebookCount,
+        transferableCount: (p.transferable || []).length,
+        totalNominations: stats.total,
+      };
+    });
+
+  const count = agentMetrics.length || 1;
+  const avgAcceptRate = agentMetrics.reduce((s, a) => s + a.acceptRate, 0) / count;
+  const avgThreshold = agentMetrics.reduce((s, a) => s + a.threshold, 0) / count;
+  const totalExpertise = agentMetrics.reduce((s, a) => s + a.expertiseCount, 0);
+  const totalNotebooks = agentMetrics.reduce((s, a) => s + a.notebookCount, 0);
+  const totalTransferable = agentMetrics.reduce((s, a) => s + a.transferableCount, 0);
+  const totalNominations = agentMetrics.reduce((s, a) => s + a.totalNominations, 0);
+
+  // Determine health status based on Neverland test criteria
+  let healthStatus: 'cold-start' | 'accumulating' | 'calibrating' | 'mature';
+  if (totalNominations < 10) {
+    healthStatus = 'cold-start';
+  } else if (avgAcceptRate < 0.5) {
+    healthStatus = 'accumulating';
+  } else if (avgAcceptRate < 0.7) {
+    healthStatus = 'calibrating';
+  } else {
+    healthStatus = 'mature';
+  }
+
+  return {
+    agents: agentMetrics,
+    aggregate: {
+      avgAcceptRate,
+      avgThreshold,
+      totalExpertise,
+      totalNotebooks,
+      totalTransferable,
+    },
+    healthStatus,
+  };
+}
+
+/**
  * Forward nominations to Symphony relay for cross-machine delivery.
  * Only forwards if Symphony is configured and relay is running.
  * Fire-and-forget — relay failure does not block local processing.

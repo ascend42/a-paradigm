@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries, processPendingEvents } from '../utils/nomination-engine.js';
+import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, getNeverlandMetrics, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries, processPendingEvents } from '../utils/nomination-engine.js';
 import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
@@ -125,6 +125,18 @@ export function getAmbientToolsList() {
       },
       annotations: {
         readOnlyHint: false,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_ambient_neverland',
+      description: 'Neverland Validation — aggregate learning metrics across all agents. Shows acceptance rates, threshold drift, expertise growth, notebook counts, cross-project transfer, and overall health status (cold-start → accumulating → calibrating → mature). ~200 tokens.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {},
+      },
+      annotations: {
+        readOnlyHint: true,
         destructiveHint: false,
       },
     },
@@ -409,6 +421,14 @@ export async function handleAmbientTool(
           ...result,
           stats,
         }),
+        handled: true,
+      };
+    }
+
+    case 'paradigm_ambient_neverland': {
+      const metrics = getNeverlandMetrics(ctx.rootDir);
+      return {
+        text: json(metrics),
         handled: true,
       };
     }
