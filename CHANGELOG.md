@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.2] — 2026-03-20
+
+### Fixed
+
+- **Post-write hook cwd** — Hook was silently exiting because `$(pwd)` wasn't the project root in plugin context. Now extracts `cwd` from JSON input (same pattern as stop hook). File edits via Edit/Write tools now emit `file-modified` events.
+- **Weighted attention scoring** — Replaced max-based scoring (always 1.0) with weighted dimensions: primary 0.5, secondary 0.2, tertiary+quaternary 0.15 each. Creates actual relevance gradient.
+- **Nomination deduplication** — Same agent + identical brief within 30-second window is now skipped. Prevents nomination spam from rapid sequential tool calls.
+- **Agent creation defaults** — `createAgentProfile` now populates `attention`, `collaboration` from `DEFAULT_ATTENTION` and `DEFAULT_COLLABORATION`. New agents are ambient-capable from creation.
+- **Signal coverage gaps** — All 5 default agents now have appropriate signal subscriptions. Previously architect/builder/reviewer had zero signals — compliance-violation, file-modified, error-encountered events went unnoticed.
+- **Plugin version** — Bumped from 3.45.0 to 5.3.0 to invalidate stale caches missing event emission hooks.
+
+### Changed
+
+- **DEFAULT_ATTENTION expanded** — architect: +flow-modified, +compliance-violation. builder: +file-modified, +error-encountered. reviewer: +compliance-violation. tester: +test-result. security: +gate-checked, +compliance-violation.
+
 ## [5.3.0] — 2026-03-20
 
 ### Added
