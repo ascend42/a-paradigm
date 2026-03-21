@@ -24,7 +24,7 @@ import type {
   AgentPersonality,
   AgentProjectContext,
 } from '../types/agents.js';
-import { DEFAULT_PERSONALITIES } from '../types/agents.js';
+import { DEFAULT_PERSONALITIES, DEFAULT_ATTENTION, DEFAULT_COLLABORATION } from '../types/agents.js';
 
 // ────────────────────────────────────────────────────────
 // Constants
@@ -200,6 +200,14 @@ export function createAgentProfile(
   // Fix: use a valid default if not in DEFAULT_PERSONALITIES
   if (!DEFAULT_PERSONALITIES[agentId]) {
     profile.personality = { style: 'deliberate', risk: 'balanced', verbosity: 'concise' };
+  }
+
+  // Populate ambient defaults (attention, collaboration)
+  if (DEFAULT_ATTENTION[agentId]) {
+    profile.attention = { ...DEFAULT_ATTENTION[agentId] };
+  }
+  if (DEFAULT_COLLABORATION[agentId]) {
+    profile.collaboration = { ...DEFAULT_COLLABORATION[agentId] };
   }
 
   const scope = opts.scope || 'global';
