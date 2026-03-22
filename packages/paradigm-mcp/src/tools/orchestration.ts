@@ -613,15 +613,17 @@ async function handleOrchestrateInline(
     const agentPrompts: AgentPromptResult[] = [];
 
     for (const agentStep of stage.agents) {
-      const agentDef: AgentDefinition = manifest.agents[agentStep.name] || {
-        name: agentStep.name,
-        role: ROLE_PROMPTS[agentStep.name] || `${agentStep.name} agent`,
-        focus: { reads: ['**/*'], writes: ['**/*'] },
-        defaultModel: DEFAULT_MODELS[agentStep.name] || 'sonnet',
+      const manifestAgent = manifest.agents[agentStep.name];
+      const agentDef: AgentDefinition = {
+        name: manifestAgent?.name || agentStep.name,
+        role: manifestAgent?.role || ROLE_PROMPTS[agentStep.name] || `${agentStep.name} agent`,
+        focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
+        defaultModel: manifestAgent?.defaultModel || DEFAULT_MODELS[agentStep.name] || 'sonnet',
+        triggers: manifestAgent?.triggers,
+        handoff_to: manifestAgent?.handoff_to,
+        context: manifestAgent?.context,
+        protocol: manifestAgent?.protocol,
       };
-      if (!agentDef.focus) {
-        agentDef.focus = { reads: ['**/*'], writes: ['**/*'] };
-      }
 
       const profileData = agentProfiles.get(agentStep.name);
       const promptResult = buildAgentPromptInternal({
@@ -755,15 +757,17 @@ async function handleAgentPrompt(
   // Load agents manifest
   const manifest = loadAgentsManifest(ctx.rootDir);
 
-  // Get agent definition (from manifest or use defaults)
-  const agentDef: AgentDefinition = manifest?.agents[agentName] || {
-    name: agentName,
-    role: ROLE_PROMPTS[agentName] || ROLE_PROMPTS.builder,
-    focus: {
-      reads: ['**/*'],
-      writes: ['**/*'],
-    },
-    defaultModel: DEFAULT_MODELS[agentName] || 'sonnet',
+  // Get agent definition — merge manifest with defaults to handle partial definitions
+  const manifestAgent = manifest?.agents[agentName];
+  const agentDef: AgentDefinition = {
+    name: manifestAgent?.name || agentName,
+    role: manifestAgent?.role || ROLE_PROMPTS[agentName] || ROLE_PROMPTS.builder,
+    focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
+    defaultModel: manifestAgent?.defaultModel || DEFAULT_MODELS[agentName] || 'sonnet',
+    triggers: manifestAgent?.triggers,
+    handoff_to: manifestAgent?.handoff_to,
+    context: manifestAgent?.context,
+    protocol: manifestAgent?.protocol,
   };
 
   // Extract symbols from task
