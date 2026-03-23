@@ -301,6 +301,13 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Ensure portal.yaml exists (empty but valid — prevents doctor failures on first run)
+  const portalPath = path.join(cwd, 'portal.yaml');
+  if (!fs.existsSync(portalPath)) {
+    const defaultPortal = { version: '1.0.0', gates: {}, routes: {} };
+    fs.writeFileSync(portalPath, yaml.dump(defaultPortal, { lineWidth: -1, noRefs: true }), 'utf8');
+  }
+
   // Ensure .paradigm/lore/ directory exists
   const lorePath = path.join(cwd, '.paradigm', 'lore');
   if (!fs.existsSync(lorePath)) {
@@ -427,7 +434,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.paradigm/agents.yaml', desc: 'Team agent configuration' },
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: '.paradigm/lore/', desc: 'Project lore timeline', isDir: true },
-    { path: 'portal.yaml', desc: 'Authorization gates', optional: true },
+    { path: 'portal.yaml', desc: 'Authorization gates' },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
     { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
     { path: '.cursor/rules/', desc: 'Cursor AI instructions', isDir: true },
@@ -479,7 +486,6 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   }
 
   console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
-  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Create ') + chalk.cyan('portal.yaml') + chalk.gray(' if you have authorization'));
   console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Add ') + chalk.cyan('.purpose') + chalk.gray(' files to feature directories'));
   console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
   console.log('');
