@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.11.0] — 2026-03-24
+
+### Added
+
+- **Orchestration enforcement habits** — 3 new seed habits: `orchestration-required` (preflight, warn — suggests orchestration for complex tasks), `agent-coverage-validated` (postflight, advisory — verify agents with relevant expertise were consulted), `hot-mode-incident` (on-stop, advisory — incident response mode requires lore entry).
+- **PARA 701: Agent Mastery** — New 10-lesson university course covering the full modern agent system: 54-agent roster, profiles, notebooks, state, rosters, model tiers, enforcement, Symphony visibility, learning loop, and pods/nevr.land.
+- **Symbol debt cleanup** — Registered all new components from v5.6.3–5.10.1: #agent-state, #project-type, #roster, #model-resolution, #grid-preset, #help-view, #conductor-install, #nomination-surfacing, plus flows $orchestration-visibility, $agent-learning-loop, $roster-setup.
+
 ## [5.10.1] — 2026-03-24
 
 ### Fixed

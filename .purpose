@@ -25,16 +25,16 @@ features:
   symbol-system:
     description: 'The shared language between code, developers, and AI (v2: #, $, ^, !, ~ + tag bank)'
     aspects:
-      - "~yaml-config-loading"
-      - "~zod-validated"
-      - "~file-glob-discovery"
+      - ~yaml-config-loading
+      - ~zod-validated
+      - ~file-glob-discovery
     components:
       - '#symbol-parser'
       - '#symbol-index'
   ide-sync:
     description: Generate IDE instruction files from .paradigm/ config
     aspects:
-      - "~ide-adapter-pattern"
+      - ~ide-adapter-pattern
     flows:
       - $sync-flow
       - $ide-sync-flow
@@ -52,6 +52,9 @@ features:
       - '#scan-generator'
   agent-efficiency:
     description: Tools for token-efficient AI development
+    aspects:
+      - ~symbol-typed-logging
+      - ~correlation-tracked
     signals:
       - '!context-loaded'
       - '!ripple-analyzed'
@@ -61,14 +64,14 @@ features:
       - '#ripple'
       - '#thread'
       - '#echo'
-    aspects:
-      - "~symbol-typed-logging"
-      - "~correlation-tracked"
   mcp-server:
     description: Model Context Protocol server for AI assistants with global session persistence and cross-project wisdom
     aspects:
-      - "~mcp-tool-handler"
-      - "~global-persistence"
+      - ~mcp-tool-handler
+      - ~global-persistence
+    flows:
+      - $handoff-roundtrip
+      - $wisdom-promotion
     signals:
       - '!server-started'
       - '!resource-fetched'
@@ -76,9 +79,6 @@ features:
       - '!handoff-persisted'
       - '!handoff-delivered'
       - '!wisdom-promoted'
-    flows:
-      - $handoff-roundtrip
-      - $wisdom-promotion
     components:
       - '#mcp-resources'
       - '#mcp-tools'
@@ -87,7 +87,7 @@ features:
   sentinel-dashboard:
     description: Unified codebase intelligence UI with symbol visualization
     aspects:
-      - "~express-server"
+      - ~express-server
     components:
       - '#sentinel-ui'
       - '#node-renderer'
@@ -96,34 +96,34 @@ features:
   university-platform:
     description: Interactive academia-themed learning platform with courses, quizzes, PLSAT certification exam, and reference library
     aspects:
-      - "~express-server"
+      - ~express-server
+    flows:
+      - $plsat-exam-flow
+    signals:
+      - '!plsat-completed'
+      - '!quiz-completed'
     components:
       - '#university-ui'
       - '#university-server'
       - '#courses-store'
       - '#progress-store'
       - '#plsat-store'
-    signals:
-      - "!plsat-completed"
-      - "!quiz-completed"
-    flows:
-      - $plsat-exam-flow
   aspect-graph:
     description: SQLite-backed aspect graph with materialization, three-tier search, drift detection, and auto-suggest
     aspects:
-      - "~aspect-graph-derived-artifact"
-      - "~three-tier-search"
-      - "~search-weight-learning"
+      - ~aspect-graph-derived-artifact
+      - ~three-tier-search
+      - ~search-weight-learning
+    flows:
+      - $aspect-materialization
+    signals:
+      - '!index-rebuilt'
     components:
       - '#AspectGraph'
       - '#AspectSearch'
       - '#AspectLoreBridge'
       - '#AspectSuggest'
       - '#AspectGraphTools'
-    signals:
-      - '!index-rebuilt'
-    flows:
-      - $aspect-materialization
   portal-authorization:
     description: Runtime authorization with visual testing
     flows:
@@ -140,8 +140,8 @@ features:
   team-orchestration:
     description: Multi-agent coordination with model selection, spawning, and orchestration
     aspects:
-      - "~provider-cascade"
-      - "~budget-enforced"
+      - ~provider-cascade
+      - ~budget-enforced
     flows:
       - $orchestration-flow
       - $agent-orchestration-flow
@@ -215,6 +215,27 @@ components:
     description: Manages provider cascade (claude → claude-code → cursor-cli → manual)
   model-configurator:
     description: Interactive prompts for configuring agent model assignments
+  roster:
+    description: Per-project agent roster system. .paradigm/roster.yaml declares which agents are active for a project. Orchestrator only considers roster agents.
+    type: system
+    flows:
+      - $roster-setup
+    components:
+      - '#project-type'
+      - '#agent-state'
+  model-resolution:
+    description: Tier-based model resolution system. Agents declare capability tiers (tier-1/tier-2/tier-3), config.yaml maps tiers to actual models per environment.
+    type: system
+    components:
+      - '#orchestration'
+  nomination-surfacing:
+    description: System-level nomination processing in orchestration. Processes pending events, loads high-urgency nominations, surfaces them in plan/execute responses. Framework-level — no agent names hardcoded.
+    type: system
+    signals:
+      - '!nomination-surfaced'
+    components:
+      - '#orchestration'
+      - '#nomination-engine'
 signals:
   command-success:
     description: CLI command completed successfully
@@ -371,8 +392,6 @@ aspects:
       - '#mcp-tools'
   aspect-graph-derived-artifact:
     description: The SQLite aspect-graph.db is a derived build artifact rebuilt from scratch on every reindex — YAML .purpose files remain the authoritative source
-    category: invariant
-    severity: critical
     tags:
       - aspect-graph
       - architecture
@@ -387,8 +406,6 @@ aspects:
       from SymbolEntry[] on every reindex. Never edit the database directly.
   three-tier-search:
     description: Aspect search uses three tiers in order — Tier 1 learned mappings, Tier 2 FTS5 full-text, Tier 3 Levenshtein fuzzy — first tier to return results wins
-    category: decision
-    severity: high
     tags:
       - aspect-graph
       - search
@@ -399,8 +416,6 @@ aspects:
       - '#AspectGraphTools'
   search-weight-learning:
     description: Search results improve via confirm feedback — confirmed aspect gets +1.0, alternatives decay by *0.95 per query
-    category: rule
-    severity: medium
     tags:
       - aspect-graph
       - learning
@@ -488,3 +503,53 @@ flows:
       - npm install -g paradigm
       - npm install -g paradigm-mcp
       - Verify installation with paradigm doctor
+  orchestration-visibility:
+    description: 'Live orchestration visibility pipeline: orchestrator emits Symphony notes → NoteRelay routes to inboxes → SymphonyThreadWatcher picks up thr-orch-* threads → TeamThreadView renders in Conductor'
+    signals:
+      - '!nomination-surfaced'
+      - '!agent-state-recorded'
+    components:
+      - '#orchestration'
+      - '#conductor'
+      - '#symphony'
+    steps:
+      - component: '#orchestration'
+        action: emit Symphony notes on execute
+      - component: '#symphony'
+        action: NoteRelay routes notes to agent inboxes
+      - component: '#conductor'
+        action: SymphonyThreadWatcher polls for thr-orch-* threads
+      - component: '#conductor'
+        action: TeamThreadView renders live conversation
+  agent-learning-loop:
+    description: 'Automatic agent learning from session work: verdicts auto-adjust expertise confidence, Teacher Model writes journals, journals promote to notebooks, notebooks enrich future prompts'
+    signals:
+      - '!agent-state-recorded'
+    components:
+      - '#agent-state'
+      - '#session-work-log'
+      - '#nomination-engine'
+    steps:
+      - component: '#session-work-log'
+        action: record verdict (accepted/dismissed/revised)
+      - component: '#agent-state'
+        action: auto-adjust expertise confidence
+      - component: '#agent-state'
+        action: write session summary to project state
+      - component: '#nomination-engine'
+        action: score events and generate nominations
+  roster-setup:
+    description: 'Per-project agent roster setup: paradigm shift detects project type → suggests appropriate agents → creates .paradigm/roster.yaml → orchestrator filters by roster'
+    components:
+      - '#project-type'
+      - '#roster'
+      - '#orchestration'
+    steps:
+      - component: '#project-type'
+        action: detect project type from file signatures
+      - component: '#roster'
+        action: suggest roster based on type
+      - component: '#roster'
+        action: create .paradigm/roster.yaml
+      - component: '#orchestration'
+        action: filter agents by roster on plan/execute

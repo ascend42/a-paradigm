@@ -253,6 +253,37 @@ const SEED_HABITS: HabitDefinition[] = [
     check: { type: 'tool-called', params: { tools: ['paradigm_university_onboard'] } },
     enabled: false,
   },
+  // ── Agent Orchestration Enforcement ──────────────────────────
+  {
+    id: 'orchestration-required',
+    name: 'Orchestrate Complex Tasks',
+    description: 'Tasks affecting 3+ files or touching security symbols should use paradigm_orchestrate_inline to determine which agents are needed. Ensures security review, test coverage, and documentation.',
+    category: 'collaboration',
+    trigger: 'preflight',
+    severity: 'warn',
+    check: { type: 'tool-called', params: { tools: ['paradigm_orchestrate_inline'] } },
+    enabled: true,
+  },
+  {
+    id: 'agent-coverage-validated',
+    name: 'Validate Agent Involvement',
+    description: 'After completing work, verify that agents with relevant expertise were consulted. Check nominations that were surfaced but not acted on.',
+    category: 'collaboration',
+    trigger: 'postflight',
+    severity: 'advisory',
+    check: { type: 'tool-called', params: { tools: ['paradigm_ambient_nominations', 'paradigm_agent_list'] } },
+    enabled: true,
+  },
+  {
+    id: 'hot-mode-incident',
+    name: 'Incident Response Acknowledgment',
+    description: 'During incident response, orchestration enforcement is waived. But a post-incident lore entry is required and a postflight review should be scheduled.',
+    category: 'collaboration',
+    trigger: 'on-stop',
+    severity: 'advisory',
+    check: { type: 'lore-recorded' },
+    enabled: true,
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════

@@ -3,7 +3,8 @@ components:
   ServeCommand:
     description: paradigm serve — launches the unified Platform server
     type: command
-    tags: [feature]
+    tags:
+      - feature
   ShiftCommand:
     description: paradigm shift — full project setup in one command
     type: command
@@ -25,16 +26,30 @@ components:
   DocsServeCommand:
     description: paradigm docs serve — launches the Platform with docs section enabled
     type: command
-    tags: [feature, docs]
+    tags:
+      - feature
+      - docs
   DocsBuildCommand:
     description: paradigm docs build — static export of symbol-graph documentation
     type: command
-    tags: [feature, docs]
+    tags:
+      - feature
+      - docs
   GraduateCommand:
-    description: "paradigm graduate — automation tier graduation CLI (status, promote, demote)"
+    description: paradigm graduate — automation tier graduation CLI (status, promote, demote)
     type: command-group
-    tags: [feature, graduation, automation]
+    tags:
+      - feature
+      - graduation
+      - automation
   PersonaCommand:
-    description: "paradigm persona — actor-driven journey testing CLI (list, show, validate, coverage, run, affected, delete)"
+    description: paradigm persona — actor-driven journey testing CLI (list, show, validate, coverage, run, affected, delete)
     type: command-group
-    tags: [feature, personas, testing]
+    tags:
+      - feature
+      - personas
+      - testing
+  conductor-install:
+    description: 'Global binary install for Conductor. --install copies native binary to ~/.paradigm/conductor/bin/. Three-tier resolution: installed → monorepo dev → error.'
+    file: packages/paradigm/src/commands/conductor.ts
+    type: command

@@ -1,0 +1,5 @@
+components:
+  help-view:
+    description: In-app help system with 9-section guide covering Conductor capabilities, menus, shortcuts, and known limitations. Accessible via ? button.
+    file: packages/conductor/Sources/Conductor/UI/Views/HelpView.swift
+    type: view

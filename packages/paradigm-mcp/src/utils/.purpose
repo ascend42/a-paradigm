@@ -1,103 +1,175 @@
 version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
-
 components:
   symphony-loader:
-    description: "The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained)."
+    description: 'The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained).'
     type: loader
-    tags: [feature, symphony]
     anchors:
       - symphony-loader.ts:1-988
+    tags:
+      - feature
+      - symphony
   university-loader:
-    description: "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple"
+    description: Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple
     type: loader
-    tags: [feature, university]
+    tags:
+      - feature
+      - university
   platform-bridge:
-    description: "HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command."
+    description: HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command.
     type: loader
-    tags: [feature, platform, agent-ui]
+    tags:
+      - feature
+      - platform
+      - agent-ui
   symphony-peers:
-    description: "Peer trust records for Symphony cross-machine networking — peers.json CRUD, pairing code generation/verification, HMAC authentication."
+    description: Peer trust records for Symphony cross-machine networking — peers.json CRUD, pairing code generation/verification, HMAC authentication.
     type: loader
-    tags: [feature, symphony, networking]
     anchors:
       - symphony-peers.ts:1-229
+    tags:
+      - feature
+      - symphony
+      - networking
   symphony-relay:
-    description: "WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect."
+    description: WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect.
     type: integration
-    tags: [feature, symphony, networking]
     anchors:
       - symphony-relay.ts:1-925
+    tags:
+      - feature
+      - symphony
+      - networking
   agent-loader:
-    description: "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification"
+    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification
     type: loader
-    tags: [feature, agent-identity, permissions]
+    tags:
+      - feature
+      - agent-identity
+      - permissions
   notebook-loader:
-    description: "CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count"
+    description: CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count
     type: loader
-    tags: [feature, notebooks, agent-identity]
+    tags:
+      - feature
+      - notebooks
+      - agent-identity
   tool-registry:
-    description: "Tiered tool registration system — core/feature/advanced tiers with auto-detection"
+    description: Tiered tool registration system — core/feature/advanced tiers with auto-detection
     type: loader
-    tags: [feature, tool-loading, mcp]
+    tags:
+      - feature
+      - tool-loading
+      - mcp
   compliance-checker:
-    description: "Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality"
+    description: Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality
     type: service
-    tags: [feature, review, compliance]
+    tags:
+      - feature
+      - review
+      - compliance
   DocsLoader:
     description: Reads scan-index, .purpose files, portal.yaml, and flows.yaml to produce structured documentation page data
     type: loader
-    tags: [feature, docs]
+    tags:
+      - feature
+      - docs
   graduation-types:
-    description: "Type definitions for the automation tier graduation system — GraduationState, GraduationConfig, GraduationTier, NON_GRADUATABLE_CHECK_TYPES"
+    description: Type definitions for the automation tier graduation system — GraduationState, GraduationConfig, GraduationTier, NON_GRADUATABLE_CHECK_TYPES
     type: types
-    tags: [feature, graduation, automation]
+    tags:
+      - feature
+      - graduation
+      - automation
   graduation-store:
-    description: "YAML read/write for .paradigm/graduation.yaml — state accessors, mutations, 30s cache"
+    description: YAML read/write for .paradigm/graduation.yaml — state accessors, mutations, 30s cache
     type: store
-    tags: [feature, graduation, persistence]
+    tags:
+      - feature
+      - graduation
+      - persistence
   graduation-engine:
-    description: "Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking"
+    description: Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking
     type: engine
-    tags: [feature, graduation, automation]
+    tags:
+      - feature
+      - graduation
+      - automation
   aspect-fingerprint:
-    description: "Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors"
+    description: Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors
     type: engine
-    tags: [feature, drift-detection, fingerprint]
+    tags:
+      - feature
+      - drift-detection
+      - fingerprint
   event-stream:
-    description: "Ambient event stream — emit, store (JSONL), query, and attention-score events for ambient coordination. Append-only with automatic pruning."
+    description: Ambient event stream — emit, store (JSONL), query, and attention-score events for ambient coordination. Append-only with automatic pruning.
     type: engine
-    tags: [feature, ambient, event-stream]
     anchors:
       - event-stream.ts:1-199
+    tags:
+      - feature
+      - ambient
+      - event-stream
   data-policy-loader:
-    description: "Data policy loader — reads .paradigm/data-policy.yaml, merges with defaults, enforces trust rings, observation rules, content redaction, and per-agent overrides."
+    description: Data policy loader — reads .paradigm/data-policy.yaml, merges with defaults, enforces trust rings, observation rules, content redaction, and per-agent overrides.
     type: loader
-    tags: [feature, data-policy, sovereignty]
     anchors:
       - data-policy-loader.ts:1-195
+    tags:
+      - feature
+      - data-policy
+      - sovereignty
   work-log-loader:
-    description: "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/"
+    description: Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/
     type: loader
-    tags: [feature, knowledge-streams, work-log]
+    tags:
+      - feature
+      - knowledge-streams
+      - work-log
   journal-loader:
-    description: "Learning Journal CRUD — record/search/stats for agent learnings. Agent-private YAML in ~/.paradigm/agents/{id}/journal/"
+    description: Learning Journal CRUD — record/search/stats for agent learnings. Agent-private YAML in ~/.paradigm/agents/{id}/journal/
     type: loader
-    tags: [feature, knowledge-streams, journal]
+    tags:
+      - feature
+      - knowledge-streams
+      - journal
   decision-loader:
-    description: "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/"
+    description: Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/
     type: loader
-    tags: [feature, knowledge-streams, decisions]
+    tags:
+      - feature
+      - knowledge-streams
+      - decisions
   nomination-engine:
-    description: "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (pattern_discovered + human_feedback triggers), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config."
+    description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (pattern_discovered + human_feedback triggers), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.'
     type: engine
-    tags: [feature, ambient, nominations, debates, learning, surfacing, neverland]
     anchors:
       - nomination-engine.ts:1
+    tags:
+      - feature
+      - ambient
+      - nominations
+      - debates
+      - learning
+      - surfacing
+      - neverland
   session-work-log:
-    description: "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start."
+    description: Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start.
     type: loader
-    tags: [feature, maestro, learning, session]
     anchors:
       - session-work-log.ts:1
+    tags:
+      - feature
+      - maestro
+      - learning
+      - session
+  agent-state:
+    description: Per-project + global state tracking for agent continuity. Tracks last session summary, pending work, decisions, patterns, and career stats across sessions.
+    file: packages/paradigm-mcp/src/utils/agent-state.ts
+    flows:
+      - $agent-learning-loop
+    signals:
+      - '!agent-state-recorded'
+    type: service

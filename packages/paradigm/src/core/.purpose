@@ -7,12 +7,16 @@ components:
   pipeline-types:
     description: Spec pipeline type definitions — 5 stages, 3 gate modes, pipeline state, templates
     type: model
-    tags: [pipeline, types]
+    tags:
+      - pipeline
+      - types
     path: pipeline-types.ts
   pipeline-utils:
     description: Pipeline YAML utilities — load, save, list, create, archive pipeline state files
     type: utility
-    tags: [pipeline, utilities]
+    tags:
+      - pipeline
+      - utilities
     path: pipeline-utils.ts
   orchestrator:
     description: Multi-agent task conductor supporting solo and faceted modes
@@ -81,6 +85,12 @@ components:
     description: Run orchestration in background with progress reporting
     type: engine
     path: background-orchestrator.ts
+  project-type:
+    description: Detects project type from file signatures (saas-web-app, game, backend-api, etc.) and suggests appropriate agent rosters.
+    file: packages/paradigm/src/core/project-type.ts
+    flows:
+      - $roster-setup
+    type: utility
 signals:
   orchestration-started:
     description: Multi-agent orchestration has begun
@@ -263,12 +273,12 @@ aspects:
       - '#orchestrator'
   habits-types:
     description: Habit type definitions — HabitDefinition, HabitCheck, HabitCategory, HabitTrigger, HabitSeverity, check type enums
-    anchors:
-      - habits/types.ts:12-12
-      - habits/types.ts:66-66
     tags:
       - habits
       - types
+    anchors:
+      - habits/types.ts:12-12
+      - habits/types.ts:66-66
     applies-to:
       - '#orchestrator'
 flows:
