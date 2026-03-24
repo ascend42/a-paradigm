@@ -11,6 +11,7 @@ import './styles/agent.css';
 
 const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
+const CanvasSection = lazy(() => import('./sections/canvas/CanvasSection'));
 const GitSection = lazy(() => import('./sections/git/GitSection'));
 const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection'));
 const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection'));
@@ -53,7 +54,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient'];
+      const validSections = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -76,6 +77,7 @@ export default function App() {
             {activeSection === 'overview' && <OverviewSection />}
             {activeSection === 'lore' && <LoreSection />}
             {activeSection === 'graph' && <GraphSection />}
+            {activeSection === 'canvas' && <CanvasSection />}
             {activeSection === 'git' && <GitSection />}
             {activeSection === 'sentinel' && <SentinelSection />}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}

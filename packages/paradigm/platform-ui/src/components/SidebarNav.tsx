@@ -5,6 +5,7 @@ const SECTION_ICONS: Record<string, string> = {
   overview: '◉',
   lore: '◆',
   graph: '◎',
+  canvas: '▦',
   git: '⎇',
   sentinel: '◈',
   university: '▣',

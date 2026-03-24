@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-21T06:36:54.167Z'
+generated: '2026-03-24T03:13:49.688Z'
 structure: {}
 key_files:
   config:
@@ -259,7 +259,7 @@ symbols:
   '#purpose-component-GraduationTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-SymphonyTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-PurposePortalTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
-  '#purpose-component-OrchestrationTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
+  '#purpose-component-OrchestrationTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose
   '#purpose-component-CoreTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-WisdomTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-HistoryTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
@@ -457,6 +457,9 @@ symbols:
   '#purpose-component-eyebrow-bindings-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   '#purpose-component-hotkey-bindings-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   '#purpose-component-action-picker-views': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
+  '#purpose-component-symphony-thread-watcher': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
+  '#purpose-component-team-thread-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
+  '#purpose-component-agent-roster-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   '#purpose-component-header': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose
   '#purpose-component-seal': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose
   '#purpose-component-timer': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose
@@ -494,7 +497,7 @@ symbols:
   '#purpose-component-ListRow': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
   '#purpose-component-Autocomplete': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
   '#purpose-component-ConversationView': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
-  '#purpose-component-CanvasStore': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
+  '#purpose-component-CanvasStore': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   '#purpose-component-ThemeStore': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
   '#purpose-component-ConversationStore': /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose
   '#purpose-component-purpose-parser': /Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose
@@ -529,6 +532,26 @@ symbols:
   '#purpose-component-gate-client': /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose
   '#purpose-component-gate-schemas': /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose
   '#purpose-component-topology-checker': /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose
+  '#purpose-component-date-separator': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-detail-panel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-filter-bar': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-lore-card': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-review-stars': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-symbol-tag': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-verification-badge': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-view-switcher': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-author-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-session-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-symbol-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
+  '#purpose-component-graph-ui': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-symbol-node': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-group-node': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-symbol-panel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-toolbar': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-canvas': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-graph-store': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-export-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-load-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
   '#purpose-component-PlatformShell': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
   '#purpose-component-SidebarNav': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
   '#purpose-component-PlatformHeader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
@@ -555,26 +578,26 @@ symbols:
   '#purpose-component-ThreadsTab': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
   '#purpose-component-NetworkTab': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
   '#purpose-component-FilesTab': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/.purpose
-  '#purpose-component-date-separator': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-detail-panel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-filter-bar': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-lore-card': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-review-stars': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-symbol-tag': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-verification-badge': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-view-switcher': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-author-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-session-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-symbol-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/lore-ui/.purpose
-  '#purpose-component-graph-ui': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-symbol-node': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-group-node': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-symbol-panel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-toolbar': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-canvas': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-graph-store': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-export-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
-  '#purpose-component-load-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/graph-ui/.purpose
+  '#purpose-component-symphony-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-university-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-platform-bridge': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-symphony-peers': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose
+  '#purpose-component-symphony-relay': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-agent-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-notebook-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-tool-registry': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-compliance-checker': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-DocsLoader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-graduation-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-graduation-store': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-graduation-engine': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-aspect-fingerprint': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-data-policy-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-work-log-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-journal-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-decision-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-nomination-engine': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
+  '#purpose-component-session-work-log': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
   '#purpose-component-UniversityTypes': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose
   '#purpose-component-AgentTypes': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose
   '#purpose-component-NotebookTypes': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose
@@ -634,25 +657,6 @@ symbols:
   '#purpose-component-DocsBuildCommand': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-GraduateCommand': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-PersonaCommand': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
-  '#purpose-component-symphony-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-university-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-platform-bridge': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-symphony-peers': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose
-  '#purpose-component-symphony-relay': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-agent-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-notebook-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-tool-registry': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-compliance-checker': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-DocsLoader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-graduation-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-graduation-store': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-graduation-engine': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-aspect-fingerprint': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-data-policy-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-work-log-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-journal-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-decision-loader': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
-  '#purpose-component-nomination-engine': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
   '#purpose-component-plsat-v3': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/plsat/.purpose
   '#purpose-component-plsat-v2': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/plsat/.purpose
   '#purpose-component-plsat-questions-symbol-system': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/plsat/.purpose
@@ -746,17 +750,17 @@ symbols:
   '#purpose-component-CategoryListPage': /Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose
   '#purpose-component-ContentPage': /Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose
   '#purpose-component-UniversityStorage': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/university/.purpose
+  '#purpose-component-lore-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
+  '#purpose-component-lore-storage': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
+  '#purpose-component-lore-filter': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
+  '#purpose-component-lore-normalize': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
+  '#purpose-component-lore-resolve-author': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
   '#purpose-component-claude-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-claude-code-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-claude-code-teams-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-cursor-cli-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-claude-cli-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-manual-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
-  '#purpose-component-lore-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
-  '#purpose-component-lore-storage': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
-  '#purpose-component-lore-filter': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
-  '#purpose-component-lore-normalize': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
-  '#purpose-component-lore-resolve-author': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose
   '#purpose-component-adapter-base': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose
   '#purpose-component-agents-adapter': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose
   '#purpose-component-adapter-registry': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose
@@ -784,7 +788,6 @@ symbols:
   '#purpose-component-pipeline-abort': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/pipeline/.purpose
   '#purpose-component-pipeline-list': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/pipeline/.purpose
   '#purpose-component-NotebookCommands': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/notebook/.purpose
-  '#purpose-component-paradigm-hooks': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-lore-record-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
   '#purpose-component-lore-assess-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
   '#purpose-component-lore-calibration-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
@@ -797,10 +800,24 @@ symbols:
   '#purpose-component-lore-serve-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
   '#purpose-component-lore-retag-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
   '#purpose-component-lore-migrate-assessments-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose
+  '#purpose-component-paradigm-hooks': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-context-audit': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-DocsCommands': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/docs/.purpose
   '#purpose-component-AgentCommands': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/agent/.purpose
   '#purpose-component-DocsSection': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/docs/.purpose
+  '#purpose-component-CanvasSection': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-CanvasEditor': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-CanvasFrame': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-RenderNode': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-CanvasToolbar': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-ComponentPalette': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-PropertyPanel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-ContainerComponent': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-TextComponent': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-ButtonComponent': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-ImageComponent': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-SpacerComponent': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '#purpose-component-CanvasSerializer': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   ^purpose-gate-api-authenticated: /Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose
   ^purpose-gate-camera-permission: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   ^purpose-gate-microphone-permission: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
@@ -814,6 +831,9 @@ symbols:
   ^purpose-gate-^file-request-allowed: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Symphony/.purpose
   ^purpose-gate-gate-check: /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose
   ^purpose-gate-file-trust: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose
+  ^purpose-gate-canvas-loaded: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  ^purpose-gate-file-exists: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  ^purpose-gate-node-selected: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   '#purpose-state-index': /Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose
   '#purpose-state-session': /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose
   $purpose-flow-init-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
@@ -889,6 +909,9 @@ symbols:
   $purpose-flow-$review-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/review/.purpose
   $purpose-flow-$notebook-promote-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/notebook/.purpose
   $purpose-flow-$agent-expertise-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/agent/.purpose
+  $purpose-flow-canvas-file-crud: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  $purpose-flow-drag-to-canvas: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  $purpose-flow-property-edit: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   '!purpose-signal-command-success': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '!purpose-signal-command-error': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '!purpose-signal-context-loaded': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
@@ -1003,6 +1026,12 @@ symbols:
   '!purpose-signal-agent-created': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/agent/.purpose
   '!purpose-signal-agent-synced': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/agent/.purpose
   '!purpose-signal-expertise-updated': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/agent/.purpose
+  '!purpose-signal-canvas-file-saved': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '!purpose-signal-canvas-file-loaded': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '!purpose-signal-canvas-file-created': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '!purpose-signal-node-placed': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '!purpose-signal-node-removed': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  '!purpose-signal-prop-changed': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   ~purpose-aspect-yaml-config-loading: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   ~purpose-aspect-zod-validated: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   ~purpose-aspect-symbol-typed-logging: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
@@ -1155,7 +1184,7 @@ symbols:
   ~purpose-aspect-~symbol-auto-prefix-normalization: /Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose
   ~purpose-aspect-~correlation-async-local-storage: /Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose
   ~purpose-aspect-~symbol-filter-env-var: /Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose
-  ~purpose-aspect-local-only: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
+  ~purpose-aspect-local-only: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   ~purpose-aspect-zero-cost: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   ~purpose-aspect-platform-abstracted: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   ~purpose-aspect-resource-conscious: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
@@ -1218,6 +1247,9 @@ symbols:
   ~purpose-aspect-~stop-hook-8-compliance-checks: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   ~purpose-aspect-~pre-tool-use-auto-reindex: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   ~purpose-aspect-~post-tool-use-advisory: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
+  ~purpose-aspect-real-css: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  ~purpose-aspect-git-friendly: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
+  ~purpose-aspect-paradigm-native: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/canvas/.purpose
   '#purpose-ref-component-ora-spinners': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   '#purpose-ref-component-chalk-output': /Users/ascend/Documents/GitHub/a-paradigm/.purpose
   $purpose-ref-flow-plsat-exam-flow: /Users/ascend/Documents/GitHub/a-paradigm/.purpose
@@ -1323,6 +1355,7 @@ symbolsByComponentType:
     - '#tutorial-command'
     - '#sweep-command'
     - '#pipeline-command'
+    - '#symphony-peers'
     - '#symphony-send'
     - '#symphony-status'
     - '#symphony-thread'
@@ -1335,7 +1368,6 @@ symbolsByComponentType:
     - '#MigrateCommand'
     - '#DocsServeCommand'
     - '#DocsBuildCommand'
-    - '#symphony-peers'
     - '#symphony-join'
     - '#symphony-leave'
     - '#symphony-whoami'
@@ -1352,7 +1384,6 @@ symbolsByComponentType:
     - '#symphony-deny'
     - '#symphony-watch'
     - '#ReviewCommand'
-    - '#paradigm-hooks'
     - '#lore-record-command'
     - '#lore-assess-command'
     - '#lore-calibration-command'
@@ -1365,6 +1396,7 @@ symbolsByComponentType:
     - '#lore-serve-command'
     - '#lore-retag-command'
     - '#lore-migrate-assessments-command'
+    - '#paradigm-hooks'
   service:
     - '#cursor-adapter'
     - '#copilot-adapter'
@@ -1409,6 +1441,7 @@ symbolsByComponentType:
     - '#checkpoint-reader'
     - '#symphony-monitor'
     - '#agent-health-monitor'
+    - '#symphony-thread-watcher'
     - '#generator'
     - '#component-scanner'
     - '#protocol-handler'
@@ -1417,6 +1450,7 @@ symbolsByComponentType:
     - '#journey-recorder'
     - '#portal-client'
     - '#gate-client'
+    - '#compliance-checker'
     - '#GuidanceResources'
     - '#DocsResources'
     - '#PromptsResources'
@@ -1433,14 +1467,13 @@ symbolsByComponentType:
     - '#task-classifier'
     - '#flow-validator'
     - '#portal-compliance'
-    - '#compliance-checker'
+    - '#lore-storage'
     - '#claude-provider'
     - '#claude-code-provider'
     - '#claude-code-teams-provider'
     - '#cursor-cli-provider'
     - '#claude-cli-provider'
     - '#manual-provider'
-    - '#lore-storage'
     - '#agents-adapter'
     - '#adapter-registry'
   engine:
@@ -1450,10 +1483,10 @@ symbolsByComponentType:
     - '#text-buffer'
     - '#cursor-navigation'
     - '#event-stream'
-    - '#background-orchestrator'
     - '#graduation-engine'
     - '#aspect-fingerprint'
     - '#nomination-engine'
+    - '#background-orchestrator'
   store:
     - '#provider-registry'
     - '#progress-store'
@@ -1474,6 +1507,8 @@ symbolsByComponentType:
     - '#task-store'
     - '#eyebrow-binding-registry'
     - '#hotkey-binding-registry'
+    - '#CanvasStore'
+    - '#graph-store'
     - '#OverviewStore'
     - '#GitStore'
     - '#AgentStore'
@@ -1482,7 +1517,6 @@ symbolsByComponentType:
     - '#SentinelEventsStore'
     - '#SentinelSchemasStore'
     - '#SymphonyStore'
-    - '#graph-store'
     - '#graduation-store'
   config:
     - '#model-configurator'
@@ -1570,6 +1604,8 @@ symbolsByComponentType:
     - '#builtin-gesture-bindings'
     - '#eyebrow-bindings-view'
     - '#hotkey-bindings-view'
+    - '#team-thread-view'
+    - '#agent-roster-view'
     - '#header'
     - '#seal'
     - '#timer'
@@ -1601,6 +1637,13 @@ symbolsByComponentType:
     - '#event-renderer'
     - '#checklist-component'
     - '#palette-component'
+    - '#symbol-node'
+    - '#group-node'
+    - '#symbol-panel'
+    - '#toolbar'
+    - '#canvas'
+    - '#export-dialog'
+    - '#load-dialog'
     - '#PlatformShell'
     - '#SidebarNav'
     - '#PlatformHeader'
@@ -1619,19 +1662,13 @@ symbolsByComponentType:
     - '#ThreadsTab'
     - '#NetworkTab'
     - '#FilesTab'
-    - '#symbol-node'
-    - '#group-node'
-    - '#symbol-panel'
-    - '#toolbar'
-    - '#canvas'
-    - '#export-dialog'
-    - '#load-dialog'
     - '#SymbolPage'
     - '#FlowPage'
     - '#PortalPage'
     - '#CategoryListPage'
     - '#ContentPage'
     - '#DocsSection'
+    - '#CanvasSection'
   loader:
     - '#DocsDataLayer'
     - '#CourseDataLoader'
@@ -1651,6 +1688,7 @@ symbolsByComponentType:
     - '#work-log-loader'
     - '#journal-loader'
     - '#decision-loader'
+    - '#session-work-log'
   utility:
     - '#ring-buffer'
     - '#AspectLoreBridge'
@@ -1692,6 +1730,7 @@ symbolsByComponentType:
     - '#lore-resolve-author'
     - '#adapter-base'
     - '#context-audit'
+    - '#CanvasSerializer'
   schema:
     - '#SymphonySchema'
     - '#purpose-grammar'
@@ -1709,7 +1748,6 @@ symbolsByComponentType:
     - '#GraduationTools'
     - '#SymphonyTools'
     - '#PurposePortalTools'
-    - '#OrchestrationTools'
     - '#CoreTools'
     - '#WisdomTools'
     - '#HistoryTools'
@@ -1733,6 +1771,7 @@ symbolsByComponentType:
     - '#lore-assess'
     - '#lore-calibration'
   tool-group:
+    - '#OrchestrationTools'
     - '#UniversityTools'
     - '#PlatformTools'
     - '#AgentTools'
@@ -1812,17 +1851,17 @@ symbolsByComponentType:
     - '#lore-types'
   state:
     - '#ConversationStore'
+  integration:
+    - '#symphony-relay'
+    - '#SymphonyEventBridge'
   types:
+    - '#graduation-types'
     - '#UniversityTypes'
     - '#AgentTypes'
     - '#NotebookTypes'
     - '#AmbientTypes'
     - '#KnowledgeStreamTypes'
     - '#DataPolicyTypes'
-    - '#graduation-types'
-  integration:
-    - '#SymphonyEventBridge'
-    - '#symphony-relay'
   command-group:
     - '#GraduateCommand'
     - '#PersonaCommand'
@@ -1835,3 +1874,15 @@ symbolsByComponentType:
     - '#para-501-review-compliance'
   storage:
     - '#UniversityStorage'
+  component:
+    - '#CanvasEditor'
+    - '#CanvasFrame'
+    - '#RenderNode'
+    - '#CanvasToolbar'
+    - '#ComponentPalette'
+    - '#PropertyPanel'
+    - '#ContainerComponent'
+    - '#TextComponent'
+    - '#ButtonComponent'
+    - '#ImageComponent'
+    - '#SpacerComponent'

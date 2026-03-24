@@ -1,0 +1,165 @@
+id: L-2026-03-24-ascend-032314-001
+type: milestone
+timestamp: '2026-03-24T03:23:14.908Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Canvas Sprint 0 — Visual Design Editor Foundation
+summary: 'Built Paradigm Canvas Sprint 0: a Craft.js-powered visual design editor embedded as a new Platform section. Users can drag 5 building blocks (Container, Text, Button, Image, Spacer) onto a canvas, edit CSS properties via a full property panel (layout, spacing, size, typography, background, border), and save/load designs as *.canvas YAML files. 25 new files, 5 modified, 31.7KB gzipped lazy-loaded bundle. All builds passing.'
+symbols_touched:
+  - '#canvas-section'
+  - '#canvas-store'
+  - '#canvas-routes'
+  - '#canvas-editor'
+  - '#canvas-frame'
+  - '#render-node'
+  - '#canvas-toolbar'
+  - '#component-palette'
+  - '#property-panel'
+  - '#container-component'
+  - '#text-component'
+  - '#button-component'
+  - '#image-component'
+  - '#spacer-component'
+  - '#canvas-serializer'
+symbols_created:
+  - '#canvas-section'
+  - '#canvas-store'
+  - '#canvas-routes'
+  - '#canvas-editor'
+  - '#canvas-frame'
+  - '#render-node'
+  - '#canvas-toolbar'
+  - '#component-palette'
+  - '#property-panel'
+  - '#container-component'
+  - '#text-component'
+  - '#button-component'
+  - '#image-component'
+  - '#spacer-component'
+  - '#canvas-serializer'
+files_created:
+  - packages/paradigm/platform-ui/src/sections/canvas/types.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/CanvasSection.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/store/canvasStore.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/hooks/useCanvasData.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasEditor.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasFrame.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/editor/RenderNode.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/toolbar/CanvasToolbar.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/ComponentPalette.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/PropertyPanel.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/LayoutControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SpacingControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SizeControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/TypographyControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BackgroundControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BorderControls.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/user/ContainerComponent.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/user/TextComponent.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/user/ButtonComponent.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/user/ImageComponent.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/components/user/SpacerComponent.tsx
+  - packages/paradigm/platform-ui/src/sections/canvas/utils/canvas-serializer.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/utils/css-serializer.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/styles/canvas.css
+  - packages/paradigm/src/platform-server/routes/canvas.ts
+  - packages/paradigm/platform-ui/src/sections/canvas/.purpose
+files_modified:
+  - packages/paradigm/platform-ui/package.json
+  - packages/paradigm/platform-ui/src/store/platformStore.ts
+  - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/src/platform-server/routes/.purpose
+  - packages/paradigm/package.json
+  - packages/paradigm/CHANGELOG.md
+lines_added: 1850
+lines_removed: 5
+decisions:
+  - id: canvas-craftjs
+    decision: Use Craft.js instead of tldraw or GrapesJS
+    rationale: Craft.js renders actual DOM/CSS (not canvas approximations), MIT licensed, gives maximum control over UI since we build all panels ourselves. tldraw is great for diagrams but fights precise CSS layout. GrapesJS was rejected by user in favor of full control.
+  - id: canvas-file-format
+    decision: '*.canvas YAML files in project root, not .paradigm/canvas/'
+    rationale: User wants canvas files to be first-class project objects that get committed to git, not hidden in .paradigm/. YAML is consistent with rest of Paradigm. Glob discovery supports flexible placement.
+  - id: canvas-structured-layout
+    decision: Structured CSS layout (flexbox/grid) not absolute positioning
+    rationale: The killer feature is that designs output production-ready CSS. Absolute positioning produces unusable CSS. Structured layout means what you design is what ships.
+  - id: canvas-graph-coexist
+    decision: Canvas and Graph sections coexist as distinct tools
+    rationale: Graph is the quick auto-generated topology view (symbol wiring diagram). Canvas is the persistent freeform design workspace. Different questions answered.
+learnings:
+  - Craft.js @0.2.x works cleanly with React 18 and Vite — no special config needed, ~40KB gzipped
+  - Canvas section builds to 31.7KB gzipped with lazy loading — comparable to other sections, no bundle bloat
+  - Craft.js useNode() hook provides clean read/write access to node props — setProp() callback pattern works well for property panels
+  - File glob discovery for *.canvas files needs explicit ignore patterns (node_modules, .git, dist) to avoid slow walks on large projects
+verification:
+  status: pass
+  details:
+    build_platform_ui: pass
+    build_paradigm: pass
+    typescript: pass
+    bundle_size: 31.7KB gzipped
+tags:
+  - canvas
+  - craft-js
+  - platform
+  - design-tool
+  - sprint-0
+  - v5.8.0
+meta:
+  sprint: 0
+  feature: canvas
+  version: 5.8.0
+body: |-
+  ## Vision Pivot
+
+  The original Canvas spec (docs/specs/canvas.md) described a tldraw-based symbol visualization canvas — showing Paradigm symbols as cards on an infinite canvas. During planning, the user clarified their actual goal: a free, open-source visual design tool (like Penpot/Figma) where UI elements are Paradigm-native, designs output real CSS, and Claude can see/modify designs via conversation.
+
+  ## Key Decisions
+
+  1. **Craft.js over tldraw** — tldraw is great for diagrams but fights you on precise CSS layout. Craft.js renders actual DOM with actual CSS — what you see IS the CSS. MIT license, ~40KB gzipped.
+
+  2. **Craft.js over GrapesJS** — User chose maximum control. Craft.js gives us the editor framework (drag-drop, component tree, serialization, selection) while we build all UI ourselves.
+
+  3. **Structured layout (flexbox/grid)** — Not absolute positioning. Elements flow with real CSS layout, producing production-ready CSS output.
+
+  4. ***.canvas files as first-class project objects** — Not hidden in .paradigm/canvas/. YAML format, project root default, discovered by glob, git-tracked. This makes canvas files committable project artifacts.
+
+  5. **Graph coexists** — Graph stays as the quick topology view, Canvas is the persistent design editor. Different tools for different jobs.
+
+  ## What Was Built (Sprint 0)
+
+  ### Backend
+  - Express router with 4 endpoints: glob discovery, YAML read, YAML write, delete
+  - 5-second TTL cache on file discovery, path traversal protection
+  - Mounted at /api/canvas/files/* in platform-server
+
+  ### Frontend (25 new files)
+  - 5 user components: Container (flexbox, accepts children), Text (inline editable), Button, Image (with placeholder), Spacer
+  - 3 editor core components: CanvasEditor (Craft.js wrapper), CanvasFrame (white design surface), RenderNode (selection/hover outlines)
+  - 8 panel components: ComponentPalette (left, 200px), PropertyPanel (right, 280px), 6 sub-panels (Layout, Spacing, Size, Typography, Background, Border)
+  - Toolbar: file picker, new/save/delete, undo/redo, design/preview toggle
+  - Zustand store: file CRUD, debounced auto-save, localStorage last-opened
+  - Canvas serializer (Craft.js JSON ↔ YAML), CSS serializer stub
+  - Sync hook (editor state ↔ store bidirectional)
+
+  ### Paradigm Compliance
+  - .purpose file with 15 components, 3 flows, 3 gates, 6 signals, 4 aspects
+  - Routes .purpose updated with CanvasRouter
+  - Index rebuilt
+
+  ## Sprint Roadmap
+
+  - S1: Full CSS + responsive breakpoints + layers panel + CSS output view
+  - S2: Reusable components + Paradigm #symbol linking
+  - S3: MCP tools + CLI + AI integration (Claude can modify designs)
+  - S4: Bidirectional CSS sync (design ↔ source code)
+  - S5: Export, templates, polish
+confidence: 0.88
+git_context:
+  ref: 95bbc653486c21b7c96cd71651bd2baba4846ada
+  branch: main
+  dirty: true

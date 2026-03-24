@@ -2,6 +2,25 @@
 
 All notable changes to Paradigm will be documented in this file.
 
+## [5.8.0] — 2026-03-23
+
+### Added
+
+- **Canvas — Visual Design Editor (Sprint 0)** — New Platform section for creating UI layouts with real CSS output
+  - Craft.js-powered design editor embedded as a `▦` Canvas section in `paradigm serve`
+  - 5 draggable building blocks: Container (flexbox), Text (inline-editable), Button, Image, Spacer
+  - Full CSS property panel: Layout (flex direction, justify, align, gap, wrap), Spacing (4-sided padding/margin), Size (width, height, min/max, overflow), Typography (font size, weight, family, color, align, line-height), Background (color picker, opacity), Border (width, style, color, radius)
+  - Component palette (left panel) with drag-and-drop onto the design canvas
+  - `*.canvas` files — first-class YAML project objects, discovered via glob, git-tracked by default
+  - Backend CRUD API: `GET/PUT/DELETE /api/canvas/files/*` with path traversal protection
+  - Zustand store with debounced auto-save (500ms), localStorage last-opened memory
+  - Design/Preview mode toggle, Undo/Redo via Craft.js history
+  - Custom node renderer with selection outlines, hover indicators, and inline delete
+  - RenderNode toolbar showing component type labels on selection
+  - 15 Paradigm components, 3 flows, 3 gates, 6 signals, 4 aspects registered
+  - `.purpose` files for full symbolication coverage
+  - **31.7KB gzipped** — lazy-loaded, zero impact on other sections
+
 ## [Unreleased]
 
 ### Added

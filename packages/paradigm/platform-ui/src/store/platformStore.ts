@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type SectionId = 'overview' | 'lore' | 'graph' | 'git' | 'sentinel' | 'university' | 'symphony' | 'docs' | 'ambient' | 'team';
+export type SectionId = 'overview' | 'lore' | 'graph' | 'canvas' | 'git' | 'sentinel' | 'university' | 'symphony' | 'docs' | 'ambient' | 'team';
 
 export interface PlatformState {
   activeSection: SectionId;

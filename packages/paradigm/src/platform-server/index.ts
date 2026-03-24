@@ -23,6 +23,7 @@ import { createOverviewHandler } from './routes/overview.js';
 import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
 import { createTeamRouter } from './routes/team.js';
+import { createCanvasRouter } from './routes/canvas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,7 +76,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'lore', 'graph', 'git', 'ambient', 'team'];
+  const always = ['overview', 'lore', 'graph', 'canvas', 'git', 'ambient', 'team'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
 
   const enabled = new Set<string>();
@@ -139,6 +140,9 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
 
   // === Overview aggregation ===
   app.get('/api/platform/overview', createOverviewHandler(options.projectDir));
+
+  // === Canvas design editor ===
+  app.use('/api/canvas', createCanvasRouter(options.projectDir));
 
   // === Git management ===
   app.use('/api/git', createGitRouter(options.projectDir));

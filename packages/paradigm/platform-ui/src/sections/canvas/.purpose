@@ -1,0 +1,101 @@
+description: Visual design editor section in Platform UI — Craft.js based, creates UI layouts with real CSS output linked to Paradigm symbols
+components:
+  CanvasSection:
+    description: Main Platform section entry point (lazy-loaded) — initializes file state and renders editor
+    type: view
+    tags: [feature, canvas, platform]
+  CanvasEditor:
+    description: Craft.js Editor wrapper with resolver config for all user components
+    type: component
+    tags: [canvas, editor]
+  CanvasFrame:
+    description: White design surface containing the Craft.js Frame with root container
+    type: component
+    tags: [canvas, editor]
+  RenderNode:
+    description: Custom Craft.js node renderer — adds selection/hover outlines and delete button
+    type: component
+    tags: [canvas, editor]
+  CanvasToolbar:
+    description: Top toolbar — file operations, undo/redo, design/preview mode toggle
+    type: component
+    tags: [canvas, toolbar]
+  ComponentPalette:
+    description: Left panel — draggable component list (Container, Text, Button, Image, Spacer)
+    type: component
+    tags: [canvas, panel]
+  PropertyPanel:
+    description: Right panel — CSS property controls for selected element (layout, spacing, size, typography, background, border)
+    type: component
+    tags: [canvas, panel]
+  ContainerComponent:
+    description: Draggable div building block — flexbox/grid layout, accepts children
+    type: component
+    tags: [canvas, user-component]
+  TextComponent:
+    description: Draggable text element — inline editable, typography controls
+    type: component
+    tags: [canvas, user-component]
+  ButtonComponent:
+    description: Draggable button element — editable label, full styling
+    type: component
+    tags: [canvas, user-component]
+  ImageComponent:
+    description: Draggable image element — URL source, object-fit, placeholder when empty
+    type: component
+    tags: [canvas, user-component]
+  SpacerComponent:
+    description: Draggable spacer element — invisible div for layout spacing
+    type: component
+    tags: [canvas, user-component]
+  CanvasStore:
+    description: Zustand store — file management, editor state serialization, debounced auto-save
+    type: store
+    tags: [canvas, state]
+  CanvasSerializer:
+    description: Converts between Craft.js JSON and *.canvas YAML format
+    type: utility
+    tags: [canvas, serialization]
+flows:
+  canvas-file-crud:
+    description: Create → edit → save → reload lifecycle for *.canvas YAML files
+    steps: [create-file, edit-design, auto-save, reload-from-api]
+  drag-to-canvas:
+    description: Palette item → drag connector → drop on Frame → node created → render
+    steps: [select-component, drag-start, drop-on-frame, craft-node-created, render-element]
+  property-edit:
+    description: Select node → read props → edit in panel → setProp() → visual update
+    steps: [select-node, show-controls, edit-value, setProp-dispatch, re-render]
+gates:
+  canvas-loaded:
+    description: Craft.js editor initialized and ready for interaction
+  file-exists:
+    description: A *.canvas file exists and is loaded into the editor
+  node-selected:
+    description: A canvas node is selected (enables property panel)
+signals:
+  canvas-file-saved:
+    description: Design persisted to *.canvas YAML on disk
+  canvas-file-loaded:
+    description: Design loaded from *.canvas YAML into editor
+  canvas-file-created:
+    description: New *.canvas file created in project root
+  node-placed:
+    description: Element dragged from palette onto canvas
+  node-removed:
+    description: Element deleted from canvas
+  prop-changed:
+    description: CSS property updated on a selected node
+aspects:
+  real-css:
+    description: All rendering uses actual CSS — inline styles are the output CSS
+    anchors: [ContainerComponent, TextComponent, ButtonComponent, ImageComponent]
+  local-only:
+    description: Everything runs in the browser, no cloud services required
+    anchors: [CanvasEditor, CanvasFrame]
+  git-friendly:
+    description: "*.canvas files are YAML, diff cleanly, committed to project"
+    anchors: [CanvasSerializer, CanvasStore]
+  paradigm-native:
+    description: Components will link to Paradigm #symbols (Sprint 2+)
+    anchors: [CanvasSection]
