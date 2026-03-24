@@ -1,0 +1,807 @@
+{
+  "id": "para-701",
+  "title": "PARA 701: Agent Mastery",
+  "description": "Master the Paradigm agent system \u2014 from the 54-agent roster to orchestration enforcement, learning loops, and the nevr.land marketplace.",
+  "lessons": [
+    {
+      "id": "agent-roster",
+      "title": "Lesson 1: The Agent Roster",
+      "content": "## 54 Agents, 7 Tiers\n\nParadigm ships with 54 named agents organized into seven functional tiers. Each agent is a narrow specialist with a defined personality, expertise domain, attention patterns, and collaboration graph. The roster is not a menu of interchangeable generalists \u2014 it is a team of specialists who are each the best at one thing.\n\nThe seven tiers group agents by function:\n\n**Builders** \u2014 Agents that produce code and artifacts. The builder agent writes implementation code. Mika (designer) produces UI/UX designs. Wren (copywriter) writes user-facing text. Ghost (e2e) writes end-to-end tests. The tester writes unit and integration tests. These agents produce output that becomes part of the codebase.\n\n**Reviewers** \u2014 Agents that evaluate what builders produce. The reviewer checks code quality and Paradigm compliance. Shield (qa) designs test strategy and validates acceptance criteria. Jinx (advocate) is the devil's advocate who stress-tests assumptions and finds edge cases nobody considered. Bolt (performance) reviews for performance regressions.\n\n**Strategists** \u2014 Agents that plan and decide. The architect designs systems and leads orchestration. North (product) owns the product vision and prioritization. Yuki (pm) manages tickets and tracking. Scout (researcher) conducts competitive analysis and market research. Clause (legal) handles compliance and legal review.\n\n**Intelligence** \u2014 Agents that gather and analyze information. Sage (analyst) performs data analysis. Beacon (seo) handles search optimization. Lens (content-intel) analyzes content strategy. Oracle (ai) specializes in AI/ML patterns and prompt engineering. Cipher (reverser) reverse-engineers systems and protocols.\n\n**Infrastructure** \u2014 Agents that manage the platform and deployment. Atlas (devops) owns CI/CD, deployment, and monitoring. Vault (dba) manages databases, migrations, and query optimization. Root (sysadmin) handles system administration. Wire (network) specializes in networking and protocols. Ship (release) manages release coordination.\n\n**Meta** \u2014 Agents that manage other agents. Loid (forge) designs and builds new agents \u2014 she understands the full .agent profile schema and recommends team compositions. Sensei (trainer) trains agents by reviewing their performance and curating notebook entries. The documentor maintains .purpose files and portal.yaml after other agents finish their work. Bridge (mediator) resolves disagreements between agents.\n\n**Human Ops** \u2014 Agents that support the human directly. Sunday (secretary) is a personal operations agent who tracks goals, schedules, and commitments across all projects. Obi (mentor) provides career guidance. Sheila (educator) creates learning materials for humans. Leila (operations) handles business operations.\n\n## Named Agents Have Personalities\n\nEvery agent has a unique nickname and personality configuration. Jinx is confrontational and aggressive \u2014 her job is to argue against the current approach. Mika is opinionated and precise \u2014 she leads design discussions and will challenge decisions. Sunday is proactive and conservative \u2014 she watches the human's commitments across all contexts. Atlas is methodical and conservative \u2014 he does not take risks with infrastructure.\n\nThese are not cosmetic names. The personality (style, risk tolerance, verbosity) shapes how the agent behaves during orchestration. A `deliberate` architect thinks carefully before responding. A `rapid` builder moves fast. A `confrontational` advocate pushes back on every assumption.\n\n## How the Orchestrator Picks Agents\n\nWhen `paradigm_orchestrate_inline` runs in plan mode, it evaluates which agents are relevant to the task. The selection process considers:\n\n1. **Task classification** \u2014 What kind of work is this? A new feature needs builders, reviewers, and possibly security. A refactor needs the architect and reviewer. An incident needs devops, debugger, and security.\n\n2. **Symbol matching** \u2014 Which symbols does the task touch? Each agent has attention patterns (symbols, paths, concepts, signals) that define what they notice. If the task involves `^authenticated` gates, the security agent's symbol pattern `^*` matches. If it touches `src/design/**` files, Mika's path patterns match.\n\n3. **Attention threshold** \u2014 Each agent scores events against their attention patterns. Only agents whose relevance score meets their threshold are included. Security has a low threshold (0.45) because missing a security issue is expensive. The builder has a higher threshold (0.75) because it should only be included when directly relevant.\n\n4. **Roster filtering** \u2014 If the project has a `roster.yaml`, only agents listed there are considered. A game project does not need SEO or legal agents. A backend API does not need a designer.\n\nThe orchestrator then stages agents in dependency order: the architect plans first, builders implement, the reviewer and security check, the documentor updates Paradigm files last.\n\n## Why Narrow Specialists Beat Broad Generalists\n\nA single \"coding agent\" that tries to build, review, test, and document produces mediocre results across all dimensions. The specialist model works because:\n\n- **Expertise compounds** \u2014 The security agent's confidence on `#portal-gates` is 0.95 because that is all it focuses on. A generalist's confidence would be 0.5 across many domains.\n- **Attention is focused** \u2014 The security agent watches gate symbols, auth paths, and security concepts. It does not waste attention on typography or test fixtures.\n- **Collaboration is explicit** \u2014 The architect pairs with security to validate auth models. The builder pairs with the tester to verify implementation. These pairs are defined in the agent's collaboration graph, not left to chance.\n- **Accountability is clear** \u2014 When a security issue ships, the security agent's acceptance rate drops. When a design is inconsistent, Mika's patterns need updating. Each agent owns a specific quality dimension.\n\nThe full roster provides coverage across code quality, security, performance, accessibility, design, testing, documentation, and business strategy. Most projects activate 15-25 agents depending on the domain. The orchestrator handles routing \u2014 the human never manually assigns agents to tasks.\n\n| Tier | Count | Example Agents |\n|---|---|---|\n| Builders | ~10 | builder, designer (Mika), copywriter (Wren), tester, e2e (Ghost) |\n| Reviewers | ~6 | reviewer, qa (Shield), advocate (Jinx), performance (Bolt) |\n| Strategists | ~8 | architect, product (North), pm (Yuki), researcher (Scout) |\n| Intelligence | ~7 | analyst (Sage), seo (Beacon), content-intel (Lens), ai (Oracle) |\n| Infrastructure | ~8 | devops (Atlas), dba (Vault), sysadmin (Root), release (Ship) |\n| Meta | ~6 | forge (Loid), trainer (Sensei), documentor, mediator (Bridge) |\n| Human Ops | ~9 | secretary (Sunday), mentor (Obi), educator (Sheila), operations (Leila) |",
+      "keyConcepts": [
+        "54 agents organized into 7 tiers: Builders, Reviewers, Strategists, Intelligence, Infrastructure, Meta, Human Ops",
+        "Each agent has a unique nickname and personality (style, risk, verbosity) that shapes behavior during orchestration",
+        "The orchestrator selects agents via task classification, symbol matching, attention thresholds, and roster filtering",
+        "Narrow specialists beat broad generalists because expertise compounds, attention is focused, and accountability is clear",
+        "Most projects activate 15-25 of the 54 agents depending on domain",
+        "Agents are staged in dependency order: architect plans, builders implement, reviewers check, documentor finalizes"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A new SaaS web app project needs to build a payment flow with Stripe integration. The task touches `^authenticated`, `$checkout-flow`, and `#payment-service`. Which agents would the orchestrator most likely include, and why?",
+          "choices": {
+            "A": "Only the builder \u2014 it is a coding task",
+            "B": "The architect (plans the flow), builder (implements), security (gates on ^authenticated), reviewer (quality check), and documentor (.purpose updates) \u2014 because their attention patterns match the symbols involved",
+            "C": "All 54 agents \u2014 payments are critical and need full coverage",
+            "D": "The designer and copywriter \u2014 it is a user-facing payment page",
+            "E": "The devops agent \u2014 Stripe is infrastructure"
+          },
+          "correct": "B",
+          "explanation": "The orchestrator matches task symbols against agent attention patterns. The architect's `$*` pattern matches `$checkout-flow`. Security's `^*` pattern matches `^authenticated`. The builder's path patterns match source files. The reviewer watches all symbol types. The documentor has the lowest threshold (0.3) and matches symbol patterns. The designer and copywriter might be included if UI work is required, but the core selection is driven by symbol matching against attention patterns."
+        },
+        {
+          "id": "q2",
+          "question": "Why does the security agent have an attention threshold of 0.45 while the builder has 0.75?",
+          "choices": {
+            "A": "The security agent is more important than the builder",
+            "B": "The builder writes more code and needs to be more selective about when it speaks up",
+            "C": "The cost of missing a security issue (low threshold = more alerts) far outweighs the cost of a false alarm, while the builder should only engage when directly relevant to implementation",
+            "D": "Lower thresholds mean the agent runs faster",
+            "E": "The thresholds are arbitrary defaults with no design rationale"
+          },
+          "correct": "C",
+          "explanation": "Threshold values encode the asymmetry of costs. A security agent that stays quiet when a gate is missing creates a vulnerability \u2014 the cost of a false negative is high. So it uses a low threshold (0.45) to speak up early and often. The builder speaking up on tasks not directly relevant to implementation just adds noise. The cost of a builder false positive is wasted context tokens. So it uses a higher threshold (0.75) to stay focused."
+        },
+        {
+          "id": "q3",
+          "question": "What is the purpose of the Meta tier agents (forge, trainer, documentor, mediator)?",
+          "choices": {
+            "A": "They manage the codebase directly, writing and reviewing source files",
+            "B": "They manage other agents \u2014 designing new agents, training existing ones, maintaining Paradigm files, and resolving agent disagreements",
+            "C": "They are administrative agents that handle user authentication",
+            "D": "They provide backup for the builder when it is unavailable",
+            "E": "They are deprecated and no longer used in the roster"
+          },
+          "correct": "B",
+          "explanation": "Meta agents operate on the agent system itself rather than on the codebase directly. Loid (forge) designs and builds new agents by understanding the full .agent profile schema. Sensei (trainer) reviews agent performance and curates notebook entries to improve them. The documentor maintains .purpose and portal.yaml files after other agents finish. Bridge (mediator) resolves disagreements between agents. They are the agents that make other agents better."
+        },
+        {
+          "id": "q4",
+          "question": "A developer is working on a game project built with Godot. Which of these agents would likely NOT be in the project roster?",
+          "choices": {
+            "A": "The gamedev agent (Pixel)",
+            "B": "The 3d agent (Neon)",
+            "C": "The audio agent (Echo)",
+            "D": "The SEO agent (Beacon)",
+            "E": "The builder agent"
+          },
+          "correct": "D",
+          "explanation": "The SEO agent (Beacon) specializes in search engine optimization \u2014 concepts like meta tags, crawlability, structured data, and organic traffic. A Godot game project has no web pages to optimize for search engines. The game project type suggests a roster including architect, builder, reviewer, tester, documentor, gamedev (Pixel), 3d (Neon), audio (Echo), designer, performance, and debugger. SEO is irrelevant to this domain."
+        },
+        {
+          "id": "q5",
+          "question": "What distinguishes Jinx (advocate) from the reviewer in the Reviewers tier?",
+          "choices": {
+            "A": "Jinx writes code and the reviewer does not",
+            "B": "Jinx is a devil's advocate who stress-tests assumptions and challenges approaches, while the reviewer checks code correctness, quality, and Paradigm compliance",
+            "C": "Jinx is the reviewer's backup \u2014 they do the same work",
+            "D": "Jinx only works on security-related code",
+            "E": "Jinx has a higher attention threshold than the reviewer"
+          },
+          "correct": "B",
+          "explanation": "Jinx and the reviewer serve fundamentally different purposes. The reviewer checks code quality: correctness, naming conventions, .purpose coverage, aspect anchors, test coverage. Jinx's job is to argue against the current approach entirely \u2014 she stress-tests assumptions, finds edge cases nobody considered, and asks uncomfortable questions. Her personality is confrontational and aggressive, while the reviewer is deliberate and conservative. Jinx attacks the design; the reviewer evaluates the implementation."
+        }
+      ]
+    },
+    {
+      "id": "agent-profiles",
+      "title": "Lesson 2: Agent Profiles Deep Dive",
+      "content": "## The .agent File\n\nEvery agent's identity lives in a `.agent` file stored at `~/.paradigm/agents/{id}.agent`. This is a YAML file that defines who the agent is: not just what it does, but how it thinks, who it works with, what it watches, and what it has learned. The `.agent` file is the complete specification of an agent's identity.\n\n## Core Identity Fields\n\nThe top-level fields establish the agent's identity:\n\n```yaml\nid: security\nnickname: null              # Optional display name (e.g., \"Jinx\", \"Mika\")\nrole: Security agent\ndescription: >-\n  Security specialist who audits auth flows, reviews gate implementations,\n  and hunts for vulnerabilities. He is the Portal/Gates champion.\nversion: 1.0.0\n```\n\n`id` is the machine-readable identifier used in rosters, orchestration plans, and file paths. `nickname` is the optional human-friendly name displayed in attributed responses and Symphony threads (e.g., Mika for designer, Atlas for devops). `role` is a short description of the agent's function. `description` is a detailed paragraph that explains the agent's responsibilities, expertise boundaries, and what it does NOT do.\n\nThe description is critically important because it is injected into the agent's prompt during orchestration. A vague description produces vague behavior. A precise description like \"He flags issues but does NOT implement fixes \u2014 that's the Builder's job\" creates a clear boundary.\n\n## Personality Configuration\n\nThe `personality` block defines the agent's behavioral parameters:\n\n```yaml\npersonality:\n  style: methodical        # How the agent approaches work\n  risk: conservative       # Risk tolerance for decisions\n  verbosity: detailed      # How much output the agent produces\n```\n\n**Style** options include `rapid` (moves fast, starts immediately), `deliberate` (thinks before acting, maps impact first), `methodical` (follows systematic processes), `analytical` (data-driven, evidence-based), `opinionated` (has strong views, will lead), `confrontational` (challenges everything), `patient` (takes time to understand context), `proactive` (anticipates needs, speaks up unprompted), `strategic` (thinks about long-term implications), and `meticulous` (leaves nothing unchecked).\n\n**Risk** values are `conservative` (prefers proven approaches, avoids experimentation), `balanced` (will take calculated risks with evidence), `moderate` (open to new approaches when justified), and `aggressive` (pushes boundaries, challenges the status quo).\n\n**Verbosity** values are `concise` (minimal output, just the essentials), `precise` (exact and specific, no filler), `detailed` (thorough explanations with context), and `thorough` (comprehensive coverage with examples and rationale).\n\nThese values are not decorative. During orchestration, `buildProfileEnrichment()` injects them into the agent's prompt as `**Style:** methodical | **Risk:** conservative | **Verbosity:** detailed`. The LLM uses these parameters to calibrate its response style.\n\n## Collaboration Graph\n\nThe `collaboration` block defines how the agent works with others:\n\n```yaml\ncollaboration:\n  stance: advisory                   # Default relationship to other agents\n  pairs_well_with:\n    - architect: Security validates the architect's auth model and gate design\n    - devops: Atlas handles infra hardening, security handles app-layer auth\n    - builder: Security reviews builder's auth code before it ships\n  with:\n    architect:\n      stance: peer                   # Treat as equal, not subordinate\n      can_contradict: true           # Allowed to disagree with architect\n    builder:\n      stance: advisory               # Give guidance, not orders\n      review_output: true            # Review what builder produces\n  debate:\n    will_challenge: true             # Will push back on decisions\n    evidence_required: true          # Requires evidence to challenge\n    escalate_to_human: true          # Will ask the human to break ties\n  onboarding: >-\n    When joining a project, security:\n    1. Reads portal.yaml\n    2. Calls paradigm_gates_for_route on key routes\n    3. Checks Sentinel for auth-related events\n    4. Reviews auth middleware implementations\n    5. Identifies unprotected routes\n```\n\nThe `stance` field defines the default relationship: `lead` (drives decisions), `advisory` (gives guidance), `support` (executes direction from leads), `peer` (equal footing), `challenger` (pushes back on everything). The `pairs_well_with` array lists productive agent pairings with explanations \u2014 these are surfaced during orchestration planning.\n\nThe `debate` section controls disagreement behavior. Jinx (advocate) has `will_challenge: true` and `evidence_required: false` \u2014 she challenges instinctively. The security agent has `evidence_required: true` \u2014 it backs challenges with OWASP references and CVE data. The `onboarding` field is a step-by-step procedure the agent follows when it first encounters a project.\n\n## Expertise Tracking\n\nThe `expertise` array tracks the agent's confidence on specific symbols:\n\n```yaml\nexpertise:\n  - symbol: '#portal-gates'\n    confidence: 0.95            # 0.0-1.0\n    sessions: 12                # Times this agent worked on this symbol\n    lastTouch: '2026-03-24T11:30:00.000Z'\n  - symbol: '#auth-security'\n    confidence: 0.95\n    sessions: 8\n    lastTouch: '2026-03-24T11:30:00.000Z'\n```\n\nConfidence scores are not static. They adjust automatically based on user verdicts in the session work log: `+0.03` for accepted contributions, `-0.02` for dismissed ones, `-0.01` for revised ones. An agent that consistently gets security reviews accepted will see its `#auth-security` confidence rise over time. An agent whose suggestions are frequently dismissed will see confidence drop.\n\nThe `sessions` count and `lastTouch` timestamp provide recency context. An agent with 50 sessions on `#payment-service` that last touched it yesterday has stronger expertise than one with 2 sessions from three months ago.\n\n## Attention Patterns\n\nThe `attention` block defines what the agent notices in the event stream:\n\n```yaml\nattention:\n  symbols:\n    - ^*                      # All gate symbols\n    - '#*-auth'\n    - '#*-middleware'\n  paths:\n    - auth/**\n    - middleware/**\n  concepts:\n    - JWT\n    - RBAC\n    - injection\n    - CSRF\n  signals:\n    - type: gate-added\n    - type: route-created\n  threshold: 0.45\n```\n\nAttention patterns were covered in depth in PARA 601. The key point here is that they are part of the agent profile, not a separate system. The agent's identity (who it is) and its attention (what it notices) are defined in the same file.\n\n## Behaviors\n\nThe `behaviors` block defines named behavior protocols the agent follows:\n\n```yaml\nbehaviors:\n  portal-gates-mastery: >-\n    Security owns the portal.yaml gate model:\n    1. Every route that checks auth MUST have a corresponding ^gate\n    2. Use paradigm_gates_for_route to check gate coverage\n    3. Gates need prizes: [] (v2 requirement)\n  sentinel-security-monitoring: >-\n    Security uses Sentinel for threat detection:\n    - paradigm_sentinel_events to find auth failures\n    - paradigm_sentinel_patterns for security patterns\n  security-review-checklist: >-\n    Before approving auth-related code:\n    1. Check portal.yaml coverage\n    2. Verify JWT validation\n    3. Check for OWASP Top 10 vulnerabilities\n```\n\nBehaviors are injected into the agent's orchestration prompt. They are named so that other agents and humans can reference them (\"use the security-review-checklist behavior\"). They define step-by-step procedures that make the agent's actions predictable and auditable.\n\n## Transferable Patterns\n\nThe `transferable` array contains patterns the agent has learned that apply across projects:\n\n```yaml\ntransferable:\n  - pattern: gate-coverage-check\n    description: >-\n      Every new route gets paradigm_gates_for_route called on it.\n      No exceptions. If it returns no gates and the route modifies data,\n      that's a security violation.\n    successRate: 1.0\n    sessions: 0\n```\n\nTransferable patterns travel with the agent across projects. When the security agent joins a new project, it brings its `gate-coverage-check` pattern regardless of whether the previous project was a SaaS app or a CLI tool. Patterns with `successRate >= 0.7` are included in prompt enrichment; lower success rate patterns are excluded.\n\n## How Profiles Define WHO the Agent Is\n\nThe `.agent` file is not a configuration file \u2014 it is an identity specification. It answers:\n\n- **Who am I?** \u2014 id, nickname, role, description, personality\n- **What do I know?** \u2014 expertise with confidence scores\n- **What do I notice?** \u2014 attention patterns and threshold\n- **How do I work with others?** \u2014 collaboration stance, pairings, debate rules\n- **How do I behave?** \u2014 named behavior protocols\n- **What have I learned?** \u2014 transferable patterns\n\nWhen the orchestrator invokes an agent, `buildProfileEnrichment()` assembles all of these fields into a prompt section that makes the LLM behave as that specific agent. The same base model (e.g., Claude Sonnet) becomes the security agent or the designer based entirely on the profile enrichment injected from the `.agent` file.",
+      "keyConcepts": [
+        "The .agent file is a YAML identity specification stored at ~/.paradigm/agents/{id}.agent",
+        "Personality (style, risk, verbosity) shapes agent behavior during orchestration \u2014 it is injected into prompts via buildProfileEnrichment()",
+        "Collaboration graph defines stance, pairings, debate rules, and onboarding procedures for inter-agent relationships",
+        "Expertise confidence scores auto-adjust based on user verdicts: +0.03 accepted, -0.02 dismissed, -0.01 revised",
+        "Behaviors are named step-by-step protocols injected into orchestration prompts for predictable, auditable agent actions",
+        "Transferable patterns with successRate >= 0.7 travel across projects and are included in prompt enrichment"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A security agent has `confidence: 0.85` on `#auth-security`. Over the next 5 sessions, its security review contributions are accepted 4 times and dismissed 1 time. What is the approximate new confidence score?",
+          "choices": {
+            "A": "0.85 \u2014 confidence does not change automatically",
+            "B": "~0.95 \u2014 4 accepts at +0.03 each, 1 dismiss at -0.02 = +0.10 net",
+            "C": "1.0 \u2014 confidence maxes out after enough acceptances",
+            "D": "~0.80 \u2014 the single dismissal outweighs the acceptances",
+            "E": "Depends on the reviewer, not the verdicts"
+          },
+          "correct": "B",
+          "explanation": "Expertise confidence adjusts per verdict: `+0.03` for accepted, `-0.02` for dismissed, `-0.01` for revised. Four acceptances: `4 * 0.03 = +0.12`. One dismissal: `1 * -0.02 = -0.02`. Net delta: `+0.10`. Starting from 0.85, the new confidence is approximately 0.95. In practice, confidence is clamped to `[0.0, 1.0]`, so it would be `min(1.0, 0.95) = 0.95`."
+        },
+        {
+          "id": "q2",
+          "question": "What is the difference between `collaboration.stance` and `collaboration.with.{agent}.stance`?",
+          "choices": {
+            "A": "They are the same field with different syntax",
+            "B": "`collaboration.stance` is the default stance toward all agents; `collaboration.with.{agent}.stance` overrides it for a specific agent",
+            "C": "`collaboration.with` is deprecated in favor of `collaboration.stance`",
+            "D": "`collaboration.stance` applies to humans; `collaboration.with` applies to agents",
+            "E": "`collaboration.stance` only applies during orchestration; `collaboration.with` applies in Symphony"
+          },
+          "correct": "B",
+          "explanation": "The top-level `collaboration.stance` (e.g., `advisory`) is the default relationship the agent has with all other agents. The `collaboration.with.{agent}.stance` (e.g., `with.architect.stance: peer`) overrides it for a specific agent. This allows fine-grained relationships: the security agent is `advisory` by default but treats the architect as a `peer` with `can_contradict: true`."
+        },
+        {
+          "id": "q3",
+          "question": "An agent has a transferable pattern with `successRate: 0.5`. How does this affect its inclusion in orchestration prompts?",
+          "choices": {
+            "A": "It is included with a warning label",
+            "B": "It is always included \u2014 all patterns are injected regardless of success rate",
+            "C": "It is excluded \u2014 buildProfileEnrichment() only includes patterns with successRate >= 0.7",
+            "D": "It is included but with reduced priority",
+            "E": "It triggers a notification to the human to update the pattern"
+          },
+          "correct": "C",
+          "explanation": "The `buildProfileEnrichment()` function filters transferable patterns: `(profile.transferable || []).filter(p => p.successRate >= 0.7)`. Patterns with a success rate below 0.7 are excluded from prompt enrichment. A 0.5 success rate means the pattern works only half the time \u2014 injecting it into every orchestration prompt would waste context tokens on unreliable guidance. The agent needs to improve the pattern (or it will naturally improve as the system tracks successes) before it gets promoted to prompt enrichment."
+        },
+        {
+          "id": "q4",
+          "question": "Why does the security agent's description explicitly state \"He flags issues but does NOT implement fixes \u2014 that's the Builder's job\"?",
+          "choices": {
+            "A": "It is a style preference with no functional impact",
+            "B": "The description is injected into the agent's prompt during orchestration, so explicit boundaries prevent the security agent from writing implementation code when it should only be reviewing",
+            "C": "It is documentation for the human developer only",
+            "D": "It prevents the security agent from being activated on implementation tasks",
+            "E": "It triggers the orchestrator to always pair security with builder"
+          },
+          "correct": "B",
+          "explanation": "The agent's `description` field is injected into the orchestration prompt. When the LLM receives the security agent's prompt, it reads this boundary statement and constrains its behavior accordingly. Without explicit boundaries in the description, the LLM might generate implementation code when it should only flag issues for the builder. Clear description boundaries are how you enforce separation of concerns between agents that share the same underlying LLM."
+        },
+        {
+          "id": "q5",
+          "question": "What happens when the orchestrator calls buildProfileEnrichment() for an agent?",
+          "choices": {
+            "A": "It writes the agent's profile to disk in a new format",
+            "B": "It compiles the agent's .agent file into a binary prompt template",
+            "C": "It assembles the agent's personality, relevant expertise, transferable patterns, notebook entries, and agent state into a markdown prompt section that makes the base LLM behave as that specific agent",
+            "D": "It validates the agent's profile for schema errors",
+            "E": "It sends the profile to the Conductor UI for display"
+          },
+          "correct": "C",
+          "explanation": "buildProfileEnrichment() is the function that transforms a static .agent file into a dynamic prompt enrichment section. It takes the agent's profile, the relevant symbols for the current task, notebook entries matched by concept, ambient context (decisions, journal insights, nominations), and agent state (last session, pending work). It assembles all of this into markdown that includes sections like '## Agent Identity', '## Your Expertise on Relevant Symbols', '## Transferable Patterns', '## Relevant Notebook Entries', and '## Your Recent Work on This Project'. This prompt enrichment is what makes the same base LLM behave differently as each agent."
+        }
+      ]
+    },
+    {
+      "id": "agent-notebooks",
+      "title": "Lesson 3: Agent Notebooks",
+      "content": "## What Notebooks Are\n\nAgent notebooks are curated snippet libraries distilled from experience. Where expertise scores track *how well* an agent knows a symbol, and transferable patterns track *general principles* the agent has learned, notebooks contain *specific, reusable knowledge* \u2014 code patterns, configuration snippets, troubleshooting procedures, and domain-specific techniques.\n\nA notebook entry for the security agent might contain a specific JWT validation middleware pattern for Express v5. A notebook entry for Mika (designer) might contain a font pairing recommendation with rationale. A notebook entry for Atlas (devops) might contain a zero-downtime migration pattern for Supabase.\n\nNotebooks bridge the gap between abstract principles (\"always validate JWTs\") and concrete implementation (\"here is the exact middleware code that handles edge cases in Express v5\").\n\n## The NotebookEntry Schema\n\nEvery notebook entry follows the `NotebookEntry` interface:\n\n```typescript\ninterface NotebookEntry {\n  id: string;              // e.g., \"nb-auth-pattern-001\"\n  context: string;         // When to apply this snippet\n  snippet: string;         // The reusable code/knowledge\n  provenance: {            // Where this came from\n    source: 'lore' | 'manual' | 'transfer';\n    loreEntryId?: string;  // If promoted from lore\n    originProject?: string;\n    createdBy?: string;\n  };\n  appliedCount: number;    // Times applied in orchestration\n  confidence: number;      // 0.0-1.0\n  concepts: string[];      // Concept tags for retrieval\n  tags: string[];          // Classification tags\n  created: string;         // ISO date\n  updated: string;         // ISO date\n}\n```\n\nThe `context` field describes *when* to apply the snippet \u2014 not what the snippet is, but the situation that calls for it. For example: \"When setting up JWT validation middleware in an Express v5 application with async route handlers.\" This context is what the retrieval system matches against.\n\nThe `snippet` field contains the actual knowledge \u2014 code, configuration, a procedure, or a detailed explanation. It should be directly usable, not abstract guidance.\n\nThe `provenance` field tracks where the entry came from: `lore` (promoted from a lore entry), `manual` (written directly by a human or agent), or `transfer` (copied from another agent's notebook). This matters for trust: a lore-promoted entry with a link to the original session has higher credibility than a manually created one.\n\nThe `appliedCount` tracks how often this entry has been used in orchestration. Entries are sorted by `appliedCount` descending \u2014 frequently-applied entries surface first.\n\n## Storage: Global vs Project\n\nNotebooks live in two locations:\n\n**Global notebooks** at `~/.paradigm/notebooks/{agent-id}/` travel with the agent across all projects. An entry about JWT validation patterns is useful regardless of which project the security agent joins. Global notebooks are stored in the user's home directory (ring 2), so they persist even if a project is deleted.\n\n**Project notebooks** at `.paradigm/notebooks/{agent-id}/` contain knowledge specific to one project. An entry about the specific authentication architecture of project X should not bleed into project Y. Project notebooks are committed to the repository so they are shared with the team.\n\nWhen loading entries, the system reads global first, then project. If the same entry ID exists in both locations, the **project version wins** (override pattern). This allows a project to customize an agent's global knowledge for its specific needs.\n\nEach entry is stored as an individual YAML file named `nb-{concept}.yaml` (or more precisely, `{entry-id}.yaml`). The `nb-` prefix and `.yaml` extension are enforced by the `NOTEBOOK_PREFIX` and `NOTEBOOK_EXT` constants in the notebook loader.\n\n## Bootstrapping: Canonical Sources vs Learning Loop\n\nNotebook entries come from two pipelines:\n\n**Canonical bootstrapping** \u2014 When an agent is first created, Loid (forge) or a human seeds its notebook with foundational entries. The security agent might be bootstrapped with entries for OWASP Top 10 patterns, JWT best practices, and RLS policy templates. This gives the agent useful knowledge on day one without needing to learn from experience.\n\n**Learning loop promotion** \u2014 Over time, journal entries and lore entries that prove valuable are promoted into notebook entries. The `promoteFromLore()` function takes a lore entry ID, extracts the symbols and content, and creates a notebook entry with `provenance.source: 'lore'` and a link to the original entry. Sensei (trainer) drives this promotion \u2014 reviewing agent performance, identifying high-value learnings, and curating them into notebook entries.\n\nThe learning loop pipeline is more valuable over time because it captures *project-specific* and *team-specific* patterns that canonical sources cannot predict. A canonical JWT entry is generic. A learning-loop entry that captures \"In this project, JWT refresh tokens use the sliding window pattern with 15-minute windows because the mobile app has intermittent connectivity\" is specific and actionable.\n\n## How buildProfileEnrichment() Uses Notebooks\n\nDuring orchestration, `buildProfileEnrichment()` accepts an optional array of notebook entries. The orchestrator matches entries by concept against the task's relevant symbols and injects the **top 5 entries by concept match** into the agent's prompt:\n\n```typescript\nfunction buildProfileEnrichment(\n  profile: AgentProfile,\n  relevantSymbols: string[],\n  notebookEntries?: Array<{ context: string; snippet: string; concepts: string[] }>,\n  // ...\n): string {\n  // ...\n  if (notebookEntries && notebookEntries.length > 0) {\n    parts.push('## Relevant Notebook Entries');\n    for (const nb of notebookEntries.slice(0, 5)) {\n      parts.push(`### ${nb.context}`);\n      parts.push(`Concepts: ${nb.concepts.join(', ')}`);\n      parts.push('```');\n      const snippet = nb.snippet.length > 300\n        ? nb.snippet.slice(0, 300) + '...' : nb.snippet;\n      parts.push(snippet);\n      parts.push('```');\n    }\n  }\n}\n```\n\nNotice the `slice(0, 5)` \u2014 only the top 5 entries are injected. This is a deliberate budget constraint. Notebook entries consume prompt tokens. Injecting 50 entries would blow the context budget. The top 5 are selected by relevance (concept match) and sorted by `appliedCount` (most-used first).\n\nSnippets longer than 300 characters are truncated with `...`. This prevents a single large entry from consuming the entire notebook budget. If an entry's full snippet is needed, the agent can use `paradigm_notebook_search` to retrieve it.\n\n## 10 High-Signal Entries > 100 Low-Signal Ones\n\nThe quality bar for notebook entries matters enormously. Consider the token economics: each entry consumes ~100-300 tokens in the prompt. Five entries consume ~500-1,500 tokens. If those entries are high-signal (directly relevant, battle-tested, frequently applied), they provide immense value \u2014 the agent starts the task with proven patterns instead of reinventing them.\n\nIf those entries are low-signal (vague, generic, rarely applied), they waste 500-1,500 tokens on noise that might actually mislead the agent. Worse, low-quality entries can actively degrade performance by injecting irrelevant patterns that the LLM tries to apply inappropriately.\n\nThe `appliedCount` sorting is the primary quality signal. An entry that has been applied 15 times across 8 sessions is empirically useful. An entry that was created once and never applied is speculative. The `confidence` score provides a secondary signal, especially for new entries that have not yet accumulated an applied count.\n\nSensei's role as curator is critical: reviewing entries, pruning low-value ones, merging duplicates, and updating stale patterns. A well-maintained notebook with 10 entries is vastly more valuable than an unmaintained one with 100.\n\n## MCP Tools for Notebooks\n\n- `paradigm_notebook_add` \u2014 Add a new entry. Requires `agentId`, `context`, `snippet`, `concepts`, and `scope` (global or project).\n- `paradigm_notebook_search` \u2014 Search entries by query string across context, snippet, and concepts.\n- `paradigm_notebook_list` \u2014 List all entries for an agent, optionally filtered by concepts or tags.\n- `paradigm_notebook_promote` \u2014 Promote a lore entry into a notebook entry via `promoteFromLore()`.",
+      "keyConcepts": [
+        "Notebook entries contain specific, reusable knowledge (code patterns, config snippets, procedures) \u2014 not abstract principles",
+        "NotebookEntry schema: id, context (when to apply), snippet (the knowledge), provenance (lore/manual/transfer), appliedCount, confidence, concepts, tags",
+        "Global notebooks (~/.paradigm/notebooks/) travel across projects; project notebooks (.paradigm/notebooks/) are project-specific \u2014 project overrides global on ID collision",
+        "buildProfileEnrichment() injects the top 5 entries by concept match, with snippets truncated to 300 characters",
+        "10 high-signal entries outperform 100 low-signal ones \u2014 appliedCount sorting and Sensei's curation maintain quality",
+        "Two pipelines: canonical bootstrapping (day-one knowledge) and learning loop promotion (experience-driven via promoteFromLore)"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A security agent has 30 notebook entries. During orchestration, how many are injected into its prompt?",
+          "choices": {
+            "A": "All 30 \u2014 notebooks are always fully injected",
+            "B": "The top 5 by concept match against the task's relevant symbols, sorted by appliedCount",
+            "C": "The top 10, since 10 high-signal entries is the recommended maximum",
+            "D": "Only entries with appliedCount > 0",
+            "E": "A random selection of 5 entries"
+          },
+          "correct": "B",
+          "explanation": "buildProfileEnrichment() includes `notebookEntries.slice(0, 5)` \u2014 a hard limit of 5 entries. These are pre-filtered by concept match against the task's relevant symbols and sorted by appliedCount descending (most-used first). The 5-entry budget is a deliberate token constraint: each entry consumes 100-300 tokens, so 5 entries use 500-1,500 tokens, which balances value against context budget."
+        },
+        {
+          "id": "q2",
+          "question": "The security agent has a global notebook entry `nb-jwt-validation-001` and the current project has a project notebook entry with the same ID. Which one is used?",
+          "choices": {
+            "A": "The global entry \u2014 global always takes precedence",
+            "B": "Both entries are merged into one",
+            "C": "The project entry wins \u2014 project overrides global on ID collision",
+            "D": "An error is thrown for duplicate IDs",
+            "E": "The entry with the higher appliedCount is used"
+          },
+          "correct": "C",
+          "explanation": "The notebook loader reads global entries first, then project entries. Entries are stored in a Map keyed by ID. When a project entry has the same ID as a global entry, the project entry overwrites the global one: `entries.set(entry.id, entry)`. This allows a project to customize an agent's generic knowledge for project-specific needs \u2014 for example, overriding a generic JWT pattern with the project's specific token rotation strategy."
+        },
+        {
+          "id": "q3",
+          "question": "What is the difference between a notebook entry with `provenance.source: 'lore'` and one with `provenance.source: 'manual'`?",
+          "choices": {
+            "A": "Lore entries are read-only; manual entries are editable",
+            "B": "Lore entries were promoted from session experience via promoteFromLore() and link to the original lore entry; manual entries were written directly without a session origin",
+            "C": "Manual entries have higher confidence scores by default",
+            "D": "Lore entries are global; manual entries are project-scoped",
+            "E": "There is no functional difference \u2014 provenance is informational only"
+          },
+          "correct": "B",
+          "explanation": "Provenance tracks the origin of a notebook entry. `source: 'lore'` means the entry was created by `promoteFromLore()` \u2014 it links to the original lore entry via `loreEntryId` and was extracted from real session experience. `source: 'manual'` means someone wrote it directly (bootstrapping or direct curation). Lore-promoted entries have a verifiable chain of evidence (the session where the pattern was discovered), while manual entries rely on the author's judgment. Both are functionally equivalent in how they're used during enrichment."
+        },
+        {
+          "id": "q4",
+          "question": "Why is `appliedCount` the primary sorting key for notebook entries rather than `confidence`?",
+          "choices": {
+            "A": "appliedCount is easier to compute than confidence",
+            "B": "Confidence is deprecated in favor of appliedCount",
+            "C": "appliedCount is an empirical signal \u2014 an entry applied 15 times is proven useful in practice, while confidence is an initial estimate that may not reflect actual utility",
+            "D": "appliedCount determines the entry's storage priority on disk",
+            "E": "Confidence only applies to expertise scores, not notebook entries"
+          },
+          "correct": "C",
+          "explanation": "appliedCount tracks how many times an entry was actually used in orchestration. An entry with appliedCount of 15 has been surfaced and found useful in 15 sessions \u2014 this is empirical evidence of value. Confidence is an initial estimate (0.0-1.0) that may be set optimistically when the entry is created. A newly bootstrapped entry might have confidence 0.8 but appliedCount 0, meaning it looks good on paper but has never been validated. The system trusts what has been proven (appliedCount) over what has been estimated (confidence)."
+        },
+        {
+          "id": "q5",
+          "question": "An agent's notebook entry snippet is 800 characters long. How does buildProfileEnrichment() handle this?",
+          "choices": {
+            "A": "It injects the full 800-character snippet",
+            "B": "It skips the entry entirely",
+            "C": "It truncates the snippet to 300 characters and appends '...'",
+            "D": "It splits the snippet across multiple prompt sections",
+            "E": "It compresses the snippet using summarization"
+          },
+          "correct": "C",
+          "explanation": "buildProfileEnrichment() truncates long snippets: `nb.snippet.length > 300 ? nb.snippet.slice(0, 300) + '...' : nb.snippet`. The 300-character limit prevents a single large entry from consuming the entire notebook token budget. If the agent needs the full snippet, it can use `paradigm_notebook_search` to retrieve the complete entry on demand. This is the context engineering principle at work \u2014 inject enough to be useful, provide a retrieval path for more detail."
+        }
+      ]
+    },
+    {
+      "id": "agent-state",
+      "title": "Lesson 4: Agent State & Continuity",
+      "content": "## The Continuity Problem\n\nEvery AI session starts from zero. The model has no memory of previous sessions. If the security agent reviewed 8 files yesterday, identified 3 gate coverage gaps, and deferred 2 items to today \u2014 all of that context is lost when the session ends. The next session's security agent starts fresh, potentially re-reviewing the same files and missing the deferred items entirely.\n\nAgent state solves this by persisting key information between sessions at two scopes: project-level state (what happened on this specific project) and global state (career statistics across all projects).\n\n## Project State: AgentProjectState\n\nProject-scoped state lives at `.paradigm/agent-state/{agent-id}.yaml` and captures what the agent has done on THIS project:\n\n```typescript\ninterface AgentProjectState {\n  id: string;                    // Agent ID\n  project: string;               // Project name\n  lastSession: {                 // Most recent session summary\n    date: string;                // ISO timestamp\n    sessionId: string;           // Session identifier\n    summary: string;             // What was done\n    filesReviewed?: string[];    // Files the agent looked at\n    symbolsTouched?: string[];   // Symbols the agent worked on\n    decisions?: string[];        // Decisions made in the session\n  };\n  pendingWork: string[];         // Items deferred to next session\n  recentPatterns: string[];      // Patterns learned about this project\n  sessionsOnProject: number;     // Total session count\n  lastPurposeUpdate?: string;    // When .purpose was last updated\n}\n```\n\nThe `lastSession` field is the most valuable for continuity. When the agent is invoked in the next session, `buildProfileEnrichment()` injects this into the prompt:\n\n```markdown\n## Your Recent Work on This Project\nLast session (3h ago): Reviewed auth middleware, found 2 missing gate\ndeclarations for POST /api/payments and PUT /api/subscriptions.\nSessions on this project: 8\n**Pending from last session:**\n- Review the new webhook endpoint for gate coverage\n- Check Sentinel for auth anomalies on the payment routes\n**Project patterns you've learned:**\n- This project uses sliding-window JWT rotation\n- RLS policies follow the tenant-scoped pattern\n```\n\nThe agent now has context. It knows what it did last time, what remains unfinished, and what project-specific patterns it has discovered. It does not re-review files it already checked. It picks up the pending items and continues where it left off.\n\n## Pending Work Tracking\n\nThe `pendingWork` array is a simple but powerful mechanism. When an agent encounters work it cannot complete in the current session, it adds items:\n\n```typescript\naddPendingWork('security', rootDir, [\n  'Review webhook endpoint /api/webhooks/stripe for gate coverage',\n  'Check Sentinel for auth anomalies on payment routes',\n]);\n```\n\nWhen the work is completed in a future session:\n\n```typescript\ncompletePendingWork('security', rootDir, [\n  'Review webhook endpoint /api/webhooks/stripe for gate coverage',\n]);\n```\n\nPending items accumulate across sessions until explicitly completed. This creates a persistent to-do list that survives session boundaries. If the security agent defers 3 items across 3 different sessions, all 3 appear in the next session's prompt enrichment.\n\n## Recent Patterns\n\nThe `recentPatterns` array captures project-specific knowledge:\n\n```typescript\naddProjectPattern('security', rootDir,\n  'This project uses Supabase RLS with tenant-scoped policies'\n);\n```\n\nPatterns are kept to a maximum of 10 (oldest are dropped when new ones are added). These are different from transferable patterns in the `.agent` file \u2014 recent patterns are project-specific and do not travel. The security agent learning \"this project uses tenant-scoped RLS\" is only relevant to this project. The transferable pattern \"always check RLS policies on Supabase tables\" applies everywhere.\n\n## Global State: GlobalAgentState\n\nGlobal state lives at `~/.paradigm/agents/{agent-id}/state.yaml` and tracks the agent's career across all projects:\n\n```typescript\ninterface GlobalAgentState {\n  id: string;                    // Agent ID\n  totalSessions: number;         // Lifetime session count\n  lastActiveProject: string;     // Most recent project\n  lastActiveDate: string;        // ISO timestamp\n  projectHistory: Array<{        // Per-project stats\n    project: string;\n    sessions: number;\n    lastActive: string;\n  }>;\n}\n```\n\nGlobal state provides aggregate context: \"This agent has worked 47 sessions across 5 projects, most recently on dealoracle 2 hours ago.\" This is useful for:\n\n- **Expertise calibration** \u2014 An agent with 47 total sessions has more experience than one with 3.\n- **Project affinity** \u2014 An agent with 30 sessions on project A and 2 on project B has deep expertise on A.\n- **Recency** \u2014 An agent that was last active 3 months ago may need a full onboarding pass.\n\nGlobal state is updated automatically whenever `recordAgentSession()` is called \u2014 it increments `totalSessions`, updates `lastActiveProject` and `lastActiveDate`, and maintains the `projectHistory` array sorted by most recent.\n\n## How State Feeds Into Prompts\n\nThe `buildProfileEnrichment()` function accepts an optional `agentState` parameter:\n\n```typescript\nbuildProfileEnrichment(\n  profile,\n  relevantSymbols,\n  notebookEntries,\n  ambientContext,\n  agentState: {\n    lastSession: { summary: '...', date: '...' },\n    pendingWork: ['...'],\n    recentPatterns: ['...'],\n    sessionsOnProject: 8\n  }\n);\n```\n\nThe function assembles this into a `## Your Recent Work on This Project` section with:\n\n1. **Last session summary with age** \u2014 \"Last session (3h ago): Reviewed auth middleware...\" The age is computed from the timestamp and displayed as hours or days.\n2. **Session count** \u2014 \"Sessions on this project: 8\" (context for experience level)\n3. **Pending work** \u2014 Up to 5 items from the pending work list.\n4. **Project patterns** \u2014 Up to 5 recently learned patterns.\n\nThis section typically consumes 100-300 tokens depending on the amount of pending work and patterns. It is one of the highest-value sections in the prompt because it provides the specific, recent context that enables continuity.\n\n## Recording Sessions\n\nAt the end of an orchestration pass, the orchestrator calls `recordAgentSession()` for each agent that participated:\n\n```typescript\nrecordAgentSession('security', rootDir, {\n  sessionId: 'sess-2026-03-24-001',\n  summary: 'Reviewed 5 new routes for gate coverage. Found 2 gaps.',\n  filesReviewed: ['src/routes/payments.ts', 'src/routes/webhooks.ts'],\n  symbolsTouched: ['^authenticated', '^payment-owner', '#payment-service'],\n  decisions: ['Recommended adding ^payment-owner gate for refund endpoints'],\n  pendingWork: ['Review webhook endpoint for Stripe signature verification'],\n  patterns: ['This project stores Stripe webhook secrets in Supabase vault'],\n});\n```\n\nThis writes the project state file, increments the session count, and also updates global state. The next time the security agent is invoked on this project, it will see this session's summary and pending work in its prompt.\n\n## Loading All States\n\nThe `loadAllAgentStates()` function reads all agent state files for a project, returning an array of `AgentProjectState` objects. This is useful for:\n\n- **Dashboard views** \u2014 Conductor's agent roster view shows each agent's last session and pending work count.\n- **Orchestration planning** \u2014 The orchestrator can check which agents have pending work on the current project and prioritize their inclusion.\n- **Stale detection** \u2014 If an agent's last session was months ago, the orchestrator may trigger a fresh onboarding pass.",
+      "keyConcepts": [
+        "Project state at .paradigm/agent-state/{id}.yaml tracks last session, pending work, recent patterns, and session count per project",
+        "Global state at ~/.paradigm/agents/{id}/state.yaml tracks career statistics: total sessions, project history, last active date",
+        "buildProfileEnrichment() injects agent state as '## Your Recent Work on This Project' with last session summary, pending items, and patterns",
+        "pendingWork array creates a persistent cross-session to-do list \u2014 items accumulate until explicitly completed via completePendingWork()",
+        "recentPatterns (max 10) capture project-specific knowledge that does not travel across projects, unlike transferable patterns",
+        "recordAgentSession() writes project state and auto-updates global state on every session completion"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "The security agent reviewed 5 files in session A, deferred 2 items, then in session B completed 1 of those items and deferred 1 new item. How many pending items does the agent see at the start of session C?",
+          "choices": {
+            "A": "0 \u2014 pending work resets each session",
+            "B": "1 \u2014 only the item deferred in session B",
+            "C": "2 \u2014 the 1 remaining from session A plus the 1 new from session B",
+            "D": "3 \u2014 all items ever deferred",
+            "E": "It depends on the project roster configuration"
+          },
+          "correct": "C",
+          "explanation": "Pending work accumulates across sessions and persists until explicitly completed via `completePendingWork()`. Session A deferred 2 items. Session B completed 1 (leaving 1 from A) and added 1 new item. At the start of session C, the agent sees 2 pending items: the 1 remaining from session A and the 1 added in session B. This is the key value of pending work tracking \u2014 nothing falls through the cracks across session boundaries."
+        },
+        {
+          "id": "q2",
+          "question": "What is the difference between `recentPatterns` in project state and `transferable` patterns in the .agent file?",
+          "choices": {
+            "A": "They are the same thing stored in different locations",
+            "B": "recentPatterns are project-specific and do not travel; transferable patterns apply across all projects and are included in prompt enrichment when successRate >= 0.7",
+            "C": "recentPatterns are more important and always override transferable patterns",
+            "D": "transferable patterns are deprecated in favor of recentPatterns",
+            "E": "recentPatterns are automatically promoted to transferable after 10 sessions"
+          },
+          "correct": "B",
+          "explanation": "recentPatterns live in the project state file and capture knowledge specific to one project (e.g., 'This project uses sliding-window JWT rotation'). They are injected as '**Project patterns you've learned:**' in the prompt, but only for that project. Transferable patterns live in the .agent file and apply everywhere (e.g., 'always check RLS policies'). They travel across projects and are included in prompt enrichment when successRate >= 0.7. The distinction is scope: project vs universal."
+        },
+        {
+          "id": "q3",
+          "question": "An agent's global state shows `totalSessions: 47` with 30 sessions on project A and 2 on project B. The agent is now starting work on project B. How does the orchestrator use this information?",
+          "choices": {
+            "A": "It rejects the agent \u2014 2 sessions is insufficient expertise",
+            "B": "It ignores global state \u2014 only project state matters",
+            "C": "The low session count on project B (relative to the agent's 47 total sessions) may trigger a fresh onboarding pass, and the project state's lastSession age indicates how much context refresh is needed",
+            "D": "It assigns the agent to project A instead, where it has more experience",
+            "E": "Global state is only used for dashboard display, not orchestration decisions"
+          },
+          "correct": "C",
+          "explanation": "Global state provides experience context. An agent with 47 total sessions is experienced overall, but only 2 sessions on project B means limited project-specific knowledge. The orchestrator can use this to trigger the agent's `onboarding` procedure (defined in the collaboration block), ensuring the agent re-reads the project's .purpose files, config, and portal.yaml before making recommendations. The project state's `lastSession.date` shows how stale the context is \u2014 if the 2 sessions were 3 months ago, a full onboarding is warranted."
+        },
+        {
+          "id": "q4",
+          "question": "Where does project state live and why is it committed to the repository?",
+          "choices": {
+            "A": "~/.paradigm/agent-state/ \u2014 it is user-scoped, not committed",
+            "B": ".paradigm/agent-state/{id}.yaml \u2014 it is committed so that when another team member works on the project, agents remember what was done, not just what one person's agents did",
+            "C": "In memory only \u2014 state is ephemeral and reconstructed from lore",
+            "D": ".paradigm/config.yaml \u2014 state is a config value",
+            "E": "node_modules/.paradigm/ \u2014 it is a build artifact"
+          },
+          "correct": "B",
+          "explanation": "Project state at `.paradigm/agent-state/{id}.yaml` is committed to the repository. This is important for team continuity: if developer A's security agent reviews files and defers items, developer B's security agent should see those deferred items in the next session. The state is project-scoped (different from global state at ~/.paradigm/agents/ which is user-scoped), so it captures the collective agent experience on the project, not just one user's sessions."
+        },
+        {
+          "id": "q5",
+          "question": "The recentPatterns array in project state has a maximum of 10 entries. An agent learns an 11th pattern. What happens?",
+          "choices": {
+            "A": "The 11th pattern is rejected \u2014 the agent must manually remove an old one",
+            "B": "All patterns are cleared and replaced with the 11th",
+            "C": "The oldest pattern is dropped and the new one is added \u2014 `recentPatterns.slice(-10)` keeps only the most recent 10",
+            "D": "The array expands to 11 \u2014 the limit is advisory",
+            "E": "The pattern is added to the agent's transferable array instead"
+          },
+          "correct": "C",
+          "explanation": "The `addProjectPattern()` function enforces a hard limit of 10 recent patterns: `if (state.recentPatterns.length > 10) { state.recentPatterns = state.recentPatterns.slice(-10); }`. The oldest pattern is dropped and the newest is kept. This bounded window ensures the prompt enrichment section stays within token budgets while always showing the most recent project-specific knowledge. Patterns that prove universally useful should be promoted to the agent's `transferable` array in the .agent file, which has no such limit."
+        }
+      ]
+    },
+    {
+      "id": "per-project-rosters",
+      "title": "Lesson 5: Per-Project Rosters",
+      "content": "## The Problem: 54 Agents Everywhere\n\nWithout project-level rosters, all 54 global agents are available to every project. This creates three problems:\n\n1. **Noise** \u2014 The orchestrator considers 54 agents when planning, even though a backend API project does not need a designer, copywriter, or SEO agent. More candidates means more evaluation time and potentially irrelevant agents being included in plans.\n\n2. **Irrelevance** \u2014 Agents that have no domain expertise for the project (gamedev on a SaaS app, legal on an open-source tool) waste attention by scoring events and producing nominations that will never be acted on.\n\n3. **Global benching is broken** \u2014 Before rosters, benching an agent (setting `benched: true` on the `.agent` file) was a global operation. Benching the gamedev agent for your SaaS project also benched it for your game project. There was no per-project control.\n\n## The Solution: roster.yaml\n\nThe `roster.yaml` file at `.paradigm/roster.yaml` lists exactly which agents are active on this project:\n\n```yaml\n# .paradigm/roster.yaml\nversion: \"1.0\"\nproject: dealoracle\ntype: saas-web-app\n\nactive:\n  - architect\n  - builder\n  - reviewer\n  - tester\n  - security\n  - documentor\n  - designer          # Mika\n  - copywriter         # Wren\n  - performance        # Bolt\n  - devops             # Atlas\n  - dba                # Vault\n  - e2e                # Ghost\n  - dx                 # Helix\n  - seo                # Beacon\n  - pm                 # Yuki\n  - product            # North\n  - advocate           # Jinx\n  - debugger           # Trace\n  - release            # Ship\n```\n\nAgents not listed are not active on this project. They still exist globally at `~/.paradigm/agents/` but the orchestrator will not consider them when planning work for this project.\n\n## Backward Compatibility\n\nThe key design decision: **no roster.yaml = all agents available**. Existing projects that never created a roster continue working exactly as before. The `isAgentActive()` function implements this:\n\n```typescript\nfunction isAgentActive(agentId: string, rootDir: string): boolean {\n  const roster = loadProjectRoster(rootDir);\n  if (!roster) return true;  // No roster = all active\n  return roster.includes(agentId);\n}\n```\n\nThis ensures zero breaking changes. You opt into roster filtering by creating the file. Until then, the system behaves as it always has.\n\n## Project Type Detection\n\nWhen running `paradigm shift` (the project initialization command), the system auto-detects the project type from filesystem signals:\n\n```typescript\nfunction detectProjectType(cwd: string): ProjectType {\n  const signals = {\n    hasPackageJson: exists('package.json'),\n    hasSupabase: exists('supabase/'),\n    hasNextConfig: exists('next.config.*'),\n    hasSwiftPackage: exists('Package.swift'),\n    hasGodotProject: exists('project.godot'),\n    hasCargoToml: exists('Cargo.toml'),\n    hasPubspecYaml: exists('pubspec.yaml'),\n    hasPrisma: exists('prisma/'),\n    hasDockerfile: exists('Dockerfile'),\n  };\n\n  if (signals.hasGodotProject) return 'game';\n  if (signals.hasSwiftPackage) return 'ios-app';\n  if (signals.hasPubspecYaml) return 'flutter-app';\n  if (signals.hasSupabase && signals.hasNextConfig) return 'saas-web-app';\n  if (signals.hasNextConfig) return 'web-app';\n  if (signals.hasCargoToml) return 'rust-project';\n  if (signals.hasPrisma || signals.hasDockerfile) return 'backend-api';\n  return 'generic';\n}\n```\n\nDetected types include `saas-web-app`, `web-app`, `backend-api`, `ios-app`, `flutter-app`, `game`, `rust-project`, and `generic`. Each type maps to a suggested roster.\n\n## Suggested Rosters by Type\n\nEach project type has a pre-defined suggested roster. These are starting points, not mandatory configurations:\n\n| Project Type | Typical Size | Notable Inclusions | Notable Exclusions |\n|---|---|---|---|\n| saas-web-app | ~24 agents | Full stack: designer, dba, seo, sales, legal | gamedev, 3d, audio, streaming |\n| web-app | ~15 agents | Frontend-focused: designer, seo, a11y | dba, sales, legal |\n| backend-api | ~13 agents | Backend-focused: dba, dx, performance | designer, copywriter, seo |\n| ios-app | ~12 agents | Mobile: mobile (Swift), a11y, performance | dba, seo, devops |\n| game | ~11 agents | Game-specific: gamedev, 3d, audio | seo, legal, sales, dba |\n| flutter-app | ~11 agents | Cross-platform: mobile, a11y | dba, seo, devops |\n| generic | ~8 agents | Core only: architect through documentor + debugger + qa | All specialists |\n\nThe `generic` roster is intentionally minimal: architect, builder, reviewer, tester, security, documentor, debugger, and qa. These 8 agents provide the baseline quality coverage (design, build, review, test, secure, document, debug, validate) that every project needs.\n\n## CLI Commands for Roster Management\n\nRoster management is done through the CLI:\n\n```bash\n# Interactive roster setup (suggests based on project type)\nparadigm agents roster\n\n# Activate specific agents\nparadigm agents activate designer copywriter security devops dba\n\n# Deactivate agents\nparadigm agents deactivate gamedev 3d audio streaming\n\n# List active agents for this project\nparadigm agents list              # Shows only active roster\nparadigm agents list --all        # Shows all global + active status\n\n# Activate a pod (all agents in the pod)\nparadigm agents activate --pod ship-pod\n```\n\nActivate and deactivate modify the `roster.yaml` file \u2014 they never modify global `.agent` files. This is the key architectural decision: the roster is a project-level filter over global agents. Agents are not \"installed\" or \"removed\" per project; they are \"active\" or \"inactive\" based on whether they appear in the roster.\n\n## Orchestrator Integration\n\nThe orchestrator's planning phase reads the roster before selecting agents:\n\n```typescript\nfunction getActiveAgents(rootDir: string): string[] {\n  const rosterPath = path.join(rootDir, '.paradigm', 'roster.yaml');\n  if (fs.existsSync(rosterPath)) {\n    const roster = yaml.load(fs.readFileSync(rosterPath, 'utf8'));\n    return roster.active || [];\n  }\n  // Fallback: all global agents (backward compat)\n  return getAllGlobalAgents().map(a => a.id);\n}\n```\n\nThe returned list gates which agents are considered during orchestration planning. If the security agent is not in the roster, it will not be included in orchestration plans, will not receive event notifications, and will not self-nominate contributions. It is effectively invisible on this project.\n\n## paradigm shift Integration\n\nDuring `paradigm shift` (first-time project setup), the roster step runs after team initialization:\n\n```\nStep 2b/6: Agent roster setup...\n\n  Detected project type: SaaS web app (React + Supabase + Vercel)\n\n  Suggested roster (20 agents):\n    Core:       architect, builder, reviewer, tester, security, documentor\n    Design:     designer (Mika), copywriter (Wren), a11y (Aria)\n    Data:       dba (Vault), performance (Bolt), analyst (Sage)\n    Infra:      devops (Atlas), seo (Beacon), release (Ship)\n    Product:    pm (Yuki), product (North)\n    Quality:    e2e (Ghost), qa (Shield), advocate (Jinx)\n\n  Accept suggested roster? [Y/n]\n\n  Roster saved to .paradigm/roster.yaml (20 agents active)\n```\n\nThe human can accept the suggestion, modify it, or skip (which creates no roster file, keeping all agents active). On existing projects, running `paradigm shift` again offers to create a roster based on the detected type.\n\n## Why Rosters Are Not Agent Behavior\n\nRosters are a filtering mechanism, not a behavior modifier. An agent's `.agent` file defines who it is (personality, expertise, behaviors, attention). The roster defines whether it is active on this project. If the designer is not in the roster, it does not mean the designer \"knows\" it is inactive \u2014 it simply is not invoked.\n\nThis separation is important: when you activate the designer on a project, it arrives with its full personality, expertise, notebooks, and transferable patterns intact. Nothing about the agent changed. The roster just opened the door.",
+      "keyConcepts": [
+        "roster.yaml at .paradigm/roster.yaml lists active agents per project \u2014 unlisted agents are inactive on that project",
+        "No roster.yaml = all agents available (backward compatible \u2014 you opt in to filtering)",
+        "Project type detection (saas-web-app, game, backend-api, etc.) drives suggested rosters during paradigm shift",
+        "paradigm agents activate/deactivate modify roster.yaml, never global .agent files \u2014 rosters are project-level filters",
+        "The orchestrator reads roster.yaml before planning \u2014 inactive agents are invisible (no planning, no nominations, no event scoring)",
+        "Rosters are a filtering mechanism, not a behavior modifier \u2014 agents arrive with full identity when activated"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A developer runs `paradigm agents deactivate gamedev 3d audio` on their SaaS project. What happens to these agents globally?",
+          "choices": {
+            "A": "Their .agent files are deleted from ~/.paradigm/agents/",
+            "B": "Their .agent files get `benched: true` added",
+            "C": "Nothing \u2014 the command only removes them from this project's roster.yaml. They remain fully available globally and on other projects.",
+            "D": "Their expertise scores are reset to 0",
+            "E": "They are moved to a .paradigm/deactivated/ directory"
+          },
+          "correct": "C",
+          "explanation": "Roster commands modify `.paradigm/roster.yaml` and nothing else. The global .agent files at `~/.paradigm/agents/` are never touched by roster operations. Deactivating gamedev on a SaaS project removes it from that project's `active` list. The gamedev agent remains fully intact globally and would appear in the roster of a game project. This is the key architectural decision: rosters are project-level filters over global agents."
+        },
+        {
+          "id": "q2",
+          "question": "A project has no roster.yaml file. A developer runs `paradigm_orchestrate_inline` on a task. How many agents does the orchestrator consider?",
+          "choices": {
+            "A": "None \u2014 a roster is required for orchestration",
+            "B": "8 \u2014 the generic default roster",
+            "C": "All global agents \u2014 no roster means no filtering (backward compatibility)",
+            "D": "Only the architect and builder \u2014 the minimum required",
+            "E": "The orchestrator prompts for roster creation before proceeding"
+          },
+          "correct": "C",
+          "explanation": "`loadProjectRoster()` returns `null` if no roster.yaml exists. `isAgentActive()` returns `true` for all agents when the roster is null. The orchestrator's `getActiveAgents()` function falls back to listing all global agents. This is the backward compatibility guarantee: projects that predate the roster feature continue working exactly as before. All 54 agents are considered during planning."
+        },
+        {
+          "id": "q3",
+          "question": "The project type detection finds both `supabase/` and `next.config.ts` in the project root. What project type is detected and what does the suggested roster include?",
+          "choices": {
+            "A": "backend-api \u2014 Supabase indicates a database-heavy project",
+            "B": "web-app \u2014 Next.js indicates a web application",
+            "C": "saas-web-app \u2014 the combination of Supabase + Next.js triggers this type, which suggests ~24 agents including designer, dba, seo, sales, and legal",
+            "D": "generic \u2014 mixed signals default to generic",
+            "E": "fullstack-app \u2014 a dedicated type for Supabase + Next.js"
+          },
+          "correct": "C",
+          "explanation": "The detection logic checks `signals.hasSupabase && signals.hasNextConfig` early in the chain and returns `saas-web-app`. This type gets the largest suggested roster (~24 agents) because a SaaS web app typically needs the full spectrum: frontend (designer, a11y), backend (dba, devops), content (copywriter, seo), quality (tester, e2e, qa), business (pm, product, sales), and compliance (legal, security). The Supabase + Next.js combination is a strong signal for this project type."
+        },
+        {
+          "id": "q4",
+          "question": "Why does the `generic` project type suggest only 8 agents instead of 20+?",
+          "choices": {
+            "A": "Generic projects are considered less important",
+            "B": "8 agents is the minimum the orchestrator can work with",
+            "C": "When the project type is ambiguous, a minimal roster avoids activating specialists that may be irrelevant \u2014 the developer can add more as needed",
+            "D": "Generic projects cannot use more than 8 agents due to a technical limitation",
+            "E": "The 8 agents are free tier; additional agents require a paid plan"
+          },
+          "correct": "C",
+          "explanation": "The generic roster includes architect, builder, reviewer, tester, security, documentor, debugger, and qa \u2014 the universal quality baseline. When the system cannot detect the project type, it avoids false positives: activating a designer on a CLI tool or a DBA on a static site would add noise. The developer knows their project better than the detection heuristic, so a minimal starting point with easy expansion (`paradigm agents activate designer`) is better than an over-eager default."
+        },
+        {
+          "id": "q5",
+          "question": "A developer activates the designer on a project, does some UI work with Mika, then deactivates the designer. Later, they reactivate the designer. Does Mika remember the previous UI work on this project?",
+          "choices": {
+            "A": "No \u2014 deactivating an agent deletes its state",
+            "B": "Yes \u2014 roster changes only affect the active list in roster.yaml. The agent's project state (.paradigm/agent-state/designer.yaml), notebooks, and expertise are untouched by deactivation.",
+            "C": "Partially \u2014 state is preserved but expertise resets",
+            "D": "Only if the deactivation was less than 24 hours ago",
+            "E": "The developer must run paradigm_session_recover to restore state"
+          },
+          "correct": "B",
+          "explanation": "Roster deactivation removes the agent from the `active` list in roster.yaml \u2014 that is all it does. The agent's project state at `.paradigm/agent-state/designer.yaml` remains on disk. Its notebooks at `.paradigm/notebooks/designer/` remain. Its expertise in the `.agent` file remains. When reactivated, `buildProfileEnrichment()` loads the existing project state and the agent sees its last session summary, pending work, and learned patterns. Rosters are a visibility filter, not a state manager."
+        }
+      ]
+    },
+    {
+      "id": "model-tier-resolution",
+      "title": "Lesson 6: Model Tier Resolution",
+      "content": "## The Platform Portability Problem\n\nEarly Paradigm agent profiles specified `defaultModel: opus | sonnet | haiku` \u2014 Anthropic-specific model names hardcoded into each agent's configuration. This created four problems:\n\n1. **Platform lock-in** \u2014 These model names do not exist in Cursor, Windsurf, Copilot, or other IDEs. An agent profile designed for Claude Code breaks everywhere else.\n2. **Plan limitations** \u2014 Not every user has access to Opus. A developer on a Sonnet-only plan cannot use agents that request Opus without manual profile editing.\n3. **Provider assumptions** \u2014 The model names assume Anthropic. Users who want to use GPT-4o, Gemini, or local models through Ollama have no path.\n4. **Maintenance burden** \u2014 Model names were hardcoded in the orchestrator as `DEFAULT_MODELS`. Every time Anthropic ships a new model, someone has to update agent profiles.\n\n## The Solution: Capability Tiers\n\nModel tier resolution replaces specific model names with abstract **capability tiers** that describe what the agent needs, not which model to use:\n\n| Tier | Capability | Use Cases |\n|---|---|---|\n| `tier-1` (reasoning) | Complex analysis, multi-step planning | Architect, security audit, system design |\n| `tier-2` (balanced) | General coding, review, design | Reviewer, designer, most agent work |\n| `tier-3` (fast) | Simple tasks, documentation, bulk ops | Builder, tester, documentor |\n\nAgent profiles now specify `modelTier` instead of `defaultModel`:\n\n```yaml\n# Before (platform-locked)\ndefaultModel: opus\n\n# After (platform-agnostic)\nmodelTier: tier-1\n```\n\nThe orchestrator maps tier requests to available models through a resolution table in the project configuration.\n\n## The model-resolution Config Block\n\nThe `model-resolution` block in `.paradigm/config.yaml` maps tiers to actual model identifiers:\n\n```yaml\n# .paradigm/config.yaml\nmodel-resolution:\n  tier-1: claude-opus-4-6        # Best reasoning available\n  tier-2: claude-sonnet-4-6      # Balanced\n  tier-3: claude-haiku-4-5       # Fast/cheap\n```\n\nThis is the single configuration point where model choices live. Changing all agent models is a 3-line edit. Different environments ship different defaults:\n\n```yaml\n# Claude Code (full Anthropic access)\nmodel-resolution:\n  tier-1: claude-opus-4-6\n  tier-2: claude-sonnet-4-6\n  tier-3: claude-haiku-4-5\n\n# Cursor (may not have Opus access)\nmodel-resolution:\n  tier-1: claude-sonnet-4-6\n  tier-2: claude-sonnet-4-6\n  tier-3: claude-haiku-4-5\n\n# OpenAI-only environment\nmodel-resolution:\n  tier-1: gpt-4o\n  tier-2: gpt-4o-mini\n  tier-3: gpt-4o-mini\n\n# Self-hosted / Ollama\nmodel-resolution:\n  tier-1: llama-3.1-70b\n  tier-2: llama-3.1-8b\n  tier-3: llama-3.1-8b\n\n# Budget-conscious\nmodel-resolution:\n  tier-1: claude-sonnet-4-6\n  tier-2: claude-sonnet-4-6\n  tier-3: claude-sonnet-4-6\n```\n\nThe budget-conscious configuration demonstrates the power of tiers: you can run the full 54-agent orchestration system with Sonnet for everything by mapping all three tiers to the same model. The agents still have different personalities, expertise, and behaviors \u2014 the model tier only affects the underlying LLM capability.\n\n## Resolution Order\n\nWhen the orchestrator needs a model for an agent, it resolves through a five-level cascade:\n\n1. **Agent profile** \u2014 `modelTier` field (what the agent requests)\n2. **Project config** \u2014 `.paradigm/config.yaml` `model-resolution` block (project override)\n3. **Global config** \u2014 `~/.paradigm/config.yaml` `model-resolution` block (user preference)\n4. **IDE detection** \u2014 Auto-detect available models from environment variables (`CLAUDE_CODE`, `CURSOR_SESSION`, `WINDSURF_SESSION`)\n5. **Fallback** \u2014 Default to tier-2 (balanced) with the best available model\n\n```typescript\nfunction resolveModel(tier: ModelTier, config: ParadigmConfig): string {\n  return config.modelResolution?.[tier] ?? DEFAULTS[tier];\n}\n```\n\nThe cascade ensures that agent preferences are respected when possible, project-level overrides take precedence over global preferences, and there is always a working fallback even if nothing is configured.\n\n## Environment Detection\n\nThe system auto-detects the IDE environment to set sensible defaults:\n\n```typescript\nfunction detectEnvironment(): ModelResolution {\n  if (process.env.CLAUDE_CODE) {\n    return {\n      'tier-1': 'claude-opus-4-6',\n      'tier-2': 'claude-sonnet-4-6',\n      'tier-3': 'claude-haiku-4-5'\n    };\n  }\n  if (process.env.CURSOR_SESSION) {\n    return {\n      'tier-1': 'claude-sonnet-4-6',\n      'tier-2': 'claude-sonnet-4-6',\n      'tier-3': 'claude-haiku-4-5'\n    };\n  }\n  // Fallback: everything is tier-2\n  return {\n    'tier-1': 'claude-sonnet-4-6',\n    'tier-2': 'claude-sonnet-4-6',\n    'tier-3': 'claude-sonnet-4-6'\n  };\n}\n```\n\nClaude Code users get the full tier spread (Opus/Sonnet/Haiku). Cursor users get Sonnet for tier-1 because Opus may not be available in Cursor's model selection. Unknown environments get Sonnet for everything as a safe fallback.\n\n## Default Tier Assignments\n\nThe orchestrator assigns default tiers to standard agent roles:\n\n```typescript\nconst DEFAULT_TIERS: Record<string, ModelTier> = {\n  architect: 'tier-1',    // Complex planning and design\n  security: 'tier-1',     // Critical analysis, cannot miss vulnerabilities\n  reviewer: 'tier-2',     // Balanced evaluation\n  builder: 'tier-3',      // Fast implementation\n  tester: 'tier-3',       // Fast test writing\n  documentor: 'tier-3',   // Fast file maintenance\n};\n```\n\nArchitect and security get tier-1 because their work requires deep reasoning (system design, vulnerability analysis). Builder, tester, and documentor get tier-3 because their work is more mechanical (implement this spec, write this test, update this .purpose file). Reviewer gets tier-2 as a balanced middle ground.\n\nThese defaults can be overridden per-agent in the `.agent` file (`modelTier: tier-2`) or per-project in config.yaml.\n\n## Cost Estimation\n\nThe orchestrator uses tier cost multipliers for budget estimation:\n\n```typescript\nconst TIER_COST_MULTIPLIER = {\n  'tier-1': 3.0,    // ~$15/MTok for Opus\n  'tier-2': 1.0,    // ~$3/MTok for Sonnet (baseline)\n  'tier-3': 0.25,   // ~$0.80/MTok for Haiku\n};\n```\n\nThe orchestration plan output includes cost estimates: \"Estimated cost: $0.12 (tier-1: architect, tier-2: reviewer, tier-3: builder+documentor)\". This transparency lets the human approve or modify the plan before execution.\n\n## Backward Compatibility\n\nThe migration path preserves existing profiles:\n\n```yaml\n# Agent profile with both fields (transitional)\ndefaultModel: opus      # Old field (deprecated, still read)\nmodelTier: tier-1       # New field (preferred)\n```\n\nThe resolution logic checks `modelTier` first. If only `defaultModel` exists, it maps: `opus` to `tier-1`, `sonnet` to `tier-2`, `haiku` to `tier-3`. This ensures existing agent profiles continue working without modification.\n\n## What This Enables\n\nModel tier resolution unlocks five capabilities:\n\n- **Budget control** \u2014 Map all tiers to Sonnet and run the full orchestration at Sonnet cost.\n- **Platform portability** \u2014 Same agents work in Claude Code, Cursor, Windsurf, and Copilot.\n- **Provider flexibility** \u2014 Swap to OpenAI, Gemini, or local models by changing 3 lines in config.\n- **Graceful degradation** \u2014 If the tier-1 model is unavailable, fall back to tier-2 automatically.\n- **Team consistency** \u2014 The entire team shares one `model-resolution` config block, not per-agent model names.",
+      "keyConcepts": [
+        "Three capability tiers: tier-1 (reasoning), tier-2 (balanced), tier-3 (fast) \u2014 describing what the agent needs, not which model to use",
+        "model-resolution config block maps tiers to actual models \u2014 changing all agent models is a 3-line edit",
+        "Five-level resolution cascade: agent profile > project config > global config > IDE detection > fallback",
+        "Environment detection auto-configures for Claude Code (full spread), Cursor/Windsurf (Sonnet default), and unknown (safe fallback)",
+        "Default tier assignments: architect/security get tier-1, reviewer gets tier-2, builder/tester/documentor get tier-3",
+        "Backward compatible: defaultModel field maps to tiers (opus=tier-1, sonnet=tier-2, haiku=tier-3)"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A team wants to reduce costs by running all agents on the same model. What is the simplest configuration change?",
+          "choices": {
+            "A": "Edit every .agent file to change modelTier to tier-3",
+            "B": "Map all three tiers to the same model in the model-resolution config block: `tier-1: claude-sonnet-4-6`, `tier-2: claude-sonnet-4-6`, `tier-3: claude-sonnet-4-6`",
+            "C": "Remove the model-resolution block entirely",
+            "D": "Set a global `maxTier: tier-3` flag in config.yaml",
+            "E": "Deactivate all tier-1 agents from the roster"
+          },
+          "correct": "B",
+          "explanation": "The model-resolution block is the single control point. Mapping all three tiers to `claude-sonnet-4-6` means every agent \u2014 regardless of what tier they request \u2014 runs on Sonnet. This is a 3-line change in `.paradigm/config.yaml`. The agents still have different personalities, expertise, and behaviors; only the underlying model changes. Option A would work but requires editing dozens of files. Option E would lose important agents like architect and security."
+        },
+        {
+          "id": "q2",
+          "question": "An agent profile has `modelTier: tier-1`. The project config maps `tier-1: claude-sonnet-4-6`. The global config maps `tier-1: claude-opus-4-6`. Which model is used?",
+          "choices": {
+            "A": "claude-opus-4-6 \u2014 global config takes precedence",
+            "B": "claude-sonnet-4-6 \u2014 project config overrides global config in the resolution cascade",
+            "C": "The agent's defaultModel field is used instead",
+            "D": "An error is thrown because of conflicting configurations",
+            "E": "The IDE detection result is used"
+          },
+          "correct": "B",
+          "explanation": "The resolution cascade is: agent profile (determines tier) > project config > global config > IDE detection > fallback. The agent requests tier-1. The project config maps tier-1 to `claude-sonnet-4-6`. The project config has higher priority than global config, so Sonnet is used. This allows a project to override the user's global preference \u2014 useful when a project has a budget constraint that the user's default does not account for."
+        },
+        {
+          "id": "q3",
+          "question": "Why does the security agent default to tier-1 (reasoning) while the builder defaults to tier-3 (fast)?",
+          "choices": {
+            "A": "The security agent costs more to run",
+            "B": "The builder handles more requests and needs to be faster",
+            "C": "Security work requires deep reasoning (vulnerability analysis, threat modeling) that benefits from the most capable model, while builder work is more mechanical (implement a spec, write code to match a design) where speed matters more than reasoning depth",
+            "D": "Tier-1 agents have access to more MCP tools",
+            "E": "It is an arbitrary default with no rationale"
+          },
+          "correct": "C",
+          "explanation": "Tier assignments reflect the cognitive demands of each role. Security analysis involves complex reasoning: evaluating attack surfaces, identifying subtle vulnerabilities, understanding interaction effects between auth mechanisms. This benefits from a model with stronger reasoning capabilities (tier-1). Builder work is typically more structured: implement this API endpoint per the spec, add this component per the design. The spec defines what to build; the model executes. Speed and cost efficiency (tier-3) matter more than reasoning depth."
+        },
+        {
+          "id": "q4",
+          "question": "A user is running Paradigm in Cursor (detected via CURSOR_SESSION environment variable). What tier-1 model does auto-detection assign, and why?",
+          "choices": {
+            "A": "claude-opus-4-6 \u2014 always use the best available model",
+            "B": "claude-sonnet-4-6 \u2014 because Opus may not be available in Cursor's model selection, so the detection gracefully degrades tier-1 to the best confirmed-available model",
+            "C": "gpt-4o \u2014 Cursor defaults to OpenAI",
+            "D": "The user must manually configure it \u2014 Cursor is not auto-detected",
+            "E": "claude-haiku-4-5 \u2014 Cursor uses cheaper models by default"
+          },
+          "correct": "B",
+          "explanation": "The `detectEnvironment()` function checks for `process.env.CURSOR_SESSION`. When detected, it assigns `claude-sonnet-4-6` for tier-1 because Cursor may not expose Opus in its model selection. Assigning Opus would cause orchestration failures if the model is unavailable. The detection gracefully degrades: Claude Code gets the full tier spread, Cursor gets Sonnet as the ceiling. The user can override this in their config if they do have Opus access."
+        },
+        {
+          "id": "q5",
+          "question": "An old agent profile has `defaultModel: opus` but no `modelTier` field. How does the system handle this?",
+          "choices": {
+            "A": "An error is thrown \u2014 modelTier is required",
+            "B": "The agent runs with no model preference (fallback to tier-2)",
+            "C": "The system maps defaultModel to a tier: opus maps to tier-1, which is then resolved through the model-resolution config like any other tier request",
+            "D": "The agent is excluded from orchestration until its profile is updated",
+            "E": "The defaultModel value is passed directly to the API as the model name"
+          },
+          "correct": "C",
+          "explanation": "Backward compatibility is handled by mapping old model names to tiers: `opus` to `tier-1`, `sonnet` to `tier-2`, `haiku` to `tier-3`. The resolution logic checks `modelTier` first; if absent, it reads `defaultModel` and maps it. The resulting tier is then resolved through the normal cascade (project config > global config > IDE detection > fallback). This means existing agent profiles continue working without any modification."
+        }
+      ]
+    },
+    {
+      "id": "orchestration-enforcement",
+      "title": "Lesson 7: Orchestration Enforcement",
+      "content": "## Why Enforcement Matters\n\nOrchestration is powerful but optional. An agent can skip `paradigm_orchestrate_inline` and implement a 10-file feature solo, bypassing security review, missing test coverage, and producing no documentation updates. The feature ships, but quality degrades silently.\n\nEnforcement solves this by making orchestration the path of least resistance. Instead of hardcoding rules into agent logic (\"always call the orchestrator\"), enforcement works through Paradigm's habit system \u2014 three seed habits that nudge, warn, and track orchestration compliance.\n\n## The Three Orchestration Habits\n\nParadigm seeds three habits specifically for orchestration enforcement:\n\n### 1. orchestration-required (preflight, warn)\n\n```typescript\n{\n  id: 'orchestration-required',\n  name: 'Orchestrate Complex Tasks',\n  description: 'Tasks affecting 3+ files or touching security symbols\n    should use paradigm_orchestrate_inline to determine which agents\n    are needed.',\n  category: 'collaboration',\n  trigger: 'preflight',\n  severity: 'warn',\n  check: {\n    type: 'tool-called',\n    params: { tools: ['paradigm_orchestrate_inline'] }\n  },\n  enabled: true,\n}\n```\n\nThis habit fires at **preflight** (session start). It checks whether `paradigm_orchestrate_inline` was called. If not, and the task description suggests complexity (3+ files, security symbols), it emits a `warn` severity message: \"This task may benefit from orchestration. Call paradigm_orchestrate_inline mode='plan' to see which agents are needed.\"\n\nThe severity is `warn`, not `block`. This is deliberate. Blocking on orchestration would prevent quick fixes, hot patches, and simple tasks that genuinely do not need multi-agent coordination. The warning surfaces the recommendation; the human decides whether to follow it.\n\n### 2. agent-coverage-validated (postflight, advisory)\n\n```typescript\n{\n  id: 'agent-coverage-validated',\n  name: 'Validate Agent Involvement',\n  description: 'After completing work, verify that agents with relevant\n    expertise were consulted. Check nominations that were surfaced but\n    not acted on.',\n  category: 'collaboration',\n  trigger: 'postflight',\n  severity: 'advisory',\n  check: {\n    type: 'tool-called',\n    params: {\n      tools: ['paradigm_ambient_nominations', 'paradigm_agent_list']\n    }\n  },\n  enabled: true,\n}\n```\n\nThis habit fires at **postflight** (before session end). It checks whether agent nominations were reviewed. If `paradigm_ambient_nominations` was not called, it advises: \"There may be agent nominations you haven't reviewed. Run paradigm_ambient_nominations to check if any agents have relevant contributions.\"\n\nThis catches the scenario where the orchestrator was bypassed but agents still self-nominated. The security agent may have noticed a new route without a gate, but if nobody checked nominations, the contribution is lost.\n\n### 3. hot-mode-incident (on-stop, advisory)\n\n```typescript\n{\n  id: 'hot-mode-incident',\n  name: 'Incident Response Acknowledgment',\n  description: 'During incident response, orchestration enforcement is\n    waived. But a post-incident lore entry is required and a postflight\n    review should be scheduled.',\n  category: 'collaboration',\n  trigger: 'on-stop',\n  severity: 'advisory',\n  check: { type: 'lore-recorded' },\n  enabled: true,\n}\n```\n\nThis habit acknowledges that incidents are different. When production is down, you do not want a warning about calling the orchestrator. You want to fix the problem. This habit fires at **on-stop** and only checks that a lore entry was recorded. The rationale: during incidents, skip orchestration. After incidents, record what happened so the learning loop can process it.\n\n## The Nomination System\n\nOrchestration enforcement works hand-in-hand with the nomination system. When events flow through the event stream, each agent scores them against their attention patterns. Agents whose scores exceed their threshold self-nominate contributions.\n\nNominations surface in two places:\n\n1. **During orchestration plan/execute** \u2014 The orchestrator includes pending nominations in the plan. If the security agent nominated a gate-coverage review, it appears in the orchestration plan's agent list with the nomination brief.\n\n2. **Via paradigm_ambient_nominations** \u2014 This MCP tool returns all pending nominations with their urgency, agent, and brief description. The `agent-coverage-validated` habit points agents here when orchestration was skipped.\n\nThe nomination flow:\n\n```\nEvent emitted → Each agent scores it → Score >= threshold → \nAgent self-nominates → Nomination stored → \nSurfaced in orchestration OR paradigm_ambient_nominations\n```\n\n## The Post-Write Hook Connection\n\nThe post-write hook (which runs after every file edit) emits events into the event stream. These events trigger attention scoring across all active agents. If an agent's attention score exceeds its threshold, a nomination is created.\n\nThe post-write hook itself does not enforce orchestration. It simply produces the events that feed the nomination engine. The enforcement comes from the habits that check whether nominations were reviewed.\n\n## Enforcement Through Habits, Not Hardcoded Logic\n\nThis is a critical architectural decision. Orchestration enforcement is not baked into the orchestrator or the agent runtime. It lives in the habit system, which means:\n\n- **Configurable** \u2014 A project can disable `orchestration-required` by setting `enabled: false` in their habits override. A team that always orchestrates manually can turn off the nag.\n- **Tunable** \u2014 A project can change the severity from `warn` to `block` if they want strict enforcement. A project can change it to `advisory` if they want a softer touch.\n- **Extensible** \u2014 Teams can add custom orchestration habits. A habit that requires security review for any task touching `auth/**` files. A habit that requires documentation review for API changes.\n- **Transparent** \u2014 Habits are declared in YAML, visible in the project configuration, and evaluated at predictable trigger points (preflight, postflight, on-stop).\n\nThe alternative \u2014 hardcoding orchestration requirements into the orchestrator itself \u2014 would be rigid, opaque, and impossible to customize per project. The habit system provides the same enforcement with full flexibility.\n\n## Habit Evaluation Context\n\nWhen habits are evaluated, the system provides an `EvaluationContext` that includes:\n\n```typescript\ninterface EvaluationContext {\n  toolsCalled: string[];     // Which MCP tools were invoked\n  filesModified: string[];   // Which files were changed\n  symbolsTouched: string[];  // Which symbols were affected\n  loreRecorded: boolean;     // Whether a lore entry was written\n  hasPortalRoutes: boolean;  // Whether portal.yaml has routes\n  taskAddsRoutes: boolean;   // Whether the task added new routes\n  taskDescription?: string;  // The task description (for complexity analysis)\n  gitClean?: boolean;        // Whether the working tree is clean\n}\n```\n\nThe `orchestration-required` habit checks `toolsCalled` for `paradigm_orchestrate_inline`. The `agent-coverage-validated` habit checks for `paradigm_ambient_nominations` or `paradigm_agent_list`. The `hot-mode-incident` habit checks `loreRecorded`.\n\nThe evaluation produces a `HabitEvaluation` with three possible results: `followed` (the habit was satisfied), `skipped` (the habit was not satisfied), or `partial` (some conditions met, others not). Skipped habits with `warn` severity produce warnings; skipped habits with `block` severity prevent the session from completing.\n\n## Practical Workflow\n\nHere is how orchestration enforcement plays out in a typical session:\n\n1. Developer starts a task: \"Add webhook support for Stripe events\"\n2. **Preflight** \u2014 `orchestration-required` fires: \"This task modifies auth-related symbols. Consider calling paradigm_orchestrate_inline.\"\n3. Developer calls `paradigm_orchestrate_inline mode='plan'` \u2014 the plan includes builder (implement), security (gate review), tester (write tests), documentor (update .purpose)\n4. Developer calls `paradigm_orchestrate_inline mode='execute'` \u2014 agents produce their outputs\n5. Work is done. **Postflight** \u2014 `agent-coverage-validated` fires: evaluates whether nominations were reviewed. Since orchestration was used, this passes.\n6. Session ends. **On-stop** \u2014 standard hooks check .purpose coverage, portal.yaml gates, etc.\n\nIf step 3 was skipped (developer implemented solo), the postflight habit would advise reviewing `paradigm_ambient_nominations` to check for security or documentation contributions that were self-nominated by agents watching the event stream.",
+      "keyConcepts": [
+        "Three seed habits enforce orchestration: orchestration-required (preflight/warn), agent-coverage-validated (postflight/advisory), hot-mode-incident (on-stop/advisory)",
+        "Enforcement uses the habit system, not hardcoded logic \u2014 habits are configurable, tunable (warn/block/advisory), and extensible",
+        "Nominations surface in orchestration plan/execute and via paradigm_ambient_nominations when orchestration is bypassed",
+        "Post-write hook emits events that feed the nomination engine \u2014 the hook does not enforce, it produces signals for the habit system",
+        "hot-mode-incident acknowledges that incidents should bypass orchestration while requiring a post-incident lore entry",
+        "EvaluationContext includes toolsCalled, filesModified, symbolsTouched, loreRecorded, and other session metrics for habit checking"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A developer implements a 5-file feature without calling paradigm_orchestrate_inline. What happens?",
+          "choices": {
+            "A": "The session is blocked and the developer must orchestrate before proceeding",
+            "B": "At preflight, the `orchestration-required` habit emits a warning suggesting orchestration. At postflight, `agent-coverage-validated` advises reviewing paradigm_ambient_nominations for any self-nominated contributions.",
+            "C": "Nothing \u2014 orchestration is entirely optional with no enforcement",
+            "D": "The commit is rejected by the pre-commit hook",
+            "E": "All modified files are automatically reverted"
+          },
+          "correct": "B",
+          "explanation": "Orchestration enforcement uses `warn` and `advisory` severities, not `block`. The developer receives a warning at preflight (\"Consider calling paradigm_orchestrate_inline\") and an advisory at postflight (\"Check paradigm_ambient_nominations for pending contributions\"). The work is not blocked because the severity is `warn`, not `block`. However, the developer is informed that agents may have had relevant contributions, and the security agent may have self-nominated a gate review that was never seen."
+        },
+        {
+          "id": "q2",
+          "question": "Why is orchestration enforcement implemented as habits rather than hardcoded into the orchestrator?",
+          "choices": {
+            "A": "Habits are faster to evaluate than hardcoded checks",
+            "B": "The orchestrator cannot access the habit system",
+            "C": "Habits are configurable (enable/disable), tunable (warn/block/advisory), extensible (custom habits), and transparent (declared in YAML) \u2014 hardcoded enforcement would be rigid and impossible to customize per project",
+            "D": "Hardcoded enforcement would require a database connection",
+            "E": "Habits are only evaluated once per day, reducing overhead"
+          },
+          "correct": "C",
+          "explanation": "The habit system provides four advantages over hardcoded enforcement: (1) Configurable \u2014 a project can disable `orchestration-required` by setting `enabled: false`. (2) Tunable \u2014 severity can be changed from `warn` to `block` for strict enforcement or `advisory` for a softer touch. (3) Extensible \u2014 teams can add custom habits (e.g., require security review for any `auth/**` changes). (4) Transparent \u2014 habits are declared in YAML and evaluated at predictable trigger points. Hardcoded logic would be a black box that every project lives with regardless of their needs."
+        },
+        {
+          "id": "q3",
+          "question": "Production is down. A developer needs to push a hot fix immediately. How does orchestration enforcement handle this?",
+          "choices": {
+            "A": "The developer must still orchestrate \u2014 there are no exceptions",
+            "B": "The `hot-mode-incident` habit acknowledges incidents by waiving orchestration enforcement and only requiring a post-incident lore entry",
+            "C": "The developer must manually disable all three habits before proceeding",
+            "D": "The system detects production incidents automatically and suspends all enforcement",
+            "E": "Orchestration enforcement does not apply to hot fixes by default because all severities are `warn` or `advisory`"
+          },
+          "correct": "B",
+          "explanation": "The `hot-mode-incident` habit is designed for this exact scenario. It fires at on-stop (session end) with `advisory` severity and only checks that a lore entry was recorded (`check: { type: 'lore-recorded' }`). The rationale: during incidents, you fix first and document later. The lore entry requirement ensures the learning loop captures the incident for future prevention. The other two habits (`orchestration-required` at `warn`, `agent-coverage-validated` at `advisory`) do not block, so the hot fix proceeds with only advisories."
+        },
+        {
+          "id": "q4",
+          "question": "A team wants to strictly require orchestration for all tasks. How do they configure this?",
+          "choices": {
+            "A": "Edit the orchestrator source code to block unorchestrated tasks",
+            "B": "Change the `orchestration-required` habit's severity from `warn` to `block` in their project's habit overrides",
+            "C": "Add a pre-commit hook that checks for orchestration",
+            "D": "Set `orchestration: mandatory` in config.yaml",
+            "E": "Remove all agents from the roster except the orchestrator"
+          },
+          "correct": "B",
+          "explanation": "Habit severity is tunable per project. Changing `orchestration-required` from `warn` to `block` in the project's habits override means the habit will block session completion if `paradigm_orchestrate_inline` was not called. This is the designed customization path: the seed habit provides a sensible default (`warn`), and projects can upgrade to `block` if they need strict enforcement. No source code modification is needed."
+        },
+        {
+          "id": "q5",
+          "question": "The `agent-coverage-validated` habit checks for which tools in its evaluation?",
+          "choices": {
+            "A": "paradigm_orchestrate_inline only",
+            "B": "paradigm_ambient_nominations and paradigm_agent_list \u2014 it verifies that agent contributions were reviewed, not just that orchestration was invoked",
+            "C": "paradigm_reindex and paradigm_purpose_validate",
+            "D": "paradigm_ripple and paradigm_search",
+            "E": "All MCP tools \u2014 it checks that at least one was called"
+          },
+          "correct": "B",
+          "explanation": "The `agent-coverage-validated` habit's check is `{ type: 'tool-called', params: { tools: ['paradigm_ambient_nominations', 'paradigm_agent_list'] } }`. It verifies that agent contributions were reviewed \u2014 either by checking ambient nominations or listing agents. This is distinct from `orchestration-required` which checks for `paradigm_orchestrate_inline`. The two habits complement each other: one ensures orchestration was considered (preflight), the other ensures agent contributions were reviewed (postflight)."
+        }
+      ]
+    },
+    {
+      "id": "symphony-visibility",
+      "title": "Lesson 8: Live Visibility via Symphony",
+      "content": "## The Visibility Gap\n\nOrchestration runs inside an MCP tool call. The human sees: \"Calling paradigm_orchestrate_inline...\" followed by a wall of text when it completes. There is no live visibility into what is happening during orchestration \u2014 which agents are active, what they are producing, whether they agree or disagree, how far along the plan is.\n\nSymphony closes this gap by providing a real-time communication channel between the orchestrator, agents, and the Conductor UI. The orchestrator emits progress into Symphony threads. The Conductor watches these threads and renders live updates.\n\n## How Orchestration Emits to Symphony\n\nWhen `paradigm_orchestrate_inline` runs in execute mode, it auto-emits a Symphony thread with a `thr-orch-` prefix:\n\n```typescript\nconst orchestrationThread = `thr-orch-${orchestrationId}`;\n```\n\nThe orchestrator creates this thread via the Symphony loader and posts an initial note from the \"maestro\" identity:\n\n```typescript\nconst maestroId = `${projectName}/maestro`;\nsymphony.createNote(orchestrationThread, {\n  from: maestroId,\n  content: `Orchestration started: ${taskDescription}`,\n  type: 'agent',\n  project: projectName,\n  role: 'orchestrator',\n});\n```\n\nAs each agent completes its work, the orchestrator posts their contributions to the thread. If security finds a gate coverage issue, that appears as a note from the security agent. If the builder completes implementation, that appears as a note from the builder. The thread becomes a chronological record of the orchestration.\n\nThe `thr-orch-` prefix is critical \u2014 it is the identifier that allows the Conductor to distinguish orchestration threads from regular Symphony threads (like team chat or general discussion).\n\n## NoteRelay: The Polling Bridge\n\nSymphony threads are stored as JSON files in `~/.paradigm/score/threads/`. The Conductor is a native macOS application that cannot directly watch the filesystem for MCP-created files (different process, different sandbox). NoteRelay bridges this gap.\n\nNoteRelay is a Conductor service that polls the Symphony thread directory on a 5-second interval:\n\n```\n~/.paradigm/score/threads/*.json → NoteRelay (5s poll) → Conductor state\n```\n\nEvery 5 seconds, NoteRelay scans for new or modified thread files. When it finds changes, it parses the JSON, extracts the notes, and updates the Conductor's in-memory state. This creates a near-real-time bridge between the MCP server (which writes threads) and the Conductor UI (which displays them).\n\nThe 5-second poll interval is a deliberate balance. A 1-second poll would provide faster updates but consume more CPU on the macOS overlay app. A 30-second poll would be too slow for live orchestration visibility. Five seconds means the Conductor is at most 5 seconds behind the actual orchestration state.\n\n## SymphonyThreadWatcher: Filtering Orchestration Threads\n\nNoteRelay delivers all Symphony threads to the Conductor. But the Team view in Conductor only wants orchestration threads \u2014 not general discussion or personal notes. SymphonyThreadWatcher handles this filtering.\n\nSymphonyThreadWatcher polls at a 3-second interval (faster than NoteRelay's 5-second scan) and filters threads by the `thr-orch-` prefix:\n\n```\nAll Symphony threads → SymphonyThreadWatcher (3s poll) → \nFilter: thr-orch-* → TeamThreadView\n```\n\nThe watcher also tracks thread state: is the orchestration in progress, completed, or failed? It determines this by checking the latest note in the thread \u2014 a \"completed\" or \"failed\" status note indicates the orchestration has finished.\n\n## TeamThreadView: Rendering in Conductor\n\nTeamThreadView is the SwiftUI view that renders orchestration threads in the Conductor overlay. Each note in the thread is displayed with:\n\n1. **Colored role badge** \u2014 Each agent role has a distinct color. The architect gets one color, the security agent another, the builder another. This makes it immediately visible who said what without reading names.\n\n2. **Intent indicator** \u2014 The orchestration plan specifies an intent for each agent (e.g., \"review gate coverage\", \"implement webhook handler\"). The intent appears next to the agent's badge, providing context for why the agent was included.\n\n3. **Agent nickname** \u2014 If the agent has a nickname (Mika, Atlas, Jinx), it is displayed alongside the role. This makes attributed responses feel like team communication rather than tool output.\n\n4. **Note content** \u2014 The actual contribution from the agent. This could be a review finding, a code suggestion, a security flag, or a completion confirmation.\n\nThe visual layout mimics a team chat interface: chronological notes from identified agents, each with their role badge and intent. The human can watch the orchestration unfold in real time rather than waiting for a monolithic output.\n\n## Agent-Side Emission\n\nAgents are instructed (via their orchestration prompts) to emit progress and completion notes to Symphony during execution. The orchestrator includes this instruction:\n\n```markdown\n## Symphony Communication\nDuring your work, emit progress notes to the active Symphony thread.\nUse these note types:\n- progress: \"Reviewing file X of Y...\"\n- finding: \"Found gate coverage gap on POST /api/payments\"\n- completion: \"Review complete. 2 findings, 0 blockers.\"\n```\n\nNot all agents emit notes equally. The architect tends to emit planning updates. The security agent emits findings. The builder emits completion summaries. The documentor emits what it updated. This diversity creates a natural team-communication feel in the thread.\n\n## The Full Pipeline\n\nPutting it all together, the live visibility pipeline is:\n\n```\npardigm_orchestrate_inline execute\n  ↓\nOrchestrator creates thr-orch-{id} thread\n  ↓\nEach agent contributes → notes posted to thread\n  ↓\nThread file written to ~/.paradigm/score/threads/\n  ↓\nNoteRelay polls (5s) → detects new/changed thread\n  ↓\nSymphonyThreadWatcher filters (3s) → thr-orch-* threads\n  ↓\nTeamThreadView renders with colored badges and intents\n  ↓\nHuman sees live orchestration progress in Conductor overlay\n```\n\nThe latency from agent contribution to visual display is at most ~8 seconds (5s NoteRelay + 3s ThreadWatcher in the worst case). In practice, it is usually 3-5 seconds because the polls are offset.\n\n## Why This Architecture\n\nThe polling-based architecture was chosen over alternatives for pragmatic reasons:\n\n- **Filesystem watching** (FSEvents on macOS) is brittle across sandboxed processes and does not work reliably when the MCP server writes files from a different process tree.\n- **WebSocket/TCP connection** between MCP server and Conductor would require connection management, reconnection logic, and port conflicts. Polling a directory is simpler.\n- **Shared memory** would require both processes to link against the same framework, creating tight coupling.\n\nPolling JSON files from a well-known directory is the simplest architecture that provides near-real-time visibility without process-coupling complexity. The tradeoff is a 3-8 second display latency, which is acceptable for human observation of orchestration progress.",
+      "keyConcepts": [
+        "Orchestrator auto-emits thr-orch-{id} threads to Symphony on execute \u2014 each agent's contribution becomes a note in the thread",
+        "NoteRelay polls ~/.paradigm/score/threads/ at 5-second intervals, bridging the MCP server (writes) and Conductor UI (reads)",
+        "SymphonyThreadWatcher filters orchestration threads (thr-orch-* prefix) at 3-second intervals for the Team view",
+        "TeamThreadView renders notes with colored role badges, intent indicators, and agent nicknames in a team-chat layout",
+        "Agents emit progress, finding, and completion notes during orchestration for real-time visibility",
+        "Polling-based architecture chosen over FSEvents/WebSocket for simplicity and cross-process reliability, with 3-8s display latency"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "An orchestration plan includes architect, security, builder, and documentor. The human watches the Conductor overlay. In what order do notes typically appear?",
+          "choices": {
+            "A": "Alphabetically by agent name",
+            "B": "Randomly \u2014 agents run in parallel with no ordering",
+            "C": "Chronologically based on orchestration stages: architect plans first, builder implements, security reviews, documentor updates last \u2014 matching the staged execution order",
+            "D": "All notes appear simultaneously when orchestration completes",
+            "E": "Fastest agent first, slowest last"
+          },
+          "correct": "C",
+          "explanation": "The orchestrator executes agents in staged dependency order: the architect plans first (stage 1), the builder implements based on the plan (stage 2), the security agent reviews the implementation (stage 3), and the documentor updates .purpose files last (final stage). Notes are posted chronologically as each stage completes, so the Conductor shows a natural progression of planning, implementation, review, and documentation."
+        },
+        {
+          "id": "q2",
+          "question": "NoteRelay polls at 5-second intervals and SymphonyThreadWatcher at 3-second intervals. What is the worst-case latency from an agent posting a note to it appearing in the Conductor?",
+          "choices": {
+            "A": "Exactly 5 seconds \u2014 NoteRelay is the bottleneck",
+            "B": "Exactly 3 seconds \u2014 ThreadWatcher is the bottleneck",
+            "C": "Up to ~8 seconds in the worst case (5s NoteRelay + 3s ThreadWatcher if both polls just missed the change)",
+            "D": "Instant \u2014 filesystem events trigger immediate updates",
+            "E": "30 seconds \u2014 there is a buffer delay"
+          },
+          "correct": "C",
+          "explanation": "In the worst case, NoteRelay just polled (misses the new file by 1ms) and polls again in 5 seconds. Then SymphonyThreadWatcher just polled (misses the state update by 1ms) and polls again in 3 seconds. Total worst case: ~8 seconds. In practice, the two polls are offset and the average latency is 3-5 seconds. This is acceptable for human observation \u2014 you are watching orchestration progress, not debugging a real-time system."
+        },
+        {
+          "id": "q3",
+          "question": "Why does the orchestrator use the `thr-orch-` prefix on thread names?",
+          "choices": {
+            "A": "It is a naming convention with no functional purpose",
+            "B": "It allows SymphonyThreadWatcher to distinguish orchestration threads from regular Symphony threads (team chat, notes) using a simple prefix filter",
+            "C": "It enables encryption of orchestration data",
+            "D": "It prevents other agents from reading the thread",
+            "E": "It is required by the Symphony API"
+          },
+          "correct": "B",
+          "explanation": "SymphonyThreadWatcher filters threads by the `thr-orch-` prefix to separate orchestration threads from regular communication threads. Without this prefix, the Team view in Conductor would mix orchestration progress with team chat, personal notes, and other thread types. The prefix is a simple, reliable discrimination mechanism that avoids complex content parsing."
+        },
+        {
+          "id": "q4",
+          "question": "Why was polling chosen over filesystem watching (FSEvents) for the NoteRelay architecture?",
+          "choices": {
+            "A": "Polling is faster than filesystem events",
+            "B": "macOS does not support filesystem watching",
+            "C": "FSEvents is brittle across sandboxed processes and does not work reliably when the MCP server writes files from a different process tree \u2014 polling a directory is simpler and more reliable",
+            "D": "Filesystem watching requires root permissions",
+            "E": "Polling uses less memory than filesystem watching"
+          },
+          "correct": "C",
+          "explanation": "The MCP server and the Conductor run as separate processes, potentially in different sandbox contexts. FSEvents (macOS filesystem watching) has known reliability issues when watching files written by a different process tree, especially across sandbox boundaries. Polling the `~/.paradigm/score/threads/` directory at a known interval is architecturally simpler, reliably cross-process, and introduces only 3-8 seconds of latency \u2014 an acceptable tradeoff for avoiding process-coupling complexity."
+        },
+        {
+          "id": "q5",
+          "question": "The security agent emits a finding note ('Found gate coverage gap on POST /api/payments') during orchestration. How does this note reach the TeamThreadView in Conductor?",
+          "choices": {
+            "A": "The security agent sends the note directly to the Conductor via a WebSocket connection",
+            "B": "The orchestrator posts the note to the thr-orch-{id} thread file in ~/.paradigm/score/threads/, NoteRelay detects the file change within 5 seconds, SymphonyThreadWatcher filters it as an orchestration thread within 3 seconds, and TeamThreadView renders it with the security agent's colored role badge",
+            "C": "The note is stored in the event stream and Conductor reads events directly",
+            "D": "The note is emailed to the developer and they manually check Conductor",
+            "E": "The note is only visible after orchestration completes, not during execution"
+          },
+          "correct": "B",
+          "explanation": "The full pipeline is: (1) The orchestrator posts the security agent's finding as a note in the `thr-orch-{id}` Symphony thread file. (2) NoteRelay polls `~/.paradigm/score/threads/` every 5 seconds and detects the updated thread file. (3) SymphonyThreadWatcher filters the thread by its `thr-orch-` prefix and routes it to the Team view. (4) TeamThreadView renders the note with the security agent's colored role badge, intent indicator, and nickname. The maximum latency is ~8 seconds (5s + 3s worst case), providing near-real-time visibility during orchestration."
+        }
+      ]
+    },
+    {
+      "id": "learning-feedback-loop",
+      "title": "Lesson 9: The Learning Feedback Loop",
+      "content": "## The Full Loop: DO-RECORD-ASSESS-LEARN-ADAPT-DO\n\nPARA 601 introduced the six-phase learning loop. In the context of the agent system, this loop operates at the agent level: each agent does work, records its contributions, receives verdicts, learns from the feedback, and adapts its behavior for the next session. The agent system provides the concrete mechanisms that make each phase work.\n\n## Phase 1: DO \u2014 Agent Work\n\nAgents perform work during orchestration. The builder writes code. The security agent reviews gates. The designer proposes UI patterns. Each contribution is captured in the session work log as an `agent-contribution` entry:\n\n```typescript\ninterface SessionWorkEntry {\n  timestamp: string;\n  type: 'agent-contribution' | 'user-verdict' | 'decision';\n  agent?: string;\n  contribution?: string;\n  attribution?: string;\n  symbols?: string[];\n}\n```\n\nThe session work log is stored at `.paradigm/events/session-log.jsonl` as append-only JSONL, bounded to 200 entries per session. Unlike breadcrumbs (which are recovery-focused with a 50-entry limit), the session work log captures rich context specifically for the learning pass.\n\n## Phase 2: RECORD \u2014 Verdict Capture\n\nWhen a human accepts, dismisses, or revises an agent's contribution, the verdict is recorded:\n\n```typescript\n{\n  type: 'user-verdict',\n  agent: 'security',\n  nominationId: 'nom-2026-03-24-001',\n  verdict: 'accepted' | 'dismissed' | 'revised' | 'deferred',\n  reason: 'Gate coverage recommendation was accurate',\n  symbols: ['^authenticated', '#payment-service'],\n  revisionDelta?: '...',  // What the human changed (for revised)\n}\n```\n\nFour verdict types capture the full range of human feedback:\n\n- **accepted** \u2014 The contribution was correct and applied as-is.\n- **dismissed** \u2014 The contribution was wrong or irrelevant.\n- **revised** \u2014 The contribution was partially correct; the human modified it. The `revisionDelta` captures what changed.\n- **deferred** \u2014 The contribution may be valid but is not relevant now.\n\nEach verdict is linked to the agent and the symbols involved, enabling per-symbol confidence tracking.\n\n## Phase 3: ASSESS \u2014 Auto-Expertise Adjustment\n\nWhen a verdict is recorded, the session work log automatically adjusts the agent's expertise confidence:\n\n```typescript\nconst delta = entry.verdict === 'accepted' ? 0.03\n  : entry.verdict === 'dismissed' ? -0.02\n  : entry.verdict === 'revised' ? -0.01\n  : 0; // deferred = no change\n```\n\nThis adjustment is asymmetric by design:\n\n- **+0.03 for accepted** \u2014 Positive reinforcement is slightly stronger than negative. This prevents a single bad review from tanking an otherwise reliable agent.\n- **-0.02 for dismissed** \u2014 A dismissed contribution means the agent was wrong. Confidence should decrease, but not catastrophically.\n- **-0.01 for revised** \u2014 A revised contribution was partially right. The penalty is smaller because the agent was in the right direction.\n- **0 for deferred** \u2014 Deferral says nothing about correctness, only timing. No confidence change.\n\nThe adjustment is applied per-symbol. If the security agent's gate recommendation for `^authenticated` was accepted, its confidence on `^authenticated` increases by 0.03. Its confidence on unrelated symbols is unchanged.\n\n```typescript\nfor (const symbol of entry.symbols!) {\n  const exp = profile.expertise!.find(e => e.symbol === symbol);\n  if (exp) {\n    exp.confidence = Math.max(0, Math.min(1, exp.confidence + delta));\n    exp.sessions = (exp.sessions || 0) + 1;\n    exp.lastTouch = new Date().toISOString();\n  }\n}\n```\n\nConfidence is clamped to `[0.0, 1.0]`. Sessions are incremented. The `lastTouch` timestamp is updated. This all happens as a fire-and-forget side effect of recording the verdict \u2014 the human never manually adjusts expertise scores.\n\n## Phase 4: LEARN \u2014 Teacher Model and Journal Entries\n\nAt the end of an orchestration session, the Teacher Model runs a postflight learning pass. It reads the session work log, identifies patterns in the verdicts, and writes journal entries for each agent that participated:\n\n```yaml\n# Learning journal entry written by Teacher Model\nid: LJ-2026-03-24-001\nagent: security\ntimestamp: '2026-03-24T16:00:00.000Z'\ntrigger: human_feedback\ninsight: >-\n  Security review of webhook endpoints should check for Stripe\n  signature verification, not just gate coverage. The human revised\n  the gate recommendation to include webhook-specific checks.\nproject: dealoracle\ntransferable: true\nconfidence_before: 0.85\nconfidence_after: 0.84\npattern:\n  id: webhook-stripe-signature\n  applies_when: Reviewing webhook endpoints that receive Stripe events\n  correct_approach: Check for webhook signature verification in addition to gate coverage\n```\n\nThe Teacher Model synthesizes verdict patterns into actionable journal entries. A single \"revised\" verdict becomes an insight about what the agent should do differently. The `trigger: human_feedback` records that this learning came from a human correction, not self-reflection.\n\n## Phase 5: ADAPT \u2014 Journal Promotion to Notebooks\n\nJournal entries that prove valuable over time are promoted into notebook entries by Sensei (trainer). The promotion pipeline:\n\n```\nJournal entry (agent-private) → Sensei reviews → \npromoteFromLore() → Notebook entry (reusable snippet) → \nbuildProfileEnrichment() → Injected into future prompts\n```\n\nThe key distinction: journal entries are raw learnings (\"I was wrong about X because Y\"). Notebook entries are distilled knowledge (\"When doing X, use this pattern\"). Sensei's job is to transform the former into the latter.\n\nNot every journal entry becomes a notebook entry. Sensei evaluates:\n- Is the insight transferable to other projects?\n- Is it actionable (specific enough to apply)?\n- Has the same insight appeared in multiple sessions (pattern confirmation)?\n- Is the confidence high enough to be reliable?\n\n## Phase 6: The Nomination Engine\n\nThe nomination engine connects the learning loop to real-time project activity. As events flow through the event stream, each active agent scores them against their attention patterns:\n\n```\nEvent (file-modified, gate-added, etc.)\n  ↓\nscoreEventForAgent(event, agentId, attention)\n  ↓\nAttentionScore { score, shouldNominate, breakdown }\n  ↓\nIf shouldNominate → Create nomination\n  ↓\nNomination surfaced in orchestration or paradigm_ambient_nominations\n```\n\nThe nomination engine is the adaptive component: as an agent's attention patterns evolve (new concepts, adjusted thresholds), its nominations change. As its expertise confidence adjusts, its contributions become more or less influential. The system adapts based on empirical performance, not fixed rules.\n\n## The Complete Cycle\n\nPutting all six phases together for a single agent:\n\n```\n1. DO:     Security agent reviews webhook endpoint, flags missing gate\n2. RECORD: Human accepts the gate recommendation → verdict: accepted\n3. ASSESS: Security confidence on ^authenticated: 0.85 → 0.88 (+0.03)\n4. LEARN:  Teacher Model writes journal entry about webhook gate patterns\n5. ADAPT:  Sensei promotes journal → notebook entry for webhook security\n6. DO:     Next session, security agent starts with webhook pattern in\n           its prompt via buildProfileEnrichment(). It applies the pattern\n           without needing to rediscover it.\n```\n\nEach iteration through the loop makes the agent incrementally better. After 10 sessions with consistent feedback, the security agent's webhook review pattern is battle-tested, high-confidence, and automatically injected into every relevant orchestration. The human no longer needs to remind the agent about webhook-specific checks \u2014 the learning loop closed.\n\n## What Makes This Different\n\nMost AI systems have observation without adaptation. They log what happened but do not feed it back. Paradigm's agent system closes the loop through four mechanisms:\n\n1. **Per-symbol expertise tracking** \u2014 Confidence adjusts based on verdicts, not manual scoring\n2. **Asymmetric reinforcement** \u2014 +0.03/-0.02/-0.01 prevents a single bad session from destroying confidence\n3. **Teacher Model postflight** \u2014 Journal entries are written automatically, not relying on agents to self-reflect\n4. **Notebook promotion** \u2014 Insights become reusable patterns via Sensei, surfaced through buildProfileEnrichment()",
+      "keyConcepts": [
+        "Session work log (.paradigm/events/session-log.jsonl) captures agent contributions and user verdicts (accepted/dismissed/revised/deferred)",
+        "Auto-expertise adjustment: +0.03 for accepted, -0.02 for dismissed, -0.01 for revised \u2014 asymmetric to prevent single-session confidence collapse",
+        "Teacher Model runs postflight learning pass, reading verdicts and writing journal entries with extracted patterns",
+        "Journals promote to notebooks via Sensei: raw learnings become distilled, reusable patterns injected into future prompts",
+        "Nomination engine scores events against attention patterns in real time \u2014 nominations adapt as expertise and attention evolve",
+        "The full loop: DO (work) \u2192 RECORD (verdicts) \u2192 ASSESS (expertise adjustment) \u2192 LEARN (journal entries) \u2192 ADAPT (notebook promotion) \u2192 DO"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "The security agent's contribution is revised by the human (partially correct). What happens to its expertise confidence on the relevant symbols?",
+          "choices": {
+            "A": "No change \u2014 revised contributions have no effect",
+            "B": "Confidence decreases by 0.02 (same as dismissed)",
+            "C": "Confidence decreases by 0.01 \u2014 the revised verdict means the agent was partially right, so the penalty is smaller than dismissed (-0.02)",
+            "D": "Confidence increases by 0.01 (partially correct is still partially positive)",
+            "E": "Confidence is reset to 0.5 (neutral)"
+          },
+          "correct": "C",
+          "explanation": "Revised verdicts trigger a -0.01 adjustment. This is smaller than dismissed (-0.02) because the agent was in the right direction \u2014 the human modified the contribution rather than rejecting it entirely. The asymmetric reinforcement scheme (+0.03 accept / -0.02 dismiss / -0.01 revise) is designed so that a mix of mostly-accepted with occasional revisions still trends upward, while consistent dismissals trend downward."
+        },
+        {
+          "id": "q2",
+          "question": "The Teacher Model runs at postflight and reads the session work log. What is it looking for?",
+          "choices": {
+            "A": "Code syntax errors in agent contributions",
+            "B": "Patterns in user verdicts \u2014 which agents were accepted, dismissed, or revised, and what insights can be extracted for journal entries",
+            "C": "Missing .purpose file updates",
+            "D": "Whether the orchestrator was called",
+            "E": "Token usage metrics for cost optimization"
+          },
+          "correct": "B",
+          "explanation": "The Teacher Model's postflight learning pass reads agent-contribution and user-verdict entries from the session work log. It looks for patterns: which agents were consistently accepted (confirming their expertise), which were revised (indicating partial knowledge gaps), and what specific corrections the human made (revisionDelta). It synthesizes these patterns into journal entries with extracted LearningPatterns that describe when to apply the corrected approach. The Teacher Model does not check code quality or Paradigm compliance \u2014 those are the reviewer's and stop hook's jobs."
+        },
+        {
+          "id": "q3",
+          "question": "A journal entry about JWT refresh token rotation has appeared in 4 different sessions with `transferable: true`. Sensei is evaluating whether to promote it to a notebook entry. What criteria does Sensei use?",
+          "choices": {
+            "A": "Only the transferable flag \u2014 if true, it is automatically promoted",
+            "B": "The number of sessions (4 is enough) \u2014 promotion is count-based",
+            "C": "Whether the insight is transferable, actionable, confirmed by multiple sessions, and high enough confidence to be reliable",
+            "D": "Whether the human explicitly requests promotion",
+            "E": "Whether the agent's overall acceptance rate is above 80%"
+          },
+          "correct": "C",
+          "explanation": "Sensei evaluates multiple criteria: (1) Is it transferable to other projects? (`transferable: true` confirms this). (2) Is it actionable \u2014 specific enough to apply, not just a vague observation? (3) Has it appeared across multiple sessions \u2014 4 appearances confirms the pattern. (4) Is the confidence high enough? A pattern discovered through `correction_received` with `confidence_after: 0.9` is more reliable than one from `self_reflection` with `confidence_after: 0.6`. The promotion is a quality gate, not automatic."
+        },
+        {
+          "id": "q4",
+          "question": "Why is the expertise adjustment +0.03 for accepted but only -0.02 for dismissed (asymmetric rather than symmetric)?",
+          "choices": {
+            "A": "Positive reinforcement is always stronger than negative in learning theory",
+            "B": "The asymmetry prevents a single bad session from collapsing an otherwise reliable agent's confidence \u2014 it takes more dismissals than acceptances to significantly change confidence",
+            "C": "Symmetric adjustments would cause confidence to oscillate unstably",
+            "D": "The specific values are arbitrary and have no design rationale",
+            "E": "Accepted contributions are more common, so they need a larger weight"
+          },
+          "correct": "B",
+          "explanation": "The asymmetry is deliberate. If an agent has been consistently good (confidence 0.9) and has one bad session where a contribution is dismissed, symmetric -0.03 would drop it to 0.87. With asymmetric -0.02, it drops to 0.88. This matters because a single bad session should not outweigh multiple good ones. The agent needs more dismissals than acceptances to trend downward, which matches the expectation that occasionally wrong agents are still net-positive contributors."
+        },
+        {
+          "id": "q5",
+          "question": "An agent's nomination was deferred (not accepted, not dismissed). How does this affect the learning loop?",
+          "choices": {
+            "A": "The expertise confidence decreases slightly",
+            "B": "The nomination is marked for re-evaluation in the next session",
+            "C": "No expertise change occurs \u2014 deferred says nothing about correctness, only timing. The journal entry (if written) would use trigger `self_reflection` rather than `human_feedback`.",
+            "D": "The agent is temporarily benched until the deferred item is resolved",
+            "E": "The Teacher Model treats deferred as a weaker form of dismissal"
+          },
+          "correct": "C",
+          "explanation": "A deferred verdict means the contribution is not relevant right now, but may be valid. The expertise adjustment for deferred is 0 (no change) because deferral carries no signal about whether the agent was right or wrong. The agent's confidence remains unchanged. If the Teacher Model writes a journal entry about the deferred contribution, it would use `self_reflection` as the trigger rather than `human_feedback`, since the human did not evaluate correctness."
+        }
+      ]
+    },
+    {
+      "id": "agent-pods-nevrland",
+      "title": "Lesson 10: Agent Pods & nevr.land",
+      "content": "## The Pod Concept\n\nA pod is a named team preset \u2014 a curated group of agents optimized for a specific workflow. Instead of manually activating 8-15 agents for a common scenario, you activate a pod and get a pre-configured team.\n\nPods are metadata about team composition, not modifications to agent behavior. Activating a pod adds agents to the roster; it does not change their personalities, expertise, or attention patterns. The agents in a \"Ship Pod\" are the same agents as when activated individually \u2014 the pod just saves the activation step.\n\n## Named Pods\n\nSeveral standard pods cover common workflows:\n\n**Ship Pod** \u2014 The core shipping team. Architect, builder, reviewer, tester, security, documentor. This is the minimum viable team for implementing and shipping a feature with quality gates.\n\n**Launch Pod** \u2014 Everything needed for a product launch. Ship Pod + designer (Mika), copywriter (Wren), seo (Beacon), performance (Bolt), e2e (Ghost). Covers UI, content, search visibility, performance testing, and end-to-end verification.\n\n**Growth Pod** \u2014 Business intelligence and growth team. Researcher (Scout), analyst (Sage), seo (Beacon), content-intel (Lens), product (North), pm (Yuki). Focused on market research, analytics, content strategy, and product direction.\n\n**Design Pod** \u2014 The visual and UX team. Designer (Mika), copywriter (Wren), a11y (Aria), creative (Prism), presenter (Stage). Covers UI design, copy, accessibility, creative direction, and presentation.\n\n**Infra Pod** \u2014 The platform team. Devops (Atlas), dba (Vault), sysadmin (Root), network (Wire), release (Ship), performance (Bolt). Focused on deployment, database, infrastructure, and reliability.\n\n**Quality Pod** \u2014 The quality assurance team. Reviewer, tester, e2e (Ghost), qa (Shield), advocate (Jinx), debugger (Trace), performance (Bolt). Covers code review, unit tests, end-to-end tests, test strategy, adversarial testing, debugging, and performance.\n\nActivating a pod via CLI:\n\n```bash\n# Activate all agents in the Ship Pod\nparadigm agents activate --pod ship-pod\n\n# Activate Design Pod on top of existing roster\nparadigm agents activate --pod design-pod\n\n# Multiple pods\nparadigm agents activate --pod ship-pod --pod infra-pod\n```\n\nPods are additive \u2014 activating a pod adds its agents to the roster without removing existing ones. Activating Ship Pod and then Design Pod results in a roster containing both teams.\n\n## Pods Are Registry Metadata, Not Agent Behavior\n\nThis distinction is critical. A pod definition is:\n\n```yaml\nid: ship-pod\nname: Ship Pod\ndescription: Core shipping team for implementing and delivering features\nagents:\n  - architect\n  - builder\n  - reviewer\n  - tester\n  - security\n  - documentor\n```\n\nIt is a list of agent IDs. There is no behavioral modification, no special collaboration mode, no pod-specific prompts. The agents in the Ship Pod behave exactly as they do when activated individually. The pod is a convenience for roster management.\n\nThis keeps the agent system simple. Agent behavior is defined in `.agent` files. Team composition is defined in `roster.yaml`. Pods are shortcuts for populating the roster. There is one system for behavior (profiles), one for composition (rosters), and one for convenience (pods). They do not overlap.\n\n## The nevr.land Marketplace\n\nWhile Paradigm ships 54 agents locally, the agent ecosystem is open. nevr.land (nevr.land) is the marketplace where agents can be published, discovered, and installed \u2014 like npm for AI agents.\n\n### Installing Agents\n\n```bash\n# Install a community agent\nparadigm agents install @paradigm/designer\n\n# Install from a specific publisher\nparadigm agents install @acme/compliance-auditor\n\n# Install and activate in one step\nparadigm agents install @paradigm/designer --activate\n```\n\nInstalled agents are placed in `~/.paradigm/agents/` alongside the built-in agents. They follow the same `.agent` schema and participate in orchestration, attention scoring, and the learning loop identically to built-in agents.\n\n### Trust Levels\n\nNot all agents are equal. The marketplace uses three trust levels:\n\n| Trust Level | Meaning | Verification |\n|---|---|---|\n| **verified** | Published by the Paradigm team or a verified organization | Publisher identity confirmed, agent reviewed for quality and safety |\n| **community** | Published by a community member | Publisher identity confirmed, agent not reviewed |\n| **private** | Published to a private registry | Only accessible to the publisher's organization |\n\nTrust levels affect installation warnings and default permissions. A `verified` agent installs silently. A `community` agent shows a warning with the publisher's identity and a link to the source. A `private` agent requires authentication to the publisher's registry.\n\nTrust does NOT affect agent capabilities. A community agent can do everything a verified agent can do. Trust is about provenance (\"who made this?\"), not permissions.\n\n### Agent Package Format\n\nA published agent package contains three files:\n\n```\n@paradigm/designer/\n  agent.yaml      # The .agent profile (same schema as local agents)\n  notebooks/      # Bootstrapping notebook entries\n    nb-design-system-001.yaml\n    nb-typography-002.yaml\n    nb-color-theory-003.yaml\n  metadata.yaml   # Registry metadata\n```\n\n**agent.yaml** is the standard `.agent` file: id, nickname, role, personality, collaboration, expertise, attention, behaviors, transferable patterns. It follows the exact same schema used for local agents.\n\n**notebooks/** contains bootstrapping entries that give the agent useful knowledge on day one. A designer agent might ship with entries for typography scales, color theory, layout patterns, and accessibility guidelines. These are installed into `~/.paradigm/notebooks/{agent-id}/` as global entries.\n\n**metadata.yaml** contains registry-specific fields:\n\n```yaml\nname: \"@paradigm/designer\"\nversion: \"1.2.0\"\ndescription: \"Design engineer with deep knowledge of UI/UX theory\"\nauthor: \"Paradigm Team\"\nlicense: \"MIT\"\ntrust: verified\ntags: [design, ui, ux, accessibility, typography]\ncompatibility:\n  paradigm: \">=5.0.0\"\n  tiers: [tier-1, tier-2]  # Works with reasoning and balanced models\ndownloads: 12847\nrating: 4.8\n```\n\nThe `compatibility` field specifies which Paradigm version and model tiers the agent works with. An agent designed for tier-1 reasoning models may produce poor results on tier-3 fast models. The marketplace surfaces this information during installation.\n\n### Publishing\n\nPublishing an agent reverses the installation flow:\n\n```bash\n# Package and publish\nparadigm agents publish ~/.paradigm/agents/custom-agent.agent \\\n  --notebooks ~/.paradigm/notebooks/custom-agent/ \\\n  --trust community\n```\n\nThe publish command validates the agent schema, packages the agent file and notebooks, and uploads to the nevr.land registry. Private publishing requires an organization token.\n\n## The Ecosystem Vision\n\nThe progression from local to global follows a natural path:\n\n1. **Built-in agents** \u2014 Paradigm ships 54 agents covering standard development workflows.\n2. **Custom local agents** \u2014 Loid (forge) designs project-specific agents stored in `~/.paradigm/agents/`.\n3. **Team-shared agents** \u2014 Agent files in `.paradigm/agents/` (project-level) are committed to the repo and shared with the team.\n4. **Community agents** \u2014 Published to nevr.land for anyone to install.\n5. **Verified agents** \u2014 Reviewed and endorsed by the Paradigm team for quality and safety.\n\nEach level inherits the same agent system: `.agent` schema, notebooks, expertise tracking, attention patterns, learning loop. A community agent from nevr.land participates in orchestration, builds expertise through verdicts, and accumulates notebook entries exactly like a built-in agent. The only difference is provenance.\n\n## Future: Agent Registries as Infrastructure\n\nThe nevr.land marketplace is the first implementation of a broader concept: agent registries. Organizations may run private registries for internal agents that should not be published publicly. Multiple registries can be configured in `~/.paradigm/config.yaml`, similar to how npm supports multiple registries.\n\nThe agent package format (agent.yaml + notebooks/ + metadata.yaml) is intentionally simple to enable this. There is no compilation step, no binary format, no platform dependency. An agent package is human-readable YAML and can be inspected, forked, and modified before installation.\n\nThis openness is a design principle: agents are knowledge, not code. They should be as shareable, forkable, and composable as npm packages. The trust system provides safety rails without restricting capability.",
+      "keyConcepts": [
+        "Pods are named team presets (Ship, Launch, Growth, Design, Infra, Quality) \u2014 they add agents to the roster without modifying behavior",
+        "Pods are registry metadata, not agent behavior \u2014 agents in a pod behave identically to when activated individually",
+        "nevr.land marketplace enables paradigm agents install @publisher/agent-name for community and verified agents",
+        "Three trust levels: verified (reviewed by Paradigm team), community (publisher confirmed), private (organization-only)",
+        "Agent package format: agent.yaml (standard .agent schema) + notebooks/ (bootstrapping entries) + metadata.yaml (registry metadata)",
+        "Five-level progression: built-in agents \u2192 custom local \u2192 team-shared \u2192 community \u2192 verified"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "A developer activates the Ship Pod and then the Design Pod. How many agents are in the roster?",
+          "choices": {
+            "A": "6 \u2014 the Design Pod replaces the Ship Pod",
+            "B": "11 \u2014 Ship Pod (6) + Design Pod (5), no overlap",
+            "C": "The union of both pods \u2014 pods are additive, agents from both are in the roster with no duplicates",
+            "D": "Only the Design Pod agents \u2014 the last activated pod wins",
+            "E": "All 54 agents \u2014 activating any pod enables all agents"
+          },
+          "correct": "C",
+          "explanation": "Pods are additive. Activating a pod adds its agents to the existing roster. The Ship Pod adds architect, builder, reviewer, tester, security, and documentor. The Design Pod adds designer, copywriter, a11y, creative, and presenter. The roster now contains the union of both: 11 unique agents (no overlap between these two pods). If pods had overlapping agents (e.g., both include reviewer), the agent would appear once in the roster."
+        },
+        {
+          "id": "q2",
+          "question": "What is the difference between a pod and a roster?",
+          "choices": {
+            "A": "They are the same thing with different names",
+            "B": "A pod is a named preset of agents (a template); a roster is the actual list of active agents on a project. Activating a pod modifies the roster.",
+            "C": "A pod modifies agent behavior; a roster just lists agent names",
+            "D": "A roster can contain pods but not individual agents",
+            "E": "Pods are for production; rosters are for development"
+          },
+          "correct": "B",
+          "explanation": "A pod is a template \u2014 a named group of agents optimized for a workflow (like \"Ship Pod\" = architect + builder + reviewer + tester + security + documentor). A roster is the actual configuration file (`.paradigm/roster.yaml`) that lists which agents are active on a project. The command `paradigm agents activate --pod ship-pod` reads the pod template and adds its agents to the roster. The pod is the input; the roster is the output."
+        },
+        {
+          "id": "q3",
+          "question": "A community-published agent from nevr.land is installed. How does it participate in the local Paradigm system?",
+          "choices": {
+            "A": "It runs in a sandboxed mode with limited capabilities",
+            "B": "It is installed to ~/.paradigm/agents/ and participates identically to built-in agents: same orchestration, attention scoring, learning loop, expertise tracking, and notebook system",
+            "C": "It can only be used manually, not through orchestration",
+            "D": "It requires an API key from the publisher to function",
+            "E": "It is read-only and cannot accumulate expertise or notebook entries"
+          },
+          "correct": "B",
+          "explanation": "An installed agent follows the standard `.agent` schema and is placed in `~/.paradigm/agents/`. The system treats it identically to a built-in agent: it is included in orchestration planning (if in the roster), scores events against its attention patterns, self-nominates contributions, accumulates expertise through verdicts, and builds notebook entries through the learning loop. Trust level affects installation warnings, not runtime capabilities."
+        },
+        {
+          "id": "q4",
+          "question": "An agent package on nevr.land includes a `notebooks/` directory with 5 YAML files. Where are these installed?",
+          "choices": {
+            "A": "In the project's .paradigm/notebooks/{agent-id}/",
+            "B": "In ~/.paradigm/notebooks/{agent-id}/ as global entries that travel across all projects",
+            "C": "They are not installed \u2014 notebooks must be created manually",
+            "D": "In the agent's .agent file as inline snippets",
+            "E": "In ~/.paradigm/agents/{agent-id}/notebooks/"
+          },
+          "correct": "B",
+          "explanation": "Notebook entries from an agent package are installed into `~/.paradigm/notebooks/{agent-id}/` as global entries. This means they are available on every project the agent joins, providing bootstrapping knowledge from day one. This matches the storage pattern: global notebooks at ~/.paradigm/notebooks/ travel with the agent, while project notebooks at .paradigm/notebooks/ are project-specific. Bootstrapping entries should be global because they represent the agent's foundational knowledge, not project-specific patterns."
+        },
+        {
+          "id": "q5",
+          "question": "Why does the agent package format use YAML files instead of a compiled binary format?",
+          "choices": {
+            "A": "YAML is faster to parse than binary formats",
+            "B": "Binary formats are not supported on all platforms",
+            "C": "YAML is human-readable, enabling inspection, forking, and modification before installation \u2014 agents are knowledge, not code, and should be as shareable and composable as possible",
+            "D": "YAML is required by the Paradigm schema validator",
+            "E": "Binary formats would require code signing"
+          },
+          "correct": "C",
+          "explanation": "The design principle is that agents are knowledge, not compiled code. A human-readable YAML format means you can inspect an agent's personality, expertise, behaviors, and attention patterns before installing it. You can fork a community agent, modify its attention threshold, add a behavior, and republish. You can copy a single transferable pattern from one agent to another. A binary format would make all of this opaque. The package format (agent.yaml + notebooks/ + metadata.yaml) is intentionally the simplest possible structure that captures the complete agent identity."
+        }
+      ]
+    }
+  ]
+}
