@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.1] — 2026-03-24
+
+### Added
+
+- **Model tier resolution** — Agents now use capability tiers (`tier-1`, `tier-2`, `tier-3`) instead of hardcoded model names. Tiers resolve to actual models via `model-resolution` block in `.paradigm/config.yaml`. Claude Code auto-configures (opus/sonnet/haiku), Cursor defaults to sonnet/sonnet/haiku, other environments get sensible defaults.
+- **Tier config in paradigm shift** — Step 2d auto-detects environment and configures model-resolution. Edit config.yaml to change all agent models in one place (e.g., all tier-2 to haiku for budget mode).
+- **`resolveModelForAgent()`** — Orchestrator resolves agent → tier → config → model at runtime. Backward compatible with `defaultModel` field in agents.yaml.
+
 ## [5.9.0] — 2026-03-24
 
 ### Added

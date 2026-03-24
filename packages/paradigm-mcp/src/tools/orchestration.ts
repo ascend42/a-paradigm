@@ -157,6 +157,7 @@ interface AgentPromptResult {
 
 const SYMBOL_PATTERN = /[@#$%^!?&~][a-zA-Z0-9_-]+/g;
 
+// Legacy — kept for backward compat, prefer AGENT_TIERS + resolveModelForAgent()
 const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
   architect: 'opus',
   security: 'opus',
@@ -165,6 +166,62 @@ const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
   tester: 'haiku',
   documentor: 'haiku',
 };
+
+// Agent capability tier assignments
+const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
+  architect: 'tier-1',
+  security: 'tier-1',
+  advocate: 'tier-1',
+  product: 'tier-1',
+  operations: 'tier-1',
+  sales: 'tier-1',
+  reviewer: 'tier-2',
+  designer: 'tier-2',
+  copywriter: 'tier-2',
+  researcher: 'tier-2',
+  analyst: 'tier-2',
+  dx: 'tier-2',
+  qa: 'tier-2',
+  debugger: 'tier-2',
+  builder: 'tier-3',
+  tester: 'tier-3',
+  documentor: 'tier-3',
+  sysadmin: 'tier-3',
+  archivist: 'tier-3',
+  release: 'tier-3',
+};
+
+const DEFAULT_TIER_MODELS: Record<string, string> = {
+  'tier-1': 'opus',
+  'tier-2': 'sonnet',
+  'tier-3': 'haiku',
+};
+
+/**
+ * Resolve the model for an agent using tier-based config.
+ * Resolution: config.yaml model-resolution → agent modelTier → AGENT_TIERS → fallback sonnet
+ */
+function resolveModelForAgent(agentName: string, rootDir: string, agentDef?: { defaultModel?: string; modelTier?: string }): string {
+  // 1. Check config.yaml model-resolution block
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const config = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+      const resolution = config?.['model-resolution'] as Record<string, string> | undefined;
+      if (resolution) {
+        const tier = (agentDef?.modelTier as string) || AGENT_TIERS[agentName] || 'tier-2';
+        if (resolution[tier]) return resolution[tier];
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 2. Agent's own defaultModel (backward compat)
+  if (agentDef?.defaultModel) return agentDef.defaultModel;
+
+  // 3. Hardcoded tier defaults
+  const tier = AGENT_TIERS[agentName] || 'tier-2';
+  return DEFAULT_TIER_MODELS[tier] || 'sonnet';
+}
 
 const AGENT_TOKEN_ESTIMATES: Record<string, { min: number; max: number }> = {
   architect: { min: 5000, max: 20000 },
@@ -630,7 +687,7 @@ async function handleOrchestrateInline(
         name: manifestAgent?.name || agentStep.name,
         role: manifestAgent?.role || ROLE_PROMPTS[agentStep.name] || `${agentStep.name} agent`,
         focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
-        defaultModel: manifestAgent?.defaultModel || DEFAULT_MODELS[agentStep.name] || 'sonnet',
+        defaultModel: resolveModelForAgent(agentStep.name, ctx.rootDir, manifestAgent),
         triggers: manifestAgent?.triggers,
         handoff_to: manifestAgent?.handoff_to,
         context: manifestAgent?.context,
@@ -847,7 +904,7 @@ async function handleAgentPrompt(
     name: manifestAgent?.name || agentName,
     role: manifestAgent?.role || ROLE_PROMPTS[agentName] || ROLE_PROMPTS.builder,
     focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
-    defaultModel: manifestAgent?.defaultModel || DEFAULT_MODELS[agentName] || 'sonnet',
+    defaultModel: resolveModelForAgent(agentName, ctx.rootDir, manifestAgent),
     triggers: manifestAgent?.triggers,
     handoff_to: manifestAgent?.handoff_to,
     context: manifestAgent?.context,
@@ -1233,7 +1290,7 @@ handoff_context: |
 This structured output helps track progress and pass context between agents.`);
 
   const prompt = parts.join('\n');
-  const model = agent.defaultModel || DEFAULT_MODELS[agent.name] || 'sonnet';
+  const model = agent.defaultModel || DEFAULT_TIER_MODELS[AGENT_TIERS[agent.name] || 'tier-2'] || 'sonnet';
 
   // Build attribution prefix: "[nickname (role)]" or "[role]"
   const attribution = options.nickname
@@ -1427,7 +1484,7 @@ function generateCostPreviewLocal(
   for (const stage of plan.stages) {
     for (const agentStep of stage.agents) {
       const base = AGENT_BASE_TOKENS[agentStep.name] || { input: 5000, output: 3000 };
-      const model = DEFAULT_MODELS[agentStep.name] || 'sonnet';
+      const model = DEFAULT_TIER_MODELS[AGENT_TIERS[agentStep.name] || 'tier-2'] || 'sonnet';
       const pricing = MODEL_PRICING[model];
 
       const input = Math.round(base.input * complexityMultiplier);
@@ -1450,7 +1507,7 @@ function generateCostPreviewLocal(
   // Calculate baseline (full team)
   let baselineCost = 0;
   for (const [agent, base] of Object.entries(AGENT_BASE_TOKENS)) {
-    const model = DEFAULT_MODELS[agent] || 'sonnet';
+    const model = DEFAULT_TIER_MODELS[AGENT_TIERS[agent] || 'tier-2'] || 'sonnet';
     const pricing = MODEL_PRICING[model];
     baselineCost += (base.input / 1_000_000) * pricing.input + (base.output / 1_000_000) * pricing.output;
   }

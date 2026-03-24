@@ -288,6 +288,38 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Step 2d: Model tier configuration
+  {
+    const configForTiers = path.join(paradigmDir, 'config.yaml');
+    if (fs.existsSync(configForTiers)) {
+      try {
+        const configContent = fs.readFileSync(configForTiers, 'utf8');
+        const config = yaml.load(configContent) as Record<string, unknown>;
+        if (!config['model-resolution'] || options.force) {
+          // Auto-configure based on environment detection
+          const { ModelDiscovery } = await import('../core/model-discovery.js');
+          const discovery = new ModelDiscovery(cwd);
+          const env = discovery.detectEnvironment();
+
+          let tierMap: Record<string, string>;
+          if (env === 'claude-code') {
+            tierMap = { 'tier-1': 'opus', 'tier-2': 'sonnet', 'tier-3': 'haiku' };
+          } else if (env === 'cursor') {
+            tierMap = { 'tier-1': 'sonnet', 'tier-2': 'sonnet', 'tier-3': 'haiku' };
+          } else {
+            tierMap = { 'tier-1': 'sonnet', 'tier-2': 'sonnet', 'tier-3': 'sonnet' };
+          }
+
+          config['model-resolution'] = tierMap;
+          fs.writeFileSync(configForTiers, yaml.dump(config, { lineWidth: -1, noRefs: true }), 'utf8');
+          console.log(chalk.green(`  ✓ Model tiers configured for ${chalk.cyan(env)}: tier-1=${tierMap['tier-1']}, tier-2=${tierMap['tier-2']}, tier-3=${tierMap['tier-3']}`));
+        }
+      } catch (e) {
+        log.operation('shift').debug('Model tier config failed', { error: (e as Error).message });
+      }
+    }
+  }
+
   // Step 3: Scan/Index
   if (!options.quick) {
     spinner.start('Step 3/6: Scanning and indexing symbols...');
