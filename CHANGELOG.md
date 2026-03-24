@@ -5,6 +5,13 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.0] — 2026-03-24
+
+### Added
+
+- **Live orchestration visibility via Symphony** — `paradigm_orchestrate_inline` execute mode now automatically writes Symphony messages to an orchestration thread (`thr-orch-*`). Maestro registers as a Symphony agent and emits "task assigned" notes for each agent stage. Agents are instructed to emit progress and completion notes. The full agent conversation is visible in Conductor's TeamThreadView in real-time.
+- **Conductor TeamThreadView in container mode** — The monitor tab in the container sidebar now shows live orchestration threads when agents are working. Colored role badges, intent indicators, and symbol references render as agents communicate.
+
 ## [5.8.2] — 2026-03-24
 
 ### Added

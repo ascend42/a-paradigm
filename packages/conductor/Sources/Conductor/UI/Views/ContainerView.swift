@@ -13,6 +13,8 @@ struct ContainerView: View {
     @ObservedObject var agentProcessManager: AgentProcessManager
     @ObservedObject var agentGroupStore: AgentGroupStore
     @ObservedObject var symphonyMonitor: SymphonyMonitor
+    @ObservedObject var threadWatcher: SymphonyThreadWatcher
+    @ObservedObject var noteRelay: NoteRelay
 
     @State private var gridPreset: GridPreset = .twoByOne
     @State private var showSidebar = true
@@ -237,6 +239,14 @@ struct ContainerView: View {
                         }
                     }
                 }
+            }
+
+            // Live orchestration threads
+            if !threadWatcher.teamThreads.isEmpty {
+                TeamThreadView(
+                    threadWatcher: threadWatcher,
+                    monitor: symphonyMonitor
+                )
             }
 
             if !taskStore.tasks.isEmpty {

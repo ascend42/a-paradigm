@@ -349,7 +349,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 projectStore: projectStore,
                 agentProcessManager: agentProcessManager,
                 agentGroupStore: agentGroupStore,
-                symphonyMonitor: symphonyMonitor
+                symphonyMonitor: symphonyMonitor,
+                threadWatcher: threadWatcher,
+                noteRelay: noteRelay
             )
         )
         container.makeKeyAndOrderFront(nil)

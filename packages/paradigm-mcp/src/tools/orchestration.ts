@@ -7,6 +7,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
@@ -679,6 +680,59 @@ async function handleOrchestrateInline(
     }
   } catch { /* non-fatal */ }
 
+  // Emit orchestration thread to Symphony for live visibility in Conductor
+  const orchestrationThread = `thr-orch-${orchestrationId}`;
+  try {
+    const symphony = await import('../utils/symphony-loader.js');
+    const projectName = path.basename(ctx.rootDir);
+    const maestroId = `${projectName}/maestro`;
+
+    // Register maestro agent if needed
+    try {
+      const identity = symphony.getMyIdentity(ctx.rootDir);
+      if (!identity) {
+        symphony.registerAgent(ctx.rootDir, 'maestro', 'Maestro (orchestrator)');
+      }
+    } catch { /* non-fatal */ }
+
+    // Create orchestration thread
+    symphony.createThread(`Orchestration: ${task.slice(0, 80)}`, {
+      id: maestroId,
+      name: 'Maestro',
+      type: 'agent' as const,
+      project: projectName,
+      role: 'orchestrator',
+    });
+
+    // Rename thread to use thr-orch- prefix for SymphonyThreadWatcher
+    const threadsDir = path.join(os.homedir(), '.paradigm', 'score', 'threads');
+    const existingThreads = fs.readdirSync(threadsDir).filter(f => f.endsWith('.json')).sort();
+    const latestThread = existingThreads[existingThreads.length - 1];
+    if (latestThread) {
+      const oldPath = path.join(threadsDir, latestThread);
+      const newPath = path.join(threadsDir, `${orchestrationThread}.json`);
+      const threadData = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
+      threadData.id = orchestrationThread;
+      fs.writeFileSync(newPath, JSON.stringify(threadData, null, 2), 'utf8');
+      if (oldPath !== newPath) fs.unlinkSync(oldPath);
+    }
+
+    // Emit task assignment notes for each agent in each stage
+    for (const stage of stagePrompts) {
+      for (const agent of stage.agents) {
+        const note = symphony.buildMessage({
+          threadRoot: orchestrationThread,
+          sender: { id: maestroId, name: 'Maestro', type: 'agent' as const, project: projectName, role: 'orchestrator' },
+          intent: 'task' as any,
+          text: `[Maestro] Stage ${stage.stage}: Assigned to ${agent.attribution || agent.agent} — ${agent.taskDescription || task}`,
+          symbols,
+          metadata: { task: { stage: stage.stage, canRunParallel: stage.canRunParallel } } as any,
+        });
+        symphony.routeMessage(note);
+      }
+    }
+  } catch { /* Symphony emission is non-fatal */ }
+
   const result = {
     orchestrationId,
     task,
@@ -696,6 +750,13 @@ async function handleOrchestrateInline(
       'Do NOT synthesize agent responses — show them as distinct contributions from each agent',
       'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
+
+    // Symphony thread for live visibility in Conductor
+    symphony: {
+      orchestrationThread,
+      instruction: 'After each agent completes, call paradigm_symphony_send to report progress. This makes the work visible in Conductor.',
+      perAgentInstruction: `When each agent finishes, run: paradigm_symphony_send threadId="${orchestrationThread}" intent="task-complete" text="[agentName] Summary of completed work" symbols=[touched symbols]`,
+    },
 
     // Claude Code: Use Task tool for parallel agent spawning
     claudeCode: {
