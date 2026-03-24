@@ -287,24 +287,11 @@ struct TaskDetailView: View {
     }
 
     private func statusColor(_ status: TaskStatus) -> Color {
-        switch status {
-        case .assigned: return .blue
-        case .acknowledged: return .cyan
-        case .inProgress: return .green
-        case .blocked: return .red
-        case .awaitingApproval: return .orange
-        case .complete: return .green
-        case .failed: return .red
-        }
+        ConductorColors.statusColor(status)
     }
 
     private func priorityColor(_ priority: TaskPriority) -> Color {
-        switch priority {
-        case .critical: return .red
-        case .high: return .orange
-        case .normal: return .blue
-        case .low: return .secondary
-        }
+        ConductorColors.priorityColor(priority)
     }
 }
 

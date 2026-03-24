@@ -1,0 +1,25 @@
+context: When auditing security in the Paradigm framework
+snippet: >-
+  portal.yaml is the declarative security layer. Structure: gates (named auth checks with type, check expression,
+  prizes:[]) and routes (path → gate list mappings). Gate types: network (hostname/IP checks), auth (JWT/session), role
+  (RBAC), ownership (resource ownership). Every gate MUST have prizes:[] (v2 requirement). Security classification
+  keywords: ownership, transfer, privilege, escalation, auth, jwt, session, token, password, secret, credential,
+  api-key. The stop hook blocks if protected routes lack portal.yaml gates. Paradigm itself has minimal gates
+  (local-only for API endpoints) since it's a local dev tool.
+provenance:
+  source: manual
+  createdBy: security
+confidence: 0.95
+concepts:
+  - portal-yaml
+  - gates
+  - auth
+  - security-classification
+  - route-protection
+tags:
+  - paradigm
+  - security
+id: nb-portal-yaml-mn53xthp
+appliedCount: 0
+created: '2026-03-24T21:09:11.437Z'
+updated: '2026-03-24T21:09:11.437Z'

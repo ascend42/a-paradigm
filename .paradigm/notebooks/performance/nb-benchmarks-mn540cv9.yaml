@@ -1,0 +1,26 @@
+context: When profiling or benchmarking Paradigm operations
+snippet: >-
+  Benchmarking targets: MCP tool response should be under 200ms for simple lookups (paradigm_status, paradigm_search),
+  under 500ms for graph operations (paradigm_aspect_graph, paradigm_ripple). CLI command startup target: under 300ms to
+  first output. Nomination engine scoring must handle 50+ agents without noticeable delay. Aspect graph: sql.js loads
+  ~1MB SQLite DB into memory — acceptable for dev tool, but watch for growth. Agent notebook search scans YAML files on
+  disk — could become slow with hundreds of entries per agent. Token budget matters: a 500-token MCP response costs real
+  money at scale across sessions. The concise/detailed response_format toggle is the primary optimization lever.
+provenance:
+  source: manual
+  createdBy: performance
+confidence: 0.85
+concepts:
+  - benchmarks
+  - response-time
+  - token-cost
+  - sqlite-memory
+  - notebook-scaling
+tags:
+  - paradigm
+  - performance
+  - benchmarks
+id: nb-benchmarks-mn540cv9
+appliedCount: 0
+created: '2026-03-24T21:11:09.861Z'
+updated: '2026-03-24T21:11:09.861Z'

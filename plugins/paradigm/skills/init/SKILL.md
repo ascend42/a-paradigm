@@ -44,20 +44,20 @@ Run the following via Bash:
 npx @a-company/paradigm init
 ```
 
-If the user wants a specific discipline (detected from Step 2), pass it:
+If the user wants a specific stack (detected from Step 2), pass it:
 
 ```bash
-npx @a-company/paradigm init --discipline <type>
+npx @a-company/paradigm init --stack <type>
 ```
 
-Available disciplines: `web`, `api`, `mobile`, `desktop`, `library`, `cli`, `fullstack`
+Available stacks: `web`, `api`, `mobile`, `desktop`, `library`, `cli`, `fullstack`
 
 ## Step 4: Scan for Symbols
 
 After initialization, scan the codebase to build the symbol index:
 
 ```bash
-npx @a-company/paradigm scan
+npx @a-company/paradigm scan auto
 ```
 
 ## Step 5: Generate CLAUDE.md

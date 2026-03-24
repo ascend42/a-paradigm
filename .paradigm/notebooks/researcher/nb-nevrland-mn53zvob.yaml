@@ -1,0 +1,26 @@
+context: When evaluating new capabilities or integrations for Paradigm
+snippet: >-
+  Active research areas and their status: (1) nevr.land agent registry — npm-for-AI-agents marketplace, domain owned,
+  spec at a-neverland repo. Early ideation. (2) Autonomous agents — Linear-driven orchestrator dispatching specialists.
+  Vision doc exists. (3) Canvas design tool — Craft.js editor, ships as Platform section. Sprint 0 in progress, plan at
+  docs/private/plans/canvas-plan.md. (4) Sentinel adoption — all 6 phases implemented on APT-2 branch, not yet merged to
+  main. (5) Paradigm Symphony — inter-agent messaging backbone, Phase 0-1 shipped. (6) Model resolution — per-project
+  tier mapping for agent cost optimization. Shipped in v5.11.0.
+provenance:
+  source: manual
+  createdBy: researcher
+confidence: 0.85
+concepts:
+  - nevrland
+  - autonomous-agents
+  - canvas
+  - sentinel-adoption
+  - symphony
+  - model-resolution
+tags:
+  - paradigm
+  - research-status
+id: nb-nevrland-mn53zvob
+appliedCount: 0
+created: '2026-03-24T21:10:47.579Z'
+updated: '2026-03-24T21:10:47.579Z'

@@ -212,11 +212,6 @@ struct SentinelLiveView: View {
     }
 
     private func levelColor(_ level: String) -> Color {
-        switch level {
-        case "error": return .red
-        case "warn": return .orange
-        case "info": return .blue
-        default: return .secondary
-        }
+        ConductorColors.levelColor(level)
     }
 }

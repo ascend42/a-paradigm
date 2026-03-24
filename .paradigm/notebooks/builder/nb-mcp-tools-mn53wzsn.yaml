@@ -1,0 +1,24 @@
+context: When adding new MCP tools or CLI commands
+snippet: >-
+  MCP tools live in packages/paradigm-mcp/src/tools/*.ts — each file exports tool definitions with name, description,
+  input schema (zod), and handler. Tools are registered in src/tools/index.ts. Response budget: ~100-200 tokens per tool
+  response. CLI commands live in packages/paradigm/src/commands/ — use Commander.js subcommands. Each command file
+  exports a function that receives the program instance. New commands registered in src/index.ts. Convention: kebab-case
+  for all symbol IDs, tool names use paradigm_ prefix (e.g., paradigm_ripple, paradigm_lore_record).
+provenance:
+  source: manual
+  createdBy: builder
+confidence: 0.9
+concepts:
+  - mcp-tools
+  - cli-commands
+  - tool-registration
+  - commander
+  - zod
+tags:
+  - paradigm
+  - patterns
+id: nb-mcp-tools-mn53wzsn
+appliedCount: 0
+created: '2026-03-24T21:08:32.951Z'
+updated: '2026-03-24T21:08:32.951Z'

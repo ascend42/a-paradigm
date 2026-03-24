@@ -6,10 +6,8 @@
 
 ## Project Overview
 
-This project uses Paradigm v2 for structured AI-assisted development.
+This project uses Paradigm for structured AI-assisted development.
 All context, symbols, and specifications live in the .paradigm/ directory.
-
-v2 uses 5 operational symbols (#, $, ^, !, ~) plus a tag bank for classification.
 
 
 ## Quick Orientation
@@ -29,7 +27,7 @@ Use these prefixes in documentation and commits:
 
 | Symbol | Meaning | Example |
 |--------|---------|---------|
-| `#` | Component | `#PaymentService` |
+| `#` | Component | `#checkout` |
 | `$` | Flow | `$checkout-flow` |
 | `^` | Gate | `^authenticated` |
 | `!` | Signal | `!login-success` |
@@ -37,15 +35,13 @@ Use these prefixes in documentation and commits:
 
 ## Conventions
 
-- Use kebab-case for symbol IDs (#feature-name, not #featureName)
-- Use PascalCase for class-like components (#PaymentService, #UserProfile)
+- Use kebab-case for all symbol IDs (feature-name, not featureName)
 - Document flows when logic spans 3+ components
-- Reference related items using symbol prefixes (# $ ^ ! ~) and tags
+- Reference related items using symbol prefixes (# $ ^ ! ~)
 - Add descriptions to all components and gates
-- Update .purpose files when changing behavior
+- Update .purpose files when changing feature behavior
 - Keep gates minimal - one responsibility per gate
-- Use signals for side effects, not direct mutations
-- Aspects (~) MUST have code anchors - no unanchored aspects
+- Use signals for side effects, not direct state mutations
 - ALWAYS use Paradigm logger, NEVER raw console.log/print
 
 ## Commit Messages
@@ -144,9 +140,8 @@ Detailed guidance is available via MCP resources — load only what you need:
 ## Directory Structure
 
 `.purpose` files exist in:
-- `src/*`
-- `lib/*`
 - `packages/*`
+- `apps/*`
 
 ---
 

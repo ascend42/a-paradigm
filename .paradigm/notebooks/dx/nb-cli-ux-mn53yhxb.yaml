@@ -1,0 +1,25 @@
+context: When evaluating or improving developer experience for Paradigm users
+snippet: >-
+  Paradigm has three DX surfaces: (1) CLI — 90+ commands via Commander.js (paradigm lore record, paradigm agents list,
+  paradigm shift, etc.). Must be fast to start, intuitive to use, with chalk-colored output and ora spinners. (2) MCP
+  tools — 50+ tools are the primary AI agent interface. Tool responses stay under ~100-200 tokens. Tool names use
+  paradigm_ prefix with snake_case. (3) Plugin — 18 skills for Claude Code (slash commands like /paradigm:review,
+  /paradigm:ripple, /paradigm:agents). Skills defined as SKILL.md files in plugins/paradigm/skills/. The MCP surface is
+  the highest-leverage DX work since every AI interaction flows through it.
+provenance:
+  source: manual
+  createdBy: dx
+confidence: 0.95
+concepts:
+  - cli-ux
+  - mcp-tools
+  - plugin-skills
+  - developer-experience
+  - token-budget
+tags:
+  - paradigm
+  - dx
+id: nb-cli-ux-mn53yhxb
+appliedCount: 0
+created: '2026-03-24T21:09:43.103Z'
+updated: '2026-03-24T21:09:43.103Z'

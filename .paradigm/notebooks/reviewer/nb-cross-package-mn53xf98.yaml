@@ -1,0 +1,24 @@
+context: When reviewing cross-package changes or release-bound code
+snippet: >-
+  Multi-package review concerns: (1) paradigm-mcp tool changes affect both CLI and plugin — verify tool registration in
+  src/tools/index.ts. (2) MCP tool responses must stay within ~100-200 token budget. (3) Version bumps follow rules:
+  @a-company/paradigm always bumps, paradigm-mcp only when tools change, sentinel only on sentinel changes, university
+  only on course changes. (4) Plugin version in plugins/paradigm/.claude-plugin/plugin.json MUST match package.json —
+  this has been missed repeatedly. (5) CHANGELOG uses Keep a Changelog format, no [Unreleased] on main branch.
+provenance:
+  source: manual
+  createdBy: reviewer
+confidence: 0.9
+concepts:
+  - cross-package
+  - versioning
+  - plugin-version
+  - changelog
+  - token-budget
+tags:
+  - paradigm
+  - release-review
+id: nb-cross-package-mn53xf98
+appliedCount: 0
+created: '2026-03-24T21:08:52.988Z'
+updated: '2026-03-24T21:08:52.988Z'

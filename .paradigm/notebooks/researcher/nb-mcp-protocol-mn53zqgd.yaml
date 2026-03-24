@@ -1,0 +1,25 @@
+context: When researching patterns, protocols, or external developments relevant to Paradigm
+snippet: >-
+  Research domains for Paradigm: (1) MCP protocol evolution — @modelcontextprotocol/sdk updates, new transport types,
+  resource/prompt patterns. (2) Claude Code plugin system — skills, hooks, agents, marketplace mechanics. (3) AI agent
+  orchestration — multi-agent coordination patterns, handoff protocols, expertise routing. (4) Ambient learning —
+  nomination engines, confidence calibration, knowledge distillation from session activity. (5) Developer tools DX — CLI
+  design patterns, error message UX, progressive disclosure. (6) macOS accessibility APIs — AXUIElement, event taps,
+  screen readers (for Conductor). (7) nevr.land agent marketplace — trust contracts, agent packaging, pod definitions.
+provenance:
+  source: manual
+  createdBy: researcher
+confidence: 0.85
+concepts:
+  - mcp-protocol
+  - claude-code-plugins
+  - agent-orchestration
+  - ambient-learning
+  - macos-a11y
+tags:
+  - paradigm
+  - research-domains
+id: nb-mcp-protocol-mn53zqgd
+appliedCount: 0
+created: '2026-03-24T21:10:40.813Z'
+updated: '2026-03-24T21:10:40.813Z'

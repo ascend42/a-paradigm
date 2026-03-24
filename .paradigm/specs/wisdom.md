@@ -75,7 +75,7 @@ version: "1.0"
 
 antipatterns:
   - id: "api-001"
-    symbols: ["#api", "#api-client"]
+    symbols: ["#api-client"]
     description: "Do NOT use axios interceptors for auth token refresh"
     reason: "Caused race conditions when multiple requests trigger refresh simultaneously"
     alternative: "Use a token refresh queue with mutex, implemented in AuthService"
@@ -115,7 +115,7 @@ experts:
     contact: "#team-search on Slack"
 
   - name: "carol"
-    symbols: ["^authenticated", "#login", "#signup"]
+    symbols: ["^authenticated", "#login-handler", "#signup-handler"]
     areas: ["auth", "security", "oauth"]
     notes: "Security team lead"
 ```
@@ -127,7 +127,7 @@ id: "001"
 title: "Use JWT for API Authentication"
 status: accepted  # proposed | accepted | deprecated | superseded
 date: "2026-01-15"
-symbols: ["^authenticated", "#login", "#api"]
+symbols: ["^authenticated", "#login-handler", "#api-client"]
 
 context: |
   We need to authenticate API requests from web and mobile clients.
@@ -200,7 +200,7 @@ Record new team learning.
   "arguments": {
     "type": "antipattern",
     "id": "api-002",
-    "symbols": ["#api"],
+    "symbols": ["#api-client"],
     "description": "Do NOT use...",
     "reason": "Because...",
     "alternative": "Instead..."
@@ -236,7 +236,7 @@ paradigm wisdom init
 # Add antipattern
 paradigm wisdom add-antipattern \
   --id "api-002" \
-  --symbols "#api" \
+  --symbols "#api-client" \
   --description "Do NOT..." \
   --reason "Because..." \
   --alternative "Instead..."
@@ -245,7 +245,7 @@ paradigm wisdom add-antipattern \
 paradigm wisdom decide \
   --id "002" \
   --title "API Versioning Strategy" \
-  --symbols "#api" \
+  --symbols "#api-client" \
   --context "We need to version our API..." \
   --decision "Use URL path versioning..."
 

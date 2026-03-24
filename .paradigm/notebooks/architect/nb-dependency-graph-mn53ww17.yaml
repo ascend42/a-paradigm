@@ -1,0 +1,24 @@
+context: When designing new features or evaluating cross-package impact
+snippet: >-
+  Package dependency graph: paradigm (CLI) depends on paradigm-mcp, sentinel, university. paradigm-mcp depends on sql.js
+  (aspect graph), @modelcontextprotocol/sdk, ws (WebSocket). Conductor is fully independent Swift — communicates via
+  Symphony WebSocket relay and checkpoint JSON files. Plugin at plugins/paradigm/ is directory-based — pushing to GitHub
+  IS the update. Three automation tiers: MCP tools (always available) → habits (compliance checks) → hooks
+  (pre-commit/stop/post-write enforcement). New features should enter at MCP tier and graduate upward.
+provenance:
+  source: manual
+  createdBy: architect
+confidence: 0.9
+concepts:
+  - dependency-graph
+  - package-boundaries
+  - automation-tiers
+  - conductor-independence
+  - plugin-deployment
+tags:
+  - paradigm
+  - architecture
+id: nb-dependency-graph-mn53ww17
+appliedCount: 0
+created: '2026-03-24T21:08:28.075Z'
+updated: '2026-03-24T21:08:28.075Z'

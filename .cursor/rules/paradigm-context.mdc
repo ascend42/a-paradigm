@@ -23,7 +23,7 @@ This returns a recommendation: `continue`, `consider-handoff`, `handoff-recommen
 | Usage | Recommendation | Action |
 |-------|----------------|--------|
 | <50% | continue | Keep working |
-| 50-70% | consider-handoff | Plan stopping point |
+| 50-70% | consider-handoff | Plan handoff; prepare summary when ready |
 | 70-85% | handoff-recommended | Prepare handoff soon |
 | >85% | handoff-urgent | Handoff after current task |
 

@@ -1,0 +1,26 @@
+context: When designing UI for Paradigm's visual interfaces
+snippet: >-
+  Paradigm has 5 UI surfaces: (1) Platform UI — React app at packages/paradigm/platform-ui/, sections for team, agents,
+  dashboard. Served via CLI's express server. (2) Conductor — SwiftUI macOS overlay app. Key views: MainOverlayView
+  (floating panel), ContainerView (docked window with tiling), TaskDashboardView, AgentHealthView, SessionManagerView,
+  HelpView, WorkspaceGrid. (3) University UI — Vite/React at packages/university/ui/. Course viewer, quiz interface,
+  diploma display. (4) Sentinel web UI — React/Vite at packages/sentinel-web/. Error dashboard with pattern matching
+  visualization. (5) Lore/Graph UIs — lightweight embedded viewers. No shared design system yet — each UI is
+  independent. Design renaissance planned with Mika's 59 notebook entries.
+provenance:
+  source: manual
+  createdBy: designer
+confidence: 0.9
+concepts:
+  - platform-ui
+  - conductor-ui
+  - university-ui
+  - sentinel-ui
+  - design-surfaces
+tags:
+  - paradigm
+  - design
+id: nb-platform-ui-mn540j6c
+appliedCount: 0
+created: '2026-03-24T21:11:18.036Z'
+updated: '2026-03-24T21:11:18.036Z'

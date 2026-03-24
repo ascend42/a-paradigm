@@ -1,0 +1,24 @@
+context: When planning architecture or designing features for the Paradigm monorepo
+snippet: >-
+  Paradigm is a 15+ package monorepo for AI-assisted development tooling. Build order: core (purpose-core, portal-core,
+  probe-core) → packages (portal-sdk, premise-core, sentinel, runtime, paradigm-mcp) → CLI (@a-company/paradigm).
+  Conductor (Swift/SwiftUI macOS app) builds independently via swift build -c release. Key architectural pattern:
+  MCP-first — all intelligence lives in paradigm-mcp's 50+ MCP tools, CLI and plugin are thin wrappers. Symbol system
+  (#$^!~) is the universal vocabulary across all packages.
+provenance:
+  source: manual
+  createdBy: architect
+confidence: 0.95
+concepts:
+  - monorepo
+  - architecture
+  - build-order
+  - mcp-first
+  - package-structure
+tags:
+  - paradigm
+  - orientation
+id: nb-monorepo-mn53wvzd
+appliedCount: 0
+created: '2026-03-24T21:08:28.009Z'
+updated: '2026-03-24T21:08:28.009Z'

@@ -321,39 +321,6 @@ Agent: "I need to modify #search to add filters"
 5. After tests pass, call paradigm_history_validate(...)
 ```
 
-## Lore Symbol Validation
-
-When recording lore entries (via `paradigm lore record` or `paradigm_lore_record`), symbols in `symbols_touched` can optionally be validated against the project's registered symbols.
-
-### How It Works
-
-Pass `validateSymbols: true` to `recordLore()` (or the MCP tool). The validator checks each symbol against:
-
-1. **`.purpose` files** — symbols declared as components, gates, signals, etc.
-2. **`flows.yaml`** — flow symbols (`$flow-name`)
-3. **`portal.yaml`** — gate symbols (`^gate-name`)
-
-### Validation Results
-
-Validation is **advisory only** — lore entries are always recorded regardless of validation results. Unregistered symbols produce warnings, not errors.
-
-```
-⚠ Symbol validation:
-  Registered: #checkout, $payment-flow, ^authenticated
-  Unregistered: #legacy-widget, !unknown-signal
-
-  Tip: Unregistered symbols may indicate missing .purpose files
-  or symbols that haven't been indexed yet. Run 'paradigm scan'
-  to update the index.
-```
-
-### When to Enable
-
-- **Enable** when you want to catch typos or references to removed symbols
-- **Skip** when recording exploratory lore with new symbols not yet in `.purpose` files
-- The CLI `paradigm lore record` enables validation by default
-- The MCP tool `paradigm_lore_record` can accept a `validateSymbols` flag
-
 ## Best Practices
 
 1. **Always record** - even failed attempts provide learning
@@ -370,51 +337,3 @@ Validation is **advisory only** — lore entries are always recorded regardless 
 - Co-change patterns: ~50-100 tokens
 
 Pre-computed index.yaml avoids scanning full log.
-
----
-
-## Auto-Lore Drafting
-
-When a session modifies 3+ files, Paradigm can automatically draft a lore entry from session breadcrumbs.
-
-### How It Works
-
-1. The session tracker records tool calls as breadcrumbs
-2. At session end (or when `paradigm_habits_check({ trigger: "on-stop" })` runs), the system checks if 3+ files were modified
-3. If so, `draftLoreFromBreadcrumbs()` generates a partial lore entry:
-   - **Title**: Inferred from session checkpoint context or file count
-   - **Summary**: Generated from tool usage stats and modified file count
-   - **Symbols**: Extracted from breadcrumb args and checkpoint data
-   - **Tags**: Auto-tagged with `[auto-draft]`
-4. The draft is presented to the user/agent for review and finalization
-
-### Draft vs Final
-
-Auto-drafted entries are tagged `[auto-draft]` and should be reviewed before promotion. The agent or user can:
-- Accept as-is (remove `auto-draft` tag)
-- Edit title, summary, or symbols
-- Discard if the session was routine
-
----
-
-## Co-Authorship Tracking
-
-Lore entries support an `assistedBy` field for co-authorship:
-
-```yaml
-assistedBy:
-  type: agent    # 'agent', 'tool', or 'human'
-  id: claude-opus-4
-  role: code-generator
-```
-
-### Use Cases
-
-| Scenario | Author | assistedBy |
-|----------|--------|------------|
-| Agent writes code, human reviews | agent | human (reviewer) |
-| Human writes code with AI suggestions | human | agent (assistant) |
-| Automated tool generates entry | tool | --- |
-| Pair programming between agents | agent | agent (pair) |
-
-This field is optional and does not affect lore search or timeline display. It provides attribution context for audit and compliance workflows.

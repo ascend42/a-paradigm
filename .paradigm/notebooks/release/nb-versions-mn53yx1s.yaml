@@ -1,0 +1,24 @@
+context: When managing package versions or dependencies
+snippet: >-
+  Package versions at v5.11.0: paradigm, paradigm-mcp, university all at 5.11.0. Sentinel at 3.9.0 (independent
+  cadence). Logger at 3.5.1. Runtime at 0.1.0 (early). Workspace packages are private (paradigm-mcp, sentinel-web, site,
+  etc.) — only the CLI package, sentinel, university, logger, and runtime publish to npm under @a-company scope.
+  Conductor has no npm version — it's a standalone Swift binary. Uses npm workspaces (not Lerna/Nx/Turbo). Changesets
+  available (npm run release) but manual publish is common practice.
+provenance:
+  source: manual
+  createdBy: release
+confidence: 0.9
+concepts:
+  - versions
+  - npm-scope
+  - workspace-packages
+  - publish-targets
+  - changesets
+tags:
+  - paradigm
+  - versioning
+id: nb-versions-mn53yx1s
+appliedCount: 0
+created: '2026-03-24T21:10:02.704Z'
+updated: '2026-03-24T21:10:02.704Z'

@@ -118,12 +118,7 @@ struct AgentHealthView: View {
     // MARK: - Helpers
 
     private func healthColor(_ status: HealthStatus) -> Color {
-        switch status {
-        case .healthy: return .green
-        case .degraded: return .yellow
-        case .unhealthy: return .red
-        case .unknown: return .gray
-        }
+        ConductorColors.healthColor(status)
     }
 
     private func formatDuration(_ ms: Double) -> String {

@@ -3,12 +3,12 @@ description: PLSAT (Paradigm Licensure Standardized Assessment Test) exam conten
 
 components:
   plsat-v3:
-    description: "PLSAT v3.0 — 99 slots with variants, 90 min, 80% pass threshold"
+    description: "PLSAT v3.0 — 99 slots with variants, 90 min, 90% pass threshold"
     file: v3.0.json
     tags: [plsat, certification]
 
   plsat-v2:
-    description: "PLSAT v2.0 — 50 questions, 45 min, 80% pass threshold (legacy)"
+    description: "PLSAT v2.0 — 50 questions, 45 min, 90% pass threshold (legacy)"
     file: v2.0.json
     tags: [plsat, certification, legacy]
 

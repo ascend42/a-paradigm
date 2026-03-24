@@ -1,0 +1,26 @@
+context: When tracing issues across Paradigm packages
+snippet: >-
+  Debug paths by symptom: MCP tool returns error → check packages/paradigm-mcp/src/tools/{tool-file}.ts handler, look
+  for undefined property access on YAML-parsed data. CLI command fails → check
+  packages/paradigm/src/commands/{domain}/{action}.ts. Hook blocks unexpectedly → check plugins/paradigm/scripts/
+  (paradigm-postwrite.sh, paradigm-stop.sh), note: post-write hook keeps getting reverted by plugin cache regeneration
+  (known issue). Conductor doesn't connect → check Symphony WebSocket (ws://localhost port), verify CLI platform server
+  is running. Agent not appearing → check .paradigm/roster.yaml active list and ~/.paradigm/agents/{id}.agent file
+  exists.
+provenance:
+  source: manual
+  createdBy: debugger
+confidence: 0.85
+concepts:
+  - debug-paths
+  - trace-routes
+  - hook-revert
+  - symphony-connection
+  - agent-loading
+tags:
+  - paradigm
+  - debugging
+id: nb-debug-paths-mn53z6rg
+appliedCount: 0
+created: '2026-03-24T21:10:15.291Z'
+updated: '2026-03-24T21:10:15.291Z'

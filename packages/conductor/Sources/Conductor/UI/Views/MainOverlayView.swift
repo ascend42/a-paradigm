@@ -124,7 +124,7 @@ struct MainOverlayView: View {
                 .foregroundStyle(.cyan)
             Text("Conductor")
                 .font(.headline)
-            Text("v0.16.0")
+            Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()

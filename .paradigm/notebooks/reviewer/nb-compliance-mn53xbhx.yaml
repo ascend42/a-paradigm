@@ -1,0 +1,25 @@
+context: When reviewing code changes in the Paradigm monorepo
+snippet: >-
+  Paradigm compliance checklist: (1) Every directory with source files needs a .purpose file — stop hook BLOCKS without
+  it. (2) New routes require portal.yaml gates with prizes:[]. (3) All logging must use Paradigm logger
+  (log.component(), log.gate()), never console.log. (4) Symbol IDs use kebab-case. (5) Commits use format:
+  type(#symbol): description, with Symbols: trailer for machine-readable tracking. (6) .purpose files must be updated
+  when feature behavior changes. (7) Check paradigm_reindex was run if symbols were added/renamed.
+provenance:
+  source: manual
+  createdBy: reviewer
+confidence: 0.95
+concepts:
+  - compliance
+  - purpose-files
+  - portal-yaml
+  - logging
+  - commit-format
+  - stop-hook
+tags:
+  - paradigm
+  - review-checklist
+id: nb-compliance-mn53xbhx
+appliedCount: 0
+created: '2026-03-24T21:08:48.117Z'
+updated: '2026-03-24T21:08:48.117Z'

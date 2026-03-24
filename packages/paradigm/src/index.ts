@@ -5,8 +5,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'node:module';
-import { initCommand } from './commands/init.js';
-import { statusCommand } from './commands/status.js';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
@@ -37,7 +35,10 @@ program
   .option('--migrate', 'Output migration prompt for existing IDE files')
   .option('--quick', 'Non-interactive mode with smart defaults')
   .option('--dry-run', 'Show what would be created without creating')
-  .action(initCommand);
+  .action(async (options) => {
+    const { initCommand } = await import('./commands/init.js');
+    await initCommand(options);
+  });
 
 // paradigm shift - one command to rule them all
 program
@@ -128,7 +129,10 @@ program
   .command('status')
   .alias('st')
   .description('Show project status and symbol counts')
-  .action(statusCommand);
+  .action(async () => {
+    const { statusCommand } = await import('./commands/status.js');
+    await statusCommand();
+  });
 
 // paradigm purpose <command>
 const purposeCmd = program

@@ -1,0 +1,25 @@
+context: When reviewing Paradigm's own security posture
+snippet: >-
+  Paradigm-specific security concerns: (1) MCP server runs locally — all endpoints gated with ^local-only (req.hostname
+  === 'localhost'). (2) Symphony WebSocket relay has no auth — acceptable for local-only use but must be gated if ever
+  exposed. (3) Agent notebook/lore entries are stored as YAML files on disk — no encryption, no access control beyond
+  filesystem. (4) Plugin update checker fetches from GitHub — verify no code execution from remote. (5) Conductor reads
+  checkpoint files from .paradigm/ — validate file integrity before parsing. (6) sql.js (SQLite in-memory) for aspect
+  graph — no SQL injection risk since queries are parameterized, but verify.
+provenance:
+  source: manual
+  createdBy: security
+confidence: 0.85
+concepts:
+  - local-security
+  - symphony-security
+  - mcp-security
+  - file-integrity
+  - conductor-security
+tags:
+  - paradigm
+  - security-posture
+id: nb-local-security-mn53xycb
+appliedCount: 0
+created: '2026-03-24T21:09:17.722Z'
+updated: '2026-03-24T21:09:17.722Z'

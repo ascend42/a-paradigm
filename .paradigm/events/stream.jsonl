@@ -130,3 +130,79 @@
 {"id":"ev-1774321933506-2037","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T03:12:13.506Z","path":"packages/paradigm/platform-ui/src/sections/canvas/styles/canvas.css"}
 {"id":"ev-1774322029767-8207","timestamp":"2026-03-24T03:13:49.767Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1774322595139-8343","timestamp":"2026-03-24T03:23:15.139Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#canvas-section","#canvas-store","#canvas-routes","#canvas-editor","#canvas-frame","#render-node","#canvas-toolbar","#component-palette","#property-panel","#container-component","#text-component","#button-component","#image-component","#spacer-component","#canvas-serializer"],"context":"Lore recorded: Canvas Sprint 0 — Visual Design Editor Foundation"}
+{"id":"ev-1774323122868-0420","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T03:32:02.868Z","path":"packages/paradigm-mcp/src/utils/session-tracker.ts"}
+{"id":"ev-1774333133766-6301","timestamp":"2026-03-24T06:18:53.766Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#agent-profiles","#notebooks","#orchestration","#neverland","#ambient-learning","#conductor"],"context":"Lore recorded: The Paradigm Army — 54 Agents, 272 Notebook Entries"}
+{"id":"ev-1774361067694-1406","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:04:27.694Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774361095385-3891","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:04:55.385Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774361111915-2981","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:05:11.915Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774361128089-5188","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:05:28.089Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774361159505-0163","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:05:59.505Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774361180339-9421","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:06:20.339Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774361198732-0963","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:06:38.733Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774361236326-0536","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:07:16.326Z","path":"packages/paradigm/src/core/project-type.ts"}
+{"id":"ev-1774361259656-9310","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:07:39.656Z","path":"packages/paradigm/src/commands/shift.ts"}
+{"id":"ev-1774361277970-9261","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:07:57.970Z","path":"packages/paradigm/src/commands/shift.ts"}
+{"id":"ev-1774361307586-1172","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:08:27.586Z","path":"packages/paradigm/src/commands/shift.ts"}
+{"id":"ev-1774361331046-0341","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:08:51.046Z","path":"packages/paradigm-mcp/src/tools/notebooks.ts"}
+{"id":"ev-1774361337221-6475","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T14:08:57.221Z","path":"packages/paradigm-mcp/src/tools/notebooks.ts"}
+{"id":"ev-1774370626029-8635","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:43:46.029Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774370654266-2336","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:44:14.266Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774370673733-5587","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:44:33.733Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774370700789-1367","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:45:00.789Z","path":"packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift"}
+{"id":"ev-1774370722271-4759","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:45:22.271Z","path":"packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift"}
+{"id":"ev-1774370755957-8616","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:45:55.957Z","path":"packages/conductor/Sources/Conductor/App/AppDelegate.swift"}
+{"id":"ev-1774370777629-8504","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T16:46:17.629Z","path":"packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift"}
+{"id":"ev-1774378129883-5987","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:48:49.883Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378150469-0551","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:49:10.469Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378175910-0022","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:49:35.910Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378208050-8553","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:50:08.050Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378223838-5006","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:50:23.838Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378234342-3901","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:50:34.342Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774378258245-3374","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T18:50:58.245Z","path":"packages/paradigm/src/commands/shift.ts"}
+{"id":"ev-1774381304005-1288","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:41:44.005Z","path":"packages/paradigm-mcp/src/utils/agent-state.ts"}
+{"id":"ev-1774381346119-7297","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:42:26.119Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774381357237-8365","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:42:37.237Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774381395372-7739","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:43:15.372Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774381409171-4488","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:43:29.171Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774381434538-5094","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:43:54.538Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774381499156-5610","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:44:59.156Z","path":"plugins/paradigm/scripts/paradigm-postwrite.sh"}
+{"id":"ev-1774381518005-0834","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:45:18.005Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774381528424-7446","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:45:28.424Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774381542658-3340","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:45:42.658Z","path":"packages/paradigm-mcp/src/tools/agents.ts"}
+{"id":"ev-1774381575522-4407","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:46:15.522Z","path":"packages/paradigm-mcp/src/utils/session-work-log.ts"}
+{"id":"ev-1774381588276-7886","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:46:28.276Z","path":"packages/paradigm-mcp/src/utils/session-work-log.ts"}
+{"id":"ev-1774381878651-5528","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:51:18.651Z","path":"plugins/paradigm/scripts/paradigm-postwrite.sh"}
+{"id":"ev-1774382032461-5564","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:53:52.461Z","path":"plugins/paradigm/scripts/paradigm-postwrite.sh"}
+{"id":"ev-1774382083584-4343","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:54:43.584Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774382092993-9737","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:54:52.993Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774382158545-3510","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T19:55:58.545Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774383013983-7726","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T20:10:13.983Z","path":"packages/paradigm-mcp/src/utils/habits-loader.ts"}
+{"id":"ev-1774383113206-9967","timestamp":"2026-03-24T20:11:53.206Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#agent-state"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383123566-0296","timestamp":"2026-03-24T20:12:03.566Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#project-type"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383132847-0996","timestamp":"2026-03-24T20:12:12.847Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#roster"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383141540-7083","timestamp":"2026-03-24T20:12:21.540Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#model-resolution"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383151037-8068","timestamp":"2026-03-24T20:12:31.037Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#grid-preset"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383159050-4177","timestamp":"2026-03-24T20:12:39.050Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#help-view"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383168352-3478","timestamp":"2026-03-24T20:12:48.352Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#conductor-install"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383176964-4607","timestamp":"2026-03-24T20:12:56.964Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#nomination-surfacing"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774383194787-5383","timestamp":"2026-03-24T20:13:14.787Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_flow","symbols":["#orchestration-visibility"],"context":"Purpose/portal update via paradigm_purpose_add_flow"}
+{"id":"ev-1774383204496-2174","timestamp":"2026-03-24T20:13:24.496Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_flow","symbols":["#agent-learning-loop"],"context":"Purpose/portal update via paradigm_purpose_add_flow"}
+{"id":"ev-1774383212788-3479","timestamp":"2026-03-24T20:13:32.788Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_flow","symbols":["#roster-setup"],"context":"Purpose/portal update via paradigm_purpose_add_flow"}
+{"id":"ev-1774383225102-0468","timestamp":"2026-03-24T20:13:45.102Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1774395053585-7416","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:30:53.585Z","path":"packages/paradigm/platform-ui/src/App.tsx"}
+{"id":"ev-1774395053672-0181","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:30:53.672Z","path":"packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts"}
+{"id":"ev-1774395055564-9131","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:30:55.564Z","path":"packages/paradigm/platform-ui/src/sections/lore/components/ViewSwitcher.tsx"}
+{"id":"ev-1774395072090-0097","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:31:12.090Z","path":"packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx"}
+{"id":"ev-1774395085265-3816","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:31:25.265Z","path":"packages/paradigm/platform-ui/src/App.tsx"}
+{"id":"ev-1774395094779-8101","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:31:34.779Z","path":"packages/paradigm/platform-ui/src/App.tsx"}
+{"id":"ev-1774395180161-4386","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:00.161Z","path":"packages/conductor/Sources/Conductor/UI/ConductorColors.swift"}
+{"id":"ev-1774395188608-4653","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:08.608Z","path":"packages/conductor/Sources/Conductor/UI/Views/TaskDashboardView.swift"}
+{"id":"ev-1774395191008-2157","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:11.008Z","path":"packages/conductor/Sources/Conductor/UI/Views/TaskDetailView.swift"}
+{"id":"ev-1774395192206-9199","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:12.206Z","path":"packages/conductor/Sources/Conductor/UI/Views/AgentHealthView.swift"}
+{"id":"ev-1774395193483-9635","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:13.483Z","path":"packages/conductor/Sources/Conductor/UI/Views/SentinelLiveView.swift"}
+{"id":"ev-1774395195258-5485","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:15.258Z","path":"packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift"}
+{"id":"ev-1774395196908-6429","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:16.908Z","path":"packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift"}
+{"id":"ev-1774395208984-5647","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:28.984Z","path":"packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift"}
+{"id":"ev-1774395219619-9082","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:39.619Z","path":"packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift"}
+{"id":"ev-1774395231694-7741","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:51.694Z","path":"packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift"}
+{"id":"ev-1774395237898-4421","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-24T23:33:57.898Z","path":"packages/conductor/Sources/Conductor/App/AppDelegate.swift"}

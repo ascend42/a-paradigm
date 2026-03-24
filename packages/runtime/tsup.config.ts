@@ -11,4 +11,6 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   clean: true,
+  treeshake: true,
+  minify: true,
 });

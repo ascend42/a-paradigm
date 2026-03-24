@@ -1,0 +1,27 @@
+context: When working on Conductor SwiftUI views or Platform UI React components
+snippet: >-
+  Conductor design constraints: macOS 14+ only, floating NSPanel overlay (always-on-top), must not block user
+  interaction with other apps. WorkspaceGrid uses recursive TileNode with 6 layout presets (single, split-h, split-v,
+  grid-2x2, etc.). Agent colors are assigned per-agent for visual identity in TeamThreadView and AgentRosterView.
+  Platform UI uses React with a store pattern (teamStore.ts, etc.) — sections are lazy-loaded. Canvas design tool
+  planned (Sprint 0) using Craft.js for visual editing — will ship as a Platform section with *.canvas YAML files and
+  bidirectional CSS sync. No shared component library yet — opportunity for design system unification across all 5 UI
+  surfaces.
+provenance:
+  source: manual
+  createdBy: designer
+confidence: 0.85
+concepts:
+  - conductor-design
+  - swiftui-constraints
+  - platform-react
+  - canvas-tool
+  - design-system
+tags:
+  - paradigm
+  - design
+  - ui-architecture
+id: nb-conductor-design-mn540o60
+appliedCount: 0
+created: '2026-03-24T21:11:24.504Z'
+updated: '2026-03-24T21:11:24.504Z'

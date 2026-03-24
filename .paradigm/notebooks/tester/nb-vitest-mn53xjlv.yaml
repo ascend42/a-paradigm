@@ -1,0 +1,24 @@
+context: When writing or running tests for Paradigm packages
+snippet: >-
+  Test infrastructure: TypeScript packages use Vitest (npm run test at workspace root or per-package). Conductor uses
+  XCTest with 160+ unit tests at Tests/ConductorTests/ (run: swift test). Key test areas: MCP tool handlers
+  (paradigm-mcp), CLI command execution (paradigm), portal.yaml validation, .purpose file parsing, nomination engine
+  scoring, agent notebook CRUD, aspect graph queries (SQLite via sql.js). No E2E test suite yet — integration testing is
+  manual via field-testing on other repos (e.g., deus-backend, dealoracle).
+provenance:
+  source: manual
+  createdBy: tester
+confidence: 0.9
+concepts:
+  - vitest
+  - xctest
+  - test-infrastructure
+  - conductor-tests
+  - mcp-tests
+tags:
+  - paradigm
+  - testing
+id: nb-vitest-mn53xjlv
+appliedCount: 0
+created: '2026-03-24T21:08:58.627Z'
+updated: '2026-03-24T21:08:58.627Z'

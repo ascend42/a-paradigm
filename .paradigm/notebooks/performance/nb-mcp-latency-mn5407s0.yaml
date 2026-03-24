@@ -1,0 +1,27 @@
+context: When evaluating or optimizing Paradigm performance
+snippet: >-
+  Performance-critical paths: (1) MCP tool response time — every AI interaction waits on these. Tool handlers must avoid
+  heavy I/O; use concise response_format to reduce token serialization. sql.js (in-memory SQLite) for aspect graph
+  queries is fast but loads entire DB on init. (2) CLI startup — Commander.js loads all command modules on boot. Heavy
+  imports (express, simple-git, glob) add latency. Consider lazy loading for infrequent commands. (3) Hook execution —
+  pre-commit and stop hooks run shell scripts synchronously. paradigm-postwrite.sh fires on every file write. Keep hooks
+  under 500ms. (4) Conductor — native Swift, 60fps overlay target. WhisperKit voice inference is the heaviest operation
+  (runs on-device ML). (5) Build time — tsup bundles are fast (~2-5s per package). swift build -c release is slow
+  (~30-60s cold, ~5-10s incremental).
+provenance:
+  source: manual
+  createdBy: performance
+confidence: 0.9
+concepts:
+  - mcp-latency
+  - cli-startup
+  - hook-performance
+  - conductor-fps
+  - build-time
+tags:
+  - paradigm
+  - performance
+id: nb-mcp-latency-mn5407s0
+appliedCount: 0
+created: '2026-03-24T21:11:03.264Z'
+updated: '2026-03-24T21:11:03.264Z'

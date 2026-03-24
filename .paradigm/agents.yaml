@@ -3,27 +3,6 @@ team:
   name: a-paradigm-team
   default_agent: architect
   require_handoff: false
-
-# Orchestration configuration
-orchestration:
-  # Default mode for `paradigm team orchestrate`
-  default_mode: faceted  # or 'solo'
-
-  # Global budget for orchestrations
-  budget:
-    max_tokens: 500000      # Hard limit per orchestration
-    max_cost_usd: 5.00      # Cost ceiling
-    warn_at_percent: 80     # Warn orchestrator at 80% budget
-
-  # Per-agent limits
-  agent_limits:
-    architect: { max_tokens: 100000 }
-    security: { max_tokens: 100000 }
-    builder: { max_tokens: 200000 }
-    reviewer: { max_tokens: 50000 }
-    tester: { max_tokens: 50000 }
-
-# Agent (Facet) definitions
 agents:
   architect:
     name: architect
@@ -33,7 +12,7 @@ agents:
       When your spec is ready, hand off to Builder with 'paradigm team handoff --to builder'.
     focus:
       reads:
-        - "#components"
+        - "@features"
         - $flows
         - specs/*.md
         - health.yaml
@@ -49,12 +28,11 @@ agents:
           - spec
       - type: symbol
         match:
-          - "#*"
+          - "@*"
           - $*
     handoff_to:
       - builder
       - reviewer
-    # Facet configuration
     defaultModel: opus
     context:
       include:
@@ -62,16 +40,10 @@ agents:
         - .purpose
         - "**/.purpose"
         - portal.yaml
-        - .paradigm/config.yaml
       exclude:
         - src/**
         - tests/**
         - node_modules/**
-    protocol:
-      onFailure: pause
-      requireApproval:
-        - external_api
-
   builder:
     name: builder
     role: |-
@@ -99,22 +71,15 @@ agents:
     handoff_to:
       - reviewer
       - architect
-    # Facet configuration
     defaultModel: haiku
     context:
       include:
         - src/**
         - tests/**
         - "{feature}.purpose"
-        - "specs/{feature}.md"
       exclude:
         - specs/*.md
         - node_modules/**
-        - dist/**
-    protocol:
-      onFailure: retry
-      maxRetries: 2
-
   reviewer:
     name: reviewer
     role: |-
@@ -143,7 +108,6 @@ agents:
     handoff_to:
       - builder
       - tester
-    # Facet configuration
     defaultModel: sonnet
     context:
       include:
@@ -154,7 +118,6 @@ agents:
       exclude:
         - tests/**
         - node_modules/**
-
   tester:
     name: tester
     role: |-
@@ -182,7 +145,6 @@ agents:
     handoff_to:
       - builder
       - architect
-    # Facet configuration
     defaultModel: haiku
     context:
       include:
@@ -193,7 +155,6 @@ agents:
         - src/**
         - specs/**
         - node_modules/**
-
   security:
     name: security
     role: |-
@@ -218,14 +179,12 @@ agents:
     handoff_to:
       - builder
       - architect
-    # Facet configuration
     defaultModel: opus
     context:
       include:
         - portal.yaml
         - src/middleware/**
         - src/auth/**
-        - .paradigm/wisdom/antipatterns.yaml
       exclude:
         - src/routes/**
         - tests/**

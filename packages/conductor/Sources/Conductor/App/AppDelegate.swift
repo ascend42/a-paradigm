@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var conductorPanel: ConductorPanel?
     private var containerWindow: ContainerWindow?
     /// Container mode — launched via `paradigm conductor --container`
-    var useContainerMode: Bool = false
+    @AppStorage("useContainerMode") var useContainerMode: Bool = false
     private let permissionsManager = PermissionsManager()
     private lazy var gazeCursor = GazeCursorController()
     private lazy var gestureConfirmation = GestureConfirmationController()

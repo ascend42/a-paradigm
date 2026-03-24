@@ -1,0 +1,26 @@
+context: When creating or updating university course content
+snippet: >-
+  University courses at packages/university/src/content/courses/*.json. Current catalog: PARA 101 (Foundations —
+  symbols, purpose files, logging, config, gates), PARA 201 (Advanced Symbols & Project Structure), PARA 301 (Gates &
+  Authorization — portal.yaml deep dive), PARA 401 (Flows & Multi-Agent Orchestration), PARA 501 (Wisdom & Team
+  Decisions), PARA 601 (Sentinel & Observability), PARA 701 (Agent Mastery — 10 lessons, newest). Each course has
+  lessons array with content, quizzes with multiple-choice questions, and prerequisites. PLSAT certification exams at
+  src/content/plsat/ (v2.0 and v3.0). Courses build sequentially — 101 is prereq for 201, etc. UI served via Vite React
+  app embedded in CLI.
+provenance:
+  source: manual
+  createdBy: educator
+confidence: 0.95
+concepts:
+  - courses
+  - para-series
+  - plsat
+  - course-schema
+  - prerequisites
+tags:
+  - paradigm
+  - university
+id: nb-courses-mn53zhi9
+appliedCount: 0
+created: '2026-03-24T21:10:29.217Z'
+updated: '2026-03-24T21:10:29.217Z'

@@ -109,7 +109,7 @@ Common issues and their solutions.
    # Correct
    LOG_LEVEL=debug
    PARADIGM_SYMBOLS=!,#
-
+   
    # Wrong (spaces)
    PARADIGM_SYMBOLS=!, #
    ```
@@ -128,7 +128,7 @@ Common issues and their solutions.
 
 4. **Browser: Check URL params:**
    ```
-   ?logLevel=debug&symbols=!,#
+   ?logLevel=debug&symbols=!,@
    ```
 
 5. **Clear and reset:**
@@ -196,24 +196,14 @@ Common issues and their solutions.
 2. **Common YAML issues:**
    ```yaml
    # Wrong - missing quotes on special chars
-   description: Use # for components
-
+   description: Use @ for features
+   
    # Correct
-   description: "Use # for components"
-
-   # Wrong - ! is a YAML tag indicator, breaks parsing in arrays
-   signals: [!success, !failed]
-   steps:
-     - !payment-completed
-
-   # Correct - always quote ! signals in YAML
-   signals: ["!success", "!failed"]
-   steps:
-     - "!payment-completed"
-
+   description: "Use @ for features"
+   
    # Wrong - tabs instead of spaces
    	key: value
-
+   
    # Correct - 2 spaces
      key: value
    ```
@@ -328,7 +318,7 @@ Common issues and their solutions.
 
 2. **Filter symbols in production:**
    ```bash
-   # Only signals
+   # Only errors and signals
    PARADIGM_SYMBOLS=!
    LOG_LEVEL=warn
    ```
@@ -428,23 +418,23 @@ The `.cursorrules` file is loaded on **every single chat**. A 600-line file cost
 ```markdown
 # project-name - Paradigm Context
 
-## Symbol System
+## Symbol System (v2)
 | Symbol | Name | Use For |
 |--------|------|---------|
-| `#` | Component | Any documented code unit |
+| `#` | Component | All code units (features, services, integrations) |
+| `^` | Gate | Access control / authorization |
+| `!` | Signal | Events / side effects |
 | `$` | Flow | Multi-step processes |
-| `^` | Gate | Access control |
-| `!` | Signal | Events/side effects |
-| `~` | Aspect | Rule with code anchor |
+| `~` | Aspect | Cross-cutting rules with code anchors |
 
 ## Paradigm Logger
 **NEVER use console.log. ALWAYS use Paradigm logger.**
 
 | Directory | Method |
 |-----------|--------|
-| `features/` | `log.component()` |
-| `components/` | `log.component()` |
-| `middleware/` | `log.gate()` |
+| `features/`, `components/` | `log.component()` |
+| `middleware/`, `auth/` | `log.gate()` |
+| `events/`, `handlers/` | `log.signal()` |
 
 ## Key Files
 | File | Purpose |
@@ -458,306 +448,6 @@ At ~80% context: `paradigm team handoff --to <agent>`, start new session.
 
 ## Full Specs
 Read on-demand: `.paradigm/specs/`
-```
-
----
-
-## MCP Server Connection Issues
-
-### Symptoms
-- Cursor logs show "Handling DeleteClient action"
-- MCP tools not available in Cursor/Claude
-- MCP server immediately disconnects
-- "command not found: paradigm-mcp"
-
-### Solutions
-
-1. **Check if paradigm-mcp is installed:**
-   ```bash
-   which paradigm-mcp
-   # Should return a path like:
-   # /Users/you/.nvm/versions/node/vXX/bin/paradigm-mcp
-   ```
-
-2. **Broken npm link (most common):**
-   
-   The symlink exists but points to nothing. Re-link:
-   ```bash
-   cd path/to/a-paradigm/packages/paradigm-mcp
-   npm link
-   ```
-
-3. **Verify the link target exists:**
-   ```bash
-   # Check if the binary symlink target exists
-   ls -la $(which paradigm-mcp)
-   
-   # Follow the symlink and check if dist/index.js exists
-   ls -la $(npm root -g)/@a-company/paradigm-mcp/dist/index.js
-   ```
-
-4. **Alternative: Use direct path in mcp.json:**
-   
-   If linking is problematic, bypass it:
-   ```json
-   {
-     "mcpServers": {
-       "my-project": {
-         "command": "node",
-         "args": ["/full/path/to/paradigm-mcp/dist/index.js", "."],
-         "cwd": "/path/to/your/project"
-       }
-     }
-   }
-   ```
-
-5. **Check if package is built:**
-   ```bash
-   ls path/to/paradigm-mcp/dist/
-   # Should contain index.js
-   
-   # If not, build it:
-   cd path/to/paradigm-mcp
-   npm run build
-   ```
-
-6. **Shebang issues:**
-   
-   The dist/index.js should start with:
-   ```
-   #!/usr/bin/env node
-   ```
-   
-   If missing, rebuild the package.
-
-7. **nvm/node version mismatch:**
-   
-   If using nvm, ensure Cursor is using the same node version:
-   ```bash
-   # Check current node
-   node --version
-   
-   # Check where paradigm-mcp is linked
-   which paradigm-mcp
-   
-   # These should match the same nvm version
-   ```
-
-### Debugging MCP Startup
-
-Run the MCP server directly to see any errors:
-```bash
-cd /path/to/your/project
-node /path/to/paradigm-mcp/dist/index.js . 2>&1
-```
-
-If it hangs waiting for input, the server is working (MCP servers wait for stdio).
-If it throws an error, that's your problem.
-
-### Common DeleteClient Causes
-
-| Cause | Fix |
-|-------|-----|
-| Broken symlink | `npm link` in paradigm-mcp |
-| Package not built | `npm run build` |
-| Missing dependencies | `npm install` in paradigm-mcp |
-| Wrong cwd in mcp.json | Use absolute path |
-| No .paradigm/ in project | Run `paradigm init` |
-| nvm/PATH not available | Use full paths (see below) |
-
-### nvm Users: Cursor Doesn't Inherit Shell PATH
-
-**Problem:** Cursor's MCP spawner doesn't load your shell profile, so nvm-managed `node` and globally linked commands like `paradigm-mcp` aren't found.
-
-**Symptoms:**
-- MCP works in terminal but not in Cursor
-- "command not found" even though `which paradigm-mcp` works
-- Server starts when run manually but Cursor shows "DeleteClient"
-
-**Solution:** Use absolute paths in your `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "paradigm": {
-      "command": "/Users/YOU/.nvm/versions/node/vXX.XX.X/bin/node",
-      "args": ["/path/to/paradigm-mcp/dist/index.js", "."],
-      "cwd": "/path/to/your/project"
-    }
-  }
-}
-```
-
-**Find your paths:**
-```bash
-# Get your node path
-which node
-# Example: /Users/you/.nvm/versions/node/v24.12.0/bin/node
-
-# Get paradigm-mcp location
-ls $(npm root -g)/../bin/paradigm-mcp
-# Or use the source directly:
-# /path/to/a-paradigm/packages/paradigm-mcp/dist/index.js
-```
-
-**Template for multiple projects:**
-
-Each project's `.cursor/mcp.json` should look like:
-```json
-{
-  "mcpServers": {
-    "my-project": {
-      "command": "/Users/ascend/.nvm/versions/node/v24.12.0/bin/node",
-      "args": ["/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/dist/index.js", "."],
-      "cwd": "/Users/ascend/Documents/GitHub/my-project"
-    }
-  }
-}
-```
-
-Only the `cwd` needs to change per project.
-
----
-
-## Circular Flow Dependencies
-
-### Symptoms
-- `paradigm flow validate` reports "Circular dependency detected"
-- Flow validation shows cycle chains like `$a → $b → $c → $a`
-- `paradigm_flow_validate` returns `circularDependencies` array
-
-### Understanding the Error
-
-Circular dependencies occur when flows reference each other in a cycle. Paradigm detects these via DFS traversal of `relatedFlows` and step-level `$flow` references.
-
-**Example error output:**
-```
-⚠ Circular Dependencies (1)
-
-  $checkout-flow → $payment-flow → $checkout-flow
-
-  Resolution: Break the cycle by extracting shared logic into a
-  separate flow, or remove one direction of the dependency.
-```
-
-### Solutions
-
-1. **Identify the cycle** — the arrow chain shows the exact dependency loop:
-   ```
-   $a → $b → $c → $a
-   ```
-   This means `$a` references `$b`, which references `$c`, which references `$a` again.
-
-2. **Extract shared logic** — create a new flow for the shared dependency:
-   ```yaml
-   # Before (circular):
-   $checkout-flow:
-     relatedFlows: [$payment-flow]
-   $payment-flow:
-     relatedFlows: [$checkout-flow]
-
-   # After (extracted):
-   $checkout-flow:
-     relatedFlows: [$payment-processing]
-   $payment-flow:
-     relatedFlows: [$payment-processing]
-   $payment-processing:
-     # Shared logic lives here
-   ```
-
-3. **Remove one direction** — if only one flow truly depends on the other, remove the reverse reference.
-
-4. **Use signals instead** — replace a direct flow reference with a signal:
-   ```yaml
-   $payment-flow:
-     # Instead of relatedFlows: [$checkout-flow]
-     steps:
-       - type: signal
-         symbol: "!payment-completed"
-   # $checkout-flow listens for !payment-completed separately
-   ```
-
-5. **Validate after fixing:**
-   ```bash
-   paradigm flow validate
-   # Or via MCP:
-   # paradigm_flow_validate({})
-   ```
-
----
-
-## Dry-Run Mode
-
-### Overview
-
-Several commands support `--dry-run` to preview changes without side effects.
-
-### Supported Commands
-
-| Command | What It Shows |
-|---------|---------------|
-| `paradigm upgrade --all --dry-run` | Files that would be created or updated |
-| `paradigm hooks install --dry-run` | Git hooks, Claude Code hooks, and Cursor hooks that would be installed |
-| `paradigm hooks uninstall --dry-run` | Hooks and files that would be removed |
-| `paradigm lore delete <id> --dry-run` | Lore entry details that would be deleted |
-
-### Examples
-
-```bash
-# Preview hook installation
-paradigm hooks install --dry-run
-
-# Preview what upgrade would change
-paradigm upgrade --all --dry-run
-
-# Preview lore entry deletion
-paradigm lore delete entry-001 --dry-run
-```
-
----
-
-## Doctor Check Failures
-
-The `paradigm doctor` command validates project health. Here are the new checks and how to resolve failures:
-
-### portal.yaml Invalid YAML
-**Status:** error
-**Message:** `Invalid YAML: <parse error>`
-**Fix:** Check YAML syntax in portal.yaml — ensure proper indentation, quoted strings, and valid structure with `version` and `gates` keys.
-
-### flows.yaml Validation
-**Status:** warn
-**Message:** `N flows defined, M have no steps`
-**Fix:** Add steps to empty flow definitions in `.paradigm/flows.yaml`. Each flow should have at least one step with type (gate/action/signal) and a symbol reference.
-
-### Lore Health
-**Status:** warn
-**Message:** `Lore directory exists but no entries found`
-**Fix:** Record your first lore entry: `paradigm lore record` or use `paradigm_lore_record` via MCP. Lore entries document session history and decisions.
-
-### Hook Freshness
-**Status:** warn
-**Message:** `Hooks are N days old — may be outdated`
-**Fix:** Reinstall hooks to pick up latest paradigm changes:
-```bash
-paradigm hooks install
-```
-
-### Habits Config
-**Status:** error/warn
-**Message:** `Invalid YAML: <parse error>` or `Missing version or habits array`
-**Fix:** Regenerate a valid habits config:
-```bash
-paradigm habits init
-```
-Or manually ensure `.paradigm/habits.yaml` has `version: "1.0"` and a `habits: []` array.
-
-### AGENTS.md Staleness
-**Status:** warn
-**Message:** `N days since last update — may be stale`
-**Fix:** Regenerate AGENTS.md to include current project symbols and conventions:
-```bash
-paradigm sync
 ```
 
 ---
@@ -785,27 +475,3 @@ If none of these solutions work:
    ```bash
    cat .cursorrules  # or equivalent
    ```
-
----
-
-### Symphony / A-Mail
-
-| Issue | Solution |
-|-------|----------|
-| "Mail not delivered" | Check agent is linked (`paradigm symphony list`) and polling (`/loop`) |
-| "File request denied" | Check `~/.paradigm/score/trust.yaml` patterns — `.env*`, `*.key` always blocked |
-| "Agent shows as asleep" | Agent hasn't polled in 60s — ensure `/loop 10s paradigm_symphony_poll` is running |
-| "Thread not found" | Run `paradigm symphony threads` to list all threads |
-| "No agents found" | Run `paradigm symphony join` in each terminal first |
-
-### Networking
-
-| Issue | Solution |
-|-------|----------|
-| Peer not connecting | Check firewall allows port 3939 (TCP). On macOS, check System Settings > Network > Firewall |
-| Pairing code rejected | Codes rotate every 5 minutes. Get a fresh code from the hub terminal |
-| Auto-reconnect failing | Check that the hub (`paradigm symphony serve`) is still running. The spoke retries with exponential backoff (1s → 30s max) |
-| "Too many failed attempts" | Wait 60 seconds. After 3 wrong codes from the same IP, a cooldown is enforced |
-| Internet mode not working | Port 3939 must be reachable from the internet. Use port forwarding, VPN, or SSH tunnel (`ssh -R 3939:localhost:3939 server`) |
-| Remote agents not showing | Run `paradigm symphony peers` to verify the connection. Agents sync happens after successful pairing |
-| NAT/double-NAT issues | If both machines are behind NAT, use a relay server or SSH tunnel. Direct LAN connect only works on the same network |

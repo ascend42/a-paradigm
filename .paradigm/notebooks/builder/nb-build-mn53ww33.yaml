@@ -1,0 +1,25 @@
+context: When implementing features in the Paradigm monorepo
+snippet: >-
+  Build habit — ALWAYS fully build and link after every code change: (1) swift build -c release in packages/conductor/
+  if Swift changed, (2) npm run build in packages/paradigm-mcp/, (3) npm run build && npm link in packages/paradigm/.
+  Tech stack: TypeScript + tsup for all TS packages, Commander.js for CLI, @modelcontextprotocol/sdk for MCP tools,
+  Swift 5.9 + SwiftUI for Conductor, Vite + React for embedded UIs (platform-ui, university-ui, sentinel-ui, lore-ui,
+  graph-ui). NEVER use console.log — use Paradigm logger (log.component(), log.gate(), etc.).
+provenance:
+  source: manual
+  createdBy: builder
+confidence: 0.95
+concepts:
+  - build
+  - tech-stack
+  - tsup
+  - commander
+  - logger
+  - swift
+tags:
+  - paradigm
+  - implementation
+id: nb-build-mn53ww33
+appliedCount: 0
+created: '2026-03-24T21:08:28.143Z'
+updated: '2026-03-24T21:08:28.143Z'

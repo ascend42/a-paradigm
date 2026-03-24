@@ -139,19 +139,20 @@ function query_database(query, params):
 
 ## Logging Errors
 
-Always use the Paradigm logger (v2):
+Always use the Paradigm logger:
 
 ```
-// Component context (features, services, integrations)
-log.component('#checkout-handler').error('Payment failed', { reason, order_id })
+// Component context (features)
+log.component('#checkout').error('Payment failed', { reason, order_id })
+
+// Component context (infrastructure)
 log.component('#database').error('Connection lost', { host })
-log.component('#stripe-service').error('API error', { status, message })
 
 // Gate context
-log.gate('^authenticated').warn('Access denied', { user_id, resource })
+log.gate('^auth').warn('Access denied', { user_id, resource })
 
-// Signal context
-log.signal('!payment-failed').error('Payment declined', { order_id, reason })
+// Component context (integrations)
+log.component('#stripe-client').error('API error', { status, message })
 ```
 
 ## Graceful Degradation
@@ -207,55 +208,6 @@ function submit():
 // Display
 if error:
     show_error_message(error)
-```
-
----
-
-## CLI Error Patterns
-
-Paradigm CLI commands produce actionable error messages that include:
-1. **What went wrong** — clear description of the error
-2. **Why** — context about the cause
-3. **What to do** — concrete next steps
-
-### Sentinel Startup Errors
-
-| Error | Message | Recovery |
-|-------|---------|----------|
-| Module not found | `@a-company/sentinel is not installed` | `npm install @a-company/sentinel` |
-| Port in use | `Port 3838 is already in use` | `paradigm sentinel --port 3839` |
-| Permission denied | `Permission denied on port N` | Use a port above 1024 |
-| Dir not found | `Project directory not found: /path` | Verify the path exists |
-| Network error | `Network connection failed` | Check network configuration |
-| Unknown error | Shows error message + code + 3 recovery steps | Follow recovery steps or run `paradigm doctor` |
-
-### Flow Validation Errors
-
-| Error | Message | Recovery |
-|-------|---------|----------|
-| Legacy v1 symbol | `"@feature" uses deprecated v1 prefix "@". Use #component with tags: [feature]` | Migrate to v2 symbol |
-| Invalid symbol | `Invalid symbol format "foo" — must start with a v2 prefix (#, $, ^, !, ~)` | Add correct prefix |
-| Missing gate | `Gate ^name not declared in portal.yaml` | Add gate to portal.yaml |
-| Type mismatch | `Symbol ^gate should have type 'gate', got 'action'` | Fix the step type |
-
-### General Error Message Guidelines
-
-When adding new CLI error messages, follow this pattern:
-
-```typescript
-// BAD - generic, unhelpful
-console.error('Error:', error);
-
-// GOOD - actionable with recovery steps
-console.error(chalk.red('\nError: Port 3838 is already in use.'));
-console.log(chalk.gray('Try a different port with: paradigm sentinel --port 3839\n'));
-
-// GOOD - categorized with multiple recovery options
-console.error(chalk.red('\nFailed to start Sentinel.'));
-console.error(chalk.gray(`  Error: ${errMsg}`));
-console.log(chalk.gray('\nIf this persists, try:'));
-console.log(chalk.gray('  1. Ensure @a-company/sentinel is up to date'));
-console.log(chalk.gray('  2. Run `paradigm doctor` to check your setup'));
 ```
 
 ---

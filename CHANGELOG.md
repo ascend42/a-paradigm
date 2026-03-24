@@ -5,6 +5,27 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.12.0] — 2026-03-24
+
+### Added
+
+- **Project agent roster** — 14-agent team registered for the Paradigm repo: architect, builder, reviewer, tester, security, documentor + dx, release, debugger, qa, educator, researcher, performance, designer. Orchestrator only considers rostered agents.
+- **29 project-scoped notebook entries** — Every rostered agent bootstrapped with Paradigm-specific knowledge: architecture, build chain, test infrastructure, security posture, DX surfaces, release process, debug paths, course content, research domains, performance targets, and UI surfaces.
+- **ErrorBoundary for Platform UI** — Each lazy-loaded section wrapped in error boundary with reload button. Uncaught exceptions no longer crash the entire app.
+
+### Fixed
+
+- **Platform UI URL routing** — Added missing sections (team, canvas, sentinel, ambient, docs) to `validSections` in `App.tsx` and `useAgentEffects.ts`. Direct URL navigation now works for all 11 sections.
+- **Duplicate theme toggle** — Removed Lore's standalone theme toggle from `ViewSwitcher.tsx` when embedded in Platform (Platform shell handles theming).
+- **Conductor duplicate color functions** — Extracted `statusColor`, `priorityColor`, `healthColor`, `levelColor` into shared `ConductorColors.swift`. Four views now delegate to the shared enum.
+- **Hardcoded Conductor version** — `MainOverlayView` now reads `CFBundleShortVersionString` from bundle instead of hardcoded "v0.16.0".
+- **String Identifiable hazard** — Moved global `String: @retroactive Identifiable` from `AgentNetworkView` to shared file, added `ThreadSelection` wrapper type.
+- **Window mode not persisted** — `AppDelegate.useContainerMode` now uses `@AppStorage` so sidebar/container preference survives restarts.
+- **CLI startup performance** — `initCommand` and `statusCommand` now lazy-loaded like all other commands, eliminating eager import of premise-core, purpose-core, portal-core, and ora.
+- **Bundle sizes** — Added `treeshake: true` and `minify: true` to 5 tsup configs (paradigm-mcp, paradigm, university, sentinel, runtime).
+- **Stale SKILL.md flags** — Fixed `--discipline` → `--stack` and `paradigm scan` → `paradigm scan auto` in init skill.
+- **Stale university .purpose files** — Updated course count 5→7 (75 lessons), added PARA 701 entries, fixed PLSAT from 86→99 questions, 86→90 minutes, 80%→90% pass threshold across 3 .purpose files.
+
 ## [5.11.0] — 2026-03-24
 
 ### Added

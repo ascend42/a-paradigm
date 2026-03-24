@@ -1,8 +1,8 @@
 name: university-courses
-description: Course content for Paradigm University — 5 courses, 50 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
+description: Course content for Paradigm University — 7 courses, 75 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
 
 components:
-  # PARA 101: Foundations (8 lessons)
+  # PARA 101: Foundations (9 lessons)
 
   para-101-welcome:
     description: "Welcome to Paradigm — three pillars, why structured context matters"
@@ -188,7 +188,7 @@ components:
     tags: [course-content, para-301]
     references: ["#lore-system", "#wisdom-system", "#ripple-analysis", "#navigation", "#sentinel", "#protocol-system"]
 
-  # PARA 401: Orchestration (9 lessons)
+  # PARA 401: Orchestration (11 lessons)
 
   para-401-mcp-tools-overview:
     description: "MCP Tools Overview — 95 tools, token budgets, query vs file read"
@@ -255,7 +255,7 @@ components:
     type: lesson
     tags: [university, notebooks, agent-identity, permissions]
 
-  # PARA 501: Advanced Systems (10 lessons)
+  # PARA 501: Advanced Systems (14 lessons)
 
   para-501-lore-system:
     description: "Lore System — entries, types, arcs, linked entries, timeline"
@@ -328,7 +328,7 @@ components:
     type: lesson
     tags: [university, review, compliance, tool-loading]
 
-  # PARA 601: Ambient Coordination (8 lessons)
+  # PARA 601: Ambient Coordination (9 lessons)
 
   para-601-event-stream:
     description: "Event Stream — append-only JSONL activity log, event types, automatic emission from MCP tools and hooks"
@@ -372,8 +372,76 @@ components:
     tags: [course-content, para-601]
     references: ["#agent-loader", "#nomination-engine"]
 
+  para-601-maestro-team-collab:
+    description: "Maestro: Visible Team Orchestration — attributed responses, agent profiles, bench/activate, Symphony threads, Neverland test, Teacher Model, documentor agent"
+    file: para-601.json
+    tags: [course-content, para-601]
+    references: ["#orchestration", "#agent-loader", "#nomination-engine"]
+
   para-601-ambient-review:
     description: "Ambient Review — comprehensive review of PARA 601 ambient coordination concepts"
     file: para-601.json
     tags: [course-content, para-601]
     references: ["#event-stream", "#nomination-engine", "#data-policy", "#agent-loader"]
+
+  # PARA 701: Agent Mastery (10 lessons)
+
+  para-701-agent-roster:
+    description: "The Agent Roster — 54 agents, 7 tiers, specialist model, orchestrator selection"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration", "#agent-loader"]
+
+  para-701-agent-profiles:
+    description: "Agent Profiles Deep Dive — .agent YAML schema, personality, expertise, attention, collaboration graph"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#agent-loader"]
+
+  para-701-agent-notebooks:
+    description: "Agent Notebooks — persistent knowledge, journal-to-notebook promotion, buildProfileEnrichment pipeline"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#agent-loader"]
+
+  para-701-agent-state:
+    description: "Agent State & Continuity — session state, expertise accumulation, threshold calibration"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#agent-loader", "#session-continuity"]
+
+  para-701-per-project-rosters:
+    description: "Per-Project Rosters — roster.yaml, domain filtering, team composition per project"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration", "#agent-loader"]
+
+  para-701-model-tier-resolution:
+    description: "Model Tier Resolution — model tiers, cost-aware routing, provider cascade"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration"]
+
+  para-701-orchestration-enforcement:
+    description: "Orchestration Enforcement — habits, hook checks, compliance validation for multi-agent flows"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration", "#enforcement-hooks", "#habits-system"]
+
+  para-701-symphony-visibility:
+    description: "Live Visibility via Symphony — real-time agent messaging, Conductor views, Platform dashboard"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration"]
+
+  para-701-learning-feedback-loop:
+    description: "The Learning Feedback Loop — postflight learning, threshold calibration, Neverland metrics"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#nomination-engine", "#agent-loader"]
+
+  para-701-agent-pods-nevrland:
+    description: "Agent Pods & nevr.land — agent marketplace, trust contracts, pod composition, remote agents"
+    file: para-701.json
+    tags: [course-content, para-701]
+    references: ["#orchestration", "#agent-loader"]

@@ -1,0 +1,16 @@
+version: '1.0'
+active:
+  - architect
+  - builder
+  - debugger
+  - designer
+  - documentor
+  - dx
+  - educator
+  - performance
+  - qa
+  - release
+  - researcher
+  - reviewer
+  - security
+  - tester

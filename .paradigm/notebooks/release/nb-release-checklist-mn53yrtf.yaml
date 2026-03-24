@@ -1,0 +1,26 @@
+context: When preparing a Paradigm release
+snippet: >-
+  Release checklist: (1) Build all packages: npm run build (respects build order: core → packages → CLI). (2) Build
+  Conductor if Swift changed: swift build -c release in packages/conductor/. (3) Version bump rules: @a-company/paradigm
+  ALWAYS bumps, @a-company/paradigm-mcp only when MCP tools change, @a-company/sentinel only on sentinel changes,
+  @a-company/university only on course changes. (4) CRITICAL: bump plugins/paradigm/.claude-plugin/plugin.json version
+  to match — this has been missed repeatedly and it's the version users see. (5) CHANGELOG: Keep a Changelog format, NO
+  [Unreleased] on main — every push is a release. (6) npm publish for each bumped package. (7) Pushing to GitHub updates
+  the plugin automatically.
+provenance:
+  source: manual
+  createdBy: release
+confidence: 0.95
+concepts:
+  - release-checklist
+  - version-bumps
+  - plugin-version
+  - changelog
+  - npm-publish
+tags:
+  - paradigm
+  - release
+id: nb-release-checklist-mn53yrtf
+appliedCount: 0
+created: '2026-03-24T21:09:55.923Z'
+updated: '2026-03-24T21:09:55.923Z'

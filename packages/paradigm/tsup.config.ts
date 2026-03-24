@@ -3,6 +3,8 @@ import { defineConfig } from 'tsup';
 const shared = {
   format: ['esm'] as const,
   clean: false,
+  treeshake: true,
+  minify: true,
   banner: {
     js: '#!/usr/bin/env node',
   },

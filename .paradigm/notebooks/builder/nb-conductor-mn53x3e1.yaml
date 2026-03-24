@@ -1,0 +1,26 @@
+context: When modifying Conductor Swift code
+snippet: >-
+  Conductor at packages/conductor/ is a Swift Package (Package.swift). Architecture: App/ (AppDelegate, panels), UI/
+  (SwiftUI views), Models/ (data types), Services/ (SessionManager, ProjectStore), Orchestration/ (Symphony relay,
+  TaskStore), Input/ (vision, gesture, voice via WhisperKit). All protocols use @MainActor for Swift 6 concurrency.
+  Tests at Tests/ConductorTests/ — 160+ XCTest unit tests. Build: swift build -c release. Test: swift test. Key views:
+  MainOverlayView, ContainerView, TaskDashboardView, AgentHealthView, SessionManagerView, HelpView. Communicates with
+  CLI via Symphony WebSocket and checkpoint JSON files.
+provenance:
+  source: manual
+  createdBy: builder
+confidence: 0.9
+concepts:
+  - conductor
+  - swift
+  - swiftui
+  - whisperkit
+  - symphony
+  - xcode
+tags:
+  - paradigm
+  - conductor
+id: nb-conductor-mn53x3e1
+appliedCount: 0
+created: '2026-03-24T21:08:37.609Z'
+updated: '2026-03-24T21:08:37.609Z'

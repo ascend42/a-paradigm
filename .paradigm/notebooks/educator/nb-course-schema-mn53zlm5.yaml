@@ -1,0 +1,26 @@
+context: When designing new lessons or quizzes
+snippet: >-
+  Course JSON schema: { id, title, description, version, prerequisites: [], lessons: [{ id, title, content (markdown),
+  quiz: { questions: [{ question, options: [], correctAnswer (index), explanation }] } }] }. Design principles: each
+  lesson teaches ONE concept with a practical example. Quiz questions should test understanding, not memorization.
+  Include code snippets from real Paradigm usage. Reference actual MCP tools and CLI commands students will use. PARA
+  701 (Agent Mastery) is the model for depth — 10 lessons covering agent profiles, orchestration, notebooks,
+  nominations, Symphony, and the teacher model. Keep content current with latest Paradigm version.
+provenance:
+  source: manual
+  createdBy: educator
+confidence: 0.9
+concepts:
+  - course-schema
+  - lesson-design
+  - quiz-design
+  - content-principles
+  - para-701
+tags:
+  - paradigm
+  - university
+  - content-design
+id: nb-course-schema-mn53zlm5
+appliedCount: 0
+created: '2026-03-24T21:10:34.541Z'
+updated: '2026-03-24T21:10:34.541Z'

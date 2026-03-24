@@ -19,40 +19,20 @@ log.signal('!login-success').info('User authenticated');
 
 | Directory | Symbol | Logger Method |
 |-----------|--------|---------------|
-| `features/**` | `#` | `log.component()` |
-| `routes/**` | `#` | `log.component()` |
-| `api/**` | `#` | `log.component()` |
-| `endpoints/**` | `#` | `log.component()` |
-| `commands/**` | `#` | `log.component()` |
-| `models/**` | `#` | `log.component()` |
-| `components/**` | `#` | `log.component()` |
-| `lib/**` | `#` | `log.component()` |
-| `utils/**` | `#` | `log.component()` |
+| `packages/**` | `#` | `log.component()` |
+| `apps/**` | `#` | `log.component()` |
 | `services/**` | `#` | `log.component()` |
-| `core/**` | `#` | `log.component()` |
-| `drivers/**` | `#` | `log.component()` |
-| `systems/**` | `#` | `log.component()` |
-| `integrations/**` | `#` | `log.component()` |
-| `external/**` | `#` | `log.component()` |
-| `vendors/**` | `#` | `log.component()` |
-| `stores/**` | `#` | `log.component()` |
-| `state/**` | `#` | `log.component()` |
-| `reducers/**` | `#` | `log.component()` |
+| `libs/**` | `#` | `log.component()` |
+| `shared/**` | `#` | `log.component()` |
+| `tools/**` | `#` | `log.component()` |
 | `config/**` | `#` | `log.component()` |
 | `middleware/**` | `^` | `log.gate()` |
 | `auth/**` | `^` | `log.gate()` |
-| `guards/**` | `^` | `log.gate()` |
-| `policies/**` | `^` | `log.gate()` |
 | `events/**` | `!` | `log.signal()` |
 | `handlers/**` | `!` | `log.signal()` |
-| `listeners/**` | `!` | `log.signal()` |
-| `hooks/**` | `!` | `log.signal()` |
 | `flows/**` | `$` | `log.flow()` |
-| `sagas/**` | `$` | `log.flow()` |
-| `workflows/**` | `$` | `log.flow()` |
 | `pipelines/**` | `$` | `log.flow()` |
 | `aspects/**` | `~` | `log.aspect()` |
 | `rules/**` | `~` | `log.aspect()` |
-| `constraints/**` | `~` | `log.aspect()` |
 
 See `.paradigm/specs/logger.md` for full specification.

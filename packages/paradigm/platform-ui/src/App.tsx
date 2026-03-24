@@ -2,6 +2,7 @@ import React, { useEffect, lazy, Suspense } from 'react';
 import { usePlatformStore } from './store/platformStore';
 import { SidebarNav } from './components/SidebarNav';
 import { PlatformHeader } from './components/PlatformHeader';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { OverviewSection } from './sections/overview/OverviewSection';
 import { AgentToastContainer } from './components/AgentToast';
 import { AgentCalloutOverlay, AgentNavigationPrompt } from './components/AgentCallout';
@@ -54,7 +55,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient'];
+      const validSections = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -74,17 +75,17 @@ export default function App() {
         <PlatformHeader />
         <div className="content">
           <Suspense fallback={<SectionFallback />}>
-            {activeSection === 'overview' && <OverviewSection />}
-            {activeSection === 'lore' && <LoreSection />}
-            {activeSection === 'graph' && <GraphSection />}
-            {activeSection === 'canvas' && <CanvasSection />}
-            {activeSection === 'git' && <GitSection />}
-            {activeSection === 'sentinel' && <SentinelSection />}
+            {activeSection === 'overview' && <ErrorBoundary sectionName="Overview"><OverviewSection /></ErrorBoundary>}
+            {activeSection === 'lore' && <ErrorBoundary sectionName="Lore"><LoreSection /></ErrorBoundary>}
+            {activeSection === 'graph' && <ErrorBoundary sectionName="Graph"><GraphSection /></ErrorBoundary>}
+            {activeSection === 'canvas' && <ErrorBoundary sectionName="Canvas"><CanvasSection /></ErrorBoundary>}
+            {activeSection === 'git' && <ErrorBoundary sectionName="Git"><GitSection /></ErrorBoundary>}
+            {activeSection === 'sentinel' && <ErrorBoundary sectionName="Sentinel"><SentinelSection /></ErrorBoundary>}
             {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
-            {activeSection === 'symphony' && <SymphonySection />}
-            {activeSection === 'docs' && <DocsSection />}
-            {activeSection === 'ambient' && <AmbientSection />}
-            {activeSection === 'team' && <TeamSection />}
+            {activeSection === 'symphony' && <ErrorBoundary sectionName="Symphony"><SymphonySection /></ErrorBoundary>}
+            {activeSection === 'docs' && <ErrorBoundary sectionName="Docs"><DocsSection /></ErrorBoundary>}
+            {activeSection === 'ambient' && <ErrorBoundary sectionName="Ambient"><AmbientSection /></ErrorBoundary>}
+            {activeSection === 'team' && <ErrorBoundary sectionName="Team"><TeamSection /></ErrorBoundary>}
           </Suspense>
         </div>
       </div>

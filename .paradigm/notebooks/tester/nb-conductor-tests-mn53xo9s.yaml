@@ -1,0 +1,25 @@
+context: When testing Conductor Swift features
+snippet: >-
+  Conductor test categories: BindingRegistryTests (hotkey dispatch), GestureFSMTests (state machine transitions),
+  DTWMatcherTests (dynamic time warping for gesture recognition), GazeCalibrationTests, VoiceControlTests (WhisperKit
+  integration), SentinelWSClientTests (WebSocket error streaming), TaskStoreTests (7 task intents), EyebrowFSMTests,
+  SessionManagerTests, CheckpointReaderTests. All use XCTest. Protocols are @MainActor — tests must account for
+  async/MainActor isolation. Build before testing: swift build then swift test.
+provenance:
+  source: manual
+  createdBy: tester
+confidence: 0.9
+concepts:
+  - conductor-tests
+  - xctest
+  - swift-concurrency
+  - gesture-tests
+  - task-tests
+tags:
+  - paradigm
+  - conductor
+  - testing
+id: nb-conductor-tests-mn53xo9s
+appliedCount: 0
+created: '2026-03-24T21:09:04.672Z'
+updated: '2026-03-24T21:09:04.672Z'

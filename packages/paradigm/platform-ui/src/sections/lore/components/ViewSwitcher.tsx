@@ -11,8 +11,6 @@ const VIEWS: { mode: ViewMode; label: string }[] = [
 export function ViewSwitcher() {
   const view = useLoreStore(s => s.view);
   const setView = useLoreStore(s => s.setView);
-  const theme = useLoreStore(s => s.theme);
-  const toggleTheme = useLoreStore(s => s.toggleTheme);
 
   return (
     <div className="view-switcher-row">
@@ -27,13 +25,6 @@ export function ViewSwitcher() {
           </button>
         ))}
       </div>
-      <button
-        className="theme-toggle"
-        onClick={toggleTheme}
-        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      >
-        {theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
-      </button>
     </div>
   );
 }

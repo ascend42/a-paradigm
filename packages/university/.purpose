@@ -55,7 +55,7 @@ components:
     file: ui/src/views/QuizView.tsx
 
   plsat-view:
-    description: Timed 86-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
+    description: Timed 99-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.
     type: view
     file: ui/src/views/PLSATView.tsx
 
@@ -98,7 +98,7 @@ components:
     file: ui/src/components/QuestionCard.tsx
 
   plsat-timer:
-    description: Countdown timer component for PLSAT exam (86 minutes)
+    description: Countdown timer component for PLSAT exam (90 minutes)
     type: view
     file: ui/src/components/Timer.tsx
 
@@ -118,8 +118,8 @@ components:
     file: ui/src/styles/academia.css
 
 aspects:
-  ~plsat-pass-threshold-80pct:
-    description: "PLSAT pass threshold is 0.8 (80%); defined in content JSON and read by the server at runtime"
+  ~plsat-pass-threshold-90pct:
+    description: "PLSAT pass threshold is 0.9 (90%); defined in content JSON and read by the server at runtime"
     category: configuration
     severity: high
     tags: [plsat, certification]
@@ -178,9 +178,9 @@ flows:
       - component: "#plsat-view"
         action: Display intro, rules, and name input
       - component: "#plsat-timer"
-        action: Start 86-minute countdown
+        action: Start 90-minute countdown
       - component: "#question-card"
-        action: Present 86 shuffled questions (with passage blocks for grouped questions)
+        action: Present 99 shuffled questions (with passage blocks for grouped questions)
       - component: "#plsat-view"
         action: Calculate score on submit or time-up
       - component: "#plsat-store"

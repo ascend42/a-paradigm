@@ -1,0 +1,26 @@
+context: When planning test strategy for Paradigm changes
+snippet: >-
+  Test strategy by risk tier: HIGH RISK (test thoroughly): orchestration engine (multi-agent coordination), nomination
+  engine (scoring, thresholds, expiry), portal.yaml validation (security enforcement), stop hook (blocks user workflow
+  if buggy), agent loader (field-by-field merge logic). MEDIUM RISK: MCP tool handlers (input validation, response
+  format), CLI commands (argument parsing, output formatting), university quiz validation, aspect graph queries. LOW
+  RISK: lore CRUD, notebook CRUD, wisdom recording, tag suggestions. Integration testing gap: no automated E2E tests —
+  field-testing on deus-backend and dealoracle is the current strategy. Conductor has strong unit coverage (160+ tests)
+  but no UI automation.
+provenance:
+  source: manual
+  createdBy: qa
+confidence: 0.9
+concepts:
+  - test-strategy
+  - risk-tiers
+  - integration-gap
+  - field-testing
+  - coverage
+tags:
+  - paradigm
+  - qa-strategy
+id: nb-test-strategy-mn53zc9b
+appliedCount: 0
+created: '2026-03-24T21:10:22.415Z'
+updated: '2026-03-24T21:10:22.415Z'

@@ -1,0 +1,25 @@
+context: When designing new tools, commands, or skills
+snippet: >-
+  DX patterns to follow: MCP tools should have concise response_format option ("concise" vs "detailed") to let agents
+  save tokens. Tool descriptions end with token estimate (~100 tokens). CLI commands use consistent subcommand structure
+  (paradigm {domain} {action} [--flags]). Skills in SKILL.md use structured prompt format with clear instructions for
+  the AI. Hooks: pre-commit (advisory, auto-rebuilds index), post-write (advisory reminder for .purpose), stop (BLOCKING
+  enforcement). The stop hook is the enforcement backstop — it should never surprise users who follow the conventions.
+  Error messages should suggest the fix, not just state the problem.
+provenance:
+  source: manual
+  createdBy: dx
+confidence: 0.9
+concepts:
+  - tool-design
+  - response-format
+  - skill-structure
+  - hook-design
+  - error-messages
+tags:
+  - paradigm
+  - dx-patterns
+id: nb-tool-design-mn53yn6i
+appliedCount: 0
+created: '2026-03-24T21:09:49.914Z'
+updated: '2026-03-24T21:09:49.914Z'

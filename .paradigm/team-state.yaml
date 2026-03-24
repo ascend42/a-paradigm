@@ -1,9 +1,4 @@
 current: null
 queue: []
-recent:
-  - agent: architect
-    task: Unknown task
-    result: success
-    handed_to: builder
-    timestamp: "2026-02-01T18:41:29.214Z"
+recent: []
 blocked: []

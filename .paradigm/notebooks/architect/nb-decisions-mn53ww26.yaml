@@ -1,0 +1,25 @@
+context: When evaluating architectural decisions or trade-offs
+snippet: >-
+  Key architectural decisions: (1) Maestro teacher model — top-down learning from session context, not bottom-up from
+  events. (2) Nomination engine for ambient learning — agents earn expertise through validated contributions. (3) Agent
+  notebooks as curated knowledge, not raw logs. (4) portal.yaml for declarative auth — gates with prizes:[] on each
+  entry. (5) @MainActor on all Conductor protocols for Swift 6 concurrency safety. (6) Model resolution: tier-1/2 agents
+  → sonnet, tier-3 → haiku, architect/security → opus. (7) Symphony for inter-agent messaging — WebSocket relay through
+  CLI platform server.
+provenance:
+  source: manual
+  createdBy: architect
+confidence: 0.9
+concepts:
+  - decisions
+  - maestro
+  - nomination-engine
+  - model-resolution
+  - symphony
+tags:
+  - paradigm
+  - decisions
+id: nb-decisions-mn53ww26
+appliedCount: 0
+created: '2026-03-24T21:08:28.110Z'
+updated: '2026-03-24T21:08:28.110Z'

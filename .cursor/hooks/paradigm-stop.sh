@@ -52,8 +52,9 @@ fi
 # Get modified files (uncommitted changes)
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
-  # Clean up pending-review on pass
+  # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
+  rm -f ".paradigm/.session-started"
   exit 0
 fi
 
@@ -105,9 +106,26 @@ if [ -n "$ADVISORY" ]; then
   echo "$ADVISORY" >&2
 fi
 
-# Clean up pending-review and loop guard on pass
+# Auto-demote graduated habits with 3+ failures
+if [ -d ".paradigm/.graduation-failures" ]; then
+  for fail_file in .paradigm/.graduation-failures/*; do
+    [ -f "$fail_file" ] || continue
+    habit_id=$(basename "$fail_file")
+    fail_count=$(wc -l < "$fail_file" | tr -d ' ')
+    if [ "$fail_count" -ge 3 ]; then
+      if command -v paradigm >/dev/null 2>&1; then
+        paradigm graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
+      fi
+      rm -f "$fail_file"
+      echo "[paradigm] Auto-demoted '$habit_id' after $fail_count failures." >&2
+    fi
+  done
+fi
+
+# Clean up session markers and loop guard on pass
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
+rm -f ".paradigm/.session-started"
 
 exit 0

@@ -1,0 +1,25 @@
+context: When debugging issues in the Paradigm framework
+snippet: >-
+  Common Paradigm failure modes: (1) MCP tool errors — often from undefined reads on missing YAML fields (e.g., agent
+  .agent files missing expected keys). Fix: field-by-field merge with defaults. (2) Hook failures — stop hook blocks on
+  missing .purpose or portal.yaml gates. Check: paradigm_plugin_check for hook health. (3) Stale build artifacts —
+  forgot to rebuild after code change. Fix: full build chain (paradigm-mcp → paradigm CLI → npm link). (4) Plugin
+  version mismatch — plugin.json not updated. (5) Nomination engine scoring bugs — check nomination-engine.ts for
+  threshold/expiry logic. (6) Checkpoint crash — JSON parse errors on malformed checkpoint files in .paradigm/.
+provenance:
+  source: manual
+  createdBy: debugger
+confidence: 0.9
+concepts:
+  - common-bugs
+  - mcp-errors
+  - hook-failures
+  - build-artifacts
+  - checkpoint-crash
+tags:
+  - paradigm
+  - debugging
+id: nb-common-bugs-mn53z1w4
+appliedCount: 0
+created: '2026-03-24T21:10:08.980Z'
+updated: '2026-03-24T21:10:08.980Z'

@@ -5,5 +5,7 @@ export default defineConfig({
   format: ['esm'],
   dts: { resolve: true },
   clean: true,
+  treeshake: true,
+  minify: true,
   external: ['express', 'open'],
 });

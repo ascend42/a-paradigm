@@ -15,7 +15,7 @@ struct AgentNetworkView: View {
 
     @State private var showNewGroup = false
     @State private var newGroupName = ""
-    @State private var selectedThread: String?
+    @State private var selectedThread: ThreadSelection?
     @State private var addAgentGroupId: UUID? = nil
     @State private var taskComposerGroupId: UUID? = nil
 
@@ -64,9 +64,9 @@ struct AgentNetworkView: View {
         .sheet(isPresented: $showNewGroup) {
             newGroupSheet
         }
-        .sheet(item: $selectedThread) { threadId in
+        .sheet(item: $selectedThread) { selection in
             ThreadView(
-                threadId: threadId,
+                threadId: selection.id,
                 monitor: monitor,
                 relay: relay,
                 agentPartManager: agentPartManager
@@ -151,7 +151,7 @@ struct AgentNetworkView: View {
                         .font(.system(size: 9))
                         .foregroundStyle(.purple)
                     ForEach(Array(threadIds.prefix(3)), id: \.self) { threadId in
-                        Button(action: { selectedThread = threadId }) {
+                        Button(action: { selectedThread = ThreadSelection(id: threadId) }) {
                             Text(threadId.prefix(12) + "...")
                                 .font(.system(size: 9))
                         }
@@ -433,8 +433,8 @@ struct AgentNetworkView: View {
     }
 }
 
-// MARK: - String Identifiable conformance for sheet binding
+// MARK: - ThreadSelection for sheet binding
 
-extension String: @retroactive Identifiable {
-    public var id: String { self }
+struct ThreadSelection: Identifiable {
+    let id: String
 }

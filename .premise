@@ -1,12 +1,12 @@
 version: 1.0.0
 metadata:
   name: a-paradigm
-  created: '2026-01-25T04:25:23.372Z'
-  modified: '2026-01-25T04:25:23.373Z'
+  created: '2026-03-24T20:36:17.185Z'
+  modified: '2026-03-24T20:36:17.187Z'
 sources:
   purpose:
     - path: ./
-  gate:
+  portal:
     - path: ./portal.yaml
 nodes: []
 connections: []

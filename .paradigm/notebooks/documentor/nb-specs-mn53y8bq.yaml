@@ -1,0 +1,25 @@
+context: When updating Paradigm documentation after code changes
+snippet: >-
+  Documentation locations: .paradigm/specs/ (detailed specifications), .paradigm/docs/ (commands, patterns,
+  troubleshooting), docs/specs/ (feature design docs like model-resolution.md, per-project-roster.md,
+  conductor-team-collab.md, maestro-learning.md). Lore entries at .paradigm/lore/ track project history — record via
+  paradigm_lore_record for sessions modifying 3+ files. CLAUDE.md at root is the primary AI context file — keep it
+  current with project conventions. The plugin skills at plugins/paradigm/skills/*/SKILL.md define slash command
+  behavior — update when adding new capabilities.
+provenance:
+  source: manual
+  createdBy: documentor
+confidence: 0.9
+concepts:
+  - specs
+  - lore
+  - claude-md
+  - skills
+  - documentation-locations
+tags:
+  - paradigm
+  - documentation
+id: nb-specs-mn53y8bq
+appliedCount: 0
+created: '2026-03-24T21:09:30.662Z'
+updated: '2026-03-24T21:09:30.662Z'
