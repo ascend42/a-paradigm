@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.1] — 2026-03-23
+
+### Fixed
+
+- **Checkpoint `modifiedFiles` crash** — `paradigm_agent_list`, `paradigm_ambient_neverland`, and other MCP tools crashed with `checkpoint.modifiedFiles.join is not a function` when a checkpoint file stored array fields as JSON strings instead of actual arrays. `loadCheckpoint()` now sanitizes `modifiedFiles`, `symbolsTouched`, and `decisions` on read, parsing JSON strings back to arrays.
+
 ## [5.7.0] — 2026-03-23
 
 ### Added
