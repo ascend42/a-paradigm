@@ -568,6 +568,17 @@ async function handleOrchestrateInline(
   // Extract symbols from task
   const symbols = extractSymbols(task);
 
+  // Process pending events and check for high-urgency nominations
+  let activeNominations: Array<{ agent: string; urgency: string; brief: string }> = [];
+  try {
+    const { processPendingEvents, loadNominations } = await import('../utils/nomination-engine.js');
+    processPendingEvents(ctx.rootDir);
+    const nominations = loadNominations(ctx.rootDir, { pending_only: true, limit: 10 });
+    activeNominations = nominations
+      .filter(n => n.urgency === 'high' || n.urgency === 'critical')
+      .map(n => ({ agent: n.agent, urgency: n.urgency, brief: n.brief }));
+  } catch { /* non-fatal */ }
+
   // Classify the task for intelligent agent selection
   const classification = classifyTaskLocal(task);
 
@@ -594,9 +605,14 @@ async function handleOrchestrateInline(
       plan,
       suggestedAgents,
       costPreview,
+      ...(activeNominations.length > 0 ? {
+        activeNominations,
+        nominationNote: `${activeNominations.length} high-urgency agent nomination(s) pending. These agents have been flagged by the system for attention on this project.`,
+      } : {}),
       instructions: [
         'Review task classification and cost preview above',
         'Review suggested agents based on task triggers',
+        ...(activeNominations.length > 0 ? ['Review active nominations — agents flagged by the system may need to be included'] : []),
         'Call again with mode="execute" to get full prompts and execution strategy',
         'Stages marked canRunParallel: true can be launched simultaneously',
         'After each agent completes, pass handoff context to the next stage',
@@ -822,6 +838,7 @@ async function handleOrchestrateInline(
     mode: 'execute',
     symbols,
     totalAgents: plan.estimatedAgents,
+    ...(activeNominations.length > 0 ? { activeNominations } : {}),
     stages: stagePrompts,
 
     // IDE-agnostic execution instructions

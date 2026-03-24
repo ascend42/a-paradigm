@@ -125,11 +125,10 @@ elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "  The stop hook WILL BLOCK if .purpose files aren't updated." >&2
 fi
 
-# Documentor recommendation at 5+ uncovered files
+# Surface high-urgency agent nominations (system-level, not agent-specific)
 if [ "$PENDING_COUNT" -ge 5 ] && [ "$((PENDING_COUNT % 5))" -eq 0 ]; then
   echo "" >&2
-  echo "[paradigm] 📋 $PENDING_COUNT files pending .purpose review." >&2
-  echo "  Run the documentor: paradigm_orchestrate_inline task=\"Update .purpose and portal.yaml\" agents=[\"documentor\"]" >&2
+  echo "[paradigm] $PENDING_COUNT files pending review. Check agent nominations: paradigm_ambient_nominations" >&2
 fi
 
 # Context budget heuristic: suggest handoff check at high edit counts
