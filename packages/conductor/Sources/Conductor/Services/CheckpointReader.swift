@@ -115,6 +115,55 @@ enum CheckpointReader {
         return URL(fileURLWithPath: path).lastPathComponent
     }
 
+    // MARK: - Project Discovery
+
+    /// Metadata from _project-meta.json in global session directories.
+    struct ProjectMeta {
+        let name: String
+        let path: String
+        let lastSeen: Date
+    }
+
+    /// Scan ~/.paradigm/sessions/ for all known projects.
+    /// Returns projects sorted by lastSeen descending, filtered to paths that still exist on disk.
+    static func discoverAllProjects() -> [ProjectMeta] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let sessionsDir = home.appendingPathComponent(".paradigm/sessions")
+        let fm = FileManager.default
+
+        guard fm.fileExists(atPath: sessionsDir.path) else { return [] }
+        guard let subdirs = try? fm.contentsOfDirectory(atPath: sessionsDir.path) else { return [] }
+
+        var projects: [ProjectMeta] = []
+
+        for subdir in subdirs {
+            let metaPath = sessionsDir
+                .appendingPathComponent(subdir)
+                .appendingPathComponent("_project-meta.json")
+
+            guard fm.fileExists(atPath: metaPath.path),
+                  let data = try? Data(contentsOf: metaPath) else { continue }
+
+            // Decode { name, path, lastSeen (ISO 8601) }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let name = json["name"] as? String,
+                  let projectPath = json["path"] as? String,
+                  let lastSeenStr = json["lastSeen"] as? String else { continue }
+
+            // Parse ISO 8601 date
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let lastSeen = formatter.date(from: lastSeenStr) ?? Date.distantPast
+
+            // Only include projects that still exist on disk
+            guard fm.fileExists(atPath: projectPath) else { continue }
+
+            projects.append(ProjectMeta(name: name, path: projectPath, lastSeen: lastSeen))
+        }
+
+        return projects.sorted { $0.lastSeen > $1.lastSeen }
+    }
+
     // MARK: - Private
 
     /// Global session directory: ~/.paradigm/sessions/{sha256-prefix}/

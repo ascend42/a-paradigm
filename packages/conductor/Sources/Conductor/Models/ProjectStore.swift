@@ -31,6 +31,7 @@ final class ProjectStore: ObservableObject {
 
     init() {
         load()
+        discoverAndMerge()
     }
 
     // MARK: - CRUD
@@ -71,6 +72,43 @@ final class ProjectStore: ObservableObject {
         projects.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
             return a.lastOpened > b.lastOpened
+        }
+    }
+
+    // MARK: - Discovery
+
+    /// Merge projects discovered from ~/.paradigm/sessions/ into the store.
+    /// Idempotent — safe to call on every launch.
+    func discoverAndMerge() {
+        let discovered = CheckpointReader.discoverAllProjects()
+        var changed = false
+
+        for meta in discovered {
+            if let idx = projects.firstIndex(where: { $0.path == meta.path }) {
+                // Update name and lastOpened if discovered data is newer
+                if meta.lastSeen > projects[idx].lastOpened {
+                    projects[idx].name = meta.name
+                    projects[idx].lastOpened = meta.lastSeen
+                    changed = true
+                }
+            } else {
+                // New project — add it
+                projects.append(RecentProject(
+                    id: UUID(),
+                    path: meta.path,
+                    name: meta.name,
+                    lastAgentRole: nil,
+                    lastOpened: meta.lastSeen,
+                    pinned: false
+                ))
+                changed = true
+            }
+        }
+
+        if changed {
+            save()
+            ConductorLog.component("project-store")
+                .info("Discovered \(discovered.count) projects, store now has \(projects.count)")
         }
     }
 

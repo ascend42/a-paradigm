@@ -1926,6 +1926,7 @@ program
   .command('conductor')
   .description('Launch Paradigm Conductor — multimodal mission control for Claude Code sessions')
   .option('--build', 'Force rebuild the native binary')
+  .option('--install', 'Install Conductor binary to ~/.paradigm/conductor/bin/')
   .option('-v, --verbose', 'Show build output')
   .action(async (options) => {
     const { conductorCommand } = await import('./commands/conductor.js');

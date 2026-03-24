@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0] — 2026-03-23
+
+### Added
+
+- **Conductor global install** — `paradigm conductor --install` builds and copies the native binary to `~/.paradigm/conductor/bin/`. Three-tier resolution: installed binary → monorepo dev binary → error with install instructions. `paradigm conductor` now works from any directory on the machine.
+- **Auto-discover projects on launch** — Conductor scans `~/.paradigm/sessions/` on startup and populates the project list from `_project-meta.json` files. All projects with Paradigm session history appear automatically.
+- **Resume/Open UX** — "Resume" button (when checkpoint exists) and "Open" button (when no checkpoint) launch an interactive Terminal.app session in the project directory. Claude auto-recovers context via `paradigm_session_recover`. "Headless" remains available for power users.
+- **Instance linking UI** — Link mode in Sessions section: tap the link icon, select 2+ projects, confirm to create a Symphony agent group. Linked instances can message each other via Symphony relay.
+
 ## [5.6.3] — 2026-03-22
 
 ### Fixed

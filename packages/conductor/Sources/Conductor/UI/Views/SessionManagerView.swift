@@ -1,16 +1,19 @@
 // SessionManagerView.swift — #session-manager-view
 // Dashboard: recent projects with checkpoint status + running headless agents.
-// Actions: continue, discard, launch, view log, pin.
+// Actions: resume, open, headless, discard, link instances, pin.
 
 import SwiftUI
 
 struct SessionManagerView: View {
     @ObservedObject var projectStore: ProjectStore
     @ObservedObject var agentManager: AgentProcessManager
+    @ObservedObject var agentGroupStore: AgentGroupStore
     let onLaunchInTerminal: (String) -> Void
 
     @State private var selectedLogAgent: UUID?
     @State private var showLaunchSheet = false
+    @State private var linkingMode = false
+    @State private var selectedForLinking: Set<String> = []  // project paths
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -20,12 +23,40 @@ struct SessionManagerView: View {
                     .font(.subheadline.bold())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button(action: { showLaunchSheet = true }) {
-                    Image(systemName: "plus.circle")
-                        .font(.subheadline)
+
+                if linkingMode {
+                    Text("\(selectedForLinking.count) selected")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Button("Link") {
+                        createGroupFromSelection()
+                    }
+                    .controlSize(.mini)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedForLinking.count < 2)
+
+                    Button("Cancel") {
+                        linkingMode = false
+                        selectedForLinking.removeAll()
+                    }
+                    .controlSize(.mini)
+                    .buttonStyle(.bordered)
+                } else {
+                    Button(action: { linkingMode = true }) {
+                        Image(systemName: "link.circle")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Link instances together")
+
+                    Button(action: { showLaunchSheet = true }) {
+                        Image(systemName: "plus.circle")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Launch new agent")
                 }
-                .buttonStyle(.borderless)
-                .help("Launch new agent")
             }
 
             // Recent projects
@@ -80,13 +111,20 @@ struct SessionManagerView: View {
     private func projectCard(_ project: RecentProject) -> some View {
         let checkpoint = CheckpointReader.readCheckpoint(projectPath: project.path)
         let hasAgent = agentManager.runningAgents.contains { $0.projectPath == project.path }
+        let isSelected = selectedForLinking.contains(project.path)
 
         return VStack(alignment: .leading, spacing: 4) {
             // Header row
             HStack(spacing: 6) {
-                Image(systemName: "folder.fill")
-                    .foregroundStyle(.cyan)
-                    .font(.caption)
+                if linkingMode {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? .blue : .secondary)
+                        .font(.caption)
+                } else {
+                    Image(systemName: "folder.fill")
+                        .foregroundStyle(.cyan)
+                        .font(.caption)
+                }
 
                 Text(project.name)
                     .font(.caption.bold())
@@ -127,58 +165,79 @@ struct SessionManagerView: View {
                 }
             }
 
-            // Action buttons
-            HStack(spacing: 6) {
-                if checkpoint != nil && !hasAgent {
-                    Button("Continue") {
-                        launchAgent(projectPath: project.path, role: project.lastAgentRole, resume: true)
-                    }
-                    .controlSize(.mini)
-                    .buttonStyle(.borderedProminent)
+            // Action buttons (hidden during linking mode)
+            if !linkingMode {
+                HStack(spacing: 6) {
+                    if !hasAgent {
+                        // Primary action: open interactive terminal session
+                        Button(checkpoint != nil ? "Resume" : "Open") {
+                            onLaunchInTerminal(project.path)
+                            projectStore.addOrUpdate(
+                                path: project.path,
+                                name: project.name,
+                                role: project.lastAgentRole
+                            )
+                        }
+                        .controlSize(.mini)
+                        .buttonStyle(.borderedProminent)
 
-                    Button("Discard") {
-                        discardCheckpoint(projectPath: project.path)
+                        // Secondary: headless agent (power user)
+                        Button("Headless") {
+                            launchAgent(projectPath: project.path, role: project.lastAgentRole, resume: checkpoint != nil)
+                        }
+                        .controlSize(.mini)
+                        .buttonStyle(.bordered)
+
+                        if checkpoint != nil {
+                            Button("Discard") {
+                                discardCheckpoint(projectPath: project.path)
+                            }
+                            .controlSize(.mini)
+                            .buttonStyle(.bordered)
+                        }
                     }
-                    .controlSize(.mini)
-                    .buttonStyle(.bordered)
-                } else if !hasAgent {
-                    Button("Launch") {
-                        launchAgent(projectPath: project.path, role: project.lastAgentRole, resume: false)
+
+                    Spacer()
+
+                    // Context menu for pin/remove
+                    Menu {
+                        Button(project.pinned ? "Unpin" : "Pin") {
+                            projectStore.togglePin(id: project.id)
+                        }
+                        Button("Remove", role: .destructive) {
+                            projectStore.remove(id: project.id)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .controlSize(.mini)
-                    .buttonStyle(.bordered)
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 20)
                 }
-
-                Button("Terminal") {
-                    onLaunchInTerminal(project.path)
-                }
-                .controlSize(.mini)
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                // Context menu for pin/remove
-                Menu {
-                    Button(project.pinned ? "Unpin" : "Pin") {
-                        projectStore.togglePin(id: project.id)
-                    }
-                    Button("Remove", role: .destructive) {
-                        projectStore.remove(id: project.id)
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .menuStyle(.borderlessButton)
-                .frame(width: 20)
             }
         }
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(isSelected
+                    ? Color.blue.opacity(0.1)
+                    : Color(nsColor: .controlBackgroundColor))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isSelected ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if linkingMode {
+                if selectedForLinking.contains(project.path) {
+                    selectedForLinking.remove(project.path)
+                } else {
+                    selectedForLinking.insert(project.path)
+                }
+            }
+        }
     }
 
     // MARK: - Running Agents Section
@@ -289,6 +348,39 @@ struct SessionManagerView: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color.black.opacity(0.8))
         )
+    }
+
+    // MARK: - Linking
+
+    private func createGroupFromSelection() {
+        guard selectedForLinking.count >= 2 else { return }
+
+        // Build group name from selected project names
+        let names = selectedForLinking.compactMap { path in
+            projectStore.projects.first(where: { $0.path == path })?.name
+        }
+        let groupName = names.prefix(3).joined(separator: " + ")
+
+        let group = agentGroupStore.createGroup(name: groupName)
+
+        for projectPath in selectedForLinking {
+            let projectName = URL(fileURLWithPath: projectPath).lastPathComponent
+            let agent = GroupedAgent(
+                id: UUID(),
+                projectPath: projectPath,
+                agentRole: "agent",
+                symphonyAgentId: "\(projectName)/agent",
+                managedAgentId: nil
+            )
+            agentGroupStore.addAgent(groupId: group.id, agent: agent)
+        }
+
+        ConductorLog.signal("instances-linked")
+            .info("Created group '\(groupName)' with \(selectedForLinking.count) instances")
+
+        // Reset
+        linkingMode = false
+        selectedForLinking.removeAll()
     }
 
     // MARK: - Helpers

@@ -104,6 +104,7 @@ struct ControlPanelContainer: View {
             SessionManagerView(
                 projectStore: projectStore,
                 agentManager: agentProcessManager,
+                agentGroupStore: agentGroupStore,
                 onLaunchInTerminal: { projectPath in
                     Task {
                         try? await workspaceManager.launchInstance(
