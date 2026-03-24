@@ -4,6 +4,24 @@
 
 import SwiftUI
 
+// MARK: - Control Panel Tab (used by ControlPanelContainer + StatusBarView)
+
+enum ControlPanelTab: String, CaseIterable {
+    case workspace = "Workspace"
+    case orchestrate = "Orchestrate"
+    case monitor = "Monitor"
+    case settings = "Settings"
+
+    var icon: String {
+        switch self {
+        case .workspace: return "square.grid.2x2"
+        case .orchestrate: return "target"
+        case .monitor: return "chart.bar"
+        case .settings: return "gear"
+        }
+    }
+}
+
 struct ControlPanelContainer: View {
     @Binding var isVisible: Bool
     @Binding var activeTab: ControlPanelTab

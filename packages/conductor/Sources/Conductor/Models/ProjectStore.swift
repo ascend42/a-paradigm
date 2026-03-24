@@ -108,7 +108,7 @@ final class ProjectStore: ObservableObject {
         if changed {
             save()
             ConductorLog.component("project-store")
-                .info("Discovered \(discovered.count) projects, store now has \(projects.count)")
+                .info("Discovered \(discovered.count) projects, store now has \(self.projects.count)")
         }
     }
 

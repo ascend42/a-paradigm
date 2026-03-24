@@ -30,6 +30,7 @@ struct MainOverlayView: View {
     @ObservedObject var threadWatcher: SymphonyThreadWatcher
 
     @State private var showAddInstance = false
+    @State private var showHelp = false
 
     init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager, taskStore: TaskStore, sentinelClient: SentinelWSClient, agentHealthMonitor: AgentHealthMonitor, threadWatcher: SymphonyThreadWatcher) {
         self._showOnboarding = State(initialValue: showOnboarding)
@@ -128,6 +129,18 @@ struct MainOverlayView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             inputToggles
+
+            Button(action: { showHelp = true }) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Conductor Guide")
+            .sheet(isPresented: $showHelp) {
+                HelpView(isPresented: $showHelp)
+            }
+
             statusIndicator
         }
         .padding(.horizontal, 12)
