@@ -1,0 +1,93 @@
+id: L-2026-03-24-ascend-023539-001
+type: milestone
+timestamp: '2026-03-24T02:35:39.698Z'
+duration_minutes: 90
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor v5.7.0 — Daily-Driver Milestone
+summary: Conductor transformed from a monorepo-only dev tool into a globally launchable daily-driver macOS app. Global binary install via `paradigm conductor --install`, auto-discovery of ~22 projects from session history, Resume/Open UX for terminal-based session recovery, and instance linking UI for Symphony-backed cross-project collaboration. Built on 20 sprints of existing infrastructure — the gap was access and discoverability, not capability.
+symbols_touched:
+  - '#conductor'
+  - '#project-store'
+  - '#checkpoint-reader'
+  - '#session-manager-view'
+  - '#terminal-launcher'
+  - '#agent-group'
+files_modified:
+  - packages/paradigm/src/commands/conductor.ts
+  - packages/paradigm/src/index.ts
+  - packages/conductor/Sources/Conductor/Models/ProjectStore.swift
+  - packages/conductor/Sources/Conductor/Services/CheckpointReader.swift
+  - packages/conductor/Sources/Conductor/UI/Views/SessionManagerView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/ControlPanelContainer.swift
+decisions:
+  - id: D-conductor-global-install
+    decision: 'Three-tier binary resolution: ~/.paradigm/conductor/bin/ → monorepo dev → error'
+    rationale: Simplest path to global access. No Homebrew tap, no npm binary package, just file copy. User runs --install once from monorepo, then works everywhere.
+  - id: D-conductor-resume-terminal
+    decision: Resume opens interactive terminal, not headless agent. Claude auto-recovers via MCP.
+    rationale: User wants to be at the helm — interactive sessions, not background agents. paradigm_session_recover already runs on session start, so no special injection needed.
+  - id: D-conductor-linking-groups
+    decision: Instance linking creates AgentGroupStore groups with Symphony agent IDs
+    rationale: All infrastructure exists (AgentGroupStore, NoteRelay, AgentPartManager). UI is just checkboxes + group creation. Real-time message passing requires /conduct registration, which is a known next step.
+learnings:
+  - 90% of the daily-driver gap was binary distribution and data population, not missing features
+  - SessionManagerView already had full project cards with checkpoint context — just needed better button labels and a data source
+  - ProjectStore was empty because nothing ever called addOrUpdate — auto-discovery from _project-meta.json files solved it in 30 lines of Swift
+  - Instance linking backend was fully built across 3 services (AgentGroupStore, AgentPartManager, NoteRelay) — only the selection UI was missing
+verification:
+  status: pass
+  details:
+    swift_build: pass
+    cli_build: pass
+    install_from_monorepo: pass
+    launch_from_desktop: pass
+    binary_size: 11.5MB
+tags:
+  - conductor
+  - daily-driver
+  - milestone
+  - ux
+body: |-
+  ## What Changed
+
+  Conductor has been a fully-featured macOS overlay app for 20 sprints — voice input, gaze tracking, gesture recognition, window tiling, Symphony integration, Sentinel live view, task dashboard, agent health monitoring. But it could only launch from inside the a-paradigm monorepo because `findConductorDir()` walked up from `__dirname` looking for `Package.swift`.
+
+  This session closed 4 gaps:
+
+  ### 1. Global Binary Install
+  `paradigm conductor --install` builds the Swift binary and copies it to `~/.paradigm/conductor/bin/conductor` (11.5MB, arm64). The launch command now checks there first, then falls back to monorepo dev binary, then errors with install instructions. Works from any directory.
+
+  ### 2. Auto-Discover Projects
+  `CheckpointReader.discoverAllProjects()` scans `~/.paradigm/sessions/*/` and reads `_project-meta.json` from each. `ProjectStore.discoverAndMerge()` runs on init, populating the project list with ~22 projects immediately. Filters out projects whose paths no longer exist on disk.
+
+  ### 3. Resume UX
+  Renamed buttons: "Resume" (with checkpoint, primary) → opens Terminal.app in project dir. "Open" (no checkpoint) → same. "Headless" → secondary, for power users who want background agents. The key insight: `paradigm_session_recover` runs automatically via MCP, so just opening a terminal in the right directory is sufficient for context recovery.
+
+  ### 4. Instance Linking
+  Link icon in Sessions header toggles linking mode. Select 2+ projects → "Link" creates an AgentGroup via AgentGroupStore with Symphony agent IDs. The group persists to `~/.paradigm/conductor/groups.json`. Backend infrastructure (NoteRelay, AgentPartManager, SymphonyMonitor) is fully built — linking is the last-mile UI.
+
+  ## What's Still Rough
+
+  - Terminal sessions need `/conduct` registration for Conductor to see them as live instances
+  - No auto-update for installed binary — need `--install` again after monorepo rebuild
+  - Instance linking creates groups but real-time Symphony messaging requires both sessions to have registered agent parts
+  - Project list shows all historical projects, no search/filter yet
+
+  ## Next: Brand Identity & Layout Overhaul
+
+  User wants:
+  - Sidebar (collapsible) + composable NxM grid for terminal cells
+  - In-app help system (? button with docs on capabilities, menus, what's rough)
+  - Full brand facelift across Conductor, Platform, Sentinel, Lore, University
+  - This is the beginning of a larger design initiative
+linked_commits:
+  - baa34b95
+confidence: 0.88
+git_context:
+  ref: baa34b95dc71cf406c46ef04c95d9f6d3765f81a
+  branch: main
+  dirty: true

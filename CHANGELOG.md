@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-discover projects on launch** — Conductor scans `~/.paradigm/sessions/` on startup and populates the project list from `_project-meta.json` files. All projects with Paradigm session history appear automatically.
 - **Resume/Open UX** — "Resume" button (when checkpoint exists) and "Open" button (when no checkpoint) launch an interactive Terminal.app session in the project directory. Claude auto-recovers context via `paradigm_session_recover`. "Headless" remains available for power users.
 - **Instance linking UI** — Link mode in Sessions section: tap the link icon, select 2+ projects, confirm to create a Symphony agent group. Linked instances can message each other via Symphony relay.
+- **In-app help system** — `?` button in both sidebar and container mode headers opens a 9-section guide: Overview, Sessions, Workspace, Linking, Symphony, Sentinel, Input, Shortcuts, and What's Rough. Documents capabilities, menus, keyboard shortcuts, and known limitations.
+- **Sidebar + composable NxM grid layout** — ContainerView rewritten with collapsible left sidebar (Sessions/Monitor/Sentinel/Settings tabs) and explicit grid presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) with mini visual icons in header. Replaces the TilingEngine binary-tree model with a simpler, user-controlled grid.
+- **GridPreset system** — `WorkspaceGrid` now accepts explicit `GridPreset` with column/row counts alongside legacy auto-calculated mode. Presets are selectable from the container header bar.
 
 ## [5.6.3] — 2026-03-22
 

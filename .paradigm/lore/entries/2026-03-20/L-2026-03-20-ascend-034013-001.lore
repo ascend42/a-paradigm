@@ -1,0 +1,115 @@
+id: L-2026-03-20-ascend-034013-001
+type: insight
+timestamp: '2026-03-20T03:40:13.927Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Discovery: agent learning loop infrastructure already exists — unconnected'
+summary: 'Deep codebase audit revealed that Paradigm already has all the pieces for a closed agent learning loop — lore with confidence/assessment/calibration, habits with practice events and graduation, session stats with tool usage tracking, notebooks for curated knowledge, and programmatic CLAUDE.md generation. The critical finding: none of these systems feed back into agent behavior. The observation layer is complete; the adaptation layer is missing entirely. This is the jumping-off point for a foundational discussion about how the framework should learn from its own usage.'
+symbols_touched:
+  - '#lore-loader'
+  - '#habits-loader'
+  - '#graduation-engine'
+  - '#session-tracker'
+  - '#notebook-loader'
+  - '#claude-adapter'
+  - '#stop-hook'
+decisions:
+  - id: observation-complete-adaptation-missing
+    decision: The observation layer is complete; the adaptation layer is the missing piece
+    rationale: Six systems collect data but none feed back into CLAUDE.md or agent behavior. The graduation pipeline proves the closed-loop pattern works — it just hasn't been applied to the instruction layer yet.
+  - id: claude-md-generation-is-leverage
+    decision: Programmatic CLAUDE.md generation is the key leverage point
+    rationale: claude.ts already generates CLAUDE.md from config. Injecting data-driven sections (tool usage, calibration insights, relevant notebooks) requires no change to user workflow — just richer inputs to the existing generator.
+tags:
+  - arc:agent-learning-loop
+  - meta
+  - architecture
+  - discovery
+  - foundational
+body: |-
+  ## What We Found
+
+  A thorough audit of the codebase uncovered six interconnected systems that already collect the data needed for agent learning:
+
+  ### 1. Lore System (fully implemented)
+  - `packages/paradigm-mcp/src/utils/lore-loader.ts`
+  - Records sessions with confidence scores (0.0-1.0)
+  - Human assessment verdicts (correct/partial/incorrect)
+  - Computes `assessment_delta` (implied score minus confidence)
+  - Calibration queries return accuracy rates and natural-language insights
+  - **Gap:** Calibration data is queryable but inert — never influences next session's instructions
+
+  ### 2. Habits & Graduation Pipeline (fully implemented)
+  - `packages/paradigm-mcp/src/utils/habits-loader.ts` + `graduation-engine.ts`
+  - Three tiers: MCP tool → Habit → Hook
+  - Practice events stored in Sentinel DB
+  - Compliance rates computed per category
+  - Auto-demotion at 3+ failures, 14-day cooldown
+  - **This IS a closed loop** — the only one in the system. Proof the pattern works.
+
+  ### 3. Session Stats & Breadcrumbs (fully implemented)
+  - `packages/paradigm-mcp/src/utils/session-tracker.ts`
+  - Tracks which MCP tools are called, response sizes, estimated token costs
+  - Auto-extracts breadcrumbs from tool calls
+  - Handoff recommendations at context thresholds
+  - **Gap:** Tool usage frequency is tracked but never used to prune CLAUDE.md guidance
+
+  ### 4. Agent Notebooks (fully implemented)
+  - `packages/paradigm-mcp/src/utils/notebook-loader.ts`
+  - Dual-scope: project-local + global (~/.paradigm/notebooks/)
+  - Concept-indexed, searchable, promotable from lore
+  - `appliedCount` field exists for tracking usage
+  - **Gap:** Notebooks require explicit search — they never surface proactively
+
+  ### 5. CLAUDE.md Generation (fully implemented)
+  - `packages/paradigm/src/core/ide-adapters/claude.ts`
+  - **Already programmatic** — reads config.yaml, emits sections
+  - Run via `paradigm sync-llms`
+  - **This is the key leverage point** — because generation is already code-driven, injecting data-driven sections requires no architectural change to the user's workflow
+
+  ### 6. Stop Hook (fully implemented)
+  - `packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh`
+  - 12 compliance checks, enforcement point for .purpose, lore, habits
+  - Auto-heals aspect drift, auto-demotes graduated habits
+  - **Already closes loops** on documentation freshness and habit compliance
+
+  ## The Core Insight
+
+  The data flow today is:
+
+  ```
+  DO → RECORD → ASSESS → (data sits in .paradigm/) → DO (same 8K CLAUDE.md)
+  ```
+
+  The graduation pipeline proves the pattern works:
+
+  ```
+  DO → RECORD (practice event) → ASSESS (compliance rate) → ADAPT (graduate/demote) → DO (hook runs instead of habit prompt)
+  ```
+
+  The question is: can we apply the graduation pattern to CLAUDE.md content and tool guidance?
+
+  ## Why This Matters
+
+  CLAUDE.md is ~8K tokens loaded every conversation. In today's session, ~80% was irrelevant. Over hundreds of sessions, that's enormous waste. But more importantly, the instructions never improve — an agent that consistently ignores `paradigm_ripple` still gets told to use it every session. An agent that's overconfident on aspect work (per calibration data) never gets told to slow down.
+
+  The infrastructure to fix this is already built. The wiring between systems is the missing piece.
+
+  ## What This Enables (if connected)
+
+  - CLAUDE.md that drops guidance for tools never used in this project
+  - Preflight briefings that surface relevant notebooks and recent lore
+  - Habit prompts that intensify for low-compliance areas and fade for mastered ones
+  - Calibration-aware guidance ("you tend to be overconfident on auth changes — verify gates")
+  - Cross-project learning via Symphony (notebook propagation)
+
+  This is not a feature request. This is the recognition that Paradigm's most important capability — teaching AI agents to work better over time — is architecturally ready but not yet activated.
+linked_lore:
+  - L-2026-03-20-ascend-033030-001
+confidence: 0.9
+git_context:
+  ref: b715424f9b02220137d6888a4926d2940851f729
+  branch: main
+  dirty: true

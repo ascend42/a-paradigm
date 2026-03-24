@@ -1,0 +1,151 @@
+id: L-2026-03-20-ascend-211333-001
+type: milestone
+timestamp: '2026-03-20T21:13:33.749Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm Ambient — Full Runtime Shipped (v5.1.0–v5.3.0)
+summary: Built the complete ambient coordination system across 3 releases (63 files, ~11K lines). Agents now observe a shared event stream, self-nominate contributions via attention scoring, and learn from human feedback. Includes nomination engine, 7 MCP tools, data policy enforcement, Platform UI with SSE, Symphony relay forwarding, journal-to-notebook promotion, surfacing config, graduation candidates, and PARA 601 university course.
+symbols_touched:
+  - '#nomination-engine'
+  - '#AmbientTools'
+  - '#event-stream'
+  - '#data-policy-loader'
+  - '#agent-loader'
+  - '#claude-adapter'
+  - '#AmbientSection'
+  - '#AmbientRouter'
+  - '#graduation-engine'
+  - '#symphony-relay'
+  - '#StreamsTools'
+  - $ambient-pipeline
+symbols_created:
+  - '#nomination-engine'
+  - '#AmbientTools'
+  - '#AmbientSection'
+  - '#AmbientRouter'
+files_created:
+  - packages/paradigm-mcp/src/utils/nomination-engine.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+  - packages/paradigm/src/commands/event.ts
+  - packages/paradigm/src/platform-server/routes/ambient.ts
+  - packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx
+  - packages/paradigm/platform-ui/src/sections/ambient/store/ambientStore.ts
+  - packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css
+  - packages/university/src/content/courses/para-601.json
+files_modified:
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/streams.ts
+  - packages/paradigm-mcp/src/tools/context.ts
+  - packages/paradigm-mcp/src/utils/agent-loader.ts
+  - packages/paradigm-mcp/src/utils/graduation-engine.ts
+  - packages/paradigm-mcp/src/utils/symphony-relay.ts
+  - packages/paradigm/src/core/ide-adapters/claude.ts
+  - packages/paradigm/src/core/ide-adapters/types.ts
+  - packages/paradigm/src/core/ide-adapters/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/platform-ui/src/store/platformStore.ts
+  - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+  - plugins/paradigm/scripts/paradigm-stop.sh
+  - plugins/paradigm/scripts/paradigm-postwrite.sh
+  - packages/university/src/content/plsat/v3.0.json
+  - packages/university/src/content/reference.json
+lines_added: 10955
+lines_removed: 6234
+decisions:
+  - id: d-emit-and-process
+    decision: Replace bare emitEvent calls with emitAndProcess that bundles policy check + emission + nomination processing
+    rationale: Single call site ensures every event goes through the full ambient pipeline. No way to accidentally emit without policy enforcement.
+  - id: d-fire-and-forget-hooks
+    decision: Hook event emission uses CLI paradigm event emit with & (background) instead of importing the MCP nomination engine
+    rationale: Hooks must be fast (<100ms). CLI writes directly to stream.jsonl with no nomination processing. Nominations are deferred to the next MCP tool call.
+  - id: d-surfacing-config
+    decision: Surfacing rules live in .paradigm/surfacing.yaml, not in agent files
+    rationale: Surfacing is a project-level preference (the human decides what noise level they want), not an agent-level behavior. Separating it lets you mute agents without editing their identity.
+  - id: d-journal-promotion
+    decision: Auto-promote journal entries with pattern_discovered trigger and confidence >= 0.8 to notebooks
+    rationale: Closes the learning loop mechanically. Without this, journal entries accumulate but never influence future sessions. Notebooks are what buildProfileEnrichment actually reads.
+  - id: d-sse-over-polling
+    decision: Platform ambient section uses SSE EventSource for events, polls only for nominations
+    rationale: Events are high-frequency (every file edit). SSE gives real-time updates without 10-second latency. Nominations are low-frequency and don't need sub-second delivery.
+learnings:
+  - The nomination brief quality matters more than the scoring algorithm — a mechanical 'symbol match on X' brief is useless even if the score is perfect. Role-aware contextual briefs make nominations actionable.
+  - Surfacing config is essential for adoption — without it, a noisy agent with a low threshold floods the human with irrelevant nominations and they disable the whole system.
+  - Symphony relay integration was simpler than expected — writing to the outbox directory is enough, the relay's file watcher picks it up. No direct WebSocket API needed from the nomination engine.
+  - The graduation pipeline connection (ambient → hooks) is the most architecturally significant piece — it means agent behaviors that prove reliable can eventually become automated enforcement, reducing the human-in-the-loop cost over time.
+  - SSE with incremental byte reads (tracking file offset) is more efficient than re-parsing the entire JSONL on each poll cycle, but requires handling file truncation edge cases.
+verification:
+  status: partial
+  details:
+    build_paradigm_mcp: pass
+    build_paradigm_cli: pass
+    cli_event_emit: pass
+    platform_ui_compiles: pass
+    live_pipeline_test: untested
+    platform_serve_test: untested
+tags:
+  - ambient
+  - milestone
+  - nomination-engine
+  - platform
+  - symphony
+  - graduation
+  - learning-loop
+  - v5.1.0
+  - v5.2.0
+  - v5.3.0
+body: |-
+  ## Architecture
+
+  The ambient system has three layers:
+
+  **Layer 1: Observation** — Events flow from hooks (post-write, stop) and MCP tool dispatch (9 emission points) into `.paradigm/events/stream.jsonl`. Append-only, bounded at 1000 events, queryable by type/source/symbol/agent/time.
+
+  **Layer 2: Processing** — The nomination engine scores each event against all agent attention patterns (4 dimensions: symbol, path, concept, signal). Agents above their threshold generate nominations. Overlapping nominations form debates. Data policy is enforced before scoring (agents can't observe denied paths).
+
+  **Layer 3: Surfacing** — Nominations surface via MCP tools (`paradigm_ambient_nominations`), recovery preamble (critical/high auto-surface at session start), and Platform UI (real-time SSE stream + nomination panel with accept/dismiss).
+
+  ## The Learning Loop
+
+  ```
+  DO → RECORD → OBSERVE → NOMINATE → ENGAGE → LEARN → ADAPT → DO
+  ```
+
+  - adjustAttentionFromFeedback: >60% dismissed → raise threshold, >80% accepted → lower
+  - autoPromoteJournalEntries: pattern_discovered + confidence >= 0.8 → notebook
+  - Notebooks feed into buildProfileEnrichment for next session
+
+  ## Data Sovereignty
+
+  Four trust rings enforced at every boundary:
+  1. project-locked (events, work-log, decisions)
+  2. user-scoped (journal entries)
+  3. creator-upstream (anonymized metrics only)
+  4. network-public (aggregated stats, opt-in)
+
+  ## Deliverables
+
+  | Version | Focus | Files |
+  |---------|-------|-------|
+  | v5.1.0 | Core runtime — engine, MCP tools, data policy, hooks, IDE adapters, university | 51 |
+  | v5.2.0 | Platform UI, learning loop, cross-session surfacing, substantive briefs | 17 |
+  | v5.3.0 | Symphony relay, graduation candidates, journal promotion, surfacing config, SSE, expanded emission | 14 |
+
+  ## Next Steps
+
+  - Run paradigm shift in deus-backend and deus-frontend to activate ambient
+  - Create .agent files for the workspace agents
+  - Live test the full pipeline: edit → event → score → nomination → engage → learn
+  - Verify Platform UI renders events and nominations correctly
+linked_commits:
+  - 187dcef1
+  - e9980834
+  - 88d55155
+confidence: 0.88
+git_context:
+  ref: 88d55155f195b6cbd21d3c92e04b1b1584480974
+  branch: main
+  dirty: true

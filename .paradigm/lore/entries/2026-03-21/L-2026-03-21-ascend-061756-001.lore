@@ -1,0 +1,80 @@
+id: L-2026-03-21-ascend-061756-001
+type: milestone
+timestamp: '2026-03-21T06:17:56.767Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Paradigm Ambient v5.0–5.3 complete, Maestro team collaboration spec finalized
+summary: 'Shipped the full ambient coordination system across 8 commits (v5.1.0–v5.3.3): nomination engine, 7 MCP tools, data policy enforcement, Platform UI with SSE, Symphony relay, journal-to-notebook promotion, surfacing config, graduation candidates, PARA 601 university course. Field-tested in deus-backend — found and fixed 4 critical bugs (post-write hook JSON corruption, scoring always 1.0, nomination spam, hook events invisible to nominations). Pivoted the Conductor team collaboration spec from persistent headless agents (token-bleeding) to Maestro model (subagent spawns with learning, 30-40x cheaper). Spec covers 5 phases through Neverland validation.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#AmbientTools'
+  - '#event-stream'
+  - '#data-policy-loader'
+  - '#agent-loader'
+  - '#claude-adapter'
+  - '#AmbientSection'
+  - '#AmbientRouter'
+  - '#graduation-engine'
+  - '#symphony-relay'
+  - '#StreamsTools'
+  - '#conductor'
+  - $ambient-pipeline
+  - $team-collab
+symbols_created:
+  - '#nomination-engine'
+  - '#AmbientTools'
+  - '#AmbientSection'
+  - '#AmbientRouter'
+decisions:
+  - id: d-maestro-not-persistent
+    decision: Maestro model (subagent spawns) instead of persistent headless agent sessions
+    rationale: Persistent agents bleed tokens via polling (600K/session). Maestro spawns one-shot subagents with enriched context — 30-40x cheaper (15-20K/session). Proven model, already works via Agent tool. Context growth and concurrent file edits become non-issues.
+  - id: d-ambient-as-memory
+    decision: Ambient system is the between-sessions memory layer, not the within-session collaboration engine
+    rationale: 'Field testing showed real-time ambient nominations are noisy and expensive. Ambient is better as the persistence layer: what agents learned, what patterns they discovered, what''s pending. Live collaboration uses Symphony messages written by Maestro during orchestration.'
+  - id: d-temp-file-hooks
+    decision: Hook scripts must use temp files for JSON parsing, never echo pipe
+    rationale: PostToolUse hook receives 8KB+ JSON (tool_response includes full file contents). echo corrupts escape sequences before jq sees them. Temp file + jq < file is the only reliable approach.
+learnings:
+  - Plugin cache keys on version number — same version means no re-fetch even if remote content changed. Must bump version to propagate fixes.
+  - PostToolUse hooks in Claude Code plugins DO fire for Edit/Write tools, but echo piping large JSON through shell corrupts it. The hook was running, just silently failing on JSON parse.
+  - Max-based attention scoring (Math.max of 4 dimensions) gives 1.0 whenever any single dimension fully matches — useless for ranking. Weighted scoring with primary/secondary weights creates actual gradient.
+  - The ambient nomination model works architecturally but the signal-to-noise ratio at default thresholds is terrible. Deduplication, surfacing config, and graduated thresholds are essential for adoption.
+  - Persistent headless agents are architecturally attractive but economically ruinous. The Maestro model (intelligent dispatcher with ephemeral subagents) achieves the same collaboration with 30-40x less token cost.
+verification:
+  status: partial
+  details:
+    build_paradigm_mcp: pass
+    build_paradigm_cli: pass
+    plugin_hooks: pass (after temp-file fix)
+    deus_field_test: partial — events flow, nominations fire, learning untested
+    conductor_team_ui: not started
+    neverland_validation: not started
+tags:
+  - ambient
+  - milestone
+  - conductor
+  - maestro
+  - field-test
+  - deus-backend
+  - v5.1.0
+  - v5.2.0
+  - v5.3.0
+  - v5.3.3
+body: '## Session Arc\n\nStarted with implementing the 6-phase ambient plan (nomination engine → MCP tools → data policy → hooks → context composition → university). Shipped all phases across v5.1.0–v5.3.0.\n\nField-tested in deus-backend with a second Opus instance writing a case study. Found 4 critical bugs:\n1. Post-write hook JSON corruption (echo pipe vs temp file)\n2. Attention scoring always returning 1.0 (max vs weighted)\n3. Nomination spam from rapid tool calls (needed dedup)\n4. Hook-emitted events invisible to nomination engine (needed catch-up processor)\n\nFixed all 4 in v5.3.1–v5.3.3. The field test revealed a deeper issue: ambient as a persistent multi-agent system bleeds tokens and is noisy. Pivoted the Conductor team collaboration spec from persistent headless agents to the Maestro model — the active Claude Code session orchestrates subagent spawns with enriched context.\n\n## Next Steps\n\n- Phase 1: Visible team orchestration (skill/behavioral changes)\n- Phase 2: Conductor ThreadView + RosterView (Swift)\n- Phase 3: Agent bench/activate + CLI roster command\n- Phase 4: Cross-platform web display\n- Phase 5: Neverland validation (10-session learning measurement)'
+linked_commits:
+  - 187dcef1
+  - e9980834
+  - 88d55155
+  - '15710710'
+  - bb09e939
+  - 723b3b4b
+  - ad2d46ea
+  - 6916c595
+confidence: 0.85
+git_context:
+  ref: 6916c595a70e350e247741434b304f055e5adb9b
+  branch: main
+  dirty: true

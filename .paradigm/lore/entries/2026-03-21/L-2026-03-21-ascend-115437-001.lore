@@ -1,0 +1,136 @@
+id: L-2026-03-21-ascend-115437-001
+type: milestone
+timestamp: '2026-03-21T11:54:37.804Z'
+duration_minutes: 180
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Maestro v5.4.0 — Full Team Orchestration Rollout
+summary: 'Shipped all 5 phases of Maestro team collaboration in a single session: visible orchestration with attributed agent responses, Conductor Swift views (TeamThreadView, AgentRosterView, SymphonyThreadWatcher), agent bench/activate system, Platform web Team dashboard, and Neverland validation metrics. Then field-tested on deus-backend, diagnosed the learning quality gap (generic briefs, flat scoring, self-silencing loop), and designed+implemented the Teacher Model — session work log, Maestro postflight learning pass, documentor agent, stale nomination expiry, and orchestration guidance rewrite.'
+symbols_touched:
+  - '#orchestration'
+  - '#conductor'
+  - '#platform'
+  - '#ambient'
+  - '#nomination-engine'
+  - '#session-work-log'
+  - '#university'
+  - '#agent-roster-view'
+  - '#team-thread-view'
+  - '#symphony-thread-watcher'
+  - '#TeamSection'
+  - $team-collab
+  - $neverland-validation
+symbols_created:
+  - '#session-work-log'
+  - '#team-thread-view'
+  - '#agent-roster-view'
+  - '#symphony-thread-watcher'
+  - '#TeamSection'
+  - '#teamStore'
+  - '#team-routes'
+files_created:
+  - packages/paradigm-mcp/src/utils/session-work-log.ts
+  - packages/conductor/Sources/Conductor/Services/SymphonyThreadWatcher.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TeamThreadView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/AgentRosterView.swift
+  - packages/paradigm/platform-ui/src/sections/team/TeamSection.tsx
+  - packages/paradigm/platform-ui/src/sections/team/store/teamStore.ts
+  - packages/paradigm/platform-ui/src/sections/team/styles/team.css
+  - packages/paradigm/src/platform-server/routes/team.ts
+  - docs/specs/maestro-learning.md
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+  - packages/paradigm-mcp/src/tools/agents.ts
+  - packages/paradigm-mcp/src/types/agents.ts
+  - packages/paradigm-mcp/src/types/ambient.ts
+  - packages/paradigm-mcp/src/utils/nomination-engine.ts
+  - packages/paradigm-mcp/src/utils/agent-loader.ts
+  - packages/paradigm-mcp/src/utils/session-tracker.ts
+  - packages/paradigm-mcp/src/resources/guidance.ts
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/paradigm/src/commands/agent/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - plugins/paradigm/skills/postflight/SKILL.md
+  - plugins/paradigm/skills/handoff/SKILL.md
+  - packages/university/src/content/courses/para-601.json
+decisions:
+  - id: D-MAESTRO-001
+    decision: Maestro as teacher — top-down learning from full session context, not bottom-up from thin events
+    rationale: 'Events are thin (file path only). The nomination engine can never have enough context to write good briefs. Maestro sees everything: code changes, agent contributions, user reactions, reasoning. Quality learning requires quality observation.'
+  - id: D-MAESTRO-002
+    decision: Documentor as dedicated 6th agent, always final stage, Paradigm files only
+    rationale: Separates compliance concern from implementation concern. Other agents focus on their domain. Stop hook remains as safety net but documentor should prevent it from triggering.
+  - id: D-MAESTRO-003
+    decision: Training new behaviors via notebook pipeline, not configuration
+    rationale: The journal → notebook → buildProfileEnrichment pipeline already carries knowledge forward. Teaching an agent new skills (e.g., 'also update CHANGELOG') is just writing a journal entry that promotes to a notebook. No new infrastructure needed.
+learnings:
+  - Field testing before declaring 'shipped' is essential — Phases 1-5 were mechanically correct but the learning quality was broken, only visible through real use
+  - The nomination engine's brief generation is the weakest link — it only sees file paths, producing generic templates that get dismissed regardless of agent relevance
+  - 'Self-silencing loop is the most dangerous failure mode: bad briefs → dismiss → threshold up → silence. The system optimizes for quiet instead of useful'
+  - Top-down learning (Maestro observes session) beats bottom-up learning (events trigger nominations) for quality. Bottom-up is still useful for 'should this agent speak up?' but quality comes from the teacher
+  - Stale pending nominations dilute engagement stats and block threshold adjustment — 7-day expiry is essential
+verification:
+  status: pass
+  details:
+    paradigm-mcp-build: pass
+    paradigm-cli-build: pass
+    conductor-build: pass (release)
+    type-check: pass (no errors)
+tags:
+  - arc:paradigm-renaissance
+  - maestro
+  - team-collab
+  - learning
+  - documentor
+  - field-test
+body: |-
+  ## What shipped
+
+  ### Maestro Phases 1-5 (conductor-team-collab spec)
+  - **P1**: Ambient context injection into agent profiles before spawning (decisions, journal, nominations via buildProfileEnrichment). Attribution prefix [nickname (role)] on every response. Symphony thr-orch-* thread recording.
+  - **P2**: Conductor Swift — TeamThreadView (chat-style with colored roles, intent badges, diffs, decisions), AgentRosterView (active/benched with stats), SymphonyThreadWatcher (3s poll).
+  - **P3**: AgentProfile.benched field. Orchestration + nomination engine skip benched agents. MCP paradigm_agent_bench/activate. CLI paradigm agent roster/bench/activate.
+  - **P4**: Platform web Team section — TeamSection.tsx + teamStore.ts + routes/team.ts. Roster grid, thread viewer, bench toggle via REST.
+  - **P5**: getNeverlandMetrics() — per-agent acceptance rates, thresholds, expertise, notebooks. Health classifier: cold-start → accumulating → calibrating → mature. paradigm_ambient_neverland MCP tool.
+
+  ### Field Test Results (deus-backend)
+  Opus ran a structured test modifying 7 files across auth, e2ee, moderation, DM features. Key findings:
+  - Event pipeline works (14 events fired correctly)
+  - Threshold adjustment works (builder 0.70→0.75, architect 0.50→0.55, security 0.40→0.45)
+  - BUT nomination briefs are generic templates ("review for consistency")
+  - Security at 0% accept rate despite auth/e2ee changes — blind to content
+  - Flat scoring: all builders 0.7, all others 0.5
+  - Self-silencing loop: bad briefs → dismissed → threshold rises → agent goes quiet
+
+  ### Teacher Model (maestro-learning spec)
+  Designed to fix the quality gap. Maestro as teacher, not just threshold adjuster:
+  - **Session work log**: JSONL at .paradigm/events/session-log.jsonl captures agent contributions + user verdicts with reasons
+  - **Postflight learning pass**: Maestro reads work log, writes targeted journal entries per agent (human_feedback for accepted, correction_received for dismissed)
+  - **Documentor agent**: 6th core agent, always final orchestration stage, handles .purpose/portal.yaml/reindex via MCP only
+  - **Stale expiry**: 7-day cutoff on pending nominations in stats
+  - **autoPromote expanded**: human_feedback trigger now promoted to notebooks alongside pattern_discovered
+  - **Guidance rewrite**: paradigm://guidance/orchestration fully documents Maestro model
+
+  ## Architecture insight
+  The learning pipeline (journal → notebook → buildProfileEnrichment) is also the mechanism for training agents with new behaviors. No separate "skill teaching" system needed — the pipeline IS the training mechanism. This only becomes visible once the learning loop produces quality entries, which is why the Teacher Model matters.
+linked_commits:
+  - 7422b47c
+  - 4713ffff
+  - e4c48081
+  - 64f88ff1
+  - d95bc370
+  - 2e35c7f0
+  - '99887104'
+  - '501e6532'
+  - c6df36b8
+confidence: 0.82
+git_context:
+  ref: c6df36b826d0197174f7bf567edf77346a9930f3
+  branch: main
+  dirty: true

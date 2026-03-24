@@ -1,0 +1,73 @@
+id: L-2026-03-20-ascend-033030-001
+type: insight
+timestamp: '2026-03-20T03:30:30.340Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Honest assessment: Paradigm ROI in a real work session'
+summary: After a full session of site polish, bug fixes, and feature work, assessed what Paradigm actually helped with vs. where it added overhead. The .purpose files, stop hook enforcement, lore system, and symbol language in commits delivered real value. The massive CLAUDE.md (~8K tokens/session), 100+ mostly-unused MCP tools, and lack of debugging assistance were identified as areas where cost exceeds benefit.
+symbols_touched:
+  - '#CLAUDE-md'
+  - '#paradigm-mcp'
+  - '#purpose-files'
+  - '#stop-hook'
+decisions:
+  - id: claude-md-too-large
+    decision: CLAUDE.md needs to be split into slim core + on-demand resources
+    rationale: ~8K tokens loaded every session, ~80% irrelevant to any given task. The context tax compounds across hundreds of sessions.
+  - id: tool-tiering-needed
+    decision: 100+ MCP tools need explicit tiering (essential vs situational)
+    rationale: Agents don't reach for tools they don't know about. A flat list of 100+ tools is effectively invisible.
+  - id: debugging-out-of-scope
+    decision: Accept that runtime debugging is outside Paradigm's domain
+    rationale: Paradigm is a context/navigation framework. Trying to make it surface path resolution bugs would dilute its core value.
+tags:
+  - arc:framework-roi
+  - meta
+  - assessment
+  - token-efficiency
+body: |-
+  ## Context
+
+  This assessment came after a session that included: rewriting 3 hero terminal scenarios with dual-pane support, multiple CSS layout fixes, university serve bug fix, PLSAT threshold change, seal component port, and getting-started doc rewrite. A genuine mix of creative work, debugging, and maintenance.
+
+  ## What Delivered Value
+
+  **1. .purpose files for orientation**
+  When searching for components (seal, footer, metrics section, CTA), the .purpose file in `packages/site/src/` gave immediate structure. Instead of blind grepping, I knew what existed and roughly where. Estimated savings: 5-10 exploratory reads per session (~2K-4K tokens).
+
+  **2. Stop hook enforcement**
+  The stop hook forced .purpose updates when source files changed. Without this, documentation would silently rot. This is the single most valuable piece of Paradigm — it makes the map self-maintaining. Zero context cost (runs as a hook, not an MCP call).
+
+  **3. Lore for decision capture**
+  The lore entry on the hero terminal rewrite captured WHY we chose 3 scenarios over 4, why dual-pane works the way it does, why we used ✉ instead of emoji. This is invisible value — it pays off when someone revisits the code months later.
+
+  **4. Symbol language in commits**
+  `#LiveGraph`, `#FauxTerminal` in commit trailers enables `git log --grep` by component. Cheap to add, genuinely useful for history traversal.
+
+  ## What Added Overhead Without Proportional Benefit
+
+  **1. CLAUDE.md context tax (~8K tokens)**
+  Loaded into every conversation. Contains full MCP tool reference tables, portal protocol docs, workspace setup, symphony docs, university docs, conductor docs, flow-first development, confidence calibration — most irrelevant to any given session. The 20/80 rule applies hard: ~20% of the content is used in ~80% of sessions.
+
+  **2. 100+ MCP tools, 2-3 used per session**
+  The tool surface area is overwhelming. `paradigm_reindex` and `paradigm_lore_record` were the only tools used. The rest sat idle. Agents don't instinctively reach for `paradigm_ripple` when they could just grep. The "when to use" guidance in CLAUDE.md is too buried in a massive table to be actionable.
+
+  **3. No debugging assistance**
+  The university serve bug (`../university-ui` vs `./university-ui`) was found by reading code and tracing path resolution. No Paradigm tool surfaced this. This may be an accepted boundary — Paradigm is context/navigation, not debugging — but it's worth noting.
+
+  ## Key Insight
+
+  Paradigm's value is **cumulative and asymmetric**: it costs the current session to maintain, but pays off in future sessions and handoffs. The challenge is that the current-session cost (CLAUDE.md tax, .purpose maintenance) is felt immediately, while the future-session benefit is invisible. This creates a perception gap even when the ROI is positive.
+
+  ## Proposed Improvements
+
+  1. **Slim CLAUDE.md to ~2K tokens** — Core essentials only (symbols, conventions, commit format, hooks). Move everything else to MCP resources loaded on demand.
+  2. **Tool tiering** — Identify 5-10 "always useful" tools vs. 90+ "situational" tools. Surface the essential ones prominently.
+  3. **Accept debugging as out-of-scope** — Don't try to make Paradigm a debugger. Double down on what it's good at: orientation, navigation, context preservation.
+confidence: 0.82
+git_context:
+  ref: b715424f9b02220137d6888a4926d2940851f729
+  branch: main
+  dirty: true

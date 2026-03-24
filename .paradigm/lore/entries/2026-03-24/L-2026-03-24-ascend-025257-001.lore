@@ -1,0 +1,98 @@
+id: L-2026-03-24-ascend-025257-001
+type: agent-session
+timestamp: '2026-03-24T02:52:57.235Z'
+duration_minutes: 45
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Help System + Sidebar/Grid Layout Rewrite
+summary: Added in-app help system (9-section HelpView accessible via ? button) and rewrote ContainerView from TilingEngine binary-tree to collapsible sidebar + composable NxM grid with explicit GridPreset picker (1x1 through 3x2). Also created design renaissance planning doc for future brand unification across all Paradigm surfaces.
+symbols_touched:
+  - '#conductor'
+  - '#container-view'
+  - '#help-view'
+  - '#workspace-grid'
+  - '#control-panel-container'
+  - '#session-manager-view'
+symbols_created:
+  - '#help-view'
+files_created:
+  - packages/conductor/Sources/Conductor/UI/Views/HelpView.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/ControlPanelContainer.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/Workspace/WorkspaceGrid.swift
+  - packages/conductor/Sources/Conductor/Models/ProjectStore.swift
+decisions:
+  - id: D-grid-over-tiling
+    decision: Replace TilingEngine binary-tree with explicit NxM GridPreset for ContainerView
+    rationale: User wants predictable grid layouts (1x1, 2x2, 3x2) they choose upfront, not dynamic binary splits. WorkspaceGrid already computed fixed cells — just needed explicit cols/rows instead of auto-calculation from instance count.
+  - id: D-sidebar-tabs
+    decision: Sidebar uses 4 tabs (Sessions/Monitor/Sentinel/Settings) instead of single scroll
+    rationale: Sidebar content is too diverse for one scroll view. Tabs let the user focus on what they need. Sessions is the primary tab, Monitor shows groups + tasks + health, Sentinel shows live events, Settings manages workspace preferences.
+  - id: D-help-sections
+    decision: 9 help sections with sidebar navigation and split-pane layout
+    rationale: Covers all major features including experimental ones (voice, gaze). 'What's Rough' section is honest about known limitations — sets expectations and builds trust.
+learnings:
+  - ContainerView TilingEngine was overengineered for the actual use case — fixed grid is simpler and more predictable
+  - ControlPanelTab enum was defined inside ContainerView — moving it to its own location in ControlPanelContainer.swift fixed cross-file reference issues
+  - SwiftUI sheet presentation from toolbar buttons works cleanly for help overlay without disrupting the main layout
+verification:
+  status: pass
+  details:
+    swift_build: pass
+    cli_build: pass
+    binary_install: pass
+    binary_size: 11.6MB
+tags:
+  - conductor
+  - ux
+  - help
+  - layout
+  - grid
+body: |-
+  ## Session Summary
+
+  This session continued the Conductor daily-driver initiative with two major additions:
+
+  ### 1. In-App Help System (HelpView.swift)
+
+  Created a comprehensive 9-section guide accessible via `?` button in both MainOverlayView and ContainerView headers. Sections:
+  - **Overview** — What is Conductor, getting started, key concepts
+  - **Sessions** — Project cards, Resume/Open/Headless/Discard actions
+  - **Workspace** — Grid layouts, window management, auto-arrange
+  - **Linking** — How to link instances, what groups do, registration requirement
+  - **Symphony** — Thread view, file approvals, trust config
+  - **Sentinel** — Live event stream, symbol filtering
+  - **Input** — Voice, gesture, gaze capabilities and limitations
+  - **Shortcuts** — Keyboard shortcuts and bindings
+  - **What's Rough** — Honest list of known limitations
+
+  ### 2. ContainerView Layout Rewrite
+
+  Replaced the TilingEngine binary-tree model with a simpler architecture:
+  - **Left sidebar** (collapsible, 320px) with 4 tabs: Sessions, Monitor, Sentinel, Settings
+  - **Right grid area** with explicit NxM presets: 1x1, 1x2, 2x1, 2x2, 3x1, 3x2
+  - **GridPreset picker** in header bar with mini visual icons showing the layout shape
+  - Each grid cell shows instance info (label, project dir, terminal app, status) or empty placeholder
+
+  The old TilingEngine with binary splits, divider handles, and recursive frame computation is still available for sidebar mode via WorkspaceView but no longer drives the container layout.
+
+  ### 3. Design Renaissance Planning
+
+  Created `~/.claude/plans/paradigm-design-renaissance.md` documenting the vision for brand unification across Conductor, Platform, Sentinel, Lore, University. Covers: color system, typography, iconography, component library, motion, dark/light modes. Parked for a dedicated design session.
+
+  ## What's Next
+
+  - Field test the grid layout and help system in real daily use
+  - Auto-register terminal sessions launched via Resume/Open with Conductor
+  - Begin design renaissance: mood board → token definition → Conductor first → Platform second
+linked_commits:
+  - 883de035
+confidence: 0.85
+git_context:
+  ref: 883de03586f7b76f10a316c65ae7585ddc7a7b9e
+  branch: main
+  dirty: true

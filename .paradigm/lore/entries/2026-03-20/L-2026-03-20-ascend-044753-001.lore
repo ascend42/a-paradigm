@@ -1,0 +1,80 @@
+id: L-2026-03-20-ascend-044753-001
+type: agent-session
+timestamp: '2026-03-20T04:47:53.745Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Architecture session: Agent Manifest, Ambient Coordination, Lore Split, Data Sovereignty'
+summary: 'Extended architecture session designing four foundational systems for the Paradigm Renaissance. Produced detailed specs for: (1) Agent Manifest with 6 new dimensions + dual learning layers, (2) Ambient Coordination via event stream + attention filtering + self-nomination + debate protocol, (3) Lore Split into work log / learning journal / team decisions, (4) IP and Data Sovereignty with four trust rings, always-on local brain, and three deployment tiers (individual/team/enterprise). All architecture is captured in the plan file at .claude/plans/twinkling-booping-nest.md — ready for vision spec synthesis in next session.'
+symbols_touched:
+  - '#paradigm'
+  - '#symphony'
+  - '#lore-loader'
+  - '#agents-registry'
+  - '#conductor'
+  - '#data-policy'
+decisions:
+  - id: local-brain-always-on
+    decision: Every agent gets an always-on local encrypted brain — learning is the default, upstream flow is the controlled boundary
+    rationale: The whole value of renting an agent is that it gets better at YOUR project. Without local learning, every session starts from zero. What's gated is what flows back to the creator/network, not what's learned locally.
+  - id: three-deployment-tiers
+    decision: Individual (gated upstream), Team (federated brains), Enterprise (all doors open within org)
+    rationale: Enterprise agents that learn from all developers in the org create compound intelligence — the real enterprise value prop. Individual users maintain full control over upstream flow.
+  - id: four-trust-rings
+    decision: project-locked → user-scoped → creator-upstream → network-public with platform enforcement
+    rationale: Agents can't circumvent the data policy because denied data never reaches them. The platform filters at the event level, before attention.
+tags:
+  - arc:paradigm-renaissance
+  - architecture
+  - agent-manifest
+  - ambient-coordination
+  - data-sovereignty
+  - foundational
+body: |-
+  ## Architecture Produced
+
+  ### 1. Agent Manifest (6 new dimensions)
+  - **Attention patterns** — continuous relevance filters (vs triggers for dispatch)
+  - **Learning protocol** — dual layer: intrinsic (agent-driven) + platform (mandated feedback)
+  - **Context contributions** — agents compose CLAUDE.md, not consume it
+  - **Work reporting** — structured work log protocol
+  - **Collaboration stance** — peer/advisory/supportive/observer with per-agent overrides
+  - **Self-nomination** — speak-when and quiet-when rules with relevance thresholds
+
+  ### 2. Ambient Coordination
+  - Event stream extracted from tool calls, file edits, conversation
+  - Per-agent attention filtering with scoring
+  - Nominations (not interruptions) with urgency-based surfacing
+  - Debate protocol for conflicting nominations
+  - Symphony evolves: ambient + direct + broadcast modes coexist
+
+  ### 3. Lore Split
+  - Work Log: auto-recorded, task-structured, project-scoped, ephemeral
+  - Learning Journal: agent-private, intrinsic, travels with agent, promotes to notebooks
+  - Team Decisions: ADR-style, attributed with participant stances, institutional
+  - Backward compatible: existing lore stays, new stream parameter added
+
+  ### 4. Data Sovereignty
+  - Four trust rings: project-locked → user-scoped → creator-upstream → network-public
+  - **Local brain is always on** — every agent learns locally, encrypted, user owns it
+  - Upstream flow is the gated boundary, not local learning
+  - Three deployment tiers: individual (gated upstream), team (federated brains), enterprise (all doors open within org)
+  - Platform-enforced, not agent-trusted — denied data never reaches the agent
+  - Automatic redaction, audit trails, agent-specific overrides
+
+  ## Key Decision
+  The local brain reframed the entire trust model. The question isn't "should agents learn?" (always yes, locally). The question is "what flows upstream?" Enterprise value prop: org-wide collective intelligence that compounds across all developers.
+
+  ## Plan File
+  Full architecture with YAML examples at: `.claude/plans/twinkling-booping-nest.md`
+  Ready for synthesis into formal vision spec in next session.
+linked_lore:
+  - L-2026-03-20-ascend-042119-001
+  - L-2026-03-20-ascend-034013-001
+  - L-2026-03-20-ascend-033030-001
+confidence: 0.9
+git_context:
+  ref: b715424f9b02220137d6888a4926d2940851f729
+  branch: main
+  dirty: true
