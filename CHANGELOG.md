@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.10.0] — 2026-03-24
+
+### Added
+
+- **Agent state system** — Per-project state at `.paradigm/agent-state/{id}.yaml` tracks last session summary, pending work, decisions, patterns learned, and session count. Global state at `~/.paradigm/agents/{id}/state.yaml` tracks career stats across all projects. State is injected into agent prompts so agents remember what they did last session.
+- **Proactive documentor** — Post-write hook now recommends documentor at 5+ uncovered files. Documentor agent profile updated with `compliance-violation` signal attention and proactive coverage behavior.
+- **Auto learning feedback** — Session work log verdicts (accepted/dismissed/revised) auto-adjust agent expertise confidence (+0.03 on accept, -0.02 on dismiss, -0.01 on revise). Expertise evolves through real usage, not just manual curation.
+- **State-aware agent list** — `paradigm_agent_list` now includes last session summary, age, pending work count, and sessions-on-project from agent state.
+- **Orchestration writes agent state** — Each agent that participates in orchestration gets their project state updated with session summary and touched symbols.
+
 ## [5.9.1] — 2026-03-24
 
 ### Added

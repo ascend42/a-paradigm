@@ -433,6 +433,12 @@ export function buildProfileEnrichment(
     recentDecisions?: Array<{ title: string; decision: string }>;
     journalInsights?: Array<{ trigger: string; insight: string }>;
     pendingNominations?: Array<{ urgency: string; brief: string }>;
+  },
+  agentState?: {
+    lastSession?: { summary: string; date: string };
+    pendingWork?: string[];
+    recentPatterns?: string[];
+    sessionsOnProject?: number;
   }
 ): string {
   const parts: string[] = [];
@@ -483,6 +489,34 @@ export function buildProfileEnrichment(
       parts.push('```');
       parts.push('');
     }
+  }
+
+  // Agent state — recent work on this project
+  if (agentState) {
+    parts.push('');
+    parts.push('## Your Recent Work on This Project');
+    if (agentState.lastSession) {
+      const ageMs = Date.now() - new Date(agentState.lastSession.date).getTime();
+      const ageHours = Math.floor(ageMs / (60 * 60 * 1000));
+      const ageStr = ageHours < 24 ? `${ageHours}h ago` : `${Math.floor(ageHours / 24)}d ago`;
+      parts.push(`Last session (${ageStr}): ${agentState.lastSession.summary}`);
+    }
+    if (agentState.sessionsOnProject) {
+      parts.push(`Sessions on this project: ${agentState.sessionsOnProject}`);
+    }
+    if (agentState.pendingWork?.length) {
+      parts.push('**Pending from last session:**');
+      for (const item of agentState.pendingWork.slice(0, 5)) {
+        parts.push(`- ${item}`);
+      }
+    }
+    if (agentState.recentPatterns?.length) {
+      parts.push('**Project patterns you\'ve learned:**');
+      for (const pattern of agentState.recentPatterns.slice(0, 5)) {
+        parts.push(`- ${pattern}`);
+      }
+    }
+    parts.push('');
   }
 
   // Attention patterns (what this agent notices)

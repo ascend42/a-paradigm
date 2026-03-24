@@ -62,6 +62,33 @@ export function appendSessionWorkEntry(rootDir: string, entry: SessionWorkEntry)
 
     const line = JSON.stringify(entry) + '\n';
     fs.appendFileSync(filePath, line, 'utf8');
+
+    // Auto-adjust expertise based on verdicts (fire-and-forget)
+    if (entry.type === 'user-verdict' && entry.agent && entry.symbols?.length) {
+      import('./agent-loader.js').then(({ loadAgentProfile, saveAgentProfile }) => {
+        try {
+          const profile = loadAgentProfile(rootDir, entry.agent!);
+          if (profile?.expertise) {
+            const delta = entry.verdict === 'accepted' ? 0.03
+              : entry.verdict === 'dismissed' ? -0.02
+              : entry.verdict === 'revised' ? -0.01
+              : 0;
+
+            if (delta !== 0) {
+              for (const symbol of entry.symbols!) {
+                const exp = profile.expertise!.find(e => e.symbol === symbol);
+                if (exp) {
+                  exp.confidence = Math.max(0, Math.min(1, exp.confidence + delta));
+                  exp.sessions = (exp.sessions || 0) + 1;
+                  exp.lastTouch = new Date().toISOString();
+                }
+              }
+              saveAgentProfile(entry.agent!, profile, 'global');
+            }
+          }
+        } catch { /* non-fatal */ }
+      }).catch(() => { /* non-fatal */ });
+    }
   } catch {
     // Non-fatal — work log is advisory
   }

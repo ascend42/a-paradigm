@@ -18,6 +18,7 @@ import {
   saveProjectRoster,
   listAllGlobalAgentIds,
 } from '../utils/agent-loader.js';
+import { loadAgentState, loadAllAgentStates } from '../utils/agent-state.js';
 
 /**
  * Get list of agent identity tools with safety annotations
@@ -154,17 +155,29 @@ export async function handleAgentTool(
       const activeProfiles = roster ? profiles.filter(p => roster.includes(p.id)) : profiles;
       const inactiveCount = roster ? profiles.length - activeProfiles.length : 0;
 
+      // Load agent states for project context
+      const allStates = loadAllAgentStates(ctx.rootDir);
+      const stateMap = new Map(allStates.map(s => [s.id, s]));
+
       return {
         handled: true,
         text: JSON.stringify({
           count: activeProfiles.length,
           totalAvailable: profiles.length,
           ...(roster ? { rosterActive: true, inactiveCount } : { rosterActive: false }),
-          agents: activeProfiles.map(p => ({
+          agents: activeProfiles.map(p => {
+            const state = stateMap.get(p.id);
+            return {
             id: p.id,
             role: p.role,
             nickname: p.nickname,
             personality: p.personality,
+            ...(state ? {
+              lastSession: state.lastSession?.summary?.slice(0, 100),
+              lastSessionAge: state.lastSession?.date,
+              pendingWork: state.pendingWork?.length || 0,
+              sessionsOnProject: state.sessionsOnProject || 0,
+            } : {}),
             topExpertise: (p.expertise || [])
               .sort((a, b) => b.confidence - a.confidence)
               .slice(0, 5)
@@ -176,7 +189,7 @@ export async function handleAgentTool(
             projectContexts: Object.keys(p.contexts || {}),
             transferableCount: (p.transferable || []).length,
             ...(p.attention?.threshold != null ? { threshold: p.attention.threshold } : {}),
-          })),
+          }}),
         }, null, 2),
       };
     }

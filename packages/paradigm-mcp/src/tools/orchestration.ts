@@ -614,6 +614,7 @@ async function handleOrchestrateInline(
     const { loadDecisions } = await import('../utils/decision-loader.js');
     const { loadJournalEntries } = await import('../utils/journal-loader.js');
     const { loadNominations } = await import('../utils/nomination-engine.js');
+    const { loadAgentState: loadState } = await import('../utils/agent-state.js');
 
     // Load ambient context once (shared across all agents)
     const recentDecisions = loadDecisions(ctx.rootDir, { status: 'active', limit: 5 })
@@ -635,11 +636,19 @@ async function handleOrchestrateInline(
               limit: 5,
             }).map(j => ({ trigger: j.trigger, insight: j.insight.slice(0, 150) }));
 
+            // Load agent's project state for continuity
+            const agentProjectState = loadState(agentStep.name, ctx.rootDir);
+
             let enrichment = buildProfileEnrichment(profile, symbols, undefined, {
               recentDecisions,
               journalInsights,
               pendingNominations,
-            });
+            }, agentProjectState ? {
+              lastSession: agentProjectState.lastSession,
+              pendingWork: agentProjectState.pendingWork,
+              recentPatterns: agentProjectState.recentPatterns,
+              sessionsOnProject: agentProjectState.sessionsOnProject,
+            } : undefined);
 
             // Append permission constraints if set
             if (profile.permissions) {
@@ -732,6 +741,23 @@ async function handleOrchestrateInline(
           contribution: agent.taskDescription?.slice(0, 200) || task.slice(0, 200),
           attribution: agent.attribution,
           symbols,
+        });
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // Record agent state for each participating agent
+  try {
+    const { recordAgentSession } = await import('../utils/agent-state.js');
+    const sessionTracker = await import('../utils/session-tracker.js');
+    const sessionId = sessionTracker.default?.session?.sessionId || orchestrationId;
+
+    for (const stage of stagePrompts) {
+      for (const agent of stage.agents) {
+        recordAgentSession(agent.agent, ctx.rootDir, {
+          sessionId,
+          summary: `${agent.attribution || agent.agent}: ${(agent.taskDescription || task).slice(0, 200)}`,
+          symbolsTouched: symbols,
         });
       }
     }
