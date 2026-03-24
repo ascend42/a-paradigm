@@ -33,9 +33,60 @@ import { DEFAULT_PERSONALITIES, DEFAULT_ATTENTION, DEFAULT_COLLABORATION } from 
 const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.paradigm', 'agents');
 const PROJECT_AGENTS_DIR = '.paradigm/agents';
 const AGENT_EXT = '.agent';
+const ROSTER_FILE = '.paradigm/roster.yaml';
 
 /** Exponential moving average weight for new observations */
 const EMA_ALPHA = 0.3;
+
+// ────────────────────────────────────────────────────────
+// Roster Operations
+// ────────────────────────────────────────────────────────
+
+/**
+ * Load the project roster (list of active agent IDs for this project).
+ * Returns null if no roster.yaml exists (backward compat: all agents active).
+ */
+export function loadProjectRoster(rootDir: string): string[] | null {
+  const rosterPath = path.join(rootDir, ROSTER_FILE);
+  if (!fs.existsSync(rosterPath)) return null;
+  try {
+    const data = yaml.load(fs.readFileSync(rosterPath, 'utf8')) as { active?: string[] };
+    return data?.active ?? null;
+  } catch { return null; }
+}
+
+/**
+ * Check if an agent is active on this project.
+ * No roster = all active (backward compat).
+ */
+export function isAgentActive(agentId: string, rootDir: string): boolean {
+  const roster = loadProjectRoster(rootDir);
+  if (!roster) return true;
+  return roster.includes(agentId);
+}
+
+/**
+ * Save a project roster.
+ */
+export function saveProjectRoster(rootDir: string, active: string[]): void {
+  const rosterPath = path.join(rootDir, ROSTER_FILE);
+  const dir = path.dirname(rosterPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const data = { version: '1.0', active: active.sort() };
+  fs.writeFileSync(rosterPath, yaml.dump(data, { lineWidth: -1, noRefs: true }), 'utf8');
+}
+
+/**
+ * List all global agent IDs (without loading full profiles).
+ */
+export function listAllGlobalAgentIds(): string[] {
+  if (!fs.existsSync(GLOBAL_AGENTS_DIR)) return [];
+  try {
+    return fs.readdirSync(GLOBAL_AGENTS_DIR)
+      .filter(f => f.endsWith(AGENT_EXT))
+      .map(f => f.replace(AGENT_EXT, ''));
+  } catch { return []; }
+}
 
 // ────────────────────────────────────────────────────────
 // Read Operations

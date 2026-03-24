@@ -199,7 +199,7 @@ export async function handleNotebookTool(
       const concepts = (args.concepts as string[]) || [];
       const tags = (args.tags as string[]) || [];
       const confidence = (args.confidence as number) ?? 0.7;
-      const scope = (args.scope as 'global' | 'project') || 'global';
+      const scope = (args.scope as 'global' | 'project') || (ctx.rootDir ? 'project' : 'global');
 
       const result = addNotebookEntry(
         agentId,
@@ -231,7 +231,7 @@ export async function handleNotebookTool(
     case 'paradigm_notebook_promote': {
       const agentId = args.agentId as string;
       const loreEntryId = args.loreEntryId as string;
-      const scope = (args.scope as 'global' | 'project') || 'global';
+      const scope = (args.scope as 'global' | 'project') || (ctx.rootDir ? 'project' : 'global');
 
       const result = await promoteFromLore(agentId, loreEntryId, ctx.rootDir, scope);
 

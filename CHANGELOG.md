@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.2] — 2026-03-24
+
+### Added
+
+- **Per-project agent roster** — New `.paradigm/roster.yaml` file controls which agents are active on each project. No roster = all agents available (backward compatible). Orchestrator only considers roster agents when planning. Bench/activate now modify the project roster instead of global `.agent` files.
+- **Project type detection** — `paradigm shift` auto-detects project type (SaaS web app, web app, backend API, iOS app, game, etc.) from file signatures and suggests an appropriate agent roster.
+- **Roster setup in paradigm shift** — Shift now creates `.paradigm/roster.yaml` with a suggested roster based on detected project type (e.g., 24 agents for SaaS, 11 for game, 8 for generic).
+- **Agent list shows roster status** — `paradigm_agent_list` now shows active count, total available, and whether a roster is active.
+- **Project-scoped notebook writes** — `paradigm_notebook_add` now defaults to project scope (`.paradigm/notebooks/`) instead of global when inside a project. Agent learning stays project-local.
+
 ## [5.8.1] — 2026-03-23
 
 ### Fixed

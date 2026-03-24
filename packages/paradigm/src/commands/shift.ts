@@ -24,6 +24,7 @@ import { agentsConfigured } from './team/loader.js';
 import { hooksInstallCommand } from './hooks/index.js';
 import { detectDiscipline } from '../core/discipline.js';
 import { detectProjectRole } from './workspace/index.js';
+import { detectProjectType, ROSTER_SUGGESTIONS } from '../core/project-type.js';
 
 export interface ShiftOptions {
   force?: boolean;
@@ -265,6 +266,28 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     spinner.succeed(chalk.gray('Step 2/6: Team already configured (use --force to reinit)'));
   }
 
+  // Step 2c: Agent roster setup
+  const rosterPath = path.join(cwd, '.paradigm', 'roster.yaml');
+  if (!fs.existsSync(rosterPath) || options.force) {
+    try {
+      const projectType = detectProjectType(cwd);
+      const suggested = ROSTER_SUGGESTIONS[projectType] || ROSTER_SUGGESTIONS['generic'];
+      const rosterData = { version: '1.0', project: projectName, type: projectType, active: suggested.sort() };
+      fs.writeFileSync(rosterPath, yaml.dump(rosterData, { lineWidth: -1, noRefs: true }), 'utf8');
+      console.log(chalk.green(`  ✓ Agent roster set: ${chalk.cyan(suggested.length)} agents for ${chalk.cyan(projectType)}`));
+    } catch (e) {
+      log.operation('shift').debug('Roster setup failed', { error: (e as Error).message });
+    }
+  } else {
+    try {
+      const existing = yaml.load(fs.readFileSync(rosterPath, 'utf8')) as { active?: string[] };
+      const count = existing?.active?.length ?? 0;
+      console.log(chalk.gray(`  ✓ Agent roster exists (${count} agents active)`));
+    } catch {
+      console.log(chalk.gray('  ✓ Agent roster exists'));
+    }
+  }
+
   // Step 3: Scan/Index
   if (!options.quick) {
     spinner.start('Step 3/6: Scanning and indexing symbols...');
@@ -435,6 +458,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: '.paradigm/lore/', desc: 'Project lore timeline', isDir: true },
     { path: 'portal.yaml', desc: 'Authorization gates' },
+    { path: '.paradigm/roster.yaml', desc: 'Agent roster for this project' },
     { path: 'CLAUDE.md', desc: 'Claude Code AI instructions' },
     { path: 'AGENTS.md', desc: 'Universal AI agent instructions' },
     { path: '.cursor/rules/', desc: 'Cursor AI instructions', isDir: true },

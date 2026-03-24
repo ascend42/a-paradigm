@@ -14,6 +14,9 @@ import {
   saveAgentProfile,
   queryExpertise,
   verifyIntegrity,
+  loadProjectRoster,
+  saveProjectRoster,
+  listAllGlobalAgentIds,
 } from '../utils/agent-loader.js';
 
 /**
@@ -135,6 +138,7 @@ export async function handleAgentTool(
   switch (name) {
     case 'paradigm_agent_list': {
       const profiles = loadAllAgentProfiles(ctx.rootDir);
+      const roster = loadProjectRoster(ctx.rootDir);
 
       if (profiles.length === 0) {
         return {
@@ -147,15 +151,19 @@ export async function handleAgentTool(
         };
       }
 
+      const activeProfiles = roster ? profiles.filter(p => roster.includes(p.id)) : profiles;
+      const inactiveCount = roster ? profiles.length - activeProfiles.length : 0;
+
       return {
         handled: true,
         text: JSON.stringify({
-          count: profiles.length,
-          agents: profiles.map(p => ({
+          count: activeProfiles.length,
+          totalAvailable: profiles.length,
+          ...(roster ? { rosterActive: true, inactiveCount } : { rosterActive: false }),
+          agents: activeProfiles.map(p => ({
             id: p.id,
             role: p.role,
             nickname: p.nickname,
-            benched: p.benched || false,
             personality: p.personality,
             topExpertise: (p.expertise || [])
               .sort((a, b) => b.confidence - a.confidence)
@@ -266,15 +274,24 @@ export async function handleAgentTool(
           text: JSON.stringify({ error: `Agent "${benchId}" not found` }, null, 2),
         };
       }
-      benchProfile.benched = true;
-      benchProfile.updated = new Date().toISOString();
-      saveAgentProfile(benchId, benchProfile, 'global');
+
+      // Remove from project roster (roster-scoped, not global)
+      let currentRoster = loadProjectRoster(ctx.rootDir);
+      if (currentRoster) {
+        currentRoster = currentRoster.filter(id => id !== benchId);
+      } else {
+        // No roster yet — create one with all agents MINUS this one
+        currentRoster = listAllGlobalAgentIds().filter(id => id !== benchId);
+      }
+      saveProjectRoster(ctx.rootDir, currentRoster);
+
       return {
         handled: true,
         text: JSON.stringify({
           id: benchId,
-          benched: true,
-          note: `${benchId} is now benched. Maestro will skip this agent during orchestration.`,
+          removedFromRoster: true,
+          rosterCount: currentRoster.length,
+          note: `${benchId} removed from this project's roster. Still available globally.`,
         }, null, 2),
       };
     }
@@ -288,15 +305,26 @@ export async function handleAgentTool(
           text: JSON.stringify({ error: `Agent "${activateId}" not found` }, null, 2),
         };
       }
-      activateProfile.benched = false;
-      activateProfile.updated = new Date().toISOString();
-      saveAgentProfile(activateId, activateProfile, 'global');
+
+      // Add to project roster
+      let activateRoster = loadProjectRoster(ctx.rootDir);
+      if (activateRoster) {
+        if (!activateRoster.includes(activateId)) {
+          activateRoster.push(activateId);
+          saveProjectRoster(ctx.rootDir, activateRoster);
+        }
+      } else {
+        // No roster = all active already; create roster with all + this one explicitly
+        // (no-op in practice, but makes roster explicit)
+      }
+
       return {
         handled: true,
         text: JSON.stringify({
           id: activateId,
-          benched: false,
-          note: `${activateId} is now active. Maestro will include this agent in orchestration.`,
+          addedToRoster: true,
+          rosterCount: activateRoster?.length ?? 'all (no roster)',
+          note: `${activateId} is active on this project's roster.`,
         }, null, 2),
       };
     }

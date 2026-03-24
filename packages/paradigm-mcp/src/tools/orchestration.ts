@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
+import { loadProjectRoster } from '../utils/agent-loader.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
@@ -496,6 +497,16 @@ async function handleOrchestrateInline(
     return { handled: true, text };
   }
 
+  // Filter agents by project roster (if roster.yaml exists)
+  const roster = loadProjectRoster(ctx.rootDir);
+  if (roster && manifest.agents) {
+    const filtered: Record<string, AgentDefinition> = {};
+    for (const [id, def] of Object.entries(manifest.agents)) {
+      if (roster.includes(id)) filtered[id] = def;
+    }
+    manifest.agents = filtered;
+  }
+
   // Extract symbols from task
   const symbols = extractSymbols(task);
 
@@ -756,6 +767,18 @@ async function handleAgentPrompt(
 
   // Load agents manifest
   const manifest = loadAgentsManifest(ctx.rootDir);
+
+  // Check if agent is on the project roster (if roster exists)
+  const rosterForPrompt = loadProjectRoster(ctx.rootDir);
+  if (rosterForPrompt && !rosterForPrompt.includes(agentName)) {
+    const text = JSON.stringify({
+      warning: `Agent "${agentName}" is not on this project's roster`,
+      suggestion: `Run paradigm_agent_activate id="${agentName}" to add it, or check .paradigm/roster.yaml`,
+      activeRoster: rosterForPrompt,
+    }, null, 2);
+    trackToolCall(text.length, 'paradigm_agent_prompt');
+    return { handled: true, text };
+  }
 
   // Get agent definition — merge manifest with defaults to handle partial definitions
   const manifestAgent = manifest?.agents[agentName];
