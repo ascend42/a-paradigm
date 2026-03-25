@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 2.0.0
 description: |
   @a-company/probe-core - Visual discovery layer for AI agents.
   Generates scan indexes for UI-to-code mapping via screenshots.

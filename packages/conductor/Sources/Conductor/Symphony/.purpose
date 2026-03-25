@@ -1,5 +1,5 @@
 purpose: Symphony Phase 1 & 2 — Conductor auto-detection, relay, file approval, and UI for agent-to-agent messaging via The Score protocol
-version: 0.2.0
+version: 2.0.0
 description: "File-based inter-agent messaging integrated into Conductor. Auto-detects Claude Code instances via ClaudeCodeDetector, registers them as agent parts in The Score (~/.paradigm/score/), and relays notes between agents on a 5-second polling loop. Wire-compatible Codable types match the TypeScript symphony-loader.ts. Includes file transfer approval/denial with trust configuration and security checks. Phase 2 adds thread list view, file request notification banner, and Symphony settings tab in Conductor overlay."
 context:
   - Storage at ~/.paradigm/score/ with JSONL inbox/outbox per agent

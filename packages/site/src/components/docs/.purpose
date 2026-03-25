@@ -1,3 +1,4 @@
+version: 2.0.0
 components:
   DocsSidebar:
     description: Client-side collapsible sidebar with active link tracking, symbol prefix badges, text filter, and section counts

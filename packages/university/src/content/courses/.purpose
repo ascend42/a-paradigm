@@ -1,3 +1,4 @@
+version: 2.0.0
 name: university-courses
 description: Course content for Paradigm University — 7 courses, 75 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
 

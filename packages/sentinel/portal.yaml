@@ -1,25 +1,169 @@
-version: "1.0"
+version: 2.0.0
 
 gates:
+  local-only:
+    description: Server binds to localhost only — no external access
+    type: network
+    location: express-bind
+    check: req.hostname === 'localhost'
+    prizes: []
+
   api-authenticated:
-    description: API requests require valid API key or session token
+    description: API requests require valid API key via auth middleware
     type: auth
     location: middleware
     check: req.headers.authorization === `Bearer ${SENTINEL_API_KEY}`
     prizes: []
 
-  admin-only:
-    description: Admin-level operations (pattern management, incident resolution)
-    type: role
+  rate-limited:
+    description: Route is rate-limited to prevent abuse
+    type: throttle
+    location: middleware
+    check: Rate limiter middleware applied
+    prizes: []
+
+  read-only:
+    description: Route only returns data — no side effects
+    type: access
     location: route-handler
-    requires: [api-authenticated]
-    check: req.user.role === 'admin'
+    check: HTTP method is GET
+    prizes: []
+
+  write-capable:
+    description: Route modifies state — ingests data or resolves incidents
+    type: access
+    location: route-handler
+    check: HTTP method is POST or PUT
     prizes: []
 
 routes:
-  "GET /api/incidents": [^api-authenticated]
-  "POST /api/incidents": [^api-authenticated]
-  "POST /api/incidents/:id/resolve": [^api-authenticated, ^admin-only]
-  "GET /api/patterns": [^api-authenticated]
-  "POST /api/patterns": [^api-authenticated, ^admin-only]
-  "GET /api/stats": [^api-authenticated]
+  # ── Observability (auth + rate-limited) ────────────────────────────
+  POST /api/logs:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/logs:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/services:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/services:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/state:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/state:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/state/:service:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/metrics:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/metrics:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/metrics/aggregate/:name:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/traces:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/traces:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/traces/:traceId:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/schemas:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/schemas:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/schemas/:id:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  POST /api/events:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^write-capable
+  GET /api/events:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/events/scopes:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+  GET /api/events/scope/:value:
+    - ^local-only
+    - ^api-authenticated
+    - ^rate-limited
+    - ^read-only
+
+  # ── Disk-only routes (no auth) ─────────────────────────────────────
+  GET /api/symbols:
+    - ^local-only
+    - ^read-only
+  PUT /api/symbols/:id:
+    - ^local-only
+    - ^write-capable
+  GET /api/info:
+    - ^local-only
+    - ^read-only
+  GET /api/commits:
+    - ^local-only
+    - ^read-only
+  GET /api/incidents:
+    - ^local-only
+    - ^read-only
+  GET /api/incidents/:id:
+    - ^local-only
+    - ^read-only
+  POST /api/incidents/:id/resolve:
+    - ^local-only
+    - ^write-capable
+  GET /api/patterns:
+    - ^local-only
+    - ^read-only
+  GET /api/patterns/:id:
+    - ^local-only
+    - ^read-only

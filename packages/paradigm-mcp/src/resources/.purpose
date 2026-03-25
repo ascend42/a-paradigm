@@ -1,3 +1,4 @@
+version: 2.0.0
 purpose: MCP resource handlers serving on-demand content via paradigm:// URIs
 description: >
   Each module serves a category of read-only content as MCP resources.

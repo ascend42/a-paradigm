@@ -356,3 +356,62 @@ beforeEach:
 afterEach:
     process.env.LOG_LEVEL = originalLogLevel
 ```
+
+---
+
+## Drift Detection and Auto-Heal
+
+Drift detection ensures that `~aspect` code anchors (file:line references in `.purpose` files) remain accurate as code evolves. It runs automatically in the stop hook and is available via `paradigm_aspect_drift` (MCP) or `paradigm drift` (CLI).
+
+### What Drift Detection Checks
+
+Every `~aspect` can have code anchors pointing to specific file and line ranges. Drift detection reads those anchors from `.paradigm/aspect-graph.db` and verifies the referenced code has not moved or changed.
+
+### Three-Layer Resolution
+
+**Layer 1a: Exact hash match** — The SHA-256 hash of the code at the anchor's line range is compared to the stored `content_hash`. If they match, the anchor is **clean**.
+
+**Layer 1b: Normalized hash match** — Strips trailing whitespace, collapses runs of whitespace, and removes blank lines before hashing. If the normalized hash matches, the change is **cosmetic** (formatting only). The exact hash is silently updated.
+
+**Layer 2: Git-aware line mapping** — When hashes do not match, Paradigm runs `git diff <materialized_commit>..HEAD --unified=0` to compute how hunks above the anchor shifted its line numbers. If the content at the shifted location matches the original hash (exact or normalized), the anchor is **shifted** and auto-healed: line numbers in both the DB and the `.purpose` file are updated.
+
+**Layer 3: Content fingerprint search** — When git line mapping fails (e.g., the code was refactored, not just shifted), Paradigm uses n-gram fingerprinting to search the file for the original content. This produces a confidence score between 0.0 and 1.0.
+
+### Confidence Thresholds
+
+The thresholds that govern auto-heal behavior are configurable in `.paradigm/config.yaml` under the `drift` section:
+
+```yaml
+drift:
+  auto-heal-threshold: 0.85   # Score >= this: auto-relocate the anchor
+  suggest-threshold: 0.7      # Score >= this but < auto-heal: suggest relocation (manual review)
+  check-on-stop: true         # Run drift check in stop hook
+  normalize-whitespace: true  # Treat whitespace-only changes as cosmetic
+```
+
+| Confidence Score | Behavior |
+|-----------------|----------|
+| >= `auto-heal-threshold` (default 0.85) | Automatic relocation. DB and `.purpose` file updated. Recorded in `anchor_history` table. |
+| >= `suggest-threshold` (default 0.7) and < `auto-heal-threshold` | Suggested relocation. Reported as drift but not applied. Requires manual review. |
+| < `suggest-threshold` (default 0.7) | Real drift. The anchor is marked `drifted = 1` in the DB. Manual intervention required. |
+
+Cross-file relocations (content found in a different file) are never auto-applied regardless of score; they are always suggestions.
+
+### When Manual Intervention Is Required
+
+- **Modified** status: The code at the anchor location genuinely changed and could not be found elsewhere. Review the aspect to confirm it still applies and update the anchor.
+- **Missing** status: The anchor's file was deleted. Remove the stale aspect or re-point it.
+- **Low-confidence relocation** (0.7-0.85): Paradigm found a candidate but is not confident enough to auto-apply. Verify the suggestion and update manually.
+- **Cross-file suggestion**: Content was found in a different file. Verify the move was intentional and update the anchor path.
+
+### Resolving Drift Violations
+
+1. Run `paradigm_aspect_drift` to see current drift status
+2. For each **modified** anchor, read the current code and update the anchor in `.purpose`
+3. For each **missing** anchor, remove the aspect or point it at the new location
+4. Run `paradigm scan` to re-materialize the aspect graph with updated hashes
+5. The stop hook will pass once all anchors are clean or auto-healed
+
+### Wiring Config to Code (Follow-Up)
+
+The threshold values are currently hardcoded in `aspect-graph.ts` (line 914-915) and `aspect-fingerprint.ts`. The `drift` config section in `config.yaml` defines the intended values. Wiring the config loader to pass these values into `checkDrift()` and `contentSearch()` is a follow-up task. Until then, changing the config values documents intent but the runtime uses 0.85/0.7.

@@ -1,3 +1,4 @@
+version: 2.0.0
 components:
   grid-preset:
     description: Composable NxM grid layout presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) for terminal cell arrangement in Conductor container mode.

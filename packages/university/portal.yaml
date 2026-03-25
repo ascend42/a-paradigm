@@ -1,0 +1,57 @@
+version: 1.0.0
+
+gates:
+  local-only:
+    description: Server binds to localhost only — no external access
+    type: network
+    location: express-bind
+    check: req.hostname === 'localhost'
+    prizes: []
+
+  read-only:
+    description: Route only returns data — no side effects
+    type: access
+    location: route-handler
+    check: HTTP method is GET
+    prizes: []
+
+  write-capable:
+    description: Route modifies state — creates or updates data
+    type: access
+    location: route-handler
+    check: HTTP method is POST
+    prizes: []
+
+  authenticated-session:
+    description: Route requires an active University server session
+    type: session
+    location: university-server
+    check: University server is running on localhost
+    prizes: []
+
+routes:
+  GET /api/health:
+    - ^local-only
+    - ^read-only
+  GET /api/courses:
+    - ^local-only
+    - ^read-only
+  GET /api/courses/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/courses/:id/lessons/:lessonId:
+    - ^local-only
+    - ^read-only
+  GET /api/plsat:
+    - ^local-only
+    - ^read-only
+  GET /api/plsat/:version:
+    - ^local-only
+    - ^read-only
+  POST /api/plsat/diploma:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/reference:
+    - ^local-only
+    - ^read-only

@@ -1,3 +1,4 @@
+version: 2.0.0
 description: Platform-specific HTTP routes for agent-driven UI, overview aggregation, git management, and ambient coordination
 components:
   AgentCommandRoute:

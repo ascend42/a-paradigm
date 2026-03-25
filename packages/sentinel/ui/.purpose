@@ -1,5 +1,5 @@
+version: 2.0.0
 # Sentinel UI - Codebase Intelligence Visualization
-# Version: 2.0 (Symbol System v2)
 
 description: |
   React application for visualizing Paradigm symbols, incidents, and patterns.

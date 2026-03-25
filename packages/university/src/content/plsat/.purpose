@@ -1,3 +1,4 @@
+version: 2.0.0
 name: plsat-exams
 description: PLSAT (Paradigm Licensure Standardized Assessment Test) exam content. Questions are mapped to courses and Paradigm concepts so ripple analysis can identify which questions need updating when features change.
 

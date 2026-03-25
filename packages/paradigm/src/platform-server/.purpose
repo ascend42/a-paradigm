@@ -1,3 +1,4 @@
+version: 2.0.0
 description: Unified Express server for Paradigm Platform — mounts lore, graph, and platform routes under a single port, with WebSocket for agent-driven UI
 components:
   PlatformServer:

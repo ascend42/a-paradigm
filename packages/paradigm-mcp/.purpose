@@ -1,5 +1,5 @@
+version: 2.0.0
 # Paradigm MCP Server
-# Version: 2.0 (Symbol System v2)
 
 description: |
   MCP (Model Context Protocol) server for Paradigm. Exposes symbols, gates, flows,

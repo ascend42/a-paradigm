@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 2.0.0
 description: |
   @a-company/portal-core - Core library for parsing and validating portal.yaml files.
   Handles gate definitions, locks, keys, prizes, and authorization topology.

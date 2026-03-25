@@ -1,5 +1,5 @@
+version: 2.0.0
 # Paradigm Sentinel Rust Client - Tracing Integration
-# Version: 2.0 (Symbol System v2)
 
 description: |
   Rust client SDK for Paradigm Sentinel observability server. Provides async batched

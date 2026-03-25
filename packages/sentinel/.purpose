@@ -1,5 +1,5 @@
+version: 2.0.0
 # Paradigm Sentinel - Symbolic Incident Triage
-# Version: 2.0 (Symbol System v2)
 
 description: |
   Sentinel provides semantic incident recording, pattern matching, and failure triage.

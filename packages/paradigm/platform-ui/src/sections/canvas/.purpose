@@ -1,3 +1,4 @@
+version: 2.0.0
 description: Visual design editor section in Platform UI — Craft.js based, creates UI layouts with real CSS output linked to Paradigm symbols
 components:
   CanvasSection:

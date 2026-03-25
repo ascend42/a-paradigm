@@ -2,8 +2,9 @@
  * MCP Tools - Actions AI can invoke on Paradigm data
  *
  * Uses ToolRegistry for tiered tool listing and Map-based dispatch.
- * Inline tools (search, ripple, related, status, gates_for_route, plugin_check,
+ * Inline tools (search, related, status, gates_for_route, plugin_check,
  * workspace_reindex, tool_activate) are handled directly in the switch statement.
+ * Ripple analysis is in tools/ripple.ts (core-tier registry module).
  * All other tools are dispatched through the registry.
  */
 
@@ -56,16 +57,14 @@ import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getDocsToolsList, handleDocsTool } from './docs.js';
+import { getRippleToolsList, handleRippleTool } from './ripple.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
 import { findFuzzyMatches } from './fuzzy-match.js';
-import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
-import { getAffectedPersonas } from '../utils/personas-loader.js';
-import { getAffectedUniversityContent } from '../utils/university-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
-import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
+import { searchWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
 import { emitAndProcess } from '../utils/nomination-engine.js';
 
@@ -145,6 +144,12 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'core',
       getToolsList: getDocsToolsList,
       handleTool: wrap(handleDocsTool),
+    },
+    {
+      key: 'ripple',
+      tier: 'core',
+      getToolsList: getRippleToolsList,
+      handleTool: wrap(handleRippleTool),
     },
   ]);
 
@@ -390,8 +395,9 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
 
 /**
  * Inline tools are defined directly in this file rather than in separate modules.
- * They handle core Paradigm operations (search, ripple, related, status, gates)
+ * They handle core Paradigm operations (search, related, status, gates)
  * plus infrastructure tools (plugin check, workspace reindex, tool activation).
+ * Note: ripple is now in tools/ripple.ts as a registry module.
  */
 function getInlineToolDefinitions() {
   return [
@@ -410,21 +416,6 @@ function getInlineToolDefinitions() {
           response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
         },
         required: ['query'],
-      },
-      annotations: { readOnlyHint: true, destructiveHint: false },
-    },
-    {
-      name: 'paradigm_ripple',
-      description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes. Returns direct and indirect dependents with file paths and dependency depth. ~300 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          symbol: { type: 'string', description: 'Symbol to analyze (e.g., @checkout, ^authenticated, $onboarding)' },
-          depth: { type: 'number', description: 'How many levels of dependencies to analyze (default: 2, max: 5)' },
-          includeWorkspace: { type: 'boolean', description: 'Also check sibling workspace projects for cross-project impact (default: false). Requires workspace configured in config.yaml.' },
-          response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
-        },
-        required: ['symbol'],
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
     },
@@ -644,273 +635,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           };
         }
 
-        case 'paradigm_ripple': {
-          const { symbol, depth = 2, includeWorkspace = false, response_format: rippleResponseFormat } = args as { symbol: string; depth?: number; includeWorkspace?: boolean; response_format?: 'concise' | 'detailed' };
-          const entry = getSymbol(ctx.index, symbol);
-
-          if (!entry) {
-            // Fallback: grep for references when symbol isn't indexed
-            const references = grepForReferences(ctx.rootDir, symbol, { maxResults: 20 });
-
-            if (references.length === 0) {
-              const text = JSON.stringify({
-                error: 'Symbol not found in index',
-                symbol,
-                fallback: 'searched',
-                referencesFound: 0,
-                suggestion: 'Run `paradigm scan` to build the index, or check that .purpose files contain this symbol',
-              }, null, 2);
-              trackToolCall(text.length, name);
-              return {
-                content: [{
-                  type: 'text',
-                  text,
-                }],
-              };
-            }
-
-            // Analyze the grep results
-            const filesAffected = [...new Set(references.map(r => r.filePath))];
-            const contextBreakdown: Record<string, number> = {};
-            for (const ref of references) {
-              contextBreakdown[ref.context] = (contextBreakdown[ref.context] || 0) + 1;
-            }
-
-            let estimatedImpact: 'low' | 'medium' | 'high' = 'low';
-            if (filesAffected.length > 10 || references.length > 20) {
-              estimatedImpact = 'high';
-            } else if (filesAffected.length > 3 || references.length > 5) {
-              estimatedImpact = 'medium';
-            }
-
-            const text = JSON.stringify({
-              symbol,
-              status: 'not-indexed',
-              fallback: 'grep-search',
-              estimatedImpact,
-              analysis: {
-                filesAffected: filesAffected.slice(0, 10),
-                totalFilesAffected: filesAffected.length,
-                totalReferences: references.length,
-                contextBreakdown,
-                sampleReferences: references.slice(0, 5).map(r => ({
-                  file: r.filePath,
-                  line: r.line,
-                  preview: r.content.slice(0, 100),
-                })),
-              },
-              note: 'This is a fallback grep search. For accurate dependency analysis, run `paradigm scan` to index your project.',
-              suggestion: 'Run `paradigm scan` to enable full ripple analysis with dependency tracking',
-            }, null, 2);
-            trackToolCall(text.length, name);
-            return {
-              content: [{
-                type: 'text',
-                text,
-              }],
-            };
-          }
-
-          // Clamp depth to valid range (1-5)
-          const maxDepth = Math.min(Math.max(depth || 2, 1), 5);
-
-          // Get direct dependencies
-          const directDeps = getReferencesTo(ctx.index, symbol);
-
-          // Get indirect dependencies with cycle detection (configurable depth)
-          const visited = new Set<string>([symbol]);
-          const indirectByLevel: Map<number, string[]> = new Map();
-
-          function collectIndirect(symbols: string[], currentDepth: number) {
-            if (currentDepth >= maxDepth) return;
-
-            const nextLevel: string[] = [];
-            for (const sym of symbols) {
-              if (visited.has(sym)) continue;
-              visited.add(sym);
-
-              const refs = getReferencesTo(ctx.index, sym);
-              for (const ref of refs) {
-                if (!visited.has(ref.symbol)) {
-                  nextLevel.push(ref.symbol);
-                }
-              }
-            }
-
-            if (nextLevel.length > 0) {
-              indirectByLevel.set(currentDepth + 1, nextLevel);
-              collectIndirect(nextLevel, currentDepth + 1);
-            }
-          }
-
-          // Start collecting from direct deps
-          collectIndirect(directDeps.map(d => d.symbol), 1);
-
-          // Flatten all indirect deps
-          const allIndirectDeps = new Set<string>();
-          for (const [, syms] of indirectByLevel) {
-            for (const s of syms) {
-              if (s !== symbol && !directDeps.find(d => d.symbol === s)) {
-                allIndirectDeps.add(s);
-              }
-            }
-          }
-
-          // What this symbol depends on
-          const dependsOn = getReferencesFrom(ctx.index, symbol);
-
-          const totalAffected = directDeps.length + allIndirectDeps.size;
-          let impact: 'low' | 'medium' | 'high' = 'low';
-          if (totalAffected > 10) impact = 'high';
-          else if (totalAffected > 3) impact = 'medium';
-
-          // Check for affected flows
-          const flowIndex = await loadFlowIndex(ctx.rootDir);
-          let flowImpact: {
-            totalFlows: number;
-            affectedFlows: Array<{
-              flowId: string;
-              impactLevel: string;
-              reason: string;
-            }>;
-            validationSuggestion?: string;
-          } | null = null;
-
-          if (flowIndex) {
-            const flowSummary = getFlowImpactSummary(flowIndex, symbol);
-            if (flowSummary.totalFlows > 0) {
-              // Upgrade impact if flows are affected
-              if (flowSummary.impactLevel === 'high' && impact === 'low') {
-                impact = 'medium';
-              } else if (flowSummary.impactLevel === 'high') {
-                impact = 'high';
-              }
-
-              flowImpact = {
-                totalFlows: flowSummary.totalFlows,
-                affectedFlows: flowSummary.affectedFlows.map(f => ({
-                  flowId: f.flowId,
-                  impactLevel: f.downstreamSteps.length > 2 ? 'high' : 'medium',
-                  reason: `Symbol is in step ${f.stepAffected.position}, affects ${f.downstreamSteps.length} downstream steps`,
-                })),
-                validationSuggestion: flowSummary.validationCommands.length > 0
-                  ? `Run: ${flowSummary.validationCommands[0]}`
-                  : undefined,
-              };
-            }
-          }
-
-          const response: Record<string, unknown> = {
-            symbol: entry.symbol,
-            type: entry.type,
-            description: entry.description,
-            depth: maxDepth,
-            impact,
-            analysis: {
-              directlyAffected: directDeps.map(d => ({
-                symbol: d.symbol,
-                type: d.type,
-                description: d.description,
-              })),
-              indirectlyAffected: Array.from(allIndirectDeps),
-              indirectByLevel: Object.fromEntries(indirectByLevel),
-              dependsOn: dependsOn.map(d => ({
-                symbol: d.symbol,
-                type: d.type,
-              })),
-            },
-            summary: {
-              directCount: directDeps.length,
-              indirectCount: allIndirectDeps.size,
-              totalAffected,
-              dependsOnCount: dependsOn.length,
-              levelsAnalyzed: maxDepth,
-            },
-            recommendation: impact === 'high'
-              ? 'High impact change - review all affected symbols carefully before modifying'
-              : impact === 'medium'
-              ? 'Moderate impact - check direct dependencies for breaking changes'
-              : 'Low impact - safe to modify with standard review',
-          };
-
-          // Add flow impact if present
-          if (flowImpact) {
-            response.affectedFlows = flowImpact;
-          }
-
-          // Check for affected personas
-          try {
-            const personasAffected = await getAffectedPersonas(ctx.rootDir, symbol);
-            if (personasAffected.length > 0) {
-              response.personas_affected = personasAffected;
-              // Upgrade impact if personas are affected
-              if (personasAffected.length > 2 && impact === 'low') {
-                response.impact = 'medium';
-              }
-            }
-          } catch {
-            // Persona check is non-fatal
-          }
-
-          // Check for affected university content
-          try {
-            const universityAffected = getAffectedUniversityContent(ctx.rootDir, symbol);
-            if (universityAffected.length > 0) {
-              response.university_content_affected = universityAffected.map(c => ({
-                id: c.id,
-                title: c.title,
-                type: c.type,
-                stale: c.stale,
-              }));
-            }
-          } catch {
-            // University content check is non-fatal
-          }
-
-          // Check for cross-project workspace impact
-          if (includeWorkspace && ctx.workspace) {
-            const wsRipple = rippleWorkspace(ctx.workspace, symbol);
-            if (wsRipple.length > 0) {
-              response.workspaceImpact = {
-                siblings: wsRipple.map(r => ({
-                  project: r.project,
-                  references: r.references.map(ref => ({
-                    symbol: ref.symbol,
-                    type: ref.type,
-                    description: ref.description,
-                  })),
-                })),
-              };
-              // Upgrade impact if cross-project references exist
-              const totalWsRefs = wsRipple.reduce((sum, r) => sum + r.references.length, 0);
-              if (totalWsRefs > 0 && impact === 'low') {
-                response.impact = 'medium';
-              }
-              if (totalWsRefs > 5) {
-                response.impact = 'high';
-              }
-            }
-          }
-
-          // Trim response for concise mode
-          const rippleOutput = rippleResponseFormat === 'concise'
-            ? {
-                symbol: response.symbol,
-                impact: response.impact,
-                summary: response.summary,
-              }
-            : response;
-
-          const text = JSON.stringify(rippleOutput, null, 2);
-
-          trackToolCall(text.length, name);
-          return {
-            content: [{
-              type: 'text',
-              text,
-            }],
-          };
-        }
+        // paradigm_ripple is now handled by the ripple registry module (tools/ripple.ts)
+        // and will be dispatched via the default registry.dispatch() path below.
 
         case 'paradigm_related': {
           const { symbol } = args;

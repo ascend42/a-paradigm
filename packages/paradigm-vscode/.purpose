@@ -1,3 +1,4 @@
+version: 2.0.0
 name: paradigm-vscode
 description: VS Code extension providing rich IDE support for the Paradigm symbol system — syntax highlighting, hover info, go-to-definition, find references, diagnostics, CodeLens, autocomplete, and quick fixes for .purpose files.
 

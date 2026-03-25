@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.15.0] — 2026-03-24
+
+### Added
+
+- **`paradigm_ripple` standalone MCP tool** — Extracted from preflight checker into dedicated `ripple.ts` module. BFS traversal with configurable depth (default 3, max 5), cycle detection, affected flows/gates analysis, impact severity scoring, and suggested review scope. Registered as core-tier tool in ToolRegistry. Removed 270-line inline handler from tools/index.ts.
+- **Portal eat-our-own-cooking** — Expanded from 1 gate / 6 routes to 4 gates / 94 routes across 3 portal.yaml files. New gates: `^authenticated-session`, `^read-only`, `^write-capable`. Full route coverage for Platform server (60+ routes), University server (8 routes), and Sentinel server (29 routes).
+- **Drift auto-heal documentation** — Documented three-layer resolution (exact hash → normalized hash → content fingerprint) with threshold table (≥0.85 auto-heal, 0.7-0.85 suggest, <0.7 real drift). Added configurable `drift` section to config.yaml.
+- **Purpose migration docs** — New `.paradigm/docs/purpose-migration.md` covering v1→v2 symbol prefix changes and migration steps.
+
+### Fixed
+
+- **Purpose file versions** — Standardized all 57 .purpose files to v2.0.0 (was mix of v1.0.0, v0.2.0, comment-style versions, and missing version fields).
+
 ## [5.14.0] — 2026-03-24
 
 ### Added

@@ -1,3 +1,4 @@
+version: 2.0.0
 description: Paradigm Platform SPA — unified React UI shell with sidebar navigation, absorbing lore-ui and graph-ui as sections
 components:
   PlatformShell:

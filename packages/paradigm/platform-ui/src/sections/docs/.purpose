@@ -1,3 +1,4 @@
+version: 2.0.0
 components:
   DocsSection:
     description: Documentation browser in Platform UI — sidebar navigation, symbol pages, flow diagrams, portal reference

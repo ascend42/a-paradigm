@@ -1,4 +1,5 @@
-version: 1.0.0
+version: 2.0.0
+
 gates:
   local-only:
     description: Server binds to localhost only — no external access
@@ -6,14 +7,391 @@ gates:
     location: express-bind
     check: req.hostname === 'localhost'
     prizes: []
+
+  authenticated-session:
+    description: Route requires an active Paradigm session (platform server running)
+    type: session
+    location: platform-server
+    check: process is serving on localhost with active HTTP + WebSocket context
+    prizes: []
+
+  read-only:
+    description: Route only returns data — no side effects or state mutations
+    type: access
+    location: route-handler
+    check: HTTP method is GET (safe, idempotent)
+    prizes: []
+
+  write-capable:
+    description: Route modifies state — creates, updates, or deletes data
+    type: access
+    location: route-handler
+    check: HTTP method is POST, PUT, PATCH, or DELETE
+    prizes: []
+
+# ─── Platform Server Routes (/api/*) ────────────────────────────────
+# All routes bind to localhost only. The platform server must be running
+# (paradigm platform) which implies an active session context.
+
 routes:
+
+  # ── Health & Info ───────────────────────────────────────────────────
+  GET /api/health:
+    - ^local-only
+    - ^read-only
+  GET /api/platform/health:
+    - ^local-only
+    - ^read-only
+  GET /api/platform/sections:
+    - ^local-only
+    - ^read-only
+  GET /api/info:
+    - ^local-only
+    - ^read-only
+
+  # ── Overview ────────────────────────────────────────────────────────
+  GET /api/platform/overview:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+
+  # ── Agent Commands ──────────────────────────────────────────────────
+  POST /api/platform/agent-command:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+
+  # ── Lore ────────────────────────────────────────────────────────────
+  GET /api/lore:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/timeline:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/symbols:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/tags:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/authors:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/calibration:
+    - ^local-only
+    - ^read-only
+  GET /api/lore/:id:
+    - ^local-only
+    - ^read-only
+  PUT /api/lore/:id/assess:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  PUT /api/lore/:id/review:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+
+  # ── Sessions ────────────────────────────────────────────────────────
+  GET /api/sessions:
+    - ^local-only
+    - ^read-only
+  GET /api/sessions/:id:
+    - ^local-only
+    - ^read-only
+
+  # ── Symbols (Graph) ────────────────────────────────────────────────
+  GET /api/symbols:
+    - ^local-only
+    - ^read-only
+
+  # ── Graphs ──────────────────────────────────────────────────────────
+  GET /api/graphs:
+    - ^local-only
+    - ^read-only
+  GET /api/graphs/:slug:
+    - ^local-only
+    - ^read-only
+
+  # ── Canvas ──────────────────────────────────────────────────────────
+  GET /api/canvas/files:
+    - ^local-only
+    - ^read-only
+  GET /api/canvas/files/*:
+    - ^local-only
+    - ^read-only
+  PUT /api/canvas/files/*:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  DELETE /api/canvas/files/*:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+
+  # ── Git ─────────────────────────────────────────────────────────────
+  GET /api/git/status:
+    - ^local-only
+    - ^read-only
+  GET /api/git/branches:
+    - ^local-only
+    - ^read-only
+  GET /api/git/log:
+    - ^local-only
+    - ^read-only
+  GET /api/git/diff:
+    - ^local-only
+    - ^read-only
+  POST /api/git/stage:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  POST /api/git/unstage:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  POST /api/git/commit:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  POST /api/git/push:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+
+  # ── Ambient ─────────────────────────────────────────────────────────
+  GET /api/ambient/events:
+    - ^local-only
+    - ^read-only
+  GET /api/ambient/nominations:
+    - ^local-only
+    - ^read-only
+  POST /api/ambient/nominations/:id/engage:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/ambient/stream:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/ambient/policy:
+    - ^local-only
+    - ^read-only
+
+  # ── Team (Maestro) ─────────────────────────────────────────────────
+  GET /api/team/roster:
+    - ^local-only
+    - ^read-only
+  GET /api/team/threads:
+    - ^local-only
+    - ^read-only
+  PATCH /api/team/agents/:id/bench:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+
+  # ── Symphony ────────────────────────────────────────────────────────
+  GET /api/symphony/agents:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/symphony/agents/me:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/symphony/peers:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/symphony/threads:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/symphony/threads/:threadId:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/symphony/threads/:threadId/resolve:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  POST /api/symphony/messages:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/symphony/inbox:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/symphony/file-requests:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/symphony/file-requests/:requestId/action:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/symphony/status:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+
+  # ── Docs ────────────────────────────────────────────────────────────
+  GET /api/docs/manifest:
+    - ^local-only
+    - ^read-only
+  GET /api/docs/symbol/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/docs/flow/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/docs/portal:
+    - ^local-only
+    - ^read-only
+  GET /api/docs/page/:slug:
+    - ^local-only
+    - ^read-only
+  GET /api/docs/search:
+    - ^local-only
+    - ^read-only
+
+  # ── Sentinel (observability — auth + rate-limited) ─────────────────
+  POST /api/sentinel/logs:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/logs:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/services:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/services:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/state:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/state:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/state/:service:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/metrics:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/metrics:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/metrics/aggregate/:name:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/traces:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/traces:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/traces/:traceId:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/schemas:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/schemas:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/schemas/:id:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  POST /api/sentinel/events:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/events:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/events/scopes:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/events/scope/:value:
+    - ^local-only
+    - ^authenticated-session
+    - ^read-only
+  GET /api/sentinel/symbols:
+    - ^local-only
+    - ^read-only
+  PUT /api/sentinel/symbols/:id:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/info:
+    - ^local-only
+    - ^read-only
+  GET /api/sentinel/commits:
+    - ^local-only
+    - ^read-only
+  GET /api/sentinel/incidents:
+    - ^local-only
+    - ^read-only
+  GET /api/sentinel/incidents/:id:
+    - ^local-only
+    - ^read-only
+  POST /api/sentinel/incidents/:id/resolve:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/sentinel/patterns:
+    - ^local-only
+    - ^read-only
+  GET /api/sentinel/patterns/:id:
+    - ^local-only
+    - ^read-only
+
+  # ── University (courses, PLSAT, reference) ─────────────────────────
   GET /api/courses:
     - ^local-only
+    - ^read-only
   GET /api/courses/:id:
     - ^local-only
+    - ^read-only
   GET /api/courses/:id/lessons/:lessonId:
     - ^local-only
+    - ^read-only
   GET /api/plsat:
     - ^local-only
+    - ^read-only
   GET /api/plsat/:version:
     - ^local-only
+    - ^read-only
+  POST /api/plsat/diploma:
+    - ^local-only
+    - ^authenticated-session
+    - ^write-capable
+  GET /api/reference:
+    - ^local-only
+    - ^read-only
+
+  # ── WebSocket ───────────────────────────────────────────────────────
+  WS /ws:
+    - ^local-only
+    - ^authenticated-session

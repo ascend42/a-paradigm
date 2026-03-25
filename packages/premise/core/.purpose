@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 2.0.0
 description: |
   @a-company/premise-core - Core aggregation library that combines Purpose + Portal.
   Builds the unified symbol index used by CLI commands and MCP server.
