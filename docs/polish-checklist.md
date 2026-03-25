@@ -34,10 +34,10 @@
 - [x] Symphony Visibility — Already polished. Full integration, event bridge, structured threads.
 
 ## 4. Ambient Learning
-- [ ] Nomination Engine (scoring, threshold tuning)
-- [ ] Teacher Model (journal quality, promotion accuracy)
-- [ ] Journal → Notebook Pipeline (promotion criteria, dedup)
-- [ ] Stale Expiry (7-day pending, confidence decay)
+- [x] Nomination Engine — 4-dimension scoring, stale JSONL pruning on write (>100 entries), configurable TTL
+- [x] Teacher Model — Automated postflight: verdicts → journals (accepted→human_feedback, dismissed→confidence_miss, revised→correction_received). Wired into stop hook via --learn flag.
+- [x] Journal → Notebook Pipeline — human_feedback now promotable alongside pattern_discovered. Pipeline solid.
+- [x] Stale Expiry — Configurable TTL in config.yaml (nomination-ttl-days: 7, debate-ttl-days: 14). File pruning implemented.
 
 ## 5. Enforcement
 - [ ] Habits (seed habits, custom habits, graduation tiers)

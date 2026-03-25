@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.19.0] — 2026-03-25
+
+### Fixed
+
+- **Stop hook route detection false positives** — Check 3 now skips test/spec/fixture files and filters out comment lines, documentation strings, and metadata patterns. No more blocking on `// POST /api/...` in comments.
+- **Stop hook source file counting** — Check 1 now directory-aware: finds covering .purpose per file, only flags directories where source changed but the covering .purpose was NOT updated. Multi-file refactors in one .purpose directory no longer falsely block.
+- **Stop hook .purpose freshness** — Check 5 adds git-based fallback: compares source file mtime vs .purpose mtime when .pending-review tracking is out of sync.
+- **Legacy afterFileEdit hook removed** — Gutted to no-op (exit 0). All tracking now handled by postToolUse hook which has visible output. Reduces hook execution overhead.
+- **Structured violation locations** — Compliance check now returns `structuredViolations` with `file`, `source`, and `severity` fields alongside existing string violations. Agents can programmatically find which files to fix.
+
 ## [5.18.0] — 2026-03-25
 
 ### Added

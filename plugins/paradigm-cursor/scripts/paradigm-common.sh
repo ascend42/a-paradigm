@@ -48,8 +48,12 @@ else
 fi
 
 # --- Check 1: Source files modified without .purpose updates ---
+# Instead of counting total source files globally, check per-directory:
+# only flag directories where source files were modified but no .purpose
+# exists in that directory's ancestor chain OR the covering .purpose was not updated.
 SOURCE_COUNT=0
 PARADIGM_COUNT=0
+UNCOVERED_SOURCE_DIRS=""
 
 for file in $MODIFIED; do
   case "$file" in
@@ -59,13 +63,54 @@ for file in $MODIFIED; do
     *.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
+      # Check if this file's directory has a covering .purpose that was modified
+      src_dir=$(dirname "$file")
+      covering=""
+      walk_dir="$src_dir"
+      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ]; do
+        if [ -f "$walk_dir/.purpose" ]; then
+          covering="$walk_dir/.purpose"
+          break
+        fi
+        walk_dir=$(dirname "$walk_dir")
+      done
+      if [ -z "$covering" ] && [ -f ".purpose" ]; then
+        covering=".purpose"
+      fi
+      # If there IS a covering .purpose, check if it was modified too
+      if [ -n "$covering" ]; then
+        purpose_was_modified=false
+        for mod_file in $MODIFIED; do
+          if [ "$mod_file" = "$covering" ]; then
+            purpose_was_modified=true
+            break
+          fi
+        done
+        if [ "$purpose_was_modified" = false ]; then
+          # Deduplicate by directory
+          case "$UNCOVERED_SOURCE_DIRS" in
+            *"$src_dir"*) ;;
+            *) UNCOVERED_SOURCE_DIRS="$UNCOVERED_SOURCE_DIRS $src_dir" ;;
+          esac
+        fi
+      else
+        # No .purpose at all — already caught by Check 2
+        :
+      fi
       ;;
   esac
 done
 
-if [ "$SOURCE_COUNT" -gt 1 ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+# Only flag if there are uncovered directories AND zero paradigm files were touched
+if [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+  # Count uncovered dirs
+  UNCOVERED_DIR_COUNT=0
+  for _d in $UNCOVERED_SOURCE_DIRS; do
+    UNCOVERED_DIR_COUNT=$((UNCOVERED_DIR_COUNT + 1))
+  done
   VIOLATIONS="$VIOLATIONS
-  - You modified $SOURCE_COUNT source files but 0 paradigm files (.purpose/portal.yaml).
+  - You modified source files in $UNCOVERED_DIR_COUNT director(ies) without updating their .purpose files:
+   $UNCOVERED_SOURCE_DIRS
     Update the nearest .purpose file for each modified code area."
   VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
 fi
@@ -133,12 +178,29 @@ if [ -f "portal.yaml" ] || echo "$MODIFIED" | grep -q "portal.yaml"; then
   : # portal.yaml exists or was modified — OK
 else
   # Check if any modified files contain route-like patterns
+  # Skip: test/spec/fixture files, markdown, and comment-only matches
   ROUTE_FILES=""
   for file in $MODIFIED; do
+    # Skip test, spec, and fixture files entirely
+    case "$file" in
+      *test*|*spec*|*fixture*|*__tests__*|*__mocks__*|*.test.*|*.spec.*) continue ;;
+    esac
     case "$file" in
       *.ts|*.js|*.tsx|*.jsx|*.py|*.rs|*.go)
         if [ -f "$file" ]; then
-          if grep -qE '\.(get|post|put|patch|delete)\s*\(|router\.|app\.(get|post|put|delete)|@(Get|Post|Put|Delete)|#\[actix_web::(get|post)' "$file" 2>/dev/null; then
+          # Grep for route patterns, then filter out comment lines and description strings
+          ROUTE_MATCH=$(grep -nE '\.(get|post|put|patch|delete)\s*\(|router\.|app\.(get|post|put|delete)|@(Get|Post|Put|Delete)|#\[actix_web::(get|post)' "$file" 2>/dev/null \
+            | grep -v '^\s*[0-9]*:\s*//' \
+            | grep -v '^\s*[0-9]*:\s*\*' \
+            | grep -v '^\s*[0-9]*:\s*#' \
+            | grep -v '^\s*[0-9]*:\s*<!--' \
+            | grep -v 'description:' \
+            | grep -v 'summary:' \
+            | grep -v 'comment:' \
+            | grep -v '@example' \
+            | grep -v '@see' \
+            || true)
+          if [ -n "$ROUTE_MATCH" ]; then
             ROUTE_FILES="$ROUTE_FILES $file"
           fi
         fi
@@ -184,9 +246,22 @@ for purpose_file in $PURPOSE_PATHS; do
 done
 
 # --- Check 5: Per-directory .purpose freshness ---
+# Uses .pending-review if available, plus a git-based fallback that cross-references
+# modified source files against .purpose modification times.
 PENDING_FILE=".paradigm/.pending-review"
+STALE_PURPOSES=""
+
+# Helper: record a stale .purpose (deduplicating)
+_record_stale_purpose() {
+  _cov="$1"
+  case "$STALE_PURPOSES" in
+    *"$_cov"*) ;;
+    *) STALE_PURPOSES="$STALE_PURPOSES $_cov" ;;
+  esac
+}
+
+# Strategy A: Use .pending-review tracking file if present
 if [ -f "$PENDING_FILE" ]; then
-  STALE_PURPOSES=""
   while IFS= read -r tracked_file; do
     [ -z "$tracked_file" ] && continue
     # Find covering .purpose for this tracked file
@@ -205,22 +280,59 @@ if [ -f "$PENDING_FILE" ]; then
     # Check if covering .purpose was also modified
     if [ -n "$covering_purpose" ]; then
       if ! echo "$MODIFIED" | grep -qxF "$covering_purpose"; then
-        # Deduplicate
-        case "$STALE_PURPOSES" in
-          *"$covering_purpose"*) ;;
-          *) STALE_PURPOSES="$STALE_PURPOSES $covering_purpose" ;;
-        esac
+        _record_stale_purpose "$covering_purpose"
       fi
     fi
   done < "$PENDING_FILE"
+fi
 
-  if [ -n "$STALE_PURPOSES" ]; then
-    VIOLATIONS="$VIOLATIONS
+# Strategy B: Git-based fallback — for each modified source file, check whether
+# its covering .purpose was modified more recently (by filesystem mtime).
+# This catches cases where .pending-review is missing or out of sync.
+for file in $MODIFIED; do
+  case "$file" in
+    .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+  esac
+  [ -f "$file" ] || continue
+
+  # Find covering .purpose
+  check_dir=$(dirname "$file")
+  covering_purpose=""
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+    if [ -f "$check_dir/.purpose" ]; then
+      covering_purpose="$check_dir/.purpose"
+      break
+    fi
+    check_dir=$(dirname "$check_dir")
+  done
+  if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
+    covering_purpose=".purpose"
+  fi
+  [ -n "$covering_purpose" ] || continue
+
+  # Skip if .purpose was in the modified list (already updated this session)
+  echo "$MODIFIED" | grep -qxF "$covering_purpose" && continue
+
+  # Compare modification times: if source file is newer than .purpose, it's stale
+  if [ -f "$covering_purpose" ]; then
+    # Use portable stat-based mtime comparison (works on macOS + Linux)
+    if command -v stat >/dev/null 2>&1; then
+      # macOS stat: -f %m gives epoch seconds; Linux stat: -c %Y
+      src_mtime=$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || echo "0")
+      purpose_mtime=$(stat -f %m "$covering_purpose" 2>/dev/null || stat -c %Y "$covering_purpose" 2>/dev/null || echo "0")
+      if [ "$src_mtime" -gt "$purpose_mtime" ] 2>/dev/null; then
+        _record_stale_purpose "$covering_purpose"
+      fi
+    fi
+  fi
+done
+
+if [ -n "$STALE_PURPOSES" ]; then
+  VIOLATIONS="$VIOLATIONS
   - These .purpose files cover modified source code but were NOT updated:
    $STALE_PURPOSES
     Update each with: #components, ~aspects (with anchors), !signals, \$flows, ^gates."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-  fi
+  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
 fi
 
 # --- Check 6: Aspect coverage advisory ---

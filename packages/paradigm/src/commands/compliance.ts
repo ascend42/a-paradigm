@@ -84,12 +84,34 @@ interface PostflightResult {
   dryRun: boolean;
 }
 
+interface Violation {
+  message: string;
+  source: 'habits' | 'drift' | 'portal';
+  file?: string;
+  severity: 'blocking' | 'advisory';
+}
+
 interface ComplianceCheckResult {
   habits: HabitsResult | null;
   drift: DriftResult | null;
   portal: PortalResult | null;
   violations: string[];
+  structuredViolations: Violation[];
   postflight?: PostflightResult | null;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Extract a file path from a violation message string, if one is present.
+ * Matches common patterns like `/path/to/file.ts`, `src/foo/bar.js`, etc.
+ */
+function extractFilePath(message: string): string | undefined {
+  // Match relative or absolute paths with file extensions
+  const match = message.match(/(?:^|\s)((?:\/|\.\/|[a-zA-Z0-9_-]+\/)[^\s,;:'"]+\.[a-zA-Z]{1,10})\b/);
+  return match?.[1];
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -312,6 +334,7 @@ export async function complianceCheckCommand(options: {
   const trigger = (options.trigger || 'on-stop') as HabitTrigger;
   const autoHeal = options.autoHeal !== false;
   const violations: string[] = [];
+  const structuredViolations: Violation[] = [];
 
   // Run all three checks sequentially in the same process
   const habitsResult = await runHabitsCheck(rootDir, trigger);
@@ -321,23 +344,53 @@ export async function complianceCheckCommand(options: {
   // Collect violations from habits
   if (habitsResult?.evaluation.blocksCompletion) {
     const blocking = habitsResult.habits
-      .filter((h) => h.result === 'skipped' && h.severity === 'block')
-      .map((h) => `Blocking habit not satisfied: ${h.name} — ${h.reason}`);
-    violations.push(...blocking);
+      .filter((h) => h.result === 'skipped' && h.severity === 'block');
+    for (const h of blocking) {
+      const msg = `Blocking habit not satisfied: ${h.name} — ${h.reason}`;
+      violations.push(msg);
+      structuredViolations.push({
+        message: msg,
+        source: 'habits',
+        file: extractFilePath(h.reason),
+        severity: 'blocking',
+      });
+    }
   }
 
   // Collect violations from drift
   if (driftResult && driftResult.driftedCount > 0) {
-    violations.push(
-      `${driftResult.driftedCount} aspect anchor(s) have drifted (content genuinely changed). Run paradigm_aspect_check to review.`
-    );
+    const msg = `${driftResult.driftedCount} aspect anchor(s) have drifted (content genuinely changed). Run paradigm_aspect_check to review.`;
+    violations.push(msg);
+    // Add per-file violations for each drifted anchor
+    for (const d of driftResult.details.filter((dd) => dd.status === 'drifted')) {
+      structuredViolations.push({
+        message: `Aspect ~${d.aspectId} drifted at lines ${d.startLine}-${d.endLine}`,
+        source: 'drift',
+        file: d.path,
+        severity: 'advisory',
+      });
+    }
+    if (structuredViolations.filter((v) => v.source === 'drift').length === 0) {
+      structuredViolations.push({
+        message: msg,
+        source: 'drift',
+        severity: 'advisory',
+      });
+    }
   }
 
   // Collect violations from portal
   if (portalResult && portalResult.usedButUndeclaredCount > 0) {
-    violations.push(
-      `${portalResult.usedButUndeclaredCount} gate(s) used in code but not declared in portal.yaml: ${portalResult.usedButUndeclared.join(', ')}`
-    );
+    const msg = `${portalResult.usedButUndeclaredCount} gate(s) used in code but not declared in portal.yaml: ${portalResult.usedButUndeclared.join(', ')}`;
+    violations.push(msg);
+    for (const gate of portalResult.usedButUndeclared) {
+      structuredViolations.push({
+        message: `Gate ^${gate} used in code but not declared in portal.yaml`,
+        source: 'portal',
+        file: 'portal.yaml',
+        severity: 'blocking',
+      });
+    }
   }
 
   // Run postflight learning pass (non-blocking, after compliance checks)
@@ -351,6 +404,7 @@ export async function complianceCheckCommand(options: {
     drift: driftResult,
     portal: portalResult,
     violations,
+    structuredViolations,
     postflight: options.learn ? postflightResult : undefined,
   };
 

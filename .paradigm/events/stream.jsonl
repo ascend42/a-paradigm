@@ -401,3 +401,12 @@
 {"id":"ev-1774439700159-9727","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T11:55:00.159Z","path":"plugins/paradigm-cursor/scripts/paradigm-common.sh"}
 {"id":"ev-1774439745483-0949","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T11:55:45.483Z","path":"packages/paradigm/src/commands/compliance.ts"}
 {"id":"ev-1774439778179-9620","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T11:56:18.179Z","path":"packages/paradigm-mcp/src/tools/ambient.ts"}
+{"id":"ev-1774440717383-4110","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:11:57.383Z","path":"packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh"}
+{"id":"ev-1774440734782-4147","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:14.782Z","path":"packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh"}
+{"id":"ev-1774440736656-0309","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:16.656Z","path":"packages/paradigm/src/commands/hooks/scripts/claude-code-postwrite.sh"}
+{"id":"ev-1774440737553-0233","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:17.553Z","path":"packages/paradigm/src/commands/hooks/scripts/cursor-postwrite.sh"}
+{"id":"ev-1774440755910-4643","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:35.910Z","path":"packages/paradigm/src/commands/compliance.ts"}
+{"id":"ev-1774440757196-4466","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:37.196Z","path":"packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh"}
+{"id":"ev-1774440772980-5630","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:52.980Z","path":"packages/paradigm/src/commands/compliance.ts"}
+{"id":"ev-1774440778318-1348","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:12:58.318Z","path":"packages/paradigm/src/commands/compliance.ts"}
+{"id":"ev-1774440787525-4728","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T12:13:07.525Z","path":"packages/paradigm/src/commands/compliance.ts"}
