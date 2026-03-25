@@ -29,7 +29,7 @@ struct GestureRecorderView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<recorder.requiredSamples, id: \.self) { i in
                         Circle()
-                            .fill(i < recorder.recordedSamples ? Color.green : Color.secondary.opacity(0.3))
+                            .fill(i < recorder.recordedSamples ? ConductorTheme.healthy : Color.secondary.opacity(0.3))
                             .frame(width: 16, height: 16)
                             .overlay(
                                 i < recorder.recordedSamples
@@ -52,7 +52,7 @@ struct GestureRecorderView: View {
                         ProgressView()
                         Text("Recording sample \(sample)...")
                             .font(.subheadline)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(ConductorTheme.warning)
                         Button("Stop") {
                             recorder.stopRecording()
                         }
@@ -65,7 +65,7 @@ struct GestureRecorderView: View {
                 case .complete:
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 48))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ConductorTheme.healthy)
                     Text("Gesture recorded!")
                         .font(.headline)
                 }

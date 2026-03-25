@@ -77,6 +77,7 @@ struct SetupWizardView: View {
                 Circle()
                     .fill(step == currentStep ? Color.cyan : Color.secondary.opacity(0.3))
                     .frame(width: 8, height: 8)
+                    .accessibilityLabel(step == currentStep ? "Current step" : "Step")
             }
         }
     }

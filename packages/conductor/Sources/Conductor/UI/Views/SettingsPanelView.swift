@@ -222,8 +222,9 @@ struct SettingsPanelView: View {
                 LabeledContent("Status") {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(sentinel.isConnected ? .green : .red)
+                            .fill(sentinel.isConnected ? ConductorTheme.healthy : ConductorTheme.critical)
                             .frame(width: 6, height: 6)
+                            .accessibilityLabel(sentinel.isConnected ? "Connected" : "Disconnected")
                         Text(sentinel.isConnected ? "Connected" : "Disconnected")
                             .font(.caption)
                             .foregroundStyle(.secondary)

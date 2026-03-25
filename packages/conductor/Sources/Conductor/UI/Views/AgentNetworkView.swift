@@ -30,11 +30,11 @@ struct AgentNetworkView: View {
 
                 if monitor.totalUnreadCount > 0 {
                     Text("\(monitor.totalUnreadCount)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: ConductorTheme.fontSM, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(.red))
+                        .background(Capsule().fill(ConductorTheme.critical))
                 }
 
                 Button(action: { showNewGroup = true }) {
@@ -102,8 +102,8 @@ struct AgentNetworkView: View {
 
                 if groupUnread > 0 {
                     Text("\(groupUnread) unread")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.orange)
+                        .font(.system(size: ConductorTheme.fontSM, weight: .medium))
+                        .foregroundStyle(ConductorTheme.warning)
                 }
 
                 // Group actions menu
@@ -150,12 +150,12 @@ struct AgentNetworkView: View {
             if !threadIds.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.purple)
+                        .font(.system(size: ConductorTheme.fontSM))
+                        .foregroundStyle(ConductorTheme.symphony)
                     ForEach(Array(threadIds.prefix(3)), id: \.self) { threadId in
                         Button(action: { selectedThread = ThreadSelection(id: threadId) }) {
                             Text(threadId.prefix(12) + "...")
-                                .font(.system(size: 9))
+                                .font(.system(size: ConductorTheme.fontSM))
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
@@ -207,13 +207,13 @@ struct AgentNetworkView: View {
         let dotColor: Color = {
             if let health = healthMetrics?.healthStatus {
                 switch health {
-                case .healthy: return .green
-                case .degraded: return .yellow
-                case .unhealthy: return .red
-                case .unknown: return isRunning ? .green : (status?.linked == true ? .yellow : .gray)
+                case .healthy: return ConductorTheme.healthy
+                case .degraded: return ConductorTheme.degraded
+                case .unhealthy: return ConductorTheme.critical
+                case .unknown: return isRunning ? ConductorTheme.healthy : (status?.linked == true ? ConductorTheme.degraded : .gray)
                 }
             }
-            return isRunning ? .green : (status?.linked == true ? .yellow : .gray)
+            return isRunning ? ConductorTheme.healthy : (status?.linked == true ? ConductorTheme.degraded : .gray)
         }()
 
         let dotLabel: String = {
@@ -237,30 +237,30 @@ struct AgentNetworkView: View {
                 HStack(spacing: 4) {
                     if isRunning {
                         Text("running")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.green)
+                            .font(.system(size: ConductorTheme.fontXS))
+                            .foregroundStyle(ConductorTheme.healthy)
                     } else if status?.linked == true {
                         Text("linked")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.yellow)
+                            .font(.system(size: ConductorTheme.fontXS))
+                            .foregroundStyle(ConductorTheme.degraded)
                     } else {
                         Text("offline")
-                            .font(.system(size: 8))
+                            .font(.system(size: ConductorTheme.fontXS))
                             .foregroundStyle(.tertiary)
                     }
 
                     if let unread = status?.unreadCount, unread > 0 {
                         Text("\(unread) unread")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.orange)
+                            .font(.system(size: ConductorTheme.fontXS))
+                            .foregroundStyle(ConductorTheme.warning)
                     }
 
                     if let store = taskStore {
                         let agentTasks = store.activeTasks.filter { $0.assignedTo.contains(agent.symphonyAgentId) }
                         if !agentTasks.isEmpty {
                             Text("\(agentTasks.count) task\(agentTasks.count == 1 ? "" : "s")")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.blue)
+                                .font(.system(size: ConductorTheme.fontXS))
+                                .foregroundStyle(ConductorTheme.active)
                         }
                     }
                 }

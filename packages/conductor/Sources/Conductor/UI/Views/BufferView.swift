@@ -26,11 +26,12 @@ struct BufferView: View {
                 if isListening {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(.red)
+                            .fill(ConductorTheme.critical)
                             .frame(width: 6, height: 6)
+                            .accessibilityLabel("Recording active")
                         Text("Listening")
                             .font(.caption2.bold())
-                            .foregroundStyle(.red)
+                            .foregroundStyle(ConductorTheme.critical)
                     }
                     .transition(.opacity)
                 }
@@ -50,12 +51,12 @@ struct BufferView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
-                            isListening ? Color.red.opacity(0.5) : Color.clear,
+                            isListening ? ConductorTheme.critical.opacity(0.5) : Color.clear,
                             lineWidth: 2
                         )
                         .animation(.easeInOut(duration: 0.3), value: isListening)
                 )
-                .shadow(color: isListening ? .red.opacity(0.15) : .clear, radius: 8)
+                .shadow(color: isListening ? ConductorTheme.critical.opacity(0.15) : .clear, radius: 8)
                 .focused($isInputFocused)
                 .onChange(of: inputText) { _, newValue in
                     buffer.replace(with: newValue)
@@ -101,7 +102,7 @@ struct BufferView: View {
             if let zoneRouter = gazeZoneRouter, let managed = zoneRouter.targetedInstance {
                 HStack(spacing: 4) {
                     Image(systemName: "target")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ConductorTheme.healthy)
                     Text("Will send to: [Cell \(managed.gridIndex + 1)] \(managed.label)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -111,7 +112,7 @@ struct BufferView: View {
             } else if let target = gazeRouter.currentTarget {
                 HStack(spacing: 4) {
                     Image(systemName: "target")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ConductorTheme.healthy)
                     Text("Target: \(target.title)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -121,7 +122,7 @@ struct BufferView: View {
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "target")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ConductorTheme.warning)
                     Text("No target — select an instance below")
                         .font(.caption2)
                         .foregroundStyle(.secondary)

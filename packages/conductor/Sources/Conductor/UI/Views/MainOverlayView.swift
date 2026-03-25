@@ -20,6 +20,12 @@ struct MainOverlayView: View {
     @State private var showAddInstance = false
     @State private var showHelp = false
 
+    // MARK: - Collapsible Region State
+    @State private var showInput = true
+    @State private var showSessions = true
+    @State private var showTeam = true
+    @State private var showMonitoring = false
+
     /// Merged instances from AX detection + file-registered sessions.
     private var allInstances: [ClaudeCodeInstance] {
         var merged = detector.instances
@@ -91,7 +97,7 @@ struct MainOverlayView: View {
     private var headerBar: some View {
         HStack {
             Image(systemName: "waveform.badge.mic")
-                .foregroundStyle(.cyan)
+                .foregroundStyle(ConductorTheme.brand)
             Text("Conductor")
                 .font(.headline)
             Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
@@ -126,7 +132,7 @@ struct MainOverlayView: View {
             }) {
                 Image(systemName: env.orchestrator.videoActive ? "video.fill" : "video.slash.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(env.orchestrator.videoActive ? .green : .secondary)
+                    .foregroundStyle(env.orchestrator.videoActive ? ConductorTheme.healthy : .secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -140,7 +146,7 @@ struct MainOverlayView: View {
             }) {
                 Image(systemName: env.orchestrator.voiceActive ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(env.orchestrator.voiceActive ? .green : .secondary)
+                    .foregroundStyle(env.orchestrator.voiceActive ? ConductorTheme.healthy : .secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -156,7 +162,7 @@ struct MainOverlayView: View {
     private var statusIndicator: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(permissionStatus.allGranted ? .green : .orange)
+                .fill(permissionStatus.allGranted ? ConductorTheme.healthy : ConductorTheme.warning)
                 .frame(width: 8, height: 8)
                 .accessibilityLabel(permissionStatus.allGranted ? "All permissions granted" : "Permissions incomplete")
             Text(statusText)
@@ -187,24 +193,73 @@ struct MainOverlayView: View {
     }
 
     private var mainContent: some View {
-        VStack(spacing: 12) {
-            calibrationSection
-            inputSection
-            Divider()
-            bufferSection
-            Divider()
-            sessionSection
-            Divider()
-            workspaceSection
-            symphonyNotificationsSection
-            teamThreadSection
-            taskSection
-            agentNetworkSection
-            agentHealthSection
-            sentinelSection
-            Spacer(minLength: 0)
+        ScrollView {
+            VStack(spacing: 8) {
+                // Region 1: Input & Buffer
+                DisclosureGroup(isExpanded: $showInput) {
+                    VStack(spacing: 12) {
+                        calibrationSection
+                        inputSection
+                        bufferSection
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Label("Input & Buffer", systemImage: "keyboard")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                // Region 2: Sessions & Workspace
+                DisclosureGroup(isExpanded: $showSessions) {
+                    VStack(spacing: 12) {
+                        sessionSection
+                        workspaceSection
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Label("Sessions & Workspace", systemImage: "rectangle.stack")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                // Region 3: Team
+                DisclosureGroup(isExpanded: $showTeam) {
+                    VStack(spacing: 12) {
+                        symphonyNotificationsSection
+                        teamThreadSection
+                        taskSection
+                        agentNetworkSection
+                        agentHealthSection
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Label("Team", systemImage: "person.3")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                // Region 4: Monitoring (default collapsed)
+                DisclosureGroup(isExpanded: $showMonitoring) {
+                    VStack(spacing: 12) {
+                        sentinelSection
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Label("Monitoring", systemImage: "gauge.with.dots.needle.33percent")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(12)
         }
-        .padding(12)
         .sheet(isPresented: $showAddInstance) {
             AddInstanceSheet(
                 workspaceManager: env.workspaceManager,
@@ -285,7 +340,6 @@ struct MainOverlayView: View {
     @ViewBuilder
     private var teamThreadSection: some View {
         if !env.threadWatcher.teamThreads.isEmpty {
-            Divider()
             TeamThreadView(
                 threadWatcher: env.threadWatcher,
                 monitor: env.symphonyMonitor
@@ -296,7 +350,6 @@ struct MainOverlayView: View {
     @ViewBuilder
     private var taskSection: some View {
         if !env.taskStore.tasks.isEmpty {
-            Divider()
             TaskDashboardView(taskStore: env.taskStore, onSendNote: { note in
                 for r in (note.recipients ?? []) {
                     ScoreIO.appendJsonl(note, to: ScoreIO.inboxPath(for: r.id))
@@ -308,7 +361,6 @@ struct MainOverlayView: View {
     @ViewBuilder
     private var agentNetworkSection: some View {
         if !env.agentGroupStore.groups.isEmpty || !env.agentPartManager.registeredAgents.isEmpty {
-            Divider()
             AgentNetworkView(
                 groupStore: env.agentGroupStore,
                 agentPartManager: env.agentPartManager,
@@ -319,7 +371,6 @@ struct MainOverlayView: View {
                 agentHealthMonitor: env.agentHealthMonitor
             )
         } else if !env.noteRelay.activeThreads.isEmpty {
-            Divider()
             ThreadListView(relay: env.noteRelay)
         }
     }
@@ -327,21 +378,19 @@ struct MainOverlayView: View {
     @ViewBuilder
     private var agentHealthSection: some View {
         if !env.agentHealthMonitor.metrics.isEmpty {
-            Divider()
             AgentHealthView(healthMonitor: env.agentHealthMonitor)
         }
     }
 
     @ViewBuilder
     private var sentinelSection: some View {
-        Divider()
         SentinelLiveView(sentinelClient: env.sentinelClient, taskStore: env.taskStore)
     }
 
     private var calibrationBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "eye.trianglebadge.exclamationmark")
-                .foregroundStyle(.orange)
+                .foregroundStyle(ConductorTheme.warning)
             Text("Gaze not calibrated")
                 .font(.caption)
             Spacer()
@@ -353,7 +402,7 @@ struct MainOverlayView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.1)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(ConductorTheme.warning.opacity(0.1)))
     }
 
     // MARK: - Actions

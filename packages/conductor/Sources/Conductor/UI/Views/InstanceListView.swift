@@ -23,7 +23,7 @@ struct InstanceListView: View {
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(instances.isEmpty ? Color.gray.opacity(0.2) : Color.green.opacity(0.2))
+                            .fill(instances.isEmpty ? Color.gray.opacity(0.2) : ConductorTheme.healthy.opacity(0.2))
                     )
             }
 
@@ -98,14 +98,14 @@ struct InstanceListView: View {
                         .padding(.vertical, 1)
                         .background(
                             Capsule()
-                                .fill(Color.purple.opacity(0.3))
+                                .fill(ConductorTheme.symphony.opacity(0.3))
                         )
                 }
 
                 // Target indicator
                 if isTargeted {
                     Image(systemName: "target")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ConductorTheme.healthy)
                         .font(.caption)
                 }
             }
@@ -132,18 +132,20 @@ struct InstanceListView: View {
             Circle()
                 .fill(.gray)
                 .frame(width: 8, height: 8)
+                .accessibilityLabel("Idle")
         case .processing:
             Image(systemName: "circle.dotted")
-                .foregroundStyle(.orange)
+                .foregroundStyle(ConductorTheme.warning)
                 .font(.caption2)
         case .finished:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ConductorTheme.healthy)
                 .font(.caption2)
         case .unknown:
             Circle()
                 .fill(.gray.opacity(0.5))
                 .frame(width: 8, height: 8)
+                .accessibilityLabel("Unknown status")
         }
     }
 }

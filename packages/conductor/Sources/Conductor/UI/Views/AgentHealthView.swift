@@ -46,7 +46,7 @@ struct AgentHealthView: View {
             Text(value)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
             Text(label)
-                .font(.system(size: 9))
+                .font(.system(size: ConductorTheme.fontSM))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -70,12 +70,12 @@ struct AgentHealthView: View {
 
                 HStack(spacing: 6) {
                     Text("\(metrics.tasksCompleted + metrics.tasksFailed) tasks")
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.secondary)
 
                     if metrics.avgCompletionTimeMs > 0 {
                         Text(formatDuration(metrics.avgCompletionTimeMs))
-                            .font(.system(size: 9))
+                            .font(.system(size: ConductorTheme.fontSM))
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -94,7 +94,7 @@ struct AgentHealthView: View {
                     .frame(width: 24, height: 24)
                     .rotationEffect(.degrees(-90))
                 Text("\(Int(metrics.successRate * 100))")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontXS, weight: .bold, design: .monospaced))
             }
 
             // Sparkline (recent outcomes)
@@ -102,7 +102,7 @@ struct AgentHealthView: View {
                 HStack(spacing: 1) {
                     ForEach(Array(metrics.recentOutcomes.enumerated()), id: \.offset) { _, success in
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(success ? Color.green : Color.red)
+                            .fill(success ? ConductorTheme.healthy : ConductorTheme.critical)
                             .frame(width: 3, height: success ? 12 : 6)
                     }
                 }

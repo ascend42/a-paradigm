@@ -10,7 +10,7 @@ struct ThreadListView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "music.quarternote.3")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(ConductorTheme.symphony)
                 Text("Threads")
                     .font(.caption.bold())
                 Spacer()
@@ -35,8 +35,9 @@ struct ThreadListView: View {
     private func threadRow(_ thread: ThreadMeta) -> some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(thread.status == .active ? Color.green : Color.gray)
+                .fill(thread.status == .active ? ConductorTheme.healthy : Color.gray)
                 .frame(width: 6, height: 6)
+                .accessibilityLabel(thread.status == .active ? "Active" : "Inactive")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(thread.topic)

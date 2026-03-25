@@ -19,6 +19,7 @@ struct GestureHUDView: View {
                 Circle()
                     .fill(gestureProvider.isActive ? .green : .gray)
                     .frame(width: 8, height: 8)
+                    .accessibilityLabel(gestureProvider.isActive ? "Gesture tracking active" : "Gesture tracking inactive")
             }
 
             if gestureProvider.isActive {

@@ -36,13 +36,13 @@ struct SentinelSymbolFilterView: View {
     private func chipButton(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 8, design: .monospaced))
+                .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(
-                    Capsule().fill(isSelected ? Color.purple.opacity(0.25) : Color.secondary.opacity(0.1))
+                    Capsule().fill(isSelected ? ConductorTheme.symphony.opacity(0.25) : Color.secondary.opacity(0.1))
                 )
-                .foregroundStyle(isSelected ? .purple : .secondary)
+                .foregroundStyle(isSelected ? ConductorTheme.symphony : .secondary)
         }
         .buttonStyle(.plain)
     }

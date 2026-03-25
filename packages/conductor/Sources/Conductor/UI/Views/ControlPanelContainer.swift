@@ -85,12 +85,12 @@ struct ControlPanelContainer: View {
                         Image(systemName: tab.icon)
                             .font(.system(size: 14))
                         Text(tab.rawValue)
-                            .font(.system(size: 8))
+                            .font(.system(size: ConductorTheme.fontXS))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
-                    .foregroundStyle(activeTab == tab ? .blue : .secondary)
-                    .background(activeTab == tab ? Color.blue.opacity(0.08) : Color.clear)
+                    .foregroundStyle(activeTab == tab ? ConductorTheme.active : .secondary)
+                    .background(activeTab == tab ? ConductorTheme.active.opacity(0.08) : Color.clear)
                 }
                 .buttonStyle(.plain)
             }
@@ -199,7 +199,7 @@ struct ControlPanelContainer: View {
                     .font(.caption)
                 Spacer()
                 Text(sentinelClient.serverURL.absoluteString)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
             HStack {
@@ -207,8 +207,9 @@ struct ControlPanelContainer: View {
                     .font(.caption)
                 Spacer()
                 Circle()
-                    .fill(sentinelClient.isConnected ? .green : .red)
+                    .fill(sentinelClient.isConnected ? ConductorTheme.healthy : ConductorTheme.critical)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(sentinelClient.isConnected ? "Connected" : "Disconnected")
                 Text(sentinelClient.isConnected ? "Connected" : "Disconnected")
                     .font(.caption)
                     .foregroundStyle(.secondary)

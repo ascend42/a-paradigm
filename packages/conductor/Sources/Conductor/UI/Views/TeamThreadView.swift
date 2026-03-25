@@ -33,7 +33,7 @@ struct TeamThreadView: View {
     private var headerRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "person.3.fill")
-                .foregroundStyle(.purple)
+                .foregroundStyle(ConductorTheme.symphony)
                 .font(.caption)
 
             Text("Team Thread")
@@ -41,11 +41,11 @@ struct TeamThreadView: View {
 
             if threadWatcher.totalMessageCount > 0 {
                 Text("\(threadWatcher.totalMessageCount)")
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
-                    .background(Capsule().fill(.purple))
+                    .background(Capsule().fill(ConductorTheme.symphony))
             }
 
             Spacer()
@@ -60,7 +60,7 @@ struct TeamThreadView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                         .foregroundStyle(.secondary)
                 }
                 .menuStyle(.borderlessButton)
@@ -72,7 +72,7 @@ struct TeamThreadView: View {
                 }
             } label: {
                 Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.system(size: 8))
+                    .font(.system(size: ConductorTheme.fontXS))
                     .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
@@ -88,8 +88,9 @@ struct TeamThreadView: View {
             // Thread title
             HStack(spacing: 4) {
                 Circle()
-                    .fill(.green)
+                    .fill(ConductorTheme.healthy)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel("Active thread")
                 Text(threadWatcher.threadDisplayName(threadId))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -126,10 +127,10 @@ struct TeamThreadView: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.purple.opacity(0.03))
+                .fill(ConductorTheme.symphony.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.purple.opacity(0.1), lineWidth: 1)
+                        .stroke(ConductorTheme.symphony.opacity(0.1), lineWidth: 1)
                 )
         )
     }
@@ -146,7 +147,9 @@ struct TeamThreadView: View {
     // MARK: - Helpers
 
     private func agentColor(for role: String) -> Color {
-        let index = abs(role.hashValue) % Self.agentColors.count
+        // Deterministic hash: sum of character Unicode scalars
+        let hash = role.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
+        let index = abs(hash) % Self.agentColors.count
         return Self.agentColors[index]
     }
 }
@@ -163,20 +166,20 @@ struct TeamMessageBubble: View {
             HStack(spacing: 4) {
                 // Colored role badge
                 Text(attribution)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontSM, weight: .semibold, design: .monospaced))
                     .foregroundStyle(color)
 
                 Spacer()
 
                 Text(relativeTime)
-                    .font(.system(size: 8))
+                    .font(.system(size: ConductorTheme.fontXS))
                     .foregroundStyle(.tertiary)
             }
 
             // Intent badge
             HStack(spacing: 4) {
                 Text(note.intent.rawValue)
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                     .foregroundStyle(intentColor)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
@@ -185,7 +188,7 @@ struct TeamMessageBubble: View {
                 // Symbols
                 if !note.symbols.isEmpty {
                     Text(note.symbols.joined(separator: " "))
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -201,7 +204,7 @@ struct TeamMessageBubble: View {
             // Code diff if present
             if let diff = note.content.diff, !diff.isEmpty {
                 Text(diff)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                     .foregroundStyle(.primary)
                     .padding(4)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -215,8 +218,8 @@ struct TeamMessageBubble: View {
             if let decision = note.content.decision, !decision.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.yellow)
+                        .font(.system(size: ConductorTheme.fontXS))
+                        .foregroundStyle(ConductorTheme.degraded)
                     Text(decision)
                         .font(.caption2.bold())
                         .foregroundStyle(.primary)
@@ -224,7 +227,7 @@ struct TeamMessageBubble: View {
                 .padding(4)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.yellow.opacity(0.1))
+                        .fill(ConductorTheme.degraded.opacity(0.1))
                 )
             }
         }
@@ -274,20 +277,20 @@ struct TeamMessageBubble: View {
 
     private var intentColor: Color {
         switch note.intent {
-        case .question: return .blue
-        case .context, .clarification: return .cyan
-        case .proposal, .handoff: return .orange
-        case .verification: return .purple
-        case .action, .approval, .taskComplete: return .green
-        case .decision: return .yellow
-        case .alert, .rejection, .taskFailed: return .red
+        case .question: return ConductorTheme.active
+        case .context, .clarification: return ConductorTheme.brand
+        case .proposal, .handoff: return ConductorTheme.warning
+        case .verification: return ConductorTheme.symphony
+        case .action, .approval, .taskComplete: return ConductorTheme.healthy
+        case .decision: return ConductorTheme.degraded
+        case .alert, .rejection, .taskFailed: return ConductorTheme.critical
         case .reference: return .gray
         case .fileRequest, .fileApproved, .fileDenied, .fileDelivery: return .indigo
-        case .task: return .blue
-        case .taskAck: return .cyan
+        case .task: return ConductorTheme.active
+        case .taskAck: return ConductorTheme.brand
         case .progress: return .mint
-        case .approvalRequest: return .orange
-        case .approvalResponse: return .green
+        case .approvalRequest: return ConductorTheme.warning
+        case .approvalResponse: return ConductorTheme.healthy
         }
     }
 }

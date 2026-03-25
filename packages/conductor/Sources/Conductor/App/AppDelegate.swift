@@ -343,19 +343,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Launch the container workspace window.
     private func launchContainer() {
         let container = ContainerWindow()
+        let env = ConductorEnvironment(
+            orchestrator: orchestrator,
+            workspaceManager: workspaceManager,
+            noteRelay: noteRelay,
+            fileApprovalManager: fileApprovalManager,
+            projectStore: projectStore,
+            agentProcessManager: agentProcessManager,
+            agentGroupStore: agentGroupStore,
+            symphonyMonitor: symphonyMonitor,
+            agentPartManager: agentPartManager,
+            taskStore: taskStore,
+            sentinelClient: sentinelClient,
+            agentHealthMonitor: agentHealthMonitor,
+            threadWatcher: threadWatcher
+        )
         container.contentView = NSHostingView(
-            rootView: ContainerView(
-                workspaceManager: workspaceManager,
-                taskStore: taskStore,
-                sentinelClient: sentinelClient,
-                agentHealthMonitor: agentHealthMonitor,
-                projectStore: projectStore,
-                agentProcessManager: agentProcessManager,
-                agentGroupStore: agentGroupStore,
-                symphonyMonitor: symphonyMonitor,
-                threadWatcher: threadWatcher,
-                noteRelay: noteRelay
-            )
+            rootView: ContainerView()
+                .environmentObject(env)
         )
         container.makeKeyAndOrderFront(nil)
         self.containerWindow = container

@@ -15,7 +15,7 @@ struct StatusBarView: View {
             statusSection(
                 icon: "checklist",
                 text: taskText,
-                color: taskStore.blockedTasks.isEmpty ? .secondary : .red
+                color: taskStore.blockedTasks.isEmpty ? .secondary : ConductorTheme.critical
             ) {
                 onSelectTab(.orchestrate)
             }
@@ -26,8 +26,8 @@ struct StatusBarView: View {
             statusSection(
                 icon: "antenna.radiowaves.left.and.right",
                 text: sentinelText,
-                color: sentinelClient.isConnected ? .secondary : .red,
-                dot: sentinelClient.isConnected ? .green : .red
+                color: sentinelClient.isConnected ? .secondary : ConductorTheme.critical,
+                dot: sentinelClient.isConnected ? ConductorTheme.healthy : ConductorTheme.critical
             ) {
                 onSelectTab(.monitor)
             }
@@ -47,7 +47,7 @@ struct StatusBarView: View {
 
             // Keyboard hints
             Text("⌘\\ panel  ⌘1-6 presets")
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
                 .foregroundStyle(.quaternary)
                 .padding(.trailing, 8)
         }
@@ -92,12 +92,13 @@ struct StatusBarView: View {
                     Circle()
                         .fill(dot)
                         .frame(width: 5, height: 5)
+                        .accessibilityLabel("\(text) status")
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                 }
                 Text(text)
-                    .font(.system(size: 9))
+                    .font(.system(size: ConductorTheme.fontSM))
             }
             .foregroundStyle(color)
             .padding(.horizontal, 8)

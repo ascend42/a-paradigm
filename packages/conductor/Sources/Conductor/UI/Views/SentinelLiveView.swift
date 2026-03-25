@@ -23,10 +23,11 @@ struct SentinelLiveView: View {
                     // Connection indicator
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(sentinelClient.isConnected ? .green : .red)
+                            .fill(sentinelClient.isConnected ? ConductorTheme.healthy : ConductorTheme.critical)
                             .frame(width: 6, height: 6)
+                            .accessibilityLabel(sentinelClient.isConnected ? "Connected" : "Disconnected")
                         Text(sentinelClient.isConnected ? "Connected" : "Disconnected")
-                            .font(.system(size: 9))
+                            .font(.system(size: ConductorTheme.fontSM))
                             .foregroundStyle(.secondary)
                     }
 
@@ -94,11 +95,11 @@ struct SentinelLiveView: View {
                 HStack {
                     if selectedSymbol != nil || levelFilter != "All" || !searchText.isEmpty {
                         Text("\(filteredEvents.count)/\(sentinelClient.recentEvents.count) events")
-                            .font(.system(size: 9))
+                            .font(.system(size: ConductorTheme.fontSM))
                             .foregroundStyle(.tertiary)
                     } else {
                         Text("\(sentinelClient.recentEvents.count) events")
-                            .font(.system(size: 9))
+                            .font(.system(size: ConductorTheme.fontSM))
                             .foregroundStyle(.tertiary)
                     }
 
@@ -108,14 +109,14 @@ struct SentinelLiveView: View {
                             selectedSymbol = nil
                         }
                         .controlSize(.mini)
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                     }
 
                     Spacer()
                     Toggle("Auto-scroll", isOn: $autoScroll)
                         .toggleStyle(.switch)
                         .controlSize(.mini)
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                 }
             }
         } label: {
@@ -124,8 +125,9 @@ struct SentinelLiveView: View {
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                 Circle()
-                    .fill(sentinelClient.isConnected ? .green : .gray)
+                    .fill(sentinelClient.isConnected ? ConductorTheme.healthy : .gray)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(sentinelClient.isConnected ? "Sentinel connected" : "Sentinel disconnected")
             }
         }
         .popover(item: $selectedEvent) { event in
@@ -172,7 +174,7 @@ struct SentinelLiveView: View {
         HStack(alignment: .top, spacing: 6) {
             // Timestamp
             Text(event.timestamp, style: .time)
-                .font(.system(size: 8, design: .monospaced))
+                .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
                 .foregroundStyle(.tertiary)
                 .frame(width: 50, alignment: .leading)
 
@@ -186,8 +188,8 @@ struct SentinelLiveView: View {
                     }
                 }) {
                     Text(symbol)
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.purple)
+                        .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
+                        .foregroundStyle(ConductorTheme.symphony)
                         .lineLimit(1)
                         .frame(width: 60, alignment: .leading)
                 }
@@ -196,7 +198,7 @@ struct SentinelLiveView: View {
 
             // Level badge
             Text(event.level)
-                .font(.system(size: 7, weight: .medium))
+                .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                 .padding(.horizontal, 3)
                 .padding(.vertical, 1)
                 .background(RoundedRectangle(cornerRadius: 2).fill(levelColor(event.level).opacity(0.15)))
@@ -204,7 +206,7 @@ struct SentinelLiveView: View {
 
             // Message
             Text(event.message ?? event.type)
-                .font(.system(size: 9))
+                .font(.system(size: ConductorTheme.fontSM))
                 .lineLimit(2)
                 .foregroundStyle(.primary)
         }

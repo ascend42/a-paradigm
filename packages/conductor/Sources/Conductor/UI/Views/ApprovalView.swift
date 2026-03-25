@@ -17,7 +17,7 @@ struct ApprovalView: View {
             // Header
             HStack {
                 Image(systemName: "bell.badge.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(ConductorTheme.warning)
                 Text("Approval Requested")
                     .font(.headline)
                 Spacer()
@@ -82,7 +82,7 @@ struct ApprovalView: View {
                         .foregroundStyle(.secondary)
                     ScrollView {
                         Text(diff)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                             .textSelection(.enabled)
                     }
                     .frame(maxHeight: 150)
@@ -118,7 +118,7 @@ struct ApprovalView: View {
                 }
                 .controlSize(.small)
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .tint(ConductorTheme.critical)
 
                 Button("Redirect + Feedback") {
                     respond(decision: .redirected)
@@ -132,7 +132,7 @@ struct ApprovalView: View {
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .tint(ConductorTheme.healthy)
             }
         }
         .padding()
@@ -208,7 +208,7 @@ struct ApprovalNotificationBanner: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "bell.badge.fill")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(ConductorTheme.warning)
                                 .font(.caption)
                             Text("Approval: \(item.payload.question)")
                                 .font(.caption)
@@ -222,7 +222,7 @@ struct ApprovalNotificationBanner: View {
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.orange.opacity(0.1))
+                                .fill(ConductorTheme.warning.opacity(0.1))
                         )
                     }
                     .buttonStyle(.plain)

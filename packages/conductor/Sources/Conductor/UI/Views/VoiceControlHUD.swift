@@ -27,7 +27,7 @@ struct VoiceControlHUD: View {
                 if case .error(let msg) = coordinator.state {
                     Text(msg)
                         .font(.caption2)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ConductorTheme.critical)
                 }
             }
 
@@ -56,21 +56,21 @@ struct VoiceControlHUD: View {
                 .foregroundStyle(.gray)
         case .armed:
             Image(systemName: "mic.badge.plus")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(ConductorTheme.degraded)
                 .symbolEffect(.pulse, isActive: true)
         case .recording:
             Image(systemName: "mic.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(ConductorTheme.critical)
                 .symbolEffect(.pulse, isActive: true)
         case .transcribing:
             ProgressView()
                 .controlSize(.small)
         case .readyToSend:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ConductorTheme.healthy)
         case .error:
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(ConductorTheme.critical)
         }
     }
 
@@ -88,22 +88,22 @@ struct VoiceControlHUD: View {
     private var stateColor: Color {
         switch coordinator.state {
         case .idle: return .secondary
-        case .armed: return .yellow
-        case .recording: return .red
-        case .transcribing: return .orange
-        case .readyToSend: return .green
-        case .error: return .red
+        case .armed: return ConductorTheme.degraded
+        case .recording: return ConductorTheme.critical
+        case .transcribing: return ConductorTheme.warning
+        case .readyToSend: return ConductorTheme.healthy
+        case .error: return ConductorTheme.critical
         }
     }
 
     private var stateBackgroundColor: Color {
         switch coordinator.state {
         case .idle: return Color(nsColor: .controlBackgroundColor)
-        case .armed: return Color.yellow.opacity(0.1)
-        case .recording: return Color.red.opacity(0.1)
-        case .transcribing: return Color.orange.opacity(0.1)
-        case .readyToSend: return Color.green.opacity(0.1)
-        case .error: return Color.red.opacity(0.1)
+        case .armed: return ConductorTheme.degraded.opacity(0.1)
+        case .recording: return ConductorTheme.critical.opacity(0.1)
+        case .transcribing: return ConductorTheme.warning.opacity(0.1)
+        case .readyToSend: return ConductorTheme.healthy.opacity(0.1)
+        case .error: return ConductorTheme.critical.opacity(0.1)
         }
     }
 
@@ -113,7 +113,7 @@ struct VoiceControlHUD: View {
         HStack(spacing: 2) {
             ForEach(0..<5, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.red)
+                    .fill(ConductorTheme.critical)
                     .frame(width: 2, height: CGFloat.random(in: 4...16))
                     .animation(
                         .easeInOut(duration: 0.3).repeatForever().delay(Double(i) * 0.1),

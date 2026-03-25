@@ -27,11 +27,11 @@ struct InputStatusView: View {
             if let error = orchestrator.lastError {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ConductorTheme.warning)
                         .font(.caption2)
                     Text(error)
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ConductorTheme.warning)
                 }
                 .padding(.top, 2)
             }
@@ -48,7 +48,7 @@ struct InputStatusView: View {
         return statusRow(
             icon: "eye.fill",
             label: "Gaze",
-            color: active ? (calibrated ? .green : .yellow) : .gray,
+            color: active ? (calibrated ? ConductorTheme.healthy : ConductorTheme.degraded) : .gray,
             detail: gazeDetail(active: active, calibrated: calibrated)
         )
     }
@@ -72,7 +72,7 @@ struct InputStatusView: View {
         return statusRow(
             icon: "eyebrow",
             label: "Eyebrows",
-            color: enabled ? (hasData ? .green : .yellow) : .gray,
+            color: enabled ? (hasData ? ConductorTheme.healthy : ConductorTheme.degraded) : .gray,
             detail: eyebrowDetail(enabled: enabled, detector: detector)
         )
     }
@@ -97,7 +97,7 @@ struct InputStatusView: View {
             statusRow(
                 icon: "mic.fill",
                 label: "Voice",
-                color: active ? (recording ? .red : .green) : .gray,
+                color: active ? (recording ? ConductorTheme.critical : ConductorTheme.healthy) : .gray,
                 detail: voiceDetail(active: active, modelReady: modelReady, recording: recording)
             )
 
@@ -132,7 +132,7 @@ struct InputStatusView: View {
         return statusRow(
             icon: "hand.raised.fill",
             label: "Gestures",
-            color: active ? (handState != .none ? .green : .yellow) : .gray,
+            color: active ? (handState != .none ? ConductorTheme.healthy : ConductorTheme.degraded) : .gray,
             detail: gestureDetail(active: active, handState: handState)
         )
     }
@@ -166,6 +166,7 @@ struct InputStatusView: View {
             Circle()
                 .fill(color)
                 .frame(width: 6, height: 6)
+                .accessibilityLabel("\(label): \(detail)")
 
             Text(detail)
                 .font(.caption2)

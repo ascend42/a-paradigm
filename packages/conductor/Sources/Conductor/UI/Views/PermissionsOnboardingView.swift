@@ -22,7 +22,7 @@ struct PermissionsOnboardingView: View {
             VStack(spacing: 4) {
                 Image(systemName: "lock.shield")
                     .font(.system(size: 32))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(ConductorTheme.brand)
                 Text("Permissions")
                     .font(.title3.bold())
                 Text("Conductor needs access to work with your camera, microphone, and windows.")
@@ -72,7 +72,7 @@ struct PermissionsOnboardingView: View {
             } else {
                 Text("Accessibility permission is required for Conductor to function.")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(ConductorTheme.warning)
                     .multilineTextAlignment(.center)
             }
         }
@@ -116,7 +116,7 @@ struct PermissionsOnboardingView: View {
         switch state {
         case .granted:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ConductorTheme.healthy)
         case .denied:
             Button("Open Settings") {
                 action()
@@ -131,7 +131,7 @@ struct PermissionsOnboardingView: View {
             .buttonStyle(.borderedProminent)
         case .restricted:
             Image(systemName: "lock.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(ConductorTheme.critical)
         }
     }
 

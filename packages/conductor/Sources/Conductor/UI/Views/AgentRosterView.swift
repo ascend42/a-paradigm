@@ -30,7 +30,7 @@ struct AgentRosterView: View {
     private var headerRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "person.crop.rectangle.stack.fill")
-                .foregroundStyle(.purple)
+                .foregroundStyle(ConductorTheme.symphony)
                 .font(.caption)
 
             Text("Agent Roster")
@@ -40,12 +40,12 @@ struct AgentRosterView: View {
             let benchedCount = agents.filter(\.benched).count
 
             Text("\(activeCount) active")
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.green)
+                .font(.system(size: ConductorTheme.fontXS, weight: .medium))
+                .foregroundStyle(ConductorTheme.healthy)
 
             if benchedCount > 0 {
                 Text("\(benchedCount) benched")
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -57,7 +57,7 @@ struct AgentRosterView: View {
                 }
             } label: {
                 Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.system(size: 8))
+                    .font(.system(size: ConductorTheme.fontXS))
                     .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
@@ -84,10 +84,10 @@ struct AgentRosterView: View {
             if !benched.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "tray.fill")
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                         .foregroundStyle(.secondary)
                     Text("Benched")
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 4)
@@ -105,10 +105,10 @@ struct AgentRosterView: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.purple.opacity(0.03))
+                .fill(ConductorTheme.symphony.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.purple.opacity(0.1), lineWidth: 1)
+                        .stroke(ConductorTheme.symphony.opacity(0.1), lineWidth: 1)
                 )
         )
     }
@@ -149,7 +149,7 @@ struct AgentRosterRow: View {
         HStack(spacing: 6) {
             // Status dot
             Circle()
-                .fill(isBenched ? Color.gray : Color.green)
+                .fill(isBenched ? Color.gray : ConductorTheme.healthy)
                 .frame(width: 6, height: 6)
                 .accessibilityLabel(isBenched ? "Benched" : "Active")
 
@@ -174,19 +174,19 @@ struct AgentRosterRow: View {
                 HStack(spacing: 6) {
                     if let rate = agent.acceptanceRate {
                         Label("\(Int(rate * 100))%", systemImage: "checkmark.circle")
-                            .font(.system(size: 8))
-                            .foregroundStyle(rate >= 0.7 ? .green : rate >= 0.5 ? .yellow : .red)
+                            .font(.system(size: ConductorTheme.fontXS))
+                            .foregroundStyle(rate >= 0.7 ? ConductorTheme.healthy : rate >= 0.5 ? ConductorTheme.degraded : ConductorTheme.critical)
                     }
 
                     if agent.expertiseCount > 0 {
                         Label("\(agent.expertiseCount)", systemImage: "star")
-                            .font(.system(size: 8))
+                            .font(.system(size: ConductorTheme.fontXS))
                             .foregroundStyle(.secondary)
                     }
 
                     if let threshold = agent.threshold {
                         Label(String(format: "%.2f", threshold), systemImage: "slider.horizontal.3")
-                            .font(.system(size: 8))
+                            .font(.system(size: ConductorTheme.fontXS))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -200,7 +200,7 @@ struct AgentRosterRow: View {
             } label: {
                 Image(systemName: isBenched ? "play.circle" : "pause.circle")
                     .font(.system(size: 10))
-                    .foregroundStyle(isBenched ? .green : .secondary)
+                    .foregroundStyle(isBenched ? ConductorTheme.healthy : .secondary)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isBenched ? "Activate agent" : "Bench agent")

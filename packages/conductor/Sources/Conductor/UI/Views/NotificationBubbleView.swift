@@ -45,7 +45,7 @@ struct NotificationBubbleView: View {
                 .controlSize(.mini)
         case .finished:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ConductorTheme.healthy)
                 .font(.caption2)
         case .unknown:
             Image(systemName: "questionmark.circle")
@@ -63,23 +63,23 @@ struct NotificationBubbleView: View {
     private var agentBadge: some View {
         HStack(spacing: 2) {
             Image(systemName: "person.2.fill")
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
             Text("\(agentCount)")
                 .font(.caption2.bold())
         }
-        .foregroundStyle(.purple)
+        .foregroundStyle(ConductorTheme.symphony)
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
         .background(
             Capsule()
-                .fill(Color.purple.opacity(0.15))
+                .fill(ConductorTheme.symphony.opacity(0.15))
         )
     }
 
     private var threadBadge: some View {
         HStack(spacing: 2) {
             Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
             Text("\(threadCount)")
                 .font(.caption2.bold())
         }

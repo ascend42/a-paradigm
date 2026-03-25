@@ -71,7 +71,7 @@ struct AddInstanceSheet: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(ConductorTheme.critical)
             }
 
             Spacer()

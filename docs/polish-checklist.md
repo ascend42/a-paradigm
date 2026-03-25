@@ -40,11 +40,11 @@
 - [x] Stale Expiry — Configurable TTL in config.yaml (nomination-ttl-days: 7, debate-ttl-days: 14). File pruning implemented.
 
 ## 5. Enforcement
-- [ ] Habits (seed habits, custom habits, graduation tiers)
-- [ ] Stop Hook (blocking accuracy, false positive rate)
-- [ ] Pre-commit Hook (index rebuild reliability)
-- [ ] Post-write Hook (advisory quality, event batching)
-- [ ] Compliance Check (single-process consolidation, speed)
+- [x] Habits — 16 seed habits, graduation system, 12 check types, 30s cache. Solid.
+- [x] Stop Hook — Fixed 3 false positive sources: route detection skips comments/tests, source counting is directory-aware, freshness has git mtime fallback
+- [x] Pre-commit Hook — Simple, never blocks, auto-stages indexes. Solid.
+- [x] Post-write Hook — Legacy afterFileEdit gutted to no-op. postToolUse is sole tracking hook now.
+- [x] Compliance Check — Consolidated, --learn flag, structured violations with file/source/severity
 
 ## 6. Conductor (Native macOS)
 - [ ] Overlay Panel (layout, visual hierarchy)

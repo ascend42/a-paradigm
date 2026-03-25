@@ -26,7 +26,7 @@ struct WorkspaceView: View {
                         Capsule()
                             .fill(workspaceManager.managedInstances.isEmpty
                                   ? Color.gray.opacity(0.2)
-                                  : Color.cyan.opacity(0.2))
+                                  : ConductorTheme.brand.opacity(0.2))
                     )
             }
 
@@ -72,7 +72,7 @@ struct WorkspaceView: View {
                 // Sidebar indicator
                 let sidebarRect = grid.sidebarFrame
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.cyan.opacity(0.2))
+                    .fill(ConductorTheme.brand.opacity(0.2))
                     .frame(
                         width: sidebarRect.width * scaleX,
                         height: sidebarRect.height * scaleY
@@ -89,10 +89,10 @@ struct WorkspaceView: View {
                     let isTargeted = gazeRouter.currentTarget?.processID == managed.processID
 
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(isTargeted ? Color.green.opacity(0.3) : Color.secondary.opacity(0.15))
+                        .fill(isTargeted ? ConductorTheme.healthy.opacity(0.3) : Color.secondary.opacity(0.15))
                         .overlay(
                             RoundedRectangle(cornerRadius: 2)
-                                .stroke(isTargeted ? Color.green : Color.secondary.opacity(0.3), lineWidth: 1)
+                                .stroke(isTargeted ? ConductorTheme.healthy : Color.secondary.opacity(0.3), lineWidth: 1)
                         )
                         .overlay(
                             Text("\(index + 1)")
@@ -156,7 +156,7 @@ struct WorkspaceView: View {
                 .font(.caption.bold().monospaced())
                 .foregroundStyle(.white)
                 .frame(width: 20, height: 20)
-                .background(Circle().fill(isTargeted ? Color.green : Color.secondary))
+                .background(Circle().fill(isTargeted ? ConductorTheme.healthy : Color.secondary))
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
@@ -175,12 +175,14 @@ struct WorkspaceView: View {
             // Status
             if managed.isAlive {
                 Circle()
-                    .fill(.green)
+                    .fill(ConductorTheme.healthy)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel("Instance running")
             } else {
                 Circle()
-                    .fill(.red)
+                    .fill(ConductorTheme.critical)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel("Instance stopped")
             }
 
             // Close button
@@ -224,6 +226,7 @@ struct WorkspaceView: View {
                     Circle()
                         .fill(.gray)
                         .frame(width: 6, height: 6)
+                        .accessibilityLabel("External instance")
                     Text(instance.projectDirectory ?? instance.title)
                         .font(.caption2)
                         .lineLimit(1)

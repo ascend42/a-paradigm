@@ -22,7 +22,7 @@ struct ThreadView: View {
             // Header
             HStack {
                 Image(systemName: "bubble.left.and.bubble.right")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(ConductorTheme.symphony)
                 Text(threadId)
                     .font(.caption.bold())
                     .lineLimit(1)
@@ -91,14 +91,14 @@ struct ThreadView: View {
                     .foregroundStyle(.primary)
                 Spacer()
                 Text(relativeTime(note.timestamp))
-                    .font(.system(size: 9))
+                    .font(.system(size: ConductorTheme.fontSM))
                     .foregroundStyle(.tertiary)
             }
 
             // Intent badge
             HStack(spacing: 4) {
                 Text(note.intent.rawValue)
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                     .foregroundStyle(intentColor(note.intent))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
@@ -108,7 +108,7 @@ struct ThreadView: View {
 
                 if !note.symbols.isEmpty {
                     Text(note.symbols.joined(separator: " "))
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -122,7 +122,7 @@ struct ThreadView: View {
             // Diff (if present)
             if let diff = note.content.diff {
                 Text(diff)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .padding(4)
                     .background(
@@ -176,26 +176,26 @@ struct ThreadView: View {
 
     private func intentColor(_ intent: MessageIntent) -> Color {
         switch intent {
-        case .question: return .blue
-        case .context, .clarification: return .cyan
-        case .proposal: return .orange
-        case .verification: return .purple
-        case .action: return .green
-        case .decision: return .yellow
-        case .alert: return .red
-        case .approval: return .green
-        case .rejection: return .red
+        case .question: return ConductorTheme.active
+        case .context, .clarification: return ConductorTheme.brand
+        case .proposal: return ConductorTheme.warning
+        case .verification: return ConductorTheme.symphony
+        case .action: return ConductorTheme.healthy
+        case .decision: return ConductorTheme.degraded
+        case .alert: return ConductorTheme.critical
+        case .approval: return ConductorTheme.healthy
+        case .rejection: return ConductorTheme.critical
         case .reference: return .gray
-        case .handoff: return .orange
+        case .handoff: return ConductorTheme.warning
         case .fileRequest, .fileApproved, .fileDenied, .fileDelivery: return .indigo
         // Task protocol intents
-        case .task: return .blue
-        case .taskAck: return .cyan
+        case .task: return ConductorTheme.active
+        case .taskAck: return ConductorTheme.brand
         case .progress: return .mint
-        case .approvalRequest: return .orange
-        case .approvalResponse: return .green
-        case .taskComplete: return .green
-        case .taskFailed: return .red
+        case .approvalRequest: return ConductorTheme.warning
+        case .approvalResponse: return ConductorTheme.healthy
+        case .taskComplete: return ConductorTheme.healthy
+        case .taskFailed: return ConductorTheme.critical
         }
     }
 

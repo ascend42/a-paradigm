@@ -26,6 +26,22 @@ struct GridPreset: Equatable, Hashable, Codable {
     ]
 }
 
+// MARK: - RawRepresentable (for @AppStorage persistence)
+
+extension GridPreset: RawRepresentable {
+    init?(rawValue: String) {
+        let parts = rawValue.split(separator: "x")
+        guard parts.count == 2,
+              let cols = Int(parts[0]),
+              let rows = Int(parts[1]) else {
+            return nil
+        }
+        self.init(columns: cols, rows: rows)
+    }
+
+    var rawValue: String { "\(columns)x\(rows)" }
+}
+
 /// Computes cell frames for a workspace grid layout.
 struct WorkspaceGrid: Equatable {
 

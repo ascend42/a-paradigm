@@ -14,7 +14,7 @@ struct FileRequestNotificationView: View {
             VStack(spacing: 6) {
                 HStack {
                     Image(systemName: "doc.badge.arrow.up")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ConductorTheme.warning)
                     Text("File Requests")
                         .font(.caption.bold())
                     Spacer()
@@ -28,7 +28,7 @@ struct FileRequestNotificationView: View {
                 }
             }
             .padding(8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(ConductorTheme.warning.opacity(0.08)))
         }
     }
 
@@ -41,11 +41,11 @@ struct FileRequestNotificationView: View {
                 Spacer()
                 if record.request.urgency == .urgent {
                     Text("URGENT")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: ConductorTheme.fontXS, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(.red))
+                        .background(Capsule().fill(ConductorTheme.critical))
                 }
             }
 
@@ -64,7 +64,7 @@ struct FileRequestNotificationView: View {
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .tint(ConductorTheme.healthy)
 
                 Button("Redact") {
                     onApproveRedacted(record.request.requestId)
@@ -77,7 +77,7 @@ struct FileRequestNotificationView: View {
                 }
                 .controlSize(.small)
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .tint(ConductorTheme.critical)
             }
             .padding(.top, 2)
         }

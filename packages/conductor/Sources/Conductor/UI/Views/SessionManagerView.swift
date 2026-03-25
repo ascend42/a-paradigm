@@ -118,11 +118,11 @@ struct SessionManagerView: View {
             HStack(spacing: 6) {
                 if linkingMode {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isSelected ? .blue : .secondary)
+                        .foregroundStyle(isSelected ? ConductorTheme.active : .secondary)
                         .font(.caption)
                 } else {
                     Image(systemName: "folder.fill")
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(ConductorTheme.brand)
                         .font(.caption)
                 }
 
@@ -133,14 +133,14 @@ struct SessionManagerView: View {
                 if project.pinned {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.yellow)
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                 }
 
                 Spacer()
 
                 // Status badge
                 if hasAgent {
-                    statusBadge("Running", color: .green)
+                    statusBadge("Running", color: ConductorTheme.healthy)
                 } else if checkpoint != nil {
                     statusBadge(checkpoint!.phase.capitalized, color: phaseColor(checkpoint!.phase))
                 }
@@ -221,12 +221,12 @@ struct SessionManagerView: View {
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected
-                    ? Color.blue.opacity(0.1)
+                    ? ConductorTheme.active.opacity(0.1)
                     : Color(nsColor: .controlBackgroundColor))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                .strokeBorder(isSelected ? ConductorTheme.active.opacity(0.4) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -254,7 +254,7 @@ struct SessionManagerView: View {
                 }
                 .controlSize(.mini)
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .tint(ConductorTheme.critical)
             }
             .padding(.top, 4)
 
@@ -268,8 +268,9 @@ struct SessionManagerView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(agent.isAlive ? Color.green : Color.red)
+                    .fill(agent.isAlive ? ConductorTheme.healthy : ConductorTheme.critical)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(agent.isAlive ? "Agent running" : "Agent stopped")
 
                 Text("\(agent.agentRole) @ \(URL(fileURLWithPath: agent.projectPath).lastPathComponent)")
                     .font(.caption.bold())
@@ -312,7 +313,7 @@ struct SessionManagerView: View {
                 }
                 .controlSize(.mini)
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .tint(ConductorTheme.critical)
 
                 Spacer()
             }
@@ -387,7 +388,7 @@ struct SessionManagerView: View {
 
     private func statusBadge(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .medium))
+            .font(.system(size: ConductorTheme.fontSM, weight: .medium))
             .foregroundStyle(color)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
@@ -398,10 +399,10 @@ struct SessionManagerView: View {
 
     private func phaseColor(_ phase: String) -> Color {
         switch phase {
-        case "planning": return .blue
-        case "implementing": return .orange
-        case "validating": return .purple
-        case "complete": return .green
+        case "planning": return ConductorTheme.active
+        case "implementing": return ConductorTheme.warning
+        case "validating": return ConductorTheme.symphony
+        case "complete": return ConductorTheme.healthy
         default: return .gray
         }
     }

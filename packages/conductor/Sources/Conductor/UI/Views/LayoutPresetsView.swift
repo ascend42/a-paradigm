@@ -24,7 +24,7 @@ struct LayoutPresetsView: View {
                 presetIcon(preset)
                     .frame(width: 24, height: 18)
                 Text("⌘\(preset.shortcutIndex)")
-                    .font(.system(size: 7, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 4)

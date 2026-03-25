@@ -92,7 +92,7 @@ struct EmptyCellView: View {
                 .foregroundStyle(.secondary)
 
             Text("Drop project or click +")
-                .font(.system(size: 9))
+                .font(.system(size: ConductorTheme.fontSM))
                 .foregroundStyle(.tertiary)
 
             Button(action: onLaunch) {

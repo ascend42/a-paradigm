@@ -21,7 +21,7 @@ struct TaskDashboardView: View {
                 // Archive badge
                 if taskStore.archivedCount > 0 {
                     Text("\(taskStore.archivedCount) archived")
-                        .font(.system(size: 8))
+                        .font(.system(size: ConductorTheme.fontXS))
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
@@ -32,9 +32,9 @@ struct TaskDashboardView: View {
 
                 // Task counts
                 HStack(spacing: 6) {
-                    countBadge(taskStore.activeTasks.count, color: .blue, label: "active")
-                    countBadge(taskStore.blockedTasks.count, color: .red, label: "blocked")
-                    countBadge(taskStore.awaitingApprovalTasks.count, color: .orange, label: "pending")
+                    countBadge(taskStore.activeTasks.count, color: ConductorTheme.active, label: "active")
+                    countBadge(taskStore.blockedTasks.count, color: ConductorTheme.critical, label: "blocked")
+                    countBadge(taskStore.awaitingApprovalTasks.count, color: ConductorTheme.warning, label: "pending")
                 }
 
                 // Archive menu
@@ -70,28 +70,28 @@ struct TaskDashboardView: View {
             ScrollView {
                 LazyVStack(spacing: 6) {
                     if !filtered(taskStore.activeTasks).isEmpty {
-                        columnHeader("Active", systemImage: "play.circle", color: .blue)
+                        columnHeader("Active", systemImage: "play.circle", color: ConductorTheme.active)
                         ForEach(filtered(taskStore.activeTasks)) { task in
                             taskCard(task)
                         }
                     }
 
                     if !filtered(taskStore.blockedTasks).isEmpty {
-                        columnHeader("Blocked", systemImage: "exclamationmark.triangle", color: .red)
+                        columnHeader("Blocked", systemImage: "exclamationmark.triangle", color: ConductorTheme.critical)
                         ForEach(filtered(taskStore.blockedTasks)) { task in
                             taskCard(task)
                         }
                     }
 
                     if !filtered(taskStore.awaitingApprovalTasks).isEmpty {
-                        columnHeader("Awaiting Approval", systemImage: "clock.badge.questionmark", color: .orange)
+                        columnHeader("Awaiting Approval", systemImage: "clock.badge.questionmark", color: ConductorTheme.warning)
                         ForEach(filtered(taskStore.awaitingApprovalTasks)) { task in
                             taskCard(task)
                         }
                     }
 
                     if !filtered(taskStore.completedTasks).isEmpty {
-                        columnHeader("Complete", systemImage: "checkmark.circle", color: .green)
+                        columnHeader("Complete", systemImage: "checkmark.circle", color: ConductorTheme.healthy)
                         ForEach(filtered(taskStore.completedTasks).suffix(5)) { task in
                             taskCard(task)
                         }
@@ -125,7 +125,7 @@ struct TaskDashboardView: View {
         Group {
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: ConductorTheme.fontSM, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
@@ -153,7 +153,7 @@ struct TaskDashboardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(task.id.suffix(8))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer()
                     priorityBadge(task.priority)
@@ -170,9 +170,9 @@ struct TaskDashboardView: View {
                     if let first = task.assignedTo.first {
                         HStack(spacing: 2) {
                             Image(systemName: "person")
-                                .font(.system(size: 8))
+                                .font(.system(size: ConductorTheme.fontXS))
                             Text(first.components(separatedBy: "/").last ?? first)
-                                .font(.system(size: 9))
+                                .font(.system(size: ConductorTheme.fontSM))
                         }
                         .foregroundStyle(.secondary)
                     }
@@ -186,7 +186,7 @@ struct TaskDashboardView: View {
                                 .frame(width: 40)
                                 .controlSize(.mini)
                             Text("\(task.progress)%")
-                                .font(.system(size: 8, design: .monospaced))
+                                .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
                     } else {
@@ -210,7 +210,7 @@ struct TaskDashboardView: View {
 
     private func priorityBadge(_ priority: TaskPriority) -> some View {
         Text(priority.rawValue.capitalized)
-            .font(.system(size: 8, weight: .medium))
+            .font(.system(size: ConductorTheme.fontXS, weight: .medium))
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(
@@ -222,11 +222,11 @@ struct TaskDashboardView: View {
     private func statusBadge(_ status: TaskStatus) -> some View {
         HStack(spacing: 2) {
             Image(systemName: status == .complete ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
             Text(status == .complete ? "Done" : "Failed")
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
         }
-        .foregroundStyle(status == .complete ? .green : .red)
+        .foregroundStyle(status == .complete ? ConductorTheme.healthy : ConductorTheme.critical)
     }
 
     // MARK: - Helpers

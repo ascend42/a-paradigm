@@ -89,7 +89,7 @@ struct CellChromeView: View {
             // Progress
             if status == .implementing && progress > 0 {
                 Text("\(progress)%")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
 
@@ -112,7 +112,7 @@ struct CellChromeView: View {
                 // Maximize
                 Button(action: { onMaximize?() }) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
@@ -120,7 +120,7 @@ struct CellChromeView: View {
                 // Close
                 Button(action: { onClose?() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
@@ -144,8 +144,9 @@ struct CellChromeView: View {
             Circle()
                 .fill(status.color)
                 .frame(width: 6, height: 6)
+                .accessibilityLabel("Status: \(status.label)")
             Text(status.label)
-                .font(.system(size: 8, weight: .medium))
+                .font(.system(size: ConductorTheme.fontXS, weight: .medium))
                 .foregroundStyle(status.color)
         }
         .padding(.horizontal, 5)
@@ -154,10 +155,10 @@ struct CellChromeView: View {
     }
 
     private var borderColor: Color {
-        if isGazeTargeted { return .green }
+        if isGazeTargeted { return ConductorTheme.healthy }
         switch status {
-        case .blocked: return .red.opacity(0.5)
-        case .implementing: return .blue.opacity(0.3)
+        case .blocked: return ConductorTheme.critical.opacity(0.5)
+        case .implementing: return ConductorTheme.active.opacity(0.3)
         default: return .secondary.opacity(0.2)
         }
     }
@@ -185,10 +186,10 @@ enum CellStatus: String {
     var color: Color {
         switch self {
         case .idle: return .secondary
-        case .implementing: return .blue
-        case .blocked: return .red
-        case .complete: return .green
-        case .processing: return .orange
+        case .implementing: return ConductorTheme.active
+        case .blocked: return ConductorTheme.critical
+        case .complete: return ConductorTheme.healthy
+        case .processing: return ConductorTheme.warning
         }
     }
 }

@@ -41,10 +41,10 @@ struct SentinelEventDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "number")
                         .font(.system(size: 10))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(ConductorTheme.symphony)
                     Text(symbol)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(ConductorTheme.symphony)
                         .textSelection(.enabled)
                 }
             }
@@ -68,11 +68,11 @@ struct SentinelEventDetailView: View {
                 ForEach(metadata.keys.sorted(), id: \.self) { key in
                     HStack(alignment: .top, spacing: 4) {
                         Text(key)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.cyan)
+                            .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
+                            .foregroundStyle(ConductorTheme.brand)
                             .frame(width: 80, alignment: .trailing)
                         Text(metadata[key] ?? "")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)
                     }
@@ -89,14 +89,14 @@ struct SentinelEventDetailView: View {
                 ForEach(relatedTasks) { task in
                     HStack(spacing: 6) {
                         Text(String(task.id.suffix(8)))
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                             .foregroundStyle(.secondary)
 
                         taskStatusPill(task.status)
 
                         if task.progress > 0 && task.progress < 100 {
                             Text("\(task.progress)%")
-                                .font(.system(size: 8, design: .monospaced))
+                                .font(.system(size: ConductorTheme.fontXS, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -111,7 +111,7 @@ struct SentinelEventDetailView: View {
 
     private func levelBadge(_ level: String) -> some View {
         Text(level.uppercased())
-            .font(.system(size: 8, weight: .bold))
+            .font(.system(size: ConductorTheme.fontXS, weight: .bold))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Capsule().fill(levelColor(level).opacity(0.15)))
@@ -120,7 +120,7 @@ struct SentinelEventDetailView: View {
 
     private func typeBadge(_ type: String) -> some View {
         Text(type)
-            .font(.system(size: 8, weight: .medium))
+            .font(.system(size: ConductorTheme.fontXS, weight: .medium))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Capsule().fill(.secondary.opacity(0.1)))
@@ -129,7 +129,7 @@ struct SentinelEventDetailView: View {
 
     private func taskStatusPill(_ status: TaskStatus) -> some View {
         Text(statusLabel(status))
-            .font(.system(size: 8, weight: .medium))
+            .font(.system(size: ConductorTheme.fontXS, weight: .medium))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Capsule().fill(statusColor(status).opacity(0.15)))
@@ -138,9 +138,9 @@ struct SentinelEventDetailView: View {
 
     private func levelColor(_ level: String) -> Color {
         switch level {
-        case "error": return .red
-        case "warn": return .orange
-        case "info": return .blue
+        case "error": return ConductorTheme.critical
+        case "warn": return ConductorTheme.warning
+        case "info": return ConductorTheme.active
         default: return .secondary
         }
     }
@@ -159,11 +159,11 @@ struct SentinelEventDetailView: View {
 
     private func statusColor(_ status: TaskStatus) -> Color {
         switch status {
-        case .assigned, .acknowledged, .inProgress: return .blue
-        case .blocked: return .red
-        case .awaitingApproval: return .orange
-        case .complete: return .green
-        case .failed: return .red
+        case .assigned, .acknowledged, .inProgress: return ConductorTheme.active
+        case .blocked: return ConductorTheme.critical
+        case .awaitingApproval: return ConductorTheme.warning
+        case .complete: return ConductorTheme.healthy
+        case .failed: return ConductorTheme.critical
         }
     }
 }

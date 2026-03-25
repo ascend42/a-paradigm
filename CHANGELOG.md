@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.20.0] — 2026-03-25
+
+### Added
+
+- **Overlay panel grouping** — MainOverlayView's 11 flat sections grouped into 4 collapsible DisclosureGroup regions: Input & Buffer, Sessions & Workspace, Team, Monitoring. Clean visual hierarchy.
+- **ContainerView environment migration** — ContainerView now uses `@EnvironmentObject` like MainOverlayView (was 10 separate @ObservedObject). AppDelegate injects the shared environment.
+- **Grid preset persistence** — `@AppStorage("conductorGridPreset")` preserves selected grid layout across launches. GridPreset gains RawRepresentable conformance.
+- **ConductorTheme full adoption** — 25 view files migrated from raw `.green`/`.red`/`.blue` to semantic tokens (`ConductorTheme.healthy`/`.critical`/`.active`). ~100% coverage for status colors.
+- **Agent color stability** — TeamThreadView uses deterministic Unicode scalar sum instead of Swift's randomized `hashValue`. Same agent gets same color every session.
+- **Accessibility completion** — 17 additional status dot labels across 14 views. 84 font size occurrences standardized: all `size: 7` → `fontXS` (8pt), `size: 8` → `fontXS`, `size: 9` → `fontSM`. Zero sub-8pt fonts remain.
+
 ## [5.19.0] — 2026-03-25
 
 ### Fixed

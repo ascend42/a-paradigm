@@ -5,18 +5,9 @@
 import SwiftUI
 
 struct ContainerView: View {
-    @ObservedObject var workspaceManager: WorkspaceManager
-    @ObservedObject var taskStore: TaskStore
-    @ObservedObject var sentinelClient: SentinelWSClient
-    @ObservedObject var agentHealthMonitor: AgentHealthMonitor
-    @ObservedObject var projectStore: ProjectStore
-    @ObservedObject var agentProcessManager: AgentProcessManager
-    @ObservedObject var agentGroupStore: AgentGroupStore
-    @ObservedObject var symphonyMonitor: SymphonyMonitor
-    @ObservedObject var threadWatcher: SymphonyThreadWatcher
-    @ObservedObject var noteRelay: NoteRelay
+    @EnvironmentObject var env: ConductorEnvironment
 
-    @State private var gridPreset: GridPreset = .twoByOne
+    @AppStorage("conductorGridPreset") private var gridPreset: GridPreset = .twoByOne
     @State private var showSidebar = true
     @State private var showHelp = false
     @State private var sidebarTab: SidebarTab = .sessions
@@ -53,9 +44,9 @@ struct ContainerView: View {
 
             // Status bar
             StatusBarView(
-                taskStore: taskStore,
-                sentinelClient: sentinelClient,
-                agentHealthMonitor: agentHealthMonitor,
+                taskStore: env.taskStore,
+                sentinelClient: env.sentinelClient,
+                agentHealthMonitor: env.agentHealthMonitor,
                 onSelectTab: { _ in }
             )
             .frame(height: statusBarHeight)
@@ -71,14 +62,14 @@ struct ContainerView: View {
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showSidebar.toggle() } }) {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 14))
-                    .foregroundStyle(showSidebar ? .blue : .secondary)
+                    .foregroundStyle(showSidebar ? ConductorTheme.active : .secondary)
             }
             .buttonStyle(.borderless)
             .accessibilityLabel(showSidebar ? "Hide sidebar" : "Show sidebar")
             .help(showSidebar ? "Hide sidebar" : "Show sidebar")
 
             Image(systemName: "waveform.badge.mic")
-                .foregroundStyle(.cyan)
+                .foregroundStyle(ConductorTheme.brand)
             Text("Conductor")
                 .font(.system(size: 13, weight: .semibold))
 
@@ -91,7 +82,7 @@ struct ContainerView: View {
                 .frame(height: 16)
 
             // Instance count
-            let instanceCount = workspaceManager.managedInstances.count
+            let instanceCount = env.workspaceManager.managedInstances.count
             Text("\(instanceCount)/\(gridPreset.totalCells) cells")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -111,7 +102,7 @@ struct ContainerView: View {
 
             // Status indicator
             Circle()
-                .fill(.green)
+                .fill(ConductorTheme.healthy)
                 .frame(width: 8, height: 8)
                 .accessibilityLabel("Conductor running")
         }
@@ -134,13 +125,13 @@ struct ContainerView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(gridPreset == preset
-                                    ? Color.blue.opacity(0.2)
+                                    ? ConductorTheme.active.opacity(0.2)
                                     : Color.clear)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 4)
                                 .strokeBorder(gridPreset == preset
-                                    ? Color.blue.opacity(0.4)
+                                    ? ConductorTheme.active.opacity(0.4)
                                     : Color.secondary.opacity(0.2), lineWidth: 1)
                         )
                 }
@@ -161,7 +152,7 @@ struct ContainerView: View {
                 HStack(spacing: spacing) {
                     ForEach(0..<cols, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(gridPreset == preset ? Color.blue : Color.secondary.opacity(0.5))
+                            .fill(gridPreset == preset ? ConductorTheme.active : Color.secondary.opacity(0.5))
                     }
                 }
             }
@@ -181,12 +172,12 @@ struct ContainerView: View {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 12))
                             Text(tab.title)
-                                .font(.system(size: 9))
+                                .font(.system(size: ConductorTheme.fontSM))
                         }
-                        .foregroundStyle(sidebarTab == tab ? .blue : .secondary)
+                        .foregroundStyle(sidebarTab == tab ? ConductorTheme.active : .secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(sidebarTab == tab ? Color.blue.opacity(0.08) : Color.clear)
+                        .background(sidebarTab == tab ? ConductorTheme.active.opacity(0.08) : Color.clear)
                     }
                     .buttonStyle(.borderless)
                 }
@@ -211,12 +202,12 @@ struct ContainerView: View {
         switch sidebarTab {
         case .sessions:
             SessionManagerView(
-                projectStore: projectStore,
-                agentManager: agentProcessManager,
-                agentGroupStore: agentGroupStore,
+                projectStore: env.projectStore,
+                agentManager: env.agentProcessManager,
+                agentGroupStore: env.agentGroupStore,
                 onLaunchInTerminal: { projectPath in
                     Task {
-                        try? await workspaceManager.launchInstance(
+                        try? await env.workspaceManager.launchInstance(
                             projectDir: projectPath,
                             label: CheckpointReader.projectName(for: projectPath)
                         )
@@ -225,14 +216,14 @@ struct ContainerView: View {
             )
 
         case .monitor:
-            if !agentGroupStore.groups.isEmpty {
+            if !env.agentGroupStore.groups.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Linked Groups", systemImage: "link.circle")
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
-                    ForEach(agentGroupStore.groups) { group in
+                    ForEach(env.agentGroupStore.groups) { group in
                         HStack {
-                            Circle().fill(Color.blue).frame(width: 6, height: 6)
+                            Circle().fill(ConductorTheme.active).frame(width: 6, height: 6)
                                 .accessibilityLabel("Linked group")
                             Text(group.name)
                                 .font(.caption)
@@ -246,24 +237,24 @@ struct ContainerView: View {
             }
 
             // Live orchestration threads
-            if !threadWatcher.teamThreads.isEmpty {
+            if !env.threadWatcher.teamThreads.isEmpty {
                 TeamThreadView(
-                    threadWatcher: threadWatcher,
-                    monitor: symphonyMonitor
+                    threadWatcher: env.threadWatcher,
+                    monitor: env.symphonyMonitor
                 )
             }
 
-            if !taskStore.tasks.isEmpty {
-                TaskDashboardView(taskStore: taskStore)
+            if !env.taskStore.tasks.isEmpty {
+                TaskDashboardView(taskStore: env.taskStore)
             }
 
-            AgentHealthView(healthMonitor: agentHealthMonitor)
+            AgentHealthView(healthMonitor: env.agentHealthMonitor)
 
         case .sentinel:
-            SentinelLiveView(sentinelClient: sentinelClient)
+            SentinelLiveView(sentinelClient: env.sentinelClient)
 
         case .settings:
-            WorkspaceSettingsView(workspaceManager: workspaceManager)
+            WorkspaceSettingsView(workspaceManager: env.workspaceManager)
         }
     }
 
@@ -282,8 +273,8 @@ struct ContainerView: View {
                     let x = cellGap + CGFloat(col) * (cellWidth + cellGap)
                     let y = cellGap + CGFloat(row) * (cellHeight + cellGap)
 
-                    let instance = index < workspaceManager.managedInstances.count
-                        ? workspaceManager.managedInstances[index]
+                    let instance = index < env.workspaceManager.managedInstances.count
+                        ? env.workspaceManager.managedInstances[index]
                         : nil
 
                     gridCell(index: index, instance: instance)
@@ -301,7 +292,7 @@ struct ContainerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Circle()
-                        .fill(instance.isAlive ? Color.green : Color.red)
+                        .fill(instance.isAlive ? ConductorTheme.healthy : ConductorTheme.critical)
                         .frame(width: 8, height: 8)
                         .accessibilityLabel(instance.isAlive ? "Running" : "Stopped")
                     Text(instance.label)
@@ -309,7 +300,7 @@ struct ContainerView: View {
                         .lineLimit(1)
                     Spacer()
                     Text("Cell \(index + 1)")
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.tertiary)
                 }
 
@@ -323,15 +314,15 @@ struct ContainerView: View {
 
                 HStack {
                     Text(instance.terminalApp.rawValue)
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.tertiary)
                     Spacer()
                     Button("Close") {
-                        workspaceManager.closeInstance(instance)
+                        env.workspaceManager.closeInstance(instance)
                     }
                     .controlSize(.mini)
                     .buttonStyle(.bordered)
-                    .tint(.red)
+                    .tint(ConductorTheme.critical)
                 }
             }
             .padding(8)
@@ -341,7 +332,7 @@ struct ContainerView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.green.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(ConductorTheme.healthy.opacity(0.3), lineWidth: 1)
             )
         } else {
             // Empty cell — placeholder

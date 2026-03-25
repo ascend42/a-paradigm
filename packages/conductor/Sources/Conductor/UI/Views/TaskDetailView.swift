@@ -84,8 +84,8 @@ struct TaskDetailView: View {
                         ForEach(task.blockers, id: \.self) { blocker in
                             HStack(spacing: 4) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.red)
+                                    .font(.system(size: ConductorTheme.fontSM))
+                                    .foregroundStyle(ConductorTheme.critical)
                                 Text(blocker)
                                     .font(.caption)
                             }
@@ -114,11 +114,11 @@ struct TaskDetailView: View {
                         FlowLayout(spacing: 4) {
                             ForEach(task.symbolsTouched, id: \.self) { symbol in
                                 Text(symbol)
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 2)
-                                    .background(RoundedRectangle(cornerRadius: 3).fill(.purple.opacity(0.1)))
-                                    .foregroundStyle(.purple)
+                                    .background(RoundedRectangle(cornerRadius: 3).fill(ConductorTheme.symphony.opacity(0.1)))
+                                    .foregroundStyle(ConductorTheme.symphony)
                             }
                         }
                     }
@@ -134,7 +134,7 @@ struct TaskDetailView: View {
                         sectionHeader("External Reference")
                         Text(ref)
                             .font(.caption)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(ConductorTheme.active)
                             .textSelection(.enabled)
                     }
                 }
@@ -228,12 +228,12 @@ struct TaskDetailView: View {
 
                 HStack(spacing: 4) {
                     Text(event.timestamp, style: .relative)
-                        .font(.system(size: 9))
+                        .font(.system(size: ConductorTheme.fontSM))
                         .foregroundStyle(.tertiary)
 
                     if let percent = event.percent {
                         Text("\(percent)%")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: ConductorTheme.fontSM, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -261,15 +261,15 @@ struct TaskDetailView: View {
 
     private func timelineColor(_ type: String) -> Color {
         switch type {
-        case "created": return .blue
-        case "acknowledged": return .cyan
-        case "progress": return .green
-        case "blocked": return .red
-        case "approval": return .orange
-        case "complete": return .green
-        case "failed": return .red
-        case "cancelled": return .orange
-        case "reassigned": return .cyan
+        case "created": return ConductorTheme.active
+        case "acknowledged": return ConductorTheme.brand
+        case "progress": return ConductorTheme.healthy
+        case "blocked": return ConductorTheme.critical
+        case "approval": return ConductorTheme.warning
+        case "complete": return ConductorTheme.healthy
+        case "failed": return ConductorTheme.critical
+        case "cancelled": return ConductorTheme.warning
+        case "reassigned": return ConductorTheme.brand
         default: return .secondary
         }
     }

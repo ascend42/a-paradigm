@@ -14,22 +14,22 @@ struct CellFooterView: View {
             if !symbols.isEmpty {
                 HStack(spacing: 2) {
                     Image(systemName: "number")
-                        .font(.system(size: 7))
+                        .font(.system(size: ConductorTheme.fontXS))
                     Text(symbols.prefix(3).joined(separator: ", "))
                         .lineLimit(1)
                 }
-                .font(.system(size: 8))
-                .foregroundStyle(.purple.opacity(0.8))
+                .font(.system(size: ConductorTheme.fontXS))
+                .foregroundStyle(ConductorTheme.symphony.opacity(0.8))
             }
 
             // Files
             if filesModified > 0 {
                 HStack(spacing: 2) {
                     Image(systemName: "doc")
-                        .font(.system(size: 7))
+                        .font(.system(size: ConductorTheme.fontXS))
                     Text("\(filesModified)")
                 }
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
                 .foregroundStyle(.secondary)
             }
 
@@ -37,11 +37,12 @@ struct CellFooterView: View {
             if let status = agentStatus {
                 HStack(spacing: 2) {
                     Circle()
-                        .fill(.green)
+                        .fill(ConductorTheme.healthy)
                         .frame(width: 4, height: 4)
+                        .accessibilityLabel("Agent status: \(status)")
                     Text(status)
                 }
-                .font(.system(size: 8))
+                .font(.system(size: ConductorTheme.fontXS))
                 .foregroundStyle(.secondary)
             }
 

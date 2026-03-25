@@ -29,7 +29,7 @@ struct EyebrowCalibrationView: View {
             VStack(spacing: 12) {
                 Image(systemName: stepIcon)
                     .font(.system(size: 48))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(ConductorTheme.brand)
 
                 Text(stepInstruction)
                     .font(.title3)
@@ -39,7 +39,7 @@ struct EyebrowCalibrationView: View {
                 if stepComplete {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ConductorTheme.healthy)
                 }
             }
 
@@ -127,8 +127,8 @@ struct EyebrowCalibrationView: View {
     }
 
     private func barColor(for value: Double) -> Color {
-        if value > 0.04 { return .green }
-        if value > 0.02 { return .yellow }
+        if value > 0.04 { return ConductorTheme.healthy }
+        if value > 0.02 { return ConductorTheme.degraded }
         return .gray
     }
 }
