@@ -16,8 +16,10 @@ import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAt
 import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
-import { loadJournalEntries } from '../utils/journal-loader.js';
+import { loadJournalEntries, recordJournalEntry } from '../utils/journal-loader.js';
+import { readSessionWorkLog } from '../utils/session-work-log.js';
 import type { NominationUrgencyLevel } from '../types/ambient.js';
+import type { JournalTrigger } from '../types/knowledge-streams.js';
 
 export function getAmbientToolsList() {
   return [
@@ -137,6 +139,21 @@ export function getAmbientToolsList() {
       },
       annotations: {
         readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_ambient_learn_postflight',
+      description: 'Postflight learning pass — converts session work log verdicts into agent journal entries. Reads accepted/dismissed/revised verdicts from the session log, creates journal entries for each agent, then auto-promotes high-confidence entries to notebooks. Typically called at session end by the stop hook. ~200 tokens.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          session_id: { type: 'string', description: 'Session ID (default: current session)' },
+          dry_run: { type: 'boolean', description: 'If true, show what would be written without writing (default: false)' },
+        },
+      },
+      annotations: {
+        readOnlyHint: false,
         destructiveHint: false,
       },
     },
@@ -451,7 +468,253 @@ export async function handleAmbientTool(
       };
     }
 
+    case 'paradigm_ambient_learn_postflight': {
+      return {
+        text: json(await runPostflightLearning(ctx.rootDir, args)),
+        handled: true,
+      };
+    }
+
     default:
       return { text: `Unknown ambient tool: ${name}`, handled: false };
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Postflight Learning Pass
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Maps session work log verdicts to journal triggers.
+ */
+const VERDICT_TRIGGERS: Record<string, JournalTrigger> = {
+  accepted: 'human_feedback',
+  dismissed: 'confidence_miss',
+  revised: 'correction_received',
+};
+
+/**
+ * Derive project name from rootDir — checks .paradigm/config.yaml first,
+ * then falls back to directory basename.
+ */
+function resolveProjectName(rootDir: string): string {
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      const match = content.match(/project:\s*["']?([^"'\n]+)["']?/);
+      if (match) return match[1].trim();
+    }
+  } catch { /* fall through */ }
+  return path.basename(rootDir);
+}
+
+interface PostflightResult {
+  sessionEntries: number;
+  agentsProcessed: string[];
+  journalsWritten: number;
+  journalsByAgent: Record<string, number>;
+  promoted: number;
+  promotedByAgent: Record<string, number>;
+  dryRun: boolean;
+  details: Array<{
+    agent: string;
+    verdict: string;
+    trigger: JournalTrigger;
+    insight: string;
+    symbols?: string[];
+  }>;
+}
+
+/**
+ * Run the postflight learning pass — core logic shared by MCP tool and CLI.
+ *
+ * 1. Read session work log for verdicts
+ * 2. Group by agent
+ * 3. Generate journal entries per verdict
+ * 4. Auto-promote high-confidence entries
+ * 5. Return summary
+ */
+export async function runPostflightLearning(
+  rootDir: string,
+  args: Record<string, unknown> = {},
+): Promise<PostflightResult> {
+  const dryRun = args.dry_run === true;
+  const projectName = resolveProjectName(rootDir);
+
+  // 1. Read session work log
+  const allEntries = readSessionWorkLog(rootDir);
+  const verdictEntries = allEntries.filter(
+    e => e.type === 'user-verdict' && e.verdict && e.agent
+  );
+
+  if (verdictEntries.length === 0) {
+    return {
+      sessionEntries: allEntries.length,
+      agentsProcessed: [],
+      journalsWritten: 0,
+      journalsByAgent: {},
+      promoted: 0,
+      promotedByAgent: {},
+      dryRun,
+      details: [],
+    };
+  }
+
+  // 2. Group verdicts by agent
+  const agentVerdicts = new Map<string, typeof verdictEntries>();
+  for (const entry of verdictEntries) {
+    const agentId = entry.agent!;
+    if (!agentVerdicts.has(agentId)) {
+      agentVerdicts.set(agentId, []);
+    }
+    agentVerdicts.get(agentId)!.push(entry);
+  }
+
+  // Also gather contribution context (to enrich journal insights)
+  const contributionEntries = allEntries.filter(e => e.type === 'agent-contribution');
+  const contributionsByAgent = new Map<string, typeof contributionEntries>();
+  for (const entry of contributionEntries) {
+    if (!entry.agent) continue;
+    if (!contributionsByAgent.has(entry.agent)) {
+      contributionsByAgent.set(entry.agent, []);
+    }
+    contributionsByAgent.get(entry.agent)!.push(entry);
+  }
+
+  const details: PostflightResult['details'] = [];
+  const journalsByAgent: Record<string, number> = {};
+  let totalJournals = 0;
+
+  // 3. Generate journal entries for each agent
+  for (const [agentId, verdicts] of agentVerdicts) {
+    journalsByAgent[agentId] = 0;
+
+    // Compute agent-level stats for context
+    const accepted = verdicts.filter(v => v.verdict === 'accepted').length;
+    const dismissed = verdicts.filter(v => v.verdict === 'dismissed').length;
+    const revised = verdicts.filter(v => v.verdict === 'revised').length;
+    const total = verdicts.length;
+    const acceptRate = total > 0 ? accepted / total : 0;
+
+    for (const verdict of verdicts) {
+      const trigger = VERDICT_TRIGGERS[verdict.verdict!];
+      if (!trigger) continue;
+
+      // Build a meaningful insight based on verdict type
+      const contribution = contributionsByAgent.get(agentId)?.shift();
+      const insight = buildVerdictInsight(verdict, contribution, {
+        acceptRate,
+        total,
+        accepted,
+        dismissed,
+        revised,
+      });
+
+      // Compute confidence_after based on verdict
+      const confidenceAfter = verdict.verdict === 'accepted' ? 0.85
+        : verdict.verdict === 'revised' ? 0.6
+        : 0.4; // dismissed
+
+      const detail = {
+        agent: agentId,
+        verdict: verdict.verdict!,
+        trigger,
+        insight,
+        symbols: verdict.symbols,
+      };
+      details.push(detail);
+
+      if (!dryRun) {
+        try {
+          recordJournalEntry(agentId, {
+            trigger,
+            insight,
+            confidence_before: verdict.verdict === 'accepted' ? 0.7 : 0.8,
+            confidence_after: confidenceAfter,
+            project: projectName,
+            transferable: verdict.verdict === 'dismissed', // dismissals are transferable lessons
+            tags: [
+              'postflight',
+              `verdict:${verdict.verdict}`,
+              ...(verdict.symbols || []).map(s => `symbol:${s}`),
+            ],
+          });
+          journalsByAgent[agentId]++;
+          totalJournals++;
+        } catch {
+          // Non-fatal — continue with other entries
+        }
+      } else {
+        journalsByAgent[agentId]++;
+        totalJournals++;
+      }
+    }
+  }
+
+  // 4. Auto-promote high-confidence entries to notebooks
+  const promotedByAgent: Record<string, number> = {};
+  let totalPromoted = 0;
+
+  if (!dryRun) {
+    for (const agentId of agentVerdicts.keys()) {
+      try {
+        const result = autoPromoteJournalEntries(rootDir, agentId);
+        if (result.promoted > 0) {
+          promotedByAgent[agentId] = result.promoted;
+          totalPromoted += result.promoted;
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
+
+  return {
+    sessionEntries: allEntries.length,
+    agentsProcessed: Array.from(agentVerdicts.keys()),
+    journalsWritten: totalJournals,
+    journalsByAgent,
+    promoted: totalPromoted,
+    promotedByAgent,
+    dryRun,
+    details,
+  };
+}
+
+/**
+ * Build a human-readable insight string from a verdict + its contribution context.
+ */
+function buildVerdictInsight(
+  verdict: { verdict?: string; reason?: string; revisionDelta?: string; nominationId?: string; symbols?: string[] },
+  contribution: { contribution?: string; attribution?: string } | undefined,
+  stats: { acceptRate: number; total: number; accepted: number; dismissed: number; revised: number },
+): string {
+  const symbolsNote = verdict.symbols?.length
+    ? ` (symbols: ${verdict.symbols.join(', ')})`
+    : '';
+  const reasonNote = verdict.reason ? ` Reason: ${verdict.reason}.` : '';
+
+  switch (verdict.verdict) {
+    case 'accepted':
+      return `Contribution accepted by user${symbolsNote}.${reasonNote}` +
+        (contribution?.contribution ? ` Original: "${contribution.contribution.slice(0, 120)}".` : '') +
+        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+
+    case 'dismissed':
+      return `Contribution dismissed by user${symbolsNote}.${reasonNote}` +
+        (contribution?.contribution ? ` Rejected contribution: "${contribution.contribution.slice(0, 120)}".` : '') +
+        ` Learn from this dismissal to improve future nominations.` +
+        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+
+    case 'revised':
+      return `Contribution revised by user${symbolsNote}.${reasonNote}` +
+        (verdict.revisionDelta ? ` Delta: "${verdict.revisionDelta.slice(0, 120)}".` : '') +
+        (contribution?.contribution ? ` Original: "${contribution.contribution.slice(0, 120)}".` : '') +
+        ` Partial credit — close but not accurate enough.` +
+        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+
+    default:
+      return `Unknown verdict "${verdict.verdict}"${symbolsNote}.${reasonNote}`;
   }
 }

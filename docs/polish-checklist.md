@@ -27,11 +27,11 @@
 - [x] Expertise Tracking — Confidence decay implemented (60-day half-life, 7-day grace). EMA + verdicts working. "(aging)" tag on stale entries
 
 ## 3. Orchestration (Maestro)
-- [ ] Multi-Agent Orchestration (plan quality, stage composition)
-- [ ] ToolRegistry (tiered loading, feature detection caching)
-- [ ] Collaboration Graph (pairs_well_with effectiveness)
-- [ ] Documentor (always-last enforcement, coverage)
-- [ ] Symphony Visibility (live thread rendering)
+- [x] Multi-Agent Orchestration — Mode config wired in (was hardcoded faceted). Classification drives agent selection.
+- [x] ToolRegistry — Feature detection cached (5-min TTL). Tier ambiguity fixed (graph/heatmap→feature, conductor/platform/pipeline→advanced).
+- [x] Collaboration Graph — handoff_to wired into planning via topological sort. Collaboration boost in agent suggestion. Graph shown in plan output.
+- [x] Documentor — Skipped for analysis tasks and no-code plans. Always-last for code tasks. Saves 2-8k tokens.
+- [x] Symphony Visibility — Already polished. Full integration, event bridge, structured threads.
 
 ## 4. Ambient Learning
 - [ ] Nomination Engine (scoring, threshold tuning)

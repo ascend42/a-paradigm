@@ -326,9 +326,9 @@ fi
 # with a single `paradigm compliance-check` invocation.
 COMPLIANCE_RESULT=""
 if command -v paradigm >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --trigger on-stop 2>/dev/null) || true
+  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null) || true
 elif command -v npx >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --trigger on-stop 2>/dev/null) || true
+  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null) || true
 fi
 
 if [ -n "$COMPLIANCE_RESULT" ]; then

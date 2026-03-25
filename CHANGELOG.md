@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.18.0] — 2026-03-25
+
+### Added
+
+- **Automated postflight learning pass** — New `paradigm_ambient_learn_postflight` MCP tool converts session verdicts into journal entries automatically. Verdict mapping: accepted → `human_feedback`, dismissed → `confidence_miss`, revised → `correction_received`. Rich insight strings include contribution context, user reasons, and session accept rate. Auto-promotes eligible journals to notebooks.
+- **`--learn` flag on compliance-check** — Stop hook now passes `--learn` to run the postflight learning pass after compliance checks. Fire-and-forget, non-blocking.
+- **Stale JSONL pruning** — Nominations and debates files now auto-prune entries older than TTL when file exceeds 100 entries. Prevents unbounded file growth.
+- **Configurable ambient TTL** — New `ambient` config section in config.yaml: `nomination-ttl-days` (default 7) and `debate-ttl-days` (default 14). Replaces all hardcoded 7-day thresholds.
+
+### Changed
+
+- **Auto-promotion triggers** — `human_feedback` journal entries now eligible for notebook promotion alongside `pattern_discovered`. Corrective entries (`correction_received`, `confidence_miss`) remain journal-only.
+
 ## [5.17.0] — 2026-03-25
 
 ### Added

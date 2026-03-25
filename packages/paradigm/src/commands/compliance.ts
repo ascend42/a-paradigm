@@ -74,11 +74,22 @@ interface PortalResult {
   properlyDeclared: string[];
 }
 
+interface PostflightResult {
+  sessionEntries: number;
+  agentsProcessed: string[];
+  journalsWritten: number;
+  journalsByAgent: Record<string, number>;
+  promoted: number;
+  promotedByAgent: Record<string, number>;
+  dryRun: boolean;
+}
+
 interface ComplianceCheckResult {
   habits: HabitsResult | null;
   drift: DriftResult | null;
   portal: PortalResult | null;
   violations: string[];
+  postflight?: PostflightResult | null;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -274,6 +285,20 @@ async function runPortalCheck(rootDir: string): Promise<PortalResult | null> {
 }
 
 // ════════════════════════════════════════════════════════════════════
+// Postflight learning pass (inline — no subprocess)
+// ════════════════════════════════════════════════════════════════════
+
+async function runPostflightLearn(rootDir: string): Promise<PostflightResult | null> {
+  try {
+    const { runPostflightLearning } = await import('../../../paradigm-mcp/src/tools/ambient.js');
+    const result = await runPostflightLearning(rootDir);
+    return result as PostflightResult;
+  } catch {
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // Combined compliance check command
 // ════════════════════════════════════════════════════════════════════
 
@@ -281,6 +306,7 @@ export async function complianceCheckCommand(options: {
   json?: boolean;
   autoHeal?: boolean;
   trigger?: string;
+  learn?: boolean;
 }): Promise<void> {
   const rootDir = process.cwd();
   const trigger = (options.trigger || 'on-stop') as HabitTrigger;
@@ -314,11 +340,18 @@ export async function complianceCheckCommand(options: {
     );
   }
 
+  // Run postflight learning pass (non-blocking, after compliance checks)
+  let postflightResult: PostflightResult | null = null;
+  if (options.learn) {
+    postflightResult = await runPostflightLearn(rootDir);
+  }
+
   const result: ComplianceCheckResult = {
     habits: habitsResult,
     drift: driftResult,
     portal: portalResult,
     violations,
+    postflight: options.learn ? postflightResult : undefined,
   };
 
   if (options.json) {
@@ -363,6 +396,22 @@ export async function complianceCheckCommand(options: {
       console.log(`    Status: ${statusColor(portalResult.status)}`);
       if (portalResult.usedButUndeclaredCount > 0) {
         console.log(chalk.red(`    ${portalResult.usedButUndeclaredCount} undeclared gate(s)`));
+      }
+      console.log();
+    }
+
+    if (postflightResult) {
+      console.log(chalk.white('  Postflight Learning:'));
+      if (postflightResult.journalsWritten > 0) {
+        console.log(chalk.green(`    Journals written: ${postflightResult.journalsWritten}`));
+        for (const [agent, count] of Object.entries(postflightResult.journalsByAgent)) {
+          if (count > 0) console.log(chalk.gray(`      ${agent}: ${count} entries`));
+        }
+      } else {
+        console.log(chalk.gray('    No verdicts to learn from'));
+      }
+      if (postflightResult.promoted > 0) {
+        console.log(chalk.green(`    Promoted to notebooks: ${postflightResult.promoted}`));
       }
       console.log();
     }

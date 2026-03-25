@@ -31,6 +31,9 @@ const NOMINATIONS_FILE = 'nominations.jsonl';
 const DEBATES_FILE = 'debates.jsonl';
 const MAX_NOMINATIONS = 500;
 const MAX_DEBATES = 200;
+const DEFAULT_NOMINATION_TTL_DAYS = 7;
+const DEFAULT_DEBATE_TTL_DAYS = 14;
+const PRUNE_ENTRY_THRESHOLD = 100;
 
 // ── ID Generation ──
 
@@ -247,6 +250,10 @@ export function persistNominations(rootDir: string, nominations: Nomination[]): 
     const lines = nominations.map(n => JSON.stringify(n)).join('\n') + '\n';
     fs.appendFileSync(filePath, lines, 'utf8');
     pruneFile(filePath, MAX_NOMINATIONS);
+
+    // TTL-based pruning: remove stale entries when file grows large
+    const { nominationTtlDays } = loadAmbientConfig(rootDir);
+    pruneStaleEntries(filePath, nominationTtlDays * 24 * 60 * 60 * 1000);
   } catch {
     // Non-fatal
   }
@@ -260,6 +267,10 @@ function persistDebates(rootDir: string, debates: Debate[]): void {
     const lines = debates.map(d => JSON.stringify(d)).join('\n') + '\n';
     fs.appendFileSync(filePath, lines, 'utf8');
     pruneFile(filePath, MAX_DEBATES);
+
+    // TTL-based pruning: remove stale entries when file grows large
+    const { debateTtlDays } = loadAmbientConfig(rootDir);
+    pruneStaleEntries(filePath, debateTtlDays * 24 * 60 * 60 * 1000);
   } catch {
     // Non-fatal
   }
@@ -271,6 +282,83 @@ function pruneFile(filePath: string, maxLines: number): void {
     const lines = content.trim().split('\n').filter(l => l.trim());
     if (lines.length > maxLines) {
       const kept = lines.slice(-maxLines);
+      fs.writeFileSync(filePath, kept.join('\n') + '\n', 'utf8');
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ── Ambient Config ──
+
+interface AmbientConfig {
+  nominationTtlDays: number;
+  debateTtlDays: number;
+}
+
+/**
+ * Load ambient config from .paradigm/config.yaml → ambient section.
+ * Falls back to defaults if the section doesn't exist.
+ */
+function loadAmbientConfig(rootDir: string): AmbientConfig {
+  const defaults: AmbientConfig = {
+    nominationTtlDays: DEFAULT_NOMINATION_TTL_DAYS,
+    debateTtlDays: DEFAULT_DEBATE_TTL_DAYS,
+  };
+
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (!fs.existsSync(configPath)) return defaults;
+
+    const yaml = require('js-yaml');
+    const content = fs.readFileSync(configPath, 'utf8');
+    const parsed = yaml.load(content) as Record<string, unknown>;
+    const ambient = parsed?.ambient as Record<string, unknown> | undefined;
+    if (!ambient) return defaults;
+
+    return {
+      nominationTtlDays: typeof ambient['nomination-ttl-days'] === 'number'
+        ? ambient['nomination-ttl-days']
+        : defaults.nominationTtlDays,
+      debateTtlDays: typeof ambient['debate-ttl-days'] === 'number'
+        ? ambient['debate-ttl-days']
+        : defaults.debateTtlDays,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+// ── TTL-Based Pruning ──
+
+/**
+ * Remove entries older than the given TTL from a JSONL file.
+ * Only runs if the file has more than PRUNE_ENTRY_THRESHOLD entries
+ * to avoid unnecessary I/O on small files.
+ *
+ * Each line must be a JSON object with a "timestamp" field (ISO string).
+ */
+function pruneStaleEntries(filePath: string, ttlMs: number): void {
+  try {
+    if (!fs.existsSync(filePath)) return;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.trim().split('\n').filter(l => l.trim());
+
+    if (lines.length <= PRUNE_ENTRY_THRESHOLD) return;
+
+    const cutoff = Date.now() - ttlMs;
+    const kept = lines.filter(line => {
+      try {
+        const entry = JSON.parse(line);
+        const ts = entry.timestamp ? new Date(entry.timestamp).getTime() : Date.now();
+        return ts >= cutoff;
+      } catch {
+        return true; // Keep unparseable lines
+      }
+    });
+
+    if (kept.length < lines.length) {
       fs.writeFileSync(filePath, kept.join('\n') + '\n', 'utf8');
     }
   } catch {
@@ -584,10 +672,11 @@ export function adjustAttentionFromFeedback(
   const oldThreshold = profile.attention.threshold ?? 0.6;
 
   // Load engagement history for this agent (exclude stale pending nominations)
-  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const { nominationTtlDays } = loadAmbientConfig(rootDir);
+  const staleThresholdMs = nominationTtlDays * 24 * 60 * 60 * 1000;
   const allNominations = loadNominations(rootDir, { agent: agentId });
   const active = allNominations.filter(n =>
-    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < STALE_THRESHOLD_MS)
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs)
   );
   const engaged = active.filter(n => n.engaged);
 
@@ -644,11 +733,12 @@ export function getNominationStats(
   rootDir: string,
   agentId: string
 ): { total: number; accepted: number; dismissed: number; deferred: number; pending: number; acceptRate: number } {
-  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const { nominationTtlDays } = loadAmbientConfig(rootDir);
+  const staleThresholdMs = nominationTtlDays * 24 * 60 * 60 * 1000;
   const allNominations = loadNominations(rootDir, { agent: agentId });
-  // Filter out stale pending nominations (>7 days, not engaged) to prevent diluting stats
+  // Filter out stale pending nominations (older than TTL, not engaged) to prevent diluting stats
   const nominations = allNominations.filter(n =>
-    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < STALE_THRESHOLD_MS)
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs)
   );
   const accepted = nominations.filter(n => n.response === 'accepted').length;
   const dismissed = nominations.filter(n => n.response === 'dismissed').length;
@@ -800,11 +890,18 @@ function detectLocalProject(rootDir: string): string {
 // ── Journal-to-Notebook Auto-Promotion ──
 
 /**
- * Scan an agent's journal for high-confidence pattern discoveries
- * and auto-promote them to notebook entries.
+ * Scan an agent's journal for high-confidence pattern discoveries and
+ * confirmed human feedback, then auto-promote them to notebook entries.
  *
- * Criteria: trigger === 'pattern_discovered' AND confidence_after >= 0.8
- * AND not already promoted (promoted_to_notebook is unset).
+ * Promotable triggers:
+ *   - 'pattern_discovered' — agent identified a reusable pattern
+ *   - 'human_feedback' — user confirmed an agent's approach worked well
+ *
+ * Non-promotable triggers (kept as journal-only):
+ *   - 'correction_received' — about what NOT to do; less useful as notebook snippets
+ *   - 'confidence_miss' — for confidence adjustment, not reusable knowledge
+ *
+ * Criteria: confidence_after >= 0.8 AND not already promoted (promoted_to_notebook is unset).
  *
  * Returns the number of entries promoted.
  */

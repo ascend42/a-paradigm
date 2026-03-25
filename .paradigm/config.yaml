@@ -109,6 +109,9 @@ drift:
   suggest-threshold: 0.7      # Minimum score to suggest relocation (below this = real drift)
   check-on-stop: true         # Run drift check in stop hook
   normalize-whitespace: true  # Ignore whitespace-only changes (cosmetic drift)
+ambient:
+  nomination-ttl-days: 7
+  debate-ttl-days: 14
 model-resolution:
   tier-1: sonnet
   tier-2: sonnet
