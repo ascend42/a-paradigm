@@ -42,7 +42,8 @@ Use these prefixes in documentation and commits:
 - Update .purpose files when changing feature behavior
 - Keep gates minimal - one responsibility per gate
 - Use signals for side effects, not direct state mutations
-- ALWAYS use Paradigm logger, NEVER raw console.log/print
+- **Logging:** Library code (packages/paradigm-mcp, packages/sentinel, etc.) — use Paradigm logger, never console.log
+- **CLI output:** CLI commands (packages/paradigm/src/commands/) — use `cli-output.ts` helpers (`out()`, `success()`, `warn()`, `error()`, `dim()`, `header()`, `kv()`, `json()`) for user-facing output. Raw console.log is acceptable but helpers are preferred for consistency
 
 ## Commit Messages
 
@@ -114,7 +115,8 @@ The stop hook **BLOCKS** if source files were modified without .purpose updates.
 - Add multi-step flow → document as `$flow`
 - Rename/delete symbol → update all references
 - Record lore via `paradigm_lore_record` for sessions modifying 3+ files
-- Use Paradigm logger (`log.component()`, `log.gate()`, etc.) — never raw console.log
+- Use Paradigm logger (`log.component()`, `log.gate()`, etc.) for library code — never raw console.log
+- Use `cli-output.ts` helpers for CLI command output (see `packages/paradigm/src/utils/cli-output.ts`)
 
 **Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.
 

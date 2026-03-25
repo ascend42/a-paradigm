@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.14.0] — 2026-03-24
+
+### Added
+
+- **Command palette** — `Cmd+K` opens a searchable command palette in Platform UI. Filter sections by name, navigate with arrow keys, press Enter to select. Number keys `1-9` switch sections directly when not typing. `Escape` closes overlays.
+- **`paradigm explain-files`** — New CLI command (alias: `paradigm files`) that prints a categorized, color-coded guide to all Paradigm config files. Shows which files exist in the current project, grouped by: required, optional, auto-generated, and IDE integration.
+- **`cli-output.ts` helpers** — Structured CLI output utilities (`out()`, `success()`, `warn()`, `error()`, `dim()`, `header()`, `kv()`, `json()`) replacing raw console.log in CLI commands. Convention documented in CLAUDE.md: library code uses Paradigm logger, CLI commands use these helpers.
+
+### Changed
+
+- **CLI output convention** — CLAUDE.md updated to distinguish library logging (Paradigm logger) from CLI output (cli-output helpers). Three commands converted as examples: `watch.ts`, `graph.ts`, `promote.ts`.
+
 ## [5.13.0] — 2026-03-24
 
 ### Added

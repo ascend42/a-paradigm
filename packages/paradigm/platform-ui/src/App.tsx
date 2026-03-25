@@ -8,7 +8,10 @@ import { AgentToastContainer } from './components/AgentToast';
 import { AgentCalloutOverlay, AgentNavigationPrompt } from './components/AgentCallout';
 import { useAgentEffects } from './hooks/useAgentEffects';
 import { useActivityReporter } from './hooks/useActivityReporter';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { CommandPalette } from './components/CommandPalette';
 import './styles/agent.css';
+import './styles/command-palette.css';
 
 const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
@@ -47,6 +50,7 @@ export default function App() {
   // Agent-driven UI: WebSocket connection + effect handling
   const wsRef = useAgentEffects();
   useActivityReporter(wsRef);
+  useKeyboardShortcuts();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -90,6 +94,7 @@ export default function App() {
         </div>
       </div>
       {/* Agent-driven UI overlays */}
+      <CommandPalette />
       <AgentNavigationPrompt />
       <AgentToastContainer />
       <AgentCalloutOverlay />

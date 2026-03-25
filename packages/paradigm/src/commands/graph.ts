@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as pathMod from 'path';
+import { out, success, dim, error as cliError } from '../utils/cli-output.js';
 
 interface GraphOptions {
   port?: string;
@@ -12,28 +13,28 @@ export async function graphCommand(path: string | undefined, options: GraphOptio
   const port = parseInt(options.port || '3841', 10);
   const shouldOpen = options.open !== false;
 
-  console.log(chalk.cyan('\nStarting Symbol Graph...\n'));
+  out(chalk.cyan('\nStarting Symbol Graph...\n'));
 
   try {
     const { startGraphServer } = await import('../graph-server/index.js');
 
-    console.log(chalk.gray(`Project: ${projectDir}`));
-    console.log(chalk.gray(`Port: ${port}`));
-    console.log();
+    dim(`Project: ${projectDir}`);
+    dim(`Port: ${port}`);
+    out('');
 
     await startGraphServer({ port, projectDir, open: shouldOpen });
 
-    console.log(chalk.green(`\nSymbol Graph is running at http://localhost:${port}`));
-    console.log(chalk.gray('\nPress Ctrl+C to stop\n'));
+    success(`Symbol Graph is running at http://localhost:${port}`);
+    dim('\nPress Ctrl+C to stop\n');
 
     // Keep process running
     await new Promise(() => {});
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-      console.error(chalk.red(`\nError: Port ${port} is already in use.`));
-      console.log(chalk.gray(`Try: paradigm graph --port ${port + 1}\n`));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      cliError(`Port ${port} is already in use.`);
+      dim(`Try: paradigm graph --port ${port + 1}\n`);
     } else {
-      console.error(chalk.red('\nFailed to start Symbol Graph:'), error);
+      cliError(`Failed to start Symbol Graph: ${err}`);
     }
     process.exit(1);
   }
@@ -169,7 +170,7 @@ export async function graphGenerateCommand(
     const groups = options.group?.map((g) => {
       const colonIdx = g.indexOf(':');
       if (colonIdx === -1) {
-        console.error(chalk.red(`Invalid group format: "${g}". Expected "Label:#sym1,#sym2"`));
+        cliError(`Invalid group format: "${g}". Expected "Label:#sym1,#sym2"`);
         process.exit(1);
       }
       return { label: g.slice(0, colonIdx), symbols: g.slice(colonIdx + 1).split(',').map((s) => s.trim()) };
@@ -178,7 +179,7 @@ export async function graphGenerateCommand(
     const links = options.link?.map((l) => {
       const arrowIdx = l.indexOf('>');
       if (arrowIdx === -1) {
-        console.error(chalk.red(`Invalid link format: "${l}". Expected "Source>Target:label"`));
+        cliError(`Invalid link format: "${l}". Expected "Source>Target:label"`);
         process.exit(1);
       }
       const source = l.slice(0, arrowIdx);
@@ -195,11 +196,11 @@ export async function graphGenerateCommand(
     const outPath = pathMod.join(graphsDir, `${slug}.graph.json`);
     fs.writeFileSync(outPath, json, 'utf8');
 
-    console.log(chalk.green(`Graph saved to ${outPath}`));
-    console.log(chalk.gray(`${state.nodes.length} nodes, ${state.edges.length} edges, ${(json.length / 1024).toFixed(1)} KB`));
-    console.log(chalk.gray(`\nView: paradigm graph`));
-  } catch (error) {
-    console.error(chalk.red('Failed to generate graph:'), (error as Error).message);
+    success(`Graph saved to ${outPath}`);
+    dim(`${state.nodes.length} nodes, ${state.edges.length} edges, ${(json.length / 1024).toFixed(1)} KB`);
+    dim(`\nView: paradigm graph`);
+  } catch (err) {
+    cliError(`Failed to generate graph: ${(err as Error).message}`);
     process.exit(1);
   }
 }

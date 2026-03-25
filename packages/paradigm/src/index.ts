@@ -367,6 +367,16 @@ program
     await costCommand(path, options);
   });
 
+// paradigm explain-files
+program
+  .command('explain-files')
+  .alias('files')
+  .description('Explain all Paradigm config and generated files')
+  .action(async () => {
+    const { explainFilesCommand } = await import('./commands/explain-files.js');
+    await explainFilesCommand();
+  });
+
 // paradigm scan <subcommand>
 const scanCmd = program
   .command('scan')

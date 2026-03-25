@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { loadParadigmFiles, detectIDE, syncToIDE } from '../core/ide-adapters/index.js';
+import { out, header, dim, error as cliError } from '../utils/cli-output.js';
 
 interface WatchState {
   lastConfigMtime: number;
@@ -15,25 +16,26 @@ interface WatchState {
 export async function watchCommand() {
   const cwd = process.cwd();
   
-  console.log(chalk.blue('\n👀 Paradigm Watch\n'));
+  header('👀 Paradigm Watch');
+  out('');
 
   // Check if .paradigm exists
   const paradigmDir = path.join(cwd, '.paradigm');
   if (!fs.existsSync(paradigmDir) || !fs.statSync(paradigmDir).isDirectory()) {
-    console.log(chalk.red('❌ No .paradigm/ directory found.'));
-    console.log(chalk.gray('   Run `paradigm init` first.\n'));
+    cliError('No .paradigm/ directory found.');
+    dim('   Run `paradigm init` first.\n');
     process.exit(1);
   }
 
   // Detect IDE
   const detection = detectIDE(cwd);
   const targetIDE = detection.detected || 'cursor';
-  
-  console.log(chalk.gray('Watching for changes...\n'));
-  console.log(chalk.gray(`  [config] .paradigm/config.yaml`));
-  console.log(chalk.gray(`  [specs]  .paradigm/specs/*.md`));
-  console.log(chalk.gray(`  [target] ${targetIDE}\n`));
-  console.log(chalk.gray('Press Ctrl+C to stop.\n'));
+
+  dim('Watching for changes...\n');
+  dim(`  [config] .paradigm/config.yaml`);
+  dim(`  [specs]  .paradigm/specs/*.md`);
+  dim(`  [target] ${targetIDE}\n`);
+  dim('Press Ctrl+C to stop.\n');
 
   // Track file modification times
   const state: WatchState = {
@@ -80,19 +82,19 @@ export async function watchCommand() {
     
     if (needsSync) {
       const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-      console.log(chalk.cyan(`${timestamp}`) + chalk.gray(` [${changeType}]`) + ' Changed → syncing...');
-      
+      out(chalk.cyan(`${timestamp}`) + chalk.gray(` [${changeType}]`) + ' Changed → syncing...');
+
       // Reload and sync
       const files = loadParadigmFiles(cwd);
       if (files) {
         const result = syncToIDE(cwd, targetIDE, files, true);
         if (result.success) {
-          console.log(chalk.green(`${timestamp}`) + chalk.gray(` [sync]`) + ` ${result.outputPath} updated`);
+          out(chalk.green(`${timestamp}`) + chalk.gray(` [sync]`) + ` ${result.outputPath} updated`);
         } else {
-          console.log(chalk.red(`${timestamp}`) + chalk.gray(` [sync]`) + ` Failed: ${result.message}`);
+          out(chalk.red(`${timestamp}`) + chalk.gray(` [sync]`) + ` Failed: ${result.message}`);
         }
       } else {
-        console.log(chalk.red(`${timestamp}`) + chalk.gray(` [error]`) + ' Failed to load .paradigm/ files');
+        out(chalk.red(`${timestamp}`) + chalk.gray(` [error]`) + ' Failed to load .paradigm/ files');
       }
     }
   };
@@ -103,7 +105,7 @@ export async function watchCommand() {
   // Handle graceful shutdown
   process.on('SIGINT', () => {
     clearInterval(interval);
-    console.log(chalk.gray('\n\nStopped watching.\n'));
+    dim('\n\nStopped watching.\n');
     process.exit(0);
   });
 

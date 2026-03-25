@@ -18,6 +18,7 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
+import { out, success, warn, error as cliError, dim, header, json as cliJson } from '../utils/cli-output.js';
 
 // ============================================================================
 // Types
@@ -116,10 +117,10 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
   const sourceRoot = findSourceRoot();
   if (!sourceRoot) {
     if (options.json) {
-      console.log(JSON.stringify({ error: 'Not in paradigm source repo' }));
+      cliJson({ error: 'Not in paradigm source repo' });
     } else {
-      console.log(chalk.red('\nNot in the paradigm source repository.'));
-      console.log(chalk.gray('Run this command from the a-paradigm directory.\n'));
+      cliError('Not in the paradigm source repository.');
+      dim('Run this command from the a-paradigm directory.\n');
     }
     return;
   }
@@ -128,11 +129,11 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
   if (!fs.existsSync(PARADIGM_CLI_DIR)) {
     if (!options.force) {
       if (options.json) {
-        console.log(JSON.stringify({ error: 'Production directory not found', path: PARADIGM_CLI_DIR }));
+        cliJson({ error: 'Production directory not found', path: PARADIGM_CLI_DIR });
       } else {
-        console.log(chalk.red(`\nProduction directory not found: ${PARADIGM_CLI_DIR}`));
-        console.log(chalk.gray('Paradigm CLI may not be globally installed.'));
-        console.log(chalk.gray('Install with: curl -fsSL https://a-company.org/install | bash\n'));
+        cliError(`Production directory not found: ${PARADIGM_CLI_DIR}`);
+        dim('Paradigm CLI may not be globally installed.');
+        dim('Install with: curl -fsSL https://a-company.org/install | bash\n');
       }
       return;
     }
@@ -140,9 +141,10 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
   }
 
   if (!options.json) {
-    console.log(chalk.blue('\n📦 Promoting local build to production\n'));
-    console.log(chalk.gray(`  Source: ${sourceRoot}`));
-    console.log(chalk.gray(`  Target: ${PARADIGM_CLI_DIR}\n`));
+    header('📦 Promoting local build to production');
+    out('');
+    dim(`  Source: ${sourceRoot}`);
+    dim(`  Target: ${PARADIGM_CLI_DIR}\n`);
   }
 
   // 3. Build (unless skipped)
@@ -158,13 +160,13 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
     } catch (err) {
       spinner.fail('Build failed');
       if (options.json) {
-        console.log(JSON.stringify({
+        cliJson({
           error: 'Build failed',
           details: err instanceof Error ? err.message : String(err),
-        }));
+        });
       } else {
-        console.log(chalk.red(`\n${err instanceof Error ? err.message : err}\n`));
-        console.log(chalk.gray('Fix build errors and try again, or use --skip-build.\n'));
+        cliError(`${err instanceof Error ? err.message : err}`);
+        dim('Fix build errors and try again, or use --skip-build.\n');
       }
       return;
     }
@@ -219,7 +221,7 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
 
   // Output
   if (options.json) {
-    console.log(JSON.stringify({
+    cliJson({
       success: allErrors.length === 0,
       source: sourceRoot,
       target: PARADIGM_CLI_DIR,
@@ -227,22 +229,22 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
       totalFiles,
       errors: allErrors,
       version,
-    }, null, 2));
+    });
   } else {
-    console.log();
+    out('');
     if (allErrors.length === 0) {
-      console.log(chalk.green('✓ Promotion complete!\n'));
+      success('Promotion complete!\n');
     } else {
-      console.log(chalk.yellow(`⚠ Promotion completed with ${allErrors.length} error(s)\n`));
+      warn(`Promotion completed with ${allErrors.length} error(s)\n`);
       for (const err of allErrors.slice(0, 5)) {
-        console.log(chalk.red(`  ${err}`));
+        cliError(`  ${err}`);
       }
-      console.log();
+      out('');
     }
 
-    console.log(chalk.gray(`  Packages: ${copiedPackages.length}`));
-    console.log(chalk.gray(`  Files:    ${totalFiles}`));
-    console.log(chalk.gray(`  Version:  ${version}`));
-    console.log();
+    dim(`  Packages: ${copiedPackages.length}`);
+    dim(`  Files:    ${totalFiles}`);
+    dim(`  Version:  ${version}`);
+    out('');
   }
 }
