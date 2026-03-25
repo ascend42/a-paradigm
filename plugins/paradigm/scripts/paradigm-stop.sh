@@ -51,7 +51,8 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
-  # Emit compliance-violation event (fire-and-forget)
+  # Emit compliance-violation event (fire-and-forget, backgrounded)
+  # NOTE: Could be absorbed into compliance-check command in a future iteration.
   if command -v paradigm >/dev/null 2>&1; then
     paradigm event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
   fi
@@ -84,6 +85,7 @@ if [ -n "$ADVISORY" ]; then
 fi
 
 # Auto-demote graduated habits with 3+ failures
+# NOTE: Could be absorbed into compliance-check command in a future iteration.
 if [ -d ".paradigm/.graduation-failures" ]; then
   for fail_file in .paradigm/.graduation-failures/*; do
     [ -f "$fail_file" ] || continue
@@ -103,5 +105,6 @@ fi
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
+rm -f ".paradigm/.purpose-paths"
 
 exit 0

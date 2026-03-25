@@ -1,0 +1,112 @@
+id: L-2026-03-24-ascend-061853-001
+type: milestone
+timestamp: '2026-03-24T06:18:53.576Z'
+duration_minutes: 300
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The Paradigm Army — 54 Agents, 272 Notebook Entries
+summary: 'Built the complete Paradigm agent army in a single marathon session: 54 specialist agents across 7 tiers (Builders, Reviewers, Strategists, Intelligence, Infrastructure, Meta, Human Ops) with 272 bootstrapped notebook entries from canonical sources. Agents range from core engineering (architect, builder, security) to business (Mozi/Hormozi sales, Leila/operations) to personal (Sunday/secretary, Obi/mentor). Each agent has personality, expertise, attention thresholds, collaboration graphs with named pairs, and transferable patterns. Notebooks bootstrapped from Material Design 3, Apple HIG, WCAG 2.2, Radix Colors, OWASP, Playwright docs, Hormozi methodology, Blender, Godot, and 40+ other canonical sources.'
+symbols_touched:
+  - '#agent-profiles'
+  - '#notebooks'
+  - '#orchestration'
+  - '#neverland'
+  - '#ambient-learning'
+  - '#conductor'
+symbols_created:
+  - '#agent-army'
+  - '#agent-pods'
+  - '#content-intel'
+decisions:
+  - id: D-agent-taxonomy
+    decision: '7-tier agent taxonomy: Builders, Reviewers, Strategists, Intelligence, Infrastructure, Meta, Human Ops'
+    rationale: 'Natural clustering by function, not domain. An agent''s tier determines how the orchestrator uses it: builders produce, reviewers validate, strategists decide, intelligence gathers, infrastructure enables, meta manages agents, human ops serves the person.'
+  - id: D-notebook-bootstrap
+    decision: Bootstrap agent notebooks from canonical sources rather than waiting for session-based learning
+    rationale: Agents with empty notebooks are generalists pretending to be specialists. Bootstrapping from Material Design 3, OWASP, Playwright docs etc gives them real knowledge from day one. The learning loop then evolves and adds project-specific patterns on top.
+  - id: D-pods-are-platform
+    decision: Agent pods (team recommendations) are a nevr.land registry feature, not agent behavior
+    rationale: Pods emerge from collaboration graphs in agent profiles. The marketplace surfaces them as install recommendations. This keeps agent profiles clean (they know who they pair with) while the platform handles team composition.
+  - id: D-54-not-20
+    decision: Grew from 20 to 54 agents by following genuine capability gaps rather than arbitrary limits
+    rationale: Started with core engineering (8), added business/design (12), then meta/generalists (Jinx, Sunday, Loid), then deep specialists (WebRTC, AI/ML, mobile, a11y), then business figures (Hormozi, Leila). Each addition filled a real gap no existing agent covered.
+  - id: D-hormozi-agents
+    decision: Sales agent (Mozi) modeled on Alex Hormozi methodology, operations agent (Leila) modeled on Leila Hormozi
+    rationale: These aren't generic business agents. They encode specific frameworks ($100M Offers value equation, CLOSER sales framework, Core Four lead gen, EOS operating system) that the user actively uses in their businesses.
+learnings:
+  - Agent notebooks need bootstrapping from canonical sources — the learning loop alone takes too many sessions to reach useful knowledge density
+  - Mika (designer) at 59 entries is the proof that deep bootstrapping works — color theory, typography, iconography, M3, HIG, WCAG, Radix, Tailwind all distilled into actionable patterns
+  - The collaboration graph (pairs_well_with) is the most important field in an agent profile — it determines how the orchestrator composes teams
+  - Agent personality (style, risk, verbosity) shapes communication more than expertise — Jinx being confrontational and Sunday being warm are as important as their knowledge
+  - Named agents (nicknames) create identity and make the team feel real — 'Ask Mika' is more natural than 'run the designer agent'
+  - 54 agents is not too many — the orchestrator only activates the subset needed per task. Having specialists available is better than generalists trying to cover gaps
+  - Pod recommendations should emerge from existing collaboration data, not be manually curated — the pairs_well_with graph already encodes which agents work together
+verification:
+  status: pass
+  details:
+    agent_validation: 54/54 pass
+    notebook_validation: 272/272 pass
+    format_errors: '0'
+    yaml_parse_errors: '0'
+tags:
+  - agents
+  - milestone
+  - army
+  - notebooks
+  - bootstrap
+  - marathon
+body: |-
+  ## The Marathon Session
+
+  What started as "let's make dealoracle work with the new orchestration" turned into building the complete Paradigm agent army over ~5 hours.
+
+  ### Timeline
+
+  1. **Conductor daily-driver** (v5.7.0) — global binary install, project discovery, resume UX, instance linking
+  2. **Conductor help system** — 9-section in-app guide, sidebar + NxM grid layout rewrite
+  3. **dealoracle migration** — paradigm shift, .purpose schema analysis, checkpoint crash fix (v5.8.1)
+  4. **First 8 agents** — Mika, Scout, Wren, Atlas, Sage, Bolt, Helix, Loid + Yuki's PM agent from dealoracle
+  5. **Paradigm enrichment** — architect (orchestration lead), security (portal champion), reviewer (compliance), Atlas (Sentinel master), plus Sage, Bolt, Helix, Yuki with Paradigm MCP knowledge
+  6. **Creative/specialist wave** — Ghost (e2e), Pixel (gamedev), Prism (creative director), Neon (3D), Sheila (educator), Conduit (CLI/MCP builder), Sunday (personal secretary)
+  7. **Generalist wave** — Jinx (devil's advocate), Trace (debugger), Ink (narrator), Compass (ethicist), Index (archivist), Bridge (mediator), Echo (audio), Root (sysadmin), Stage (presenter)
+  8. **Business wave** — Mozi (Hormozi sales), Leila (operations/company building)
+  9. **Final wave** — Beacon (SEO), Babel (i18n), Clause (legal), Shield (QA strategy), North (product), Vault (DBA), Obi (mentor), Horizon (futurist), Gather (community)
+  10. **Specialist wave** — Sensei (agent trainer), Flux (streaming/WebRTC), Oracle (AI/ML), Swift (mobile), Aria (accessibility), Pipeline (data engineering), Ship (release manager), Wire (network protocols)
+  11. **Intelligence + finance** — Lens (content extraction), Rosetta (translator), Cipher (reverse engineer), Ledger (finance)
+
+  ### Notebook Bootstrapping
+
+  269 entries distilled from canonical sources including:
+  - Material Design 3 (10 entries — tonal palettes, shape, type, motion, components)
+  - Apple HIG (10 entries — principles, safe areas, SF Symbols, Dynamic Type, visionOS, dark mode)
+  - WCAG 2.2 (8 entries — contrast, focus, target size, reflow, text spacing, color independence)
+  - Radix Colors (7 entries — 12-step scale, backgrounds, borders, alpha, dark mode, composition)
+  - Tailwind CSS (8 entries — tokens, responsive, dark mode, container queries, spacing, typography)
+  - OWASP Top 10 (4 entries — A01-A10 with prevention patterns)
+  - Playwright (8 entries — locators, auto-waiting, fixtures, POM, visual regression, a11y, CI, traces)
+  - Hormozi methodology (12+10 entries — value equation, Grand Slam Offers, CLOSER, Core Four, Leila's frameworks)
+  - Color theory fundamentals (14 entries — wheel, spaces, oklch, psychology, temperature, dark mode theory)
+  - Typography (6 entries — classification, modular scale, pairing, line height, variable fonts, heading hierarchy)
+  - Iconography (3 entries — icon systems, design rules, accessibility)
+  - Plus: Blender, Godot, Unity, Midjourney, Runway, spaced repetition, Bloom's taxonomy, MCP protocol, and more
+
+  ### Architecture Decisions
+
+  - **Pods** are a nevr.land platform feature, not agent behavior — derived from collaboration graphs
+  - **7-tier taxonomy** organizes agents by function: Builders, Reviewers, Strategists, Intelligence, Infrastructure, Meta, Human Ops
+  - **Notebook bootstrapping** is essential — agents need hard knowledge before their first session
+  - **Named nicknames** create identity: "Ask Mika" > "run designer agent"
+
+  ### What's Next
+
+  - Field test orchestration with the full roster on dealoracle
+  - Build Sensei's training loop — have him review agent performance and write targeted notebook entries
+  - Begin nevr.land registry with these 54 as the official archetype collection
+  - Design renaissance — Mika now has 59 entries of design knowledge, ready to lead the visual overhaul
+confidence: 0.9
+git_context:
+  ref: 1edc2a77e6155a6e8973705487b2a626cfdd5db6
+  branch: main
+  dirty: true

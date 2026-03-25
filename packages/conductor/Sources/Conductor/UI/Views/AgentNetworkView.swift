@@ -42,6 +42,7 @@ struct AgentNetworkView: View {
                         .font(.subheadline)
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Create new group")
                 .help("New Group")
             }
 
@@ -88,6 +89,7 @@ struct AgentNetworkView: View {
                 Circle()
                     .fill(groupColor)
                     .frame(width: 8, height: 8)
+                    .accessibilityLabel("Group color: \(group.color)")
 
                 Text(group.name)
                     .font(.caption.bold())
@@ -214,10 +216,18 @@ struct AgentNetworkView: View {
             return isRunning ? .green : (status?.linked == true ? .yellow : .gray)
         }()
 
+        let dotLabel: String = {
+            if let health = healthMetrics?.healthStatus {
+                return "Agent \(health.rawValue)"
+            }
+            return isRunning ? "Agent running" : (status?.linked == true ? "Agent linked" : "Agent offline")
+        }()
+
         return HStack(spacing: 6) {
             Circle()
                 .fill(dotColor)
                 .frame(width: 6, height: 6)
+                .accessibilityLabel(dotLabel)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(agent.agentRole) @ \(URL(fileURLWithPath: agent.projectPath).lastPathComponent)")
@@ -267,6 +277,7 @@ struct AgentNetworkView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Remove agent from group")
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
@@ -281,6 +292,7 @@ struct AgentNetworkView: View {
                     Circle()
                         .fill(Color.gray)
                         .frame(width: 6, height: 6)
+                        .accessibilityLabel("Ungrouped agent")
                     Text(agent.id)
                         .font(.caption)
                         .lineLimit(1)

@@ -74,6 +74,7 @@ struct ContainerView: View {
                     .foregroundStyle(showSidebar ? .blue : .secondary)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(showSidebar ? "Hide sidebar" : "Show sidebar")
             .help(showSidebar ? "Hide sidebar" : "Show sidebar")
 
             Image(systemName: "waveform.badge.mic")
@@ -102,6 +103,7 @@ struct ContainerView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Open Conductor Guide")
             .help("Conductor Guide")
             .sheet(isPresented: $showHelp) {
                 HelpView(isPresented: $showHelp)
@@ -111,6 +113,7 @@ struct ContainerView: View {
             Circle()
                 .fill(.green)
                 .frame(width: 8, height: 8)
+                .accessibilityLabel("Conductor running")
         }
         .padding(.horizontal, 12)
         .background(.ultraThinMaterial)
@@ -230,6 +233,7 @@ struct ContainerView: View {
                     ForEach(agentGroupStore.groups) { group in
                         HStack {
                             Circle().fill(Color.blue).frame(width: 6, height: 6)
+                                .accessibilityLabel("Linked group")
                             Text(group.name)
                                 .font(.caption)
                             Spacer()
@@ -299,6 +303,7 @@ struct ContainerView: View {
                     Circle()
                         .fill(instance.isAlive ? Color.green : Color.red)
                         .frame(width: 8, height: 8)
+                        .accessibilityLabel(instance.isAlive ? "Running" : "Stopped")
                     Text(instance.label)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)

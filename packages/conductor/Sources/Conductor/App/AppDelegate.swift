@@ -314,24 +314,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             side: workspaceManager.sidebarSide,
             width: workspaceManager.sidebarWidth
         )
+        let env = ConductorEnvironment(
+            orchestrator: orchestrator,
+            workspaceManager: workspaceManager,
+            noteRelay: noteRelay,
+            fileApprovalManager: fileApprovalManager,
+            projectStore: projectStore,
+            agentProcessManager: agentProcessManager,
+            agentGroupStore: agentGroupStore,
+            symphonyMonitor: symphonyMonitor,
+            agentPartManager: agentPartManager,
+            taskStore: taskStore,
+            sentinelClient: sentinelClient,
+            agentHealthMonitor: agentHealthMonitor,
+            threadWatcher: threadWatcher
+        )
         panel.contentView = NSHostingView(
             rootView: MainOverlayView(
                 showOnboarding: showOnboarding,
-                permissionStatus: permissionStatus ?? permissionsManager.checkAll(),
-                orchestrator: orchestrator,
-                workspaceManager: workspaceManager,
-                noteRelay: noteRelay,
-                fileApprovalManager: fileApprovalManager,
-                projectStore: projectStore,
-                agentProcessManager: agentProcessManager,
-                agentGroupStore: agentGroupStore,
-                symphonyMonitor: symphonyMonitor,
-                agentPartManager: agentPartManager,
-                taskStore: taskStore,
-                sentinelClient: sentinelClient,
-                agentHealthMonitor: agentHealthMonitor,
-                threadWatcher: threadWatcher
+                permissionStatus: permissionStatus ?? permissionsManager.checkAll()
             )
+            .environmentObject(env)
         )
         panel.makeKeyAndOrderFront(nil)
         self.conductorPanel = panel

@@ -15,40 +15,10 @@ struct MainOverlayView: View {
     @StateObject private var detector = ClaudeCodeDetector()
     @StateObject private var sessionWatcher = SessionFileWatcher()
     @ObservedObject private var gazeRouter = GazeRouter.shared
-    @ObservedObject var orchestrator: InputOrchestrator
-    @ObservedObject var workspaceManager: WorkspaceManager
-    @ObservedObject var noteRelay: NoteRelay
-    var fileApprovalManager: FileApprovalManager
-    @ObservedObject var projectStore: ProjectStore
-    @ObservedObject var agentProcessManager: AgentProcessManager
-    @ObservedObject var agentGroupStore: AgentGroupStore
-    @ObservedObject var symphonyMonitor: SymphonyMonitor
-    @ObservedObject var agentPartManager: AgentPartManager
-    @ObservedObject var taskStore: TaskStore
-    @ObservedObject var sentinelClient: SentinelWSClient
-    @ObservedObject var agentHealthMonitor: AgentHealthMonitor
-    @ObservedObject var threadWatcher: SymphonyThreadWatcher
+    @EnvironmentObject var env: ConductorEnvironment
 
     @State private var showAddInstance = false
     @State private var showHelp = false
-
-    init(showOnboarding: Bool, permissionStatus: PermissionStatus, orchestrator: InputOrchestrator, workspaceManager: WorkspaceManager, noteRelay: NoteRelay, fileApprovalManager: FileApprovalManager, projectStore: ProjectStore, agentProcessManager: AgentProcessManager, agentGroupStore: AgentGroupStore, symphonyMonitor: SymphonyMonitor, agentPartManager: AgentPartManager, taskStore: TaskStore, sentinelClient: SentinelWSClient, agentHealthMonitor: AgentHealthMonitor, threadWatcher: SymphonyThreadWatcher) {
-        self._showOnboarding = State(initialValue: showOnboarding)
-        self.permissionStatus = permissionStatus
-        self.orchestrator = orchestrator
-        self.workspaceManager = workspaceManager
-        self.noteRelay = noteRelay
-        self.fileApprovalManager = fileApprovalManager
-        self.projectStore = projectStore
-        self.agentProcessManager = agentProcessManager
-        self.agentGroupStore = agentGroupStore
-        self.symphonyMonitor = symphonyMonitor
-        self.agentPartManager = agentPartManager
-        self.taskStore = taskStore
-        self.sentinelClient = sentinelClient
-        self.agentHealthMonitor = agentHealthMonitor
-        self.threadWatcher = threadWatcher
-    }
 
     /// Merged instances from AX detection + file-registered sessions.
     private var allInstances: [ClaudeCodeInstance] {
@@ -136,6 +106,7 @@ struct MainOverlayView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Open Conductor Guide")
             .help("Conductor Guide")
             .sheet(isPresented: $showHelp) {
                 HelpView(isPresented: $showHelp)
@@ -151,29 +122,31 @@ struct MainOverlayView: View {
         HStack(spacing: 6) {
             // Video toggle (gaze + gesture camera)
             Button(action: {
-                Task { await orchestrator.toggleVideo() }
+                Task { await env.orchestrator.toggleVideo() }
             }) {
-                Image(systemName: orchestrator.videoActive ? "video.fill" : "video.slash.fill")
+                Image(systemName: env.orchestrator.videoActive ? "video.fill" : "video.slash.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(orchestrator.videoActive ? .green : .secondary)
+                    .foregroundStyle(env.orchestrator.videoActive ? .green : .secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help(orchestrator.videoActive ? "Disable camera (Cmd+Shift+V)" : "Enable camera (Cmd+Shift+V)")
+            .accessibilityLabel(env.orchestrator.videoActive ? "Disable camera" : "Enable camera")
+            .help(env.orchestrator.videoActive ? "Disable camera (Cmd+Shift+V)" : "Enable camera (Cmd+Shift+V)")
 
             // Voice toggle
             Button(action: {
-                Task { await orchestrator.toggleVoice() }
+                Task { await env.orchestrator.toggleVoice() }
             }) {
-                Image(systemName: orchestrator.voiceActive ? "mic.fill" : "mic.slash.fill")
+                Image(systemName: env.orchestrator.voiceActive ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(orchestrator.voiceActive ? .green : .secondary)
+                    .foregroundStyle(env.orchestrator.voiceActive ? .green : .secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help(orchestrator.voiceActive ? "Mute voice (Cmd+Shift+M)" : "Unmute voice (Cmd+Shift+M)")
+            .accessibilityLabel(env.orchestrator.voiceActive ? "Mute voice" : "Unmute voice")
+            .help(env.orchestrator.voiceActive ? "Mute voice (Cmd+Shift+M)" : "Unmute voice (Cmd+Shift+M)")
 
             Divider()
                 .frame(height: 16)
@@ -185,6 +158,7 @@ struct MainOverlayView: View {
             Circle()
                 .fill(permissionStatus.allGranted ? .green : .orange)
                 .frame(width: 8, height: 8)
+                .accessibilityLabel(permissionStatus.allGranted ? "All permissions granted" : "Permissions incomplete")
             Text(statusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -208,7 +182,7 @@ struct MainOverlayView: View {
 
     /// External instances not managed by the workspace (AX-detected + file-registered minus managed).
     private var externalInstances: [ClaudeCodeInstance] {
-        let managedPIDs = Set(workspaceManager.managedInstances.compactMap(\.processID))
+        let managedPIDs = Set(env.workspaceManager.managedInstances.compactMap(\.processID))
         return allInstances.filter { !managedPIDs.contains($0.processID) }
     }
 
@@ -233,7 +207,7 @@ struct MainOverlayView: View {
         .padding(12)
         .sheet(isPresented: $showAddInstance) {
             AddInstanceSheet(
-                workspaceManager: workspaceManager,
+                workspaceManager: env.workspaceManager,
                 isPresented: $showAddInstance
             )
         }
@@ -250,30 +224,30 @@ struct MainOverlayView: View {
 
     @ViewBuilder
     private var inputSection: some View {
-        InputStatusView(orchestrator: orchestrator)
-        if orchestrator.eyebrowEnabled {
-            VoiceControlHUD(coordinator: orchestrator.voiceCoordinator)
+        InputStatusView(orchestrator: env.orchestrator)
+        if env.orchestrator.eyebrowEnabled {
+            VoiceControlHUD(coordinator: env.orchestrator.voiceCoordinator)
         }
     }
 
     private var bufferSection: some View {
         BufferView(
-            buffer: orchestrator.buffer,
+            buffer: env.orchestrator.buffer,
             gazeRouter: gazeRouter,
-            orchestrator: orchestrator,
-            gazeZoneRouter: orchestrator.gazeZoneRouter,
+            orchestrator: env.orchestrator,
+            gazeZoneRouter: env.orchestrator.gazeZoneRouter,
             onSend: dispatchBuffer
         )
     }
 
     private var sessionSection: some View {
         SessionManagerView(
-            projectStore: projectStore,
-            agentManager: agentProcessManager,
-            agentGroupStore: agentGroupStore,
+            projectStore: env.projectStore,
+            agentManager: env.agentProcessManager,
+            agentGroupStore: env.agentGroupStore,
             onLaunchInTerminal: { projectPath in
                 Task {
-                    try? await workspaceManager.launchInstance(
+                    try? await env.workspaceManager.launchInstance(
                         projectDir: projectPath,
                         label: CheckpointReader.projectName(for: projectPath)
                     )
@@ -284,7 +258,7 @@ struct MainOverlayView: View {
 
     private var workspaceSection: some View {
         WorkspaceView(
-            workspaceManager: workspaceManager,
+            workspaceManager: env.workspaceManager,
             gazeRouter: gazeRouter,
             externalInstances: externalInstances,
             onAddInstance: { showAddInstance = true }
@@ -294,36 +268,36 @@ struct MainOverlayView: View {
     @ViewBuilder
     private var symphonyNotificationsSection: some View {
         FileRequestNotificationView(
-            requests: noteRelay.pendingFileRequests,
+            requests: env.noteRelay.pendingFileRequests,
             onApprove: { id in
-                _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath)
+                _ = env.fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath)
             },
             onDeny: { id in
-                fileApprovalManager.deny(id)
+                env.fileApprovalManager.deny(id)
             },
             onApproveRedacted: { id in
-                _ = fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath, redact: true)
+                _ = env.fileApprovalManager.approve(id, projectDir: FileManager.default.currentDirectoryPath, redact: true)
             }
         )
-        ApprovalNotificationBanner(monitor: symphonyMonitor)
+        ApprovalNotificationBanner(monitor: env.symphonyMonitor)
     }
 
     @ViewBuilder
     private var teamThreadSection: some View {
-        if !threadWatcher.teamThreads.isEmpty {
+        if !env.threadWatcher.teamThreads.isEmpty {
             Divider()
             TeamThreadView(
-                threadWatcher: threadWatcher,
-                monitor: symphonyMonitor
+                threadWatcher: env.threadWatcher,
+                monitor: env.symphonyMonitor
             )
         }
     }
 
     @ViewBuilder
     private var taskSection: some View {
-        if !taskStore.tasks.isEmpty {
+        if !env.taskStore.tasks.isEmpty {
             Divider()
-            TaskDashboardView(taskStore: taskStore, onSendNote: { note in
+            TaskDashboardView(taskStore: env.taskStore, onSendNote: { note in
                 for r in (note.recipients ?? []) {
                     ScoreIO.appendJsonl(note, to: ScoreIO.inboxPath(for: r.id))
                 }
@@ -333,35 +307,35 @@ struct MainOverlayView: View {
 
     @ViewBuilder
     private var agentNetworkSection: some View {
-        if !agentGroupStore.groups.isEmpty || !agentPartManager.registeredAgents.isEmpty {
+        if !env.agentGroupStore.groups.isEmpty || !env.agentPartManager.registeredAgents.isEmpty {
             Divider()
             AgentNetworkView(
-                groupStore: agentGroupStore,
-                agentPartManager: agentPartManager,
-                agentProcessManager: agentProcessManager,
-                monitor: symphonyMonitor,
-                relay: noteRelay,
-                taskStore: taskStore,
-                agentHealthMonitor: agentHealthMonitor
+                groupStore: env.agentGroupStore,
+                agentPartManager: env.agentPartManager,
+                agentProcessManager: env.agentProcessManager,
+                monitor: env.symphonyMonitor,
+                relay: env.noteRelay,
+                taskStore: env.taskStore,
+                agentHealthMonitor: env.agentHealthMonitor
             )
-        } else if !noteRelay.activeThreads.isEmpty {
+        } else if !env.noteRelay.activeThreads.isEmpty {
             Divider()
-            ThreadListView(relay: noteRelay)
+            ThreadListView(relay: env.noteRelay)
         }
     }
 
     @ViewBuilder
     private var agentHealthSection: some View {
-        if !agentHealthMonitor.metrics.isEmpty {
+        if !env.agentHealthMonitor.metrics.isEmpty {
             Divider()
-            AgentHealthView(healthMonitor: agentHealthMonitor)
+            AgentHealthView(healthMonitor: env.agentHealthMonitor)
         }
     }
 
     @ViewBuilder
     private var sentinelSection: some View {
         Divider()
-        SentinelLiveView(sentinelClient: sentinelClient, taskStore: taskStore)
+        SentinelLiveView(sentinelClient: env.sentinelClient, taskStore: env.taskStore)
     }
 
     private var calibrationBanner: some View {
@@ -391,7 +365,7 @@ struct MainOverlayView: View {
 
     private func dispatchBuffer() {
         Task {
-            await orchestrator.executeAction(.send)
+            await env.orchestrator.executeAction(.send)
         }
     }
 }

@@ -1,36 +1,4 @@
-/* === Paradigm Graph — Dark Theme === */
-
-:root {
-  --bg-base: #0a0a0f;
-  --bg-panel: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-hover: #334155;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border: #1e293b;
-  --border-focus: #475569;
-
-  /* Symbol colors (from Sentinel) */
-  --color-component: #86efac;
-  --color-flow: #fbbf24;
-  --color-gate: #f87171;
-  --color-signal: #fde047;
-  --color-aspect: #a78bfa;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow: hidden;
-}
+/* Paradigm Graph — uses Platform tokens from styles/tokens.css */
 
 /* === App Layout === */
 
@@ -52,8 +20,8 @@ body {
 .symbol-panel {
   width: 280px;
   min-width: 280px;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  background: var(--p-bg-panel);
+  border-right: 1px solid var(--p-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -64,7 +32,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--p-border);
 }
 
 .symbol-panel__header h2 {
@@ -72,13 +40,13 @@ body {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--p-text-secondary);
 }
 
 .symbol-panel__count {
   font-size: 12px;
-  background: var(--bg-surface);
-  color: var(--text-muted);
+  background: var(--p-bg-tertiary);
+  color: var(--p-text-muted);
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -86,21 +54,21 @@ body {
 .symbol-panel__search {
   margin: 12px 16px;
   padding: 8px 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  background: var(--p-bg-tertiary);
+  border: 1px solid var(--p-border);
   border-radius: 6px;
-  color: var(--text-primary);
+  color: var(--p-text-primary);
   font-size: 13px;
   outline: none;
   transition: border-color 0.15s;
 }
 
 .symbol-panel__search:focus {
-  border-color: var(--border-focus);
+  border-color: var(--p-border-active);
 }
 
 .symbol-panel__search::placeholder {
-  color: var(--text-muted);
+  color: var(--p-text-muted);
 }
 
 .symbol-panel__list {
@@ -157,7 +125,7 @@ body {
 }
 
 .symbol-panel__item:hover {
-  background: var(--bg-surface);
+  background: var(--p-bg-tertiary);
 }
 
 .symbol-panel__item:active {
@@ -172,7 +140,7 @@ body {
 
 .symbol-panel__item-desc {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--p-text-muted);
   line-height: 1.3;
 }
 
@@ -183,14 +151,14 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
+  background: var(--p-bg-panel);
+  border-bottom: 1px solid var(--p-border);
 }
 
 .toolbar__name {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-primary);
+  color: var(--p-text-primary);
   font-size: 14px;
   font-weight: 600;
   padding: 4px 8px;
@@ -202,7 +170,7 @@ body {
 
 .toolbar__name:hover,
 .toolbar__name:focus {
-  border-color: var(--border-focus);
+  border-color: var(--p-border-active);
 }
 
 .toolbar__actions {
@@ -214,9 +182,9 @@ body {
 
 .toolbar__btn {
   padding: 6px 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
+  background: var(--p-bg-tertiary);
+  border: 1px solid var(--p-border);
+  color: var(--p-text-secondary);
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -225,8 +193,8 @@ body {
 }
 
 .toolbar__btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--p-bg-hover);
+  color: var(--p-text-primary);
 }
 
 .toolbar__btn--primary {
@@ -242,7 +210,7 @@ body {
 .toolbar__divider {
   width: 1px;
   height: 20px;
-  background: var(--border);
+  background: var(--p-border);
   margin: 0 4px;
 }
 
@@ -254,57 +222,57 @@ body {
 }
 
 .paradigm-flow {
-  background: var(--bg-base) !important;
+  background: var(--p-bg-primary) !important;
 }
 
 /* React Flow overrides */
 .react-flow__controls {
-  background: var(--bg-panel) !important;
-  border: 1px solid var(--border) !important;
+  background: var(--p-bg-panel) !important;
+  border: 1px solid var(--p-border) !important;
   border-radius: 8px !important;
   overflow: hidden;
 }
 
 .react-flow__controls-button {
-  background: var(--bg-panel) !important;
-  border-bottom: 1px solid var(--border) !important;
-  fill: var(--text-secondary) !important;
+  background: var(--p-bg-panel) !important;
+  border-bottom: 1px solid var(--p-border) !important;
+  fill: var(--p-text-secondary) !important;
 }
 
 .react-flow__controls-button:hover {
-  background: var(--bg-surface) !important;
+  background: var(--p-bg-tertiary) !important;
 }
 
 .react-flow__minimap {
-  border: 1px solid var(--border) !important;
+  border: 1px solid var(--p-border) !important;
   border-radius: 8px !important;
   overflow: hidden;
 }
 
 .react-flow__edge-path {
-  stroke: var(--text-muted) !important;
+  stroke: var(--p-text-muted) !important;
   stroke-width: 2;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--text-primary) !important;
+  stroke: var(--p-text-primary) !important;
 }
 
 .react-flow__edge-text {
-  fill: var(--text-secondary) !important;
+  fill: var(--p-text-secondary) !important;
   font-size: 11px;
 }
 
 .react-flow__edge-textbg {
-  fill: var(--bg-panel) !important;
+  fill: var(--p-bg-panel) !important;
 }
 
 /* === Symbol Node === */
 
 .symbol-node {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--color-component);
+  background: var(--p-bg-panel);
+  border: 1px solid var(--p-border);
+  border-left: 3px solid var(--p-symbol-component);
   border-radius: 8px;
   padding: 8px 12px;
   min-width: 160px;
@@ -313,7 +281,7 @@ body {
 }
 
 .symbol-node:hover {
-  border-color: var(--border-focus);
+  border-color: var(--p-border-active);
 }
 
 .symbol-node__name {
@@ -325,7 +293,7 @@ body {
 
 .symbol-node__desc {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--p-text-muted);
   line-height: 1.3;
   margin-top: 2px;
 }
@@ -334,7 +302,7 @@ body {
 
 .group-node {
   background: rgba(30, 41, 59, 0.5);
-  border: 2px dashed var(--border-focus);
+  border: 2px dashed var(--p-border-active);
   border-radius: 12px;
   width: 100%;
   height: 100%;
@@ -343,7 +311,7 @@ body {
 
 .group-node__header {
   padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--p-border);
   border-radius: 12px 12px 0 0;
   background: rgba(15, 23, 42, 0.8);
   cursor: default;
@@ -352,13 +320,13 @@ body {
 .group-node__label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--p-text-primary);
 }
 
 .group-node__input {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-focus);
-  color: var(--text-primary);
+  background: var(--p-bg-tertiary);
+  border: 1px solid var(--p-border-active);
+  color: var(--p-text-primary);
   font-size: 13px;
   font-weight: 600;
   padding: 2px 8px;
@@ -368,11 +336,11 @@ body {
 }
 
 .group-node__resizer-line {
-  border-color: var(--color-component) !important;
+  border-color: var(--p-symbol-component) !important;
 }
 
 .group-node__resizer-handle {
-  background: var(--color-component) !important;
+  background: var(--p-symbol-component) !important;
   width: 8px !important;
   height: 8px !important;
   border-radius: 2px !important;
@@ -381,8 +349,8 @@ body {
 .group-handle {
   width: 10px !important;
   height: 10px !important;
-  background: var(--bg-hover) !important;
-  border: 2px solid var(--text-muted) !important;
+  background: var(--p-bg-hover) !important;
+  border: 2px solid var(--p-text-muted) !important;
 }
 
 /* === Export Dialog === */
@@ -398,8 +366,8 @@ body {
 }
 
 .export-dialog {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
+  background: var(--p-bg-panel);
+  border: 1px solid var(--p-border);
   border-radius: 12px;
   width: 640px;
   max-width: 90vw;
@@ -413,7 +381,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--p-border);
 }
 
 .export-dialog__header h3 {
@@ -424,7 +392,7 @@ body {
 .export-dialog__close {
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: var(--p-text-muted);
   font-size: 24px;
   cursor: pointer;
   line-height: 1;
@@ -432,17 +400,17 @@ body {
 }
 
 .export-dialog__close:hover {
-  color: var(--text-primary);
+  color: var(--p-text-primary);
 }
 
 .export-dialog__content {
   flex: 1;
   margin: 16px 20px;
   padding: 12px;
-  background: var(--bg-base);
-  border: 1px solid var(--border);
+  background: var(--p-bg-primary);
+  border: 1px solid var(--p-border);
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--p-text-primary);
   font-size: 13px;
   font-family: 'SF Mono', 'Fira Code', monospace;
   resize: none;
@@ -454,7 +422,7 @@ body {
   display: flex;
   gap: 8px;
   padding: 16px 20px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--p-border);
   justify-content: flex-end;
 }
 
@@ -482,14 +450,14 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  color: var(--p-text-secondary);
 }
 
 .load-dialog__divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--text-muted);
+  color: var(--p-text-muted);
   font-size: 12px;
 }
 
@@ -498,7 +466,7 @@ body {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border);
+  background: var(--p-border);
 }
 
 .load-dialog__status {
@@ -509,18 +477,18 @@ body {
 
 .load-dialog__status--error {
   background: rgba(248, 113, 113, 0.1);
-  color: #f87171;
+  color: var(--p-accent-red);
   border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
 .load-dialog__status--success {
   background: rgba(134, 239, 172, 0.1);
-  color: #86efac;
+  color: var(--p-accent-green);
   border: 1px solid rgba(134, 239, 172, 0.2);
 }
 
 .load-dialog__loading {
-  color: #94a3b8;
+  color: var(--p-text-secondary);
   font-size: 0.85rem;
   padding: 8px 0;
 }
@@ -557,12 +525,12 @@ body {
 .load-dialog__graph-name {
   font-weight: 500;
   font-size: 0.9rem;
-  color: #e2e8f0;
+  color: var(--p-text-primary);
 }
 
 .load-dialog__graph-meta {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--p-text-muted);
 }
 
 /* === Scrollbar === */
@@ -576,10 +544,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-hover);
+  background: var(--p-bg-hover);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--p-text-muted);
 }

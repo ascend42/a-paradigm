@@ -127,5 +127,6 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
+rm -f ".paradigm/.purpose-paths"
 
 exit 0

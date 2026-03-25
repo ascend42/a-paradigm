@@ -2447,5 +2447,17 @@ agentCmd
     await agentListCommand({});
   });
 
+// paradigm compliance-check — unified compliance checker for stop hooks
+program
+  .command('compliance-check')
+  .description('Run all compliance checks (habits, drift, portal) in a single process')
+  .option('--json', 'Output as JSON')
+  .option('--auto-heal', 'Auto-heal drift violations')
+  .option('--trigger <event>', 'Trigger context (e.g., on-stop)', 'on-stop')
+  .action(async (options) => {
+    const { complianceCheckCommand } = await import('./commands/compliance.js');
+    await complianceCheckCommand(options);
+  });
+
 // Parse and run
 program.parse();

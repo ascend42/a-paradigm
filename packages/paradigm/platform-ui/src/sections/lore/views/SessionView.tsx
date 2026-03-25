@@ -105,7 +105,7 @@ function SessionDetail({ session }: { session: Session }) {
             </div>
           ))
         ) : (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading entries...</div>
+          <div style={{ color: 'var(--p-text-muted)', fontSize: 13 }}>Loading entries...</div>
         )}
       </div>
     </div>
@@ -129,11 +129,11 @@ export function SessionView() {
   return (
     <div className="sidebar-view">
       <div className="sidebar">
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--p-border)', fontSize: 11, color: 'var(--p-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Sessions ({sessions.length})
         </div>
         {sessions.length === 0 ? (
-          <div style={{ padding: 20, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>
+          <div style={{ padding: 20, color: 'var(--p-text-muted)', textAlign: 'center', fontSize: 13 }}>
             No sessions found
           </div>
         ) : (

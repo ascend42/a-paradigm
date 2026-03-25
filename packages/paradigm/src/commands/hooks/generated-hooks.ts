@@ -31,16 +31,27 @@ export const COMMON_HOOK = `#!/bin/sh
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
 #   7. Lore entry expected for significant sessions (3+ source files)
-#   8. Blocking habits not satisfied (from paradigm_habits_check)
+#   8. Blocking habits not satisfied (from unified compliance-check)
 #   9. Purpose-required patterns from config.yaml
-#  10. Aspect drift detection with auto-heal
-#  11. Portal gate implementation compliance
+#  10. Aspect drift detection with auto-heal (from unified compliance-check)
+#  11. Portal gate implementation compliance (from unified compliance-check)
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
 AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
+
+# --- Cache .purpose file paths (avoid repeated find scans) ---
+PURPOSE_CACHE=".paradigm/.purpose-paths"
+if [ -f "$PURPOSE_CACHE" ]; then
+  PURPOSE_PATHS=$(cat "$PURPOSE_CACHE")
+else
+  PURPOSE_PATHS=$(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null)
+  if [ -n "$PURPOSE_PATHS" ]; then
+    echo "$PURPOSE_PATHS" > "$PURPOSE_CACHE"
+  fi
+fi
 
 # --- Check 1: Source files modified without .purpose updates ---
 SOURCE_COUNT=0
@@ -151,7 +162,7 @@ else
 fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
-for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
+for purpose_file in $PURPOSE_PATHS; do
   if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
     purpose_dir=$(dirname "$purpose_file")
     in_anchors=false
@@ -221,7 +232,7 @@ fi
 # --- Check 6: Aspect coverage advisory ---
 ADVISORY=""
 HAS_ASPECTS=false
-for purpose_file in $(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null); do
+for purpose_file in $PURPOSE_PATHS; do
   if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
     HAS_ASPECTS=true
     break
@@ -316,21 +327,64 @@ LOREEOF
   fi
 fi
 
-# --- Auto-evaluate on-stop habits via CLI ---
+# --- Checks 8, 10, 11: Unified compliance check (single Node.js process) ---
+# Replaces 3 separate subprocess calls (habits check, drift check, portal check)
+# with a single \`paradigm compliance-check\` invocation.
+COMPLIANCE_RESULT=""
 if command -v paradigm >/dev/null 2>&1; then
-  paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --trigger on-stop 2>/dev/null) || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm habits check --trigger on-stop --record --json 2>/dev/null || true
+  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --trigger on-stop 2>/dev/null) || true
 fi
 
-# --- Check 8: Blocking habits ---
-if [ -f ".paradigm/.habits-blocking" ]; then
-  HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
-  VIOLATIONS="$VIOLATIONS
+if [ -n "$COMPLIANCE_RESULT" ]; then
+  # --- Check 8: Blocking habits (from unified result) ---
+  # The compliance-check command writes .habits-blocking marker internally
+  if [ -f ".paradigm/.habits-blocking" ]; then
+    HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
+    VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
     Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
-  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+
+  # --- Check 10: Aspect drift (from unified result) ---
+  DRIFTED_COUNT=$(echo "$COMPLIANCE_RESULT" | grep -o '"driftedCount":[0-9]*' | sed 's/.*://')
+  HEALED_COUNT=$(echo "$COMPLIANCE_RESULT" | grep -o '"healedCount":[0-9]*' | sed 's/.*://')
+
+  if [ -n "$HEALED_COUNT" ] && [ "$HEALED_COUNT" -gt 0 ] 2>/dev/null; then
+    echo "[paradigm] Auto-healed $HEALED_COUNT shifted anchor(s)." >&2
+  fi
+
+  if [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
+    VIOLATIONS="$VIOLATIONS
+  - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
+    Run paradigm_aspect_check to review. Update anchors in .purpose files."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+
+  # --- Check 11: Portal gate compliance (from unified result) ---
+  UNDECLARED=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclaredCount":[0-9]*' | sed 's/.*://')
+
+  if [ -n "$UNDECLARED" ] && [ "$UNDECLARED" -gt 0 ] 2>/dev/null; then
+    UNDECLARED_LIST=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclared":\\[[^]]*\\]' | sed 's/.*\\[//;s/\\].*//;s/"//g')
+    VIOLATIONS="$VIOLATIONS
+  - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
+    $UNDECLARED_LIST
+    Add them to portal.yaml or use paradigm_portal_add_gate."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
+else
+  # Fallback: check habits blocking marker even if compliance-check unavailable
+  if [ -f ".paradigm/.habits-blocking" ]; then
+    HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
+    VIOLATIONS="$VIOLATIONS
+  - Blocking habit(s) not satisfied:
+    $HABITS_BLOCKING
+    Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  fi
 fi
 
 # --- Check 9: Purpose-required patterns from config.yaml ---
@@ -426,55 +480,6 @@ PURPOSEEOF
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
     Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
-      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-    fi
-  fi
-fi
-
-# --- Check 10: Aspect drift detection with auto-heal ---
-if [ -f ".paradigm/aspect-graph.db" ]; then
-  DRIFT_RESULT=""
-  if command -v paradigm >/dev/null 2>&1; then
-    DRIFT_RESULT=$(paradigm drift check --json --auto-heal 2>/dev/null) || true
-  elif command -v npx >/dev/null 2>&1; then
-    DRIFT_RESULT=$(npx paradigm drift check --json --auto-heal 2>/dev/null) || true
-  fi
-
-  if [ -n "$DRIFT_RESULT" ]; then
-    DRIFTED_COUNT=$(echo "$DRIFT_RESULT" | grep -o '"driftedCount":[0-9]*' | sed 's/.*://')
-    HEALED_COUNT=$(echo "$DRIFT_RESULT" | grep -o '"healedCount":[0-9]*' | sed 's/.*://')
-
-    if [ -n "$HEALED_COUNT" ] && [ "$HEALED_COUNT" -gt 0 ] 2>/dev/null; then
-      echo "[paradigm] Auto-healed $HEALED_COUNT shifted anchor(s)." >&2
-    fi
-
-    if [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
-      VIOLATIONS="$VIOLATIONS
-  - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
-    Run paradigm_aspect_check to review. Update anchors in .purpose files."
-      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-    fi
-  fi
-fi
-
-# --- Check 11: Portal gate implementation compliance ---
-if [ -f "portal.yaml" ]; then
-  PORTAL_RESULT=""
-  if command -v paradigm >/dev/null 2>&1; then
-    PORTAL_RESULT=$(paradigm portal check --json 2>/dev/null) || true
-  elif command -v npx >/dev/null 2>&1; then
-    PORTAL_RESULT=$(npx paradigm portal check --json 2>/dev/null) || true
-  fi
-
-  if [ -n "$PORTAL_RESULT" ]; then
-    UNDECLARED=$(echo "$PORTAL_RESULT" | grep -o '"usedButUndeclaredCount":[0-9]*' | sed 's/.*://')
-
-    if [ -n "$UNDECLARED" ] && [ "$UNDECLARED" -gt 0 ] 2>/dev/null; then
-      UNDECLARED_LIST=$(echo "$PORTAL_RESULT" | grep -o '"usedButUndeclared":\\[[^]]*\\]' | sed 's/.*\\[//;s/\\].*//;s/"//g')
-      VIOLATIONS="$VIOLATIONS
-  - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
-    $UNDECLARED_LIST
-    Add them to portal.yaml or use paradigm_portal_add_gate."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     fi
   fi
@@ -582,7 +587,8 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
-  # Emit compliance-violation event (fire-and-forget)
+  # Emit compliance-violation event (fire-and-forget, backgrounded)
+  # NOTE: Could be absorbed into compliance-check command in a future iteration.
   if command -v paradigm >/dev/null 2>&1; then
     paradigm event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
   fi
@@ -615,6 +621,7 @@ if [ -n "$ADVISORY" ]; then
 fi
 
 # Auto-demote graduated habits with 3+ failures
+# NOTE: Could be absorbed into compliance-check command in a future iteration.
 if [ -d ".paradigm/.graduation-failures" ]; then
   for fail_file in .paradigm/.graduation-failures/*; do
     [ -f "$fail_file" ] || continue
@@ -634,6 +641,7 @@ fi
 rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
+rm -f ".paradigm/.purpose-paths"
 
 exit 0
 `;
@@ -1051,6 +1059,7 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
+rm -f ".paradigm/.purpose-paths"
 
 exit 0
 `;

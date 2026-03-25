@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.13.0] — 2026-03-24
+
+### Added
+
+- **ToolRegistry wired into MCP dispatch** — The existing but unused `ToolRegistry` is now the actual tool registration and dispatch path. Tools organized into 3 tiers: core (7 modules, always loaded), feature (18, project-dependent), advanced (7, on-demand via `paradigm_tool_activate`). Replaces O(n) if-chain with Map-based dispatch. Net ~150 lines removed from tools/index.ts.
+- **Tool definition helpers** — New `utils/tool-helpers.ts` with `defineTool()`, `formatToolResult()`, and `loadYamlFile()` factories for future tool module cleanup.
+- **`paradigm compliance-check` command** — Single CLI command replacing 3 separate subprocess calls in stop hook. Runs habits, drift, and portal checks in one Node.js process with combined JSON output.
+- **ConductorTheme design token system** — Expanded `ConductorColors` into `ConductorTheme` with 8 semantic color tokens (brand, symphony, healthy, degraded, critical, warning, active, muted), 4 font size constants, and card style constants. Backward-compatible typealias preserved.
+- **ConductorEnvironment** — New `@MainActor ObservableObject` replacing MainOverlayView's 15 `@ObservedObject` properties with a single `@EnvironmentObject`.
+- **Accessibility labels** — Added `.accessibilityLabel()` to all status dots and icon-only buttons across 5 Conductor views (MainOverlayView, AgentHealthView, AgentRosterView, AgentNetworkView, ContainerView).
+- **Shared Platform UI components** — Extracted `StatCard`, `EmptyState`, and `Badge` into `components/shared/`. Overview and Ambient sections now share the same StatCard.
+- **Unified CSS token system** — Migrated Lore and Graph sections from standalone `:root` variables to Platform's `--p-*` prefix system. Removed conflicting global resets. Replaced 20+ hardcoded hex colors with CSS variables.
+
+### Fixed
+
+- **Stop hook performance** — Reduced from 5 Node.js subprocess spawns + 2 `find` scans to 1 subprocess + cached `.purpose` paths. Estimated 1-2 second saving per session end.
+- **Centralized post-dispatch events** — Extracted event emission from 10+ individual tool handlers into single `emitPostDispatchEvents()` function.
+
 ## [5.12.0] — 2026-03-24
 
 ### Added

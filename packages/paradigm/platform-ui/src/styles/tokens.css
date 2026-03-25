@@ -31,6 +31,22 @@
   --p-symbol-signal: #d29922;
   --p-symbol-aspect: #bc8cff;
 
+  /* Surfaces (aliases) */
+  --p-bg-card: #21262d;
+  --p-bg-panel: #161b22;
+
+  /* Lore entry type colors */
+  --p-lore-agent-session: #818cf8;
+  --p-lore-human-note: #34d399;
+  --p-lore-decision: #fbbf24;
+  --p-lore-review: #c084fc;
+  --p-lore-incident: #f87171;
+  --p-lore-milestone: #60a5fa;
+
+  /* Spine */
+  --p-spine-color: #30363d;
+  --p-spine-width: 2px;
+
   /* Layout */
   --p-sidebar-width: 56px;
   --p-header-height: 44px;
@@ -53,4 +69,20 @@
   --p-accent-red: #cf222e;
   --p-accent-orange: #9a6700;
   --p-accent-purple: #8250df;
+
+  /* Surfaces (aliases) */
+  --p-bg-card: #eaeef2;
+  --p-bg-panel: #f6f8fa;
+
+  /* Lore entry type colors */
+  --p-lore-agent-session: #5c7cfa;
+  --p-lore-human-note: #20c997;
+  --p-lore-decision: #e67700;
+  --p-lore-review: #9775fa;
+  --p-lore-incident: #fa5252;
+  --p-lore-milestone: #339af0;
+
+  /* Spine */
+  --p-spine-color: #d0d7de;
+  --p-spine-width: 2px;
 }

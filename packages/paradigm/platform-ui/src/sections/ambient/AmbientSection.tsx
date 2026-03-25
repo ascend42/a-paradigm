@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useAmbientStore, type StreamEvent, type Nomination, type Debate } from './store/ambientStore';
+import { StatCard } from '../../components/shared/StatCard';
 import './styles/ambient.css';
 
 const URGENCY_ORDER: Record<string, number> = {
@@ -39,18 +40,6 @@ function eventsLastHour(events: StreamEvent[]): number {
   return events.filter((e) => {
     try { return new Date(e.timestamp).getTime() > oneHourAgo; } catch { return false; }
   }).length;
-}
-
-function StatCard({ value, label, accent }: { value: string | number; label: string; accent?: string }) {
-  return (
-    <div
-      className="stat-card"
-      style={accent ? { borderTopColor: accent, borderTopWidth: 2 } as React.CSSProperties : undefined}
-    >
-      <div className="stat-card__value">{value}</div>
-      <div className="stat-card__label">{label}</div>
-    </div>
-  );
 }
 
 function getUniqueEventTypes(events: StreamEvent[]): string[] {

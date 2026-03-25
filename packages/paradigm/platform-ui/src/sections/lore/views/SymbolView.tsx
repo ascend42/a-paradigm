@@ -22,7 +22,7 @@ export function SymbolView() {
   return (
     <div className="sidebar-view">
       <div className="sidebar">
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--p-border)', fontSize: 11, color: 'var(--p-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Symbols ({symbols.length})
         </div>
         {symbols.map(s => (
@@ -36,7 +36,7 @@ export function SymbolView() {
           </div>
         ))}
         {symbols.length === 0 && (
-          <div style={{ padding: 20, color: 'var(--text-muted)', textAlign: 'center', fontSize: 13 }}>
+          <div style={{ padding: 20, color: 'var(--p-text-muted)', textAlign: 'center', fontSize: 13 }}>
             No symbols found
           </div>
         )}
@@ -48,7 +48,7 @@ export function SymbolView() {
               <SymbolTag symbol={selectedSymbol} /> entries
             </h2>
             {entries.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)' }}>No entries for this symbol</div>
+              <div style={{ color: 'var(--p-text-muted)' }}>No entries for this symbol</div>
             ) : (
               entries.map(e => (
                 <div key={e.id} style={{ marginBottom: 12 }}>

@@ -39,7 +39,7 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
         {entry.body && (
           <div style={{
             fontSize: 11,
-            color: 'var(--text-muted)',
+            color: 'var(--p-text-muted)',
             marginTop: 4,
             fontStyle: 'italic',
             overflow: 'hidden',
@@ -69,7 +69,7 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
                 border: '1px solid rgba(96, 165, 250, 0.3)',
                 borderRadius: 10,
                 fontSize: 10,
-                color: '#60a5fa',
+                color: 'var(--p-lore-milestone)',
               }}>{'\u21BB'} {t}</span>
             ))}
           </div>
@@ -88,7 +88,7 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
                 border: '1px solid rgba(139, 92, 246, 0.3)',
                 borderRadius: 8,
                 fontSize: 10,
-                color: '#8b5cf6',
+                color: 'var(--p-accent-purple)',
               }}>{(entry.confidence * 100).toFixed(0)}%</span>
             )}
             {entry.assessment && (
@@ -102,9 +102,9 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
                   : 'rgba(248, 113, 113, 0.3)'}`,
                 borderRadius: 8,
                 fontSize: 10,
-                color: entry.assessment.verdict === 'correct' ? '#34d399'
-                  : entry.assessment.verdict === 'partial' ? '#fbbf24'
-                  : '#f87171',
+                color: entry.assessment.verdict === 'correct' ? 'var(--p-accent-green)'
+                  : entry.assessment.verdict === 'partial' ? 'var(--p-accent-orange)'
+                  : 'var(--p-accent-red)',
               }}>{entry.assessment.verdict}</span>
             )}
           </div>

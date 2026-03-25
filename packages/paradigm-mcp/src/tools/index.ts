@@ -1,5 +1,10 @@
 /**
  * MCP Tools - Actions AI can invoke on Paradigm data
+ *
+ * Uses ToolRegistry for tiered tool listing and Map-based dispatch.
+ * Inline tools (search, ripple, related, status, gates_for_route, plugin_check,
+ * workspace_reindex, tool_activate) are handled directly in the switch statement.
+ * All other tools are dispatched through the registry.
  */
 
 import * as os from 'os';
@@ -9,7 +14,6 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
 import {
   getSymbol,
   searchSymbols,
@@ -20,6 +24,7 @@ import {
   getSymbolCounts,
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
+import { ToolRegistry, type ToolModule, type ToolDefinition } from '../utils/tool-registry.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
@@ -54,8 +59,8 @@ import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
-import { grepForReferences, FallbackReference } from './fallback-grep.js';
-import { findFuzzyMatches, isValidSymbolFormat } from './fuzzy-match.js';
+import { grepForReferences } from './fallback-grep.js';
+import { findFuzzyMatches } from './fuzzy-match.js';
 import { loadFlowIndex, getFlowImpactSummary } from '../utils/flow-loader.js';
 import { getAffectedPersonas } from '../utils/personas-loader.js';
 import { getAffectedUniversityContent } from '../utils/university-loader.js';
@@ -63,6 +68,248 @@ import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace, rippleWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
 import { emitAndProcess } from '../utils/nomination-engine.js';
+
+// ────────────────────────────────────────────────────────
+// Tool Registry Setup
+// ────────────────────────────────────────────────────────
+
+/**
+ * Build and populate the ToolRegistry with all tool modules.
+ *
+ * Tiers:
+ *   core     — always loaded (context, navigate, tags, purpose-portal, pm, reindex, docs)
+ *   feature  — auto-detected (lore, agents, orchestration, habits, notebooks, etc.)
+ *   advanced — on-demand (conductor, platform, pipeline, graduation, assessment, graph, heatmap)
+ *
+ * The registry provides tiered listing via getActiveTools() and
+ * Map-based dispatch via dispatch().
+ */
+function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): ToolRegistry {
+  const registry = new ToolRegistry(rootDir);
+
+  const reload = reloadContext || (async () => {});
+
+  // Helper: wrap a standard (name, args, ctx) handler into the ToolModule.handleTool shape
+  const wrap = (
+    handler: (name: string, args: Record<string, unknown>, ctx: ProjectContext) => Promise<{ handled: boolean; text: string }>,
+  ): ToolModule['handleTool'] =>
+    async (name, args, ctx) => handler(name, args, ctx as ProjectContext);
+
+  // Helper: wrap handlers that also need the reload callback
+  const wrapWithReload = (
+    handler: (name: string, args: Record<string, unknown>, ctx: ProjectContext, reloadFn: () => Promise<void>) => Promise<{ handled: boolean; text: string }>,
+  ): ToolModule['handleTool'] =>
+    async (name, args, ctx) => handler(name, args, ctx as ProjectContext, reload);
+
+  // ── Core tier (always loaded) ─────────────────────────
+
+  registry.registerAll([
+    {
+      key: 'context',
+      tier: 'core',
+      getToolsList: getContextToolsList,
+      handleTool: wrap(handleContextTool),
+    },
+    {
+      key: 'navigate',
+      tier: 'core',
+      getToolsList: getNavigateToolsList as () => ToolDefinition[],
+      handleTool: wrap(handleNavigateTool),
+    },
+    {
+      key: 'tags',
+      tier: 'core',
+      getToolsList: getTagsToolsList,
+      handleTool: wrap(handleTagsTool),
+    },
+    {
+      key: 'purpose-portal',
+      tier: 'core',
+      getToolsList: getPurposePortalToolsList as () => ToolDefinition[],
+      handleTool: wrapWithReload(handlePurposePortalTool),
+    },
+    {
+      key: 'pm',
+      tier: 'core',
+      getToolsList: getPmToolsList,
+      handleTool: wrap(handlePmTool),
+    },
+    {
+      key: 'reindex',
+      tier: 'core',
+      getToolsList: getReindexToolsList,
+      handleTool: wrapWithReload(handleReindexTool),
+    },
+    {
+      key: 'docs',
+      tier: 'core',
+      getToolsList: getDocsToolsList,
+      handleTool: wrap(handleDocsTool),
+    },
+  ]);
+
+  // ── Feature tier (auto-detected) ─────────────────────
+
+  registry.registerAll([
+    {
+      key: 'wisdom',
+      tier: 'feature',
+      getToolsList: getWisdomToolsList,
+      handleTool: wrap(handleWisdomTool),
+    },
+    {
+      key: 'history',
+      tier: 'feature',
+      getToolsList: getHistoryToolsList,
+      handleTool: wrap(handleHistoryTool),
+    },
+    {
+      key: 'lore',
+      tier: 'feature',
+      getToolsList: getLoreToolsList,
+      handleTool: wrap(handleLoreTool),
+    },
+    {
+      key: 'streams',
+      tier: 'feature',
+      getToolsList: getStreamsToolsList,
+      handleTool: wrap(handleStreamsTool),
+    },
+    {
+      key: 'ambient',
+      tier: 'feature',
+      getToolsList: getAmbientToolsList,
+      handleTool: wrap(handleAmbientTool),
+    },
+    {
+      key: 'sentinel',
+      tier: 'feature',
+      getToolsList: getSentinelToolsList,
+      handleTool: wrap(handleSentinelTool),
+    },
+    {
+      key: 'flows',
+      tier: 'feature',
+      getToolsList: getFlowsToolsList,
+      handleTool: wrap(handleFlowTool),
+    },
+    {
+      key: 'fixtures',
+      tier: 'feature',
+      getToolsList: getFixturesToolsList,
+      handleTool: wrap(handleFixturesTool),
+    },
+    {
+      key: 'orchestration',
+      tier: 'feature',
+      getToolsList: getOrchestrationToolsList,
+      handleTool: wrap(handleOrchestrationTool),
+    },
+    {
+      key: 'habits',
+      tier: 'feature',
+      getToolsList: getHabitsToolsList,
+      handleTool: wrap(handleHabitsTool),
+    },
+    {
+      key: 'tasks',
+      tier: 'feature',
+      getToolsList: getTasksToolsList,
+      handleTool: wrap(handleTasksTool),
+    },
+    {
+      key: 'personas',
+      tier: 'feature',
+      getToolsList: getPersonaToolsList,
+      handleTool: wrap(handlePersonaTool),
+    },
+    {
+      key: 'protocols',
+      tier: 'feature',
+      getToolsList: getProtocolsToolsList,
+      handleTool: wrap(handleProtocolsTool),
+    },
+    {
+      key: 'symphony',
+      tier: 'feature',
+      getToolsList: getSymphonyToolsList,
+      handleTool: wrap(handleSymphonyTool),
+    },
+    {
+      key: 'university',
+      tier: 'feature',
+      getToolsList: getUniversityToolsList,
+      handleTool: wrap(handleUniversityTool),
+    },
+    {
+      key: 'agents',
+      tier: 'feature',
+      getToolsList: getAgentToolsList,
+      handleTool: wrap(handleAgentTool),
+    },
+    {
+      key: 'notebooks',
+      tier: 'feature',
+      getToolsList: getNotebookToolsList,
+      handleTool: wrap(handleNotebookTool),
+    },
+    {
+      key: 'aspect-graph',
+      tier: 'feature',
+      getToolsList: getAspectGraphToolsList,
+      handleTool: wrap(handleAspectGraphTool),
+    },
+  ]);
+
+  // ── Advanced tier (on-demand) ─────────────────────────
+
+  registry.registerAll([
+    {
+      key: 'conductor',
+      tier: 'advanced',
+      getToolsList: getConductorToolsList,
+      handleTool: wrap(handleConductorTool),
+    },
+    {
+      key: 'platform',
+      tier: 'advanced',
+      getToolsList: getPlatformToolsList,
+      handleTool: wrap(handlePlatformTool),
+    },
+    {
+      key: 'pipeline',
+      tier: 'advanced',
+      getToolsList: getPipelineToolsList,
+      handleTool: wrap(handlePipelineTool),
+    },
+    {
+      key: 'graduation',
+      tier: 'advanced',
+      getToolsList: getGraduationToolsList,
+      handleTool: wrap(handleGraduationTool),
+    },
+    {
+      key: 'assessment',
+      tier: 'advanced',
+      getToolsList: getAssessmentToolsList,
+      handleTool: wrap(handleAssessmentTool),
+    },
+    {
+      key: 'graph',
+      tier: 'advanced',
+      getToolsList: getGraphToolsList,
+      handleTool: wrap(handleGraphTool),
+    },
+    {
+      key: 'heatmap',
+      tier: 'advanced',
+      getToolsList: getHeatmapToolsList,
+      handleTool: wrap(handleHeatmapTool),
+    },
+  ]);
+
+  return registry;
+}
 
 /**
  * Calculate similarity between two routes for gate suggestions
@@ -137,263 +384,130 @@ function calculateRouteSimilarity(route1: string, route2: string): number {
   return Math.min(1.0, baseSimilarity + structureBonus);
 }
 
+// ────────────────────────────────────────────────────────
+// Inline Tool Definitions
+// ────────────────────────────────────────────────────────
+
+/**
+ * Inline tools are defined directly in this file rather than in separate modules.
+ * They handle core Paradigm operations (search, ripple, related, status, gates)
+ * plus infrastructure tools (plugin check, workspace reindex, tool activation).
+ */
+function getInlineToolDefinitions() {
+  return [
+    {
+      name: 'paradigm_search',
+      description: 'Search for Paradigm symbols by name, description, or tags. Includes fuzzy matching for typo tolerance. Returns matching symbols with names, paths, types, and descriptions. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query (matches symbol names, descriptions, tags)' },
+          type: { type: 'string', enum: ['component', 'flow', 'gate', 'signal', 'aspect'], description: 'Optional: filter by symbol type (v2: #component, $flow, ^gate, !signal, ~aspect)' },
+          limit: { type: 'number', description: 'Maximum results to return (default: 10)' },
+          fuzzy: { type: 'boolean', description: 'Enable fuzzy matching for typos (default: true)' },
+          includeWorkspace: { type: 'boolean', description: 'Also search sibling workspace projects (default: false). Requires workspace configured in config.yaml.' },
+          componentType: { type: 'string', description: 'Filter components by type (e.g., "view", "service", "tool"). Only applies to #component symbols.' },
+          response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
+        },
+        required: ['query'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_ripple',
+      description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes. Returns direct and indirect dependents with file paths and dependency depth. ~300 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          symbol: { type: 'string', description: 'Symbol to analyze (e.g., @checkout, ^authenticated, $onboarding)' },
+          depth: { type: 'number', description: 'How many levels of dependencies to analyze (default: 2, max: 5)' },
+          includeWorkspace: { type: 'boolean', description: 'Also check sibling workspace projects for cross-project impact (default: false). Requires workspace configured in config.yaml.' },
+          response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
+        },
+        required: ['symbol'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_related',
+      description: 'Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on. Returns uses/used-by lists with symbol types. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          symbol: { type: 'string', description: 'Symbol to find relations for' },
+        },
+        required: ['symbol'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_status',
+      description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features. Returns symbol counts by type, project health score, and feature flags. ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
+        },
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_gates_for_route',
+      description: 'Suggest which gates should be applied to a route based on patterns in the project. Returns suggested gates with confidence scores and existing patterns. ~150 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          route: { type: 'string', description: 'Route path (e.g., /api/users, /admin/settings)' },
+          method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'HTTP method' },
+          response_format: { type: 'string', enum: ['concise', 'detailed'], description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")' },
+        },
+        required: ['route'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_plugin_check',
+      description: 'Check for updates to installed Claude Code plugins. Reports which marketplace clones have newer remote commits and which cached versions are stale.',
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_workspace_reindex',
+      description: 'Rebuild scan-index.json for all workspace members. Requires workspace configured in config.yaml. Returns per-member symbol counts. ~200 tokens.',
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: 'paradigm_tool_activate',
+      description: 'Activate an advanced-tier tool module for this session. Advanced tools are not loaded by default to reduce tool count. Call with a feature key to make its tools available. ~50 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          feature: { type: 'string', description: 'Feature key to activate (e.g., "graph", "heatmap", "pipeline", "conductor", "platform")' },
+        },
+        required: ['feature'],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+  ];
+}
+
 /**
  * Register all MCP tools
  */
 export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: () => Promise<void>) {
-  // List available tools
+  // Build the tool registry with all modules organized by tier
+  const ctx0 = getContext();
+  const registry = buildRegistry(ctx0.rootDir, reloadContext);
+
+  // List available tools — inline tools + registry-managed tools (tiered)
   server.setRequestHandler(
     ListToolsRequestSchema,
     async () => {
       return {
         tools: [
-          {
-            name: 'paradigm_search',
-            description: 'Search for Paradigm symbols by name, description, or tags. Includes fuzzy matching for typo tolerance. Returns matching symbols with names, paths, types, and descriptions. ~150 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query (matches symbol names, descriptions, tags)',
-                },
-                type: {
-                  type: 'string',
-                  enum: ['component', 'flow', 'gate', 'signal', 'aspect'],
-                  description: 'Optional: filter by symbol type (v2: #component, $flow, ^gate, !signal, ~aspect)',
-                },
-                limit: {
-                  type: 'number',
-                  description: 'Maximum results to return (default: 10)',
-                },
-                fuzzy: {
-                  type: 'boolean',
-                  description: 'Enable fuzzy matching for typos (default: true)',
-                },
-                includeWorkspace: {
-                  type: 'boolean',
-                  description: 'Also search sibling workspace projects (default: false). Requires workspace configured in config.yaml.',
-                },
-                componentType: {
-                  type: 'string',
-                  description: 'Filter components by type (e.g., "view", "service", "tool"). Only applies to #component symbols.',
-                },
-                response_format: {
-                  type: 'string',
-                  enum: ['concise', 'detailed'],
-                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
-                },
-              },
-              required: ['query'],
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          {
-            name: 'paradigm_ripple',
-            description: 'IMPORTANT: Call BEFORE modifying any symbol to understand impact. Shows what depends on it directly and indirectly, helping you avoid breaking changes. Returns direct and indirect dependents with file paths and dependency depth. ~300 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                symbol: {
-                  type: 'string',
-                  description: 'Symbol to analyze (e.g., @checkout, ^authenticated, $onboarding)',
-                },
-                depth: {
-                  type: 'number',
-                  description: 'How many levels of dependencies to analyze (default: 2, max: 5)',
-                },
-                includeWorkspace: {
-                  type: 'boolean',
-                  description: 'Also check sibling workspace projects for cross-project impact (default: false). Requires workspace configured in config.yaml.',
-                },
-                response_format: {
-                  type: 'string',
-                  enum: ['concise', 'detailed'],
-                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
-                },
-              },
-              required: ['symbol'],
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          {
-            name: 'paradigm_related',
-            description: 'Get all symbols related to a given symbol. Call before modifying code to understand what uses this symbol and what it depends on. Returns uses/used-by lists with symbol types. ~150 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                symbol: {
-                  type: 'string',
-                  description: 'Symbol to find relations for',
-                },
-              },
-              required: ['symbol'],
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          {
-            name: 'paradigm_status',
-            description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features. Returns symbol counts by type, project health score, and feature flags. ~100 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                response_format: {
-                  type: 'string',
-                  enum: ['concise', 'detailed'],
-                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
-                },
-              },
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          {
-            name: 'paradigm_gates_for_route',
-            description: 'Suggest which gates should be applied to a route based on patterns in the project. Returns suggested gates with confidence scores and existing patterns. ~150 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                route: {
-                  type: 'string',
-                  description: 'Route path (e.g., /api/users, /admin/settings)',
-                },
-                method: {
-                  type: 'string',
-                  enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-                  description: 'HTTP method',
-                },
-                response_format: {
-                  type: 'string',
-                  enum: ['concise', 'detailed'],
-                  description: 'Response detail level. "concise" returns minimal fields to save tokens (default: "detailed")',
-                },
-              },
-              required: ['route'],
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          // Wisdom tools
-          ...getWisdomToolsList(),
-          // History tools
-          ...getHistoryToolsList(),
-          // Navigate tools
-          ...getNavigateToolsList(),
-          // Context tracking tools
-          ...getContextToolsList(),
-          // Sentinel tools
-          ...getSentinelToolsList(),
-          // Flow tools
-          ...getFlowsToolsList(),
-          // Fixtures tools
-          ...getFixturesToolsList(),
-          // Orchestration tools
-          ...getOrchestrationToolsList(),
-          // Tags tools (v2 symbol system)
-          ...getTagsToolsList(),
-          // Purpose & Portal file management tools
-          ...getPurposePortalToolsList(),
-          // PM governance tools
-          ...getPmToolsList(),
-          // Reindex tool
-          ...getReindexToolsList(),
-          // Lore tools
-          ...getLoreToolsList(),
-          // Knowledge streams (work log, journal, decisions)
-          ...getStreamsToolsList(),
-          // Ambient coordination tools (nominations, events, context)
-          ...getAmbientToolsList(),
-          // Habits tools
-          ...getHabitsToolsList(),
-          // Graduation tools
-          ...getGraduationToolsList(),
-          // Aspect graph tools
-          ...getAspectGraphToolsList(),
-          // Task management tools
-          ...getTasksToolsList(),
-          // Assessment loop tools
-          ...getAssessmentToolsList(),
-          ...getPersonaToolsList(),
-          // Protocol tools
-          ...getProtocolsToolsList(),
-          // Graph generation tool
-          ...getGraphToolsList(),
-          // Heat map tools
-          ...getHeatmapToolsList(),
-          // Pipeline tools
-          ...getPipelineToolsList(),
-          // Conductor session registration tools
-          ...getConductorToolsList(),
-          // Symphony (The Score) tools
-          ...getSymphonyToolsList(),
-          // University (per-project knowledge base) tools
-          ...getUniversityToolsList(),
-          // Platform agent-driven UI tools
-          ...getPlatformToolsList(),
-          // Agent identity tools
-          ...getAgentToolsList(),
-          // Agent notebook tools
-          ...getNotebookToolsList(),
-          // Docs (auto-generated documentation) tools
-          ...getDocsToolsList(),
-          // Plugin update check
-          {
-            name: 'paradigm_plugin_check',
-            description: 'Check for updates to installed Claude Code plugins. Reports which marketplace clones have newer remote commits and which cached versions are stale.',
-            inputSchema: {
-              type: 'object',
-              properties: {},
-            },
-            annotations: {
-              readOnlyHint: true,
-              destructiveHint: false,
-            },
-          },
-          // Workspace reindex tool
-          {
-            name: 'paradigm_workspace_reindex',
-            description: 'Rebuild scan-index.json for all workspace members. Requires workspace configured in config.yaml. Returns per-member symbol counts. ~200 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {},
-            },
-            annotations: {
-              readOnlyHint: false,
-              destructiveHint: true,
-            },
-          },
-          // Dynamic tool activation
-          {
-            name: 'paradigm_tool_activate',
-            description: 'Activate an advanced-tier tool module for this session. Advanced tools are not loaded by default to reduce tool count. Call with a feature key to make its tools available. ~50 tokens.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                feature: {
-                  type: 'string',
-                  description: 'Feature key to activate (e.g., "graph", "heatmap", "pipeline", "conductor", "platform")',
-                },
-              },
-              required: ['feature'],
-            },
-            annotations: {
-              readOnlyHint: false,
-              destructiveHint: false,
-            },
-          },
+          ...getInlineToolDefinitions(),
+          ...registry.getActiveTools(),
         ],
       };
     }
@@ -1289,400 +1403,54 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
         case 'paradigm_tool_activate': {
           const feature = (args as { feature: string }).feature;
-          // For now, all features are auto-detected and loaded. This is a placeholder
-          // for when the tier system is fully wired. Return success with current status.
+          // Try activating an advanced-tier module via the registry
+          const activated = registry.activateAdvanced(feature);
+          if (activated) {
+            const text = JSON.stringify({
+              action: 'tool_activate',
+              feature,
+              status: 'activated',
+              toolsAdded: activated.map(t => t.name),
+              note: `Advanced module "${feature}" activated for this session. ${activated.length} tool(s) now available.`,
+            }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }] };
+          }
+          // Feature not found or not advanced tier — check if it's already loaded
+          const info = registry.getRegistryInfo();
+          const isActive = info.activeFeatures.includes(feature);
           const text = JSON.stringify({
             action: 'tool_activate',
             feature,
-            status: 'active',
-            note: 'All tools are currently auto-detected and loaded. Advanced tier activation will be enabled in a future update.',
+            status: isActive ? 'already_active' : 'not_found',
+            note: isActive
+              ? `Module "${feature}" is already active (auto-detected or core tier).`
+              : `Module "${feature}" not found. Available advanced modules: ${info.availableAdvanced.join(', ') || '(none)'}`,
+            availableAdvanced: info.availableAdvanced,
           }, null, 2);
           trackToolCall(text.length, name);
-          return {
-            content: [{ type: 'text', text }],
-          };
+          return { content: [{ type: 'text', text }] };
         }
 
         default: {
-          // Try navigate tool
-          if (name === 'paradigm_navigate') {
-            const result = await handleNavigateTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
+          // ── Registry-based dispatch ────────────────────────
+          // All non-inline tools are dispatched through the ToolRegistry.
+          // This replaces the previous O(n) if-chain with Map-based lookup.
+          const result = await registry.dispatch(name, args as Record<string, unknown>, ctx);
+
+          if (result && result.handled) {
+            // Track tool call (skip context tools to avoid recursion)
+            const isContextTool = name.startsWith('paradigm_context_') || name.startsWith('paradigm_session_') || name === 'paradigm_handoff_prepare';
+            if (!isContextTool) {
               trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
             }
-          }
 
-          // Try wisdom tools
-          if (name.startsWith('paradigm_wisdom_')) {
-            const result = await handleWisdomTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
+            // Post-dispatch event emission for tools that generate events
+            emitPostDispatchEvents(name, args as Record<string, unknown>, ctx.rootDir);
 
-          // Try history tools
-          if (name.startsWith('paradigm_history_')) {
-            const result = await handleHistoryTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try context tools
-          if (name.startsWith('paradigm_context_') || name.startsWith('paradigm_session_') || name === 'paradigm_handoff_prepare') {
-            const result = await handleContextTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              // Don't track context tools to avoid recursion
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try sentinel tools
-          if (name.startsWith('paradigm_sentinel_')) {
-            const result = await handleSentinelTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name === 'paradigm_sentinel_record') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'error-encountered', source: 'mcp-tool-call', tool: name, severity: (a.severity as string) || 'warning', context: `Sentinel: ${a.title || a.summary || 'incident recorded'}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try flow tools
-          if (name === 'paradigm_flows_affected' || name === 'paradigm_flow_validate') {
-            const result = await handleFlowTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try fixtures tools
-          if (name === 'paradigm_test_fixtures') {
-            const result = await handleFixturesTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try orchestration tools
-          if (name.startsWith('paradigm_orchestrate') || name === 'paradigm_agent_prompt') {
-            const result = await handleOrchestrationTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              // trackToolCall is handled inside the orchestration tool handlers
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try tags tools (v2 symbol system)
-          if (name.startsWith('paradigm_tags') || name === 'paradigm_aspect_check') {
-            const result = await handleTagsTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try PM governance tools
-          if (name.startsWith('paradigm_pm_')) {
-            const result = await handlePmTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try purpose & portal file management tools
-          if (name.startsWith('paradigm_purpose_') || name.startsWith('paradigm_portal_')) {
-            const reload = reloadContext || (async () => {});
-            const result = await handlePurposePortalTool(name, args as Record<string, unknown>, ctx, reload);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name.includes('_add_') || name.includes('_update_') || name.includes('_remove_')) {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'file-modified', source: 'mcp-tool-call', tool: name, symbols: a.id ? [`#${a.id}`] : a.symbol ? [String(a.symbol)] : [], context: `Purpose/portal update via ${name}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try lore tools
-          if (name.startsWith('paradigm_lore_')) {
-            const result = await handleLoreTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name === 'paradigm_lore_record') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols_touched) ? a.symbols_touched.map(String) : [], context: `Lore recorded: ${a.title || 'untitled'}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try knowledge streams tools (work log, journal, decisions)
-          if (name.startsWith('paradigm_work_log_') || name.startsWith('paradigm_journal_') || name.startsWith('paradigm_decision_')) {
-            const result = await handleStreamsTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name === 'paradigm_work_log_record' || name === 'paradigm_journal_record') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols) ? a.symbols.map(String) : [], context: `Work logged: ${a.summary || a.title || 'entry'}` }); } catch {}
-              }
-              if (name === 'paradigm_decision_record') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'decision-made', source: 'mcp-tool-call', tool: name, symbols: Array.isArray(a.symbols) ? a.symbols.map(String) : [], context: `Decision: ${a.title || a.summary || 'recorded'}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try habits tools
-          if (name.startsWith('paradigm_habits_') || name === 'paradigm_practice_context') {
-            const result = await handleHabitsTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try graduation tools
-          if (name.startsWith('paradigm_graduate_')) {
-            const result = await handleGraduationTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try aspect graph tools
-          if (name.startsWith('paradigm_aspect_') && name !== 'paradigm_aspect_check') {
-            const result = await handleAspectGraphTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try task tools
-          if (name.startsWith('paradigm_task_')) {
-            const result = await handleTasksTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try assessment tools
-          if (name.startsWith('paradigm_assessment_')) {
-            const result = await handleAssessmentTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try persona tools
-          if (name.startsWith('paradigm_persona_')) {
-            const result = await handlePersonaTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name === 'paradigm_persona_run') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: `Persona run: ${a.persona || 'unknown'}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try protocol tools
-          if (name.startsWith('paradigm_protocol_')) {
-            const result = await handleProtocolsTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              if (name === 'paradigm_protocol_record') {
-                const a = args as Record<string, unknown>;
-                try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: `Protocol recorded: ${a.name || a.id || 'unknown'}` }); } catch {}
-              }
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try graph tool
-          if (name === 'paradigm_graph_generate') {
-            const result = await handleGraphTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try heat map tools
-          if (name.startsWith('paradigm_heatmap_')) {
-            const result = await handleHeatmapTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try pipeline tools
-          if (name.startsWith('paradigm_pipeline_')) {
-            const result = await handlePipelineTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try conductor tools
-          if (name.startsWith('paradigm_conductor_')) {
-            const result = await handleConductorTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try symphony tools
-          if (name.startsWith('paradigm_symphony_')) {
-            const result = await handleSymphonyTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try university tools
-          if (name.startsWith('paradigm_university_')) {
-            const result = await handleUniversityTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try platform tools (agent-driven UI)
-          if (name.startsWith('paradigm_platform_')) {
-            const result = await handlePlatformTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try agent identity tools
-          if (name.startsWith('paradigm_agent_') && name !== 'paradigm_agent_prompt') {
-            const result = await handleAgentTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try notebook tools
-          if (name.startsWith('paradigm_notebook_')) {
-            const result = await handleNotebookTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try docs tools
-          if (name.startsWith('paradigm_docs_')) {
-            const result = await handleDocsTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try ambient coordination tools
-          if (name.startsWith('paradigm_ambient_') || name === 'paradigm_context_compose') {
-            const result = await handleAmbientTool(name, args as Record<string, unknown>, ctx);
-            if (result.handled) {
-              trackToolCall(result.text.length, name);
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
-          }
-
-          // Try reindex tool
-          if (name === 'paradigm_reindex') {
-            const reload = reloadContext || (async () => {});
-            const result = await handleReindexTool(name, args as Record<string, unknown>, ctx, reload);
-            if (result.handled) {
-              try { emitAndProcess(ctx.rootDir, { type: 'work-completed', source: 'mcp-tool-call', tool: name, context: 'Index rebuilt' }, { skipNominations: true }); } catch {}
-              return {
-                content: [{ type: 'text', text: result.text }],
-              };
-            }
+            return {
+              content: [{ type: 'text', text: result.text }],
+            };
           }
 
           throw new Error(`Unknown tool: ${name}`);
@@ -1703,4 +1471,87 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       return toolResult;
     }
   );
+}
+
+// ────────────────────────────────────────────────────────
+// Post-Dispatch Event Emission
+// ────────────────────────────────────────────────────────
+
+/**
+ * Emit nomination/event-stream events after certain tool calls succeed.
+ * These were previously inline in each if-branch; now centralized.
+ * All emissions are fire-and-forget (non-fatal).
+ */
+function emitPostDispatchEvents(name: string, args: Record<string, unknown>, rootDir: string): void {
+  try {
+    switch (name) {
+      case 'paradigm_sentinel_record':
+        emitAndProcess(rootDir, {
+          type: 'error-encountered', source: 'mcp-tool-call', tool: name,
+          severity: (args.severity as string) || 'warning',
+          context: `Sentinel: ${args.title || args.summary || 'incident recorded'}`,
+        });
+        break;
+
+      case 'paradigm_lore_record':
+        emitAndProcess(rootDir, {
+          type: 'work-completed', source: 'mcp-tool-call', tool: name,
+          symbols: Array.isArray(args.symbols_touched) ? args.symbols_touched.map(String) : [],
+          context: `Lore recorded: ${args.title || 'untitled'}`,
+        });
+        break;
+
+      case 'paradigm_work_log_record':
+      case 'paradigm_journal_record':
+        emitAndProcess(rootDir, {
+          type: 'work-completed', source: 'mcp-tool-call', tool: name,
+          symbols: Array.isArray(args.symbols) ? args.symbols.map(String) : [],
+          context: `Work logged: ${args.summary || args.title || 'entry'}`,
+        });
+        break;
+
+      case 'paradigm_decision_record':
+        emitAndProcess(rootDir, {
+          type: 'decision-made', source: 'mcp-tool-call', tool: name,
+          symbols: Array.isArray(args.symbols) ? args.symbols.map(String) : [],
+          context: `Decision: ${args.title || args.summary || 'recorded'}`,
+        });
+        break;
+
+      case 'paradigm_persona_run':
+        emitAndProcess(rootDir, {
+          type: 'work-completed', source: 'mcp-tool-call', tool: name,
+          context: `Persona run: ${args.persona || 'unknown'}`,
+        });
+        break;
+
+      case 'paradigm_protocol_record':
+        emitAndProcess(rootDir, {
+          type: 'work-completed', source: 'mcp-tool-call', tool: name,
+          context: `Protocol recorded: ${args.name || args.id || 'unknown'}`,
+        });
+        break;
+
+      case 'paradigm_reindex':
+        emitAndProcess(rootDir, {
+          type: 'work-completed', source: 'mcp-tool-call', tool: name,
+          context: 'Index rebuilt',
+        }, { skipNominations: true });
+        break;
+
+      default:
+        // Purpose/portal file modification events
+        if ((name.startsWith('paradigm_purpose_') || name.startsWith('paradigm_portal_')) &&
+            (name.includes('_add_') || name.includes('_update_') || name.includes('_remove_'))) {
+          emitAndProcess(rootDir, {
+            type: 'file-modified', source: 'mcp-tool-call', tool: name,
+            symbols: args.id ? [`#${args.id}`] : args.symbol ? [String(args.symbol)] : [],
+            context: `Purpose/portal update via ${name}`,
+          });
+        }
+        break;
+    }
+  } catch {
+    // Event emission is non-fatal — never block the tool response
+  }
 }

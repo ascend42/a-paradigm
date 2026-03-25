@@ -60,6 +60,7 @@ struct AgentHealthView: View {
             Circle()
                 .fill(healthColor(metrics.healthStatus))
                 .frame(width: 8, height: 8)
+                .accessibilityLabel("Health: \(metrics.healthStatus.rawValue)")
 
             // Agent ID
             VStack(alignment: .leading, spacing: 1) {

@@ -61,6 +61,7 @@ struct AgentRosterView: View {
                     .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isCollapsed ? "Expand roster" : "Collapse roster")
         }
     }
 
@@ -150,6 +151,7 @@ struct AgentRosterRow: View {
             Circle()
                 .fill(isBenched ? Color.gray : Color.green)
                 .frame(width: 6, height: 6)
+                .accessibilityLabel(isBenched ? "Benched" : "Active")
 
             // Name/role
             VStack(alignment: .leading, spacing: 1) {
@@ -201,6 +203,7 @@ struct AgentRosterRow: View {
                     .foregroundStyle(isBenched ? .green : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isBenched ? "Activate agent" : "Bench agent")
             .help(isBenched ? "Activate agent" : "Bench agent")
         }
         .padding(.vertical, 2)

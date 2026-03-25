@@ -31,7 +31,7 @@ export function DetailPanel() {
             <div className="lore-card-title" style={{ fontSize: 16 }}>{entry.title}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
               <span className={`lore-card-type ${entry.type}`}>{entry.type}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{entry.id}</span>
+              <span style={{ color: 'var(--p-text-muted)', fontSize: 12 }}>{entry.id}</span>
             </div>
           </div>
           <button className="detail-close" onClick={() => selectEntry(null)}>{'\u2715'}</button>
@@ -64,7 +64,7 @@ export function DetailPanel() {
           {/* Summary */}
           <div className="detail-section">
             <h3>Summary</h3>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{entry.summary}</p>
+            <p style={{ fontSize: 13, color: 'var(--p-text-secondary)' }}>{entry.summary}</p>
           </div>
 
           {/* Body */}
@@ -73,13 +73,13 @@ export function DetailPanel() {
               <h3>Body</h3>
               <pre style={{
                 fontSize: 12,
-                color: 'var(--text-secondary)',
+                color: 'var(--p-text-secondary)',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
-                background: 'var(--bg-primary)',
+                background: 'var(--p-bg-primary)',
                 padding: 12,
                 borderRadius: 6,
-                border: '1px solid var(--border)',
+                border: '1px solid var(--p-border)',
                 maxHeight: 300,
                 overflowY: 'auto',
               }}>{entry.body}</pre>
@@ -96,7 +96,7 @@ export function DetailPanel() {
                   <dd>{entry.linked_lore.map(id => (
                     <span key={id} onClick={() => selectEntry(id)} style={{
                       cursor: 'pointer',
-                      color: 'var(--color-component)',
+                      color: 'var(--p-symbol-component)',
                       textDecoration: 'underline',
                       marginRight: 8,
                       fontSize: 12,
@@ -143,13 +143,13 @@ export function DetailPanel() {
             <div className="detail-section">
               <h3>Files ({(entry.files_created?.length || 0) + (entry.files_modified?.length || 0)})</h3>
               <ul className="detail-files">
-                {entry.files_created?.map(f => <li key={f} style={{ color: '#34d399' }}>+ {f}</li>)}
-                {entry.files_modified?.map(f => <li key={f} style={{ color: '#fbbf24' }}>~ {f}</li>)}
+                {entry.files_created?.map(f => <li key={f} style={{ color: 'var(--p-accent-green)' }}>+ {f}</li>)}
+                {entry.files_modified?.map(f => <li key={f} style={{ color: 'var(--p-accent-orange)' }}>~ {f}</li>)}
               </ul>
               {(entry.lines_added || entry.lines_removed) ? (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                  <span style={{ color: '#34d399' }}>+{entry.lines_added || 0}</span>{' '}
-                  <span style={{ color: '#f87171' }}>-{entry.lines_removed || 0}</span> lines
+                <p style={{ fontSize: 12, color: 'var(--p-text-muted)', marginTop: 4 }}>
+                  <span style={{ color: 'var(--p-accent-green)' }}>+{entry.lines_added || 0}</span>{' '}
+                  <span style={{ color: 'var(--p-accent-red)' }}>-{entry.lines_removed || 0}</span> lines
                 </p>
               ) : null}
             </div>
@@ -174,8 +174,8 @@ export function DetailPanel() {
               <h3>Errors Encountered</h3>
               {entry.errors_encountered.map((e, i) => (
                 <div key={i} className="detail-error">
-                  <div style={{ color: 'var(--color-incident)', fontSize: 13 }}>{e.description}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2 }}>
+                  <div style={{ color: 'var(--p-lore-incident)', fontSize: 13 }}>{e.description}</div>
+                  <div style={{ color: 'var(--p-text-secondary)', fontSize: 12, marginTop: 2 }}>
                     {'\u2192'} {e.resolution}{e.time_to_fix ? ` (${e.time_to_fix})` : ''}
                   </div>
                 </div>
@@ -203,7 +203,7 @@ export function DetailPanel() {
                   {Object.entries(entry.verification.details).map(([k, v]) => (
                     <React.Fragment key={k}>
                       <dt>{k}</dt>
-                      <dd style={{ color: v === 'pass' ? '#34d399' : '#f87171' }}>{v}</dd>
+                      <dd style={{ color: v === 'pass' ? 'var(--p-accent-green)' : 'var(--p-accent-red)' }}>{v}</dd>
                     </React.Fragment>
                   ))}
                 </dl>
@@ -225,7 +225,7 @@ export function DetailPanel() {
                       border: '1px solid rgba(139, 92, 246, 0.3)',
                       borderRadius: 10,
                       fontSize: 12,
-                      color: '#8b5cf6',
+                      color: 'var(--p-accent-purple)',
                     }}>{(entry.confidence * 100).toFixed(0)}%</span>
                   </dd>
                 </>}
@@ -242,9 +242,9 @@ export function DetailPanel() {
                         : 'rgba(248, 113, 113, 0.3)'}`,
                       borderRadius: 10,
                       fontSize: 12,
-                      color: entry.assessment.verdict === 'correct' ? '#34d399'
-                        : entry.assessment.verdict === 'partial' ? '#fbbf24'
-                        : '#f87171',
+                      color: entry.assessment.verdict === 'correct' ? 'var(--p-accent-green)'
+                        : entry.assessment.verdict === 'partial' ? 'var(--p-accent-orange)'
+                        : 'var(--p-accent-red)',
                     }}>{entry.assessment.verdict}</span>
                   </dd>
                   <dt>Assessed by</dt>
@@ -259,13 +259,13 @@ export function DetailPanel() {
                 {entry.assessment_delta != null && <>
                   <dt>Delta</dt>
                   <dd style={{
-                    color: Math.abs(entry.assessment_delta) <= 0.1 ? '#34d399'
-                      : Math.abs(entry.assessment_delta) <= 0.3 ? '#fbbf24'
-                      : '#f87171',
+                    color: Math.abs(entry.assessment_delta) <= 0.1 ? 'var(--p-accent-green)'
+                      : Math.abs(entry.assessment_delta) <= 0.3 ? 'var(--p-accent-orange)'
+                      : 'var(--p-accent-red)',
                   }}>
                     {entry.assessment_delta > 0 ? '+' : ''}{entry.assessment_delta.toFixed(2)}
                     {' '}
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--p-text-muted)' }}>
                       ({entry.assessment_delta > 0.1 ? 'under-confident' : entry.assessment_delta < -0.1 ? 'over-confident' : 'well-calibrated'})
                     </span>
                   </dd>
@@ -294,8 +294,8 @@ export function DetailPanel() {
           ) : (
             <div className="detail-section">
               <h3>Review</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                No review yet. Run <code style={{ background: 'var(--bg-card)', padding: '2px 4px', borderRadius: 3 }}>paradigm lore review {entry.id}</code>
+              <p style={{ color: 'var(--p-text-muted)', fontSize: 13 }}>
+                No review yet. Run <code style={{ background: 'var(--p-bg-card)', padding: '2px 4px', borderRadius: 3 }}>paradigm lore review {entry.id}</code>
               </p>
             </div>
           )}
@@ -340,11 +340,11 @@ export function DetailPanel() {
                   return (
                     <span key={t} style={{
                       padding: '2px 8px',
-                      background: isArc ? 'var(--color-flow-bg, rgba(96, 165, 250, 0.15))' : 'var(--bg-primary)',
-                      border: `1px solid ${isArc ? 'var(--color-flow, #60a5fa)' : 'var(--border)'}`,
+                      background: isArc ? 'rgba(96, 165, 250, 0.15)' : 'var(--p-bg-primary)',
+                      border: `1px solid ${isArc ? 'var(--p-lore-milestone)' : 'var(--p-border)'}`,
                       borderRadius: 12,
                       fontSize: 11,
-                      color: isArc ? 'var(--color-flow, #60a5fa)' : 'var(--text-secondary)',
+                      color: isArc ? 'var(--p-lore-milestone)' : 'var(--p-text-secondary)',
                     }}>{isArc ? '\u21BB ' : ''}{t}</span>
                   );
                 })}
