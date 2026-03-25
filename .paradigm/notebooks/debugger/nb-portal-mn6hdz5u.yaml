@@ -1,0 +1,22 @@
+context: When debugging gate detection false positives
+snippet: >-
+  Gate symbol detection (^gate-name) must ONLY scan .purpose files and portal.yaml — not arbitrary source code. The ^
+  character appears in regex [^a-z], JSX components, CSS hex colors, URLs, and docs. Portal compliance checker at
+  packages/paradigm/src/core/portal-compliance.ts was fixed in v5.21.1. If false positives recur, check that
+  findGateReferences() is not doing broad grep.
+provenance:
+  source: manual
+  createdBy: debugger
+confidence: 0.95
+concepts:
+  - portal
+  - gate-detection
+  - false-positive
+  - portal-compliance
+tags:
+  - paradigm
+  - gotcha
+id: nb-portal-mn6hdz5u
+appliedCount: 0
+created: '2026-03-25T20:13:26.466Z'
+updated: '2026-03-25T20:13:26.466Z'

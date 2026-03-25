@@ -1,0 +1,23 @@
+context: When planning changes to habits or enforcement systems
+snippet: >-
+  TECH DEBT: Habits evaluation is duplicated across two packages (paradigm-mcp/utils/habits-loader.ts +
+  paradigm/core/habits/evaluator.ts). Must be consolidated into a single shared source. The CLI package should import
+  from paradigm-mcp or a new shared package. Current state causes bugs where fixes to one copy don't propagate.
+  Discovered in v5.21.2-v5.21.3 incident.
+provenance:
+  source: manual
+  createdBy: architect
+confidence: 0.95
+concepts:
+  - habits
+  - tech-debt
+  - duplicate-code
+  - package-boundaries
+tags:
+  - paradigm
+  - debt
+  - consolidation
+id: nb-habits-mn6he1ec
+appliedCount: 0
+created: '2026-03-25T20:13:29.364Z'
+updated: '2026-03-25T20:13:29.364Z'

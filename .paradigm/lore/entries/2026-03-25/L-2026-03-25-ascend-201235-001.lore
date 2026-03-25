@@ -1,0 +1,77 @@
+id: L-2026-03-25-ascend-201235-001
+type: incident
+timestamp: '2026-03-25T20:12:35.530Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Field-test hotfixes: gate false positives + duplicate habits evaluator'
+summary: Two critical bugs found from dealoracle field testing. Gate detection was grepping ALL source files for ^word patterns, matching React components, CSS hex colors, regex character classes — 73 false "undeclared gates" per session. Habits evaluator existed in TWO separate copies (paradigm-mcp/utils/habits-loader.ts and paradigm/core/habits/evaluator.ts) — fixed the wrong copy first (v5.21.2), had to fix the real one in v5.21.3.
+symbols_touched:
+  - '#portal'
+  - '#enforcement'
+  - '#habits'
+  - '#stop-hook'
+  - '#compliance-check'
+decisions:
+  - id: d-gate-scan-scope
+    decision: Gate symbol scanning restricted to .purpose and portal.yaml files only
+    rationale: ^word appears everywhere in code (regex, JSX, CSS, URLs). Only .purpose and portal.yaml use ^ as a Paradigm gate prefix.
+  - id: d-on-stop-incompatible
+    decision: git-clean and file-modified checks auto-pass on on-stop trigger
+    rationale: Stop hook runs before commit. Uncommitted changes are expected. These checks only make sense on on-commit trigger.
+  - id: d-duplicate-evaluator-debt
+    decision: Two habits evaluator copies is tech debt that must be consolidated
+    rationale: Fixing one copy and missing the other caused a shipped-but-broken fix. Single source of truth needed.
+errors_encountered:
+  - description: Gate detection regex \^[a-zA-Z][a-zA-Z0-9_-]+ grepped all source files, matching React components (SuperAdminRoute), CSS hex colors (#F97316), regex char classes [^a-z], URL fragments, docs examples — 73 false positives on dealoracle
+    resolution: Restricted gate symbol scanning to .purpose and portal.yaml files only. Function-based checks (checkGate/requireGate) still scan all code. Gate names restricted to kebab-case ^[a-z][a-z0-9-]+
+  - description: 'Habits evaluator duplicated in two packages: paradigm-mcp/src/utils/habits-loader.ts (used by MCP tools) and paradigm/src/core/habits/evaluator.ts (used by CLI stop hook). Fixed the MCP copy in v5.21.2 but stop hook calls the CLI copy — fix had no effect'
+    resolution: Fixed the CLI copy in v5.21.3. Both now auto-pass git-clean on on-stop and downgrade file-modified with block severity to advisory on on-stop
+    time_to_fix: 30 minutes (including wrong-file detour)
+  - description: git-clean and file-modified habits with severity:block on trigger:on-stop are fundamentally incompatible — stop hook runs BEFORE user commits, so uncommitted changes and missing git diff entries are the normal state
+    resolution: Both check types now detect on-stop trigger and auto-pass or downgrade. They work correctly on on-commit trigger where staged files are reliable
+learnings:
+  - Gate symbol patterns must be scoped to Paradigm-specific files — grepping all code for ^ is too broad
+  - Two separate habits evaluators (MCP utils + CLI core) is dangerous tech debt — fix in one doesn't propagate to the other
+  - on-stop trigger is inherently incompatible with git-state checks since the hook runs before commit
+  - Always verify which code path the stop hook actually calls before fixing — it uses the CLI package, not the MCP package
+  - Field testing on real projects (dealoracle) catches bugs that unit tests miss — enforcement issues only surface with real workflows
+verification:
+  status: pass
+  details:
+    build: 25/25 clean
+    pushed: v5.21.3 on main
+tags:
+  - incident
+  - field-test
+  - dealoracle
+  - false-positive
+  - duplicate-code
+body: |-
+  ## Timeline
+
+  1. User reported 73 false "undeclared gates" blocking every session on dealoracle
+  2. Found portal-compliance.ts grepping ALL source for \\^[a-zA-Z] — matches React components, CSS, regex, URLs
+  3. Fixed: restricted to .purpose + portal.yaml scanning only (v5.21.1)
+  4. User reported "Update Changelog" and "Commit Changes" habits still blocking
+  5. Fixed habits-loader.ts in paradigm-mcp (v5.21.2) — but this was the WRONG file
+  6. Still broken — stop hook calls paradigm/src/core/habits/evaluator.ts, not the MCP copy
+  7. Fixed the CLI evaluator (v5.21.3) — actually resolved
+
+  ## Structural Debt
+
+  The habits evaluation logic exists in TWO places:
+  - `packages/paradigm-mcp/src/utils/habits-loader.ts` — used by MCP tools (paradigm_habits_check)
+  - `packages/paradigm/src/core/habits/evaluator.ts` — used by CLI (paradigm compliance-check → stop hook)
+
+  These MUST be consolidated. The CLI should import from paradigm-mcp or a shared package. Currently they drift independently and bugs fixed in one don't propagate to the other.
+linked_commits:
+  - 3c9cd923
+  - be4de8d7
+  - 39b884fc
+confidence: 0.95
+git_context:
+  ref: 39b884fc494bd317ea2aa47e1b9cbd45991d859c
+  branch: main
+  dirty: true

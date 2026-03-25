@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.4] — 2026-03-25
+
+### Fixed
+
+- **Lore check doesn't recognize .lore files** — Stop hook Check 7 only looked for `*.yaml` lore entries but the MCP tool writes `*.lore` files. Now matches both `*.yaml` and `*.lore` in both git diff check and disk check. This caused "no lore entry recorded" violations even after lore was recorded.
+
 ## [5.21.3] — 2026-03-25
 
 ### Fixed

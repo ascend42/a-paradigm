@@ -377,7 +377,7 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   # Check git diff first (covers staged/committed lore)
   for file in $MODIFIED; do
     case "$file" in
-      .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml)
+      .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml|.paradigm/lore/entries/*.lore|.paradigm/lore/entries/*/*.lore)
         LORE_RECORDED=true
         break
         ;;
@@ -388,7 +388,7 @@ if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   if [ "$LORE_RECORDED" = false ]; then
     TODAY=$(date -u +"%Y-%m-%d")
     if [ -d ".paradigm/lore/entries/$TODAY" ]; then
-      ENTRY_COUNT=$(find ".paradigm/lore/entries/$TODAY" -name "*.yaml" 2>/dev/null | head -1)
+      ENTRY_COUNT=$(find ".paradigm/lore/entries/$TODAY" \\( -name "*.yaml" -o -name "*.lore" \\) 2>/dev/null | head -1)
       if [ -n "$ENTRY_COUNT" ]; then
         LORE_RECORDED=true
       fi
@@ -457,7 +457,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
     VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
-    Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
+    Fix: satisfy the habit(s), or change severity to 'warn' in .paradigm/habits.yaml to make advisory."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   fi
 
@@ -494,7 +494,7 @@ else
     VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
-    Call paradigm_habits_check with trigger=\\"on-stop\\" after fixing the above."
+    Fix: satisfy the habit(s), or change severity to 'warn' in .paradigm/habits.yaml to make advisory."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   fi
 fi

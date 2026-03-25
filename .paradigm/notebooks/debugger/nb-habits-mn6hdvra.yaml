@@ -1,0 +1,24 @@
+context: When debugging habits evaluation or stop hook blocking issues
+snippet: >-
+  CRITICAL: Habits evaluation logic exists in TWO separate copies. The stop hook calls the CLI copy
+  (packages/paradigm/src/core/habits/evaluator.ts) via `paradigm compliance-check`. MCP tools use a different copy
+  (packages/paradigm-mcp/src/utils/habits-loader.ts). Fixing one does NOT fix the other. Always check WHICH evaluator
+  the failing code path calls before patching. The CLI evaluator is what matters for stop hook issues.
+provenance:
+  source: manual
+  createdBy: debugger
+confidence: 0.99
+concepts:
+  - habits
+  - stop-hook
+  - duplicate-evaluator
+  - compliance-check
+  - debugging
+tags:
+  - critical
+  - paradigm
+  - gotcha
+id: nb-habits-mn6hdvra
+appliedCount: 0
+created: '2026-03-25T20:13:22.054Z'
+updated: '2026-03-25T20:13:22.054Z'
