@@ -2425,13 +2425,43 @@ agentCmd
     await agentSyncCommand(id, options);
   });
 
-agentCmd
+const rosterCmd = agentCmd
   .command('roster')
-  .description('Show agent roster with active/benched status')
+  .description('Manage per-project agent roster (.paradigm/roster.yaml)');
+
+rosterCmd
+  .command('init')
+  .description('Create a roster based on detected project type')
+  .option('-f, --force', 'Overwrite existing roster')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const { agentRosterCommand } = await import('./commands/agent/index.js');
-    await agentRosterCommand(options);
+    const { rosterInitCommand } = await import('./commands/agent/roster.js');
+    await rosterInitCommand(options);
+  });
+
+rosterCmd
+  .command('add <ids...>')
+  .description('Add one or more agents to the active roster')
+  .option('--json', 'Output as JSON')
+  .action(async (ids, options) => {
+    const { rosterAddCommand } = await import('./commands/agent/roster.js');
+    await rosterAddCommand(ids, options);
+  });
+
+rosterCmd
+  .command('remove <ids...>')
+  .description('Remove one or more agents from the active roster')
+  .option('--json', 'Output as JSON')
+  .action(async (ids, options) => {
+    const { rosterRemoveCommand } = await import('./commands/agent/roster.js');
+    await rosterRemoveCommand(ids, options);
+  });
+
+rosterCmd
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { rosterShowCommand } = await import('./commands/agent/roster.js');
+    await rosterShowCommand(options);
   });
 
 agentCmd

@@ -354,3 +354,14 @@
 {"id":"ev-1774416861042-1699","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:34:21.042Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
 {"id":"ev-1774416867155-3288","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:34:27.155Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
 {"id":"ev-1774416888608-2366","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:34:48.608Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
+{"id":"ev-1774417527189-8916","timestamp":"2026-03-25T05:45:27.189Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#orchestration","#tool-registry","#ripple","#portal","#purpose-files","#drift-detection","#conductor","#conductor-theme","#conductor-environment","#platform","#platform-tokens","#command-palette","#compliance-check","#cli-output","#explain-files","#error-boundary","#shared-components","#university","#plsat","#roster","#agent-notebooks"],"context":"Lore recorded: Polish Sprint: v5.12.0–v5.15.0 — Team Review + Core Framework"}
+{"id":"ev-1774418266735-3556","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:57:46.735Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774418285762-5057","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:05.762Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774418305148-2959","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:25.148Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774418306823-3395","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:26.823Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774418311308-8637","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:31.308Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774418317314-1185","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:37.314Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774418327180-7422","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:58:47.180Z","path":"packages/paradigm-mcp/src/utils/agent-loader.ts"}
+{"id":"ev-1774418370346-3537","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:59:30.346Z","path":"packages/paradigm/src/commands/agent/roster.ts"}
+{"id":"ev-1774418382353-6818","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T05:59:42.354Z","path":"packages/paradigm/src/index.ts"}
+{"id":"ev-1774418515420-9230","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T06:01:55.420Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}

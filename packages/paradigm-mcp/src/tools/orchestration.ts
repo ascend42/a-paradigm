@@ -169,12 +169,17 @@ const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
 
 // Agent capability tier assignments
 const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
+  // Tier 1 — Decision-makers (opus)
   architect: 'tier-1',
   security: 'tier-1',
   advocate: 'tier-1',
   product: 'tier-1',
   operations: 'tier-1',
   sales: 'tier-1',
+  legal: 'tier-1',
+  ethicist: 'tier-1',
+  futurist: 'tier-1',
+  // Tier 2 — Specialists (sonnet)
   reviewer: 'tier-2',
   designer: 'tier-2',
   copywriter: 'tier-2',
@@ -183,12 +188,44 @@ const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
   dx: 'tier-2',
   qa: 'tier-2',
   debugger: 'tier-2',
+  performance: 'tier-2',
+  creative: 'tier-2',
+  pm: 'tier-2',
+  narrator: 'tier-2',
+  e2e: 'tier-2',
+  educator: 'tier-2',
+  community: 'tier-2',
+  'content-intel': 'tier-2',
+  ai: 'tier-2',
+  mediator: 'tier-2',
+  presenter: 'tier-2',
+  mentor: 'tier-2',
+  trainer: 'tier-2',
+  a11y: 'tier-2',
+  seo: 'tier-2',
+  // Tier 3 — Implementers (haiku)
   builder: 'tier-3',
   tester: 'tier-3',
   documentor: 'tier-3',
   sysadmin: 'tier-3',
   archivist: 'tier-3',
   release: 'tier-3',
+  devops: 'tier-3',
+  dba: 'tier-3',
+  dataeng: 'tier-3',
+  integrator: 'tier-3',
+  network: 'tier-3',
+  streaming: 'tier-3',
+  mobile: 'tier-3',
+  gamedev: 'tier-3',
+  '3d': 'tier-3',
+  i18n: 'tier-3',
+  translator: 'tier-3',
+  forge: 'tier-3',
+  secretary: 'tier-3',
+  reverser: 'tier-3',
+  audio: 'tier-3',
+  finance: 'tier-3',
 };
 
 const DEFAULT_TIER_MODELS: Record<string, string> = {
@@ -592,6 +629,34 @@ async function handleOrchestrateInline(
     // Generate cost preview
     const costPreview = generateCostPreviewLocal(plan, classification);
 
+    // Gather notebook entry counts per agent (non-fatal)
+    let notebookKnowledge: Record<string, { totalEntries: number; relevantEntries: number }> | undefined;
+    try {
+      const { loadNotebookEntries } = await import('../utils/notebook-loader.js');
+      const symbolConcepts = symbols.map(s => s.replace(/^[#$^!~@&%?]/, '').toLowerCase());
+      const counts: Record<string, { totalEntries: number; relevantEntries: number }> = {};
+      const seenAgents = new Set<string>();
+      for (const stage of plan.stages) {
+        for (const agentStep of stage.agents) {
+          if (seenAgents.has(agentStep.name)) continue;
+          seenAgents.add(agentStep.name);
+          const allEntries = loadNotebookEntries(agentStep.name, ctx.rootDir);
+          const relevantEntries = symbolConcepts.length > 0
+            ? loadNotebookEntries(agentStep.name, ctx.rootDir, { concepts: symbolConcepts })
+            : allEntries;
+          if (allEntries.length > 0) {
+            counts[agentStep.name] = {
+              totalEntries: allEntries.length,
+              relevantEntries: relevantEntries.length,
+            };
+          }
+        }
+      }
+      if (Object.keys(counts).length > 0) {
+        notebookKnowledge = counts;
+      }
+    } catch { /* non-fatal */ }
+
     // Return the plan with suggestions and cost preview
     const text = JSON.stringify({
       task,
@@ -605,6 +670,10 @@ async function handleOrchestrateInline(
       plan,
       suggestedAgents,
       costPreview,
+      ...(notebookKnowledge ? {
+        notebookKnowledge,
+        notebookNote: 'Agents with relevant notebook entries will have curated knowledge injected into their prompts during execute mode.',
+      } : {}),
       ...(activeNominations.length > 0 ? {
         activeNominations,
         nominationNote: `${activeNominations.length} high-urgency agent nomination(s) pending. These agents have been flagged by the system for attention on this project.`,
@@ -612,6 +681,7 @@ async function handleOrchestrateInline(
       instructions: [
         'Review task classification and cost preview above',
         'Review suggested agents based on task triggers',
+        ...(notebookKnowledge ? ['Review notebook knowledge — agents with relevant entries will receive curated snippets in execute mode'] : []),
         ...(activeNominations.length > 0 ? ['Review active nominations — agents flagged by the system may need to be included'] : []),
         'Call again with mode="execute" to get full prompts and execution strategy',
         'Stages marked canRunParallel: true can be launched simultaneously',
@@ -631,12 +701,16 @@ async function handleOrchestrateInline(
     const { loadJournalEntries } = await import('../utils/journal-loader.js');
     const { loadNominations } = await import('../utils/nomination-engine.js');
     const { loadAgentState: loadState } = await import('../utils/agent-state.js');
+    const { loadNotebookEntries } = await import('../utils/notebook-loader.js');
 
     // Load ambient context once (shared across all agents)
     const recentDecisions = loadDecisions(ctx.rootDir, { status: 'active', limit: 5 })
       .map(d => ({ title: d.title, decision: d.decision.slice(0, 150) }));
     const pendingNominations = loadNominations(ctx.rootDir, { pending_only: true, limit: 10 })
       .map(n => ({ urgency: n.urgency, brief: n.brief }));
+
+    // Derive concept keywords from symbols for notebook filtering
+    const symbolConcepts = symbols.map(s => s.replace(/^[#$^!~@&%?]/, '').toLowerCase());
 
     for (const stage of plan.stages) {
       for (const agentStep of stage.agents) {
@@ -655,7 +729,26 @@ async function handleOrchestrateInline(
             // Load agent's project state for continuity
             const agentProjectState = loadState(agentStep.name, ctx.rootDir);
 
-            let enrichment = buildProfileEnrichment(profile, symbols, undefined, {
+            // Load notebook entries filtered by task symbols, sorted by confidence then recency
+            let notebookEntries: Array<{ context: string; snippet: string; concepts: string[] }> | undefined;
+            try {
+              const rawEntries = loadNotebookEntries(agentStep.name, ctx.rootDir,
+                symbolConcepts.length > 0 ? { concepts: symbolConcepts } : undefined
+              );
+              if (rawEntries.length > 0) {
+                // Sort by confidence (desc), then recency (desc), take top 5
+                const sorted = rawEntries
+                  .sort((a, b) => b.confidence - a.confidence || new Date(b.updated).getTime() - new Date(a.updated).getTime())
+                  .slice(0, 5);
+                notebookEntries = sorted.map(e => ({
+                  context: e.context,
+                  snippet: e.snippet,
+                  concepts: e.concepts,
+                }));
+              }
+            } catch { /* notebook loading is non-fatal */ }
+
+            let enrichment = buildProfileEnrichment(profile, symbols, notebookEntries, {
               recentDecisions,
               journalInsights,
               pendingNominations,
@@ -965,6 +1058,7 @@ async function handleAgentPrompt(
     const { loadDecisions } = await import('../utils/decision-loader.js');
     const { loadJournalEntries } = await import('../utils/journal-loader.js');
     const { loadNominations } = await import('../utils/nomination-engine.js');
+    const { loadNotebookEntries } = await import('../utils/notebook-loader.js');
 
     const profile = loadAgentProfile(ctx.rootDir, agentName);
     if (profile) {
@@ -978,7 +1072,26 @@ async function handleAgentPrompt(
       const pendingNominations = loadNominations(ctx.rootDir, { pending_only: true, limit: 10 })
         .map(n => ({ urgency: n.urgency, brief: n.brief }));
 
-      let enrichment = buildProfileEnrichment(profile, symbols, undefined, {
+      // Load notebook entries filtered by task symbols, sorted by confidence then recency
+      let notebookEntries: Array<{ context: string; snippet: string; concepts: string[] }> | undefined;
+      try {
+        const symbolConcepts = symbols.map(s => s.replace(/^[#$^!~@&%?]/, '').toLowerCase());
+        const rawEntries = loadNotebookEntries(agentName, ctx.rootDir,
+          symbolConcepts.length > 0 ? { concepts: symbolConcepts } : undefined
+        );
+        if (rawEntries.length > 0) {
+          const sorted = rawEntries
+            .sort((a, b) => b.confidence - a.confidence || new Date(b.updated).getTime() - new Date(a.updated).getTime())
+            .slice(0, 5);
+          notebookEntries = sorted.map(e => ({
+            context: e.context,
+            snippet: e.snippet,
+            concepts: e.concepts,
+          }));
+        }
+      } catch { /* notebook loading is non-fatal */ }
+
+      let enrichment = buildProfileEnrichment(profile, symbols, notebookEntries, {
         recentDecisions,
         journalInsights,
         pendingNominations,

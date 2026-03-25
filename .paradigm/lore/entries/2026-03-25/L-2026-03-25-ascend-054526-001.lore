@@ -1,0 +1,138 @@
+id: L-2026-03-25-ascend-054526-001
+type: milestone
+timestamp: '2026-03-25T05:45:26.737Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Polish Sprint: v5.12.0–v5.15.0 — Team Review + Core Framework'
+summary: Massive polish session across 4 releases. Deployed the full 14-agent roster with 29 project notebooks, ran a 5-agent team review that produced 100+ findings across Conductor, Platform UI, MCP, University, and CLI. Fixed all quick wins, then tackled architecture (ToolRegistry wired in, compliance-check consolidation, ConductorTheme/Environment, CSS unification), DX polish (command palette, explain-files, cli-output convention), and Core Framework (standalone ripple tool, portal eat-our-own-cooking with 94 routes, .purpose v2.0.0 standardization, drift threshold docs).
+symbols_touched:
+  - '#orchestration'
+  - '#tool-registry'
+  - '#ripple'
+  - '#portal'
+  - '#purpose-files'
+  - '#drift-detection'
+  - '#conductor'
+  - '#conductor-theme'
+  - '#conductor-environment'
+  - '#platform'
+  - '#platform-tokens'
+  - '#command-palette'
+  - '#compliance-check'
+  - '#cli-output'
+  - '#explain-files'
+  - '#error-boundary'
+  - '#shared-components'
+  - '#university'
+  - '#plsat'
+  - '#roster'
+  - '#agent-notebooks'
+symbols_created:
+  - '#ripple'
+  - '#conductor-theme'
+  - '#conductor-environment'
+  - '#command-palette'
+  - '#compliance-check'
+  - '#cli-output'
+  - '#explain-files'
+  - '#error-boundary'
+  - '#shared-components'
+  - '#conductor-colors'
+files_created:
+  - packages/paradigm-mcp/src/tools/ripple.ts
+  - packages/paradigm-mcp/src/utils/tool-helpers.ts
+  - packages/conductor/Sources/Conductor/UI/ConductorColors.swift
+  - packages/conductor/Sources/Conductor/UI/ConductorEnvironment.swift
+  - packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx
+  - packages/paradigm/platform-ui/src/components/CommandPalette.tsx
+  - packages/paradigm/platform-ui/src/hooks/useKeyboardShortcuts.ts
+  - packages/paradigm/platform-ui/src/components/shared/StatCard.tsx
+  - packages/paradigm/platform-ui/src/components/shared/Badge.tsx
+  - packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx
+  - packages/paradigm/src/commands/compliance.ts
+  - packages/paradigm/src/commands/explain-files.ts
+  - packages/paradigm/src/utils/cli-output.ts
+  - packages/university/portal.yaml
+  - .paradigm/docs/purpose-migration.md
+  - docs/polish-checklist.md
+lines_added: 28000
+lines_removed: 2100
+decisions:
+  - id: d-roster-14
+    decision: '14-agent roster for paradigm: core 8 + dx, release, debugger, qa, educator, researcher, performance, designer'
+    rationale: Dev tools monorepo needs DX, release, and education specialists over sales/SEO/DBA agents
+  - id: d-toolregistry-wired
+    decision: Wire existing ToolRegistry into actual MCP dispatch path
+    rationale: Built but unused architecture — highest ROI refactor. Cuts tool count from 176 to ~50-80 per project, O(1) dispatch
+  - id: d-compliance-consolidate
+    decision: Single paradigm compliance-check command replaces 5 stop-hook subprocesses
+    rationale: 5 Node.js spawns + 2 find scans per session end was 1-2 seconds overhead
+  - id: d-conductor-environment
+    decision: Replace 15 @ObservedObject with single ConductorEnvironment @EnvironmentObject
+    rationale: God-view anti-pattern made refactoring fragile and caused unnecessary re-renders
+  - id: d-css-unification
+    decision: Migrate Lore/Graph CSS to Platform --p-* token system
+    rationale: Three competing :root declarations were overriding each other order-dependently
+  - id: d-ripple-standalone
+    decision: Extract paradigm_ripple from preflight into standalone core-tier MCP tool
+    rationale: Referenced everywhere but didn't exist as real tool. Hardcoded 2-hop was insufficient
+  - id: d-portal-dogfood
+    decision: Expand portal.yaml from 1 gate/6 routes to 4 gates/94 routes
+    rationale: Paradigm must eat its own cooking — flagship security feature had token coverage
+learnings:
+  - Builder subagents get blocked on Write/Bash permissions — use general-purpose agents or do edits directly
+  - 'ToolRegistry was the single highest-ROI refactor: built, tested, but never wired in'
+  - Review agents read extensively but don't always synthesize — budget for a follow-up synthesis prompt
+  - 4 parallel agents with zero file overlap is the sweet spot for this codebase
+  - Plugin version in plugin.json STILL gets missed — added to every commit checklist
+verification:
+  status: pass
+  details:
+    ts-build: 25 targets, 0 errors
+    swift-build: clean (0.17s cached)
+    portal-yaml: 3 files validated
+tags:
+  - polish
+  - team-review
+  - core-framework
+  - v5.12
+  - v5.13
+  - v5.14
+  - v5.15
+body: |-
+  ## Session Arc
+
+  This session began with recovering the handoff from the v5.6.3–v5.11.0 marathon and evolved into a systematic polish sprint.
+
+  ### Phase 1: Agent Setup
+  Registered a 14-agent roster for the paradigm repo itself and bootstrapped 29 project-scoped notebook entries covering architecture, build chain, testing, security, DX, release, debugging, QA, education, research, performance, and design.
+
+  ### Phase 2: Team Review
+  Deployed 5 review agents in parallel: Architecture+Code Quality, Conductor UI/UX (Mika), Platform UI (Mika), University (Educator), Performance+DX (Bolt+Helix). Produced 100+ findings across the codebase. The architecture agent read extensively but didn't synthesize — had to launch a replacement.
+
+  ### Phase 3: Quick Fixes (v5.12.0)
+  Platform UI: URL routing for all 11 sections, ErrorBoundary per section, removed duplicate theme toggle. Conductor: ConductorColors.swift, dynamic version, window mode persistence. CLI: lazy-load init/status, treeshake+minify on 5 tsup configs. University: fixed stale .purpose files.
+
+  ### Phase 4: Architecture (v5.13.0)
+  ToolRegistry wired into actual MCP dispatch (176 tools in 3 tiers). compliance-check command (5→1 subprocess). ConductorTheme design tokens. ConductorEnvironment (15→1 @ObservedObject). A11y labels on all status dots. Unified CSS tokens. Shared Platform components.
+
+  ### Phase 5: DX Polish (v5.14.0)
+  Command palette (Cmd+K). paradigm explain-files command. cli-output.ts convention with 3 example conversions.
+
+  ### Phase 6: Core Framework (v5.15.0)
+  paradigm_ripple as standalone MCP tool with BFS depth control. Portal eat-our-own-cooking (1→4 gates, 6→94 routes). All 57 .purpose files standardized to v2.0.0. Drift auto-heal thresholds documented and configurable.
+
+  ## What's Next
+  Section 2 of the polish checklist: Agent System. Then continue through all 18 sections.
+linked_commits:
+  - e7742ad1
+  - 5bf7f037
+  - e917c32a
+  - e1309117
+confidence: 0.92
+git_context:
+  ref: e1309117cc6b54797954cbbf68d47f3f86391ea1
+  branch: main
+  dirty: true

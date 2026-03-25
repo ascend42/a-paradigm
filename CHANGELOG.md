@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.16.0] — 2026-03-25
+
+### Added
+
+- **Notebooks wired into orchestration** — `paradigm_orchestrate_inline` execute mode now loads top 5 relevant notebook entries per agent, filtered by task symbol concepts. Plan mode shows notebook knowledge counts per agent. The `paradigm_agent_prompt` tool also loads notebooks. This closes the loop — 272 global + 29 project-scoped entries are now actually surfaced to agents during execution.
+- **Confidence decay** — Agent expertise confidence now decays over time with 60-day half-life (7-day grace period). Stale expertise from a month ago ranks lower than recent work. Entries with >20% decay show "(aging)" tag. Applied in all expertise consumers: queryExpertise, mergeAgentProfileWithManifest, buildProfileEnrichment.
+- **`paradigm agents roster` CLI** — New subcommand group: `roster` (show table), `roster init` (create from project type), `roster add <ids>`, `roster remove <ids>`. All support `--json` output. Uses cli-output helpers.
+- **Complete AGENT_TIERS table** — All 54 agents now have explicit tier assignments (was 21/54, rest silently defaulted to sonnet). 9 tier-1 (opus), 23 tier-2 (sonnet), 22 tier-3 (haiku).
+- **Agent nicknames** — All 54 agents now have nicknames for attributed responses. Added: Apex (architect), Kit (builder), Judge (reviewer), Aegis (security), Probe (tester), Scribe (documentor).
+- **Builder agent enrichment** — Grew from 36-line stub to 115-line profile with 5 concrete behaviors, attention patterns, 3 transferable patterns, and collaboration relationships.
+
 ## [5.15.0] — 2026-03-24
 
 ### Added

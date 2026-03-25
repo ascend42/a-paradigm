@@ -38,6 +38,32 @@ const ROSTER_FILE = '.paradigm/roster.yaml';
 /** Exponential moving average weight for new observations */
 const EMA_ALPHA = 0.3;
 
+/** Confidence decay half-life in days (after the grace period) */
+const DECAY_HALF_LIFE_DAYS = 60;
+/** Grace period: no decay within this many days of lastTouch */
+const DECAY_GRACE_DAYS = 7;
+/** Threshold for marking expertise as "(aging)" in display */
+const DECAY_AGING_THRESHOLD = 0.20;
+
+// ────────────────────────────────────────────────────────
+// Confidence Decay
+// ────────────────────────────────────────────────────────
+
+/**
+ * Compute time-decayed confidence for an expertise entry.
+ * Returns the original confidence if within the grace period.
+ * Uses exponential decay with a 60-day half-life after 7-day grace.
+ * This is a display/ranking concern — never mutates stored values.
+ */
+export function decayedConfidence(confidence: number, lastTouch: string): number {
+  const ageMs = Date.now() - new Date(lastTouch).getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  if (ageDays <= DECAY_GRACE_DAYS) return confidence;
+  // Exponential decay with 60-day half-life
+  const decayFactor = Math.pow(0.5, (ageDays - DECAY_GRACE_DAYS) / DECAY_HALF_LIFE_DAYS);
+  return confidence * decayFactor;
+}
+
 // ────────────────────────────────────────────────────────
 // Roster Operations
 // ────────────────────────────────────────────────────────
@@ -288,7 +314,11 @@ export function queryExpertise(
     }
   }
 
-  return results.sort((a, b) => b.entry.confidence - a.entry.confidence);
+  // Sort by decayed confidence (time-aware ranking) but preserve original values
+  return results.sort((a, b) =>
+    decayedConfidence(b.entry.confidence, b.entry.lastTouch) -
+    decayedConfidence(a.entry.confidence, a.entry.lastTouch)
+  );
 }
 
 // ────────────────────────────────────────────────────────
@@ -413,7 +443,10 @@ export function mergeAgentProfileWithManifest(
   return {
     personality: profile.personality || null,
     topExpertise: (profile.expertise || [])
-      .sort((a, b) => b.confidence - a.confidence)
+      .sort((a, b) =>
+        decayedConfidence(b.confidence, b.lastTouch) -
+        decayedConfidence(a.confidence, a.lastTouch)
+      )
       .slice(0, 10),
     projectContext: profile.contexts?.[projectName] || null,
     transferablePatterns: (profile.transferable || [])
@@ -451,16 +484,22 @@ export function buildProfileEnrichment(
     parts.push('');
   }
 
-  // Relevant expertise
+  // Relevant expertise — sorted by decayed confidence (time-aware ranking)
   const relevant = (profile.expertise || [])
     .filter(e => relevantSymbols.length === 0 || relevantSymbols.includes(e.symbol))
-    .sort((a, b) => b.confidence - a.confidence)
+    .sort((a, b) =>
+      decayedConfidence(b.confidence, b.lastTouch) -
+      decayedConfidence(a.confidence, a.lastTouch)
+    )
     .slice(0, 8);
 
   if (relevant.length > 0) {
     parts.push('## Your Expertise on Relevant Symbols');
     for (const e of relevant) {
-      parts.push(`- \`${e.symbol}\`: confidence ${e.confidence.toFixed(2)} (${e.sessions} sessions)`);
+      const decayed = decayedConfidence(e.confidence, e.lastTouch);
+      const decayRatio = 1 - (decayed / e.confidence);
+      const agingTag = e.confidence > 0 && decayRatio > DECAY_AGING_THRESHOLD ? ' (aging)' : '';
+      parts.push(`- \`${e.symbol}\`: confidence ${e.confidence.toFixed(2)} (${e.sessions} sessions)${agingTag}`);
     }
     parts.push('');
   }

@@ -12,11 +12,11 @@
 
 ## 1. Core Framework
 - [x] Symbol System — 515+ symbols, strict validation, no issues
-- [~] Purpose Files — 56 files, good structure. **Fix:** mixed v1/v2 versions, no migration guidance
-- [~] Portal — only 1 gate defined. **Fix:** eat our own cooking — define gates for MCP server, platform server, university API routes
+- [x] Purpose Files — 57 files, all v2.0.0. Migration docs at .paradigm/docs/purpose-migration.md
+- [x] Portal — 4 gates, 94 routes across 3 portal.yaml files (root, university, sentinel)
 - [x] Scan & Index — robust auto-generation, integrity checking, aspect graph materialization
-- [ ] Ripple Analysis — **Fix:** no standalone MCP tool (buried in preflight, 2-hop hardcoded). Extract to real tool with configurable depth + aspect graph BFS
-- [~] Drift Detection — two-layer detection works. **Fix:** document auto-heal confidence threshold
+- [x] Ripple Analysis — standalone paradigm_ripple MCP tool, BFS with configurable depth (1-5), core tier
+- [x] Drift Detection — three-layer resolution documented, thresholds in config.yaml (0.85 auto, 0.7 suggest)
 
 ## 2. Agent System
 - [ ] 54 Agent Profiles (quality, consistency, behavior specificity)
