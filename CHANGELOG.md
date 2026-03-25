@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.22.0] — 2026-03-25
+
+### Added
+
+- **Enforcement configuration system** — New `enforcement` section in `.paradigm/config.yaml` with 3 preset levels: `strict` (all checks block), `balanced` (security blocks, docs warn), `minimal` (everything advisory). 13 check IDs with per-check severity overrides. Users control what blocks them.
+- **`paradigm enforcement` CLI** — `status` (show table), `set <level>` (change preset), `override <check> <severity>` (per-check), `reset` (clear overrides), `resolve --json` (for stop hook). Full user control over enforcement.
+- **`paradigm_enforcement_configure` MCP tool** — Agents can view/change enforcement settings on behalf of users. Actions: status, set-level, override, reset.
+- **Orchestration enforcement** — New Check 13: when enforcement is `strict` or `balanced`, tasks modifying 3+ source files without `paradigm_orchestrate_inline` produce a warning or block. `.paradigm/.orchestrated` marker written when orchestration is used, cleaned up on pass.
+- **paradigm shift writes enforcement defaults** — Step 2e seeds `balanced` enforcement config during project setup.
+- **Every stop hook check is now severity-gated** — All 13 checks read from enforcement config. `off` = skipped entirely, `warn` = advisory only, `block` = violation. No more all-or-nothing enforcement.
+
 ## [5.21.4] — 2026-03-25
 
 ### Fixed

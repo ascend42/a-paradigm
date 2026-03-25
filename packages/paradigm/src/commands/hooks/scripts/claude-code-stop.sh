@@ -6,7 +6,7 @@
 # Hook type: Stop
 # Exit 0 = allow, Exit 2 = block with message
 #
-# Checks 1–11 are defined in paradigm-common.sh (shared with Cursor hook).
+# Checks 1–13 are defined in paradigm-common.sh (shared with Cursor hook).
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -106,5 +106,6 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f ".paradigm/.orchestrated"
 
 exit 0

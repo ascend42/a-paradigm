@@ -105,10 +105,10 @@ context:
   docs-path: docs/
 workspace: ../.paradigm-workspace
 drift:
-  auto-heal-threshold: 0.85   # Confidence score for automatic anchor relocation (0.0-1.0)
-  suggest-threshold: 0.7      # Minimum score to suggest relocation (below this = real drift)
-  check-on-stop: true         # Run drift check in stop hook
-  normalize-whitespace: true  # Ignore whitespace-only changes (cosmetic drift)
+  auto-heal-threshold: 0.85
+  suggest-threshold: 0.7
+  check-on-stop: true
+  normalize-whitespace: true
 ambient:
   nomination-ttl-days: 7
   debate-ttl-days: 14
@@ -116,3 +116,6 @@ model-resolution:
   tier-1: sonnet
   tier-2: sonnet
   tier-3: haiku
+enforcement:
+  level: balanced
+  checks: {}

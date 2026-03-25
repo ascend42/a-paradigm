@@ -35,12 +35,43 @@ export const COMMON_HOOK = `#!/bin/sh
 #   9. Purpose-required patterns from config.yaml
 #  10. Aspect drift detection with auto-heal (from unified compliance-check)
 #  11. Portal gate implementation compliance (from unified compliance-check)
+#  12. Graduation failure tracking (auto-demotion)
+#  13. Orchestration required for complex tasks
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
 AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
+
+# --- Load enforcement config ---
+ENFORCEMENT_MAP=""
+if command -v paradigm >/dev/null 2>&1; then
+  ENFORCEMENT_MAP=$(paradigm enforcement resolve --json 2>/dev/null) || true
+fi
+
+# Helper: get severity for a check ID
+_check_severity() {
+  _id="$1"
+  _default="$2"
+  if [ -z "$ENFORCEMENT_MAP" ]; then
+    echo "$_default"
+    return
+  fi
+  _val=$(echo "$ENFORCEMENT_MAP" | grep -o "\\"$_id\\":\\"[^\\"]*\\"" | sed 's/.*":\\"//' | sed 's/"//')
+  if [ -n "$_val" ]; then
+    echo "$_val"
+  else
+    echo "$_default"
+  fi
+}
+
+# Read orchestration threshold
+ORCH_THRESHOLD=3
+if [ -n "$ENFORCEMENT_MAP" ]; then
+  _ot=$(echo "$ENFORCEMENT_MAP" | grep -o '"orchestrationThreshold":[0-9]*' | sed 's/.*://')
+  [ -n "$_ot" ] && ORCH_THRESHOLD="$_ot"
+fi
 
 # --- Cache .purpose file paths (avoid repeated find scans) ---
 PURPOSE_CACHE=".paradigm/.purpose-paths"
@@ -108,17 +139,24 @@ for file in $MODIFIED; do
 done
 
 # Only flag if there are uncovered directories AND zero paradigm files were touched
-if [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
+_SEV=$(_check_severity "purpose-coverage" "block")
+if [ "$_SEV" != "off" ] && [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
   # Count uncovered dirs
   UNCOVERED_DIR_COUNT=0
   for _d in $UNCOVERED_SOURCE_DIRS; do
     UNCOVERED_DIR_COUNT=$((UNCOVERED_DIR_COUNT + 1))
   done
-  VIOLATIONS="$VIOLATIONS
+  if [ "$_SEV" = "block" ]; then
+    VIOLATIONS="$VIOLATIONS
   - You modified source files in $UNCOVERED_DIR_COUNT director(ies) without updating their .purpose files:
    $UNCOVERED_SOURCE_DIRS
     Update the nearest .purpose file for each modified code area."
-  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  else
+    ADVISORY="$ADVISORY
+  - (warn) Source files in $UNCOVERED_DIR_COUNT director(ies) modified without .purpose updates:
+   $UNCOVERED_SOURCE_DIRS"
+  fi
 fi
 
 # --- Check 2: Modified source directories missing .purpose files ---
@@ -154,7 +192,8 @@ for file in $MODIFIED; do
   fi
 done
 
-if [ -n "$DIRS_WITHOUT_PURPOSE" ]; then
+_SEV=$(_check_severity "purpose-exists" "block")
+if [ "$_SEV" != "off" ] && [ -n "$DIRS_WITHOUT_PURPOSE" ]; then
   if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
     # Auto-fix: create stub .purpose files for directories missing them
     for dir in $DIRS_WITHOUT_PURPOSE; do
@@ -170,86 +209,107 @@ PURPOSEEOF
   - Created stub .purpose in $dir (update descriptions)"
       AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
     done
-  else
+  elif [ "$_SEV" = "block" ]; then
     VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose file anywhere in their path:
    $DIRS_WITHOUT_PURPOSE
     Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  else
+    ADVISORY="$ADVISORY
+  - (warn) Directories with modified source files but no .purpose file:
+   $DIRS_WITHOUT_PURPOSE"
   fi
 fi
 
 # --- Check 3: Route patterns added without portal.yaml ---
-if [ -f "portal.yaml" ] || echo "$MODIFIED" | grep -q "portal.yaml"; then
-  : # portal.yaml exists or was modified — OK
-else
-  # Check if any modified files contain route-like patterns
-  # Skip: test/spec/fixture files, markdown, and comment-only matches
-  ROUTE_FILES=""
-  for file in $MODIFIED; do
-    # Skip test, spec, and fixture files entirely
-    case "$file" in
-      *test*|*spec*|*fixture*|*__tests__*|*__mocks__*|*.test.*|*.spec.*) continue ;;
-    esac
-    case "$file" in
-      *.ts|*.js|*.tsx|*.jsx|*.py|*.rs|*.go)
-        if [ -f "$file" ]; then
-          # Grep for route patterns, then filter out comment lines and description strings
-          ROUTE_MATCH=$(grep -nE '\\.(get|post|put|patch|delete)\\s*\\(|router\\.|app\\.(get|post|put|delete)|@(Get|Post|Put|Delete)|#\\[actix_web::(get|post)' "$file" 2>/dev/null \\
-            | grep -v '^\\s*[0-9]*:\\s*//' \\
-            | grep -v '^\\s*[0-9]*:\\s*\\*' \\
-            | grep -v '^\\s*[0-9]*:\\s*#' \\
-            | grep -v '^\\s*[0-9]*:\\s*<!--' \\
-            | grep -v 'description:' \\
-            | grep -v 'summary:' \\
-            | grep -v 'comment:' \\
-            | grep -v '@example' \\
-            | grep -v '@see' \\
-            || true)
-          if [ -n "$ROUTE_MATCH" ]; then
-            ROUTE_FILES="$ROUTE_FILES $file"
+_SEV=$(_check_severity "portal-gates" "block")
+if [ "$_SEV" != "off" ]; then
+  if [ -f "portal.yaml" ] || echo "$MODIFIED" | grep -q "portal.yaml"; then
+    : # portal.yaml exists or was modified — OK
+  else
+    # Check if any modified files contain route-like patterns
+    # Skip: test/spec/fixture files, markdown, and comment-only matches
+    ROUTE_FILES=""
+    for file in $MODIFIED; do
+      # Skip test, spec, and fixture files entirely
+      case "$file" in
+        *test*|*spec*|*fixture*|*__tests__*|*__mocks__*|*.test.*|*.spec.*) continue ;;
+      esac
+      case "$file" in
+        *.ts|*.js|*.tsx|*.jsx|*.py|*.rs|*.go)
+          if [ -f "$file" ]; then
+            # Grep for route patterns, then filter out comment lines and description strings
+            ROUTE_MATCH=$(grep -nE '\\.(get|post|put|patch|delete)\\s*\\(|router\\.|app\\.(get|post|put|delete)|@(Get|Post|Put|Delete)|#\\[actix_web::(get|post)' "$file" 2>/dev/null \\
+              | grep -v '^\\s*[0-9]*:\\s*//' \\
+              | grep -v '^\\s*[0-9]*:\\s*\\*' \\
+              | grep -v '^\\s*[0-9]*:\\s*#' \\
+              | grep -v '^\\s*[0-9]*:\\s*<!--' \\
+              | grep -v 'description:' \\
+              | grep -v 'summary:' \\
+              | grep -v 'comment:' \\
+              | grep -v '@example' \\
+              | grep -v '@see' \\
+              || true)
+            if [ -n "$ROUTE_MATCH" ]; then
+              ROUTE_FILES="$ROUTE_FILES $file"
+            fi
           fi
-        fi
-        ;;
-    esac
-  done
+          ;;
+      esac
+    done
 
-  if [ -n "$ROUTE_FILES" ]; then
-    VIOLATIONS="$VIOLATIONS
+    if [ -n "$ROUTE_FILES" ]; then
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
   - Route/endpoint patterns found in modified files but no portal.yaml exists:
    $ROUTE_FILES
     Create portal.yaml with gate definitions. Use paradigm_gates_for_route for suggestions."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
+  - (warn) Route/endpoint patterns found without portal.yaml:
+   $ROUTE_FILES"
+      fi
+    fi
   fi
 fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
-for purpose_file in $PURPOSE_PATHS; do
-  if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
-    purpose_dir=$(dirname "$purpose_file")
-    in_anchors=false
-    while IFS= read -r line; do
-      case "$line" in
-        *"anchors:"*) in_anchors=true; continue ;;
-        *"- "*)
-          if [ "$in_anchors" = true ]; then
-            anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
-            if [ -n "$anchor_path" ]; then
-              # Try relative to .purpose dir first, then project root
-              if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
-                VIOLATIONS="$VIOLATIONS
+_SEV=$(_check_severity "aspect-anchors" "block")
+if [ "$_SEV" != "off" ]; then
+  for purpose_file in $PURPOSE_PATHS; do
+    if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
+      purpose_dir=$(dirname "$purpose_file")
+      in_anchors=false
+      while IFS= read -r line; do
+        case "$line" in
+          *"anchors:"*) in_anchors=true; continue ;;
+          *"- "*)
+            if [ "$in_anchors" = true ]; then
+              anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
+              if [ -n "$anchor_path" ]; then
+                # Try relative to .purpose dir first, then project root
+                if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
+                  if [ "$_SEV" = "block" ]; then
+                    VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
-                VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+                    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+                  else
+                    ADVISORY="$ADVISORY
+  - (warn) Aspect anchor '$anchor_path' in $purpose_file does not exist."
+                  fi
+                fi
               fi
             fi
-          fi
-          ;;
-        *) in_anchors=false ;;
-      esac
-    done < "$purpose_file"
-  fi
-done
+            ;;
+          *) in_anchors=false ;;
+        esac
+      done < "$purpose_file"
+    fi
+  done
+fi
 
 # --- Check 5: Per-directory .purpose freshness ---
 # Uses .pending-review if available, plus a git-based fallback that cross-references
@@ -333,45 +393,56 @@ for file in $MODIFIED; do
   fi
 done
 
-if [ -n "$STALE_PURPOSES" ]; then
-  VIOLATIONS="$VIOLATIONS
+_SEV=$(_check_severity "purpose-freshness" "warn")
+if [ "$_SEV" != "off" ] && [ -n "$STALE_PURPOSES" ]; then
+  if [ "$_SEV" = "block" ]; then
+    VIOLATIONS="$VIOLATIONS
   - These .purpose files cover modified source code but were NOT updated:
    $STALE_PURPOSES
     Update each with: #components, ~aspects (with anchors), !signals, \\$flows, ^gates."
-  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  else
+    ADVISORY="$ADVISORY
+  - (warn) These .purpose files cover modified source code but were NOT updated:
+   $STALE_PURPOSES"
+  fi
 fi
 
 # --- Check 6: Aspect coverage advisory ---
 ADVISORY=""
-HAS_ASPECTS=false
-for purpose_file in $PURPOSE_PATHS; do
-  if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
-    HAS_ASPECTS=true
-    break
-  fi
-done
-
-if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
-  ASPECT_UPDATED=false
-  for file in $MODIFIED; do
-    case "$file" in
-      *.purpose)
-        if grep -qE '^\\s*~|anchors:|applies-to:' "$file" 2>/dev/null; then
-          ASPECT_UPDATED=true
-          break
-        fi
-        ;;
-    esac
+_SEV=$(_check_severity "aspect-advisory" "warn")
+if [ "$_SEV" != "off" ]; then
+  HAS_ASPECTS=false
+  for purpose_file in $PURPOSE_PATHS; do
+    if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
+      HAS_ASPECTS=true
+      break
+    fi
   done
 
-  if [ "$ASPECT_UPDATED" = false ]; then
-    ADVISORY="  This project defines ~aspects with code anchors. Check if existing
+  if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
+    ASPECT_UPDATED=false
+    for file in $MODIFIED; do
+      case "$file" in
+        *.purpose)
+          if grep -qE '^\\s*~|anchors:|applies-to:' "$file" 2>/dev/null; then
+            ASPECT_UPDATED=true
+            break
+          fi
+          ;;
+      esac
+    done
+
+    if [ "$ASPECT_UPDATED" = false ]; then
+      ADVISORY="  This project defines ~aspects with code anchors. Check if existing
   ~aspects need updated anchors or applies-to patterns."
+    fi
   fi
 fi
 
 # --- Check 7: Lore entry expected for significant sessions ---
-if [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
+_SEV=$(_check_severity "lore-required" "block")
+if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
   LORE_RECORDED=false
 
   # Check git diff first (covers staged/committed lore)
@@ -429,12 +500,15 @@ LOREEOF
       AUTO_FIXED="$AUTO_FIXED
   - Created stub lore entry $LORE_ID (update with real summary)"
       AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
-    else
+    elif [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but recorded no lore entry.
     Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
     Include: type, title, summary, and symbols_touched."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) $SOURCE_COUNT source files modified without a lore entry."
     fi
   fi
 fi
@@ -451,17 +525,23 @@ fi
 
 if [ -n "$COMPLIANCE_RESULT" ]; then
   # --- Check 8: Blocking habits (from unified result) ---
-  # The compliance-check command writes .habits-blocking marker internally
-  if [ -f ".paradigm/.habits-blocking" ]; then
+  _SEV=$(_check_severity "habits-blocking" "block")
+  if [ "$_SEV" != "off" ] && [ -f ".paradigm/.habits-blocking" ]; then
     HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
-    VIOLATIONS="$VIOLATIONS
+    if [ "$_SEV" = "block" ]; then
+      VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
     Fix: satisfy the habit(s), or change severity to 'warn' in .paradigm/habits.yaml to make advisory."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) Blocking habit(s) not satisfied: $HABITS_BLOCKING"
+    fi
   fi
 
   # --- Check 10: Aspect drift (from unified result) ---
+  _SEV=$(_check_severity "drift-detection" "block")
   DRIFTED_COUNT=$(echo "$COMPLIANCE_RESULT" | grep -o '"driftedCount":[0-9]*' | sed 's/.*://')
   HEALED_COUNT=$(echo "$COMPLIANCE_RESULT" | grep -o '"healedCount":[0-9]*' | sed 's/.*://')
 
@@ -469,39 +549,57 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
     echo "[paradigm] Auto-healed $HEALED_COUNT shifted anchor(s)." >&2
   fi
 
-  if [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
-    VIOLATIONS="$VIOLATIONS
+  if [ "$_SEV" != "off" ] && [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
+    if [ "$_SEV" = "block" ]; then
+      VIOLATIONS="$VIOLATIONS
   - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
     Run paradigm_aspect_check to review. Update anchors in .purpose files."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) $DRIFTED_COUNT aspect anchor(s) have drifted."
+    fi
   fi
 
   # --- Check 11: Portal gate compliance (from unified result) ---
+  _SEV=$(_check_severity "portal-compliance" "block")
   UNDECLARED=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclaredCount":[0-9]*' | sed 's/.*://')
 
-  if [ -n "$UNDECLARED" ] && [ "$UNDECLARED" -gt 0 ] 2>/dev/null; then
+  if [ "$_SEV" != "off" ] && [ -n "$UNDECLARED" ] && [ "$UNDECLARED" -gt 0 ] 2>/dev/null; then
     UNDECLARED_LIST=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclared":\\[[^]]*\\]' | sed 's/.*\\[//;s/\\].*//;s/"//g')
-    VIOLATIONS="$VIOLATIONS
+    if [ "$_SEV" = "block" ]; then
+      VIOLATIONS="$VIOLATIONS
   - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
     $UNDECLARED_LIST
     Add them to portal.yaml or use paradigm_portal_add_gate."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) $UNDECLARED gate(s) used in code but not declared in portal.yaml: $UNDECLARED_LIST"
+    fi
   fi
 else
   # Fallback: check habits blocking marker even if compliance-check unavailable
-  if [ -f ".paradigm/.habits-blocking" ]; then
+  _SEV=$(_check_severity "habits-blocking" "block")
+  if [ "$_SEV" != "off" ] && [ -f ".paradigm/.habits-blocking" ]; then
     HABITS_BLOCKING=$(cat ".paradigm/.habits-blocking")
-    VIOLATIONS="$VIOLATIONS
+    if [ "$_SEV" = "block" ]; then
+      VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
     Fix: satisfy the habit(s), or change severity to 'warn' in .paradigm/habits.yaml to make advisory."
-    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) Blocking habit(s) not satisfied: $HABITS_BLOCKING"
+    fi
   fi
 fi
 
 # --- Check 9: Purpose-required patterns from config.yaml ---
+_SEV=$(_check_severity "purpose-required-patterns" "block")
 CONFIG_FILE=".paradigm/config.yaml"
-if [ -f "$CONFIG_FILE" ]; then
+if [ "$_SEV" != "off" ] && [ -f "$CONFIG_FILE" ]; then
   MISSING_REQUIRED=""
   in_section=false
   current_pattern=""
@@ -587,19 +685,24 @@ PURPOSEEOF
   - Created stub .purpose in $dir (purpose-required pattern)"
         AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
       done
-    else
+    elif [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
     Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (warn) Directories matching purpose-required patterns without .purpose file:
+   $MISSING_REQUIRED"
     fi
   fi
 fi
 
 # --- Check 12: Graduation failure tracking ---
 # When violations occur for graduated habits, record failures for auto-demotion.
-if [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
+_SEV=$(_check_severity "graduation-tracking" "warn")
+if [ "$_SEV" != "off" ] && [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
   GRAD_FAILURES_DIR=".paradigm/.graduation-failures"
   mkdir -p "$GRAD_FAILURES_DIR" 2>/dev/null
 
@@ -644,6 +747,23 @@ if [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
     fi
   done
 fi
+
+# --- Check 13: Orchestration required for complex tasks ---
+_SEV=$(_check_severity "orchestration-required" "warn")
+if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge "$ORCH_THRESHOLD" ]; then
+  if [ ! -f ".paradigm/.orchestrated" ]; then
+    if [ "$_SEV" = "block" ]; then
+      VIOLATIONS="$VIOLATIONS
+  - You modified $SOURCE_COUNT source files without running orchestration.
+    Run paradigm_orchestrate_inline mode=\\"plan\\" first.
+    Override: paradigm enforcement override orchestration-required warn"
+      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+    else
+      ADVISORY="$ADVISORY
+  - (orchestration) $SOURCE_COUNT files modified without team orchestration."
+    fi
+  fi
+fi
 `;
 
 export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
@@ -654,7 +774,7 @@ export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 # Hook type: Stop
 # Exit 0 = allow, Exit 2 = block with message
 #
-# Checks 1–11 are defined in paradigm-common.sh (shared with Cursor hook).
+# Checks 1–13 are defined in paradigm-common.sh (shared with Cursor hook).
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -754,6 +874,7 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f ".paradigm/.orchestrated"
 
 exit 0
 `;
@@ -921,7 +1042,7 @@ export const CURSOR_STOP_HOOK = `#!/bin/sh
 # Hook type: stop
 # Exit 0 = allow, Exit 2 = block with message
 #
-# Checks 1–11 are defined in paradigm-common.sh (shared with Claude Code hook).
+# Checks 1–13 are defined in paradigm-common.sh (shared with Claude Code hook).
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -1043,6 +1164,7 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f ".paradigm/.orchestrated"
 
 exit 0
 `;

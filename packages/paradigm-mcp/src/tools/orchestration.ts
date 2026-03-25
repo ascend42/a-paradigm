@@ -581,6 +581,12 @@ async function handleOrchestrateInline(
   const mode = (args.mode as string) || 'execute';
   const agentOverride = args.agents as string[] | undefined;
 
+  // Write orchestration marker for stop hook enforcement
+  try {
+    const markerPath = path.join(ctx.rootDir, '.paradigm', '.orchestrated');
+    fs.writeFileSync(markerPath, new Date().toISOString(), 'utf8');
+  } catch { /* best-effort */ }
+
   // Load agents manifest
   const manifest = loadAgentsManifest(ctx.rootDir);
   if (!manifest) {

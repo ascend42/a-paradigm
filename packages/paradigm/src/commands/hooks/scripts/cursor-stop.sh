@@ -6,7 +6,7 @@
 # Hook type: stop
 # Exit 0 = allow, Exit 2 = block with message
 #
-# Checks 1–11 are defined in paradigm-common.sh (shared with Claude Code hook).
+# Checks 1–13 are defined in paradigm-common.sh (shared with Claude Code hook).
 
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
@@ -128,5 +128,6 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f ".paradigm/.orchestrated"
 
 exit 0

@@ -320,6 +320,19 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Step 2e: Enforcement defaults
+  {
+    try {
+      const { ensureEnforcementDefaults } = await import('../core/enforcement/index.js');
+      const wrote = ensureEnforcementDefaults(cwd);
+      if (wrote) {
+        console.log(chalk.green(`  ✓ Enforcement config initialized (${chalk.cyan('balanced')} preset)`));
+      }
+    } catch (e) {
+      log.operation('shift').debug('Enforcement config setup failed', { error: (e as Error).message });
+    }
+  }
+
   // Step 3: Scan/Index
   if (!options.quick) {
     spinner.start('Step 3/6: Scanning and indexing symbols...');

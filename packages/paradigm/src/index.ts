@@ -2487,6 +2487,53 @@ agentCmd
     await agentListCommand({});
   });
 
+// paradigm enforcement <command>
+const enforcementCmd = program
+  .command('enforcement')
+  .description('Manage enforcement configuration (check severities and levels)');
+
+enforcementCmd
+  .command('set <level>')
+  .description('Set enforcement level preset (strict, balanced, minimal)')
+  .action(async (level) => {
+    const { enforcementSetCommand } = await import('./commands/enforcement.js');
+    await enforcementSetCommand(level);
+  });
+
+enforcementCmd
+  .command('override <check-id> <severity>')
+  .description('Set a per-check severity override (block, warn, off)')
+  .action(async (checkId, severity) => {
+    const { enforcementOverrideCommand } = await import('./commands/enforcement.js');
+    await enforcementOverrideCommand(checkId, severity);
+  });
+
+enforcementCmd
+  .command('reset [check-id]')
+  .description('Remove a per-check override, or all overrides if no check-id given')
+  .action(async (checkId) => {
+    const { enforcementResetCommand } = await import('./commands/enforcement.js');
+    await enforcementResetCommand(checkId);
+  });
+
+enforcementCmd
+  .command('resolve')
+  .description('Output the fully resolved severity map (used by stop hook)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { enforcementResolveCommand } = await import('./commands/enforcement.js');
+    await enforcementResolveCommand(options);
+  });
+
+enforcementCmd
+  .command('status', { isDefault: true })
+  .description('Show enforcement status table (default)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { enforcementStatusCommand } = await import('./commands/enforcement.js');
+    await enforcementStatusCommand(options);
+  });
+
 // paradigm compliance-check — unified compliance checker for stop hooks
 program
   .command('compliance-check')

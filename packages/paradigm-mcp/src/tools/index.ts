@@ -61,6 +61,7 @@ import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getRippleToolsList, handleRippleTool } from './ripple.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
+import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
 import { findFuzzyMatches } from './fuzzy-match.js';
@@ -264,6 +265,13 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'feature',
       getToolsList: getAspectGraphToolsList,
       handleTool: wrap(handleAspectGraphTool),
+    },
+    {
+      key: 'enforcement',
+      tier: 'feature',
+      getToolsList: getEnforcementToolsList,
+      handleTool: wrap(handleEnforcementTool),
+      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'config.yaml')),
     },
     {
       key: 'graph',
