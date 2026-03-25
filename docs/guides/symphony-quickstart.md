@@ -125,6 +125,99 @@ No interactive prompt needed — the code after `#` is used automatically.
 
 > **Note:** Internet mode requires port 3939 to be reachable (port forward, VPN, or SSH tunnel).
 
+### Internet Connect — Behind NAT (Power Users)
+
+If both machines are behind NAT (no public IP, no port forwarding), you need a tunnel. Three options, from easiest to most manual:
+
+#### Option 1: Tailscale (Recommended)
+
+[Tailscale](https://tailscale.com) creates a private network between your machines. Free tier, no config.
+
+```sh
+# Both machines: install Tailscale and log in
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up
+
+# Check your Tailscale IP
+tailscale ip -4
+# Example: 100.64.0.1 (Machine A), 100.64.0.2 (Machine B)
+
+# Machine A: start Symphony relay
+paradigm symphony serve
+
+# Machine B: join using Tailscale IP
+paradigm symphony join --remote 100.64.0.1:3939
+# Enter the pairing code when prompted
+```
+
+That's it. Tailscale handles NAT traversal, encryption (WireGuard), and DNS. Both machines see each other as if on the same LAN.
+
+#### Option 2: ngrok (Quick, No Install on Remote)
+
+[ngrok](https://ngrok.com) exposes a local port to the internet via their relay. Free tier has connection limits.
+
+```sh
+# Machine A: install ngrok and expose Symphony
+ngrok tcp 3939
+# Output:
+#   Forwarding tcp://0.tcp.ngrok.io:12345 -> localhost:3939
+
+# Machine A: also start Symphony
+paradigm symphony serve
+
+# Machine B: join using ngrok URL
+paradigm symphony join --remote 0.tcp.ngrok.io:12345
+# Enter the pairing code when prompted
+```
+
+ngrok gives you a public address that tunnels to your local relay. Machine B connects outbound to ngrok, ngrok forwards to Machine A. No port forwarding needed on either side.
+
+> **Note:** Free ngrok has session time limits and connection caps. Good for testing, not for always-on use.
+
+#### Option 3: SSH Tunnel (Power Users with a Server)
+
+If either person has a server with SSH access (VPS, cloud box, work machine with port 22 open):
+
+```sh
+# Scenario: Machine A runs Symphony, Machine B tunnels through a shared server
+
+# Machine A: start Symphony relay
+paradigm symphony serve
+
+# Machine A: expose local relay through the server (reverse tunnel)
+ssh -R 3939:localhost:3939 user@your-server.com
+# This makes your-server.com:3939 forward to Machine A's localhost:3939
+
+# Machine B: connect to the server
+paradigm symphony join --remote your-server.com:3939
+# Enter the pairing code when prompted
+```
+
+Alternative — both tunnel through the server:
+
+```sh
+# Machine A: reverse tunnel (expose relay on server)
+ssh -R 3939:localhost:3939 user@server.com
+
+# Machine B: local tunnel (make server:3939 appear as localhost:3939)
+ssh -L 3939:localhost:3939 user@server.com
+
+# Machine B: join via local tunnel
+paradigm symphony join --remote localhost:3939
+```
+
+> **Note:** SSH tunnels require both users to have SSH access to the same server. The tunnel is encrypted but the Symphony relay itself uses plain `ws://` — the SSH layer provides the security.
+
+#### Coming Soon: nevr.land Relay
+
+A managed relay at `relay.nevr.land` is planned so you can connect with just:
+
+```sh
+paradigm symphony join --relay nevr.land
+```
+
+Both users connect outbound (no port config), relay bridges them, auth via nevr.land accounts. Until then, use one of the options above.
+
 ### Managing Peers
 
 ```sh
