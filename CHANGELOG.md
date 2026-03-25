@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.2] — 2026-03-25
+
+### Fixed
+
+- **Stop hook false blocks from git-clean and file-modified habits** — `git-clean` check now auto-passes on `on-stop` trigger since uncommitted changes are expected before the user commits. `file-modified` with `severity: block` on `on-stop` downgrades to advisory (`partial`) since files may exist but not yet appear in `git diff`. Both checks work normally on `on-commit` trigger where staged files are reliable. Fixes blocking "Update Changelog" and "Commit Changes" violations on every session end.
+
 ## [5.21.1] — 2026-03-25
 
 ### Fixed

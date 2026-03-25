@@ -714,6 +714,20 @@ function evalFileModified(habit: HabitDefinition, ctx: EvaluationContext): Habit
   const patterns = habit.check.params.patterns || [];
   if (patterns.length === 0) return { habit, result: 'followed', reason: 'No patterns specified' };
 
+  // file-modified checks on on-stop use git diff which only shows committed changes.
+  // The agent may have modified the file but not committed yet — this is normal at session end.
+  // Only block on on-commit trigger where files should already be staged.
+  if (habit.trigger === 'on-stop' && habit.severity === 'block') {
+    const matched = ctx.filesModified.filter((f) =>
+      patterns.some((p) => f.includes(p) || path.basename(f) === p)
+    );
+    if (matched.length > 0) {
+      return { habit, result: 'followed', reason: `Matching files: ${matched.join(', ')}`, evidence: matched };
+    }
+    // Downgrade to advisory on on-stop — file may exist but not yet be in git diff
+    return { habit, result: 'partial', reason: `None of [${patterns.join(', ')}] in git diff yet (may not be committed). Use on-commit trigger for reliable check.` };
+  }
+
   const matched = ctx.filesModified.filter((f) =>
     patterns.some((p) => f.includes(p) || path.basename(f) === p)
   );
@@ -727,6 +741,13 @@ function evalFileModified(habit: HabitDefinition, ctx: EvaluationContext): Habit
 
 function evalGitClean(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
   if (ctx.filesModified.length === 0) return { habit, result: 'followed', reason: 'No files modified' };
+
+  // git-clean is inherently incompatible with on-stop blocking — the stop hook
+  // runs BEFORE the user commits, so uncommitted changes are expected.
+  // Downgrade to 'followed' on on-stop to prevent false blocks.
+  if (habit.trigger === 'on-stop') {
+    return { habit, result: 'followed', reason: 'git-clean skipped on-stop (uncommitted changes expected before commit)' };
+  }
 
   if (ctx.gitClean === undefined) {
     return { habit, result: 'partial', reason: 'Git status not available' };
