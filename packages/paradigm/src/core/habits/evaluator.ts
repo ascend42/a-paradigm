@@ -430,6 +430,17 @@ function evaluateFileModified(
     };
   }
 
+  // file-modified with severity:block on on-stop is inherently unreliable —
+  // the stop hook runs before the user commits, so files may exist on disk
+  // but not yet appear in git diff. Downgrade to advisory.
+  if (habit.trigger === 'on-stop' && habit.severity === 'block') {
+    return {
+      habit,
+      result: 'partial',
+      reason: `None of [${patterns.join(', ')}] in git diff yet (may not be committed). Use on-commit trigger for reliable check.`,
+    };
+  }
+
   return {
     habit,
     result: 'skipped',
@@ -446,6 +457,12 @@ function evaluateGitClean(
 ): HabitEvaluation {
   if (context.filesModified.length === 0) {
     return { habit, result: 'followed', reason: 'No files modified' };
+  }
+
+  // git-clean is inherently incompatible with on-stop blocking — the stop hook
+  // runs BEFORE the user commits, so uncommitted changes are expected.
+  if (habit.trigger === 'on-stop') {
+    return { habit, result: 'followed', reason: 'git-clean skipped on-stop (uncommitted changes expected before commit)' };
   }
 
   if (context.gitClean === undefined) {

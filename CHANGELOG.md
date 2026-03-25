@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.3] — 2026-03-25
+
+### Fixed
+
+- **Fix habits false blocks in CLI evaluator (the REAL fix)** — v5.21.2 fixed `paradigm-mcp/src/utils/habits-loader.ts` but the stop hook uses a SEPARATE copy at `paradigm/src/core/habits/evaluator.ts`. Both copies now have the same fix: `git-clean` auto-passes on `on-stop`, `file-modified` with `severity:block` downgrades to advisory on `on-stop`.
+
 ## [5.21.2] — 2026-03-25
 
 ### Fixed
