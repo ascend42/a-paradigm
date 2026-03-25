@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.17.0] — 2026-03-25
+
+### Added
+
+- **Feature detection caching** — `detectActiveFeatures()` results cached with 5-minute TTL. Was called 3x per operation doing 19 filesystem checks each time. `paradigm_reindex` invalidates the cache.
+- **Collaboration graph wired into planning** — `handoff_to` edges now influence stage ordering via Kahn's algorithm topological sort. Collaboration boost in agent suggestion: agents that work well with already-selected agents get priority. Plan output includes `collaborationGraph` field showing team dynamics.
+- **Smart documentor skipping** — Documentor stage skipped for analysis-only tasks and when no code-writing agents are in the plan. Saves 2-8k tokens on non-code tasks.
+- **Orchestration mode from config** — `default_mode` from agents.yaml `orchestration` block is now respected (was hardcoded to "faceted"). Falls back to faceted if not configured.
+
+### Fixed
+
+- **Tier ambiguity** — graph and heatmap moved from advanced to feature tier (auto-detect when aspect-graph.db exists). conductor/platform/pipeline remain advanced-only.
+
 ## [5.16.0] — 2026-03-25
 
 ### Added

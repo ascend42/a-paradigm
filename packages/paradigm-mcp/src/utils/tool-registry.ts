@@ -12,6 +12,18 @@ import * as path from 'path';
 import * as os from 'os';
 
 // ────────────────────────────────────────────────────────
+// Feature Detection Cache
+// ────────────────────────────────────────────────────────
+
+const FEATURE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+let featureCache: { features: Set<string>; timestamp: number } | null = null;
+
+/** Invalidate the feature detection cache. Call after reindex to force re-detection. */
+export function invalidateFeatureCache(): void {
+  featureCache = null;
+}
+
+// ────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────
 
@@ -150,6 +162,10 @@ export class ToolRegistry {
    * Returns the set of active feature keys.
    */
   detectActiveFeatures(): Set<string> {
+    if (featureCache && Date.now() - featureCache.timestamp < FEATURE_CACHE_TTL) {
+      return featureCache.features;
+    }
+
     const active = new Set<string>();
 
     for (const [key, module] of this.modules) {
@@ -181,6 +197,7 @@ export class ToolRegistry {
       }
     }
 
+    featureCache = { features: active, timestamp: Date.now() };
     return active;
   }
 

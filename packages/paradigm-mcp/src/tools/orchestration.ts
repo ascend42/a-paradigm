@@ -620,7 +620,7 @@ async function handleOrchestrateInline(
   const classification = classifyTaskLocal(task);
 
   // Plan the agent sequence (pass classification for intelligent defaults)
-  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification);
+  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration);
 
   if (mode === 'plan') {
     // Get agent suggestions based on triggers
@@ -657,6 +657,14 @@ async function handleOrchestrateInline(
       }
     } catch { /* non-fatal */ }
 
+    // Build collaboration graph from handoff_to edges among planned agents
+    const planAgentNames = plan.stages.flatMap(s => s.agents.map(a => a.name));
+    const collaborationEdges = buildCollaborationSubgraph(planAgentNames, manifest.agents);
+    const collaborationGraph = collaborationEdges.length > 0 ? {
+      edges: collaborationEdges,
+      note: 'Shows which agents hand off to which based on agents.yaml handoff_to. Stage ordering was derived from this graph.',
+    } : undefined;
+
     // Return the plan with suggestions and cost preview
     const text = JSON.stringify({
       task,
@@ -670,6 +678,7 @@ async function handleOrchestrateInline(
       plan,
       suggestedAgents,
       costPreview,
+      ...(collaborationGraph ? { collaborationGraph } : {}),
       ...(notebookKnowledge ? {
         notebookKnowledge,
         notebookNote: 'Agents with relevant notebook entries will have curated knowledge injected into their prompts during execute mode.',
@@ -681,6 +690,7 @@ async function handleOrchestrateInline(
       instructions: [
         'Review task classification and cost preview above',
         'Review suggested agents based on task triggers',
+        ...(collaborationGraph ? ['Review collaboration graph — stage ordering was derived from agent handoff_to edges'] : []),
         ...(notebookKnowledge ? ['Review notebook knowledge — agents with relevant entries will receive curated snippets in execute mode'] : []),
         ...(activeNominations.length > 0 ? ['Review active nominations — agents flagged by the system may need to be included'] : []),
         'Call again with mode="execute" to get full prompts and execution strategy',
@@ -1152,6 +1162,140 @@ async function handleAgentPrompt(
 }
 
 // ============================================================================
+// Collaboration Graph Utilities
+// ============================================================================
+
+/**
+ * Build a collaboration graph from selected agents' handoff_to edges.
+ * Returns edges that exist between selected agents only (subgraph).
+ */
+function buildCollaborationSubgraph(
+  selectedAgents: string[],
+  agents: Record<string, AgentDefinition>
+): { from: string; to: string }[] {
+  const selectedSet = new Set(selectedAgents);
+  const edges: { from: string; to: string }[] = [];
+
+  for (const name of selectedAgents) {
+    const agent = agents[name];
+    if (!agent?.handoff_to) continue;
+    for (const target of agent.handoff_to) {
+      if (selectedSet.has(target)) {
+        edges.push({ from: name, to: target });
+      }
+    }
+  }
+
+  return edges;
+}
+
+/**
+ * Derive stage ordering from the handoff_to directed graph using topological sort.
+ *
+ * - Agents with no incoming edges from other selected agents -> stage 0 (entry points)
+ * - Agents whose dependencies are all in earlier stages -> next stage
+ * - Mutual handoffs (A->B and B->A) -> same stage (parallel)
+ * - Falls back to null if no handoff_to edges exist among selected agents
+ */
+function deriveStagesFromHandoffGraph(
+  selectedAgents: string[],
+  agents: Record<string, AgentDefinition>
+): Map<string, number> | null {
+  const edges = buildCollaborationSubgraph(selectedAgents, agents);
+
+  // If no handoff edges exist among selected agents, signal fallback
+  if (edges.length === 0) return null;
+
+  // Detect mutual edges and collapse them into the same equivalence class
+  const mutualPairs = new Set<string>();
+  const edgeSet = new Set(edges.map(e => `${e.from}->${e.to}`));
+  for (const edge of edges) {
+    if (edgeSet.has(`${edge.to}->${edge.from}`)) {
+      const pair = [edge.from, edge.to].sort().join(',');
+      mutualPairs.add(pair);
+    }
+  }
+
+  // Build equivalence classes for mutual handoffs (agents that should be parallel)
+  const equivalenceMap = new Map<string, string>(); // agent -> canonical representative
+  for (const pair of mutualPairs) {
+    const [a, b] = pair.split(',');
+    const canonA = equivalenceMap.get(a) || a;
+    const canonB = equivalenceMap.get(b) || b;
+    const canonical = canonA < canonB ? canonA : canonB;
+    // Remap everything pointing to canonB to canonical
+    for (const [key, val] of equivalenceMap) {
+      if (val === canonA || val === canonB) equivalenceMap.set(key, canonical);
+    }
+    equivalenceMap.set(a, canonical);
+    equivalenceMap.set(b, canonical);
+  }
+  // Agents not in any mutual pair map to themselves
+  for (const name of selectedAgents) {
+    if (!equivalenceMap.has(name)) equivalenceMap.set(name, name);
+  }
+
+  // Build DAG on equivalence classes (skip mutual edges)
+  const canonicals = [...new Set(equivalenceMap.values())];
+  const incomingCount = new Map<string, number>();
+  const outgoing = new Map<string, Set<string>>();
+  for (const c of canonicals) {
+    incomingCount.set(c, 0);
+    outgoing.set(c, new Set());
+  }
+
+  for (const edge of edges) {
+    const fromCanon = equivalenceMap.get(edge.from)!;
+    const toCanon = equivalenceMap.get(edge.to)!;
+    // Skip self-edges (mutual pairs collapsed into same canonical)
+    if (fromCanon === toCanon) continue;
+    if (!outgoing.get(fromCanon)!.has(toCanon)) {
+      outgoing.get(fromCanon)!.add(toCanon);
+      incomingCount.set(toCanon, (incomingCount.get(toCanon) || 0) + 1);
+    }
+  }
+
+  // Kahn's algorithm for topological sort with stage levels
+  const stageMap = new Map<string, number>(); // canonical -> stage
+  const queue: string[] = [];
+
+  for (const c of canonicals) {
+    if ((incomingCount.get(c) || 0) === 0) {
+      queue.push(c);
+      stageMap.set(c, 0);
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const currentStage = stageMap.get(current) || 0;
+
+    for (const neighbor of outgoing.get(current) || []) {
+      const newCount = (incomingCount.get(neighbor) || 1) - 1;
+      incomingCount.set(neighbor, newCount);
+      // Stage is max of all incoming stages + 1
+      const candidateStage = currentStage + 1;
+      stageMap.set(neighbor, Math.max(stageMap.get(neighbor) || 0, candidateStage));
+      if (newCount === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  // If cycle detected (some nodes never reached), fall back
+  if (stageMap.size < canonicals.length) return null;
+
+  // Map back from canonical stages to individual agent stages
+  const result = new Map<string, number>();
+  for (const name of selectedAgents) {
+    const canonical = equivalenceMap.get(name)!;
+    result.set(name, stageMap.get(canonical) || 0);
+  }
+
+  return result;
+}
+
+// ============================================================================
 // Planning Logic
 // ============================================================================
 
@@ -1159,7 +1303,8 @@ function planAgentSequence(
   task: string,
   agents: Record<string, AgentDefinition>,
   agentOverride?: string[],
-  classification?: TaskClassification
+  classification?: TaskClassification,
+  orchestrationConfig?: AgentManifest['orchestration']
 ): OrchestrationPlan {
   const symbols = extractSymbols(task);
   const taskLower = task.toLowerCase();
@@ -1292,6 +1437,31 @@ function planAgentSequence(
     }
   }
 
+  // Derive stage ordering from handoff_to graph when available
+  const selectedNames = plannedAgents.map(a => a.name);
+  const graphStages = deriveStagesFromHandoffGraph(selectedNames, agents);
+  if (graphStages) {
+    // Reassign stages and dependsOn based on the handoff graph
+    for (const agent of plannedAgents) {
+      agent.stage = graphStages.get(agent.name) || 0;
+      // Rebuild dependsOn: agents that hand off TO this agent and are in earlier stages
+      const incomingFrom: string[] = [];
+      for (const otherName of selectedNames) {
+        if (otherName === agent.name) continue;
+        const otherDef = agents[otherName];
+        if (otherDef?.handoff_to?.includes(agent.name)) {
+          const otherStage = graphStages.get(otherName) || 0;
+          if (otherStage < agent.stage) {
+            incomingFrom.push(otherName);
+          }
+        }
+      }
+      if (incomingFrom.length > 0) {
+        agent.dependsOn = incomingFrom;
+      }
+    }
+  }
+
   // Group by stage
   const stageMap = new Map<number, typeof plannedAgents>();
   for (const agent of plannedAgents) {
@@ -1316,18 +1486,27 @@ function planAgentSequence(
     });
   }
 
-  // Always add documentor as the final stage (updates .purpose, portal.yaml, symbols)
-  const lastStageNum = sortedStages.length > 0 ? sortedStages[sortedStages.length - 1] + 1 : 0;
-  stages.push({
-    stage: lastStageNum,
-    agents: [{
-      name: 'documentor',
-      task: 'Review all changes made by previous agents. Update .purpose files, portal.yaml, and symbol registrations using only paradigm_purpose_* and paradigm_portal_* MCP tools. Run paradigm_reindex when done. Do NOT modify source code.',
-      dependsOn: plannedAgents.map(a => a.name),
-      required: true,
-    }],
-    canRunParallel: false,
-  });
+  // Add documentor as the final stage unless the task is analysis-only or
+  // there are no builder/tester agents (no code changes expected)
+  const hasCodeAgents = plannedAgents.some(a => a.name === 'builder' || a.name === 'tester');
+  const isAnalysis = classification?.type === 'analysis';
+  const skipDocumentor = isAnalysis || !hasCodeAgents;
+
+  let documentorAdded = false;
+  if (!skipDocumentor) {
+    const lastStageNum = sortedStages.length > 0 ? sortedStages[sortedStages.length - 1] + 1 : 0;
+    stages.push({
+      stage: lastStageNum,
+      agents: [{
+        name: 'documentor',
+        task: 'Review all changes made by previous agents. Update .purpose files, portal.yaml, and symbol registrations using only paradigm_purpose_* and paradigm_portal_* MCP tools. Run paradigm_reindex when done. Do NOT modify source code.',
+        dependsOn: plannedAgents.map(a => a.name),
+        required: true,
+      }],
+      canRunParallel: false,
+    });
+    documentorAdded = true;
+  }
 
   // Estimate tokens
   let minTokens = 0;
@@ -1337,16 +1516,21 @@ function planAgentSequence(
     minTokens += estimate.min;
     maxTokens += estimate.max;
   }
-  // Add documentor estimate
-  minTokens += 2000;
-  maxTokens += 8000;
+  // Add documentor estimate if included
+  if (documentorAdded) {
+    minTokens += 2000;
+    maxTokens += 8000;
+  }
+
+  // Read orchestration mode from agents.yaml config, fall back to 'faceted'
+  const configMode = orchestrationConfig?.default_mode || 'faceted';
 
   return {
     task,
-    mode: 'faceted',
+    mode: configMode,
     stages,
     symbols,
-    estimatedAgents: plannedAgents.length + 1, // +1 for documentor
+    estimatedAgents: plannedAgents.length + (documentorAdded ? 1 : 0),
     estimatedTokens: { min: minTokens, max: maxTokens },
   };
 }
@@ -1744,6 +1928,61 @@ function suggestAgentsForTask(
       });
     }
   }
+
+  // Collaboration boost: if agent A is suggested and A's handoff_to includes agent B,
+  // add B as a collaboration suggestion if it has any relevant triggers
+  const suggestedNames = new Set(suggestions.map(s => s.name));
+  const collaborationSuggestions: AgentSuggestion[] = [];
+
+  for (const suggestion of suggestions) {
+    const agent = agents[suggestion.name];
+    if (!agent?.handoff_to) continue;
+
+    for (const targetName of agent.handoff_to) {
+      if (suggestedNames.has(targetName) || !agents[targetName]) continue;
+
+      // Check if the target agent has any relevant triggers for this task
+      const targetAgent = agents[targetName];
+      const targetMatches: string[] = [];
+      for (const trigger of targetAgent.triggers || []) {
+        if (trigger.type === 'keyword' && trigger.match) {
+          for (const keyword of trigger.match) {
+            if (taskLower.includes(keyword.toLowerCase())) {
+              targetMatches.push(`keyword:${keyword}`);
+            }
+          }
+        }
+        if (trigger.type === 'symbol' && trigger.match) {
+          for (const pattern of trigger.match) {
+            const matchingSymbols = symbols.filter((s) => {
+              if (pattern.endsWith('*')) return s.startsWith(pattern.slice(0, -1));
+              return s === pattern;
+            });
+            for (const s of matchingSymbols) {
+              targetMatches.push(`symbol:${s}`);
+            }
+          }
+        }
+      }
+
+      // Add as collaboration suggestion with boosted confidence
+      if (targetMatches.length > 0) {
+        suggestedNames.add(targetName);
+        const roleFirstLine = targetAgent.role.split('\n')[0].trim();
+        const roleSnippet = roleFirstLine.length > 50 ? roleFirstLine.slice(0, 47) + '...' : roleFirstLine;
+
+        collaborationSuggestions.push({
+          name: targetName,
+          reason: roleSnippet,
+          confidence: targetMatches.length >= 2 ? 'high' : 'medium',
+          triggers_matched: [...targetMatches, `collaboration:handoff_from:${suggestion.name}`],
+        });
+      }
+    }
+  }
+
+  // Merge collaboration suggestions
+  suggestions.push(...collaborationSuggestions);
 
   // Sort by confidence score
   const scoreMap = { high: 3, medium: 2, low: 1 };

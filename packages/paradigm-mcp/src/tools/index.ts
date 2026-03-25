@@ -8,6 +8,7 @@
  * All other tools are dispatched through the registry.
  */
 
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -78,7 +79,7 @@ import { emitAndProcess } from '../utils/nomination-engine.js';
  * Tiers:
  *   core     — always loaded (context, navigate, tags, purpose-portal, pm, reindex, docs)
  *   feature  — auto-detected (lore, agents, orchestration, habits, notebooks, etc.)
- *   advanced — on-demand (conductor, platform, pipeline, graduation, assessment, graph, heatmap)
+ *   advanced — on-demand (conductor, platform, pipeline, graduation, assessment)
  *
  * The registry provides tiered listing via getActiveTools() and
  * Map-based dispatch via dispatch().
@@ -264,6 +265,20 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       getToolsList: getAspectGraphToolsList,
       handleTool: wrap(handleAspectGraphTool),
     },
+    {
+      key: 'graph',
+      tier: 'feature',
+      getToolsList: getGraphToolsList,
+      handleTool: wrap(handleGraphTool),
+      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
+    },
+    {
+      key: 'heatmap',
+      tier: 'feature',
+      getToolsList: getHeatmapToolsList,
+      handleTool: wrap(handleHeatmapTool),
+      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
+    },
   ]);
 
   // ── Advanced tier (on-demand) ─────────────────────────
@@ -298,18 +313,6 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'advanced',
       getToolsList: getAssessmentToolsList,
       handleTool: wrap(handleAssessmentTool),
-    },
-    {
-      key: 'graph',
-      tier: 'advanced',
-      getToolsList: getGraphToolsList,
-      handleTool: wrap(handleGraphTool),
-    },
-    {
-      key: 'heatmap',
-      tier: 'advanced',
-      getToolsList: getHeatmapToolsList,
-      handleTool: wrap(handleHeatmapTool),
     },
   ]);
 

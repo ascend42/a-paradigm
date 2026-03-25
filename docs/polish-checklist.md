@@ -19,12 +19,12 @@
 - [x] Drift Detection — three-layer resolution documented, thresholds in config.yaml (0.85 auto, 0.7 suggest)
 
 ## 2. Agent System
-- [ ] 54 Agent Profiles (quality, consistency, behavior specificity)
-- [ ] Per-Project Rosters (roster.yaml, activation UX)
-- [ ] Notebooks (global quality, project-scoped bootstrapping)
-- [ ] Agent State (persistence, resume accuracy)
-- [ ] Model Tier Resolution (config, environment detection)
-- [ ] Expertise Tracking (confidence scoring, decay, accuracy)
+- [x] 54 Agent Profiles — All have nicknames, builder enriched (36→115 lines), behaviors concrete
+- [x] Per-Project Rosters — CLI: `paradigm agents roster` (show/init/add/remove), --json support
+- [x] Notebooks — Wired into orchestration execute + prompt (top 5 by concept relevance). 272 global + 29 project entries now surfaced.
+- [~] Agent State — Tracked and injected, working. Future: staleness handling could be stronger
+- [x] Model Tier Resolution — All 54 agents in AGENT_TIERS (was 21/54). 9 opus, 23 sonnet, 22 haiku
+- [x] Expertise Tracking — Confidence decay implemented (60-day half-life, 7-day grace). EMA + verdicts working. "(aging)" tag on stale entries
 
 ## 3. Orchestration (Maestro)
 - [ ] Multi-Agent Orchestration (plan quality, stage composition)

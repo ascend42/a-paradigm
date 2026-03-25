@@ -13,6 +13,7 @@ import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { toolCache } from '../utils/tool-cache.js';
+import { invalidateFeatureCache } from '../utils/tool-registry.js';
 import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/aspect-graph.js';
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 import { rebuildPersonaIndex } from '../utils/personas-loader.js';
@@ -108,6 +109,7 @@ export async function handleReindexTool(
     const result = await rebuildStaticFiles(ctx.rootDir, ctx);
     await reloadContext();
     toolCache.clear();
+    invalidateFeatureCache();
 
     const text = JSON.stringify(result, null, 2);
     trackToolCall(text.length, name);
