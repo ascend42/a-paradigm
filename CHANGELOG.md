@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.0] — 2026-03-25
+
+### Added
+
+- **Overview stats auto-refresh** — Polls every 15 seconds, skips when document hidden.
+- **12 new CSS accent tokens** — Extended palette (`--p-accent-cyan`, `-amber`, `-yellow`, `-emerald`, `-pink`, `-lime`, `-slate`) + 5 graph node tokens for both dark/light themes.
+
+### Fixed
+
+- **Light mode color sweep** — Replaced 60+ hardcoded hex colors across Team (17), Sentinel (3 tabs, 16 colors), Graph (9), Canvas (6), Lore (13), agent store with CSS variable tokens. Light mode now works correctly across all sections.
+- **DetailPanel decomposed** — 358-line monolith split into 5 focused sub-components (DetailMeta, DetailBody, DetailDecisions, DetailReview, DetailFiles). Parent reduced to 52 lines.
+- **AbortController on all fetches** — 23 controllers across 7 stores. Stale requests cancelled on re-fetch or unmount. Mutation endpoints intentionally excluded.
+- **Section-visibility polling** — Team and Ambient sections skip polling when not the active section. SSE connections maintained regardless.
+
 ## [5.20.0] — 2026-03-25
 
 ### Added

@@ -58,10 +58,10 @@ interface ContextMenuState {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  debug: '#94a3b8',
-  info: '#3b82f6',
-  warn: '#f59e0b',
-  error: '#ef4444',
+  debug: 'var(--p-accent-slate)',
+  info: 'var(--p-accent-blue)',
+  warn: 'var(--p-accent-amber)',
+  error: 'var(--p-accent-red)',
 };
 
 const SYMBOL_COLORS: Record<string, string> = {

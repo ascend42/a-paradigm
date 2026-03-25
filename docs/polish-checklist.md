@@ -47,15 +47,15 @@
 - [x] Compliance Check — Consolidated, --learn flag, structured violations with file/source/severity
 
 ## 6. Conductor (Native macOS)
-- [ ] Overlay Panel (layout, visual hierarchy)
-- [ ] Container Mode (tiling, grid presets, persistence)
-- [ ] Session Manager (project discovery, checkpoint resume)
-- [ ] ConductorTheme (token coverage, view adoption)
-- [ ] ConductorEnvironment (all views migrated)
-- [ ] Accessibility (labels, VoiceOver, minimum font sizes)
-- [ ] Multimodal Input (vision, gesture, voice stability)
-- [ ] Task Protocol (dashboard, health, lifecycle)
-- [ ] Symphony Live (thread rendering, agent identity)
+- [x] Overlay Panel — 4 collapsible DisclosureGroup regions (Input, Sessions, Team, Monitoring)
+- [x] Container Mode — Grid preset persists via @AppStorage. 6 presets working.
+- [x] Session Manager — Discovery + checkpoint resume solid. projectCard still a function (minor).
+- [x] ConductorTheme — ~100% adoption across 25 views. 8 semantic tokens + font constants.
+- [x] ConductorEnvironment — MainOverlayView + ContainerView migrated. Both use @EnvironmentObject.
+- [x] Accessibility — 17+ labels added across 14 views. Zero sub-8pt fonts. All status dots labeled.
+- [~] Multimodal Input — Architecture solid, @MainActor safe. Event prioritization unclear (minor).
+- [x] Task Protocol — Kanban layout, lifecycle complete, health monitoring. No changes needed.
+- [x] Symphony Live — Agent colors deterministic (Unicode scalar sum). Thread rendering polished.
 
 ## 7. Platform UI (Web)
 - [ ] Overview Section (stats accuracy, real-time)

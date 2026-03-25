@@ -47,6 +47,9 @@ interface AmbientState {
   connectSSE: () => () => void;
 }
 
+let ambientEventsController: AbortController | null = null;
+let ambientNominationsController: AbortController | null = null;
+
 export const useAmbientStore = create<AmbientState>((set, get) => ({
   events: [],
   nominations: [],
@@ -55,6 +58,9 @@ export const useAmbientStore = create<AmbientState>((set, get) => ({
   eventFilter: {},
 
   fetchEvents: async (filter) => {
+    ambientEventsController?.abort();
+    ambientEventsController = new AbortController();
+    const { signal } = ambientEventsController;
     set({ loading: true });
     try {
       const f = filter || get().eventFilter;
@@ -62,25 +68,30 @@ export const useAmbientStore = create<AmbientState>((set, get) => ({
       if (f.type) params.set('type', f.type);
       if (f.since) params.set('since', f.since);
 
-      const res = await fetch(`/api/ambient/events?${params}`);
+      const res = await fetch(`/api/ambient/events?${params}`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({ events: data.events || [], loading: false });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ loading: false });
     }
   },
 
   fetchNominations: async () => {
+    ambientNominationsController?.abort();
+    ambientNominationsController = new AbortController();
+    const { signal } = ambientNominationsController;
     try {
-      const res = await fetch('/api/ambient/nominations?pending_only=true&include_debates=true');
+      const res = await fetch('/api/ambient/nominations?pending_only=true&include_debates=true', { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
         nominations: data.nominations || [],
         debates: data.debates || [],
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },

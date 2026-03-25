@@ -65,8 +65,8 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
             {entry.tags.filter(t => t.startsWith('arc:')).map(t => (
               <span key={t} style={{
                 padding: '1px 6px',
-                background: 'rgba(96, 165, 250, 0.15)',
-                border: '1px solid rgba(96, 165, 250, 0.3)',
+                background: 'color-mix(in srgb, var(--p-lore-milestone) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--p-lore-milestone) 30%, transparent)',
                 borderRadius: 10,
                 fontSize: 10,
                 color: 'var(--p-lore-milestone)',
@@ -84,8 +84,8 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
             {entry.confidence != null && (
               <span style={{
                 padding: '1px 5px',
-                background: 'rgba(139, 92, 246, 0.15)',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
+                background: 'color-mix(in srgb, var(--p-accent-purple) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--p-accent-purple) 30%, transparent)',
                 borderRadius: 8,
                 fontSize: 10,
                 color: 'var(--p-accent-purple)',
@@ -94,12 +94,12 @@ export function LoreCard({ entry, side = 'right' }: LoreCardProps) {
             {entry.assessment && (
               <span style={{
                 padding: '1px 5px',
-                background: entry.assessment.verdict === 'correct' ? 'rgba(52, 211, 153, 0.15)'
-                  : entry.assessment.verdict === 'partial' ? 'rgba(251, 191, 36, 0.15)'
-                  : 'rgba(248, 113, 113, 0.15)',
-                border: `1px solid ${entry.assessment.verdict === 'correct' ? 'rgba(52, 211, 153, 0.3)'
-                  : entry.assessment.verdict === 'partial' ? 'rgba(251, 191, 36, 0.3)'
-                  : 'rgba(248, 113, 113, 0.3)'}`,
+                background: entry.assessment.verdict === 'correct' ? 'color-mix(in srgb, var(--p-accent-green) 15%, transparent)'
+                  : entry.assessment.verdict === 'partial' ? 'color-mix(in srgb, var(--p-accent-orange) 15%, transparent)'
+                  : 'color-mix(in srgb, var(--p-accent-red) 15%, transparent)',
+                border: `1px solid ${entry.assessment.verdict === 'correct' ? 'color-mix(in srgb, var(--p-accent-green) 30%, transparent)'
+                  : entry.assessment.verdict === 'partial' ? 'color-mix(in srgb, var(--p-accent-orange) 30%, transparent)'
+                  : 'color-mix(in srgb, var(--p-accent-red) 30%, transparent)'}`,
                 borderRadius: 8,
                 fontSize: 10,
                 color: entry.assessment.verdict === 'correct' ? 'var(--p-accent-green)'

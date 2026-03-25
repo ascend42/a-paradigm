@@ -31,19 +31,25 @@ interface OverviewState {
   fetchOverview: () => Promise<void>;
 }
 
+let overviewController: AbortController | null = null;
+
 export const useOverviewStore = create<OverviewState>((set) => ({
   data: null,
   loading: false,
   error: null,
 
   fetchOverview: async () => {
+    overviewController?.abort();
+    overviewController = new AbortController();
+    const { signal } = overviewController;
     set({ loading: true, error: null });
     try {
-      const res = await fetch('/api/platform/overview');
+      const res = await fetch('/api/platform/overview', { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: OverviewData = await res.json();
       set({ data, loading: false });
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ error: String(err), loading: false });
     }
   },

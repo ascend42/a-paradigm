@@ -130,14 +130,14 @@ export default function Canvas() {
         deleteKeyCode={null}
         className="paradigm-flow"
       >
-        <Background color="#1e293b" gap={16} />
+        <Background color="var(--p-bg-tertiary)" gap={16} />
         <Controls />
         <MiniMap
           nodeColor={(node) => {
-            if (node.type === 'groupNode') return '#334155';
-            return '#86efac';
+            if (node.type === 'groupNode') return 'var(--p-bg-hover)';
+            return 'var(--p-symbol-node-component)';
           }}
-          style={{ background: '#0f172a' }}
+          style={{ background: 'var(--p-bg-primary)' }}
         />
       </ReactFlow>
     </div>

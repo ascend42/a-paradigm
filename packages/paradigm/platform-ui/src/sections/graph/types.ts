@@ -18,11 +18,11 @@ export type SymbolCategory = 'component' | 'flow' | 'gate' | 'signal' | 'aspect'
 // --- Color + prefix maps ---
 
 export const CATEGORY_COLORS: Record<SymbolCategory, string> = {
-  component: '#86efac',
-  flow: '#fbbf24',
-  gate: '#f87171',
-  signal: '#fde047',
-  aspect: '#a78bfa',
+  component: 'var(--p-symbol-node-component)',
+  flow: 'var(--p-symbol-node-flow)',
+  gate: 'var(--p-symbol-node-gate)',
+  signal: 'var(--p-symbol-node-signal)',
+  aspect: 'var(--p-symbol-node-aspect)',
 };
 
 export const CATEGORY_PREFIXES: Record<SymbolCategory, string> = {

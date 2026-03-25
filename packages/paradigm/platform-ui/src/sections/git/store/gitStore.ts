@@ -65,6 +65,12 @@ interface GitState {
   refresh: () => Promise<void>;
 }
 
+let gitStatusController: AbortController | null = null;
+let gitBranchesController: AbortController | null = null;
+let gitLogController: AbortController | null = null;
+let gitDiffController: AbortController | null = null;
+let gitSymbolsController: AbortController | null = null;
+
 export const useGitStore = create<GitState>((set, get) => ({
   branch: '',
   ahead: 0,
@@ -87,8 +93,11 @@ export const useGitStore = create<GitState>((set, get) => ({
   symbols: [],
 
   fetchStatus: async () => {
+    gitStatusController?.abort();
+    gitStatusController = new AbortController();
+    const { signal } = gitStatusController;
     try {
-      const res = await fetch('/api/git/status');
+      const res = await fetch('/api/git/status', { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({
@@ -99,26 +108,34 @@ export const useGitStore = create<GitState>((set, get) => ({
         unstaged: data.unstaged,
         untracked: data.untracked,
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchBranches: async () => {
+    gitBranchesController?.abort();
+    gitBranchesController = new AbortController();
+    const { signal } = gitBranchesController;
     try {
-      const res = await fetch('/api/git/branches');
+      const res = await fetch('/api/git/branches', { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ branches: data.branches || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchLog: async (reset = true) => {
+    gitLogController?.abort();
+    gitLogController = new AbortController();
+    const { signal } = gitLogController;
     try {
       const offset = reset ? 0 : get().commitOffset;
-      const res = await fetch(`/api/git/log?limit=20&offset=${offset}`);
+      const res = await fetch(`/api/git/log?limit=20&offset=${offset}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       if (reset) {
@@ -130,7 +147,8 @@ export const useGitStore = create<GitState>((set, get) => ({
           commitOffset: s.commitOffset + 20,
         }));
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
@@ -140,15 +158,19 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   selectFile: async (filePath: string, staged: boolean) => {
+    gitDiffController?.abort();
+    gitDiffController = new AbortController();
+    const { signal } = gitDiffController;
     set({ selectedFile: filePath, selectedFileStaged: staged, diffContent: '' });
     try {
       const params = new URLSearchParams({ path: filePath });
       if (staged) params.set('staged', 'true');
-      const res = await fetch(`/api/git/diff?${params}`);
+      const res = await fetch(`/api/git/diff?${params}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ diffContent: data.diff || '(no diff available)' });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ diffContent: '(error loading diff)' });
     }
   },
@@ -227,8 +249,11 @@ export const useGitStore = create<GitState>((set, get) => ({
   setActiveTab: (tab: GitTab) => set({ activeTab: tab }),
 
   fetchSymbols: async () => {
+    gitSymbolsController?.abort();
+    gitSymbolsController = new AbortController();
+    const { signal } = gitSymbolsController;
     try {
-      const res = await fetch('/api/symbols');
+      const res = await fetch('/api/symbols', { signal });
       if (!res.ok) return;
       const data = await res.json();
       const symbolList = data.symbols || [];
@@ -237,7 +262,8 @@ export const useGitStore = create<GitState>((set, get) => ({
         return `${prefix}${s.name || s.id}`;
       });
       set({ symbols: names });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },

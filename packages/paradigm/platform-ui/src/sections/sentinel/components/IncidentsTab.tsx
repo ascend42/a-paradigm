@@ -8,10 +8,10 @@ import { useEffect } from 'react';
 import { useSentinelIncidentsStore } from '../store/sentinelIncidentsStore';
 
 const STATUS_COLORS: Record<string, string> = {
-  open: '#ef4444',
-  investigating: '#f59e0b',
-  resolved: '#22c55e',
-  'wont-fix': '#6b7280',
+  open: 'var(--p-accent-red)',
+  investigating: 'var(--p-accent-amber)',
+  resolved: 'var(--p-accent-green)',
+  'wont-fix': 'var(--p-text-muted)',
 };
 
 const STATUS_LABELS: Record<string, string> = {

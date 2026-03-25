@@ -59,21 +59,21 @@ interface EventContextMenuState {
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
-  debug: '#94a3b8',
-  info: '#3b82f6',
-  warn: '#f59e0b',
-  error: '#ef4444',
+  debug: 'var(--p-accent-slate)',
+  info: 'var(--p-accent-blue)',
+  warn: 'var(--p-accent-amber)',
+  error: 'var(--p-accent-red)',
 };
 
 const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
-  logs: '#3b82f6',
-  metrics: '#22c55e',
-  traces: '#a855f7',
-  incidents: '#ef4444',
-  rules: '#f59e0b',
-  state: '#06b6d4',
-  cascade: '#ec4899',
-  lifecycle: '#84cc16',
+  logs: 'var(--p-accent-blue)',
+  metrics: 'var(--p-accent-green)',
+  traces: 'var(--p-accent-purple)',
+  incidents: 'var(--p-accent-red)',
+  rules: 'var(--p-accent-amber)',
+  state: 'var(--p-accent-cyan)',
+  cascade: 'var(--p-accent-pink)',
+  lifecycle: 'var(--p-accent-lime)',
 };
 
 function formatTimestamp(ts: string): string {
@@ -199,7 +199,7 @@ function CategoryFilters({ schema }: { schema: StoredSchema }) {
           onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
           style={{
             borderColor: getCategoryColor(cat, schema),
-            color: categoryFilter === cat ? '#fff' : getCategoryColor(cat, schema),
+            color: categoryFilter === cat ? 'var(--p-bg-primary)' : getCategoryColor(cat, schema),
             backgroundColor: categoryFilter === cat ? getCategoryColor(cat, schema) : 'transparent',
           }}
         >

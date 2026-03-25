@@ -105,6 +105,13 @@ interface SymphonyState {
   refresh: () => Promise<void>;
 }
 
+let symphonyAgentsController: AbortController | null = null;
+let symphonyIdentityController: AbortController | null = null;
+let symphonyThreadsController: AbortController | null = null;
+let symphonyThreadDetailController: AbortController | null = null;
+let symphonyFileReqController: AbortController | null = null;
+let symphonyStatusController: AbortController | null = null;
+
 export const useSymphonyStore = create<SymphonyState>((set, get) => ({
   agents: [],
   myIdentity: null,
@@ -119,43 +126,58 @@ export const useSymphonyStore = create<SymphonyState>((set, get) => ({
   fileFilter: 'pending',
 
   fetchAgents: async () => {
+    symphonyAgentsController?.abort();
+    symphonyAgentsController = new AbortController();
+    const { signal } = symphonyAgentsController;
     try {
-      const res = await fetch('/api/symphony/agents');
+      const res = await fetch('/api/symphony/agents', { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ agents: data.agents || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchMyIdentity: async () => {
+    symphonyIdentityController?.abort();
+    symphonyIdentityController = new AbortController();
+    const { signal } = symphonyIdentityController;
     try {
-      const res = await fetch('/api/symphony/agents/me');
+      const res = await fetch('/api/symphony/agents/me', { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ myIdentity: data.identity || null });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchThreads: async () => {
+    symphonyThreadsController?.abort();
+    symphonyThreadsController = new AbortController();
+    const { signal } = symphonyThreadsController;
     try {
       const filter = get().threadFilter;
       const params = filter !== 'all' ? `?status=${filter}` : '';
-      const res = await fetch(`/api/symphony/threads${params}`);
+      const res = await fetch(`/api/symphony/threads${params}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ threads: data.threads || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchThread: async (threadId: string) => {
+    symphonyThreadDetailController?.abort();
+    symphonyThreadDetailController = new AbortController();
+    const { signal } = symphonyThreadDetailController;
     try {
-      const res = await fetch(`/api/symphony/threads/${threadId}`);
+      const res = await fetch(`/api/symphony/threads/${threadId}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({
@@ -166,31 +188,40 @@ export const useSymphonyStore = create<SymphonyState>((set, get) => ({
           symbolsDiscussed: data.symbolsDiscussed || [],
         },
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchFileRequests: async () => {
+    symphonyFileReqController?.abort();
+    symphonyFileReqController = new AbortController();
+    const { signal } = symphonyFileReqController;
     try {
       const filter = get().fileFilter;
       const params = filter !== 'all' ? `?status=${filter}` : '';
-      const res = await fetch(`/api/symphony/file-requests${params}`);
+      const res = await fetch(`/api/symphony/file-requests${params}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ fileRequests: data.fileRequests || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchStatus: async () => {
+    symphonyStatusController?.abort();
+    symphonyStatusController = new AbortController();
+    const { signal } = symphonyStatusController;
     try {
-      const res = await fetch('/api/symphony/status');
+      const res = await fetch('/api/symphony/status', { signal });
       if (!res.ok) return;
       const data = await res.json();
       set({ status: data });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },

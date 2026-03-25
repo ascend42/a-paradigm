@@ -107,7 +107,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       case 'agent:highlight': {
         const highlight: Highlight = {
           symbols: (msg.symbols as string[]) || [],
-          color: (msg.color as string) || '#58a6ff',
+          color: (msg.color as string) || 'var(--p-accent-blue)',
           duration: (msg.duration as number) || 5000,
           pulse: (msg.pulse as boolean) ?? true,
           label: msg.label as string | undefined,

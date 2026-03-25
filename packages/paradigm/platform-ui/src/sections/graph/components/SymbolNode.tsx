@@ -5,7 +5,7 @@ import { CATEGORY_COLORS } from '../types';
 
 function SymbolNodeComponent({ data }: NodeProps) {
   const d = data as SymbolNodeData;
-  const color = CATEGORY_COLORS[d.symbol.category as SymbolCategory] || '#86efac';
+  const color = CATEGORY_COLORS[d.symbol.category as SymbolCategory] || 'var(--p-symbol-node-component)';
   const desc = d.symbol.description || '';
   const truncated = desc.length > 60 ? desc.slice(0, 57) + '...' : desc;
 

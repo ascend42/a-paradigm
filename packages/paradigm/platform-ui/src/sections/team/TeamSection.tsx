@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
 import { useTeamStore, type AgentSummary, type TeamThread, type ThreadMessage } from './store/teamStore';
+import { usePlatformStore } from '../../store/platformStore';
 import './styles/team.css';
 
-// Agent color palette — deterministic by role
+// Agent color palette — deterministic by role (uses CSS variable tokens)
 const AGENT_COLORS: Record<string, string> = {
-  architect: '#8b5cf6',
-  builder: '#3b82f6',
-  tester: '#10b981',
-  reviewer: '#f59e0b',
-  security: '#ef4444',
+  architect: 'var(--p-accent-purple)',
+  builder: 'var(--p-accent-blue)',
+  tester: 'var(--p-accent-green)',
+  reviewer: 'var(--p-accent-orange)',
+  security: 'var(--p-accent-red)',
 };
 
 function agentColor(role: string): string {
@@ -25,18 +26,18 @@ function hashCode(s: string): number {
 }
 
 const INTENT_COLORS: Record<string, string> = {
-  question: '#3b82f6',
-  context: '#06b6d4',
-  clarification: '#06b6d4',
-  proposal: '#f97316',
-  verification: '#8b5cf6',
-  action: '#10b981',
-  decision: '#eab308',
-  alert: '#ef4444',
-  approval: '#10b981',
-  rejection: '#ef4444',
-  reference: '#6b7280',
-  progress: '#34d399',
+  question: 'var(--p-accent-blue)',
+  context: 'var(--p-accent-cyan)',
+  clarification: 'var(--p-accent-cyan)',
+  proposal: 'var(--p-accent-orange)',
+  verification: 'var(--p-accent-purple)',
+  action: 'var(--p-accent-green)',
+  decision: 'var(--p-accent-yellow)',
+  alert: 'var(--p-accent-red)',
+  approval: 'var(--p-accent-green)',
+  rejection: 'var(--p-accent-red)',
+  reference: 'var(--p-text-muted)',
+  progress: 'var(--p-accent-emerald)',
 };
 
 function relativeTime(iso: string): string {
@@ -69,8 +70,10 @@ export default function TeamSection() {
     fetchRoster();
     fetchThreads();
     const interval = setInterval(() => {
-      fetchRoster();
-      fetchThreads();
+      if (usePlatformStore.getState().activeSection === 'team') {
+        fetchRoster();
+        fetchThreads();
+      }
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -220,7 +223,7 @@ function AgentCard({
 function MessageBubble({ message }: { message: ThreadMessage }) {
   const role = message.sender.role || message.sender.name;
   const color = agentColor(role);
-  const intentColor = INTENT_COLORS[message.intent] || '#6b7280';
+  const intentColor = INTENT_COLORS[message.intent] || 'var(--p-text-muted)';
 
   return (
     <div className="team__message">
@@ -235,7 +238,7 @@ function MessageBubble({ message }: { message: ThreadMessage }) {
           className="team__message-intent"
           style={{
             color: intentColor,
-            backgroundColor: `${intentColor}20`,
+            backgroundColor: `color-mix(in srgb, ${intentColor} 12%, transparent)`,
           }}
         >
           {message.intent}

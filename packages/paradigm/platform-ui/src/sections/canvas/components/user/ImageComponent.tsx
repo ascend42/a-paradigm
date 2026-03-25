@@ -35,10 +35,10 @@ export const ImageComponent: UserComponent<Partial<ImageProps>> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#f0f0f0',
-        color: '#999',
+        background: 'var(--p-bg-tertiary)',
+        color: 'var(--p-text-muted)',
         fontSize: 13,
-        border: '1px dashed #ccc',
+        border: '1px dashed var(--p-border)',
       }}
     >
       Image placeholder

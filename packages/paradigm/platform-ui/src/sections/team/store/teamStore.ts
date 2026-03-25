@@ -51,6 +51,9 @@ interface TeamState {
 
 // ── Store ────────────────────────────────────────────
 
+let rosterController: AbortController | null = null;
+let threadsController: AbortController | null = null;
+
 export const useTeamStore = create<TeamState>((set, get) => ({
   activeAgents: [],
   benchedAgents: [],
@@ -60,9 +63,12 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   selectedThread: null,
 
   fetchRoster: async () => {
+    rosterController?.abort();
+    rosterController = new AbortController();
+    const { signal } = rosterController;
     set({ rosterLoading: true });
     try {
-      const res = await fetch('/api/team/roster');
+      const res = await fetch('/api/team/roster', { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
@@ -70,22 +76,27 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         benchedAgents: data.benched || [],
         rosterLoading: false,
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ rosterLoading: false });
     }
   },
 
   fetchThreads: async () => {
+    threadsController?.abort();
+    threadsController = new AbortController();
+    const { signal } = threadsController;
     set({ threadsLoading: true });
     try {
-      const res = await fetch('/api/team/threads');
+      const res = await fetch('/api/team/threads', { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
         threads: data.threads || [],
         threadsLoading: false,
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ threadsLoading: false });
     }
   },

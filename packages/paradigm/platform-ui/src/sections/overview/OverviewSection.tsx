@@ -26,6 +26,14 @@ export function OverviewSection() {
 
   useEffect(() => {
     fetchOverview();
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchOverview();
+      }
+    }, 15_000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (loading && !data) {

@@ -15,6 +15,8 @@ export interface PlatformState {
   fetchPlatformInfo: () => Promise<void>;
 }
 
+let platformInfoController: AbortController | null = null;
+
 export const usePlatformStore = create<PlatformState>((set, get) => ({
   activeSection: 'overview',
   availableSections: ['overview', 'lore', 'graph', 'git'],
@@ -38,10 +40,13 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
   },
 
   fetchPlatformInfo: async () => {
+    platformInfoController?.abort();
+    platformInfoController = new AbortController();
+    const { signal } = platformInfoController;
     try {
       const [infoRes, sectionsRes] = await Promise.all([
-        fetch('/api/info'),
-        fetch('/api/platform/sections'),
+        fetch('/api/info', { signal }),
+        fetch('/api/platform/sections', { signal }),
       ]);
 
       if (infoRes.ok) {
@@ -55,7 +60,8 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           set({ availableSections: data.sections });
         }
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // Platform info will be loaded when server is ready
     }
   },

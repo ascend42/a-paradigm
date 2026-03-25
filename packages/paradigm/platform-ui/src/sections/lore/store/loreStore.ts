@@ -134,6 +134,13 @@ function getInitialLeftAuthors(): string[] {
   return [];
 }
 
+let entriesController: AbortController | null = null;
+let symbolsController: AbortController | null = null;
+let authorsController: AbortController | null = null;
+let sessionsController: AbortController | null = null;
+let sessionDetailController: AbortController | null = null;
+let loreInfoController: AbortController | null = null;
+
 export const useLoreStore = create<LoreState>((set, get) => ({
   entries: [],
   filter: {},
@@ -185,8 +192,11 @@ export const useLoreStore = create<LoreState>((set, get) => ({
   selectSession: async (id) => {
     set({ selectedSessionId: id });
     if (id) {
+      sessionDetailController?.abort();
+      sessionDetailController = new AbortController();
+      const { signal } = sessionDetailController;
       try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`);
+        const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { signal });
         const data = await res.json();
         // Update the session in the list with full entries
         set((s) => ({
@@ -194,13 +204,17 @@ export const useLoreStore = create<LoreState>((set, get) => ({
             sess.id === id ? { ...sess, entries: data.entries } : sess
           ),
         }));
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         // ignore
       }
     }
   },
 
   fetchEntries: async () => {
+    entriesController?.abort();
+    entriesController = new AbortController();
+    const { signal } = entriesController;
     set({ loading: true });
     try {
       const f = get().filter;
@@ -218,7 +232,7 @@ export const useLoreStore = create<LoreState>((set, get) => ({
       if (f.hasBody !== undefined) params.set('hasBody', String(f.hasBody));
       params.set('limit', '200');
 
-      const res = await fetch(`/api/lore?${params}`);
+      const res = await fetch(`/api/lore?${params}`, { signal });
       const data = await res.json();
 
       let entries = data.entries || [];
@@ -234,47 +248,64 @@ export const useLoreStore = create<LoreState>((set, get) => ({
       }
 
       set({ entries, loading: false });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       set({ loading: false });
     }
   },
 
   fetchSymbols: async () => {
+    symbolsController?.abort();
+    symbolsController = new AbortController();
+    const { signal } = symbolsController;
     try {
-      const res = await fetch('/api/lore/symbols');
+      const res = await fetch('/api/lore/symbols', { signal });
       const data = await res.json();
       set({ symbols: data.symbols || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchAuthors: async () => {
+    authorsController?.abort();
+    authorsController = new AbortController();
+    const { signal } = authorsController;
     try {
-      const res = await fetch('/api/lore/authors');
+      const res = await fetch('/api/lore/authors', { signal });
       const data = await res.json();
       set({ authors: data.authors || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchSessions: async () => {
+    sessionsController?.abort();
+    sessionsController = new AbortController();
+    const { signal } = sessionsController;
     try {
-      const res = await fetch('/api/sessions');
+      const res = await fetch('/api/sessions', { signal });
       const data = await res.json();
       set({ sessions: data.sessions || [] });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
   },
 
   fetchAll: async () => {
+    loreInfoController?.abort();
+    loreInfoController = new AbortController();
+    const { signal } = loreInfoController;
     try {
-      const infoRes = await fetch('/api/info');
+      const infoRes = await fetch('/api/info', { signal });
       const info = await infoRes.json();
       set({ projectName: info.project || '' });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       // ignore
     }
     await Promise.all([

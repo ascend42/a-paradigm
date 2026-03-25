@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useAmbientStore, type StreamEvent, type Nomination, type Debate } from './store/ambientStore';
+import { usePlatformStore } from '../../store/platformStore';
 import { StatCard } from '../../components/shared/StatCard';
 import './styles/ambient.css';
 
@@ -152,9 +153,11 @@ export default function AmbientSection() {
     // Connect to SSE for real-time event updates
     const cleanupSSE = connectSSE();
 
-    // Poll nominations only (events come via SSE)
+    // Poll nominations only (events come via SSE) — skip when section not visible
     intervalRef.current = setInterval(() => {
-      fetchNominations();
+      if (usePlatformStore.getState().activeSection === 'ambient') {
+        fetchNominations();
+      }
     }, 10_000);
 
     return () => {

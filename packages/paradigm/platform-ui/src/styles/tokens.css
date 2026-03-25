@@ -24,12 +24,28 @@
   --p-accent-orange: #d29922;
   --p-accent-purple: #bc8cff;
 
+  /* Extended accent palette */
+  --p-accent-cyan: #06b6d4;
+  --p-accent-amber: #f59e0b;
+  --p-accent-yellow: #eab308;
+  --p-accent-emerald: #34d399;
+  --p-accent-pink: #ec4899;
+  --p-accent-lime: #84cc16;
+  --p-accent-slate: #94a3b8;
+
   /* Symbols */
   --p-symbol-component: #58a6ff;
   --p-symbol-flow: #3fb950;
   --p-symbol-gate: #f85149;
   --p-symbol-signal: #d29922;
   --p-symbol-aspect: #bc8cff;
+
+  /* Symbol node colors (graph) */
+  --p-symbol-node-component: #86efac;
+  --p-symbol-node-flow: #fbbf24;
+  --p-symbol-node-gate: #f87171;
+  --p-symbol-node-signal: #fde047;
+  --p-symbol-node-aspect: #a78bfa;
 
   /* Surfaces (aliases) */
   --p-bg-card: #21262d;
@@ -69,6 +85,22 @@
   --p-accent-red: #cf222e;
   --p-accent-orange: #9a6700;
   --p-accent-purple: #8250df;
+
+  /* Extended accent palette */
+  --p-accent-cyan: #0891b2;
+  --p-accent-amber: #d97706;
+  --p-accent-yellow: #ca8a04;
+  --p-accent-emerald: #059669;
+  --p-accent-pink: #db2777;
+  --p-accent-lime: #65a30d;
+  --p-accent-slate: #64748b;
+
+  /* Symbol node colors (graph) */
+  --p-symbol-node-component: #16a34a;
+  --p-symbol-node-flow: #d97706;
+  --p-symbol-node-gate: #dc2626;
+  --p-symbol-node-signal: #ca8a04;
+  --p-symbol-node-aspect: #7c3aed;
 
   /* Surfaces (aliases) */
   --p-bg-card: #eaeef2;
