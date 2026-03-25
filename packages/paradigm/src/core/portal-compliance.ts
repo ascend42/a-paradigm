@@ -181,37 +181,85 @@ function runGrep(rootDir: string, pattern: string): string {
 }
 
 /**
- * Find gate references in the codebase using grep
+ * Files that are valid sources for gate references.
+ * Gate symbols (^name) should only be scanned in Paradigm-specific files,
+ * NOT in arbitrary source code where ^ has other meanings (regex, JSX, etc.)
+ */
+const GATE_REFERENCE_GLOBS = [
+  '**/.purpose',
+  '**/portal.yaml',
+  '**/.paradigm/**/*.yaml',
+  '**/.paradigm/**/*.yml',
+];
+
+/**
+ * False positive patterns to exclude from gate detection.
+ * These match ^word in contexts that aren't Paradigm gate references.
+ */
+const GATE_FALSE_POSITIVE_PATTERNS = [
+  /^\s*[/*#]/, // Comment lines (JS/TS/Python/Shell)
+  /\[[\^]/, // Regex character class negation [^...]
+  /\\[\^]/, // Escaped caret in regex
+  /[A-Z][a-z]+[A-Z]/, // PascalCase (React components like ^SuperAdminRoute)
+  /#[0-9A-Fa-f]{3,8}/, // CSS hex colors
+  /https?:\/\//, // URLs
+  /example|placeholder|e\.g\.|sample/i, // Documentation examples
+];
+
+/**
+ * Find gate references in the codebase.
+ *
+ * Strategy: scan ONLY .purpose files, portal.yaml, and .paradigm YAML files
+ * for ^gate-name symbol references. Then scan ALL code for function-based
+ * gate checks (checkGate, requireGate, @Gate) which are unambiguous.
  */
 export function findGateReferences(rootDir: string): GateReference[] {
   const references: GateReference[] = [];
 
-  // Search for Paradigm symbol pattern (^gateName)
-  const symbolPattern = '\\^[a-zA-Z][a-zA-Z0-9_-]+';
-  const symbolResult = runGrep(rootDir, symbolPattern);
+  // 1. Search for ^gate symbol references ONLY in Paradigm-specific files
+  const symbolPattern = '\\^[a-z][a-z0-9-]+';
+  for (const glob of GATE_REFERENCE_GLOBS) {
+    const globPattern = path.join(rootDir, glob);
+    let files: string[];
+    try {
+      const result = execFileSync('find', [
+        rootDir, '-path', '*/node_modules', '-prune', '-o',
+        '-path', '*/.git', '-prune', '-o',
+        '(', '-name', '.purpose', '-o', '-name', 'portal.yaml', ')',
+        '-print',
+      ], { encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 });
+      files = result.split('\n').filter(Boolean);
+    } catch {
+      files = [];
+    }
 
-  for (const line of symbolResult.split('\n').filter(Boolean)) {
-    const match = line.match(/^(.+?):(\d+):(.*)$/);
-    if (match) {
-      const [, file, lineNum, context] = match;
-      const gateMatch = context.match(/\^([a-zA-Z][a-zA-Z0-9_-]+)/);
-      if (gateMatch) {
-        references.push({
-          gate: gateMatch[1],
-          file: path.relative(rootDir, file),
-          line: parseInt(lineNum, 10),
-          context: context.trim().slice(0, 100),
-          matchType: 'symbol',
-        });
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(file, 'utf-8');
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const gateMatches = line.matchAll(/\^([a-z][a-z0-9-]+)/g);
+          for (const m of gateMatches) {
+            references.push({
+              gate: m[1],
+              file: path.relative(rootDir, file),
+              line: i + 1,
+              context: line.trim().slice(0, 100),
+              matchType: 'symbol',
+            });
+          }
+        }
+      } catch {
+        // Skip unreadable files
       }
     }
   }
 
-  // Search for function-based gate checks (patterns safe with execFileSync - no shell)
+  // 2. Search for function-based gate checks in ALL code (these are unambiguous)
   const functionPatterns = [
     { pattern: "checkGate\\s*\\(['\"]([^'\"]+)['\"]", type: 'function' as const },
     { pattern: "requireGate\\s*\\(['\"]([^'\"]+)['\"]", type: 'function' as const },
-    { pattern: "gate:\\s*['\"]([^'\"]+)['\"]", type: 'config' as const },
     { pattern: "@Gate\\s*\\(['\"]?([^'\"\\)]+)['\"]?\\)", type: 'function' as const },
   ];
 

@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.1] — 2026-03-25
+
+### Fixed
+
+- **Gate detection false positives** — Portal compliance checker was grepping ALL source files for `^word` patterns, matching React components (SuperAdminRoute), CSS hex colors, regex character classes, URL fragments, and documentation examples. Now scans ONLY `.purpose` files and `portal.yaml` for `^gate` symbol references. Function-based checks (checkGate, requireGate, @Gate) still scan all code since they're unambiguous. Also restricted gate name regex to kebab-case only (`^[a-z][a-z0-9-]+`), filtering out PascalCase, UPPER_CASE, and mixed patterns. Field-tested fix from dealoracle where 73 false "undeclared gates" were blocking every session.
+
 ## [5.21.0] — 2026-03-25
 
 ### Added
