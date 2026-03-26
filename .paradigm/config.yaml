@@ -118,4 +118,14 @@ model-resolution:
   tier-3: haiku
 enforcement:
   level: balanced
-  checks: {}
+  checks:
+    orchestration-required: block
+  orchestration:
+    threshold: 3
+    detection: breadcrumb
+    exempt:
+      - "*.md"
+      - "*.json"
+      - ".paradigm/**"
+      - "*.purpose"
+      - "portal.yaml"
