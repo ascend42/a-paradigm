@@ -34,11 +34,18 @@ paradigm shift
 
 ### 3. Curate your agent team
 
-After shift runs, tell your AI assistant to review the roster and tailor it to your&nbsp;project:
+After shift runs, tell your AI to shape the roster for your&nbsp;project:
 
-> *"Look at my agent roster and help me pick the right team for what we're&nbsp;building."*
+> *"Check my agent roster. Add Mika (designer), Bolt (performance), and Atlas (devops) — we're building a consumer web&nbsp;app."*
 
-Your AI reads the project type, suggests which agents to activate or bench, and explains what each one brings. You start building with a team that already knows its&nbsp;roles.
+Your AI runs the commands to add each agent, confirms what they bring to the team, and you're ready to&nbsp;build.
+
+Under the hood, your AI&nbsp;runs:
+```bash
+paradigm agent roster add designer      # Mika joins the team
+paradigm agent roster add performance   # Bolt joins the team
+paradigm agent roster add devops        # Atlas joins the team
+```
 
 ---
 
@@ -82,12 +89,17 @@ Beyond the core 7, Paradigm ships **50+ agent profiles**. A&nbsp;sample:
 | creative | Prism | narrator | Ink | educator | Sheila |
 | pm | Yuki | operations | Leila | seo | Beacon |
 
-Add the ones that match your&nbsp;project:
+Tell your AI which ones you&nbsp;want:
 
+> *"Add Scout (researcher), Vault (dba), and Ghost (e2e) to the team. Bench Wren (copywriter) — we don't need copy for this&nbsp;project."*
+
+Or use the CLI&nbsp;directly:
 ```bash
-paradigm agent roster             # See who's active
-paradigm agent roster add dx     # Add the developer experience agent
-paradigm agent roster remove qa  # Remove one you don't need
+paradigm agent roster                    # See who's active
+paradigm agent roster add researcher    # Scout joins
+paradigm agent roster add dba           # Vault joins
+paradigm agent roster add e2e           # Ghost joins
+paradigm agent roster remove copywriter # Wren steps out
 ```
 
 You can also **create your own agents**. An agent is a `.agent` file in `~/.paradigm/agents/` that defines personality, expertise, attention triggers, and collaboration&nbsp;preferences:
@@ -196,6 +208,8 @@ paradigm mcp setup --client all   # Configure MCP for all AI tools
 
 ## Essential Commands
 
+Most of these are called by your AI automatically — but here's what's happening under the&nbsp;hood:
+
 ```bash
 paradigm shift                    # Full project setup (one command)
 paradigm agent roster             # View/manage your agent team
@@ -204,6 +218,14 @@ paradigm ripple #checkout         # Impact analysis before changes
 paradigm scan auto                # Auto-generate .purpose from code
 paradigm doctor                   # Health check and validation
 ```
+
+You can always ask your AI to run these&nbsp;naturally:
+
+> *"Run a ripple check on #checkout before we change&nbsp;it."*
+>
+> *"Orchestrate the team to build a Stripe payment&nbsp;integration."*
+>
+> *"Run doctor and fix anything that's&nbsp;broken."*
 
 [Full command reference &rarr;](./docs/README.md)
 
