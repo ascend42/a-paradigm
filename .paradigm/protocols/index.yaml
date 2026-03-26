@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-24T20:13:45.111Z'
+generated: '2026-03-26T03:23:03.563Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -196,7 +196,7 @@ protocols:
       - assessment
   - id: P-add-portal-gate
     name: Add a portal gate
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - add gate
@@ -209,7 +209,7 @@ protocols:
       - gate
   - id: P-add-portal-route-with-gates
     name: Add a protected API route with gates
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:36.543Z'
     trigger:
       - protected route
@@ -314,7 +314,7 @@ protocols:
       - orchestration
   - id: P-add-tool-with-reindex-integration
     name: Add an MCP tool with reindex integration
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:31.090Z'
     trigger:
       - tool with reindex
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 30
-  stale: 7
+  current: 27
+  stale: 10
   broken: 0

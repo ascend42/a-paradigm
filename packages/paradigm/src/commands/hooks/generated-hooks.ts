@@ -748,19 +748,77 @@ if [ "$_SEV" != "off" ] && [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/gradu
   done
 fi
 
-# --- Check 13: Orchestration required for complex tasks ---
+# --- Check 13: Orchestration required for complex tasks (magnitude-based) ---
 _SEV=$(_check_severity "orchestration-required" "warn")
-if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge "$ORCH_THRESHOLD" ]; then
-  if [ ! -f ".paradigm/.orchestrated" ]; then
-    if [ "$_SEV" = "block" ]; then
-      VIOLATIONS="$VIOLATIONS
-  - You modified $SOURCE_COUNT source files without running orchestration.
-    Run paradigm_orchestrate_inline mode=\\"plan\\" first.
+if [ "$_SEV" != "off" ]; then
+  # Compute magnitude score from multiple signals
+  MAGNITUDE=0
+  MAGNITUDE_REASONS=""
+
+  # Signal 1: Source files modified (1 point each)
+  MAGNITUDE=$((MAGNITUDE + SOURCE_COUNT))
+  [ "$SOURCE_COUNT" -gt 0 ] && MAGNITUDE_REASONS="$SOURCE_COUNT source files"
+
+  # Signal 2: Cross-package changes (2 points — different packages/ dirs)
+  CROSS_PKG_COUNT=0
+  SEEN_PKGS=""
+  for file in $MODIFIED; do
+    case "$file" in
+      packages/*)
+        _pkg=$(echo "$file" | cut -d'/' -f2)
+        case "$SEEN_PKGS" in
+          *"|$_pkg|"*) ;;
+          *)
+            SEEN_PKGS="$SEEN_PKGS|$_pkg|"
+            CROSS_PKG_COUNT=$((CROSS_PKG_COUNT + 1))
+            ;;
+        esac
+        ;;
+    esac
+  done
+  if [ "$CROSS_PKG_COUNT" -ge 2 ]; then
+    MAGNITUDE=$((MAGNITUDE + 2))
+    MAGNITUDE_REASONS="$MAGNITUDE_REASONS, $CROSS_PKG_COUNT packages"
+  fi
+
+  # Signal 3: Security-adjacent files (2 points each)
+  SEC_ADJACENT=0
+  for file in $MODIFIED; do
+    case "$file" in
+      portal.yaml|*/portal.yaml) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
+      *auth*|*permission*|*gate*|*security*|*token*|*session*) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
+    esac
+  done
+  if [ "$SEC_ADJACENT" -gt 0 ]; then
+    MAGNITUDE=$((MAGNITUDE + SEC_ADJACENT * 2))
+    MAGNITUDE_REASONS="$MAGNITUDE_REASONS, $SEC_ADJACENT security-adjacent"
+  fi
+
+  # Signal 4: Symbol-bearing files (1 point if .purpose files were changed alongside source)
+  SYMBOL_FILES=0
+  for file in $MODIFIED; do
+    case "$file" in
+      *.purpose) SYMBOL_FILES=$((SYMBOL_FILES + 1)) ;;
+    esac
+  done
+  if [ "$SYMBOL_FILES" -ge 2 ]; then
+    MAGNITUDE=$((MAGNITUDE + 1))
+    MAGNITUDE_REASONS="$MAGNITUDE_REASONS, $SYMBOL_FILES .purpose files"
+  fi
+
+  # Compare magnitude against threshold (default 3)
+  if [ "$MAGNITUDE" -ge "$ORCH_THRESHOLD" ]; then
+    if [ ! -f ".paradigm/.orchestrated" ]; then
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
+  - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
+    Run paradigm_orchestrate_inline mode=\\"quick\\" for fast pre-check.
     Override: paradigm enforcement override orchestration-required warn"
-      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-    else
-      ADVISORY="$ADVISORY
-  - (orchestration) $SOURCE_COUNT files modified without team orchestration."
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
+  - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration."
+      fi
     fi
   fi
 fi

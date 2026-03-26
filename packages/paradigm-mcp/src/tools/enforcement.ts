@@ -209,6 +209,7 @@ async function handleEnforcementConfigure(
       return JSON.stringify({
         level: activeLevel,
         orchestrationThreshold: threshold,
+        orchestrationNote: 'Threshold is compared against magnitude score (not just file count). Magnitude = source files + cross-package penalty + security-adjacent penalty + symbol file changes.',
         overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
         effective,
         checkIds: [...CHECK_IDS],

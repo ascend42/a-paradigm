@@ -85,11 +85,11 @@ description: |
     - src/tools/purpose-portal.ts:1-1350
 
 #OrchestrationTools:
-  description: Inline multi-agent orchestration tools. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings.
+  description: Inline multi-agent orchestration tools with three modes (quick/plan/execute). Quick mode runs advocate (Jinx) + reviewer for fast pre-check. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings. Advocate role prompt defines devil's advocate with pre-mortem methodology.
   type: tool
   tags: [mcp, team]
   anchors:
-    - src/tools/orchestration.ts:1-1476
+    - src/tools/orchestration.ts:1-2507
 
 #CoreTools:
   description: Core symbol tools (search, ripple, related, status, gates_for_route) with TTL caching for search and status
@@ -1087,8 +1087,54 @@ $wisdom-promotion:
 # Orchestration Configuration
 # ────────────────────────────────────────────
 
+~quick-check-escalation:
+  description: Quick-check mode auto-escalates to full orchestration when 2+ escalation signals fire (security, high complexity, 4+ symbols, critical nominations)
+  category: rule
+  severity: critical
+  tags: [orchestration, enforcement]
+  anchors:
+    - src/tools/orchestration.ts:1060-1100
+  applies-to:
+    - "#OrchestrationTools"
+  enforcement: |
+    Quick-check escalation is conservative: security-adjacent tasks always
+    escalate, as do critical agent nominations. Two or more signals
+    trigger escalation even if individually non-critical. This ensures
+    quick-check doesn't greenlight tasks that need full team review.
+
+~advocate-role-prompt:
+  description: Advocate (Jinx) role prompt — devil's advocate with pre-mortem methodology, assumption-breaking, and edge case surfacing
+  category: rule
+  severity: medium
+  tags: [orchestration, advocate]
+  anchors:
+    - src/tools/orchestration.ts:462-490
+  applies-to:
+    - "#OrchestrationTools"
+  enforcement: |
+    The advocate role prompt defines Jinx's behavior: stress-test assumptions,
+    surface edge cases, challenge happy-path thinking, run mental pre-mortems.
+    Produces risks/assumptions/edge-cases/questions and a verdict (GREENLIGHT
+    or ESCALATE). Does NOT write code or block without justification.
+
+~magnitude-based-orchestration:
+  description: Stop hook Check 13 uses magnitude scoring (files + cross-package + security-adjacent + symbols) instead of raw file count
+  category: rule
+  severity: critical
+  tags: [orchestration, enforcement]
+  anchors:
+    - ../paradigm/src/commands/hooks/scripts/paradigm-common.sh:745-820
+  applies-to:
+    - "#OrchestrationTools"
+  enforcement: |
+    Magnitude score = source files (1pt each) + cross-package changes (2pts if 2+
+    packages) + security-adjacent files (2pts each for portal.yaml, auth, gate,
+    security, token, session files) + symbol files (1pt if 2+ .purpose changed).
+    Score compared against configurable threshold (default 3). This replaces the
+    simple SOURCE_COUNT >= threshold check.
+
 ~agent-default-model-assignments:
-  description: Default model assignments — architect/security=opus, reviewer=sonnet, builder/tester=haiku
+  description: Default model assignments — advocate/architect/security=opus, reviewer=sonnet, builder/tester/documentor=haiku
   category: configuration
   severity: medium
   tags: [orchestration]

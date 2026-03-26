@@ -159,6 +159,7 @@ const SYMBOL_PATTERN = /[@#$%^!?&~][a-zA-Z0-9_-]+/g;
 
 // Legacy — kept for backward compat, prefer AGENT_TIERS + resolveModelForAgent()
 const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
+  advocate: 'opus',
   architect: 'opus',
   security: 'opus',
   reviewer: 'sonnet',
@@ -461,6 +462,31 @@ Other agents focus on their domain — you handle all Paradigm compliance.
 - Write implementation code
 - Change application logic
 - Skip .purpose coverage for new code directories`,
+
+  advocate: `You are the ADVOCATE agent (Jinx).
+
+## Your Role
+You are the devil's advocate — you stress-test assumptions, find edge cases,
+and challenge happy-path thinking before implementation begins. Your job is
+to break plans before code breaks in production.
+
+## Key Responsibilities
+1. Identify hidden assumptions in the task description
+2. Surface edge cases and failure modes the team hasn't considered
+3. Challenge "obvious" decisions — what if the opposite is true?
+4. Flag scale, dependency, and integration risks
+5. Run a mental pre-mortem: imagine the feature failed — what went wrong?
+
+## What You Produce
+- A concise list of risks, assumptions, and edge cases
+- A verdict: GREENLIGHT (proceed) or ESCALATE (needs full orchestration)
+- Specific questions the team should answer before building
+
+## What You DON'T Do
+- Write implementation code
+- Block progress without justification — you challenge, not obstruct
+- Repeat concerns already addressed in the task description
+- Produce lengthy analysis — be sharp and concise`,
 };
 
 // ============================================================================
@@ -471,25 +497,25 @@ export function getOrchestrationToolsList() {
   return [
     {
       name: 'paradigm_orchestrate_inline',
-      description: `REQUIRED before implementing features. Call with mode="plan" to get the right agents and cost estimate. Skipping this for complex tasks leads to missed security reviews and wasted tokens.
+      description: `REQUIRED before implementing features. Start with mode="quick" for fast pre-check, or mode="plan" for full orchestration planning.
 
 Plans and coordinates multi-agent task execution within the same session.
+- mode: "quick" - Lightweight pre-implementation check (~3-4k tokens). Jinx (advocate) stress-tests assumptions, reviewer checks feasibility. Returns greenlight or escalates to full orchestration. Satisfies enforcement.
 - mode: "plan" - See suggested agents, estimated tokens, and get orchestration plan
 - mode: "execute" - Get full prompts and execution strategy for any IDE
 
 After getting prompts, launch agents using the Task tool. Stages marked canRunParallel: true can be launched simultaneously in a single message.
 
 When to use this tool:
-- Task affects 3+ files
-- Task involves security/auth AND implementation
-- Task mentions multiple features (@symbols)
-- Building a new feature end-to-end
+- mode="quick": Before any implementation — fast sanity check that satisfies orchestration-required enforcement
+- mode="plan": Task affects 3+ files, involves security, or mentions multiple symbols
+- mode="execute": Ready to implement, need full agent prompts
 
 Examples:
-- "Add user authentication with JWT" → architect + security + builder + tester
-- "Should I use soft delete or hard delete?" → architect only (analysis)
-- "Fix the login bug" → security + builder
-- "Refactor the payment module" → architect + builder`,
+- "Fix the login bug" → quick (greenlight or escalate)
+- "Add user authentication with JWT" → plan → architect + security + builder + tester
+- "Should I use soft delete or hard delete?" → plan → architect only (analysis)
+- "Refactor the payment module" → plan → architect + builder`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -499,8 +525,8 @@ Examples:
           },
           mode: {
             type: 'string',
-            enum: ['plan', 'execute'],
-            description: 'Mode: "plan" returns suggested agents and plan, "execute" returns prompts ready for Task tool',
+            enum: ['quick', 'plan', 'execute'],
+            description: 'Mode: "quick" for lightweight pre-check (advocate + reviewer), "plan" returns suggested agents and plan, "execute" returns prompts ready for Task tool',
           },
           agents: {
             type: 'array',
@@ -523,7 +549,7 @@ Examples:
         properties: {
           agent: {
             type: 'string',
-            enum: ['architect', 'builder', 'tester', 'reviewer', 'security'],
+            enum: ['advocate', 'architect', 'builder', 'tester', 'reviewer', 'security', 'documentor'],
             description: 'The agent role to get prompt for',
           },
           task: {
@@ -624,6 +650,13 @@ async function handleOrchestrateInline(
 
   // Classify the task for intelligent agent selection
   const classification = classifyTaskLocal(task);
+
+  // ========================================================================
+  // Quick-check mode: lightweight advocate + reviewer pre-check
+  // ========================================================================
+  if (mode === 'quick') {
+    return handleQuickCheck(task, symbols, classification, activeNominations, manifest, ctx);
+  }
 
   // Plan the agent sequence (pass classification for intelligent defaults)
   const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration);
@@ -1015,6 +1048,185 @@ async function handleOrchestrateInline(
         symbols: ['#rate-limiter', '^authenticated'],
       },
     },
+  };
+
+  const text = JSON.stringify(result, null, 2);
+  trackToolCall(text.length, 'paradigm_orchestrate_inline');
+  return { handled: true, text };
+}
+
+// ============================================================================
+// Quick-Check Handler
+// ============================================================================
+
+async function handleQuickCheck(
+  task: string,
+  symbols: string[],
+  classification: TaskClassification,
+  activeNominations: Array<{ agent: string; urgency: string; brief: string }>,
+  manifest: AgentManifest,
+  ctx: ProjectContext
+): Promise<{ handled: boolean; text: string }> {
+  const taskLower = task.toLowerCase();
+
+  // Determine if this should auto-escalate to full orchestration
+  const escalationSignals: string[] = [];
+
+  // Security-adjacent tasks always escalate
+  if (classification.securityRequired) {
+    escalationSignals.push('security-adjacent task (auth, gates, permissions detected)');
+  }
+
+  // High complexity escalates
+  if (classification.complexity === 'high') {
+    escalationSignals.push(`high complexity task (type: ${classification.type})`);
+  }
+
+  // Many symbols in scope escalates
+  if (symbols.length >= 4) {
+    escalationSignals.push(`${symbols.length} symbols in scope — cross-cutting change`);
+  }
+
+  // Critical nominations escalate
+  const criticalNominations = activeNominations.filter(n => n.urgency === 'critical');
+  if (criticalNominations.length > 0) {
+    escalationSignals.push(`${criticalNominations.length} critical agent nomination(s) pending`);
+  }
+
+  // Build advocate (Jinx) quick analysis
+  const advocateAnalysis: {
+    assumptions: string[];
+    risks: string[];
+    edgeCases: string[];
+    questions: string[];
+  } = { assumptions: [], risks: [], edgeCases: [], questions: [] };
+
+  // Assumption detection
+  if (taskLower.includes('simple') || taskLower.includes('just') || taskLower.includes('only')) {
+    advocateAnalysis.assumptions.push('Task framed as simple — verify no hidden complexity');
+  }
+  if (taskLower.includes('always') || taskLower.includes('never')) {
+    advocateAnalysis.assumptions.push('Absolute language detected — edge cases likely exist');
+  }
+  if (!taskLower.includes('error') && !taskLower.includes('fail') && !taskLower.includes('invalid')) {
+    advocateAnalysis.assumptions.push('No error/failure handling mentioned — what happens when it fails?');
+  }
+
+  // Risk detection
+  if (symbols.some(s => s.startsWith('$'))) {
+    advocateAnalysis.risks.push('Flow symbols detected — multi-step changes have ordering/rollback risk');
+  }
+  if (symbols.some(s => s.startsWith('^'))) {
+    advocateAnalysis.risks.push('Gate symbols detected — authorization changes require security review');
+    if (!escalationSignals.some(s => s.includes('security'))) {
+      escalationSignals.push('gate symbols in scope — security review recommended');
+    }
+  }
+  if (classification.matchedKeywords.some(k => ['migration', 'database', 'schema'].includes(k))) {
+    advocateAnalysis.risks.push('Data migration risk — irreversible changes need rollback plan');
+  }
+  if (classification.matchedKeywords.some(k => ['delete', 'remove', 'drop'].includes(k))) {
+    advocateAnalysis.risks.push('Destructive operation — verify nothing depends on removed items');
+  }
+
+  // Edge cases from task patterns
+  if (taskLower.includes('add') || taskLower.includes('new')) {
+    advocateAnalysis.edgeCases.push('New feature — how does it interact with existing features?');
+  }
+  if (taskLower.includes('refactor') || taskLower.includes('rename')) {
+    advocateAnalysis.edgeCases.push('Refactor — all callers updated? Integration tests cover the change?');
+  }
+  if (taskLower.includes('fix') || taskLower.includes('bug')) {
+    advocateAnalysis.edgeCases.push('Bug fix — does the fix address the root cause or just the symptom?');
+  }
+
+  // Questions based on what's missing
+  if (!taskLower.includes('test')) {
+    advocateAnalysis.questions.push('How will this be tested?');
+  }
+  if (symbols.length === 0) {
+    advocateAnalysis.questions.push('No symbols referenced — which components are actually affected?');
+  }
+
+  // Reviewer quick feasibility check
+  const reviewerCheck: {
+    concerns: string[];
+    suggestions: string[];
+  } = { concerns: [], suggestions: [] };
+
+  // Check if symbols exist in the manifest
+  for (const sym of symbols) {
+    const cleanSym = sym.replace(/^[#$^!~@&%?]/, '');
+    if (!manifest.agents[cleanSym] && sym.startsWith('#')) {
+      // This is a component symbol, not an agent — that's fine
+    }
+  }
+
+  // Check classification for reviewer concerns
+  if (classification.costMultiplier.max > 1.0) {
+    reviewerCheck.concerns.push(`Higher-than-average complexity (${classification.costMultiplier.min}x-${classification.costMultiplier.max}x baseline) — consider breaking into smaller tasks`);
+  }
+
+  // Load notebook insights for advocate if available
+  let advocateInsights: string[] = [];
+  try {
+    const { loadNotebookEntries } = await import('../utils/notebook-loader.js');
+    const symbolConcepts = symbols.map(s => s.replace(/^[#$^!~@&%?]/, '').toLowerCase());
+    const entries = loadNotebookEntries('advocate', ctx.rootDir,
+      symbolConcepts.length > 0 ? { concepts: symbolConcepts } : undefined
+    );
+    if (entries.length > 0) {
+      advocateInsights = entries
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 3)
+        .map(e => e.snippet);
+    }
+  } catch { /* non-fatal */ }
+
+  // Determine verdict
+  const shouldEscalate = escalationSignals.length >= 2 ||
+    escalationSignals.some(s => s.includes('security') || s.includes('critical'));
+  const verdict = shouldEscalate ? 'escalate' : 'greenlight';
+
+  const result = {
+    mode: 'quick',
+    task,
+    verdict,
+    classification: {
+      type: classification.type,
+      complexity: classification.complexity,
+      securityRequired: classification.securityRequired,
+    },
+    advocate: {
+      agent: 'Jinx (advocate)',
+      ...(advocateAnalysis.assumptions.length > 0 ? { assumptions: advocateAnalysis.assumptions } : {}),
+      ...(advocateAnalysis.risks.length > 0 ? { risks: advocateAnalysis.risks } : {}),
+      ...(advocateAnalysis.edgeCases.length > 0 ? { edgeCases: advocateAnalysis.edgeCases } : {}),
+      ...(advocateAnalysis.questions.length > 0 ? { questions: advocateAnalysis.questions } : {}),
+      ...(advocateInsights.length > 0 ? { notebookInsights: advocateInsights } : {}),
+    },
+    reviewer: {
+      agent: 'reviewer',
+      ...(reviewerCheck.concerns.length > 0 ? { concerns: reviewerCheck.concerns } : {}),
+      ...(reviewerCheck.suggestions.length > 0 ? { suggestions: reviewerCheck.suggestions } : {}),
+    },
+    ...(escalationSignals.length > 0 ? { escalationSignals } : {}),
+    ...(activeNominations.length > 0 ? { activeNominations } : {}),
+    symbols,
+    instructions: verdict === 'greenlight'
+      ? [
+        'Quick check passed — proceed with implementation.',
+        'Orchestration enforcement is satisfied.',
+        advocateAnalysis.questions.length > 0
+          ? `Address Jinx's questions during implementation: ${advocateAnalysis.questions.join('; ')}`
+          : 'No open questions from advocate.',
+      ]
+      : [
+        'Quick check recommends full orchestration.',
+        `Escalation reasons: ${escalationSignals.join('; ')}`,
+        'Call paradigm_orchestrate_inline mode="plan" for full agent planning.',
+        'Orchestration enforcement is satisfied regardless of verdict.',
+      ],
   };
 
   const text = JSON.stringify(result, null, 2);

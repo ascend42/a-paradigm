@@ -1,12 +1,101 @@
 version: '1.0'
-generated: '2026-03-24T20:13:45.109Z'
+generated: '2026-03-26T03:23:03.561Z'
 personas: {}
 chains: {}
 gate_coverage: {}
 route_coverage: {}
 uncovered_routes:
+  - GET /api/health
+  - GET /api/platform/health
+  - GET /api/platform/sections
+  - GET /api/info
+  - GET /api/platform/overview
+  - POST /api/platform/agent-command
+  - GET /api/lore
+  - GET /api/lore/timeline
+  - GET /api/lore/symbols
+  - GET /api/lore/tags
+  - GET /api/lore/authors
+  - GET /api/lore/calibration
+  - GET /api/lore/:id
+  - PUT /api/lore/:id/assess
+  - PUT /api/lore/:id/review
+  - GET /api/sessions
+  - GET /api/sessions/:id
+  - GET /api/symbols
+  - GET /api/graphs
+  - GET /api/graphs/:slug
+  - GET /api/canvas/files
+  - GET /api/canvas/files/*
+  - PUT /api/canvas/files/*
+  - DELETE /api/canvas/files/*
+  - GET /api/git/status
+  - GET /api/git/branches
+  - GET /api/git/log
+  - GET /api/git/diff
+  - POST /api/git/stage
+  - POST /api/git/unstage
+  - POST /api/git/commit
+  - POST /api/git/push
+  - GET /api/ambient/events
+  - GET /api/ambient/nominations
+  - POST /api/ambient/nominations/:id/engage
+  - GET /api/ambient/stream
+  - GET /api/ambient/policy
+  - GET /api/team/roster
+  - GET /api/team/threads
+  - PATCH /api/team/agents/:id/bench
+  - GET /api/symphony/agents
+  - GET /api/symphony/agents/me
+  - GET /api/symphony/peers
+  - GET /api/symphony/threads
+  - GET /api/symphony/threads/:threadId
+  - POST /api/symphony/threads/:threadId/resolve
+  - POST /api/symphony/messages
+  - GET /api/symphony/inbox
+  - GET /api/symphony/file-requests
+  - POST /api/symphony/file-requests/:requestId/action
+  - GET /api/symphony/status
+  - GET /api/docs/manifest
+  - GET /api/docs/symbol/:id
+  - GET /api/docs/flow/:id
+  - GET /api/docs/portal
+  - GET /api/docs/page/:slug
+  - GET /api/docs/search
+  - POST /api/sentinel/logs
+  - GET /api/sentinel/logs
+  - POST /api/sentinel/services
+  - GET /api/sentinel/services
+  - POST /api/sentinel/state
+  - GET /api/sentinel/state
+  - GET /api/sentinel/state/:service
+  - POST /api/sentinel/metrics
+  - GET /api/sentinel/metrics
+  - GET /api/sentinel/metrics/aggregate/:name
+  - POST /api/sentinel/traces
+  - GET /api/sentinel/traces
+  - GET /api/sentinel/traces/:traceId
+  - POST /api/sentinel/schemas
+  - GET /api/sentinel/schemas
+  - GET /api/sentinel/schemas/:id
+  - POST /api/sentinel/events
+  - GET /api/sentinel/events
+  - GET /api/sentinel/events/scopes
+  - GET /api/sentinel/events/scope/:value
+  - GET /api/sentinel/symbols
+  - PUT /api/sentinel/symbols/:id
+  - GET /api/sentinel/info
+  - GET /api/sentinel/commits
+  - GET /api/sentinel/incidents
+  - GET /api/sentinel/incidents/:id
+  - POST /api/sentinel/incidents/:id/resolve
+  - GET /api/sentinel/patterns
+  - GET /api/sentinel/patterns/:id
   - GET /api/courses
   - GET /api/courses/:id
   - GET /api/courses/:id/lessons/:lessonId
   - GET /api/plsat
   - GET /api/plsat/:version
+  - POST /api/plsat/diploma
+  - GET /api/reference
+  - WS /ws

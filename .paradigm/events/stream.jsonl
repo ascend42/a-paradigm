@@ -721,3 +721,10 @@
 {"id":"ev-1774476182855-0185","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T22:03:02.855Z","path":"packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh"}
 {"id":"ev-1774476187938-3235","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T22:03:07.938Z","path":"packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh"}
 {"id":"ev-1774476193600-1996","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-25T22:03:13.600Z","path":"packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh"}
+{"id":"ev-1774487818746-6757","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T01:16:58.746Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774487823769-3625","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T01:17:03.769Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774487836964-5861","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T01:17:16.964Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774487848824-4400","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T01:17:28.824Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774487890429-8192","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T01:18:10.429Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774495294601-3311","timestamp":"2026-03-26T03:21:34.601Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1774495383554-9706","timestamp":"2026-03-26T03:23:03.554Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}

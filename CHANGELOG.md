@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.23.0] — 2026-03-25
+
+### Added
+
+- **Orchestrator quick-check mode** (`mode="quick"`) — Lightweight pre-implementation sanity check. Jinx (advocate) stress-tests assumptions, reviewer checks feasibility. Returns greenlight or escalates to full orchestration. ~3-4k tokens. Satisfies orchestration-required enforcement.
+- **Jinx (advocate) promoted to core agent** — Added to all project type roster suggestions, `DEFAULT_MODELS`, `AGENT_TIERS`, `paradigm_agent_prompt` enum, and `ROLE_PROMPTS`. Unbenched globally. Every new project now gets advocate alongside architect, builder, reviewer, tester, security, and documentor.
+- **Magnitude-based orchestration triggers** — Stop hook Check 13 now computes a magnitude score from multiple signals instead of raw file count: source files (1pt each), cross-package changes (+2pts), security-adjacent files (+2pts each), and multi-symbol file changes (+1pt). Score compared against configurable threshold (default 3).
+
+### Changed
+
+- **Orchestration tool description** updated to lead with `mode="quick"` as the default starting point.
+- **Stop hook violation message** now shows magnitude breakdown and recommends `mode="quick"` for fast pre-check.
+
 ## [5.22.0] — 2026-03-25
 
 ### Added

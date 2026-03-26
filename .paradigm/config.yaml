@@ -121,8 +121,8 @@ enforcement:
   checks:
     orchestration-required: block
   orchestration:
-    threshold: 3
-    detection: breadcrumb
+    threshold: 3          # magnitude score threshold (not just file count)
+    detection: breadcrumb  # magnitude scoring: files + cross-pkg + security + symbols
     exempt:
       - "*.md"
       - "*.json"
