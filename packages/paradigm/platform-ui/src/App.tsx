@@ -22,6 +22,7 @@ const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection')
 const DocsSection = lazy(() => import('./sections/docs/DocsSection'));
 const AmbientSection = lazy(() => import('./sections/ambient/AmbientSection'));
 const TeamSection = lazy(() => import('./sections/team/TeamSection'));
+const UniversitySection = lazy(() => import('./sections/university/UniversitySection'));
 
 function SectionFallback() {
   return (
@@ -85,7 +86,7 @@ export default function App() {
             {activeSection === 'canvas' && <ErrorBoundary sectionName="Canvas"><CanvasSection /></ErrorBoundary>}
             {activeSection === 'git' && <ErrorBoundary sectionName="Git"><GitSection /></ErrorBoundary>}
             {activeSection === 'sentinel' && <ErrorBoundary sectionName="Sentinel"><SentinelSection /></ErrorBoundary>}
-            {activeSection === 'university' && <ComingSoonSection name="University" icon="▣" description="Courses, quizzes, learning paths, and PLSAT certification" />}
+            {activeSection === 'university' && <ErrorBoundary sectionName="University"><UniversitySection /></ErrorBoundary>}
             {activeSection === 'symphony' && <ErrorBoundary sectionName="Symphony"><SymphonySection /></ErrorBoundary>}
             {activeSection === 'docs' && <ErrorBoundary sectionName="Docs"><DocsSection /></ErrorBoundary>}
             {activeSection === 'ambient' && <ErrorBoundary sectionName="Ambient"><AmbientSection /></ErrorBoundary>}

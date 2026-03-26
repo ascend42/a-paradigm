@@ -103,6 +103,9 @@ export interface EvaluationContext {
   taskAddsRoutes: boolean;
   taskDescription?: string;
   gitClean?: boolean;
+  commitMessage?: string;
+  hasFlowCoverage?: boolean;
+  aspectAnchorsValid?: boolean;
 }
 
 export interface EvaluationResult {
@@ -626,6 +629,10 @@ function evaluateHabit(habit: HabitDefinition, ctx: EvaluationContext): HabitEva
     case 'gates-declared': return evalGatesDeclared(habit, ctx);
     case 'tests-exist': return evalTestsExist(habit, ctx);
     case 'git-clean': return evalGitClean(habit, ctx);
+    case 'commit-message-format': return evalCommitMessageFormat(habit, ctx);
+    case 'flow-coverage': return evalFlowCoverage(habit, ctx);
+    case 'context-checked': return evalContextChecked(habit, ctx);
+    case 'aspect-anchored': return evalAspectAnchored(habit, ctx);
     default: return { habit, result: 'partial', reason: `Unknown check: ${habit.check.type}` };
   }
 }
@@ -756,4 +763,67 @@ function evalGitClean(habit: HabitDefinition, ctx: EvaluationContext): HabitEval
     return { habit, result: 'followed', reason: 'Working tree is clean — changes committed' };
   }
   return { habit, result: 'skipped', reason: 'Uncommitted changes in working tree' };
+}
+
+function evalCommitMessageFormat(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  if (!ctx.commitMessage) {
+    return { habit, result: 'followed', reason: 'No commit message to check (not a commit trigger)' };
+  }
+  const patterns = habit.check.params.messagePatterns || [
+    '^(feat|fix|refactor|chore|docs|test|style|perf|ci|build)\\(',
+    'Symbols:',
+  ];
+  const matched = patterns.filter((p) => new RegExp(p, 'm').test(ctx.commitMessage!));
+  if (matched.length === patterns.length) {
+    return { habit, result: 'followed', reason: 'Commit message matches all required patterns', evidence: matched };
+  }
+  if (matched.length > 0) {
+    const missing = patterns.filter((p) => !new RegExp(p, 'm').test(ctx.commitMessage!));
+    return { habit, result: 'partial', reason: `Matches ${matched.length}/${patterns.length} patterns. Missing: ${missing.join(', ')}` };
+  }
+  return { habit, result: 'skipped', reason: 'Commit message does not match required format patterns' };
+}
+
+function evalFlowCoverage(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  const componentSymbols = ctx.symbolsTouched.filter((s) => s.startsWith('#'));
+  if (componentSymbols.length < 3) {
+    return { habit, result: 'followed', reason: 'Fewer than 3 components touched — flow not required' };
+  }
+  if (ctx.hasFlowCoverage) {
+    return { habit, result: 'followed', reason: 'Flow coverage exists for multi-component changes' };
+  }
+  const flowTools = ['paradigm_flow_validate', 'paradigm_flows_affected', 'paradigm_purpose_add_flow'];
+  const called = flowTools.filter((t) => ctx.toolsCalled.includes(t));
+  if (called.length > 0) {
+    return { habit, result: 'followed', reason: `Flow tools called: ${called.join(', ')}`, evidence: called };
+  }
+  return { habit, result: 'skipped', reason: `${componentSymbols.length} components touched without flow coverage`, evidence: componentSymbols.slice(0, 5) };
+}
+
+function evalContextChecked(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  const contextTools = habit.check.params.contextTools || [
+    'paradigm_context_check', 'paradigm_session_recover', 'paradigm_session_checkpoint',
+  ];
+  const called = contextTools.filter((t) => ctx.toolsCalled.includes(t));
+  if (called.length > 0) {
+    return { habit, result: 'followed', reason: `Context tools called: ${called.join(', ')}`, evidence: called };
+  }
+  if (ctx.filesModified.length === 0 && ctx.symbolsTouched.length === 0) {
+    return { habit, result: 'followed', reason: 'No modifications, context check not applicable' };
+  }
+  return { habit, result: 'skipped', reason: 'No context/session tools called during session' };
+}
+
+function evalAspectAnchored(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
+  const aspects = ctx.symbolsTouched.filter((s) => s.startsWith('~'));
+  if (aspects.length === 0) {
+    return { habit, result: 'followed', reason: 'No aspects touched' };
+  }
+  if (ctx.aspectAnchorsValid === true) {
+    return { habit, result: 'followed', reason: 'Aspect anchors validated and valid' };
+  }
+  if (ctx.toolsCalled.includes('paradigm_aspect_check')) {
+    return { habit, result: 'followed', reason: 'paradigm_aspect_check was called to validate anchors' };
+  }
+  return { habit, result: 'skipped', reason: `${aspects.length} aspect(s) touched without anchor validation`, evidence: aspects.slice(0, 5) };
 }

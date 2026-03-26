@@ -993,13 +993,6 @@ async function handleOrchestrateInline(
       'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
 
-    // Symphony thread for live visibility in Conductor
-    symphony: {
-      orchestrationThread,
-      instruction: 'After each agent completes, call paradigm_symphony_send to report progress. This makes the work visible in Conductor.',
-      perAgentInstruction: `When each agent finishes, run: paradigm_symphony_send threadId="${orchestrationThread}" intent="task-complete" text="[agentName] Summary of completed work" symbols=[touched symbols]`,
-    },
-
     // Claude Code: Use Task tool for parallel agent spawning
     claudeCode: {
       method: 'Task tool',
@@ -1033,18 +1026,18 @@ async function handleOrchestrateInline(
     // Symphony: Record agent contributions as team thread messages
     symphony: {
       enabled: true,
-      orchestrationThread: `thr-${orchestrationId}`,
+      orchestrationThread,
       instructions: [
-        'After each agent completes, call paradigm_symphony_send to record the contribution',
+        'After each agent completes, call paradigm_symphony_send to report progress. This makes the work visible in Conductor.',
         'Use intent "context" for analysis, "proposal" for recommendations, "decision" for decisions made',
-        `Set threadRoot to "thr-${orchestrationId}" so all contributions are in one thread`,
+        `Set threadRoot to "${orchestrationThread}" so all contributions are in one thread`,
         'Include the symbols array from the agent relay output',
-        'This creates a visible team thread that Conductor and other sessions can observe',
       ],
+      perAgentInstruction: `When each agent finishes, run: paradigm_symphony_send threadId="${orchestrationThread}" intent="task-complete" text="[agentName] Summary of completed work" symbols=[touched symbols]`,
       exampleCall: {
         intent: 'context',
         text: '[architect] Rate limiter should be placed before ^authenticated gate to prevent unauthenticated flood',
-        threadRoot: `thr-${orchestrationId}`,
+        threadRoot: orchestrationThread,
         symbols: ['#rate-limiter', '^authenticated'],
       },
     },

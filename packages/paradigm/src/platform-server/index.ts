@@ -269,6 +269,17 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
     }
   }
 
+  // Mount University routes if section is enabled
+  if (sections.has('university')) {
+    try {
+      const { createUniversityRouter } = await import('./routes/university.js');
+      app.use('/api/university', createUniversityRouter(options.projectDir));
+      log.component('platform-server').success('University routes mounted');
+    } catch (err) {
+      log.component('platform-server').warn('University routes failed to mount');
+    }
+  }
+
   return new Promise((resolve, reject) => {
     httpServer.listen(options.port, () => {
       log.component('platform-server').success('Platform running', { url: `http://localhost:${options.port}` });

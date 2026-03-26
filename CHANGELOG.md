@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.24.0] — 2026-03-25
+
+### Added
+
+- **University section in Platform UI** — Course listings, PLSAT certification exams, earned diplomas, and reference content. Platform server routes at `/api/university/`. Replaces "Coming Soon" placeholder.
+
+### Fixed
+
+- **Consolidated duplicate habits evaluator** — CLI evaluator (`paradigm/core/habits/evaluator.ts`) now re-exports from the canonical MCP evaluator (`paradigm-mcp/utils/habits-loader.ts`). Added 4 missing check types to MCP: `commit-message-format`, `flow-coverage`, `context-checked`, `aspect-anchored`.
+- **Duplicate `symphony` key in orchestration execute result** — Two `symphony` keys in the execute mode result object caused the first (Conductor thread info) to be silently overwritten. Merged into a single key.
+
 ## [5.23.0] — 2026-03-25
 
 ### Added
