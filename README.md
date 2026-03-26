@@ -58,19 +58,31 @@ Your AI reads the project type, suggests which agents to activate or bench, and 
 
 Every project starts with these — the foundation of any development&nbsp;team:
 
-| Agent | Role | What They Do |
-|-------|------|-------------|
-| **Advocate** (Jinx) | Devil's advocate | Stress-tests assumptions, finds edge cases, runs pre-mortems before code is&nbsp;written |
-| **Architect** | System designer | Plans features, defines data models, writes specs that builders&nbsp;follow |
-| **Builder** | Implementer | Writes code following specs. Each task runs in a fresh context to prevent stale&nbsp;assumptions |
-| **Reviewer** | Quality gate | Two-stage review: spec compliance first, then code quality. Minimum 3 findings per&nbsp;review |
-| **Tester** | Verification | Runs tests, checks gate validations, verifies edge&nbsp;cases |
-| **Security** | Auditor | Checks OWASP top 10, audits `^gate` implementations, reviews auth&nbsp;flows |
-| **Documentor** | Paradigm keeper | Updates `.purpose` files, `portal.yaml`, and symbol registrations after every&nbsp;change |
+| Agent | Nickname | What They Do |
+|-------|----------|-------------|
+| **Advocate** | Jinx | Devil's advocate — stress-tests assumptions, finds edge cases, runs pre-mortems before code is&nbsp;written |
+| **Architect** | Apex | System designer — plans features, defines data models, writes specs that builders&nbsp;follow |
+| **Builder** | Kit | Implementer — writes code following specs, each task in a fresh context to prevent stale&nbsp;assumptions |
+| **Reviewer** | Judge | Quality gate — two-stage review: spec compliance first, then code quality. Minimum 3&nbsp;findings |
+| **Tester** | Probe | Verification — runs tests, checks gate validations, verifies edge&nbsp;cases |
+| **Security** | Aegis | Auditor — OWASP top 10, `^gate` implementations, auth flow&nbsp;review |
+| **Documentor** | Scribe | Paradigm keeper — updates `.purpose` files, `portal.yaml`, and symbols after every&nbsp;change |
 
 ### Adding and Customizing Agents
 
-Beyond the core 7, Paradigm ships **50+ agent profiles** — from `designer` and `dba` to `gamedev` and `copywriter`. Add the ones that match your&nbsp;project:
+Beyond the core 7, Paradigm ships **50+ agent profiles**. A&nbsp;sample:
+
+| Agent | Nickname | Agent | Nickname | Agent | Nickname |
+|-------|----------|-------|----------|-------|----------|
+| designer | Mika | dba | Vault | devops | Atlas |
+| performance | Bolt | debugger | Trace | dx | Helix |
+| researcher | Scout | product | North | sales | Mozi |
+| qa | Shield | e2e | Ghost | copywriter | Wren |
+| gamedev | Pixel | mobile | Swift | a11y | Aria |
+| creative | Prism | narrator | Ink | educator | Sheila |
+| pm | Yuki | operations | Leila | seo | Beacon |
+
+Add the ones that match your&nbsp;project:
 
 ```bash
 paradigm agent roster             # See who's active
@@ -83,8 +95,8 @@ You can also **create your own agents**. An agent is a `.agent` file in `~/.para
 ```yaml
 # ~/.paradigm/agents/my-agent.agent
 id: my-agent
-nickname: Scout
-role: market researcher
+nickname: Radar
+role: market intelligence
 personality:
   style: analytical
   verbosity: concise
