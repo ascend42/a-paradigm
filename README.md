@@ -32,19 +32,19 @@ paradigm shift
 
 `paradigm shift` detects your language and framework, creates `.purpose` context files, assembles an agent team for your project type, configures your AI tools (Claude Code, Cursor, Copilot, Windsurf), installs enforcement hooks, and verifies&nbsp;everything.
 
-### 3. Build with your team
+### 3. Curate your agent team
 
-```bash
-paradigm team orchestrate "Add user authentication with JWT"
-```
+After shift runs, tell your AI assistant to review the roster and tailor it to your&nbsp;project:
 
-Your agent team plans the task across architect, security, builder, and reviewer — each reading structured context instead of raw source&nbsp;files.
+> *"Look at my agent roster and help me pick the right team for what we're&nbsp;building."*
+
+Your AI reads the project type, suggests which agents to activate or bench, and explains what each one brings. You start building with a team that already knows its&nbsp;roles.
 
 ---
 
 ## Your Agent Team
 
-`paradigm shift` detects your project type and assembles a team of specialized AI&nbsp;agents:
+`paradigm shift` detects your project type and suggests a starting&nbsp;roster:
 
 | Project Type | Agents | Example Roles |
 |-------------|--------|---------------|
@@ -54,15 +54,65 @@ Your agent team plans the task across architect, security, builder, and reviewer
 | **Game** | 12 | architect, builder, gamedev, 3d, audio, designer,&nbsp;... |
 | **Python / Rust** | 10 | architect, builder, reviewer, security, performance,&nbsp;... |
 
-Every team includes **Jinx** (devil's advocate) — a core agent that stress-tests assumptions and finds edge cases before code is&nbsp;written.
+### The 7 Core Agents
+
+Every project starts with these — the foundation of any development&nbsp;team:
+
+| Agent | Role | What They Do |
+|-------|------|-------------|
+| **Advocate** (Jinx) | Devil's advocate | Stress-tests assumptions, finds edge cases, runs pre-mortems before code is&nbsp;written |
+| **Architect** | System designer | Plans features, defines data models, writes specs that builders&nbsp;follow |
+| **Builder** | Implementer | Writes code following specs. Each task runs in a fresh context to prevent stale&nbsp;assumptions |
+| **Reviewer** | Quality gate | Two-stage review: spec compliance first, then code quality. Minimum 3 findings per&nbsp;review |
+| **Tester** | Verification | Runs tests, checks gate validations, verifies edge&nbsp;cases |
+| **Security** | Auditor | Checks OWASP top 10, audits `^gate` implementations, reviews auth&nbsp;flows |
+| **Documentor** | Paradigm keeper | Updates `.purpose` files, `portal.yaml`, and symbol registrations after every&nbsp;change |
+
+### Adding and Customizing Agents
+
+Beyond the core 7, Paradigm ships **50+ agent profiles** — from `designer` and `dba` to `gamedev` and `copywriter`. Add the ones that match your&nbsp;project:
 
 ```bash
-paradigm agent roster             # See your active team
-paradigm agent roster add dx     # Add an agent
-paradigm agent roster remove qa  # Remove one
+paradigm agent roster             # See who's active
+paradigm agent roster add dx     # Add the developer experience agent
+paradigm agent roster remove qa  # Remove one you don't need
 ```
 
-Each agent has a role, personality, model tier, expertise tracking, and a project-specific notebook that accumulates learned patterns over&nbsp;time.
+You can also **create your own agents**. An agent is a `.agent` file in `~/.paradigm/agents/` that defines personality, expertise, attention triggers, and collaboration&nbsp;preferences:
+
+```yaml
+# ~/.paradigm/agents/my-agent.agent
+id: my-agent
+nickname: Scout
+role: market researcher
+personality:
+  style: analytical
+  verbosity: concise
+expertise:
+  - { symbol: "#competitive-analysis", confidence: 0.9 }
+attention:
+  concepts: [market, competitor, pricing, positioning]
+  threshold: 0.5
+```
+
+Custom agents participate in orchestration, receive nominations from the learning system, and build project-specific expertise over&nbsp;time.
+
+### Agents That Learn
+
+Every agent maintains a **project notebook** — a collection of patterns, decisions, and insights accumulated across sessions. When an architect makes a design decision on your project, that knowledge persists. Next session, the architect picks up where it left&nbsp;off.
+
+The learning loop:
+
+1. **Agents work** — orchestration assigns tasks, agents produce&nbsp;output
+2. **Patterns emerge** — the system detects recurring decisions and successful&nbsp;approaches
+3. **Notebooks grow** — high-confidence patterns get promoted to the agent's project&nbsp;notebook
+4. **Future sessions improve** — notebook entries are injected into agent prompts, so learned context carries&nbsp;forward
+
+```bash
+paradigm agent detail architect   # See an agent's notebook and expertise
+```
+
+This means your agent team gets better at *your specific codebase* over time — not just better at coding in&nbsp;general.
 
 ---
 
