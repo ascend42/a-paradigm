@@ -285,9 +285,61 @@ struct ContainerView: View {
         }
     }
 
+    // Sprint 0 spike: embedded terminal session for cell 0
+    @State private var spikeSession: TerminalSession? = nil
+    @State private var spikeSessionActive = false
+
     @ViewBuilder
     private func gridCell(index: Int, instance: ManagedInstance?) -> some View {
-        if let instance {
+        if index == 0 && spikeSession != nil {
+            // Sprint 0: Embedded terminal spike
+            TerminalCellView(
+                session: spikeSession!,
+                appearance: .default,
+                isActive: spikeSessionActive,
+                onFocus: { spikeSessionActive = true },
+                onClose: { spikeSession = nil },
+                onProcessTerminated: { code in
+                    var s = spikeSession
+                    s?.status = .exited(code: code)
+                    spikeSession = s
+                }
+            )
+        } else if index == 0 && spikeSession == nil {
+            // Sprint 0: Launch button — always pick a folder
+            VStack(spacing: 12) {
+                Image(systemName: "terminal")
+                    .font(.title2)
+                    .foregroundStyle(ConductorTheme.brand)
+                Text("Embedded Terminal")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Button("Launch Claude Code") {
+                    let panel = NSOpenPanel()
+                    panel.title = "Select Project Folder"
+                    panel.message = "Choose a project directory to launch Claude Code in"
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false
+                    panel.canCreateDirectories = false
+                    // Start at home or most recent project
+                    if let recent = env.workspaceManager.managedInstances.first?.projectDirectory {
+                        panel.directoryURL = URL(fileURLWithPath: recent).deletingLastPathComponent()
+                    }
+                    if panel.runModal() == .OK, let url = panel.url {
+                        spikeSession = TerminalSession(projectPath: url.path)
+                        spikeSession?.status = .running
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(ConductorTheme.brand.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+            )
+        } else if let instance {
             // Active cell — instance info
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
