@@ -367,6 +367,7 @@ struct MainOverlayView: View {
                 agentProcessManager: env.agentProcessManager,
                 monitor: env.symphonyMonitor,
                 relay: env.noteRelay,
+                threadWatcher: env.threadWatcher,
                 taskStore: env.taskStore,
                 agentHealthMonitor: env.agentHealthMonitor
             )

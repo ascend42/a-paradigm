@@ -10,6 +10,7 @@ struct AgentNetworkView: View {
     @ObservedObject var agentProcessManager: AgentProcessManager
     @ObservedObject var monitor: SymphonyMonitor
     @ObservedObject var relay: NoteRelay
+    @ObservedObject var threadWatcher: SymphonyThreadWatcher
     var taskStore: TaskStore?
     var agentHealthMonitor: AgentHealthMonitor?
 
@@ -70,6 +71,7 @@ struct AgentNetworkView: View {
                 threadId: selection.id,
                 monitor: monitor,
                 relay: relay,
+                threadWatcher: threadWatcher,
                 agentPartManager: agentPartManager
             )
         }

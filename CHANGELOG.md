@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.27.0] — 2026-03-27
+
+### Added
+
+- **Conductor: Multi-workspace Symphony threads** — Thread watcher now discovers agents across ALL projects in `~/.paradigm/score/agents/`, not just the current workspace. Cross-session messages are visible in Conductor.
+- **Conductor: All-thread visibility** — Removed `thr-orch-*` hard filter. All Symphony threads now appear in Conductor with a 2-hour staleness cutoff (configurable via "show all threads" toggle).
+- **Conductor: General message notifications** — New `SymphonyNotificationManager` with priority-based notifications: banner (alerts, tasks, pan-invoke), toast (questions, proposals, decisions), silent (clarifications, progress).
+- **Conductor: Bidirectional messaging** — Messages sent from Conductor appear in the thread view immediately via `appendLocalMessage()`, no more 5-second poll delay.
+- **Conductor: Project context badges** — Thread headers show color-coded project origin badges for cross-project threads.
+- **Conductor: PAN intent support** — `pan-invoke` and `pan-result` intents added to `MessageIntent` enum with colors in both ThreadView and TeamThreadView.
+- **Conductor: Agent re-scan** — `rescanAgents()` on SymphonyThreadWatcher discovers agents that linked after Conductor launched.
+
 ## [5.26.0] — 2026-03-27
 
 ### Fixed

@@ -85,12 +85,24 @@ struct TeamThreadView: View {
         let messages = threadWatcher.teamThreads[threadId] ?? []
 
         return VStack(alignment: .leading, spacing: 4) {
-            // Thread title
+            // Thread title with project badge
             HStack(spacing: 4) {
                 Circle()
                     .fill(ConductorTheme.healthy)
                     .frame(width: 6, height: 6)
                     .accessibilityLabel("Active thread")
+
+                // Project origin badge (cross-session visibility)
+                if let project = threadWatcher.threadProject(threadId) {
+                    Text(project)
+                        .font(.system(size: 9, weight: .semibold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(projectBadgeColor(project).opacity(0.2))
+                        .foregroundStyle(projectBadgeColor(project))
+                        .cornerRadius(3)
+                }
+
                 Text(threadWatcher.threadDisplayName(threadId))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -151,6 +163,13 @@ struct TeamThreadView: View {
         let hash = role.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
         let index = abs(hash) % Self.agentColors.count
         return Self.agentColors[index]
+    }
+
+    /// Deterministic color for project badges.
+    private func projectBadgeColor(_ project: String) -> Color {
+        let hash = project.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
+        let hue = Double(abs(hash) % 360) / 360.0
+        return Color(hue: hue, saturation: 0.6, brightness: 0.7)
     }
 }
 
@@ -291,6 +310,8 @@ struct TeamMessageBubble: View {
         case .progress: return .mint
         case .approvalRequest: return ConductorTheme.warning
         case .approvalResponse: return ConductorTheme.healthy
+        case .panInvoke: return ConductorTheme.active
+        case .panResult: return ConductorTheme.healthy
         }
     }
 }

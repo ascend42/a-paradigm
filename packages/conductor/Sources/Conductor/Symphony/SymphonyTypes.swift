@@ -47,6 +47,9 @@ enum MessageIntent: String, Codable, Sendable {
     case approvalResponse = "approval-response"
     case taskComplete = "task-complete"
     case taskFailed = "task-failed"
+    // PAN agent network intents
+    case panInvoke = "pan-invoke"
+    case panResult = "pan-result"
 }
 
 // MARK: - Task Protocol Payloads

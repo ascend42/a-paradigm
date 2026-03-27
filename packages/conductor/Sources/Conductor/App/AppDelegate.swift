@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sentinelClient = SentinelWSClient()
     let agentHealthMonitor = AgentHealthMonitor()
     let threadWatcher = SymphonyThreadWatcher()
+    let symphonyNotifications = SymphonyNotificationManager()
     let hotKeyBindingRegistry = HotKeyBindingRegistry()
     let eyebrowBindingRegistry = EyebrowBindingRegistry()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
@@ -99,11 +100,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Wire agent health monitor to task store
         agentHealthMonitor.configure(taskStore: taskStore)
 
-        // Start monitoring all grouped agents
+        // Start monitoring grouped agents for detailed status tracking
         let allGrouped = agentGroupStore.allGroupedAgents
         if !allGrouped.isEmpty {
             symphonyMonitor.startPolling(agents: allGrouped)
-            threadWatcher.startWatching(agentIds: allGrouped.map(\.symphonyAgentId))
+        }
+
+        // Wire notification manager to thread watcher
+        threadWatcher.notificationManager = symphonyNotifications
+
+        // Start thread watcher with ALL agents across ALL projects (multi-workspace)
+        let globalAgentIds = SymphonyThreadWatcher.discoverAllAgentIds()
+        let groupedIds = allGrouped.map(\.symphonyAgentId)
+        let allIds = Array(Set(globalAgentIds + groupedIds))
+        if !allIds.isEmpty {
+            threadWatcher.startWatching(agentIds: allIds)
         }
 
         // Auto-link will start monitoring the detector once it's available
@@ -327,7 +338,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             taskStore: taskStore,
             sentinelClient: sentinelClient,
             agentHealthMonitor: agentHealthMonitor,
-            threadWatcher: threadWatcher
+            threadWatcher: threadWatcher,
+            symphonyNotifications: symphonyNotifications
         )
         panel.contentView = NSHostingView(
             rootView: MainOverlayView(
@@ -356,7 +368,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             taskStore: taskStore,
             sentinelClient: sentinelClient,
             agentHealthMonitor: agentHealthMonitor,
-            threadWatcher: threadWatcher
+            threadWatcher: threadWatcher,
+            symphonyNotifications: symphonyNotifications
         )
         container.contentView = NSHostingView(
             rootView: ContainerView()

@@ -8,6 +8,7 @@ struct ThreadView: View {
     let threadId: String
     @ObservedObject var monitor: SymphonyMonitor
     @ObservedObject var relay: NoteRelay
+    @ObservedObject var threadWatcher: SymphonyThreadWatcher
     let agentPartManager: AgentPartManager
 
     @State private var messageText = ""
@@ -166,6 +167,9 @@ struct ThreadView: View {
             ScoreIO.appendJsonl(note, to: ScoreIO.inboxPath(for: agentId))
         }
 
+        // Immediately append to thread watcher so the message appears in UI without waiting for poll
+        threadWatcher.appendLocalMessage(note)
+
         messageText = ""
 
         ConductorLog.component("thread-view")
@@ -196,6 +200,8 @@ struct ThreadView: View {
         case .approvalResponse: return ConductorTheme.healthy
         case .taskComplete: return ConductorTheme.healthy
         case .taskFailed: return ConductorTheme.critical
+        case .panInvoke: return ConductorTheme.active
+        case .panResult: return ConductorTheme.healthy
         }
     }
 
