@@ -9,7 +9,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "conductor", targets: ["Conductor"])
+        .executable(name: "Conductor", targets: ["Conductor"])
     ],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.16.0"),

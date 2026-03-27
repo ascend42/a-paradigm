@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.28.0] — 2026-03-27
+
+### Added
+
+- **Conductor standalone `.app` bundle** — `build-conductor.sh` produces a proper macOS application at `build/Conductor.app`. No Xcode required. Ad-hoc signed with entitlements for accessibility. Update flow: `git pull && ./build-conductor.sh --install`. Includes `--enable-autolaunch` for login start via LaunchAgent.
+- **Conductor `Resources/Info.plist` template** — Version placeholders (`__VERSION__`, `__BUILD_NUMBER__`) filled by build script from `VERSION` file + git rev count. Includes `NSAccessibilityUsageDescription`, `CFBundleIconFile`, `NSHighResolutionCapable`.
+- **Conductor entitlements file** — No sandbox (required for AX API), apple-events automation.
+- **Conductor `VERSION` file** — Single source of truth for Conductor version (0.2.0).
+
+### Changed
+
+- **Conductor product name capitalized** — `Package.swift` product renamed from `conductor` to `Conductor` for macOS conventions. Binary is now `.build/release/Conductor`.
+
 ## [5.27.1] — 2026-03-27
 
 ### Fixed
