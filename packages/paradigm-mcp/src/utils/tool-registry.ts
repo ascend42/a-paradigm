@@ -126,6 +126,7 @@ export const FEATURE_DETECTORS: Record<string, (rootDir: string) => boolean> = {
     return dirExists(rootDir, '.paradigm/agents') || fs.existsSync(globalDir);
   },
   'aspect-graph': (rootDir) => fileExists(rootDir, '.paradigm/aspect-graph.db'),
+  pan: (rootDir) => fileExists(rootDir, '.pan') || fileExists(rootDir, 'nevr.yaml'),
   notebooks: (rootDir) => {
     const globalDir = path.join(os.homedir(), '.paradigm', 'notebooks');
     return dirExists(rootDir, '.paradigm/notebooks') || fs.existsSync(globalDir);

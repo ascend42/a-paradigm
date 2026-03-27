@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-26T03:35:35.654Z'
+generated: '2026-03-26T20:30:49.427Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1700,11 +1700,50 @@ by_symbol:
       agent: []
   '#OrchestrationTools':
     symbol: '#OrchestrationTools'
-    total_changes: 3
-    last_modified: '2026-03-26T03:30:41Z'
+    total_changes: 4
+    last_modified: '2026-03-26T05:03:46Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_152
+        id: h0265
+        ts: '2026-03-26T05:03:46Z'
+        type: implement
+        symbols:
+          - '#OrchestrationTools'
+          - '#platform'
+          - '#university-routes'
+          - '#UniversitySection'
+          - '#universityStore'
+        author:
+          type: human
+          id: ascend
+        commit: f29103d3f1dfee35930e1ae068b4791addda54f1
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/utils/habits-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/sections/university/UniversitySection.tsx
+          - packages/paradigm/platform-ui/src/sections/university/store/universityStore.ts
+          - packages/paradigm/platform-ui/src/sections/university/styles/university.css
+          - packages/paradigm/src/core/habits/evaluator.ts
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/university.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#platform): v5.24.0 — University UI, habits consolidation, symphony key fix'
       - &ref_146
         id: h0264
         ts: '2026-03-26T03:30:41Z'
@@ -1819,7 +1858,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_161
+      - &ref_162
         id: h0237
         ts: '2026-03-24T03:36:30Z'
         type: implement
@@ -2823,7 +2862,7 @@ by_symbol:
           - packages/university/src/content/courses/para-701.json
         description: 'feat(#university): PARA 701: Agent Mastery — 10-lesson course'
       - *ref_23
-      - &ref_152
+      - &ref_158
         id: h0224
         ts: '2026-03-21T10:11:16Z'
         type: implement
@@ -3148,7 +3187,7 @@ by_symbol:
         description: 'feat(#enforcement): v5.22.0 — enforcement configuration system with user-controlled severity'
       - *ref_28
       - *ref_29
-      - &ref_170
+      - &ref_171
         id: h0254
         ts: '2026-03-25T12:17:34Z'
         type: implement
@@ -3529,7 +3568,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_159
+      - &ref_160
         id: h0227
         ts: '2026-03-21T12:33:27Z'
         type: implement
@@ -3602,7 +3641,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_169
+      - &ref_170
         id: h0258
         ts: '2026-03-25T17:27:03Z'
         type: implement
@@ -4620,7 +4659,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_167
+      - &ref_168
         id: h0244
         ts: '2026-03-24T20:16:03Z'
         type: implement
@@ -4652,7 +4691,7 @@ by_symbol:
           - packages/paradigm/src/core/.purpose
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.11.0 — enforcement habits, symbol debt cleanup, PARA 701 prep'
-      - &ref_164
+      - &ref_165
         id: h0235
         ts: '2026-03-24T03:23:42Z'
         type: implement
@@ -5456,7 +5495,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_63
-      - &ref_168
+      - &ref_169
         id: h0240
         ts: '2026-03-24T18:52:11Z'
         type: implement
@@ -5477,7 +5516,7 @@ by_symbol:
           - packages/paradigm/src/commands/shift.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.9.1 — model tier resolution system'
-      - &ref_165
+      - &ref_166
         id: h0238
         ts: '2026-03-24T14:12:31Z'
         type: implement
@@ -7361,7 +7400,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_162
+      - &ref_163
         id: h0232
         ts: '2026-03-24T02:15:39Z'
         type: implement
@@ -11949,7 +11988,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_171
+      - &ref_172
         id: h0255
         ts: '2026-03-25T12:48:24Z'
         type: implement
@@ -12036,7 +12075,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.9.0 — live orchestration visibility via Symphony + Conductor'
-      - &ref_163
+      - &ref_164
         id: h0234
         ts: '2026-03-24T02:53:04Z'
         type: implement
@@ -12092,7 +12131,7 @@ by_symbol:
       - *ref_146
       - *ref_63
       - *ref_147
-      - &ref_166
+      - &ref_167
         id: h0250
         ts: '2026-03-25T06:11:15Z'
         type: implement
@@ -12214,12 +12253,13 @@ by_symbol:
       agent: []
   '#platform':
     symbol: '#platform'
-    total_changes: 6
-    last_modified: '2026-03-25T12:59:35Z'
+    total_changes: 7
+    last_modified: '2026-03-26T05:03:46Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_172
+      - *ref_152
+      - &ref_173
         id: h0256
         ts: '2026-03-25T12:59:35Z'
         type: implement
@@ -12271,7 +12311,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/styles/tokens.css
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#platform): v5.21.0 — light mode color sweep, DetailPanel decomposition, fetch cleanup'
-      - &ref_173
+      - &ref_174
         id: h0248
         ts: '2026-03-25T03:58:27Z'
         type: implement
@@ -12305,7 +12345,6 @@ by_symbol:
         description: 'feat(#platform, #cli): v5.14.0 — command palette, explain-files, CLI output convention'
       - *ref_148
       - *ref_55
-      - *ref_152
     contributors:
       human:
         - ascend
@@ -12402,7 +12441,7 @@ by_symbol:
     recent:
       - *ref_156
       - *ref_157
-      - *ref_152
+      - *ref_158
     contributors:
       human:
         - ascend
@@ -12415,7 +12454,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_147
-      - &ref_158
+      - &ref_159
         id: h0241
         ts: '2026-03-24T19:48:24Z'
         type: implement
@@ -12454,7 +12493,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_158
+      - *ref_159
       - *ref_23
       - *ref_140
     contributors:
@@ -12468,7 +12507,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_159
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -12480,7 +12519,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_159
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -12492,7 +12531,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_160
+      - &ref_161
         id: h0228
         ts: '2026-03-21T13:14:57Z'
         type: implement
@@ -12525,7 +12564,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_160
+      - *ref_161
     contributors:
       human:
         - ascend
@@ -12537,8 +12576,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_161
       - *ref_162
+      - *ref_163
     contributors:
       human:
         - ascend
@@ -12550,7 +12589,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_162
+      - *ref_163
     contributors:
       human:
         - ascend
@@ -12562,7 +12601,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_162
+      - *ref_163
     contributors:
       human:
         - ascend
@@ -12574,7 +12613,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_164
       - *ref_128
     contributors:
       human:
@@ -12587,7 +12626,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_164
       - *ref_128
     contributors:
       human:
@@ -12600,7 +12639,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_164
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -12612,7 +12651,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_164
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -12643,7 +12682,7 @@ by_symbol:
           - .paradigm/protocols/index.yaml
           - .paradigm/university/index.yaml
         description: 'chore: include paradigm index and event files'
-      - *ref_164
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -12655,7 +12694,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_164
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -12667,8 +12706,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_158
-      - *ref_165
+      - *ref_159
+      - *ref_166
     contributors:
       human:
         - ascend
@@ -12680,8 +12719,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_167
       - *ref_166
-      - *ref_165
     contributors:
       human:
         - ascend
@@ -12718,8 +12757,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
       - *ref_168
+      - *ref_169
     contributors:
       human:
         - ascend
@@ -12731,8 +12770,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
-      - *ref_158
+      - *ref_168
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -12744,7 +12783,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
+      - *ref_168
     contributors:
       human:
         - ascend
@@ -12756,9 +12795,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
-      - *ref_55
       - *ref_167
+      - *ref_55
+      - *ref_168
     contributors:
       human:
         - ascend
@@ -12831,8 +12870,8 @@ by_symbol:
     fragility: low
     recent:
       - *ref_63
-      - *ref_169
       - *ref_170
+      - *ref_171
       - *ref_156
       - *ref_148
     contributors:
@@ -12846,7 +12885,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_172
       - *ref_148
     contributors:
       human:
@@ -12859,7 +12898,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_172
       - *ref_148
     contributors:
       human:
@@ -12872,7 +12911,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
       - *ref_148
     contributors:
       human:
@@ -12909,7 +12948,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_174
     contributors:
       human:
         - ascend
@@ -12921,7 +12960,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_174
     contributors:
       human:
         - ascend
@@ -12933,7 +12972,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_174
     contributors:
       human:
         - ascend
@@ -12945,7 +12984,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_174
     contributors:
       human:
         - ascend
@@ -12981,7 +13020,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -12993,7 +13032,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -13005,7 +13044,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -13017,7 +13056,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -13029,7 +13068,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -13101,7 +13140,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_170
+      - *ref_171
     contributors:
       human:
         - ascend
@@ -13113,7 +13152,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_172
     contributors:
       human:
         - ascend
@@ -13125,7 +13164,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_172
     contributors:
       human:
         - ascend
@@ -13137,7 +13176,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_172
     contributors:
       human:
         - ascend
@@ -13149,7 +13188,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -13161,7 +13200,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -13173,7 +13212,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -13260,6 +13299,42 @@ by_symbol:
     fragility: low
     recent:
       - *ref_146
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#university-routes':
+    symbol: '#university-routes'
+    total_changes: 1
+    last_modified: '2026-03-26T05:03:46Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_152
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#UniversitySection':
+    symbol: '#UniversitySection'
+    total_changes: 1
+    last_modified: '2026-03-26T05:03:46Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_152
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#universityStore':
+    symbol: '#universityStore'
+    total_changes: 1
+    last_modified: '2026-03-26T05:03:46Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_152
     contributors:
       human:
         - ascend

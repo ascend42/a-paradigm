@@ -735,3 +735,10 @@
 {"id":"ev-1774498709424-1266","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T04:18:29.424Z","path":"packages/paradigm-mcp/src/utils/habits-loader.ts"}
 {"id":"ev-1774498719077-0606","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-26T04:18:39.077Z","path":"packages/paradigm/src/core/habits/evaluator.ts"}
 {"id":"ev-1774500881856-5727","timestamp":"2026-03-26T04:54:41.856Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1774615211903-8140","timestamp":"2026-03-27T12:40:11.903Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#orchestration","#OrchestrationTools","#platform","#UniversitySection","#universityStore","#university-routes","~quick-check-escalation","~advocate-role-prompt","~magnitude-based-orchestration","~agent-default-model-assignments"],"context":"Lore recorded: v5.23.0–5.24.0 + README rewrite + Neverland pillars response"}
+{"id":"ev-1774620663629-2487","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-27T14:11:03.629Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774620669986-3927","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-27T14:11:09.986Z","path":"packages/paradigm-mcp/src/utils/symphony-loader.ts"}
+{"id":"ev-1774620693612-8107","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-27T14:11:33.613Z","path":"packages/paradigm-mcp/src/utils/symphony-loader.ts"}
+{"id":"ev-1774620701692-7127","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-27T14:11:41.692Z","path":"packages/paradigm-mcp/src/types/agents.ts"}
+{"id":"ev-1774620711042-8767","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-27T14:11:51.042Z","path":"packages/paradigm-mcp/src/utils/tool-registry.ts"}
+{"id":"ev-1774620785420-4725","timestamp":"2026-03-27T14:13:05.420Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}

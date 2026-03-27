@@ -56,6 +56,22 @@ export interface AgentProfile {
   nomination?: AgentNomination;
   /** Whether this agent is benched (skipped by Maestro orchestration) */
   benched?: boolean;
+
+  // ── PAN Network Extensions ──
+
+  /** PAN agent network configuration — links Paradigm identity to PAN agent */
+  network?: AgentNetwork;
+}
+
+export interface AgentNetwork {
+  /** PAN agent ID (e.g., "@scope/agent-name") */
+  panAgent?: string;
+  /** PAN offerings this agent can invoke */
+  offerings?: string[];
+  /** Whether other PAN agents can invoke this agent */
+  canBeInvoked?: boolean;
+  /** Max concurrent invocations allowed */
+  maxConcurrentInvocations?: number;
 }
 
 export interface AgentPersonality {

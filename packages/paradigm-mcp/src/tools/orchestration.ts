@@ -149,6 +149,12 @@ interface AgentPromptResult {
     reads: string[];
     writes: string[];
   };
+  /** PAN integration: tool names/groups this agent may use during execution */
+  tools?: string[];
+  /** PAN integration: execution mode — single-shot or multi-step ReAct */
+  mode?: 'single' | 'react';
+  /** PAN integration: max iterations for ReAct mode (default: 10) */
+  maxIters?: number;
 }
 
 // ============================================================================

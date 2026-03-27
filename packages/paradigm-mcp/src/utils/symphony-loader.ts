@@ -60,7 +60,10 @@ export type MessageIntent =
   | 'approval-request'
   | 'approval-response'
   | 'task-complete'
-  | 'task-failed';
+  | 'task-failed'
+  // PAN agent network intents
+  | 'pan-invoke'
+  | 'pan-result';
 
 // ── Task Protocol Payloads ──────────────────────────────────────
 
@@ -100,6 +103,23 @@ export interface ApprovalResponsePayload {
   decision: 'approved' | 'rejected' | 'redirected';
   feedback?: string;
   redirectTo?: string;
+}
+
+// ── PAN Agent Network Payloads ──────────────────────────────────
+
+export interface PanInvokePayload {
+  agentId: string;
+  offering: string;
+  params: Record<string, unknown>;
+  callStackDepth: number;
+  maxTokenBudget?: number;
+}
+
+export interface PanResultPayload {
+  requestId: string;
+  result: unknown;
+  usage: { inputTokens: number; outputTokens: number };
+  iterations?: number;
 }
 
 export interface MessageContent {

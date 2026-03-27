@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.25.0] — 2026-03-27
+
+### Added
+
+- **PAN network fields on `AgentPromptResult`** — `tools` (tool names/groups), `mode` ('single' | 'react'), `maxIters` (iteration budget). Lets Paradigm orchestration target ReAct-capable PAN agents without itself becoming a ReAct loop.
+- **`pan-invoke` / `pan-result` Symphony intents** — Typed channel for PAN agent invocation over Symphony. `PanInvokePayload` carries agentId, offering, params, callStackDepth. `PanResultPayload` returns result with token usage and iteration count.
+- **`network` section on `AgentProfile`** — Links Paradigm agent identity to PAN agent ID, declares available offerings, invocation permissions, and concurrency limits.
+- **`pan` feature tier in tool registry** — Auto-detects `.pan` or `nevr.yaml` in project root. When present, PAN-specific tools become available alongside existing Paradigm tools.
+
 ## [5.24.0] — 2026-03-25
 
 ### Added
