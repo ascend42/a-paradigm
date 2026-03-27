@@ -111,7 +111,24 @@ export async function handleReindexTool(
     toolCache.clear();
     invalidateFeatureCache();
 
-    const text = JSON.stringify(result, null, 2);
+    // Return compact summary — full result is 80KB+ and destroys context windows
+    const issues = (result.integrityReport?.brokenReferences?.length || 0)
+      + (result.integrityReport?.duplicateSymbols?.length || 0)
+      + (result.componentAnchorIssues || 0)
+      + (result.crossFileIssues || 0);
+
+    const summary = {
+      success: true,
+      symbolCount: result.symbolCount,
+      breakdown: result.breakdown,
+      flowCount: result.flowCount,
+      filesWritten: result.filesWritten.length,
+      ...(result.aspectGraphStats ? { aspects: result.aspectGraphStats.aspects, loreLinks: result.aspectGraphStats.loreLinks } : {}),
+      ...(result.protocolHealth ? { protocols: result.protocolHealth.total, staleProtocols: result.protocolHealth.stale } : {}),
+      ...(issues > 0 ? { issues } : {}),
+    };
+
+    const text = JSON.stringify(summary, null, 2);
     trackToolCall(text.length, name);
     return { handled: true, text };
   } catch (err) {
