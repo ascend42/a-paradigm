@@ -291,14 +291,17 @@ export async function handleAgentTool(
     }
 
     case 'paradigm_agent_bench': {
-      const benchId = args.id as string;
-      const benchProfile = resolveAgent(ctx.rootDir, benchId);
+      const benchInput = args.id as string;
+      const benchProfile = resolveAgent(ctx.rootDir, benchInput);
       if (!benchProfile) {
         return {
           handled: true,
-          text: JSON.stringify({ error: `Agent "${benchId}" not found` }, null, 2),
+          text: JSON.stringify({ error: `Agent "${benchInput}" not found` }, null, 2),
         };
       }
+
+      // Use the canonical agent ID (not the nickname)
+      const benchId = benchProfile.id;
 
       // Remove from project roster (roster-scoped, not global)
       let currentRoster = loadProjectRoster(ctx.rootDir);
@@ -314,22 +317,26 @@ export async function handleAgentTool(
         handled: true,
         text: JSON.stringify({
           id: benchId,
+          ...(benchProfile.nickname ? { nickname: benchProfile.nickname } : {}),
           removedFromRoster: true,
           rosterCount: currentRoster.length,
-          note: `${benchId} removed from this project's roster. Still available globally.`,
+          note: `${benchProfile.nickname || benchId} (${benchId}) removed from this project's roster. Still available globally.`,
         }, null, 2),
       };
     }
 
     case 'paradigm_agent_activate': {
-      const activateId = args.id as string;
-      const activateProfile = resolveAgent(ctx.rootDir, activateId);
+      const activateInput = args.id as string;
+      const activateProfile = resolveAgent(ctx.rootDir, activateInput);
       if (!activateProfile) {
         return {
           handled: true,
-          text: JSON.stringify({ error: `Agent "${activateId}" not found` }, null, 2),
+          text: JSON.stringify({ error: `Agent "${activateInput}" not found` }, null, 2),
         };
       }
+
+      // Use the canonical agent ID (not the nickname)
+      const activateId = activateProfile.id;
 
       // Add to project roster
       let activateRoster = loadProjectRoster(ctx.rootDir);
@@ -347,9 +354,10 @@ export async function handleAgentTool(
         handled: true,
         text: JSON.stringify({
           id: activateId,
+          ...(activateProfile.nickname ? { nickname: activateProfile.nickname } : {}),
           addedToRoster: true,
           rosterCount: activateRoster?.length ?? 'all (no roster)',
-          note: `${activateId} is active on this project's roster.`,
+          note: `${activateProfile.nickname || activateId} (${activateId}) is active on this project's roster.`,
         }, null, 2),
       };
     }
