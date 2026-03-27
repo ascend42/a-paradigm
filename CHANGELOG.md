@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`network` section on `AgentProfile`** — Links Paradigm agent identity to PAN agent ID, declares available offerings, invocation permissions, and concurrency limits.
 - **`pan` feature tier in tool registry** — Auto-detects `.pan` or `nevr.yaml` in project root. When present, PAN-specific tools become available alongside existing Paradigm tools.
 
+### Fixed
+
+- **Compact reindex response** — `paradigm_reindex` returned the full 80KB+ RebuildResult (every orphaned symbol, component type breakdown, integrity report). Now returns a ~500 byte summary: success, symbolCount, breakdown, flowCount, filesWritten count, and issue count. Prevents context window destruction on large projects.
+
 ## [5.24.0] — 2026-03-25
 
 ### Added
