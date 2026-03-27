@@ -18,7 +18,7 @@ import { getPreset, isValidLevel, isValidSeverity, isValidCheckId } from './pres
 // DEFAULTS
 // ═══════════════════════════════════════════════════════════════════
 
-const DEFAULT_LEVEL: EnforcementLevel = 'balanced';
+const DEFAULT_LEVEL: EnforcementLevel = 'minimal';
 
 const DEFAULT_ORCHESTRATION = {
   threshold: 3,

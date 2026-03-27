@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`paradigm shift` runs non-interactively by default** — Previously forced interactive model selection prompts (`configureModels: true`), which blocked `! paradigm shift` in Claude Code and broke the "one command setup" promise. Now auto-defaults model tiers based on environment detection (opus/sonnet/haiku for Claude Code, sonnet/sonnet/haiku for Cursor). Use `paradigm shift --configure-models` for interactive selection.
+- **Default enforcement level changed from `balanced` to `minimal`** — New projects no longer block on missing `.purpose` files or habits violations. `minimal` warns on `purpose-coverage` and `habits-blocking` but never blocks. Users upgrade to `balanced` or `strict` once they understand the system. Changed in: writer.ts (seed default), loader.ts (fallback default), enforcement.ts (MCP fallback).
 
 ## [5.27.0] — 2026-03-27
 

@@ -124,8 +124,8 @@ function saveConfig(rootDir: string, config: ConfigYaml): void {
 }
 
 function resolveEffective(config: ConfigYaml): Record<CheckId, CheckSeverity> & { orchestrationThreshold: number } {
-  const level = (config.enforcement?.level || 'balanced') as EnforcementLevel;
-  const preset = PRESETS[level] || PRESETS.balanced;
+  const level = (config.enforcement?.level || 'minimal') as EnforcementLevel;
+  const preset = PRESETS[level] || PRESETS.minimal;
   const overrides = (config.enforcement?.checks || {}) as Partial<Record<CheckId, CheckSeverity>>;
   const threshold = config.enforcement?.orchestration?.threshold ?? 3;
 
@@ -202,7 +202,7 @@ async function handleEnforcementConfigure(
     case 'status': {
       const config = loadConfig(ctx.rootDir);
       const effective = resolveEffective(config);
-      const activeLevel = (config.enforcement?.level || 'balanced') as string;
+      const activeLevel = (config.enforcement?.level || 'minimal') as string;
       const overrides = config.enforcement?.checks || {};
       const threshold = config.enforcement?.orchestration?.threshold ?? 3;
 
@@ -276,7 +276,7 @@ async function handleEnforcementConfigure(
       saveConfig(ctx.rootDir, config);
 
       const effective = resolveEffective(config);
-      const activeLevel = (config.enforcement?.level || 'balanced') as string;
+      const activeLevel = (config.enforcement?.level || 'minimal') as string;
       return JSON.stringify({
         success: true,
         message: `All per-check overrides cleared. Preset "${activeLevel}" is now fully in effect.`,
