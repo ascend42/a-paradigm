@@ -155,6 +155,30 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
 }
 
 /**
+ * Find agents by nickname (case-insensitive). Returns all matches.
+ * Useful when users remember "Jinx" but not "advocate".
+ */
+export function findAgentsByNickname(rootDir: string, nickname: string): AgentProfile[] {
+  const all = loadAllAgentProfiles(rootDir);
+  const lower = nickname.toLowerCase();
+  return all.filter(p => p.nickname?.toLowerCase() === lower);
+}
+
+/**
+ * Resolve an agent by ID or nickname. Tries ID first, then nickname.
+ * Returns the first match (ID is exact, nickname may have multiple).
+ */
+export function resolveAgent(rootDir: string, idOrNickname: string): AgentProfile | null {
+  // Try exact ID first
+  const byId = loadAgentProfile(rootDir, idOrNickname);
+  if (byId) return byId;
+
+  // Try nickname (case-insensitive)
+  const byNickname = findAgentsByNickname(rootDir, idOrNickname);
+  return byNickname[0] ?? null;
+}
+
+/**
  * Load all agent profiles from both global and project dirs, deduplicated by id.
  */
 export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {

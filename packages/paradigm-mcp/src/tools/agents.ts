@@ -11,6 +11,8 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import {
   loadAllAgentProfiles,
   loadAgentProfile,
+  resolveAgent,
+  findAgentsByNickname,
   saveAgentProfile,
   queryExpertise,
   verifyIntegrity,
@@ -77,7 +79,7 @@ export function getAgentToolsList() {
         properties: {
           id: {
             type: 'string',
-            description: 'Agent ID (e.g., "architect", "builder")',
+            description: 'Agent ID or nickname (e.g., "architect", "Apex", "Jinx")',
           },
         },
         required: ['id'],
@@ -232,14 +234,24 @@ export async function handleAgentTool(
 
     case 'paradigm_agent_get': {
       const id = args.id as string;
-      const profile = loadAgentProfile(ctx.rootDir, id);
+      const profile = resolveAgent(ctx.rootDir, id);
 
       if (!profile) {
+        // Check if it's a partial nickname match
+        const allProfiles = loadAllAgentProfiles(ctx.rootDir);
+        const lower = id.toLowerCase();
+        const fuzzy = allProfiles.filter(p =>
+          p.nickname?.toLowerCase().includes(lower) || p.id.includes(lower)
+        );
         return {
           handled: true,
           text: JSON.stringify({
-            error: `Agent profile "${id}" not found`,
-            suggestion: `Create with \`paradigm agent create ${id} --global\``,
+            error: `Agent "${id}" not found by ID or nickname`,
+            ...(fuzzy.length > 0 ? {
+              didYouMean: fuzzy.map(p => ({ id: p.id, nickname: p.nickname })),
+            } : {
+              suggestion: `Create with \`paradigm agent create ${id} --global\``,
+            }),
           }, null, 2),
         };
       }
@@ -280,7 +292,7 @@ export async function handleAgentTool(
 
     case 'paradigm_agent_bench': {
       const benchId = args.id as string;
-      const benchProfile = loadAgentProfile(ctx.rootDir, benchId);
+      const benchProfile = resolveAgent(ctx.rootDir, benchId);
       if (!benchProfile) {
         return {
           handled: true,
@@ -311,7 +323,7 @@ export async function handleAgentTool(
 
     case 'paradigm_agent_activate': {
       const activateId = args.id as string;
-      const activateProfile = loadAgentProfile(ctx.rootDir, activateId);
+      const activateProfile = resolveAgent(ctx.rootDir, activateId);
       if (!activateProfile) {
         return {
           handled: true,
