@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.27.1] — 2026-03-27
+
+### Fixed
+
+- **`paradigm shift` runs non-interactively by default** — Previously forced interactive model selection prompts (`configureModels: true`), which blocked `! paradigm shift` in Claude Code and broke the "one command setup" promise. Now auto-defaults model tiers based on environment detection (opus/sonnet/haiku for Claude Code, sonnet/sonnet/haiku for Cursor). Use `paradigm shift --configure-models` for interactive selection.
+
 ## [5.27.0] — 2026-03-27
 
 ### Added

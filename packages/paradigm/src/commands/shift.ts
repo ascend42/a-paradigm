@@ -247,7 +247,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   }
 
   // Step 2: Team init (if needed)
-  // Always run interactive model configuration — it's a fun step in the setup process
+  // Auto-default models based on environment detection. Interactive prompts only if --configure-models is passed.
   const teamConfigured = agentsConfigured(cwd);
   if (!teamConfigured || options.force) {
     console.log(chalk.cyan('  Step 2/6: Initializing team configuration...'));
@@ -255,8 +255,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       await teamInitCommand(cwd, {
         force: options.force,
         json: false,
-        configureModels: true,
-        noConfigureModels: false,
+        configureModels: options.configureModels || false,
+        noConfigureModels: !options.configureModels,
       });
       console.log(chalk.green('  ✓ Team configuration initialized\n'));
     } catch (error) {
