@@ -285,51 +285,33 @@ struct ContainerView: View {
         }
     }
 
-    // Sprint 0 spike: embedded terminal session for cell 0
-    @State private var spikeSession: TerminalSession? = nil
-    @State private var spikeSessionActive = false
+    @State private var showNewSessionSheet: Int? = nil
 
     @ViewBuilder
     private func gridCell(index: Int, instance: ManagedInstance?) -> some View {
-        if index == 0 && spikeSession != nil {
-            // Sprint 0: Embedded terminal spike
+        if let session = env.terminalSessionManager.sessionForCellIndex(index) {
+            // Embedded terminal session
             TerminalCellView(
-                session: spikeSession!,
+                session: session,
                 appearance: .default,
-                isActive: spikeSessionActive,
-                onFocus: { spikeSessionActive = true },
-                onClose: { spikeSession = nil },
+                isActive: env.terminalSessionManager.activeSessionId == session.id,
+                onFocus: { env.terminalSessionManager.focusSession(id: session.id) },
+                onClose: { env.terminalSessionManager.removeSession(id: session.id) },
                 onProcessTerminated: { code in
-                    var s = spikeSession
-                    s?.status = .exited(code: code)
-                    spikeSession = s
+                    env.terminalSessionManager.reportProcessTerminated(sessionId: session.id, exitCode: code)
                 }
             )
-        } else if index == 0 && spikeSession == nil {
-            // Sprint 0: Launch button — always pick a folder
-            VStack(spacing: 12) {
-                Image(systemName: "terminal")
+        } else if instance == nil {
+            // Empty cell — launch new session
+            VStack(spacing: 10) {
+                Image(systemName: "plus.rectangle.on.rectangle")
                     .font(.title2)
-                    .foregroundStyle(ConductorTheme.brand)
-                Text("Embedded Terminal")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Button("Launch Claude Code") {
-                    let panel = NSOpenPanel()
-                    panel.title = "Select Project Folder"
-                    panel.message = "Choose a project directory to launch Claude Code in"
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    panel.allowsMultipleSelection = false
-                    panel.canCreateDirectories = false
-                    // Start at home or most recent project
-                    if let recent = env.workspaceManager.managedInstances.first?.projectDirectory {
-                        panel.directoryURL = URL(fileURLWithPath: recent).deletingLastPathComponent()
-                    }
-                    if panel.runModal() == .OK, let url = panel.url {
-                        spikeSession = TerminalSession(projectPath: url.path)
-                        spikeSession?.status = .running
-                    }
+                    .foregroundStyle(ConductorTheme.brand.opacity(0.6))
+                Text("Cell \(index + 1)")
+                    .font(.caption2)
+                    .foregroundStyle(.quaternary)
+                Button("New Session") {
+                    showNewSessionSheet = index
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
@@ -337,8 +319,18 @@ struct ContainerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(ConductorTheme.brand.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                    .stroke(ConductorTheme.brand.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
             )
+            .sheet(isPresented: Binding(
+                get: { showNewSessionSheet == index },
+                set: { if !$0 { showNewSessionSheet = nil } }
+            )) {
+                NewSessionSheet(
+                    sessionManager: env.terminalSessionManager,
+                    projectStore: env.projectStore,
+                    cellIndex: index
+                )
+            }
         } else if let instance {
             // Active cell — instance info
             VStack(alignment: .leading, spacing: 4) {

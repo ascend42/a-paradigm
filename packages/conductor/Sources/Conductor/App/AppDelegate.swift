@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let agentHealthMonitor = AgentHealthMonitor()
     let threadWatcher = SymphonyThreadWatcher()
     let symphonyNotifications = SymphonyNotificationManager()
+    let terminalSessionManager = TerminalSessionManager()
     let hotKeyBindingRegistry = HotKeyBindingRegistry()
     let eyebrowBindingRegistry = EyebrowBindingRegistry()
     private(set) lazy var orchestrator: InputOrchestrator = InputOrchestrator(
@@ -339,7 +340,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sentinelClient: sentinelClient,
             agentHealthMonitor: agentHealthMonitor,
             threadWatcher: threadWatcher,
-            symphonyNotifications: symphonyNotifications
+            symphonyNotifications: symphonyNotifications,
+            terminalSessionManager: terminalSessionManager
         )
         panel.contentView = NSHostingView(
             rootView: MainOverlayView(
@@ -369,7 +371,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sentinelClient: sentinelClient,
             agentHealthMonitor: agentHealthMonitor,
             threadWatcher: threadWatcher,
-            symphonyNotifications: symphonyNotifications
+            symphonyNotifications: symphonyNotifications,
+            terminalSessionManager: terminalSessionManager
         )
         container.contentView = NSHostingView(
             rootView: ContainerView()

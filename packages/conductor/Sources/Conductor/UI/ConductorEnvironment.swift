@@ -20,6 +20,7 @@ final class ConductorEnvironment: ObservableObject {
     @Published var agentHealthMonitor: AgentHealthMonitor
     @Published var threadWatcher: SymphonyThreadWatcher
     @Published var symphonyNotifications: SymphonyNotificationManager
+    @Published var terminalSessionManager: TerminalSessionManager
 
     init(
         orchestrator: InputOrchestrator,
@@ -35,7 +36,8 @@ final class ConductorEnvironment: ObservableObject {
         sentinelClient: SentinelWSClient,
         agentHealthMonitor: AgentHealthMonitor,
         threadWatcher: SymphonyThreadWatcher,
-        symphonyNotifications: SymphonyNotificationManager
+        symphonyNotifications: SymphonyNotificationManager,
+        terminalSessionManager: TerminalSessionManager
     ) {
         self.orchestrator = orchestrator
         self.workspaceManager = workspaceManager
@@ -51,5 +53,6 @@ final class ConductorEnvironment: ObservableObject {
         self.agentHealthMonitor = agentHealthMonitor
         self.threadWatcher = threadWatcher
         self.symphonyNotifications = symphonyNotifications
+        self.terminalSessionManager = terminalSessionManager
     }
 }
