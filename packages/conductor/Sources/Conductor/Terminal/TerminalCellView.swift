@@ -61,6 +61,15 @@ struct TerminalCellView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.4))
 
+            // Symphony thread count badge
+            if let agentId = session.symphonyAgentId {
+                let _ = agentId // silence unused warning — badge shows linked status
+                Image(systemName: "link")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.green.opacity(0.6))
+                    .help("Linked to Symphony")
+            }
+
             Spacer()
 
             // Close button

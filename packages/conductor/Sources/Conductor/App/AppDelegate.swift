@@ -54,8 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ConductorLog.app.info("Conductor launching")
 
-        // Hide dock icon — Conductor is a menu bar + overlay app
-        NSApp.setActivationPolicy(.accessory)
+        // Workspace mode: show in Dock and Cmd+Tab. Overlay mode: menu bar only.
+        if useContainerMode {
+            NSApp.setActivationPolicy(.regular)
+        } else {
+            NSApp.setActivationPolicy(.accessory)
+        }
 
         setupMenuBar()
         setupOrchestrator()
@@ -109,6 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Wire notification manager to thread watcher
         threadWatcher.notificationManager = symphonyNotifications
+
+        // Wire terminal session manager to Symphony components
+        terminalSessionManager.agentPartManager = agentPartManager
+        terminalSessionManager.threadWatcher = threadWatcher
 
         // Start thread watcher with ALL agents across ALL projects (multi-workspace)
         let globalAgentIds = SymphonyThreadWatcher.discoverAllAgentIds()

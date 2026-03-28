@@ -52,6 +52,45 @@ struct ContainerView: View {
             .frame(height: statusBarHeight)
         }
         .background(.ultraThickMaterial)
+        // Keyboard shortcuts (Cmd+ only — terminals pass these to the OS)
+        .keyboardShortcut("t", modifiers: .command) // Cmd+T: handled by sheet trigger below
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+                guard event.modifierFlags.contains(.command) else { return event }
+
+                switch event.charactersIgnoringModifiers {
+                case "t":
+                    // Cmd+T: New session in first empty cell
+                    let totalCells = gridPreset.totalCells
+                    for i in 0..<totalCells {
+                        if env.terminalSessionManager.sessionForCellIndex(i) == nil {
+                            showNewSessionSheet = i
+                            return nil
+                        }
+                    }
+                    return nil
+                case "w":
+                    // Cmd+W: Close active session
+                    if let activeId = env.terminalSessionManager.activeSessionId {
+                        env.terminalSessionManager.removeSession(id: activeId)
+                    }
+                    return nil
+                case "\\":
+                    // Cmd+\: Toggle sidebar
+                    withAnimation(.easeInOut(duration: 0.2)) { showSidebar.toggle() }
+                    return nil
+                case "1", "2", "3", "4", "5", "6", "7", "8":
+                    // Cmd+1-8: Focus cell N
+                    let cellIndex = Int(event.charactersIgnoringModifiers!)! - 1
+                    if let session = env.terminalSessionManager.sessionForCellIndex(cellIndex) {
+                        env.terminalSessionManager.focusSession(id: session.id)
+                    }
+                    return nil
+                default:
+                    return event
+                }
+            }
+        }
     }
 
     // MARK: - Header Bar
@@ -234,6 +273,26 @@ struct ContainerView: View {
                         }
                     }
                 }
+            }
+
+            // Active session context
+            if let project = env.terminalSessionManager.activeSessionProject {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                    Text(project)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(env.terminalSessionManager.sessions.count) sessions")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.03))
+                .cornerRadius(6)
             }
 
             // Live orchestration threads
