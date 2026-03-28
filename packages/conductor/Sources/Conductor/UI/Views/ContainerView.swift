@@ -294,8 +294,7 @@ struct ContainerView: View {
             TerminalCellView(
                 session: session,
                 appearance: .default,
-                isActive: env.terminalSessionManager.activeSessionId == session.id,
-                onFocus: { env.terminalSessionManager.focusSession(id: session.id) },
+                sessionManager: env.terminalSessionManager,
                 onClose: { env.terminalSessionManager.removeSession(id: session.id) },
                 onProcessTerminated: { code in
                     env.terminalSessionManager.reportProcessTerminated(sessionId: session.id, exitCode: code)

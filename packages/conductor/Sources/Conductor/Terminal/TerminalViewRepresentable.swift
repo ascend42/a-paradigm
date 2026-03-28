@@ -68,11 +68,30 @@ struct TerminalViewRepresentable: NSViewRepresentable {
         weak var terminalView: LocalProcessTerminalView?
         var onProcessTerminated: ((Int32) -> Void)?
         var onBecameFirstResponder: (() -> Void)?
+        private var eventMonitor: Any?
 
         init(session: TerminalSession, onProcessTerminated: ((Int32) -> Void)?, onBecameFirstResponder: (() -> Void)?) {
             self.session = session
             self.onProcessTerminated = onProcessTerminated
             self.onBecameFirstResponder = onBecameFirstResponder
+            super.init()
+
+            // Monitor mouse clicks to detect focus changes
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                guard let self, let tv = self.terminalView else { return event }
+                // Check if the click is inside our terminal view
+                let locationInView = tv.convert(event.locationInWindow, from: nil)
+                if tv.bounds.contains(locationInView) {
+                    self.onBecameFirstResponder?()
+                }
+                return event
+            }
+        }
+
+        deinit {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
         }
 
         // MARK: LocalProcessTerminalViewDelegate

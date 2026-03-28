@@ -7,10 +7,13 @@ import SwiftUI
 struct TerminalCellView: View {
     let session: TerminalSession
     let appearance: TerminalAppearance
-    let isActive: Bool
-    var onFocus: (() -> Void)?
+    @ObservedObject var sessionManager: TerminalSessionManager
     var onClose: (() -> Void)?
     var onProcessTerminated: ((Int32) -> Void)?
+
+    private var isActive: Bool {
+        sessionManager.activeSessionId == session.id
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +25,9 @@ struct TerminalCellView: View {
                 session: session,
                 appearance: appearance,
                 onProcessTerminated: onProcessTerminated,
-                onBecameFirstResponder: onFocus
+                onBecameFirstResponder: {
+                    sessionManager.focusSession(id: session.id)
+                }
             )
         }
         .background(Color(nsColor: appearance.backgroundColor))
@@ -34,10 +39,6 @@ struct TerminalCellView: View {
                     lineWidth: isActive ? 2 : 1
                 )
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onFocus?()
-        }
     }
 
     // MARK: - Toolbar

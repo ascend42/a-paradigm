@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Conductor embedded terminal (Sprint 0)** — SwiftTerm integration proven. Claude Code runs inside Conductor's container grid cells with full Ink TUI rendering (colors, ASCII art, interactive prompt, status bar). SwiftTerm added as Swift package dependency. New files: `TerminalSession`, `TerminalSessionState`, `TerminalViewRepresentable`, `TerminalCellView`. Launch button opens a folder picker to select the project directory.
 - **Conductor workspace spec** — Full spec at `docs/specs/conductor-workspace.md` covering 4 sprints: SwiftTerm spike (done), session manager + multi-pane, Symphony auto-link, polish + window management.
+- **Conductor Sprint 1: Session Manager + Multi-Pane** — `TerminalSessionManager` with session CRUD, max 8 sessions, active session tracking, cell assignment. `NewSessionSheet` with recent projects + folder picker. Every empty grid cell shows "New Session" button. Multiple Claude Code sessions run side by side with independent project directories. Focus ring updates on click between panes via `@ObservedObject` on the session manager.
 
 ## [5.28.0] — 2026-03-27
 
