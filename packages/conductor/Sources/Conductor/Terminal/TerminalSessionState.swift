@@ -12,6 +12,11 @@ struct TerminalAppearance {
     var cursorColor: NSColor
     var selectionColor: NSColor
 
+    /// Minimum and maximum font sizes.
+    static let minFontSize: CGFloat = 9
+    static let maxFontSize: CGFloat = 28
+    static let fontSizeStep: CGFloat = 1
+
     /// Default appearance matching Conductor's dark theme.
     static let `default` = TerminalAppearance(
         font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
@@ -21,4 +26,13 @@ struct TerminalAppearance {
         cursorColor: NSColor(red: 0.4, green: 0.6, blue: 1.0, alpha: 1.0),
         selectionColor: NSColor(red: 0.3, green: 0.4, blue: 0.6, alpha: 0.5)
     )
+
+    /// Return a copy with the font size adjusted.
+    func withFontSize(_ size: CGFloat) -> TerminalAppearance {
+        let clamped = min(max(size, Self.minFontSize), Self.maxFontSize)
+        var copy = self
+        copy.fontSize = clamped
+        copy.font = NSFont.monospacedSystemFont(ofSize: clamped, weight: .regular)
+        return copy
+    }
 }

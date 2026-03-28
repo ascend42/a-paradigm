@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupMenuBar()
+        setupMainMenu()
+        setupGlobalShortcuts()
         setupOrchestrator()
         setupSymphony()
         setupHotKeys()
@@ -311,6 +313,90 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
+    // MARK: - Main Menu (Application-Level Key Equivalents)
+
+    /// Set up the application main menu with keyboard shortcuts.
+    /// NSMenu key equivalents fire before any view's keyDown, so they work
+    /// even when SwiftTerm has focus and would otherwise consume the event.
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // App menu
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Conductor", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Conductor", action: #selector(quitApp), keyEquivalent: "q")
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        // View menu (font size + sidebar)
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+
+        let zoomIn = NSMenuItem(title: "Increase Font Size", action: #selector(handleZoomIn), keyEquivalent: "=")
+        zoomIn.keyEquivalentModifierMask = .command
+        viewMenu.addItem(zoomIn)
+
+        let zoomOut = NSMenuItem(title: "Decrease Font Size", action: #selector(handleZoomOut), keyEquivalent: "-")
+        zoomOut.keyEquivalentModifierMask = .command
+        viewMenu.addItem(zoomOut)
+
+        viewMenu.addItem(.separator())
+
+        let toggleSidebar = NSMenuItem(title: "Toggle Sidebar", action: nil, keyEquivalent: "\\")
+        toggleSidebar.keyEquivalentModifierMask = .command
+        viewMenu.addItem(toggleSidebar)
+
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+
+        // Session menu
+        let sessionMenuItem = NSMenuItem()
+        let sessionMenu = NSMenu(title: "Session")
+
+        let newSession = NSMenuItem(title: "New Session", action: nil, keyEquivalent: "t")
+        newSession.keyEquivalentModifierMask = .command
+        sessionMenu.addItem(newSession)
+
+        let closeSession = NSMenuItem(title: "Close Session", action: nil, keyEquivalent: "w")
+        closeSession.keyEquivalentModifierMask = .command
+        sessionMenu.addItem(closeSession)
+
+        sessionMenuItem.submenu = sessionMenu
+        mainMenu.addItem(sessionMenuItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func handleZoomIn() {
+        terminalSessionManager.increaseFontSize()
+    }
+
+    @objc private func handleZoomOut() {
+        terminalSessionManager.decreaseFontSize()
+    }
+
+    /// Global keyboard shortcut monitor — fires before any view's keyDown.
+    /// Handles Cmd+=/- for font sizing even when SwiftTerm has focus.
+    private func setupGlobalShortcuts() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.modifierFlags.contains(.command) else { return event }
+            guard let chars = event.charactersIgnoringModifiers else { return event }
+
+            switch chars {
+            case "=", "+":
+                self.terminalSessionManager.increaseFontSize()
+                return nil
+            case "-":
+                self.terminalSessionManager.decreaseFontSize()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
     // MARK: - Panel Management
 
     private func checkPermissionsAndLaunch() {
@@ -365,6 +451,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Launch the container workspace window.
     private func launchContainer() {
         let container = ContainerWindow()
+        container.onZoomIn = { [weak self] in self?.terminalSessionManager.increaseFontSize() }
+        container.onZoomOut = { [weak self] in self?.terminalSessionManager.decreaseFontSize() }
         let env = ConductorEnvironment(
             orchestrator: orchestrator,
             workspaceManager: workspaceManager,

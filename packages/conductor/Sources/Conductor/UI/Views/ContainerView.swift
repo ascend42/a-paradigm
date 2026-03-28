@@ -86,6 +86,14 @@ struct ContainerView: View {
                         env.terminalSessionManager.focusSession(id: session.id)
                     }
                     return nil
+                case "+", "=":
+                    // Cmd+Plus: Increase font size
+                    env.terminalSessionManager.increaseFontSize()
+                    return nil
+                case "-":
+                    // Cmd+Minus: Decrease font size
+                    env.terminalSessionManager.decreaseFontSize()
+                    return nil
                 default:
                     return event
                 }
@@ -352,7 +360,7 @@ struct ContainerView: View {
             // Embedded terminal session
             TerminalCellView(
                 session: session,
-                appearance: .default,
+                appearance: env.terminalSessionManager.appearance,
                 sessionManager: env.terminalSessionManager,
                 onClose: { env.terminalSessionManager.removeSession(id: session.id) },
                 onProcessTerminated: { code in

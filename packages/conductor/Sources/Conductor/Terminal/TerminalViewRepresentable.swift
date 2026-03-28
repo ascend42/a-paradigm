@@ -33,6 +33,18 @@ struct TerminalViewRepresentable: NSViewRepresentable {
         terminalView.processDelegate = context.coordinator
         context.coordinator.terminalView = terminalView
 
+        // Add drag-and-drop overlay (transparent, passes all mouse events through)
+        let dragOverlay = TerminalDragOverlayView(frame: .zero)
+        dragOverlay.terminalView = terminalView
+        dragOverlay.translatesAutoresizingMaskIntoConstraints = false
+        terminalView.addSubview(dragOverlay)
+        NSLayoutConstraint.activate([
+            dragOverlay.leadingAnchor.constraint(equalTo: terminalView.leadingAnchor),
+            dragOverlay.trailingAnchor.constraint(equalTo: terminalView.trailingAnchor),
+            dragOverlay.topAnchor.constraint(equalTo: terminalView.topAnchor),
+            dragOverlay.bottomAnchor.constraint(equalTo: terminalView.bottomAnchor),
+        ])
+
         // Build environment
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
@@ -55,8 +67,10 @@ struct TerminalViewRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ terminalView: LocalProcessTerminalView, context: Context) {
-        // Update appearance if changed
-        if terminalView.font != appearance.font {
+        // Always apply font — NSFont equality is unreliable and font size changes
+        // must propagate immediately when the session manager's appearance updates
+        let currentSize = terminalView.font.pointSize
+        if currentSize != appearance.fontSize {
             terminalView.font = appearance.font
         }
     }

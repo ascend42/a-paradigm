@@ -57,6 +57,29 @@ final class ContainerWindow: NSWindow {
         ConductorLog.component("container-window").info("Container window configured")
     }
 
+    /// Callback for font size changes (set by AppDelegate).
+    var onZoomIn: (() -> Void)?
+    var onZoomOut: (() -> Void)?
+
+    /// Intercept key equivalents before any subview (including SwiftTerm).
+    /// This is the only reliable way to handle Cmd+=/- when a terminal has focus.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command) else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        switch event.charactersIgnoringModifiers {
+        case "=", "+":
+            onZoomIn?()
+            return true
+        case "-":
+            onZoomOut?()
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
+    }
+
     /// Fit to screen (not full-screen, but maximized within visible area).
     func fitToScreen() {
         guard let screen = NSScreen.main else { return }

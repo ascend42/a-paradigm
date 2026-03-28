@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.30.0] — 2026-03-28
+
+### Added
+
+- **Rune (compliance) — 8th core agent** — Paradigm symbol compliance specialist. Plans symbols before implementation (Symbol Plan), validates coverage after (Compliance Report). Enforces 1:1 component-to-aspect ratio, flow coverage for 3+ component changes, signal registration for events, aspect anchor integrity. Uses only MCP tools. Added to all project type rosters, DEFAULT_MODELS (sonnet), AGENT_TIERS (tier-2), ROLE_PROMPTS, and paradigm_agent_prompt enum.
+- **Conductor: drag-and-drop file support** — Drag files from Finder into terminal panes. POSIX single-quote escaping (immune to shell injection). Written via `send(txt:)` — no auto-execute, user confirms. Transparent overlay NSView with `hitTest` returning nil (passes all mouse events through to SwiftTerm).
+- **Conductor: Cmd+=/- font sizing** — Window-level `performKeyEquivalent` override intercepts before SwiftTerm. Font size 9-28pt range, applied to all terminal panes.
+- **Conductor: application main menu** — View menu (font sizing), Session menu (new/close), App menu (about/quit) with keyboard equivalents.
+
 ## [5.29.0] — 2026-03-27
 
 ### Added

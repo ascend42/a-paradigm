@@ -18,6 +18,9 @@ final class TerminalSessionManager: ObservableObject {
     /// Maximum concurrent sessions.
     let maxSessions = 8
 
+    /// Current terminal appearance (shared across sessions, updated by Cmd+/Cmd-).
+    @Published var appearance: TerminalAppearance = .default
+
     /// Agent part manager for Symphony registration (injected by AppDelegate).
     weak var agentPartManager: AgentPartManager?
 
@@ -125,6 +128,20 @@ final class TerminalSessionManager: ObservableObject {
     func sessionForCellIndex(_ index: Int) -> TerminalSession? {
         let cellId = "cell-\(index)"
         return sessions.first { $0.cellId == cellId }
+    }
+
+    // MARK: - Font Size
+
+    /// Increase font size for all terminals.
+    func increaseFontSize() {
+        let newSize = appearance.fontSize + TerminalAppearance.fontSizeStep
+        appearance = appearance.withFontSize(newSize)
+    }
+
+    /// Decrease font size for all terminals.
+    func decreaseFontSize() {
+        let newSize = appearance.fontSize - TerminalAppearance.fontSizeStep
+        appearance = appearance.withFontSize(newSize)
     }
 
     // MARK: - Symphony Auto-Link
