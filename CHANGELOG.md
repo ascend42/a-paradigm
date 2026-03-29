@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.31.0] — 2026-03-28
+
+### Added
+
+- **PARA 001: Quick Start** — New 3-lesson course (~15 min). Hands-on from minute one: `paradigm shift` setup, meet the agent team, build a feature with orchestration. All HOW-first quizzes.
+- **Enforcement Levels lesson (PARA 301)** — Covers minimal/balanced/strict, all 13 checks, per-check overrides, and progression strategy.
+- **paradigm shift lesson (PARA 301)** — The 6-step onboarding command: init, migrate, scan, sync IDEs, install hooks, roster + tiers. Flags and when to re-run.
+- **Quick-Check lesson (PARA 401)** — Lightweight pre-implementation risk assessment with Jinx + reviewer. GREENLIGHT vs ESCALATE verdicts. When to use quick-check vs full orchestration.
+- **Conductor Workspace lesson (PARA 501)** — Visual mission control: workspace tiling, Symphony integration, task protocol (7 intents), agent health dashboard, local-only ML.
+
+### Changed
+
+- **PARA 101 reordered** — "Your First Steps" moved from lesson 8 to lesson 2. Students do before they theorize. Content updated with forward references.
+- **PARA 201 Aspect Graph condensed** — 10,688 → 3,376 chars. Now an introduction covering categories, fields, and 7 MCP tools. Points to PARA 501 for SQLite internals, learning loop, and edge origins.
+- **PARA 401 Agent Roles rewritten** — Bridges the 5→54 agent disconnect. Three-tier hierarchy (8 core, ~20 specialized, ~26+ ecosystem), all 8 core agents named, Rune compliance coverage, paradigm shift auto-rostering.
+- **Quiz upgrades WHAT→HOW** — Converted pure-recall questions to scenario-based in PARA 101 (welcome, five-symbols) and PARA 301 (history-system). All new lessons written HOW-first.
+- **University totals** — 7→8 courses, 75→82 lessons, 361 quiz questions across all courses.
+
+Symbols: #university, #enforcement-hooks, #shift-command, #orchestration, #conductor
+
 ## [5.30.0] — 2026-03-28
 
 ### Added

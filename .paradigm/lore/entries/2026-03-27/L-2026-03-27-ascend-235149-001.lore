@@ -1,0 +1,30 @@
+id: L-2026-03-27-ascend-235149-001
+type: milestone
+timestamp: '2026-03-27T23:51:49.086Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Sprint 0 SUCCESS — SwiftTerm renders Claude Code inside Conductor
+summary: 'SwiftTerm spike proved successful: Claude Code v2.1.86 runs inside Conductor''s embedded terminal with full Ink TUI rendering — welcome banner, ASCII art, colors, interactive prompt, status bar all work correctly. Apex was right (SwiftTerm is production-viable). Jinx''s concerns about OSC 133, performance, and rendering were not observed in initial testing. Sprint 1 (session manager + multi-pane) is greenlit.'
+symbols_touched:
+  - '#conductor'
+  - '#terminal-view-representable'
+  - '#terminal-cell-view'
+  - '#terminal-session'
+  - '#container-view'
+decisions:
+  - id: swiftterm-validated
+    decision: SwiftTerm is viable for production use in Conductor workspace mode
+    rationale: 'Sprint 0 spike: Claude Code v2.1.86 renders correctly inside SwiftTerm LocalProcessTerminalView — Ink TUI, colors, prompt, status bar all functional. No xterm.js fallback needed.'
+tags:
+  - conductor
+  - milestone
+  - swiftterm
+  - sprint-0
+  - spike
+confidence: 0.92
+git_context:
+  ref: 4198582f11f7e06d271bfe0c0a8be6e2af1b9b5f
+  branch: main
+  dirty: true

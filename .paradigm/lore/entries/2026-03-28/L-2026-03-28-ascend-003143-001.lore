@@ -1,0 +1,41 @@
+id: L-2026-03-28-ascend-003143-001
+type: milestone
+timestamp: '2026-03-28T00:31:43.132Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Workspace Sprint 0-1 complete — embedded terminals with multi-pane
+summary: 'Conductor workspace mode fully operational with embedded SwiftTerm terminals. Sprint 0 proved SwiftTerm renders Claude Code correctly (Ink TUI, colors, prompt, status bar). Sprint 1 added TerminalSessionManager (CRUD, max 8, active tracking), NewSessionSheet (recent projects + folder picker), multi-pane support (tested 2 sessions side by side: deus-backend + deus-frontend). Focus ring click detection required NSEvent local monitor on the coordinator (SwiftTerm NSView eats mouse events) + @ObservedObject on TerminalCellView for immediate redraw. Sprints 2-3 remain: Symphony auto-link and polish/window management.'
+symbols_touched:
+  - '#conductor'
+  - '#terminal-session-manager'
+  - '#terminal-cell-view'
+  - '#terminal-view-representable'
+  - '#terminal-session'
+  - '#new-session-sheet'
+  - '#container-view'
+  - '#conductor-environment'
+learnings:
+  - SwiftTerm's LocalProcessTerminalView eats mouse events — cannot use SwiftUI onTapGesture or NSView subclass override (non-open methods). NSEvent.addLocalMonitorForEvents with bounds check is the correct approach for focus detection.
+  - SwiftUI ForEach with static range does not re-evaluate children when external @Published state changes. The fix is @ObservedObject on the child view observing the state source directly, not let _ tricks or .id() modifiers (which destroy the view).
+  - Conductor VERSION file must be bumped alongside package.json versions — it feeds the .app bundle Info.plist and shows in the UI header.
+verification:
+  status: pass
+  details:
+    conductor-build: pass
+    multi-session: pass
+    focus-tracking: pass
+    folder-picker: pass
+tags:
+  - conductor
+  - milestone
+  - swiftterm
+  - sprint-0
+  - sprint-1
+  - workspace
+confidence: 0.93
+git_context:
+  ref: dd1968790a7531d5cbf37d707472ee712d5da57d
+  branch: main
+  dirty: true

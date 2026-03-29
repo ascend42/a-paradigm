@@ -1,0 +1,93 @@
+id: L-2026-03-28-ascend-234500-001
+type: agent-session
+timestamp: '2026-03-28T23:45:00.672Z'
+duration_minutes: 480
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: University audit + Rune core agent + Conductor workspace complete — massive session wrap
+summary: 'Largest single session in Paradigm history: shipped v5.23.0 through v5.30.0 (8 releases). Conductor evolved from floating overlay to full workspace app with embedded SwiftTerm terminals (4 sprints). Rune (compliance) added as 8th core agent for symbol hygiene. Cross-team Symphony debate with Neverland reached consensus on PAN evolution plan. University audit identified 8-phase restructuring plan (PARA 001 quick start, enforcement levels, quick-check mode, 5-to-54 agent bridge, Rune coverage, quiz upgrades). Also: README rewrite on side branch, AgentScope competitive analysis, Neverland pillars response, nickname-based agent lookup, reindex 80KB→500B fix, shift non-interactive default, minimal enforcement default, drag-drop file support, Cmd+/- font sizing.'
+symbols_touched:
+  - '#conductor'
+  - '#terminal-session-manager'
+  - '#terminal-view-representable'
+  - '#terminal-cell-view'
+  - '#terminal-drag-overlay'
+  - '#new-session-sheet'
+  - '#container-view'
+  - '#container-window'
+  - '#conductor-environment'
+  - '#conductor-app'
+  - '#orchestration'
+  - '#OrchestrationTools'
+  - '#agents'
+  - '#compliance'
+  - '#enforcement'
+  - '#reindex'
+  - '#shift'
+  - '#platform'
+  - '#UniversitySection'
+  - '#university'
+  - '#symphony-thread-watcher'
+  - '#symphony-notifications'
+  - '#tool-registry'
+  - $session-spawn-flow
+  - $agent-network
+  - ~quick-check-escalation
+  - ~advocate-role-prompt
+  - ~magnitude-based-orchestration
+decisions:
+  - id: swiftterm-validated
+    decision: SwiftTerm is production-viable for Conductor embedded terminals
+    rationale: Sprint 0 spike proved Claude Code renders correctly. Jinx's concerns about OSC 133 and performance were not observed. All 4 workspace sprints shipped.
+  - id: rune-8th-core-agent
+    decision: Rune (compliance) added as 8th core agent for symbol planning and coverage validation
+    rationale: 15+ files were created this session without proper aspects, flows, or signals. Documentor handles post-implementation; Rune handles pre-implementation symbol planning and mid-implementation compliance.
+  - id: university-restructure-plan
+    decision: '8-phase university restructuring: add PARA 001, fix agent disconnect, add enforcement/quick-check/Rune content, replace memorization quizzes'
+    rationale: Audit found courses teach WHAT (60% in 101) more than HOW. No day-1 course exists. Enforcement config, quick-check mode, Rune, and Conductor workspace are not covered in core 101-501 path.
+  - id: pan-evolution-consensus
+    decision: PAN sits ON TOP of agent frameworks. A/B experiment is priority zero. Cut ReAct/Tool Registry/Agent Network, replace with registry MVP + framework bridge.
+    rationale: Cross-team Symphony debate. Original 6-phase plan spent 80% on runtime (AgentScope territory) and 0% on distribution. Revised plan proves the thesis first, builds the marketplace second.
+  - id: conductor-workspace-mode
+    decision: Conductor is now a full workspace application with embedded terminals
+    rationale: '4 sprints: SwiftTerm embedding, session manager + multi-pane, Symphony auto-link, keyboard shortcuts + workspace mode. Overlay mode preserved as alternative.'
+  - id: minimal-enforcement-default
+    decision: Default enforcement changed from balanced to minimal for new projects
+    rationale: New users were getting blocked by stop hooks before understanding .purpose files. Minimal warns but never blocks. Users upgrade to balanced/strict when ready.
+  - id: shift-non-interactive
+    decision: paradigm shift runs non-interactively by default, auto-detects model tiers
+    rationale: Interactive model selection prompt blocked the one-command setup promise. Now auto-defaults based on environment detection.
+learnings:
+  - SwiftTerm handles Claude Code's Ink TUI flawlessly — validated empirically via spike, not theoretically
+  - NSEvent.addLocalMonitorForEvents does NOT intercept keys consumed by performKeyEquivalent — use window-level performKeyEquivalent override for shortcuts that need to fire before SwiftTerm
+  - SwiftTerm's LocalProcessTerminalView eats mouse events — use NSEvent local monitor with bounds check for focus detection, and @ObservedObject on child views for immediate SwiftUI redraw
+  - Always consult the team before implementing — even 'simple' changes have architectural implications. The user corrected this twice.
+  - University courses should teach HOW before WHAT — put hands-on experience in the first 10 minutes, theory after
+verification:
+  status: pass
+  details:
+    builds: all pass
+    conductor-swiftterm: pass
+    conductor-multi-pane: pass
+    conductor-symphony: pass
+    conductor-shortcuts: pass
+    conductor-drag-drop: pass
+    font-sizing: needs window-level fix verified
+tags:
+  - massive-session
+  - conductor
+  - swiftterm
+  - workspace
+  - rune
+  - university
+  - neverland
+  - pan
+  - readme
+  - agentscope
+confidence: 0.92
+git_context:
+  ref: 1a08d925059a163dd87ddf5b121022f4e7008d9c
+  branch: main
+  dirty: true

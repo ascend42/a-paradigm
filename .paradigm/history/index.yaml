@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-28T00:32:19.396Z'
+generated: '2026-03-28T23:37:11.648Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -4700,12 +4700,70 @@ by_symbol:
       agent: []
   '':
     symbol: ''
-    total_changes: 11
-    last_modified: '2026-03-28T00:32:18Z'
+    total_changes: 13
+    last_modified: '2026-03-28T23:37:10Z'
     stability_score: 1
     fragility: low
     recent:
       - &ref_143
+        id: h0278
+        ts: '2026-03-28T23:37:10Z'
+        type: implement
+        symbols:
+          - ''
+          - '#agents'
+          - '#compliance'
+          - '#conductor'
+          - '#terminal-drag-overlay'
+        author:
+          type: human
+          id: ascend
+        commit: 1a08d925059a163dd87ddf5b121022f4e7008d9c
+        intent: feature
+        files:
+          - .paradigm/roster.yaml
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/App/ContainerWindow.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalDragOverlayView.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalSessionManager.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalSessionState.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalViewRepresentable.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+          - packages/conductor/VERSION
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/core/project-type.ts
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#agents): v5.30.0 — Rune (compliance) 8th core agent + Conductor drag-drop & font sizing'
+      - &ref_144
+        id: h0277
+        ts: '2026-03-28T00:45:23Z'
+        type: implement
+        symbols:
+          - ''
+          - '#conductor'
+          - '#terminal-cell-view'
+          - '#terminal-session-manager'
+        author:
+          type: human
+          id: ascend
+        commit: 2d20974c925abfd76ac9d1ff85dea9e1bb300b88
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalCellView.swift
+          - packages/conductor/Sources/Conductor/Terminal/TerminalSessionManager.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+          - packages/conductor/VERSION
+        description: 'feat(#conductor): Sprints 2-3 — Symphony auto-link, shortcuts, workspace mode'
+      - &ref_145
         id: h0276
         ts: '2026-03-28T00:32:18Z'
         type: implement
@@ -4729,7 +4787,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/Terminal/TerminalViewRepresentable.swift
           - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
         description: 'feat(#conductor): v5.29.0 — Sprint 0+1 complete, embedded multi-pane workspace'
-      - &ref_144
+      - &ref_146
         id: h0275
         ts: '2026-03-28T00:11:52Z'
         type: implement
@@ -4750,7 +4808,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/ConductorEnvironment.swift
           - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
         description: 'feat(#conductor): Sprint 1 — session manager, multi-pane, project picker'
-      - &ref_145
+      - &ref_147
         id: h0274
         ts: '2026-03-27T23:55:19Z'
         type: implement
@@ -4782,78 +4840,6 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#conductor): v5.29.0 — embedded terminal Sprint 0 success'
-      - &ref_147
-        id: h0268
-        ts: '2026-03-27T15:20:55Z'
-        type: implement
-        symbols:
-          - ''
-          - '#conductor'
-          - '#symphony-monitor'
-          - '#symphony-thread-watcher'
-        author:
-          type: human
-          id: ascend
-        commit: e5e374a43c743a269c44cecf65c2500dbc4d24a9
-        intent: feature
-        files:
-          - .paradigm/events/stream.jsonl
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/personas/index.yaml
-          - .paradigm/protocols/index.yaml
-          - .paradigm/scan-index.json
-          - .paradigm/university/index.yaml
-          - CHANGELOG.md
-          - docs/competitive/agentscope-analysis.md
-          - docs/specs/conductor-symphony-fixes.md
-          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
-          - packages/conductor/Sources/Conductor/Services/SymphonyNotificationManager.swift
-          - packages/conductor/Sources/Conductor/Services/SymphonyThreadWatcher.swift
-          - packages/conductor/Sources/Conductor/Symphony/SymphonyTypes.swift
-          - packages/conductor/Sources/Conductor/UI/ConductorEnvironment.swift
-          - packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/TeamThreadView.swift
-          - packages/conductor/Sources/Conductor/UI/Views/ThreadView.swift
-          - packages/paradigm-mcp/package.json
-          - packages/paradigm/package.json
-          - plugins/paradigm/.claude-plugin/plugin.json
-        description: 'feat(#conductor): v5.27.0 — cross-session Symphony fixes, multi-workspace threads'
-      - &ref_172
-        id: h0244
-        ts: '2026-03-24T20:16:03Z'
-        type: implement
-        symbols:
-          - ''
-          - '#agent-state'
-          - '#model-resolution'
-          - '#nomination-surfacing'
-          - '#orchestration'
-          - '#roster'
-        author:
-          type: human
-          id: ascend
-        commit: b3a9730a0634f12ebd53b00d1f234714c612ea66
-        intent: feature
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - .purpose
-          - CHANGELOG.md
-          - packages/conductor/Sources/Conductor/UI/Views/.purpose
-          - packages/conductor/Sources/Conductor/Workspace/.purpose
-          - packages/paradigm-mcp/package.json
-          - packages/paradigm-mcp/src/utils/.purpose
-          - packages/paradigm-mcp/src/utils/habits-loader.ts
-          - packages/paradigm/package.json
-          - packages/paradigm/src/commands/.purpose
-          - packages/paradigm/src/core/.purpose
-          - plugins/paradigm/.claude-plugin/plugin.json
-        description: 'feat(#orchestration): v5.11.0 — enforcement habits, symbol debt cleanup, PARA 701 prep'
     contributors:
       human:
         - ascend
@@ -5499,7 +5485,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#shift): v5.27.1 — non-interactive by default, auto-detect model tiers'
       - *ref_63
-      - &ref_173
+      - &ref_172
         id: h0240
         ts: '2026-03-24T18:52:11Z'
         type: implement
@@ -6661,7 +6647,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_146
+      - &ref_183
         id: h0271
         ts: '2026-03-27T19:51:49Z'
         type: implement
@@ -12143,8 +12129,8 @@ by_symbol:
       agent: []
   '#conductor':
     symbol: '#conductor'
-    total_changes: 14
-    last_modified: '2026-03-28T00:32:18Z'
+    total_changes: 16
+    last_modified: '2026-03-28T23:37:10Z'
     stability_score: 1
     fragility: low
     recent:
@@ -12206,7 +12192,46 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_147
+      - &ref_182
+        id: h0268
+        ts: '2026-03-27T15:20:55Z'
+        type: implement
+        symbols:
+          - ''
+          - '#conductor'
+          - '#symphony-monitor'
+          - '#symphony-thread-watcher'
+        author:
+          type: human
+          id: ascend
+        commit: e5e374a43c743a269c44cecf65c2500dbc4d24a9
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - CHANGELOG.md
+          - docs/competitive/agentscope-analysis.md
+          - docs/specs/conductor-symphony-fixes.md
+          - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+          - packages/conductor/Sources/Conductor/Services/SymphonyNotificationManager.swift
+          - packages/conductor/Sources/Conductor/Services/SymphonyThreadWatcher.swift
+          - packages/conductor/Sources/Conductor/Symphony/SymphonyTypes.swift
+          - packages/conductor/Sources/Conductor/UI/ConductorEnvironment.swift
+          - packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/TeamThreadView.swift
+          - packages/conductor/Sources/Conductor/UI/Views/ThreadView.swift
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#conductor): v5.27.0 — cross-session Symphony fixes, multi-workspace threads'
       - *ref_153
     contributors:
       human:
@@ -12946,8 +12971,39 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - &ref_173
+        id: h0244
+        ts: '2026-03-24T20:16:03Z'
+        type: implement
+        symbols:
+          - ''
+          - '#agent-state'
+          - '#model-resolution'
+          - '#nomination-surfacing'
+          - '#orchestration'
+          - '#roster'
+        author:
+          type: human
+          id: ascend
+        commit: b3a9730a0634f12ebd53b00d1f234714c612ea66
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .purpose
+          - CHANGELOG.md
+          - packages/conductor/Sources/Conductor/UI/Views/.purpose
+          - packages/conductor/Sources/Conductor/Workspace/.purpose
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/habits-loader.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/.purpose
+          - packages/paradigm/src/core/.purpose
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'feat(#orchestration): v5.11.0 — enforcement habits, symbol debt cleanup, PARA 701 prep'
       - *ref_172
-      - *ref_173
     contributors:
       human:
         - ascend
@@ -12959,7 +13015,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
       - *ref_163
     contributors:
       human:
@@ -12972,7 +13028,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -12986,7 +13042,7 @@ by_symbol:
     recent:
       - *ref_174
       - *ref_55
-      - *ref_172
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -13278,11 +13334,12 @@ by_symbol:
       agent: []
   '#agents':
     symbol: '#agents'
-    total_changes: 4
-    last_modified: '2026-03-27T20:00:45Z'
+    total_changes: 5
+    last_modified: '2026-03-28T23:37:10Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_143
       - *ref_180
       - *ref_181
       - *ref_122
@@ -13612,7 +13669,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_147
+      - *ref_182
     contributors:
       human:
         - ascend
@@ -13624,7 +13681,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_146
+      - *ref_183
     contributors:
       human:
         - ascend
@@ -13636,7 +13693,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_145
+      - *ref_147
     contributors:
       human:
         - ascend
@@ -13648,7 +13705,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_145
+      - *ref_147
     contributors:
       human:
         - ascend
@@ -13660,28 +13717,54 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_144
+      - *ref_146
     contributors:
       human:
         - ascend
       agent: []
   '#terminal-session-manager':
     symbol: '#terminal-session-manager'
-    total_changes: 2
-    last_modified: '2026-03-28T00:32:18Z'
+    total_changes: 3
+    last_modified: '2026-03-28T00:45:23Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_143
       - *ref_144
+      - *ref_145
+      - *ref_146
     contributors:
       human:
         - ascend
       agent: []
   '#terminal-cell-view':
     symbol: '#terminal-cell-view'
+    total_changes: 2
+    last_modified: '2026-03-28T00:45:23Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_144
+      - *ref_145
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#compliance':
+    symbol: '#compliance'
     total_changes: 1
-    last_modified: '2026-03-28T00:32:18Z'
+    last_modified: '2026-03-28T23:37:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_143
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#terminal-drag-overlay':
+    symbol: '#terminal-drag-overlay'
+    total_changes: 1
+    last_modified: '2026-03-28T23:37:10Z'
     stability_score: 1
     fragility: low
     recent:

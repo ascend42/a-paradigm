@@ -56,16 +56,82 @@
         },
         {
           "id": "q4",
-          "question": "How many operational symbols does Paradigm define?",
+          "question": "You open a .purpose file and see symbols prefixed with #, $, ^, !, and ~. A new team member asks what the ~ symbol means. What do you tell them?",
           "choices": {
-            "A": "3",
-            "B": "4",
-            "C": "5",
-            "D": "7",
-            "E": "10"
+            "A": "~ marks a component — a documented code unit",
+            "B": "~ marks a flow — a multi-step process",
+            "C": "~ marks a gate — a security checkpoint",
+            "D": "~ marks a signal — an event notification",
+            "E": "~ marks an aspect — a cross-cutting rule, constraint, or configuration anchored to specific code"
+          },
+          "correct": "E",
+          "explanation": "The five symbols are: # (Component), $ (Flow), ^ (Gate), ! (Signal), and ~ (Aspect). Aspects represent cross-cutting concerns — rules, constraints, and configuration values that are anchored to specific lines of code. They are the only symbol type that requires code anchors."
+        }
+      ]
+    },
+    {
+      "id": "first-steps",
+      "title": "Your First Steps",
+      "content": "## Getting Started with Paradigm\n\nBefore diving into theory, let's get your hands dirty. This lesson walks through the concrete steps to set up Paradigm in a real project. You will encounter terms like *symbols*, *purpose files*, and *gates* — each gets its own deep-dive lesson later in this course. For now, focus on the workflow: initialize, document, scan, go.\n\n## Step 1: Initialize the Project\n\nRun `paradigm shift` in your project root. This creates the `.paradigm/` directory with a starter `config.yaml`:\n\n```bash\nparadigm shift\n```\n\n`paradigm shift` runs non-interactively by default — it auto-detects your discipline from project markers (`package.json`, `Cargo.toml`, `go.mod`, etc.), selects an appropriate agent roster, configures model tiers, installs hooks, and generates AI instruction files (CLAUDE.md, AGENTS.md). One command, full setup.\n\nYou can customize later with flags like `--verify` (health check) or `--workspace <name>` (multi-project workspace).\n\nAfter init, you will have:\n```\n.paradigm/\n  config.yaml    # Includes detected discipline and stack\n  tags.yaml\n  agents.yaml\n```\n\n## Step 2: Create Your First Purpose File\n\nPick a source directory that contains meaningful code — perhaps your main feature module or your API routes. Create a `.purpose` file:\n\n```yaml\nname: User Authentication\ndescription: Handles user login, registration, and session management\ncontext:\n  - Uses bcrypt for password hashing\n  - Sessions stored in Redis with 24h TTL\n  - Rate limited to 5 login attempts per minute\n\ncomponents:\n  #auth-handler:\n    description: POST /auth/login and POST /auth/register endpoints\n    file: auth.ts\n    tags: [feature, auth]\n    signals: [\"!login-success\", \"!login-failed\"]\n    gates: [\"^authenticated\"]\n\n  #session-manager:\n    description: Creates and validates user sessions in Redis\n    file: session.ts\n    tags: [state, auth]\n```\n\nStart small. You do not need to document every file on day one. Begin with the most important module and expand over time.\n\n## Step 3: Set Up portal.yaml (If Needed)\n\nIf your application has any protected endpoints, create `portal.yaml` at the project root:\n\n```yaml\nversion: \"1.0\"\n\ngates:\n  ^authenticated:\n    description: User must have a valid session\n    check: req.session.userId != null\n    type: auth\n    effects: []\n\nroutes:\n  \"POST /auth/login\": []\n  \"POST /auth/register\": []\n  \"GET /api/profile\": [^authenticated]\n  \"PUT /api/profile\": [^authenticated]\n```\n\nNote that public routes like login and register have empty gate arrays `[]` — they are listed to document that they are intentionally unprotected.\n\n## Step 4: Run Your First Scan\n\nGenerate the navigator map so AI agents can find symbols quickly:\n\n```bash\nparadigm scan\n```\n\nThis reads all `.purpose` files and `portal.yaml`, builds a symbol index, and writes `navigator.yaml`.\n\n## Step 5: The Orientation Protocol\n\nWhen starting a new AI session (or when an AI agent first encounters your project), the agent should follow this protocol:\n\n1. **Call `paradigm_status`** — Gets a project overview: symbol counts, health, available features.\n2. **Read `config.yaml`** — Understands the discipline, conventions, and preferences.\n3. **Check `portal.yaml`** — Knows about security gates if they exist.\n4. **Use `paradigm_navigate`** — Finds the relevant code area for the current task.\n\nThis four-step orientation takes ~500 tokens total and gives the agent everything it needs to work effectively.\n\n## Step 6: Iterate\n\nParadigm grows with your project. As you add features:\n- Create `.purpose` files for new directories\n- Add gates to `portal.yaml` for new protected routes\n- Record team decisions in `.paradigm/wisdom/decisions.yaml`\n- Log antipatterns in `.paradigm/wisdom/antipatterns.yaml`\n- Run `paradigm scan` periodically to rebuild the navigator\n\n## Common Pitfalls\n\n- **Do not document everything on day one.** Start with the most critical module and expand.\n- **Do not skip portal.yaml.** If you have any gates or preconditions, you need it.\n- **Do not forget to re-scan.** After adding new `.purpose` files, run `paradigm scan` to update the navigator.\n- **Do not put .purpose files in .paradigm/.** They live alongside source code.\n- **Do not use raw console.log.** Use the Paradigm logger from the start to build good habits.",
+      "keyConcepts": [
+        "paradigm shift creates the .paradigm/ directory",
+        "Start with one .purpose file in your most important module",
+        "Create portal.yaml if your project has gates (conditions to check)",
+        "paradigm scan generates navigator.yaml",
+        "The orientation protocol: status, config, portal, navigate"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "What is the correct order for the AI agent orientation protocol?",
+          "choices": {
+            "A": "Read source code, write tests, check coverage, deploy",
+            "B": "Call paradigm_status, read config.yaml, check portal.yaml, use paradigm_navigate",
+            "C": "Run paradigm scan, edit navigator.yaml, read .purpose files, commit changes",
+            "D": "Read package.json, install dependencies, run build, check logs",
+            "E": "Create .purpose files, define gates, emit signals, validate flows"
+          },
+          "correct": "B",
+          "explanation": "The orientation protocol is: (1) paradigm_status for project overview, (2) read config.yaml for conventions, (3) check portal.yaml for security gates, (4) paradigm_navigate to find the relevant code area. This takes ~500 tokens and gives the agent full context."
+        },
+        {
+          "id": "q2",
+          "question": "After creating new .purpose files, what command should you run?",
+          "choices": {
+            "A": "paradigm shift",
+            "B": "paradigm validate",
+            "C": "paradigm scan",
+            "D": "paradigm deploy",
+            "E": "paradigm build"
           },
           "correct": "C",
-          "explanation": "Paradigm defines exactly five operational symbols: # (Component), $ (Flow), ^ (Gate), ! (Signal), and ~ (Aspect). Classification beyond these five is handled by the tag system."
+          "explanation": "paradigm scan reads all .purpose files and portal.yaml, builds the symbol index, and regenerates navigator.yaml. Without rescanning, AI agents will not find the newly defined symbols through navigation tools."
+        },
+        {
+          "id": "q3",
+          "question": "In portal.yaml, what does an empty gate array on a route mean?",
+          "choices": {
+            "A": "The route is disabled and will return 404",
+            "B": "The route requires all gates to pass",
+            "C": "The route is intentionally unprotected — documented as public",
+            "D": "The route has not been configured yet and will return 500",
+            "E": "The route inherits gates from its parent path"
+          },
+          "correct": "C",
+          "explanation": "An empty gate array [] means the route is intentionally public. Listing it in portal.yaml with no gates documents the decision that this route should be accessible without authentication — it is not an oversight."
+        },
+        {
+          "id": "q4",
+          "question": "Which of these is a common pitfall when starting with Paradigm?",
+          "choices": {
+            "A": "Creating too many .purpose files on day one instead of starting small",
+            "B": "Using the Paradigm logger instead of console.log",
+            "C": "Running paradigm scan after adding new purpose files",
+            "D": "Putting portal.yaml at the project root",
+            "E": "Using tags to classify components"
+          },
+          "correct": "A",
+          "explanation": "A common pitfall is trying to document everything on day one. The recommended approach is to start with the most critical module, create one .purpose file, and expand incrementally as the project grows."
         }
       ]
     },
@@ -96,16 +162,16 @@
         },
         {
           "id": "q2",
-          "question": "Which symbol REQUIRES code anchors in its definition?",
+          "question": "After a refactor, you run paradigm doctor and it reports \"3 broken anchors detected.\" Which symbol type was affected?",
           "choices": {
-            "A": "# Component",
-            "B": "$ Flow",
-            "C": "^ Gate",
-            "D": "! Signal",
-            "E": "~ Aspect"
+            "A": "# Component — components have code anchors that broke during refactoring",
+            "B": "$ Flow — flow steps reference line numbers that shifted",
+            "C": "^ Gate — gate definitions include file paths that changed",
+            "D": "! Signal — signal emitters moved to different files",
+            "E": "~ Aspect — aspects are the only symbol with code anchors, and the refactor moved the anchored lines"
           },
           "correct": "E",
-          "explanation": "Aspects (~) are the only symbol that requires code anchors. An aspect represents a cross-cutting rule, and without anchors pointing to the enforcement code, the rule is just a wish — not a verified constraint."
+          "explanation": "Aspects (~) are the only symbol type that requires code anchors — specific file:line references pointing to where the rule is enforced. When code is refactored and lines move, those anchors break. paradigm doctor detects this via SHA-256 hash comparison, and paradigm_aspect_drift can show exactly which anchors drifted."
         },
         {
           "id": "q3",
@@ -135,16 +201,16 @@
         },
         {
           "id": "q5",
-          "question": "A system emits `!payment-completed` after a successful charge. Which statement is true about signals?",
+          "question": "Your payment module emits !payment-completed after charging a card. Later, the marketing team adds a \"send receipt email\" listener, and the analytics team adds a \"record conversion\" listener. Neither team modified the payment module. How is this possible?",
           "choices": {
-            "A": "The signal must directly invoke the notification service",
-            "B": "Signals can only be emitted by gate components",
-            "C": "The emitter does not need to know who listens to the signal",
-            "D": "Signals replace flows — you use one or the other, never both",
-            "E": "Signals must be defined in portal.yaml"
+            "A": "The payment module was refactored to call both services directly",
+            "B": "Signals promote loose coupling — the emitter fires the event without knowing who listens, so new listeners can be added independently",
+            "C": "The listeners were added to the payment module's .purpose file",
+            "D": "Both teams used the same $flow as the payment module",
+            "E": "The ^payment gate routes events to registered handlers"
           },
-          "correct": "C",
-          "explanation": "Signals promote loose coupling. The emitting component fires the event, and any number of listeners can react independently. The emitter has no knowledge of — and no dependency on — the listeners."
+          "correct": "B",
+          "explanation": "This is the core value of signals: loose coupling. The payment module emits !payment-completed and has zero knowledge of who listens. The marketing team and analytics team independently subscribe to the signal. No code in the payment module was modified. This is why Paradigm separates signals (!) from flows ($) — flows define explicit steps, while signals enable independent, decoupled reactions."
         }
       ]
     },
@@ -489,72 +555,6 @@
           },
           "correct": "B",
           "explanation": "Effects are side effects that trigger when a gate passes. For example, passing ^first-login might award an onboarding badge. If there are no side effects, use an empty array: effects: []."
-        }
-      ]
-    },
-    {
-      "id": "first-steps",
-      "title": "Your First Steps",
-      "content": "## Getting Started with Paradigm\n\nYou have learned the concepts — now it is time to put them into practice. This lesson walks through the concrete steps to initialize Paradigm in a new project and set up the foundational files.\n\n## Step 1: Initialize the Project\n\nRun `paradigm shift` in your project root. This creates the `.paradigm/` directory with a starter `config.yaml`:\n\n```bash\nparadigm shift\n```\n\nThe init command will prompt you for:\n- **Project name** — Used in config.yaml and as a display name\n- **Discipline** — `web`, `backend`, `fullstack`, `mobile`, `cli`, etc. (auto-detected from your project)\n- **Agent provider** — Which AI tool you use (`claude-code`, `cursor-cli`, etc.)\n\nParadigm automatically detects your discipline from project markers (`package.json`, `Cargo.toml`, `go.mod`, etc.) and your **stack preset** from framework dependencies. For example, a project with Next.js in its dependencies will be detected as `discipline: fullstack` with `stack: nextjs`. The stack preset provides framework-specific scan patterns, purpose-required paths, and refined symbol mappings.\n\nYou can also specify a stack explicitly: `paradigm init --stack fastapi`.\n\nAfter init, you will have:\n```\n.paradigm/\n  config.yaml    # Includes detected discipline and stack\n  tags.yaml\n  agents.yaml\n```\n\n## Step 2: Create Your First Purpose File\n\nPick a source directory that contains meaningful code — perhaps your main feature module or your API routes. Create a `.purpose` file:\n\n```yaml\nname: User Authentication\ndescription: Handles user login, registration, and session management\ncontext:\n  - Uses bcrypt for password hashing\n  - Sessions stored in Redis with 24h TTL\n  - Rate limited to 5 login attempts per minute\n\ncomponents:\n  #auth-handler:\n    description: POST /auth/login and POST /auth/register endpoints\n    file: auth.ts\n    tags: [feature, auth]\n    signals: [\"!login-success\", \"!login-failed\"]\n    gates: [\"^authenticated\"]\n\n  #session-manager:\n    description: Creates and validates user sessions in Redis\n    file: session.ts\n    tags: [state, auth]\n```\n\nStart small. You do not need to document every file on day one. Begin with the most important module and expand over time.\n\n## Step 3: Set Up portal.yaml (If Needed)\n\nIf your application has any protected endpoints, create `portal.yaml` at the project root:\n\n```yaml\nversion: \"1.0\"\n\ngates:\n  ^authenticated:\n    description: User must have a valid session\n    check: req.session.userId != null\n    type: auth\n    effects: []\n\nroutes:\n  \"POST /auth/login\": []\n  \"POST /auth/register\": []\n  \"GET /api/profile\": [^authenticated]\n  \"PUT /api/profile\": [^authenticated]\n```\n\nNote that public routes like login and register have empty gate arrays `[]` — they are listed to document that they are intentionally unprotected.\n\n## Step 4: Run Your First Scan\n\nGenerate the navigator map so AI agents can find symbols quickly:\n\n```bash\nparadigm scan\n```\n\nThis reads all `.purpose` files and `portal.yaml`, builds a symbol index, and writes `navigator.yaml`.\n\n## Step 5: The Orientation Protocol\n\nWhen starting a new AI session (or when an AI agent first encounters your project), the agent should follow this protocol:\n\n1. **Call `paradigm_status`** — Gets a project overview: symbol counts, health, available features.\n2. **Read `config.yaml`** — Understands the discipline, conventions, and preferences.\n3. **Check `portal.yaml`** — Knows about security gates if they exist.\n4. **Use `paradigm_navigate`** — Finds the relevant code area for the current task.\n\nThis four-step orientation takes ~500 tokens total and gives the agent everything it needs to work effectively.\n\n## Step 6: Iterate\n\nParadigm grows with your project. As you add features:\n- Create `.purpose` files for new directories\n- Add gates to `portal.yaml` for new protected routes\n- Record team decisions in `.paradigm/wisdom/decisions.yaml`\n- Log antipatterns in `.paradigm/wisdom/antipatterns.yaml`\n- Run `paradigm scan` periodically to rebuild the navigator\n\n## Common Pitfalls\n\n- **Do not document everything on day one.** Start with the most critical module and expand.\n- **Do not skip portal.yaml.** If you have any gates or preconditions, you need it.\n- **Do not forget to re-scan.** After adding new `.purpose` files, run `paradigm scan` to update the navigator.\n- **Do not put .purpose files in .paradigm/.** They live alongside source code.\n- **Do not use raw console.log.** Use the Paradigm logger from the start to build good habits.",
-      "keyConcepts": [
-        "paradigm shift creates the .paradigm/ directory",
-        "Start with one .purpose file in your most important module",
-        "Create portal.yaml if your project has gates (conditions to check)",
-        "paradigm scan generates navigator.yaml",
-        "The orientation protocol: status, config, portal, navigate"
-      ],
-      "quiz": [
-        {
-          "id": "q1",
-          "question": "What is the correct order for the AI agent orientation protocol?",
-          "choices": {
-            "A": "Read source code, write tests, check coverage, deploy",
-            "B": "Call paradigm_status, read config.yaml, check portal.yaml, use paradigm_navigate",
-            "C": "Run paradigm scan, edit navigator.yaml, read .purpose files, commit changes",
-            "D": "Read package.json, install dependencies, run build, check logs",
-            "E": "Create .purpose files, define gates, emit signals, validate flows"
-          },
-          "correct": "B",
-          "explanation": "The orientation protocol is: (1) paradigm_status for project overview, (2) read config.yaml for conventions, (3) check portal.yaml for security gates, (4) paradigm_navigate to find the relevant code area. This takes ~500 tokens and gives the agent full context."
-        },
-        {
-          "id": "q2",
-          "question": "After creating new .purpose files, what command should you run?",
-          "choices": {
-            "A": "paradigm shift",
-            "B": "paradigm validate",
-            "C": "paradigm scan",
-            "D": "paradigm deploy",
-            "E": "paradigm build"
-          },
-          "correct": "C",
-          "explanation": "paradigm scan reads all .purpose files and portal.yaml, builds the symbol index, and regenerates navigator.yaml. Without rescanning, AI agents will not find the newly defined symbols through navigation tools."
-        },
-        {
-          "id": "q3",
-          "question": "In portal.yaml, what does an empty gate array on a route mean?",
-          "choices": {
-            "A": "The route is disabled and will return 404",
-            "B": "The route requires all gates to pass",
-            "C": "The route is intentionally unprotected — documented as public",
-            "D": "The route has not been configured yet and will return 500",
-            "E": "The route inherits gates from its parent path"
-          },
-          "correct": "C",
-          "explanation": "An empty gate array [] means the route is intentionally public. Listing it in portal.yaml with no gates documents the decision that this route should be accessible without authentication — it is not an oversight."
-        },
-        {
-          "id": "q4",
-          "question": "Which of these is a common pitfall when starting with Paradigm?",
-          "choices": {
-            "A": "Creating too many .purpose files on day one instead of starting small",
-            "B": "Using the Paradigm logger instead of console.log",
-            "C": "Running paradigm scan after adding new purpose files",
-            "D": "Putting portal.yaml at the project root",
-            "E": "Using tags to classify components"
-          },
-          "correct": "A",
-          "explanation": "A common pitfall is trying to document everything on day one. The recommended approach is to start with the most critical module, create one .purpose file, and expand incrementally as the project grows."
         }
       ]
     },

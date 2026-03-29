@@ -1,0 +1,27 @@
+id: L-2026-03-28-ascend-004509-001
+type: milestone
+timestamp: '2026-03-28T00:45:09.832Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Workspace Sprints 2-3 — Symphony auto-link, keyboard shortcuts, workspace mode
+summary: 'Completed all 4 Conductor workspace sprints in a single session. Sprint 2: sessions auto-register with Symphony on creation, sidebar shows active session project context, link icon on toolbar, cleanup unregisters. Sprint 3: keyboard shortcuts (Cmd+T/W/\/1-8), workspace mode activation policy (.regular for Dock/Cmd+Tab). Combined with Sprints 0-1 (SwiftTerm embedding, multi-pane session manager), Conductor is now a full workspace application with embedded Claude Code terminals, Symphony integration, and keyboard-first UX.'
+symbols_touched:
+  - '#conductor'
+  - '#terminal-session-manager'
+  - '#terminal-cell-view'
+  - '#container-view'
+  - '#conductor-app'
+tags:
+  - conductor
+  - milestone
+  - workspace
+  - sprint-2
+  - sprint-3
+  - symphony
+confidence: 0.91
+git_context:
+  ref: 803fa5c5b850e33fa79ed4a57a7ec17948c8e524
+  branch: main
+  dirty: true

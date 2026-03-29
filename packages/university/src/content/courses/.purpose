@@ -1,9 +1,29 @@
 version: 2.0.0
 name: university-courses
-description: Course content for Paradigm University — 7 courses, 75 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
+description: Course content for Paradigm University — 8 courses, 82 lessons. Each lesson is mapped to the Paradigm concepts it teaches so that ripple analysis can identify which lessons need updating when a concept changes.
 
 components:
-  # PARA 101: Foundations (9 lessons)
+  # PARA 001: Quick Start (3 lessons)
+
+  para-001-shift-setup:
+    description: "Quick Start — Your First paradigm shift: one-command setup, what gets created"
+    file: para-001.json
+    tags: [course-content, para-001]
+    references: ["#shift-command", "#enforcement-hooks"]
+
+  para-001-meet-the-team:
+    description: "Quick Start — Meet Your Agent Team: 8 core agents, tiers, Maestro model"
+    file: para-001.json
+    tags: [course-content, para-001]
+    references: ["#orchestration", "#agent-loader"]
+
+  para-001-build-something:
+    description: "Quick Start — Build With the Team: full orchestration loop, quick-check, commit conventions"
+    file: para-001.json
+    tags: [course-content, para-001]
+    references: ["#orchestration", "#symbol-system", "#enforcement-hooks"]
+
+  # PARA 101: Foundations (9 lessons — reordered: first-steps at position 2)
 
   para-101-welcome:
     description: "Welcome to Paradigm — three pillars, why structured context matters"
@@ -74,7 +94,7 @@ components:
     references: ["#aspect-anchoring"]
 
   para-201-aspect-graph:
-    description: "Aspect Graph — symbol relationships, graph visualization"
+    description: "Aspect Graph Introduction — condensed overview, 5 categories, 7 MCP tools, pointer to PARA 501 for internals"
     file: para-201.json
     tags: [course-content, para-201]
     references: ["#symbol-graph", "#aspect-anchoring"]
@@ -121,7 +141,7 @@ components:
     tags: [course-content, para-201]
     references: ["#flow-validation", "#portal-protocol", "#aspect-anchoring", "#symbol-system"]
 
-  # PARA 301: Operations (11 lessons)
+  # PARA 301: Operations (13 lessons — added enforcement-levels and paradigm-shift)
 
   para-301-history-system:
     description: "History System — implementation history, event tracking"
@@ -152,6 +172,18 @@ components:
     file: para-301.json
     tags: [course-content, para-301]
     references: ["#navigation"]
+
+  para-301-enforcement-levels:
+    description: "Enforcement Levels — minimal/balanced/strict, 13 checks, per-check overrides, progression strategy"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#enforcement-hooks", "#enforcement-presets"]
+
+  para-301-paradigm-shift:
+    description: "The paradigm shift Command — 6-step onboarding, flags, when to re-run, idempotent setup"
+    file: para-301.json
+    tags: [course-content, para-301]
+    references: ["#shift-command", "#scan-index", "#enforcement-hooks"]
 
   para-301-navigation-system:
     description: "Navigation System — paradigm_navigate, find/explore/context intents"
@@ -189,7 +221,7 @@ components:
     tags: [course-content, para-301]
     references: ["#lore-system", "#wisdom-system", "#ripple-analysis", "#navigation", "#sentinel", "#protocol-system"]
 
-  # PARA 401: Orchestration (11 lessons)
+  # PARA 401: Orchestration (12 lessons — added quick-check, updated agent-roles with Rune + roster bridge)
 
   para-401-mcp-tools-overview:
     description: "MCP Tools Overview — 95 tools, token budgets, query vs file read"
@@ -204,10 +236,10 @@ components:
     references: ["#orchestration"]
 
   para-401-agent-roles:
-    description: "Agent Roles — architect, builder, reviewer, tester, security"
+    description: "Agent Roles — 8 core + 54 total, three-tier hierarchy, Rune compliance, facets, handoff, reviewer protocol"
     file: para-401.json
     tags: [course-content, para-401]
-    references: ["#orchestration"]
+    references: ["#orchestration", "#agent-loader"]
 
   para-401-provider-cascade:
     description: "Provider Cascade — auto, claude, claude-code, cursor-cli, manual"
@@ -220,6 +252,12 @@ components:
     file: para-401.json
     tags: [course-content, para-401]
     references: ["#orchestration", "#pm-governance"]
+
+  para-401-quick-check:
+    description: "Quick-Check: Ask Before You Build — lightweight risk assessment, Jinx + reviewer, GREENLIGHT vs ESCALATE"
+    file: para-401.json
+    tags: [course-content, para-401]
+    references: ["#orchestration"]
 
   para-401-pm-governance:
     description: "PM Governance — preflight, postflight, compliance checks"
@@ -256,7 +294,7 @@ components:
     type: lesson
     tags: [university, notebooks, agent-identity, permissions]
 
-  # PARA 501: Advanced Systems (14 lessons)
+  # PARA 501: Advanced Systems (15 lessons — added conductor-workspace)
 
   para-501-lore-system:
     description: "Lore System — entries, types, arcs, linked entries, timeline"
@@ -323,6 +361,12 @@ components:
     file: para-501.json
     tags: [course-content, para-501]
     references: ["#PlatformServer", "#PlatformWebSocket", "#AgentPresenceManager", "#UserStateTracker", "#AgentCommandRoute", "#PlatformTools", "#AgentStore", "#AgentToast", "#AgentCallout"]
+
+  para-501-conductor-workspace:
+    description: "Conductor: Visual Mission Control — workspace tiling, Symphony integration, task protocol, agent health, local ML"
+    file: para-501.json
+    tags: [course-content, para-501]
+    references: ["#conductor", "#orchestration"]
 
   para-501-review-compliance:
     description: "University lesson: Automated Review Pipeline — paradigm review, compliance-checker, dynamic tool loading, response format"

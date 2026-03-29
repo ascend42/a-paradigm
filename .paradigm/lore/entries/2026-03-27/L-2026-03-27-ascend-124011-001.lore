@@ -1,0 +1,85 @@
+id: L-2026-03-27-ascend-124011-001
+type: agent-session
+timestamp: '2026-03-27T12:40:11.581Z'
+duration_minutes: 180
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.23.0–5.24.0 + README rewrite + Neverland pillars response
+summary: 'Major session covering three workstreams: (1) Shipped v5.23.0 with quick-check orchestration mode, Jinx promoted to core agent, and magnitude-based orchestration triggers. (2) Shipped v5.24.0 with University Platform UI section, habits evaluator consolidation, and duplicate symphony key fix. (3) Wrote full-team response to Neverland pillars analysis (4 parallel agents: architect, security, product, Jinx). (4) Rewrote README on a side branch — shift-first flow, agent team front and center, AI-first prompt patterns alongside CLI commands, all agent nicknames visible. Branch readme-rewrite has 4 commits ready for review.'
+symbols_touched:
+  - '#orchestration'
+  - '#OrchestrationTools'
+  - '#platform'
+  - '#UniversitySection'
+  - '#universityStore'
+  - '#university-routes'
+  - ~quick-check-escalation
+  - ~advocate-role-prompt
+  - ~magnitude-based-orchestration
+  - ~agent-default-model-assignments
+files_created:
+  - packages/paradigm/src/platform-server/routes/university.ts
+  - packages/paradigm/platform-ui/src/sections/university/UniversitySection.tsx
+  - packages/paradigm/platform-ui/src/sections/university/store/universityStore.ts
+  - packages/paradigm/platform-ui/src/sections/university/styles/university.css
+  - /Users/ascend/Documents/GitHub/a-neverland/docs/pillars-response.md
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/enforcement.ts
+  - packages/paradigm-mcp/src/utils/habits-loader.ts
+  - packages/paradigm-mcp/.purpose
+  - packages/paradigm/src/core/habits/evaluator.ts
+  - packages/paradigm/src/core/project-type.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - .paradigm/config.yaml
+  - .paradigm/roster.yaml
+  - CHANGELOG.md
+  - README.md
+decisions:
+  - id: quick-check-mode
+    decision: Added mode='quick' to orchestrate_inline as lightweight pre-check
+    rationale: Enforcement requires orchestration for 3+ files but full plan mode is heavy. Quick-check runs advocate + reviewer analysis in ~3-4k tokens, greenlights or escalates. Satisfies enforcement either way.
+  - id: jinx-core-agent
+    decision: Promoted Jinx (advocate) to 7th core agent across all project types
+    rationale: Devil's advocate should run on every task, not just when manually added. Added to all 10 project type rosters, DEFAULT_MODELS (opus tier), ROLE_PROMPTS.
+  - id: magnitude-scoring
+    decision: Replaced file-count threshold with magnitude-based scoring in stop hook Check 13
+    rationale: Raw file count missed cross-package and security-adjacent signals. Magnitude = files(1pt) + cross-pkg(2pt) + security-adjacent(2pt each) + symbol files(1pt).
+  - id: habits-consolidation
+    decision: Made MCP habits-loader the single source of truth, CLI re-exports
+    rationale: Two evaluators with divergent check types caused bugs (v5.21.3). Added 4 missing check types to MCP, CLI evaluator.ts became a thin re-export.
+  - id: readme-rewrite-approach
+    decision: README rewrite on side branch with AI-first prompt patterns
+    rationale: 'Team analysis (DX, Product, Jinx) agreed: lead with paradigm shift, make agent team front and center, show natural language prompts alongside CLI commands. Branch for preview before merging.'
+learnings:
+  - 'Quick-check mode should auto-escalate conservatively: 2+ signals or any security/critical signal triggers full orchestration'
+  - 'The README''s actual audience is one person: a developer deciding whether to try Paradigm in the next 5 minutes'
+  - 'AI-first documentation pattern: show the prompt you''d say to your AI, then show what runs underneath — users talk to their AI, not their terminal'
+  - 'Neverland pillars analysis: all 4 teams agreed A/B framework must be 3 variants (bare model vs hand-written prompt vs PAN agent) — only C>B validates the product'
+verification:
+  status: pass
+  details:
+    build: pass
+    mcp-build: pass
+    cli-build: pass
+    platform-ui-build: pass
+    link: pass
+tags:
+  - release
+  - readme
+  - neverland
+  - orchestration
+  - university
+  - habits
+linked_commits:
+  - d09363c0
+  - f29103d3
+confidence: 0.92
+git_context:
+  ref: f29103d3f1dfee35930e1ae068b4791addda54f1
+  branch: main
+  dirty: true

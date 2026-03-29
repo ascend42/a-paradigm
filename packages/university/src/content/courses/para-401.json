@@ -179,92 +179,67 @@
     {
       "id": "agent-roles",
       "title": "Agent Roles & Facets",
-      "content": "## Agent Roles & Facets\n\nEach agent role in Paradigm is not just a label -- it is a fully configured **facet** with its own model assignment, context scope, token budget, and communication protocol. These configurations live in `.paradigm/agents.yaml` and determine exactly how each agent behaves during orchestration.\n\n### Facet Configuration\n\nA facet defines four dimensions of an agent:\n\n**`defaultModel`** -- Which AI model to use. This matches task complexity to capability:\n- `opus` for architect and security (complex reasoning, design decisions, threat analysis)\n- `sonnet` for reviewer (balanced depth and speed for code critique)\n- `haiku` for builder and tester (fast, cost-effective for implementation and test writing)\n\n**`context.include / context.exclude`** -- Which files the agent should see. An architect might include `.purpose` files, `portal.yaml`, and architecture docs but exclude test files. A tester includes test directories and the implementation files but excludes deployment configs. This scoping keeps each agent focused and reduces token waste.\n\n```yaml\n# Example from agents.yaml\narchitect:\n  defaultModel: opus\n  context:\n    include:\n      - \"**/.purpose\"\n      - \"portal.yaml\"\n      - \".paradigm/specs/**\"\n    exclude:\n      - \"**/*.test.*\"\n      - \"node_modules/**\"\n  limits:\n    maxTokens: 30000\n  protocol:\n    relay: structured\n```\n\n**`limits.maxTokens`** -- The maximum token budget for a single agent invocation. Architects typically get higher budgets (30,000+) because design work requires more exploration. Builders and testers get tighter budgets because their work is more focused and mechanical.\n\n**`protocol.relay`** -- How the agent reports results back. Options include `structured` (returns a formatted JSON report), `markdown` (returns a narrative document), or `handoff` (writes to a handoff file for the next agent). The relay protocol is how agents communicate in a pipeline.\n\n### The Orchestrator's Role\n\nThe orchestrator is not an agent itself -- it is the coordinator that:\n1. **Decomposes** the task into stages based on trigger patterns\n2. **Assigns** each stage to the appropriate agent facet\n3. **Manages handoffs** between stages, passing context from one agent to the next\n4. **Identifies parallelism** -- stages that are independent can run simultaneously\n5. **Aggregates results** from all agents into a final output\n\nThe decomposition logic uses trigger patterns: tasks mentioning \"auth\" or \"security\" trigger the security agent. Tasks mentioning \"test\" or \"coverage\" trigger the tester. Tasks involving 3+ files or multiple symbols trigger the architect for upfront design. These patterns are configurable in the orchestration rules.\n\n### Handoff Context\n\nWhen agents run in sequence, each agent receives the output of the previous one via `handoffContext`. For example, the architect produces a design document, which is passed to the security agent for review, whose approved design is then passed to the builder for implementation. The `paradigm_agent_prompt` tool accepts `previousAgent` and `handoffContext` parameters to facilitate this chain.\n\n```\nparadigm_agent_prompt({\n  agent: \"builder\",\n  task: \"Implement the auth middleware as designed\",\n  previousAgent: \"architect\",\n  handoffContext: \"Design: JWT middleware at src/middleware/auth.ts, gates: ^authenticated, ^admin-only...\"\n})\n```\n\nThis chain of specialized agents, each scoped to its role with appropriate context and budget, produces higher quality output than a single generalist agent trying to do everything.\n\n### Reviewer Protocol\n\nThe reviewer agent follows a strict **two-stage review protocol**:\n\n**Stage 1 (Spec Compliance)** checks that the implementation matches Paradigm metadata: `.purpose` definitions are registered, `^gates` from `portal.yaml` are implemented, `$flow` steps execute in order, `!signals` are emitted, and `~aspects` are enforced. If Stage 1 fails, the reviewer **stops immediately** and hands back to the builder. There is no point reviewing code quality of spec-noncompliant code.\n\n**Stage 2 (Code Quality)** only runs if Stage 1 passes. It covers security (OWASP), conventions, test coverage, performance, and error handling.\n\nEvery review must produce a **minimum of 3 categorized findings**: `blocking` (must fix), `improvement` (should fix), or `note` (informational). Only blocking findings prevent approval. This ensures thorough examination -- a review with 3 notes and 0 blocking findings is still approved, but a rubber-stamp \"looks good\" with zero findings is never acceptable.",
+      "content": "## The Agent Roster: 8 Core, 54+ Total\n\nParadigm ships with over 54 agent definitions. You do not use all of them — `paradigm shift` auto-selects a project roster based on your detected project type. But understanding the hierarchy helps you work with the orchestrator effectively.\n\n### Three-Tier Hierarchy\n\n**Core agents (8)** are available in every project. These are the backbone of orchestration:\n\n| Nickname | Role | Model Tier | Purpose |\n|----------|------|-----------|---------|\n| — | **Architect** | Tier-1 (opus) | System design, multi-file planning |\n| — | **Builder** | Tier-3 (haiku) | Implementation, code generation |\n| — | **Reviewer** | Tier-2 (sonnet) | Two-stage code review (spec → quality) |\n| Sage | **Advocate** | Tier-2 (sonnet) | User perspective, UX implications |\n| Jinx | **Advocate** | Tier-2 (sonnet) | Stress-tests assumptions, finds edge cases |\n| Sentinel | **Security** | Tier-1 (opus) | Threat analysis, auth review, OWASP |\n| Doc | **Documentor** | Tier-2 (sonnet) | .purpose files, portal.yaml — Paradigm metadata only |\n| Rune | **Compliance** | Tier-2 (sonnet) | Symbol planning, 1:1 aspect enforcement |\n| Vigil | **Tester** | Tier-3 (haiku) | Test writing, coverage, edge cases |\n\n**Specialized agents (~20)** cover domains like mobile, database, DevOps, accessibility, and performance. They are rostered when your project type matches their expertise.\n\n**Ecosystem agents (~26+)** are language/platform-specific — Swift, TypeScript, Rust, Python ML, iOS, Android, etc. They accumulate per-ecosystem knowledge through notebooks that transfer across projects.\n\n> **Deep dive:** PARA 701 covers the full roster, agent profiles, notebooks, per-project customization, and the learning feedback loop.\n\n### Rune: The Compliance Specialist\n\nRune is the 8th core agent, added specifically to prevent a common failure mode: building features without proper symbol coverage.\n\n**Before implementation**, Rune creates a **Symbol Plan**:\n- Enumerates all `#components`, `$flows`, `!signals`, `~aspects` the task needs\n- Creates symbol stubs via MCP tools (`paradigm_purpose_add_component`, etc.)\n- Enforces a **1:1 component-to-aspect ratio** — every component must have at least one aspect\n\n**After implementation**, Rune produces a **Compliance Report**:\n- Validates that planned symbols were actually created\n- Checks that aspect anchors point to valid code\n- Verifies flows exist for logic spanning 3+ components\n- Reports findings as blocking (must fix) or passing\n\nRune never modifies source code — only Paradigm metadata files (.purpose, portal.yaml). Think of Rune as the \"symbol bookkeeper\" who ensures the spec matches the code.\n\n### Facet Configuration\n\nEach agent role is a **facet** with four dimensions defined in `.paradigm/agents.yaml`:\n\n- **`defaultModel`** — Which AI model to use (opus for complex reasoning, sonnet for balanced, haiku for fast execution)\n- **`context.include / context.exclude`** — Which files the agent sees (scoped to reduce token waste)\n- **`limits.maxTokens`** — Budget per invocation (architects get more, builders get less)\n- **`protocol.relay`** — How results are reported: `structured` (JSON), `markdown` (narrative), or `handoff` (file for next agent)\n\n```yaml\n# Example from agents.yaml\narchitect:\n  defaultModel: opus\n  context:\n    include: [\"**/.purpose\", \"portal.yaml\", \".paradigm/specs/**\"]\n    exclude: [\"**/*.test.*\", \"node_modules/**\"]\n  limits:\n    maxTokens: 30000\n  protocol:\n    relay: structured\n```\n\n### Handoff Context\n\nAgents run in sequence, each receiving the previous agent's output via `handoffContext`:\n\n```\nRune (symbol plan) → Architect (design) → Security (review) → Builder (implement) → Reviewer (check) → Rune (compliance report) → Doc (.purpose files)\n```\n\nThe `paradigm_agent_prompt` tool accepts `previousAgent` and `handoffContext` parameters to thread this chain.\n\n### Reviewer Protocol\n\nThe reviewer follows a strict **two-stage protocol**:\n\n**Stage 1 (Spec Compliance)** — checks .purpose registrations, portal.yaml gates, flow steps, signal emissions, aspect enforcement. If Stage 1 fails, the reviewer **stops immediately** and hands back to the builder.\n\n**Stage 2 (Code Quality)** — only runs if Stage 1 passes. Covers OWASP security, conventions, test coverage, performance, error handling.\n\nEvery review must produce a **minimum of 3 categorized findings**: blocking (must fix), improvement (should fix), or note (informational). A rubber-stamp \"looks good\" with zero findings is never acceptable.",
       "keyConcepts": [
-        "Four facet dimensions: model, context scope, token limits, relay protocol",
-        "agents.yaml configuration file",
-        "Orchestrator decomposition and stage assignment",
-        "Handoff context between sequential agents",
-        "Trigger patterns for agent selection"
+        "Three-tier hierarchy: 8 core agents, ~20 specialized, ~26+ ecosystem",
+        "Rune (compliance) handles pre-build symbol planning and post-build compliance reports",
+        "1:1 component-to-aspect ratio is enforced by Rune — every component needs at least one aspect",
+        "Facets define model, context scope, token budget, and relay protocol per agent",
+        "Reviewer uses two-stage protocol: spec compliance first, code quality only if spec passes",
+        "paradigm shift auto-selects a roster based on project type"
       ],
       "quiz": [
         {
           "id": "q1",
-          "question": "Why does the reviewer agent use the sonnet model instead of opus or haiku?",
+          "question": "You are about to add a payment refund feature that touches 5 files including auth middleware. The orchestrator composes a team. Which agents would you expect to see, and why?",
           "choices": {
-            "A": "Sonnet is the cheapest model",
-            "B": "Sonnet provides a balance of analytical depth and speed, suited for code critique",
-            "C": "Sonnet is the only model that can read code",
-            "D": "The reviewer does not need any AI model",
-            "E": "It is a random assignment with no rationale"
+            "A": "Only builder — it is an implementation task",
+            "B": "Architect (5 files = multi-file design), Sentinel (auth middleware = security), builder (implementation), Vigil (testing), Rune (symbol planning)",
+            "C": "Only architect and builder — the others are optional",
+            "D": "All 54+ agents are always activated for every task",
+            "E": "Only Sentinel — payment features are a security concern"
           },
           "correct": "B",
-          "explanation": "Code review requires analytical depth (catching subtle issues) but not the deep reasoning needed for architectural design. Sonnet balances depth and speed, making it ideal for critique. Opus would be more expensive than necessary; haiku might miss subtle issues."
+          "explanation": "The orchestrator uses trigger patterns: 5 files triggers the architect for upfront design, auth middleware triggers Sentinel for security review, implementation triggers builder, the complexity triggers Vigil for testing, and Rune always runs for symbol planning on orchestrated tasks. This is how the \"right team for the task\" is composed automatically."
         },
         {
           "id": "q2",
-          "question": "An architect agent's context.exclude contains '**/*.test.*'. Why?",
+          "question": "After building a new feature, Rune's compliance report shows: \"3 components created, 1 aspect defined. Blocking: 2 components missing aspects (1:1 ratio violated).\" What do you do?",
           "choices": {
-            "A": "Test files contain sensitive data",
-            "B": "To reduce token consumption by excluding files irrelevant to architectural design",
-            "C": "The architect is not allowed to see tests for compliance reasons",
-            "D": "Test files are always broken and would confuse the agent",
-            "E": "It is a default that cannot be changed"
+            "A": "Ignore the report — aspects are optional metadata",
+            "B": "Delete the 2 components to make the ratio work",
+            "C": "Add aspects to the 2 uncovered components — define what rules, constraints, or configuration each component enforces",
+            "D": "Reduce the aspect count to 0 so the ratio is consistently zero",
+            "E": "Ask the architect to redesign the feature with fewer components"
           },
-          "correct": "B",
-          "explanation": "Context scoping keeps agents focused and reduces token waste. An architect designing system structure does not need to read test files -- including them would consume tokens without adding value. Each role's context is scoped to the files relevant to its task."
+          "correct": "C",
+          "explanation": "Rune enforces a 1:1 component-to-aspect ratio because every component should have at least one documented rule, constraint, or configuration. Adding aspects is the correct fix — it forces you to think about what rules govern each component. If a component truly has no rules, it may be too small to be its own component."
         },
         {
           "id": "q3",
-          "question": "The orchestrator assigns a task to architect -> security -> builder -> tester. What mechanism passes context from the architect to the security agent?",
+          "question": "The reviewer runs Stage 1 (Spec Compliance) and finds that #checkout-form is not registered in any .purpose file. What happens?",
           "choices": {
-            "A": "They share the same conversation thread",
-            "B": "The handoffContext parameter in paradigm_agent_prompt, carrying the architect's output",
-            "C": "They both read the same files",
-            "D": "The orchestrator emails the context",
-            "E": "Context is not shared between agents"
+            "A": "The reviewer proceeds to Stage 2 and includes the missing registration as a note",
+            "B": "The reviewer stops immediately, reports a blocking finding, and hands back to the builder without Stage 2",
+            "C": "The reviewer auto-creates the .purpose entry and continues",
+            "D": "The reviewer skips both stages and approves with a warning",
+            "E": "The reviewer asks Rune to fix it"
           },
           "correct": "B",
-          "explanation": "When agents run in sequence, each receives the previous agent's output via the handoffContext parameter. paradigm_agent_prompt accepts previousAgent and handoffContext to include this chain context in the generated prompt."
+          "explanation": "The two-stage protocol is a hard gate: Stage 1 failure means immediate stop. There is no point reviewing code quality of spec-noncompliant code. The builder must fix the spec issue first, then resubmit. This ensures Paradigm metadata is always in sync with code before quality review begins."
         },
         {
           "id": "q4",
-          "question": "Which file contains the facet configuration for all agent roles?",
+          "question": "Your project is a React web app. After running paradigm shift, the roster includes architect, builder, reviewer, Sage, Jinx, Sentinel, Doc, Rune, Vigil, plus accessibility and performance specialists. A teammate's Python ML project has a different roster. Why?",
           "choices": {
-            "A": ".paradigm/config.yaml",
-            "B": ".paradigm/agents.yaml",
-            "C": "portal.yaml",
-            "D": ".purpose files in each directory",
-            "E": "navigator.yaml"
+            "A": "paradigm shift uses random selection",
+            "B": "Each project type gets a tailored roster — web apps get accessibility/performance specialists, ML projects get data pipeline/model evaluation specialists",
+            "C": "The Python project is missing agents and needs manual configuration",
+            "D": "All projects get the same roster but with different model assignments",
+            "E": "The difference is because of different Paradigm versions"
           },
           "correct": "B",
-          "explanation": "Agent facet configurations -- including model assignments, context scopes, token limits, and relay protocols -- are defined in .paradigm/agents.yaml. This is separate from config.yaml (project configuration) and portal.yaml (gate definitions)."
-        },
-        {
-          "id": "q5",
-          "question": "A task description mentions 'add rate limiting to the API with security audit'. Which trigger patterns activate?",
-          "choices": {
-            "A": "Only builder -- it is an implementation task",
-            "B": "Only security -- it mentions 'security audit'",
-            "C": "Security (triggered by 'security') and builder (triggered by implementation need), plus architect if 3+ files are affected",
-            "D": "All five agents are always triggered regardless of the task",
-            "E": "Only tester -- rate limiting needs testing"
-          },
-          "correct": "C",
-          "explanation": "Trigger patterns analyze the task description: 'security audit' triggers the security agent, the implementation need triggers the builder, and if the task affects 3+ files, the architect is triggered for upfront design. The orchestrator combines these signals to compose the right team."
-        },
-        {
-          "id": "q6",
-          "question": "The reviewer agent runs Stage 1 (Spec Compliance) and finds that #checkout-form is not registered in any .purpose file. What happens next?",
-          "choices": {
-            "A": "The reviewer proceeds to Stage 2 (Code Quality) and includes the missing registration as a note",
-            "B": "The reviewer stops immediately, reports a blocking finding, and hands back to the builder without running Stage 2",
-            "C": "The reviewer auto-creates the .purpose entry and continues",
-            "D": "The reviewer skips both stages and approves with a warning",
-            "E": "The reviewer runs both stages in parallel and combines results"
-          },
-          "correct": "B",
-          "explanation": "The two-stage protocol is a hard gate: if Stage 1 (Spec Compliance) fails, the reviewer stops immediately and reports blocking findings. There is no point reviewing code quality of spec-noncompliant code -- it is wasted effort. The builder must fix the spec compliance issues first, then resubmit for review."
+          "explanation": "paradigm shift auto-detects project type from markers (package.json = web/node, requirements.txt = Python, etc.) and selects specialized agents that match. The 8 core agents appear in every roster, but specialized and ecosystem agents vary. A web app gets accessibility and performance; an ML project gets data pipeline and model evaluation."
         }
       ]
     },
@@ -410,6 +385,59 @@
           },
           "correct": "C",
           "explanation": "Specific task descriptions with clear scope, named symbols, and explicit requirements produce better plans. The orchestrator can identify exact agents needed (security for the gate, builder for implementation) and provide accurate token estimates. Vague descriptions lead to generic, less useful plans."
+        }
+      ]
+    },
+    {
+      "id": "quick-check",
+      "title": "Quick-Check: Ask Before You Build",
+      "content": "## The Lightweight Pre-Check\n\nNot every task needs full orchestration with architect, security, builder, tester, and reviewer stages. Sometimes you just want to know: *is this task ready to build, or does it need more planning?*\n\nThat is what **quick-check mode** does. It runs a lightweight risk assessment (~3–4k tokens) and returns one of two verdicts:\n\n- **GREENLIGHT** — proceed to implementation. The task is well-scoped, low-risk, and does not need multi-agent planning.\n- **ESCALATE** — this needs full orchestration. The task has unaddressed risks, ambiguous requirements, or cross-cutting concerns.\n\n### How It Works\n\nQuick-check uses two agents:\n\n**Jinx (advocate)** stress-tests your assumptions:\n- \"What if the user loses their second factor?\"\n- \"What happens when the payment provider is down?\"\n- \"Did you consider rate limiting on this endpoint?\"\n\n**Reviewer** checks feasibility:\n- Does this touch auth, security, or shared state?\n- How many files will this change?\n- Are there dependencies that need updating?\n\nTheir combined assessment produces the verdict. If either agent raises concerns that cannot be resolved in a quick check, the verdict is ESCALATE.\n\n### Usage\n\n```\nparadigm_orchestrate_inline({\n  task: \"Add a 'last seen' timestamp to user profiles\",\n  mode: \"quick\"\n})\n```\n\nCompare with full orchestration:\n```\nparadigm_orchestrate_inline({\n  task: \"Add two-factor authentication to the login flow\",\n  mode: \"plan\"\n})\n```\n\n### When to Use Quick-Check vs Full Orchestration\n\n| Signal | Quick-Check | Full Orchestration |\n|--------|-------------|-------------------|\n| Single file change | Yes | Overkill |\n| UI-only change (styling, layout) | Yes | Overkill |\n| Touches auth or security | Depends on scope | Usually yes |\n| 3+ files affected | Depends on complexity | Yes |\n| New API endpoint | Depends on gates needed | Usually yes |\n| Infrastructure change | No | Yes |\n| Unknown scope (\"make it faster\") | No | Yes |\n\n**Rule of thumb:** If you can describe the complete change in one sentence and it touches ≤2 files, quick-check is appropriate. If you find yourself saying \"and also...\" or \"but we need to consider...\", go straight to full orchestration.\n\n### Quick-Check and Enforcement\n\nQuick-check satisfies the `orchestration-required` enforcement check. On balanced or strict enforcement, the stop hook requires that complex tasks go through orchestration before building. A GREENLIGHT from quick-check counts — you do not need to run full orchestration after a greenlight.\n\nHowever, if you get an ESCALATE verdict and proceed to build anyway, the stop hook will flag that you bypassed the recommendation. The verdict is recorded and traceable.\n\n### Example Walkthrough\n\n**Task:** \"Add a 'forgot password' link to the login page\"\n\n**Jinx:** \"Where does the reset email get sent from? Is there rate limiting on reset requests? What happens if the email is not in the system — do you reveal that?\"\n\n**Reviewer:** \"This touches auth (password reset flow), requires a new API endpoint (/reset-password), involves email sending infrastructure, and needs rate limiting. Estimated: 4+ files.\"\n\n**Verdict: ESCALATE** — the task looks simple but involves auth, a new endpoint, email, and rate limiting. Full orchestration with Sentinel (security) and architect (multi-file design) is recommended.\n\nCompare: \"Change the login button color from blue to green\" → **GREENLIGHT** (single CSS change, no logic, no auth).",
+      "keyConcepts": [
+        "Quick-check is a lightweight pre-implementation risk assessment (~3-4k tokens)",
+        "Two agents: Jinx stress-tests assumptions, reviewer checks feasibility",
+        "Two outcomes: GREENLIGHT (proceed) or ESCALATE (needs full orchestration)",
+        "Satisfies orchestration-required enforcement — a greenlight counts as orchestration",
+        "Rule of thumb: one-sentence change + ≤2 files = quick-check, otherwise full orchestration"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You need to rename a CSS class from .btn-primary to .btn-main across 2 files. Your project uses balanced enforcement with orchestration-required set to warn. What do you do?",
+          "choices": {
+            "A": "Run full orchestration — any change should go through the full pipeline",
+            "B": "Run quick-check — it is a scoped, low-risk change that will likely get GREENLIGHT",
+            "C": "Skip orchestration entirely — CSS changes do not count as \"complex tasks\"",
+            "D": "Ask the architect to plan the rename first",
+            "E": "Disable orchestration-required for this one task"
+          },
+          "correct": "B",
+          "explanation": "A CSS class rename across 2 files is exactly the kind of scoped, low-risk change quick-check is designed for. It will likely GREENLIGHT. Skipping orchestration entirely would trigger the enforcement warning. Running full orchestration would waste tokens on a trivial change. Quick-check gives you the compliance checkmark at minimal cost."
+        },
+        {
+          "id": "q2",
+          "question": "Quick-check returns ESCALATE for your task \"add user deletion endpoint.\" You are short on time and want to build it anyway. What are the consequences?",
+          "choices": {
+            "A": "Nothing — ESCALATE is just a suggestion",
+            "B": "The build will fail at compile time",
+            "C": "The stop hook will flag that you bypassed an ESCALATE recommendation, and the verdict is recorded for traceability",
+            "D": "Your code will be automatically reverted",
+            "E": "The orchestrator will refuse to run any further tasks"
+          },
+          "correct": "C",
+          "explanation": "ESCALATE is a recorded recommendation, not a hard block (unless orchestration-required is set to block in strict enforcement). However, the stop hook flags the bypass, and the verdict is traceable in the session history. A user deletion endpoint likely needs security review (Sentinel) and architectural planning — skipping that introduces real risk."
+        },
+        {
+          "id": "q3",
+          "question": "During quick-check, Jinx asks: \"What if the email service is down when sending password reset?\" and the reviewer notes \"touches auth, new endpoint, email infra — estimated 4+ files.\" The verdict is ESCALATE. Which agents would full orchestration likely include?",
+          "choices": {
+            "A": "Only builder — the task is clearly defined",
+            "B": "Architect (4+ files), Sentinel (auth + password reset), builder, Vigil (tester), Rune (symbols)",
+            "C": "Only Sentinel — it is a security task",
+            "D": "All 54 agents to be thorough",
+            "E": "Jinx and reviewer again, but with more tokens"
+          },
+          "correct": "B",
+          "explanation": "Full orchestration composes the team from trigger patterns: 4+ files triggers architect for multi-file design, auth/password triggers Sentinel for security review, implementation triggers builder, complexity triggers Vigil for testing, and Rune always runs for symbol planning. This is the value of ESCALATE — it routes you to the right team composition."
         }
       ]
     },

@@ -30,16 +30,16 @@
         },
         {
           "id": "q2",
-          "question": "What are the three types of changes you can record in the history system?",
+          "question": "In one session you fixed a race condition in #checkout-flow, updated the $payment-flow to add retry logic, and added a new #refund-handler component. How would you record these three changes in the history system?",
           "choices": {
-            "A": "create, update, delete",
-            "B": "implement, refactor, rollback",
-            "C": "feature, fix, refactor",
-            "D": "add, modify, remove",
-            "E": "build, test, deploy"
+            "A": "One history_record call with all three changes combined",
+            "B": "Three separate history_record calls — a \"fix\" for the race condition, a \"change\" for the flow update, and an \"add\" for the new component",
+            "C": "Only record the new component — fixes and changes are tracked by git",
+            "D": "Use paradigm_lore_record instead — history is deprecated",
+            "E": "Record only the fix — it is the most important change"
           },
           "correct": "B",
-          "explanation": "The three change types are implement (new work), refactor (structural changes), and rollback (reverting a change). The options feature, fix, and refactor are intent values, not types."
+          "explanation": "The history system supports three change types: \"add\" (new symbols), \"change\" (modifications), and \"fix\" (bug fixes). Each change should be recorded separately so that future history queries can filter by type. Using the right type matters — when someone asks \"what broke recently?\" they want fixes, not additions."
         },
         {
           "id": "q3",
@@ -330,6 +330,112 @@
           },
           "correct": "B",
           "explanation": "Clarification markers (`[NEEDS CLARIFICATION: ...]`) are treated as warnings, not errors. Both `paradigm doctor` and `paradigm_purpose_validate` scan description fields for this exact pattern and report matches as warnings. They surface during health checks to remind the team of unresolved design questions, but they do not block validation or break builds. Resolve them before shipping."
+        }
+      ]
+    },
+    {
+      "id": "enforcement-levels",
+      "title": "Enforcement Levels",
+      "content": "## The Three Enforcement Levels\n\nParadigm enforcement is configurable. Not every project needs the same rigor — a weekend prototype has different needs than a healthcare platform. Enforcement levels control which compliance checks **block** (stop you), **warn** (notify but continue), or are **off** (silent).\n\n### Minimal — For Learning and Prototyping\n\nMinimal enforcement is the default for new projects created by `paradigm shift`. Only two checks are active, both as warnings:\n\n- `purpose-coverage` — warns if source directories lack `.purpose` files\n- `habits-blocking` — warns if defined habits are being violated\n\nEverything else is off. This means hooks never block you, so you can learn Paradigm without friction. You can always run checks manually with `paradigm doctor`.\n\n### Balanced — For Active Development\n\nWhen your team is comfortable with Paradigm, upgrade to balanced. This is where most teams operate:\n\n- **Blocks on:** `purpose-coverage` (must have purpose files), `habits-blocking` (must follow habits)\n- **Warns on:** `purpose-exists`, `portal-gates`, `aspect-anchors`, `purpose-freshness`, `lore-required`, `purpose-required-patterns`, `drift-detection`, `portal-compliance`, `orchestration-required`\n- **Off:** `aspect-advisory`, `graduation-tracking`\n\nBalanced catches problems early without being oppressive. The stop hook blocks on missing purpose files but lets you work freely otherwise.\n\n### Strict — For Regulated Domains\n\nHealthcare, finance, legal — domains where compliance is not optional. Strict blocks on nearly everything:\n\n- **Blocks on:** `purpose-coverage`, `purpose-exists`, `portal-gates`, `aspect-anchors`, `lore-required`, `habits-blocking`, `purpose-required-patterns`, `drift-detection`, `portal-compliance`, `orchestration-required`\n- **Warns on:** `purpose-freshness`, `aspect-advisory`, `graduation-tracking`\n\nWith strict enforcement, you cannot commit without purpose files, portal gates, lore records, and passing drift checks. This ensures every change is documented and traceable.\n\n## Configuration\n\nSet the level in `.paradigm/config.yaml`:\n\n```yaml\nenforcement:\n  level: balanced   # minimal | balanced | strict\n```\n\nOverride individual checks when a preset does not quite fit:\n\n```yaml\nenforcement:\n  level: balanced\n  checks:\n    orchestration-required: block   # Upgrade from warn to block\n    lore-required: off              # Downgrade — we don't need lore yet\n```\n\nPer-check overrides take precedence over the preset. This lets you start with a base level and tune specific checks to match your team's workflow.\n\n## The 13 Checks\n\n| Check | What It Validates |\n|-------|------------------|\n| `purpose-coverage` | Source directories have .purpose files |\n| `purpose-exists` | Referenced purpose files actually exist on disk |\n| `portal-gates` | Routes in portal.yaml have required gates defined |\n| `aspect-anchors` | Aspect anchors point to valid code locations |\n| `purpose-freshness` | Purpose files are not stale (content matches code) |\n| `aspect-advisory` | Components have at least one aspect (1:1 ratio) |\n| `lore-required` | Sessions modifying 3+ files record lore |\n| `habits-blocking` | Defined habits are being followed |\n| `purpose-required-patterns` | Required patterns (flows, gates) are present |\n| `drift-detection` | Aspect anchor code has not drifted |\n| `portal-compliance` | Portal.yaml matches actual route definitions |\n| `graduation-tracking` | Habits are graduating through automation tiers |\n| `orchestration-required` | Complex tasks use multi-agent orchestration |\n\n## Progression Strategy\n\nMost teams follow this path:\n\n1. **Start minimal** — learn Paradigm, build habits, no blocking\n2. **Move to balanced** after 1-2 weeks — catch issues early, still flexible\n3. **Upgrade to strict** for production-critical or regulated codebases\n\nYou can change levels at any time. The switch is immediate — no migration needed.",
+      "keyConcepts": [
+        "Three enforcement levels: minimal (learn), balanced (work), strict (regulated)",
+        "Minimal is the default for new projects — hooks warn but never block",
+        "13 checks control purpose, portal, aspect, lore, habits, drift, and orchestration compliance",
+        "Per-check overrides let you tune individual checks beyond the preset",
+        "Progression: minimal → balanced → strict as team comfort grows"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "Your team is building a healthcare claims processing system that requires audit trails. A new developer joins and asks which enforcement level to use. What do you recommend?",
+          "choices": {
+            "A": "Minimal — let the new developer learn without friction first",
+            "B": "Balanced — it catches most issues without being too strict",
+            "C": "Strict — healthcare is a regulated domain where every change must be documented and traceable",
+            "D": "Minimal with lore-required overridden to block — just the audit trail matters",
+            "E": "No enforcement — the team should self-police"
+          },
+          "correct": "C",
+          "explanation": "Healthcare is a regulated domain where compliance is not optional. Strict enforcement ensures every change has purpose files, portal gates, lore records, and passing drift checks — exactly the traceability an audit requires. The new developer should work within these constraints from day one rather than building habits that strict mode would later break."
+        },
+        {
+          "id": "q2",
+          "question": "Your project uses balanced enforcement but your team never records lore entries, causing constant warnings. What is the best fix?",
+          "choices": {
+            "A": "Switch to minimal enforcement to silence all warnings",
+            "B": "Override lore-required to off in config.yaml — your team does not need lore yet",
+            "C": "Override lore-required to block — force the team to comply",
+            "D": "Delete the enforcement section from config.yaml entirely",
+            "E": "Ignore the warnings — they are just advisory"
+          },
+          "correct": "B",
+          "explanation": "Per-check overrides exist for exactly this situation. If your team is not ready for lore tracking, override lore-required to off rather than downgrading the entire enforcement level. This keeps all other balanced checks active while silencing the one that does not match your current workflow. You can re-enable it later when the team is ready."
+        },
+        {
+          "id": "q3",
+          "question": "A stop hook blocks your commit with \"missing .purpose file for src/payments/\". You are on balanced enforcement. What happened?",
+          "choices": {
+            "A": "purpose-exists check failed — the .purpose file has a syntax error",
+            "B": "purpose-coverage check blocked — you modified files in src/payments/ but that directory has no .purpose file",
+            "C": "portal-gates check failed — src/payments/ has unprotected routes",
+            "D": "purpose-freshness check failed — the .purpose file exists but is stale",
+            "E": "aspect-anchors check failed — aspects in src/payments/ have broken anchors"
+          },
+          "correct": "B",
+          "explanation": "On balanced enforcement, purpose-coverage is the only check set to block (besides habits-blocking). The error message says \"missing .purpose file\" which means the directory lacks one entirely — that is purpose-coverage, not purpose-exists (which checks that referenced files exist) or purpose-freshness (which checks staleness). Fix: create a .purpose file in src/payments/ describing its components."
+        }
+      ]
+    },
+    {
+      "id": "paradigm-shift",
+      "title": "The paradigm shift Command",
+      "content": "## One Command, Full Setup\n\n`paradigm shift` is the universal onboarding command. It transforms any project directory into a Paradigm-aware workspace in a single run. Whether you are starting a new project or adopting Paradigm in an existing codebase, this is where you begin.\n\n```bash\nparadigm shift\n```\n\n## What It Does (6 Steps)\n\nThe command runs six steps in sequence:\n\n### Step 1: Initialize\nCreates the `.paradigm/` directory with `config.yaml`, `tags.yaml`, and starter files. If the directory already exists, it updates configuration without overwriting your customizations.\n\n### Step 2: Auto-Migrate\nDetects if your project uses an older Paradigm version and applies breaking-change migrations automatically. This keeps projects up to date without manual migration effort.\n\n### Step 3: Scan & Index\nDiscovers all symbols in your codebase by reading `.purpose` files and `portal.yaml`. Builds the navigator index for fast symbol lookup. Skip this step with `--quick` for faster initialization.\n\n### Step 4: Sync IDEs\nGenerates instruction files for your AI tools:\n- `CLAUDE.md` — Claude Code instructions\n- `AGENTS.md` — Universal agent instructions\n- `.cursor/rules/` — Cursor IDE rules\n\nThese files are regenerated from your Paradigm configuration every time you run shift or sync.\n\n### Step 5: Install Hooks\nSets up Git hooks (pre-commit, post-commit) and Claude Code/Cursor hooks for automated enforcement. The hooks run compliance checks based on your enforcement level.\n\n### Step 6: Roster & Model Tiers\nSuggests an agent roster based on your detected project type (web, backend, mobile, etc.) and configures model tiers (tier-1/tier-2/tier-3) based on your environment.\n\n## Key Flags\n\n| Flag | Effect |\n|------|--------|\n| `--quick` | Skip symbol scanning (fast init) |\n| `--verify` | Run `paradigm doctor` health checks at the end |\n| `--workspace <name>` | Create or join a multi-project workspace |\n| `--force` | Reinitialize (overwrite existing config) |\n\n## When to Re-Run\n\nRun `paradigm shift` again when:\n- You upgrade Paradigm to a new version (auto-migrates)\n- You want to refresh IDE instruction files after config changes\n- You add the project to a workspace\n- After major restructuring that changes project type\n\nThe command is idempotent — running it multiple times is safe. It updates what changed and leaves the rest alone.\n\n## What Comes Out\n\nAfter `paradigm shift`, your project has:\n\n```\n.paradigm/\n  config.yaml       # Project configuration\n  tags.yaml         # Tag taxonomy\n  roster.yaml       # Agent team roster\n  agents.yaml       # Agent tier assignments\nCLAUDE.md            # Claude Code instructions\nAGENTS.md            # Universal agent instructions\n.purpose             # Root purpose file (if new project)\nportal.yaml          # Auth topology (if gates detected)\n```\n\nPlus Git hooks and IDE-specific instruction files, all derived from your Paradigm configuration.",
+      "keyConcepts": [
+        "paradigm shift is the universal onboarding command — one command, full setup",
+        "Six steps: init, migrate, scan, sync IDEs, install hooks, roster + model tiers",
+        "Non-interactive by default — auto-detects discipline, stack, and model tiers",
+        "Idempotent — safe to re-run after upgrades or config changes",
+        "--quick skips scanning, --verify adds health checks, --workspace enables multi-project"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "question": "You just cloned a teammate's Paradigm project and want to start working. The project already has .paradigm/ and .purpose files. What command should you run?",
+          "choices": {
+            "A": "paradigm init — to create a fresh .paradigm/ directory",
+            "B": "paradigm shift — it detects the existing setup, migrates if needed, and installs hooks for your environment",
+            "C": "paradigm scan — to rebuild the symbol index",
+            "D": "paradigm sync — to generate your IDE files",
+            "E": "No command needed — the project is already set up"
+          },
+          "correct": "B",
+          "explanation": "paradigm shift is the right choice even for existing projects. It detects that .paradigm/ exists, auto-migrates if the project uses an older version, installs Git and IDE hooks for YOUR environment, generates YOUR IDE instruction files, and suggests an agent roster. Just scan or sync alone would miss hooks and migration."
+        },
+        {
+          "id": "q2",
+          "question": "Your CI pipeline needs to initialize Paradigm quickly without scanning thousands of files. Which flag do you use?",
+          "choices": {
+            "A": "paradigm shift --force — it runs faster by overwriting existing config",
+            "B": "paradigm shift --quick — it skips symbol scanning for faster initialization",
+            "C": "paradigm shift --verify — it verifies instead of scanning",
+            "D": "paradigm init --minimal — it only creates the config file",
+            "E": "paradigm shift --no-hooks — it skips the slowest step"
+          },
+          "correct": "B",
+          "explanation": "The --quick flag skips Step 3 (scan & index), which is the most time-consuming step because it reads every .purpose file in the codebase. In CI, you typically just need config, hooks, and IDE files — the full index can be built separately if needed."
+        },
+        {
+          "id": "q3",
+          "question": "After upgrading Paradigm from v4.x to v5.x, your project's .purpose files use the old @feature syntax instead of #component. What should you do?",
+          "choices": {
+            "A": "Manually find-and-replace all @feature with #component across the codebase",
+            "B": "Run paradigm shift — Step 2 (auto-migrate) detects the version gap and applies breaking-change migrations",
+            "C": "Delete .paradigm/ and start over with paradigm init",
+            "D": "Run paradigm doctor to identify the issues, then fix them one by one",
+            "E": "Ignore it — old syntax still works in v5.x"
+          },
+          "correct": "B",
+          "explanation": "paradigm shift's Step 2 (auto-migrate) exists for exactly this scenario. It detects that your project uses older conventions and applies the necessary migrations automatically. Manual find-and-replace risks missing files or misformatting YAML. Deleting .paradigm/ loses custom configuration. The old syntax does NOT work in v5.x — the symbol system changed."
         }
       ]
     },

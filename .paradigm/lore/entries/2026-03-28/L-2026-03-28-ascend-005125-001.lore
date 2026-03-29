@@ -1,0 +1,92 @@
+id: L-2026-03-28-ascend-005125-001
+type: milestone
+timestamp: '2026-03-28T00:51:25.273Z'
+duration_minutes: 120
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Workspace COMPLETE — embedded terminals, Symphony, shortcuts, all 4 sprints in one session
+summary: All 4 Conductor workspace sprints shipped in a single session. Conductor evolved from a floating overlay to a full macOS workspace application with embedded SwiftTerm terminals running Claude Code. Multiple sessions side by side with project-specific Symphony auto-linking, keyboard shortcuts (Cmd+T/W/\/1-8), and workspace mode activation (.regular for Dock/Cmd+Tab). Apex was right about SwiftTerm — it handles Claude Code's Ink TUI flawlessly. Jinx's concerns about OSC 133 and rendering issues were not observed. The team debate was settled empirically via Sprint 0 spike. This is the single biggest Conductor evolution since its creation.
+symbols_touched:
+  - '#conductor'
+  - '#conductor-app'
+  - '#terminal-session-manager'
+  - '#terminal-session'
+  - '#terminal-view-representable'
+  - '#terminal-cell-view'
+  - '#new-session-sheet'
+  - '#container-view'
+  - '#conductor-environment'
+  - '#symphony-thread-watcher'
+  - '#symphony-notifications'
+  - $session-spawn-flow
+files_created:
+  - packages/conductor/Sources/Conductor/Terminal/TerminalSession.swift
+  - packages/conductor/Sources/Conductor/Terminal/TerminalSessionState.swift
+  - packages/conductor/Sources/Conductor/Terminal/TerminalSessionManager.swift
+  - packages/conductor/Sources/Conductor/Terminal/TerminalViewRepresentable.swift
+  - packages/conductor/Sources/Conductor/Terminal/TerminalCellView.swift
+  - packages/conductor/Sources/Conductor/Terminal/NewSessionSheet.swift
+  - packages/conductor/Sources/Conductor/Services/SymphonyNotificationManager.swift
+  - packages/conductor/Conductor.entitlements
+  - packages/conductor/Resources/Info.plist
+  - packages/conductor/Resources/com.a-company.paradigm.conductor.plist
+  - packages/conductor/VERSION
+  - packages/conductor/build-conductor.sh
+  - docs/specs/conductor-workspace.md
+  - docs/specs/conductor-symphony-fixes.md
+  - docs/competitive/agentscope-analysis.md
+files_modified:
+  - packages/conductor/Package.swift
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
+  - packages/conductor/Sources/Conductor/UI/ConductorEnvironment.swift
+  - packages/conductor/Sources/Conductor/Services/SymphonyThreadWatcher.swift
+  - packages/conductor/Sources/Conductor/UI/Views/TeamThreadView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/ThreadView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/AgentNetworkView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
+  - packages/conductor/Sources/Conductor/Symphony/SymphonyTypes.swift
+decisions:
+  - id: swiftterm-production
+    decision: SwiftTerm validated for production use in Conductor
+    rationale: Sprint 0 spike proved Claude Code v2.1.86 renders correctly. Jinx's concerns (OSC 133, performance, rendering) were not observed. No fallback to xterm.js needed.
+  - id: conductor-workspace-mode
+    decision: Conductor is now a workspace application, not just an overlay
+    rationale: Embedded terminals + sidebar + Symphony auto-link + keyboard shortcuts = full AI development workspace. Overlay mode preserved as alternative for lightweight monitoring.
+  - id: nsview-focus-detection
+    decision: Use NSEvent.addLocalMonitorForEvents for terminal focus detection
+    rationale: SwiftTerm's NSView eats mouse events. Cannot override mouseDown (non-open). Cannot use SwiftUI onTapGesture. Local event monitor with bounds check is the only reliable approach.
+  - id: observedobject-for-live-ui
+    decision: TerminalCellView uses @ObservedObject on TerminalSessionManager for immediate focus ring updates
+    rationale: Static let values and let _ tricks don't trigger SwiftUI redraw in ForEach with static ranges. Direct @ObservedObject subscription is the correct pattern.
+learnings:
+  - SwiftTerm handles Claude Code's full Ink TUI without issues — colors, ASCII art, interactive prompt, streaming output, status bar all render correctly
+  - NSEvent.addLocalMonitorForEvents is the correct pattern when an NSView subclass eats mouse events and you cannot override (non-open methods)
+  - '@ObservedObject on child views is the correct SwiftUI pattern when ForEach with static ranges needs to react to external state changes'
+  - Conductor .app bundle with ad-hoc signing retains accessibility permissions across rebuilds when using a stable CFBundleIdentifier
+  - The entire workspace evolution (4 sprints) was completed in one session — empirical spikes settle architectural debates faster than theoretical discussion
+verification:
+  status: pass
+  details:
+    sprint-0-swiftterm: pass
+    sprint-1-multi-pane: pass
+    sprint-2-symphony-link: pass
+    sprint-3-shortcuts: pass
+    focus-ring-updates: pass
+    folder-picker: pass
+    workspace-mode: pass
+tags:
+  - conductor
+  - milestone
+  - major
+  - workspace
+  - swiftterm
+  - symphony
+  - shipped
+confidence: 0.95
+git_context:
+  ref: 2d20974c925abfd76ac9d1ff85dea9e1bb300b88
+  branch: main
+  dirty: true

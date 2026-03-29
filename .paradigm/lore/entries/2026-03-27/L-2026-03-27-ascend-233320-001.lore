@@ -1,0 +1,41 @@
+id: L-2026-03-27-ascend-233320-001
+type: decision
+timestamp: '2026-03-27T23:33:20.341Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Workspace spec — embedded terminals, team debate on SwiftTerm vs xterm.js
+summary: 'Full team spec for evolving Conductor from floating overlay to unified workspace with embedded terminal sessions. Apex proposed SwiftTerm (native Swift PTY). Jinx challenged: SwiftTerm is not battle-tested, proposed xterm.js via WKWebView as fallback. DX said the team thread sidebar is the killer feature, not the terminal. Decision: Sprint 0 spike with SwiftTerm (1-2 days) to prove it works with Claude Code. If it passes validation, proceed. If not, pivot to xterm.js. All three agreed: keep overlay mode, keyboard-first with Cmd+ only, MVP sidebar = Sessions + Team Thread + Tasks.'
+symbols_touched:
+  - '#conductor'
+  - '#conductor-app'
+  - '#container-view'
+  - '#tiling-engine'
+  - '#symphony-thread-watcher'
+  - '#conductor-environment'
+  - $session-spawn-flow
+decisions:
+  - id: swiftterm-spike-first
+    decision: Start with SwiftTerm Sprint 0 spike before committing to full implementation
+    rationale: Jinx raised valid concerns about SwiftTerm maturity (OSC 133, performance with 4+ sessions). A 1-2 day spike settles the debate empirically instead of theoretically. Fallback to xterm.js if spike fails.
+  - id: keep-overlay-mode
+    decision: Overlay mode persists as permanent alternative to workspace mode
+    rationale: 'DX: laptop screens need compact mode. Users on VS Code want floating sidebar. Gradual adoption path. Rename to Overlay/Workspace.'
+  - id: sidebar-follows-focus
+    decision: Sidebar context switches to whichever terminal pane is focused
+    rationale: 'DX and Apex agreed: sidebar shows active session threads/tasks by default, with ''All Sessions'' toggle for global view. This is how multi-project awareness works.'
+  - id: cmd-only-shortcuts
+    decision: All keyboard shortcuts use Cmd+ modifier only, no Ctrl+ shortcuts
+    rationale: Terminals consume Ctrl+ sequences (Ctrl+C, Ctrl+D, etc). Cmd+ is passed to the OS by terminals, so Conductor hotkeys always fire. Mirrors iTerm2 conventions for splits.
+tags:
+  - conductor
+  - architecture
+  - decision
+  - swiftterm
+  - workspace
+confidence: 0.85
+git_context:
+  ref: 4198582f11f7e06d271bfe0c0a8be6e2af1b9b5f
+  branch: main
+  dirty: true
