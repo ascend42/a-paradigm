@@ -41,6 +41,21 @@ export interface SessionWorkEntry {
 }
 
 /**
+ * Notebook reference entry — records which notebook entries were loaded into
+ * agent prompts during orchestration. Pure data collection, no scoring.
+ * Storage: .paradigm/events/notebook-refs.jsonl
+ */
+export interface NotebookReferenceEntry {
+  timestamp: string;
+  type: 'notebook-reference';
+  agentId: string;
+  notebookEntryIds: string[];
+  orchestrationId?: string;
+}
+
+const NOTEBOOK_REFS_FILE = '.paradigm/events/notebook-refs.jsonl';
+
+/**
  * Activity metric snapshot — proxy metrics for understanding session scope.
  * No dollar figures, no token counts — these measure behavioral proxies only.
  */
@@ -323,4 +338,72 @@ export function clearActivityMetrics(rootDir: string): void {
   } catch {
     // Non-fatal
   }
+}
+
+// ── Notebook Reference Tracking ──────────────────────────────────────────────
+
+/**
+ * Record which notebook entries were injected into an agent's prompt
+ * during orchestration. Pure data collection — no scoring.
+ * Non-fatal — failure is silently ignored.
+ */
+export function recordNotebookReference(
+  rootDir: string,
+  agentId: string,
+  entryIds: string[],
+  orchestrationId?: string
+): void {
+  try {
+    if (entryIds.length === 0) return;
+
+    const filePath = path.join(rootDir, NOTEBOOK_REFS_FILE);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const entry: NotebookReferenceEntry = {
+      timestamp: new Date().toISOString(),
+      type: 'notebook-reference',
+      agentId,
+      notebookEntryIds: entryIds,
+      ...(orchestrationId ? { orchestrationId } : {}),
+    };
+
+    const line = JSON.stringify(entry) + '\n';
+    fs.appendFileSync(filePath, line, 'utf8');
+  } catch {
+    // Non-fatal — reference tracking is advisory
+  }
+}
+
+/**
+ * Read all notebook reference entries from the current session.
+ * Used for analysis and surfacing in paradigm_status.
+ */
+export function getNotebookReferences(rootDir: string): NotebookReferenceEntry[] {
+  try {
+    const filePath = path.join(rootDir, NOTEBOOK_REFS_FILE);
+    if (!fs.existsSync(filePath)) return [];
+
+    return fs.readFileSync(filePath, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try { return JSON.parse(line) as NotebookReferenceEntry; }
+        catch { return null; }
+      })
+      .filter((e): e is NotebookReferenceEntry => e !== null && e.type === 'notebook-reference');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Count total notebook references in the current session.
+ * Convenience function for status output.
+ */
+export function countNotebookReferences(rootDir: string): number {
+  return getNotebookReferences(rootDir).length;
 }

@@ -816,3 +816,17 @@ if [ "$_SEV" != "off" ]; then
     fi
   fi
 fi
+
+# --- Compliance snapshot (non-fatal, fire-and-forget) ---
+# Record this stop-hook run to .paradigm/events/compliance-history.jsonl for trend analysis.
+# VIOLATION_COUNT and SOURCE_COUNT are now final at this point.
+_compliance_snapshot() {
+  _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
+  _checks=$((SOURCE_COUNT + PARADIGM_COUNT))
+  [ "$_checks" -eq 0 ] && _checks=1  # Avoid divide-by-zero downstream
+  _dir=".paradigm/events"
+  mkdir -p "$_dir" 2>/dev/null || return
+  printf '{"timestamp":"%s","violations":%d,"warnings":0,"checks":%d}\n' \
+    "$_ts" "$VIOLATION_COUNT" "$_checks" >> "$_dir/compliance-history.jsonl" 2>/dev/null || true
+}
+_compliance_snapshot

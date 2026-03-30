@@ -87,6 +87,7 @@ export function getReindexToolsList() {
         readOnlyHint: false,
         destructiveHint: true,
       },
+      aliases: ['rebuild', 'refresh', 'rescan', 'regenerate index', 'update index'],
     },
   ];
 }

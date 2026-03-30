@@ -34,6 +34,13 @@ export interface ToolDefinition {
   description: string;
   inputSchema: Record<string, unknown>;
   annotations?: Record<string, unknown>;
+  /**
+   * Alternate names and intent phrases that should match this tool.
+   * Used by tool-aware routing to surface the right tool when the user
+   * describes intent in natural language rather than using the exact name.
+   * Matching is a simple string-includes check — NOT semantic embedding.
+   */
+  aliases?: string[];
 }
 
 export interface ToolModule {

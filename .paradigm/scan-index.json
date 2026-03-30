@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-03-30T20:23:21.236Z",
+    "generatedAt": "2026-03-30T20:42:07.371Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 56,
@@ -11,15 +11,15 @@
     },
     "componentTypes": {
       "command": 98,
-      "service": 81,
-      "route": 4,
+      "schema": 4,
       "app": 4,
       "view": 130,
-      "store": 30,
       "config": 10,
-      "utility": 42,
-      "schema": 4,
       "loader": 19,
+      "service": 81,
+      "route": 4,
+      "store": 30,
+      "utility": 45,
       "tool": 33,
       "tool-group": 8,
       "detector": 11,
@@ -819,33 +819,6 @@
       ],
       "componentType": "command"
     },
-    "scan-index-generation": {
-      "id": "scan-index-generation",
-      "name": "Scan Index Generation",
-      "symbol": "#scan-index-generation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
-      "visualTags": [],
-      "related": [
-        "!index-generated",
-        "#generator",
-        "#component-scanner"
-      ]
-    },
-    "probe-protocol": {
-      "id": "probe-protocol",
-      "name": "Probe Protocol",
-      "symbol": "#probe-protocol",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "@probe-protocol: Protocol for image-to-code queries",
-      "visualTags": [],
-      "related": [
-        "#protocol-handler",
-        "#matcher"
-      ]
-    },
     "symbol-aggregation": {
       "id": "symbol-aggregation",
       "name": "Symbol Aggregation",
@@ -887,6 +860,33 @@
       "related": [
         "#reference-tracker",
         "#graph-builder"
+      ]
+    },
+    "scan-index-generation": {
+      "id": "scan-index-generation",
+      "name": "Scan Index Generation",
+      "symbol": "#scan-index-generation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "@scan-index-generation: Generate scan-index.json for component mapping",
+      "visualTags": [],
+      "related": [
+        "!index-generated",
+        "#generator",
+        "#component-scanner"
+      ]
+    },
+    "probe-protocol": {
+      "id": "probe-protocol",
+      "name": "Probe Protocol",
+      "symbol": "#probe-protocol",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "@probe-protocol: Protocol for image-to-code queries",
+      "visualTags": [],
+      "related": [
+        "#protocol-handler",
+        "#matcher"
       ]
     },
     "purpose-parsing": {
@@ -934,6 +934,48 @@
         "~file-glob-discovery",
         "#aggregator",
         "#symbol-extractor"
+      ]
+    },
+    "gate-checking": {
+      "id": "gate-checking",
+      "name": "Gate Checking",
+      "symbol": "#gate-checking",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@gate-checking: Runtime evaluation of gate conditions",
+      "visualTags": [],
+      "related": [
+        "^gate-check",
+        "!gate-passed",
+        "!gate-denied",
+        "#evaluator",
+        "#context-resolver"
+      ]
+    },
+    "decorator-api": {
+      "id": "decorator-api",
+      "name": "Decorator Api",
+      "symbol": "#decorator-api",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@decorator-api: TypeScript decorators for gate protection",
+      "visualTags": [],
+      "related": [
+        "#gate-decorator",
+        "#require-decorator"
+      ]
+    },
+    "client-api": {
+      "id": "client-api",
+      "name": "Client Api",
+      "symbol": "#client-api",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "@client-api: Programmatic API for gate checks",
+      "visualTags": [],
+      "related": [
+        "#portal-client",
+        "#gate-client"
       ]
     },
     "realtime-visualization": {
@@ -1005,48 +1047,6 @@
         "#command-generator"
       ]
     },
-    "gate-checking": {
-      "id": "gate-checking",
-      "name": "Gate Checking",
-      "symbol": "#gate-checking",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@gate-checking: Runtime evaluation of gate conditions",
-      "visualTags": [],
-      "related": [
-        "^gate-check",
-        "!gate-passed",
-        "!gate-denied",
-        "#evaluator",
-        "#context-resolver"
-      ]
-    },
-    "decorator-api": {
-      "id": "decorator-api",
-      "name": "Decorator Api",
-      "symbol": "#decorator-api",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@decorator-api: TypeScript decorators for gate protection",
-      "visualTags": [],
-      "related": [
-        "#gate-decorator",
-        "#require-decorator"
-      ]
-    },
-    "client-api": {
-      "id": "client-api",
-      "name": "Client Api",
-      "symbol": "#client-api",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "@client-api: Programmatic API for gate checks",
-      "visualTags": [],
-      "related": [
-        "#portal-client",
-        "#gate-client"
-      ]
-    },
     "portal-parsing": {
       "id": "portal-parsing",
       "name": "Portal Parsing",
@@ -1092,226 +1092,6 @@
         "#context-audit"
       ]
     },
-    "university-server": {
-      "id": "university-server",
-      "name": "University Server",
-      "symbol": "#university-server",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Express server serving static UI and content API endpoints",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "courses-router": {
-      "id": "courses-router",
-      "name": "Courses Router",
-      "symbol": "#courses-router",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "API routes for course listing and individual course/lesson retrieval",
-      "visualTags": [],
-      "related": [],
-      "componentType": "route"
-    },
-    "plsat-router": {
-      "id": "plsat-router",
-      "name": "Plsat Router",
-      "symbol": "#plsat-router",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "route"
-    },
-    "university-ui": {
-      "id": "university-ui",
-      "name": "University Ui",
-      "symbol": "#university-ui",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library",
-      "visualTags": [],
-      "related": [
-        "#home-view",
-        "#course-view",
-        "#quiz-view",
-        "#plsat-view",
-        "#reference-view",
-        "#certificate-view"
-      ],
-      "componentType": "app"
-    },
-    "home-view": {
-      "id": "home-view",
-      "name": "Home View",
-      "symbol": "#home-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "HomeView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "course-view": {
-      "id": "course-view",
-      "name": "Course View",
-      "symbol": "#course-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "CourseView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "quiz-view": {
-      "id": "quiz-view",
-      "name": "Quiz View",
-      "symbol": "#quiz-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "QuizView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "plsat-view": {
-      "id": "plsat-view",
-      "name": "Plsat View",
-      "symbol": "#plsat-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Timed 99-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "reference-view": {
-      "id": "reference-view",
-      "name": "Reference View",
-      "symbol": "#reference-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "ReferenceView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "certificate-view": {
-      "id": "certificate-view",
-      "name": "Certificate View",
-      "symbol": "#certificate-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "CertificateView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "progress-store": {
-      "id": "progress-store",
-      "name": "Progress Store",
-      "symbol": "#progress-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store with LocalStorage persistence for lesson completion and quiz scores",
-      "visualTags": [],
-      "related": [],
-      "componentType": "store"
-    },
-    "plsat-store": {
-      "id": "plsat-store",
-      "name": "Plsat Store",
-      "symbol": "#plsat-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store with LocalStorage persistence for PLSAT certificates and student name",
-      "visualTags": [],
-      "related": [],
-      "componentType": "store"
-    },
-    "courses-store": {
-      "id": "courses-store",
-      "name": "Courses Store",
-      "symbol": "#courses-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Zustand store for fetched course data from API with caching",
-      "visualTags": [],
-      "related": [],
-      "componentType": "store"
-    },
-    "university-seal": {
-      "id": "university-seal",
-      "name": "University Seal",
-      "symbol": "#university-seal",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "SVG university seal component — \"Universitas Paradigmatica — Lux in Codice\"",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "question-card": {
-      "id": "question-card",
-      "name": "Question Card",
-      "symbol": "#question-card",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "QuestionCard component",
-      "visualTags": [
-        "card"
-      ],
-      "related": [],
-      "componentType": "view"
-    },
-    "plsat-timer": {
-      "id": "plsat-timer",
-      "name": "Plsat Timer",
-      "symbol": "#plsat-timer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Countdown timer component for PLSAT exam (90 minutes)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "progress-ring": {
-      "id": "progress-ring",
-      "name": "Progress Ring",
-      "symbol": "#progress-ring",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "ProgressRing component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "university-header": {
-      "id": "university-header",
-      "name": "University Header",
-      "symbol": "#university-header",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Navigation bar with university seal, course/PLSAT/reference links, and version badge",
-      "visualTags": [
-        "header"
-      ],
-      "related": [],
-      "componentType": "view"
-    },
-    "academia-theme": {
-      "id": "academia-theme",
-      "name": "Academia Theme",
-      "symbol": "#academia-theme",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents",
-      "visualTags": [],
-      "related": [],
-      "componentType": "config"
-    },
     "SentinelRustClient": {
       "id": "SentinelRustClient",
       "name": "SentinelRustClient",
@@ -1341,28 +1121,6 @@
       "description": "tracing_subscriber Layer that intercepts Rust tracing events and forwards them to Sentinel as structured log entries",
       "visualTags": [],
       "related": []
-    },
-    "sentinel-web-client": {
-      "id": "sentinel-web-client",
-      "name": "Sentinel Web Client",
-      "symbol": "#sentinel-web-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Browser SDK for emitting events to Sentinel via HTTP",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "ring-buffer": {
-      "id": "ring-buffer",
-      "name": "Ring Buffer",
-      "symbol": "#ring-buffer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Fixed-size circular buffer for event batching with backpressure",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
     },
     "IncidentStorage": {
       "id": "IncidentStorage",
@@ -1867,6 +1625,248 @@
       "related": [],
       "componentType": "view"
     },
+    "university-server": {
+      "id": "university-server",
+      "name": "University Server",
+      "symbol": "#university-server",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Express server serving static UI and content API endpoints",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "courses-router": {
+      "id": "courses-router",
+      "name": "Courses Router",
+      "symbol": "#courses-router",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "API routes for course listing and individual course/lesson retrieval",
+      "visualTags": [],
+      "related": [],
+      "componentType": "route"
+    },
+    "plsat-router": {
+      "id": "plsat-router",
+      "name": "Plsat Router",
+      "symbol": "#plsat-router",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "API routes for PLSAT exam versions — resolves v3.0 variants, flattens passage groups, shuffles blocks (Fisher-Yates). Backward-compatible with v2.0 flat questions. v3.0 includes variants for two-stage review protocol and clarification markers.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "route"
+    },
+    "university-ui": {
+      "id": "university-ui",
+      "name": "University Ui",
+      "symbol": "#university-ui",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "React SPA with academia theme — course reader, quiz engine, PLSAT exam, certificate viewer, reference library",
+      "visualTags": [],
+      "related": [
+        "#home-view",
+        "#course-view",
+        "#quiz-view",
+        "#plsat-view",
+        "#reference-view",
+        "#certificate-view"
+      ],
+      "componentType": "app"
+    },
+    "home-view": {
+      "id": "home-view",
+      "name": "Home View",
+      "symbol": "#home-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "HomeView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "course-view": {
+      "id": "course-view",
+      "name": "Course View",
+      "symbol": "#course-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "CourseView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "quiz-view": {
+      "id": "quiz-view",
+      "name": "Quiz View",
+      "symbol": "#quiz-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "QuizView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "plsat-view": {
+      "id": "plsat-view",
+      "name": "Plsat View",
+      "symbol": "#plsat-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Timed 99-question certification exam with intro, exam, review, and results phases. Renders passage blocks above passage-group questions.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "reference-view": {
+      "id": "reference-view",
+      "name": "Reference View",
+      "symbol": "#reference-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "ReferenceView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "certificate-view": {
+      "id": "certificate-view",
+      "name": "Certificate View",
+      "symbol": "#certificate-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "CertificateView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "progress-store": {
+      "id": "progress-store",
+      "name": "Progress Store",
+      "symbol": "#progress-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store with LocalStorage persistence for lesson completion and quiz scores",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
+    },
+    "plsat-store": {
+      "id": "plsat-store",
+      "name": "Plsat Store",
+      "symbol": "#plsat-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store with LocalStorage persistence for PLSAT certificates and student name",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
+    },
+    "courses-store": {
+      "id": "courses-store",
+      "name": "Courses Store",
+      "symbol": "#courses-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Zustand store for fetched course data from API with caching",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
+    },
+    "university-seal": {
+      "id": "university-seal",
+      "name": "University Seal",
+      "symbol": "#university-seal",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "SVG university seal component — \"Universitas Paradigmatica — Lux in Codice\"",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "question-card": {
+      "id": "question-card",
+      "name": "Question Card",
+      "symbol": "#question-card",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "QuestionCard component",
+      "visualTags": [
+        "card"
+      ],
+      "related": [],
+      "componentType": "view"
+    },
+    "plsat-timer": {
+      "id": "plsat-timer",
+      "name": "Plsat Timer",
+      "symbol": "#plsat-timer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Countdown timer component for PLSAT exam (90 minutes)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "progress-ring": {
+      "id": "progress-ring",
+      "name": "Progress Ring",
+      "symbol": "#progress-ring",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "ProgressRing component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "university-header": {
+      "id": "university-header",
+      "name": "University Header",
+      "symbol": "#university-header",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Navigation bar with university seal, course/PLSAT/reference links, and version badge",
+      "visualTags": [
+        "header"
+      ],
+      "related": [],
+      "componentType": "view"
+    },
+    "academia-theme": {
+      "id": "academia-theme",
+      "name": "Academia Theme",
+      "symbol": "#academia-theme",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents",
+      "visualTags": [],
+      "related": [],
+      "componentType": "config"
+    },
+    "sentinel-web-client": {
+      "id": "sentinel-web-client",
+      "name": "Sentinel Web Client",
+      "symbol": "#sentinel-web-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Browser SDK for emitting events to Sentinel via HTTP",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "ring-buffer": {
+      "id": "ring-buffer",
+      "name": "Ring Buffer",
+      "symbol": "#ring-buffer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Fixed-size circular buffer for event batching with backpressure",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "paradigm-runtime": {
       "id": "paradigm-runtime",
       "name": "Paradigm Runtime",
@@ -2100,76 +2100,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "schema"
-    },
-    "paradigm-logger": {
-      "id": "paradigm-logger",
-      "name": "Paradigm Logger",
-      "symbol": "#paradigm-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "symbol-logger": {
-      "id": "symbol-logger",
-      "name": "Symbol Logger",
-      "symbol": "#symbol-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
-      "visualTags": [],
-      "related": [
-        "~symbol-typed-logging"
-      ]
-    },
-    "formatter-pretty": {
-      "id": "formatter-pretty",
-      "name": "Formatter Pretty",
-      "symbol": "#formatter-pretty",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Human-readable colored output with symbol prefixes and timestamps",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "formatter-json": {
-      "id": "formatter-json",
-      "name": "Formatter Json",
-      "symbol": "#formatter-json",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Machine-readable JSON output for log aggregation pipelines",
-      "visualTags": [
-        "form"
-      ],
-      "related": []
-    },
-    "correlation-tracker": {
-      "id": "correlation-tracker",
-      "name": "Correlation Tracker",
-      "symbol": "#correlation-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
-      "visualTags": [],
-      "related": [
-        "~correlation-tracked"
-      ]
-    },
-    "duration-tracker": {
-      "id": "duration-tracker",
-      "name": "Duration Tracker",
-      "symbol": "#duration-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Operation timing utility for measuring and logging execution duration",
-      "visualTags": [],
-      "related": []
     },
     "MCPServer": {
       "id": "MCPServer",
@@ -4673,62 +4603,75 @@
       "related": [],
       "componentType": "view"
     },
-    "header": {
-      "id": "header",
-      "name": "Header",
-      "symbol": "#header",
+    "paradigm-logger": {
+      "id": "paradigm-logger",
+      "name": "Paradigm Logger",
+      "symbol": "#paradigm-logger",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "Header component",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Main logger class with environment-aware configuration (LOG_LEVEL, LOG_FORMAT)",
+      "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "symbol-logger": {
+      "id": "symbol-logger",
+      "name": "Symbol Logger",
+      "symbol": "#symbol-logger",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Per-symbol logger instances returned by component/gate/signal/flow/aspect methods",
+      "visualTags": [],
+      "related": [
+        "~symbol-typed-logging"
+      ]
+    },
+    "formatter-pretty": {
+      "id": "formatter-pretty",
+      "name": "Formatter Pretty",
+      "symbol": "#formatter-pretty",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Human-readable colored output with symbol prefixes and timestamps",
       "visualTags": [
-        "header"
+        "form"
       ],
-      "related": [],
-      "componentType": "view"
+      "related": []
     },
-    "seal": {
-      "id": "seal",
-      "name": "Seal",
-      "symbol": "#seal",
+    "formatter-json": {
+      "id": "formatter-json",
+      "name": "Formatter Json",
+      "symbol": "#formatter-json",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "Seal component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Machine-readable JSON output for log aggregation pipelines",
+      "visualTags": [
+        "form"
+      ],
+      "related": []
     },
-    "timer": {
-      "id": "timer",
-      "name": "Timer",
-      "symbol": "#timer",
+    "correlation-tracker": {
+      "id": "correlation-tracker",
+      "name": "Correlation Tracker",
+      "symbol": "#correlation-tracker",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "Timer component",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "AsyncLocalStorage-based correlation ID propagation through async call chains",
       "visualTags": [],
-      "related": [],
-      "componentType": "view"
+      "related": [
+        "~correlation-tracked"
+      ]
     },
-    "courses-view": {
-      "id": "courses-view",
-      "name": "Courses View",
-      "symbol": "#courses-view",
+    "duration-tracker": {
+      "id": "duration-tracker",
+      "name": "Duration Tracker",
+      "symbol": "#duration-tracker",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "CoursesView component",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Operation timing utility for measuring and logging execution duration",
       "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "plsatview": {
-      "id": "plsatview",
-      "name": "Plsatview",
-      "symbol": "#plsatview",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
-      "description": "PLSATView component",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
+      "related": []
     },
     "App": {
       "id": "App",
@@ -5143,49 +5086,62 @@
       "related": [],
       "componentType": "view"
     },
-    "generator": {
-      "id": "generator",
-      "name": "Generator",
-      "symbol": "#generator",
+    "header": {
+      "id": "header",
+      "name": "Header",
+      "symbol": "#header",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#generator: Generates scan-index.json",
-      "visualTags": [],
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "Header component",
+      "visualTags": [
+        "header"
+      ],
       "related": [],
-      "componentType": "service"
+      "componentType": "view"
     },
-    "component-scanner": {
-      "id": "component-scanner",
-      "name": "Component Scanner",
-      "symbol": "#component-scanner",
+    "seal": {
+      "id": "seal",
+      "name": "Seal",
+      "symbol": "#seal",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#component-scanner: Scans for UI components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "Seal component",
       "visualTags": [],
       "related": [],
-      "componentType": "service"
+      "componentType": "view"
     },
-    "protocol-handler": {
-      "id": "protocol-handler",
-      "name": "Protocol Handler",
-      "symbol": "#protocol-handler",
+    "timer": {
+      "id": "timer",
+      "name": "Timer",
+      "symbol": "#timer",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#protocol-handler: Handles probe protocol requests",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "Timer component",
       "visualTags": [],
       "related": [],
-      "componentType": "service"
+      "componentType": "view"
     },
-    "matcher": {
-      "id": "matcher",
-      "name": "Matcher",
-      "symbol": "#matcher",
+    "courses-view": {
+      "id": "courses-view",
+      "name": "Courses View",
+      "symbol": "#courses-view",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "#matcher: Matches images to components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "CoursesView component",
       "visualTags": [],
       "related": [],
-      "componentType": "utility"
+      "componentType": "view"
+    },
+    "plsatview": {
+      "id": "plsatview",
+      "name": "Plsatview",
+      "symbol": "#plsatview",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/ui/.purpose",
+      "description": "PLSATView component",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
     },
     "aggregator": {
       "id": "aggregator",
@@ -5238,6 +5194,50 @@
       "description": "#reference-tracker: Tracks references between symbols",
       "visualTags": [],
       "related": []
+    },
+    "generator": {
+      "id": "generator",
+      "name": "Generator",
+      "symbol": "#generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#generator: Generates scan-index.json",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "component-scanner": {
+      "id": "component-scanner",
+      "name": "Component Scanner",
+      "symbol": "#component-scanner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#component-scanner: Scans for UI components",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "protocol-handler": {
+      "id": "protocol-handler",
+      "name": "Protocol Handler",
+      "symbol": "#protocol-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#protocol-handler: Handles probe protocol requests",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "matcher": {
+      "id": "matcher",
+      "name": "Matcher",
+      "symbol": "#matcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "#matcher: Matches images to components",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
     },
     "purpose-parser": {
       "id": "purpose-parser",
@@ -5304,6 +5304,72 @@
       "description": "#symbol-extractor: Extracts symbols from purpose data",
       "visualTags": [],
       "related": []
+    },
+    "evaluator": {
+      "id": "evaluator",
+      "name": "Evaluator",
+      "symbol": "#evaluator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#evaluator: Evaluates gate keys against context",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "context-resolver": {
+      "id": "context-resolver",
+      "name": "Context Resolver",
+      "symbol": "#context-resolver",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#context-resolver: Resolves user context for evaluation",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "gate-decorator": {
+      "id": "gate-decorator",
+      "name": "Gate Decorator",
+      "symbol": "#gate-decorator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#gate-decorator: @Gate() decorator for methods",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "require-decorator": {
+      "id": "require-decorator",
+      "name": "Require Decorator",
+      "symbol": "#require-decorator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#require-decorator: @Require() decorator for properties",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "portal-client": {
+      "id": "portal-client",
+      "name": "Portal Client",
+      "symbol": "#portal-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#portal-client: High-level client for portal operations",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "gate-client": {
+      "id": "gate-client",
+      "name": "Gate Client",
+      "symbol": "#gate-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
+      "description": "#gate-client: Low-level gate checking client",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
     },
     "websocket-server": {
       "id": "websocket-server",
@@ -5416,72 +5482,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "utility"
-    },
-    "evaluator": {
-      "id": "evaluator",
-      "name": "Evaluator",
-      "symbol": "#evaluator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#evaluator: Evaluates gate keys against context",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "context-resolver": {
-      "id": "context-resolver",
-      "name": "Context Resolver",
-      "symbol": "#context-resolver",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#context-resolver: Resolves user context for evaluation",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "gate-decorator": {
-      "id": "gate-decorator",
-      "name": "Gate Decorator",
-      "symbol": "#gate-decorator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#gate-decorator: @Gate() decorator for methods",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "require-decorator": {
-      "id": "require-decorator",
-      "name": "Require Decorator",
-      "symbol": "#require-decorator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#require-decorator: @Require() decorator for properties",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "portal-client": {
-      "id": "portal-client",
-      "name": "Portal Client",
-      "symbol": "#portal-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#portal-client: High-level client for portal operations",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "gate-client": {
-      "id": "gate-client",
-      "name": "Gate Client",
-      "symbol": "#gate-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
-      "description": "#gate-client: Low-level gate checking client",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
     },
     "gate-schemas": {
       "id": "gate-schemas",
@@ -6356,71 +6356,27 @@
       ],
       "componentType": "service"
     },
-    "UniversityTypes": {
-      "id": "UniversityTypes",
-      "name": "UniversityTypes",
-      "symbol": "#UniversityTypes",
+    "outcome-reference-tracking": {
+      "id": "outcome-reference-tracking",
+      "name": "Outcome Reference Tracking",
+      "symbol": "#outcome-reference-tracking",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for per-project university content",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Records which notebook entries were loaded into agent prompts during orchestration. Pure data collection — no scoring or attribution.",
       "visualTags": [],
       "related": [],
-      "componentType": "types"
+      "componentType": "utility"
     },
-    "AgentTypes": {
-      "id": "AgentTypes",
-      "name": "AgentTypes",
-      "symbol": "#AgentTypes",
+    "compliance-health": {
+      "id": "compliance-health",
+      "name": "Compliance Health",
+      "symbol": "#compliance-health",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.",
       "visualTags": [],
       "related": [],
-      "componentType": "types"
-    },
-    "NotebookTypes": {
-      "id": "NotebookTypes",
-      "name": "NotebookTypes",
-      "symbol": "#NotebookTypes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance",
-      "visualTags": [],
-      "related": [],
-      "componentType": "types"
-    },
-    "AmbientTypes": {
-      "id": "AmbientTypes",
-      "name": "AmbientTypes",
-      "symbol": "#AmbientTypes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for ambient coordination — StreamEvent, AttentionScore, Nomination, Debate, SurfacingConfig",
-      "visualTags": [],
-      "related": [],
-      "componentType": "types"
-    },
-    "KnowledgeStreamTypes": {
-      "id": "KnowledgeStreamTypes",
-      "name": "KnowledgeStreamTypes",
-      "symbol": "#KnowledgeStreamTypes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream",
-      "visualTags": [],
-      "related": [],
-      "componentType": "types"
-    },
-    "DataPolicyTypes": {
-      "id": "DataPolicyTypes",
-      "name": "DataPolicyTypes",
-      "symbol": "#DataPolicyTypes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for data sovereignty — TrustRing, DataPolicy, ObservationRules, EnforcementResult, AuditEntry",
-      "visualTags": [],
-      "related": [],
-      "componentType": "types"
+      "componentType": "utility"
     },
     "ResourceIndex": {
       "id": "ResourceIndex",
@@ -6510,91 +6466,71 @@
       "related": [],
       "componentType": "service"
     },
-    "PlatformServer": {
-      "id": "PlatformServer",
-      "name": "PlatformServer",
-      "symbol": "#PlatformServer",
+    "UniversityTypes": {
+      "id": "UniversityTypes",
+      "name": "UniversityTypes",
+      "symbol": "#UniversityTypes",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "Creates and starts the unified Express app with all route handlers and WebSocket",
-      "visualTags": [
-        "form"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "PlatformWebSocket": {
-      "id": "PlatformWebSocket",
-      "name": "PlatformWebSocket",
-      "symbol": "#PlatformWebSocket",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "WebSocket server with client tracking, broadcast, and reconnect handling",
-      "visualTags": [
-        "form"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "AgentPresenceManager": {
-      "id": "AgentPresenceManager",
-      "name": "AgentPresenceManager",
-      "symbol": "#AgentPresenceManager",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "Tracks connected agents by ID, auto-prunes after 2min idle, deterministic color assignment",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for per-project university content",
       "visualTags": [],
       "related": [],
-      "componentType": "service"
+      "componentType": "types"
     },
-    "UserStateTracker": {
-      "id": "UserStateTracker",
-      "name": "UserStateTracker",
-      "symbol": "#UserStateTracker",
+    "AgentTypes": {
+      "id": "AgentTypes",
+      "name": "AgentTypes",
+      "symbol": "#AgentTypes",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "Accumulates user section/symbol/theme state and highlight/annotation state for observe tool",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination",
       "visualTags": [],
       "related": [],
-      "componentType": "service"
+      "componentType": "types"
     },
-    "AgentCommandRoute": {
-      "id": "AgentCommandRoute",
-      "name": "AgentCommandRoute",
-      "symbol": "#AgentCommandRoute",
+    "NotebookTypes": {
+      "id": "NotebookTypes",
+      "name": "NotebookTypes",
+      "symbol": "#NotebookTypes",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "POST /api/platform/agent-command — receives MCP commands, broadcasts via WS",
-      "visualTags": [],
-      "related": [
-        "#PlatformServer"
-      ],
-      "componentType": "route",
-      "parent": "#PlatformServer"
-    },
-    "graph-server": {
-      "id": "graph-server",
-      "name": "Graph Server",
-      "symbol": "#graph-server",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/graph-server/.purpose",
-      "description": "Express server serving graph UI static files and symbol API routes",
-      "visualTags": [
-        "chart"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "symbols-route": {
-      "id": "symbols-route",
-      "name": "Symbols Route",
-      "symbol": "#symbols-route",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/graph-server/.purpose",
-      "description": "API route returning symbol data from scan-index for the graph UI",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance",
       "visualTags": [],
       "related": [],
-      "componentType": "route"
+      "componentType": "types"
+    },
+    "AmbientTypes": {
+      "id": "AmbientTypes",
+      "name": "AmbientTypes",
+      "symbol": "#AmbientTypes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for ambient coordination — StreamEvent, AttentionScore, Nomination, Debate, SurfacingConfig",
+      "visualTags": [],
+      "related": [],
+      "componentType": "types"
+    },
+    "KnowledgeStreamTypes": {
+      "id": "KnowledgeStreamTypes",
+      "name": "KnowledgeStreamTypes",
+      "symbol": "#KnowledgeStreamTypes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream",
+      "visualTags": [],
+      "related": [],
+      "componentType": "types"
+    },
+    "DataPolicyTypes": {
+      "id": "DataPolicyTypes",
+      "name": "DataPolicyTypes",
+      "symbol": "#DataPolicyTypes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
+      "description": "Type definitions for data sovereignty — TrustRing, DataPolicy, ObservationRules, EnforcementResult, AuditEntry",
+      "visualTags": [],
+      "related": [],
+      "componentType": "types"
     },
     "symphony-peek": {
       "id": "symphony-peek",
@@ -6822,6 +6758,103 @@
       "visualTags": [],
       "related": [],
       "componentType": "tool-group"
+    },
+    "tool-aliases": {
+      "id": "tool-aliases",
+      "name": "Tool Aliases",
+      "symbol": "#tool-aliases",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "Alternate names and intent phrases on tool definitions for better LLM tool matching. Simple string arrays, not semantic embeddings.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "PlatformServer": {
+      "id": "PlatformServer",
+      "name": "PlatformServer",
+      "symbol": "#PlatformServer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
+      "description": "Creates and starts the unified Express app with all route handlers and WebSocket",
+      "visualTags": [
+        "form"
+      ],
+      "related": [],
+      "componentType": "service"
+    },
+    "PlatformWebSocket": {
+      "id": "PlatformWebSocket",
+      "name": "PlatformWebSocket",
+      "symbol": "#PlatformWebSocket",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "WebSocket server with client tracking, broadcast, and reconnect handling",
+      "visualTags": [
+        "form"
+      ],
+      "related": [],
+      "componentType": "service"
+    },
+    "AgentPresenceManager": {
+      "id": "AgentPresenceManager",
+      "name": "AgentPresenceManager",
+      "symbol": "#AgentPresenceManager",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "Tracks connected agents by ID, auto-prunes after 2min idle, deterministic color assignment",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "UserStateTracker": {
+      "id": "UserStateTracker",
+      "name": "UserStateTracker",
+      "symbol": "#UserStateTracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "Accumulates user section/symbol/theme state and highlight/annotation state for observe tool",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "AgentCommandRoute": {
+      "id": "AgentCommandRoute",
+      "name": "AgentCommandRoute",
+      "symbol": "#AgentCommandRoute",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
+      "description": "POST /api/platform/agent-command — receives MCP commands, broadcasts via WS",
+      "visualTags": [],
+      "related": [
+        "#PlatformServer"
+      ],
+      "componentType": "route",
+      "parent": "#PlatformServer"
+    },
+    "graph-server": {
+      "id": "graph-server",
+      "name": "Graph Server",
+      "symbol": "#graph-server",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/graph-server/.purpose",
+      "description": "Express server serving graph UI static files and symbol API routes",
+      "visualTags": [
+        "chart"
+      ],
+      "related": [],
+      "componentType": "service"
+    },
+    "symbols-route": {
+      "id": "symbols-route",
+      "name": "Symbols Route",
+      "symbol": "#symbols-route",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/graph-server/.purpose",
+      "description": "API route returning symbol data from scan-index for the graph UI",
+      "visualTags": [],
+      "related": [],
+      "componentType": "route"
     },
     "pipeline-types": {
       "id": "pipeline-types",
@@ -7068,6 +7101,63 @@
       "visualTags": [],
       "related": [],
       "componentType": "command"
+    },
+    "SymbolPage": {
+      "id": "SymbolPage",
+      "name": "SymbolPage",
+      "symbol": "#SymbolPage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
+      "description": "Symbol detail page with badge, metadata row, flow steps, related symbols, and source path",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "FlowPage": {
+      "id": "FlowPage",
+      "name": "FlowPage",
+      "symbol": "#FlowPage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
+      "description": "Flow detail page with step timeline, symbol links, and involved symbols grid",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "PortalPage": {
+      "id": "PortalPage",
+      "name": "PortalPage",
+      "symbol": "#PortalPage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
+      "description": "Portal reference with gate cards and HTTP method-colored route table",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "CategoryListPage": {
+      "id": "CategoryListPage",
+      "name": "CategoryListPage",
+      "symbol": "#CategoryListPage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
+      "description": "Category index page with card grid showing all symbols in a category",
+      "visualTags": [
+        "list"
+      ],
+      "related": [],
+      "componentType": "view"
+    },
+    "ContentPage": {
+      "id": "ContentPage",
+      "name": "ContentPage",
+      "symbol": "#ContentPage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
+      "description": "Markdown renderer for handwritten docs pages — headings, code blocks with language headers, tables, inline code, bold, links",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
     },
     "plsat-v3": {
       "id": "plsat-v3",
@@ -8230,62 +8320,18 @@
         "#agent-loader"
       ]
     },
-    "SymbolPage": {
-      "id": "SymbolPage",
-      "name": "SymbolPage",
-      "symbol": "#SymbolPage",
+    "grid-preset": {
+      "id": "grid-preset",
+      "name": "Grid Preset",
+      "symbol": "#grid-preset",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
-      "description": "Symbol detail page with badge, metadata row, flow steps, related symbols, and source path",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "FlowPage": {
-      "id": "FlowPage",
-      "name": "FlowPage",
-      "symbol": "#FlowPage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
-      "description": "Flow detail page with step timeline, symbol links, and involved symbols grid",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "PortalPage": {
-      "id": "PortalPage",
-      "name": "PortalPage",
-      "symbol": "#PortalPage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
-      "description": "Portal reference with gate cards and HTTP method-colored route table",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
-    },
-    "CategoryListPage": {
-      "id": "CategoryListPage",
-      "name": "CategoryListPage",
-      "symbol": "#CategoryListPage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
-      "description": "Category index page with card grid showing all symbols in a category",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Workspace/.purpose",
+      "description": "Composable NxM grid layout presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) for terminal cell arrangement in Conductor container mode.",
       "visualTags": [
-        "list"
+        "grid"
       ],
       "related": [],
-      "componentType": "view"
-    },
-    "ContentPage": {
-      "id": "ContentPage",
-      "name": "ContentPage",
-      "symbol": "#ContentPage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/components/docs/.purpose",
-      "description": "Markdown renderer for handwritten docs pages — headings, code blocks with language headers, tables, inline code, bold, links",
-      "visualTags": [],
-      "related": [],
-      "componentType": "view"
+      "componentType": "model"
     },
     "UniversityStorage": {
       "id": "UniversityStorage",
@@ -8376,6 +8422,61 @@
       ],
       "componentType": "service"
     },
+    "lore-types": {
+      "id": "lore-types",
+      "name": "Lore Types",
+      "symbol": "#lore-types",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
+      "description": "Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta, stream), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline, KnowledgeStream",
+      "visualTags": [],
+      "related": [],
+      "componentType": "model"
+    },
+    "lore-storage": {
+      "id": "lore-storage",
+      "name": "Lore Storage",
+      "symbol": "#lore-storage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
+      "description": "Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "lore-filter": {
+      "id": "lore-filter",
+      "name": "Lore Filter",
+      "symbol": "#lore-filter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
+      "description": "Filter engine — applyLoreFilter with hasConfidence/hasAssessment support, searchLoreEntries",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "lore-normalize": {
+      "id": "lore-normalize",
+      "name": "Lore Normalize",
+      "symbol": "#lore-normalize",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
+      "description": "Normalizes legacy entry formats to v2 schema",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "lore-resolve-author": {
+      "id": "lore-resolve-author",
+      "name": "Lore Resolve Author",
+      "symbol": "#lore-resolve-author",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
+      "description": "Resolves author from env, git config, or OS username",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "adapter-base": {
       "id": "adapter-base",
       "name": "Adapter Base",
@@ -8464,61 +8565,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "service"
-    },
-    "lore-types": {
-      "id": "lore-types",
-      "name": "Lore Types",
-      "symbol": "#lore-types",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
-      "description": "Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta, stream), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline, KnowledgeStream",
-      "visualTags": [],
-      "related": [],
-      "componentType": "model"
-    },
-    "lore-storage": {
-      "id": "lore-storage",
-      "name": "Lore Storage",
-      "symbol": "#lore-storage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
-      "description": "Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "lore-filter": {
-      "id": "lore-filter",
-      "name": "Lore Filter",
-      "symbol": "#lore-filter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
-      "description": "Filter engine — applyLoreFilter with hasConfidence/hasAssessment support, searchLoreEntries",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "lore-normalize": {
-      "id": "lore-normalize",
-      "name": "Lore Normalize",
-      "symbol": "#lore-normalize",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
-      "description": "Normalizes legacy entry formats to v2 schema",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "lore-resolve-author": {
-      "id": "lore-resolve-author",
-      "name": "Lore Resolve Author",
-      "symbol": "#lore-resolve-author",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/lore/.purpose",
-      "description": "Resolves author from env, git config, or OS username",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
     },
     "UniversityCommands": {
       "id": "UniversityCommands",
@@ -8970,19 +9016,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "command-group"
-    },
-    "grid-preset": {
-      "id": "grid-preset",
-      "name": "Grid Preset",
-      "symbol": "#grid-preset",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Workspace/.purpose",
-      "description": "Composable NxM grid layout presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) for terminal cell arrangement in Conductor container mode.",
-      "visualTags": [
-        "grid"
-      ],
-      "related": [],
-      "componentType": "model"
     },
     "DocsSection": {
       "id": "DocsSection",
@@ -9523,84 +9556,6 @@
   },
   "features": {},
   "flows": {
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "name": "$plsat Exam Flow",
-      "symbol": "$$plsat-exam-flow",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "$plsat-exam-flow-step-0",
-          "name": "Display intro, rules, and name input",
-          "target": "#plsat-view",
-          "order": 0
-        },
-        {
-          "id": "$plsat-exam-flow-step-1",
-          "name": "Start 90-minute countdown",
-          "target": "#plsat-timer",
-          "order": 1
-        },
-        {
-          "id": "$plsat-exam-flow-step-2",
-          "name": "Present 99 shuffled questions (with passage blocks for grouped questions)",
-          "target": "#question-card",
-          "order": 2
-        },
-        {
-          "id": "$plsat-exam-flow-step-3",
-          "name": "Calculate score on submit or time-up",
-          "target": "#plsat-view",
-          "order": 3
-        },
-        {
-          "id": "$plsat-exam-flow-step-4",
-          "name": "Persist certificate to LocalStorage",
-          "target": "#plsat-store",
-          "order": 4
-        },
-        {
-          "id": "$plsat-exam-flow-step-5",
-          "name": "Display printable certificate if passed",
-          "target": "#certificate-view",
-          "order": 5
-        }
-      ]
-    },
-    "event-ingestion": {
-      "id": "event-ingestion",
-      "name": "Event Ingestion",
-      "symbol": "$event-ingestion",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "emit() → buffer → periodic flush → POST /api/events",
-      "steps": [
-        {
-          "id": "event-ingestion-step-0",
-          "name": "emit() call from application code",
-          "target": "#sentinel-web-client",
-          "order": 0
-        },
-        {
-          "id": "event-ingestion-step-1",
-          "name": "push event into circular buffer",
-          "target": "#ring-buffer",
-          "order": 1
-        },
-        {
-          "id": "event-ingestion-step-2",
-          "name": "setInterval flush to server",
-          "target": "#sentinel-web-client",
-          "order": 2
-        },
-        {
-          "id": "event-ingestion-step-3",
-          "name": "POST /api/events",
-          "target": "#sentinel-web-client",
-          "order": 3
-        }
-      ]
-    },
     "incident-triage": {
       "id": "incident-triage",
       "name": "Incident Triage",
@@ -9841,6 +9796,84 @@
           "id": "$university-flow-step-6",
           "name": "Step 7",
           "order": 6
+        }
+      ]
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "name": "$plsat Exam Flow",
+      "symbol": "$$plsat-exam-flow",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "$plsat-exam-flow-step-0",
+          "name": "Display intro, rules, and name input",
+          "target": "#plsat-view",
+          "order": 0
+        },
+        {
+          "id": "$plsat-exam-flow-step-1",
+          "name": "Start 90-minute countdown",
+          "target": "#plsat-timer",
+          "order": 1
+        },
+        {
+          "id": "$plsat-exam-flow-step-2",
+          "name": "Present 99 shuffled questions (with passage blocks for grouped questions)",
+          "target": "#question-card",
+          "order": 2
+        },
+        {
+          "id": "$plsat-exam-flow-step-3",
+          "name": "Calculate score on submit or time-up",
+          "target": "#plsat-view",
+          "order": 3
+        },
+        {
+          "id": "$plsat-exam-flow-step-4",
+          "name": "Persist certificate to LocalStorage",
+          "target": "#plsat-store",
+          "order": 4
+        },
+        {
+          "id": "$plsat-exam-flow-step-5",
+          "name": "Display printable certificate if passed",
+          "target": "#certificate-view",
+          "order": 5
+        }
+      ]
+    },
+    "event-ingestion": {
+      "id": "event-ingestion",
+      "name": "Event Ingestion",
+      "symbol": "$event-ingestion",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "emit() → buffer → periodic flush → POST /api/events",
+      "steps": [
+        {
+          "id": "event-ingestion-step-0",
+          "name": "emit() call from application code",
+          "target": "#sentinel-web-client",
+          "order": 0
+        },
+        {
+          "id": "event-ingestion-step-1",
+          "name": "push event into circular buffer",
+          "target": "#ring-buffer",
+          "order": 1
+        },
+        {
+          "id": "event-ingestion-step-2",
+          "name": "setInterval flush to server",
+          "target": "#sentinel-web-client",
+          "order": 2
+        },
+        {
+          "id": "event-ingestion-step-3",
+          "name": "POST /api/events",
+          "target": "#sentinel-web-client",
+          "order": 3
         }
       ]
     },
@@ -11798,50 +11831,6 @@
     }
   },
   "signals": {
-    "!plsat-completed": {
-      "id": "!plsat-completed",
-      "name": "!plsat Completed",
-      "symbol": "!!plsat-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Student has completed a PLSAT exam attempt",
-      "related": [
-        "#plsat-view"
-      ]
-    },
-    "!quiz-completed": {
-      "id": "!quiz-completed",
-      "name": "!quiz Completed",
-      "symbol": "!!quiz-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "Student has completed a per-lesson quiz",
-      "related": [
-        "#quiz-view"
-      ]
-    },
-    "events-flushed": {
-      "id": "events-flushed",
-      "name": "Events Flushed",
-      "symbol": "!events-flushed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Emitted when buffered events are sent to Sentinel server",
-      "related": [
-        "#sentinel-web-client"
-      ]
-    },
-    "events-dropped": {
-      "id": "events-dropped",
-      "name": "Events Dropped",
-      "symbol": "!events-dropped",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Emitted when events are dropped due to buffer overflow",
-      "related": [
-        "#ring-buffer"
-      ]
-    },
     "incident-recorded": {
       "id": "incident-recorded",
       "name": "Incident Recorded",
@@ -11914,14 +11903,49 @@
       "description": "Emitted when a user passes the PLSAT certification exam",
       "related": []
     },
-    "log-emitted": {
-      "id": "log-emitted",
-      "name": "Log Emitted",
-      "symbol": "!log-emitted",
+    "!plsat-completed": {
+      "id": "!plsat-completed",
+      "name": "!plsat Completed",
+      "symbol": "!!plsat-completed",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "A structured log entry was written",
-      "related": []
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Student has completed a PLSAT exam attempt",
+      "related": [
+        "#plsat-view"
+      ]
+    },
+    "!quiz-completed": {
+      "id": "!quiz-completed",
+      "name": "!quiz Completed",
+      "symbol": "!!quiz-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "Student has completed a per-lesson quiz",
+      "related": [
+        "#quiz-view"
+      ]
+    },
+    "events-flushed": {
+      "id": "events-flushed",
+      "name": "Events Flushed",
+      "symbol": "!events-flushed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Emitted when buffered events are sent to Sentinel server",
+      "related": [
+        "#sentinel-web-client"
+      ]
+    },
+    "events-dropped": {
+      "id": "events-dropped",
+      "name": "Events Dropped",
+      "symbol": "!events-dropped",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Emitted when events are dropped due to buffer overflow",
+      "related": [
+        "#ring-buffer"
+      ]
     },
     "context-loaded": {
       "id": "context-loaded",
@@ -12546,6 +12570,15 @@
         "#task-store"
       ]
     },
+    "log-emitted": {
+      "id": "log-emitted",
+      "name": "Log Emitted",
+      "symbol": "!log-emitted",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "A structured log entry was written",
+      "related": []
+    },
     "node-selected": {
       "id": "node-selected",
       "name": "Node Selected",
@@ -12582,15 +12615,6 @@
       "description": "Symbol properties were edited and saved",
       "related": []
     },
-    "index-generated": {
-      "id": "index-generated",
-      "name": "Index Generated",
-      "symbol": "!index-generated",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "!index-generated: Scan index was generated",
-      "related": []
-    },
     "aggregation-complete": {
       "id": "aggregation-complete",
       "name": "Aggregation Complete",
@@ -12598,6 +12622,15 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "!aggregation-complete: Symbol aggregation finished",
+      "related": []
+    },
+    "index-generated": {
+      "id": "index-generated",
+      "name": "Index Generated",
+      "symbol": "!index-generated",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "!index-generated: Scan index was generated",
       "related": []
     },
     "parse-success": {
@@ -12636,24 +12669,6 @@
       "description": "!validation-failed: Portal validation found issues",
       "related": []
     },
-    "decision-received": {
-      "id": "decision-received",
-      "name": "Decision Received",
-      "symbol": "!decision-received",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "!decision-received: Gate decision event received",
-      "related": []
-    },
-    "session-started": {
-      "id": "session-started",
-      "name": "Session Started",
-      "symbol": "!session-started",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "!session-started: New session tracking started",
-      "related": []
-    },
     "gate-passed": {
       "id": "gate-passed",
       "name": "Gate Passed",
@@ -12670,6 +12685,24 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "!gate-denied: Gate check failed, access denied",
+      "related": []
+    },
+    "decision-received": {
+      "id": "decision-received",
+      "name": "Decision Received",
+      "symbol": "!decision-received",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "!decision-received: Gate decision event received",
+      "related": []
+    },
+    "session-started": {
+      "id": "session-started",
+      "name": "Session Started",
+      "symbol": "!session-started",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "!session-started: New session tracking started",
       "related": []
     },
     "budget-exceeded": {
@@ -12954,50 +12987,6 @@
     }
   },
   "aspects": {
-    "~plsat-pass-threshold-90pct": {
-      "id": "~plsat-pass-threshold-90pct",
-      "name": "~plsat Pass Threshold 90pct",
-      "symbol": "~~plsat-pass-threshold-90pct",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "PLSAT pass threshold is 0.9 (90%); defined in content JSON and read by the server at runtime",
-      "related": [
-        "#plsat-router"
-      ]
-    },
-    "~plsat-fisher-yates-shuffle": {
-      "id": "~plsat-fisher-yates-shuffle",
-      "name": "~plsat Fisher Yates Shuffle",
-      "symbol": "~~plsat-fisher-yates-shuffle",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "v3.0 exam blocks are shuffled using Fisher-Yates algorithm; passage groups move as a unit to keep related questions together",
-      "related": [
-        "#plsat-router"
-      ]
-    },
-    "~plsat-v3-variant-resolution": {
-      "id": "~plsat-v3-variant-resolution",
-      "name": "~plsat V3 Variant Resolution",
-      "symbol": "~~plsat-v3-variant-resolution",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "v3.0 items have multiple variants per slot; server picks one random variant per slot so each exam attempt is unique while covering the same topics",
-      "related": [
-        "#plsat-router"
-      ]
-    },
-    "~university-cors-wildcard": {
-      "id": "~university-cors-wildcard",
-      "name": "~university Cors Wildcard",
-      "symbol": "~~university-cors-wildcard",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
-      "description": "University server sets Access-Control-Allow-Origin: * for development cross-origin API access",
-      "related": [
-        "#university-server"
-      ]
-    },
     "rust-batch-size-default-50": {
       "id": "rust-batch-size-default-50",
       "name": "Rust Batch Size Default 50",
@@ -13732,6 +13721,50 @@
         "#PatternSuggester"
       ]
     },
+    "~plsat-pass-threshold-90pct": {
+      "id": "~plsat-pass-threshold-90pct",
+      "name": "~plsat Pass Threshold 90pct",
+      "symbol": "~~plsat-pass-threshold-90pct",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "PLSAT pass threshold is 0.9 (90%); defined in content JSON and read by the server at runtime",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~plsat-fisher-yates-shuffle": {
+      "id": "~plsat-fisher-yates-shuffle",
+      "name": "~plsat Fisher Yates Shuffle",
+      "symbol": "~~plsat-fisher-yates-shuffle",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "v3.0 exam blocks are shuffled using Fisher-Yates algorithm; passage groups move as a unit to keep related questions together",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~plsat-v3-variant-resolution": {
+      "id": "~plsat-v3-variant-resolution",
+      "name": "~plsat V3 Variant Resolution",
+      "symbol": "~~plsat-v3-variant-resolution",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "v3.0 items have multiple variants per slot; server picks one random variant per slot so each exam attempt is unique while covering the same topics",
+      "related": [
+        "#plsat-router"
+      ]
+    },
+    "~university-cors-wildcard": {
+      "id": "~university-cors-wildcard",
+      "name": "~university Cors Wildcard",
+      "symbol": "~~university-cors-wildcard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/.purpose",
+      "description": "University server sets Access-Control-Allow-Origin: * for development cross-origin API access",
+      "related": [
+        "#university-server"
+      ]
+    },
     "~activation-requires-purpose-files": {
       "id": "~activation-requires-purpose-files",
       "name": "~activation Requires Purpose Files",
@@ -13796,65 +13829,6 @@
       "description": "Paradigm symbol TextMate grammar is injected into YAML, Markdown, TypeScript, TSX, JavaScript, JSX, and .purpose files",
       "related": [
         "#paradigm-symbols-grammar"
-      ]
-    },
-    "~log-level-env-resolution": {
-      "id": "~log-level-env-resolution",
-      "name": "~log Level Env Resolution",
-      "symbol": "~~log-level-env-resolution",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Log level resolves from LOG_LEVEL env var first; if unset, defaults to debug in development and info in production (NODE_ENV=production)",
-      "related": [
-        "#paradigm-logger"
-      ]
-    },
-    "~format-auto-detection": {
-      "id": "~format-auto-detection",
-      "name": "~format Auto Detection",
-      "symbol": "~~format-auto-detection",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Log format resolves from PARADIGM_LOG_FORMAT env var (json forces JSON); otherwise defaults to JSON in production, pretty in development; pretty format uses ANSI color codes per level (gray/cyan/yellow/red)",
-      "related": [
-        "#paradigm-logger",
-        "#formatter-pretty",
-        "#formatter-json"
-      ]
-    },
-    "~symbol-auto-prefix-normalization": {
-      "id": "~symbol-auto-prefix-normalization",
-      "name": "~symbol Auto Prefix Normalization",
-      "symbol": "~~symbol-auto-prefix-normalization",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Symbol loggers auto-prefix symbols with their type prefix if not already present — component() adds",
-      "related": [
-        "#paradigm-logger",
-        "#symbol-logger"
-      ]
-    },
-    "~correlation-async-local-storage": {
-      "id": "~correlation-async-local-storage",
-      "name": "~correlation Async Local Storage",
-      "symbol": "~~correlation-async-local-storage",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "Correlation tracking uses Node.js AsyncLocalStorage to propagate correlation IDs through async call chains without explicit parameter threading; IDs are UUIDs from crypto.randomUUID",
-      "related": [
-        "#correlation-tracker"
-      ]
-    },
-    "~symbol-filter-env-var": {
-      "id": "~symbol-filter-env-var",
-      "name": "~symbol Filter Env Var",
-      "symbol": "~~symbol-filter-env-var",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
-      "description": "PARADIGM_SYMBOLS env var provides comma-separated prefix filter (e.g., \"#,^\") to restrict which symbol types emit logs; null means all symbols pass",
-      "related": [
-        "#paradigm-logger",
-        "#symbol-logger"
       ]
     },
     "token-tracking": {
@@ -14631,6 +14605,65 @@
       "description": "Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)",
       "related": []
     },
+    "~log-level-env-resolution": {
+      "id": "~log-level-env-resolution",
+      "name": "~log Level Env Resolution",
+      "symbol": "~~log-level-env-resolution",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Log level resolves from LOG_LEVEL env var first; if unset, defaults to debug in development and info in production (NODE_ENV=production)",
+      "related": [
+        "#paradigm-logger"
+      ]
+    },
+    "~format-auto-detection": {
+      "id": "~format-auto-detection",
+      "name": "~format Auto Detection",
+      "symbol": "~~format-auto-detection",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Log format resolves from PARADIGM_LOG_FORMAT env var (json forces JSON); otherwise defaults to JSON in production, pretty in development; pretty format uses ANSI color codes per level (gray/cyan/yellow/red)",
+      "related": [
+        "#paradigm-logger",
+        "#formatter-pretty",
+        "#formatter-json"
+      ]
+    },
+    "~symbol-auto-prefix-normalization": {
+      "id": "~symbol-auto-prefix-normalization",
+      "name": "~symbol Auto Prefix Normalization",
+      "symbol": "~~symbol-auto-prefix-normalization",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Symbol loggers auto-prefix symbols with their type prefix if not already present — component() adds",
+      "related": [
+        "#paradigm-logger",
+        "#symbol-logger"
+      ]
+    },
+    "~correlation-async-local-storage": {
+      "id": "~correlation-async-local-storage",
+      "name": "~correlation Async Local Storage",
+      "symbol": "~~correlation-async-local-storage",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "Correlation tracking uses Node.js AsyncLocalStorage to propagate correlation IDs through async call chains without explicit parameter threading; IDs are UUIDs from crypto.randomUUID",
+      "related": [
+        "#correlation-tracker"
+      ]
+    },
+    "~symbol-filter-env-var": {
+      "id": "~symbol-filter-env-var",
+      "name": "~symbol Filter Env Var",
+      "symbol": "~~symbol-filter-env-var",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
+      "description": "PARADIGM_SYMBOLS env var provides comma-separated prefix filter (e.g., \"#,^\") to restrict which symbol types emit logs; null means all symbols pass",
+      "related": [
+        "#paradigm-logger",
+        "#symbol-logger"
+      ]
+    },
     "v2-symbols-only": {
       "id": "v2-symbols-only",
       "name": "V2 Symbols Only",
@@ -14655,28 +14688,6 @@
         "#Canvas",
         "#GridView",
         "#ListView"
-      ]
-    },
-    "~visual-tag-inference-patterns": {
-      "id": "~visual-tag-inference-patterns",
-      "name": "~visual Tag Inference Patterns",
-      "symbol": "~~visual-tag-inference-patterns",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "Component names are matched against 30+ regex patterns (button, form, modal, nav, etc.) to infer visual tags for image-to-code mapping",
-      "related": [
-        "#component-scanner"
-      ]
-    },
-    "~scan-index-schema-version-1-0-0": {
-      "id": "~scan-index-schema-version-1-0-0",
-      "name": "~scan Index Schema Version 1 0 0",
-      "symbol": "~~scan-index-schema-version-1-0-0",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
-      "description": "Scan index $meta.version is always '1.0.0'; tracked separately from paradigmVersion",
-      "related": [
-        "#generator"
       ]
     },
     "~symbol-blocklist-framework-aliases": {
@@ -14712,6 +14723,28 @@
         "#aggregator"
       ]
     },
+    "~visual-tag-inference-patterns": {
+      "id": "~visual-tag-inference-patterns",
+      "name": "~visual Tag Inference Patterns",
+      "symbol": "~~visual-tag-inference-patterns",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "Component names are matched against 30+ regex patterns (button, form, modal, nav, etc.) to infer visual tags for image-to-code mapping",
+      "related": [
+        "#component-scanner"
+      ]
+    },
+    "~scan-index-schema-version-1-0-0": {
+      "id": "~scan-index-schema-version-1-0-0",
+      "name": "~scan Index Schema Version 1 0 0",
+      "symbol": "~~scan-index-schema-version-1-0-0",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/probe/core/.purpose",
+      "description": "Scan index $meta.version is always '1.0.0'; tracked separately from paradigmVersion",
+      "related": [
+        "#generator"
+      ]
+    },
     "~purpose-schema-passthrough": {
       "id": "~purpose-schema-passthrough",
       "name": "~purpose Schema Passthrough",
@@ -14743,39 +14776,6 @@
       "description": "findPurposeFiles ignores node_modules, dist, and .git directories",
       "related": [
         "#aggregator"
-      ]
-    },
-    "~viewer-ws-port-42196": {
-      "id": "~viewer-ws-port-42196",
-      "name": "~viewer Ws Port 42196",
-      "symbol": "~~viewer-ws-port-42196",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "WebSocket server defaults to port 42196 (marathon + 1); UI defaults to 42195",
-      "related": [
-        "#websocket-server"
-      ]
-    },
-    "~viewer-cors-wildcard": {
-      "id": "~viewer-cors-wildcard",
-      "name": "~viewer Cors Wildcard",
-      "symbol": "~~viewer-cors-wildcard",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "API responses set Access-Control-Allow-Origin: * for cross-origin access",
-      "related": [
-        "#websocket-server"
-      ]
-    },
-    "~viewer-sdk-ui-client-routing": {
-      "id": "~viewer-sdk-ui-client-routing",
-      "name": "~viewer Sdk Ui Client Routing",
-      "symbol": "~~viewer-sdk-ui-client-routing",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "WebSocket clients are routed to SDK or UI handler based on URL path (/ui prefix)",
-      "related": [
-        "#websocket-server"
       ]
     },
     "~safe-expression-evaluator-no-eval": {
@@ -14842,6 +14842,39 @@
       "description": "Gate results store keeps at most 100 entries to prevent memory leaks",
       "related": [
         "#portal-client"
+      ]
+    },
+    "~viewer-ws-port-42196": {
+      "id": "~viewer-ws-port-42196",
+      "name": "~viewer Ws Port 42196",
+      "symbol": "~~viewer-ws-port-42196",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "WebSocket server defaults to port 42196 (marathon + 1); UI defaults to 42195",
+      "related": [
+        "#websocket-server"
+      ]
+    },
+    "~viewer-cors-wildcard": {
+      "id": "~viewer-cors-wildcard",
+      "name": "~viewer Cors Wildcard",
+      "symbol": "~~viewer-cors-wildcard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "API responses set Access-Control-Allow-Origin: * for cross-origin access",
+      "related": [
+        "#websocket-server"
+      ]
+    },
+    "~viewer-sdk-ui-client-routing": {
+      "id": "~viewer-sdk-ui-client-routing",
+      "name": "~viewer Sdk Ui Client Routing",
+      "symbol": "~~viewer-sdk-ui-client-routing",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "WebSocket clients are routed to SDK or UI handler based on URL path (/ui prefix)",
+      "related": [
+        "#websocket-server"
       ]
     },
     "~portal-yaml-version-required": {
@@ -15273,6 +15306,17 @@
         "#SentinelServer"
       ]
     },
+    "mcp-tool-handler": {
+      "id": "mcp-tool-handler",
+      "name": "Mcp Tool Handler",
+      "symbol": "~mcp-tool-handler",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
+      "description": "Referenced from #ToolHandlers",
+      "related": [
+        "#ToolHandlers"
+      ]
+    },
     "symbol-typed-logging": {
       "id": "symbol-typed-logging",
       "name": "Symbol Typed Logging",
@@ -15293,17 +15337,6 @@
       "description": "Referenced from #correlation-tracker",
       "related": [
         "#correlation-tracker"
-      ]
-    },
-    "mcp-tool-handler": {
-      "id": "mcp-tool-handler",
-      "name": "Mcp Tool Handler",
-      "symbol": "~mcp-tool-handler",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
-      "description": "Referenced from #ToolHandlers",
-      "related": [
-        "#ToolHandlers"
       ]
     },
     "yaml-config-loading": {
@@ -15617,14 +15650,6 @@
       "category": "components",
       "id": "pipeline-command"
     },
-    "#scan-index-generation": {
-      "category": "components",
-      "id": "scan-index-generation"
-    },
-    "#probe-protocol": {
-      "category": "components",
-      "id": "probe-protocol"
-    },
     "#symbol-aggregation": {
       "category": "components",
       "id": "symbol-aggregation"
@@ -15637,6 +15662,14 @@
       "category": "components",
       "id": "reference-tracking"
     },
+    "#scan-index-generation": {
+      "category": "components",
+      "id": "scan-index-generation"
+    },
+    "#probe-protocol": {
+      "category": "components",
+      "id": "probe-protocol"
+    },
     "#purpose-parsing": {
       "category": "components",
       "id": "purpose-parsing"
@@ -15648,6 +15681,18 @@
     "#purpose-aggregation": {
       "category": "components",
       "id": "purpose-aggregation"
+    },
+    "#gate-checking": {
+      "category": "components",
+      "id": "gate-checking"
+    },
+    "#decorator-api": {
+      "category": "components",
+      "id": "decorator-api"
+    },
+    "#client-api": {
+      "category": "components",
+      "id": "client-api"
     },
     "#realtime-visualization": {
       "category": "components",
@@ -15669,18 +15714,6 @@
       "category": "components",
       "id": "command-palette"
     },
-    "#gate-checking": {
-      "category": "components",
-      "id": "gate-checking"
-    },
-    "#decorator-api": {
-      "category": "components",
-      "id": "decorator-api"
-    },
-    "#client-api": {
-      "category": "components",
-      "id": "client-api"
-    },
     "#portal-parsing": {
       "category": "components",
       "id": "portal-parsing"
@@ -15693,82 +15726,6 @@
       "category": "components",
       "id": "context-audit-checks"
     },
-    "#university-server": {
-      "category": "components",
-      "id": "university-server"
-    },
-    "#courses-router": {
-      "category": "components",
-      "id": "courses-router"
-    },
-    "#plsat-router": {
-      "category": "components",
-      "id": "plsat-router"
-    },
-    "#university-ui": {
-      "category": "components",
-      "id": "university-ui"
-    },
-    "#home-view": {
-      "category": "components",
-      "id": "home-view"
-    },
-    "#course-view": {
-      "category": "components",
-      "id": "course-view"
-    },
-    "#quiz-view": {
-      "category": "components",
-      "id": "quiz-view"
-    },
-    "#plsat-view": {
-      "category": "components",
-      "id": "plsat-view"
-    },
-    "#reference-view": {
-      "category": "components",
-      "id": "reference-view"
-    },
-    "#certificate-view": {
-      "category": "components",
-      "id": "certificate-view"
-    },
-    "#progress-store": {
-      "category": "components",
-      "id": "progress-store"
-    },
-    "#plsat-store": {
-      "category": "components",
-      "id": "plsat-store"
-    },
-    "#courses-store": {
-      "category": "components",
-      "id": "courses-store"
-    },
-    "#university-seal": {
-      "category": "components",
-      "id": "university-seal"
-    },
-    "#question-card": {
-      "category": "components",
-      "id": "question-card"
-    },
-    "#plsat-timer": {
-      "category": "components",
-      "id": "plsat-timer"
-    },
-    "#progress-ring": {
-      "category": "components",
-      "id": "progress-ring"
-    },
-    "#university-header": {
-      "category": "components",
-      "id": "university-header"
-    },
-    "#academia-theme": {
-      "category": "components",
-      "id": "academia-theme"
-    },
     "#SentinelRustClient": {
       "category": "components",
       "id": "SentinelRustClient"
@@ -15780,14 +15737,6 @@
     "#SentinelTracingLayer": {
       "category": "components",
       "id": "SentinelTracingLayer"
-    },
-    "#sentinel-web-client": {
-      "category": "components",
-      "id": "sentinel-web-client"
-    },
-    "#ring-buffer": {
-      "category": "components",
-      "id": "ring-buffer"
     },
     "#IncidentStorage": {
       "category": "components",
@@ -15961,6 +15910,90 @@
       "category": "components",
       "id": "PlsatPage"
     },
+    "#university-server": {
+      "category": "components",
+      "id": "university-server"
+    },
+    "#courses-router": {
+      "category": "components",
+      "id": "courses-router"
+    },
+    "#plsat-router": {
+      "category": "components",
+      "id": "plsat-router"
+    },
+    "#university-ui": {
+      "category": "components",
+      "id": "university-ui"
+    },
+    "#home-view": {
+      "category": "components",
+      "id": "home-view"
+    },
+    "#course-view": {
+      "category": "components",
+      "id": "course-view"
+    },
+    "#quiz-view": {
+      "category": "components",
+      "id": "quiz-view"
+    },
+    "#plsat-view": {
+      "category": "components",
+      "id": "plsat-view"
+    },
+    "#reference-view": {
+      "category": "components",
+      "id": "reference-view"
+    },
+    "#certificate-view": {
+      "category": "components",
+      "id": "certificate-view"
+    },
+    "#progress-store": {
+      "category": "components",
+      "id": "progress-store"
+    },
+    "#plsat-store": {
+      "category": "components",
+      "id": "plsat-store"
+    },
+    "#courses-store": {
+      "category": "components",
+      "id": "courses-store"
+    },
+    "#university-seal": {
+      "category": "components",
+      "id": "university-seal"
+    },
+    "#question-card": {
+      "category": "components",
+      "id": "question-card"
+    },
+    "#plsat-timer": {
+      "category": "components",
+      "id": "plsat-timer"
+    },
+    "#progress-ring": {
+      "category": "components",
+      "id": "progress-ring"
+    },
+    "#university-header": {
+      "category": "components",
+      "id": "university-header"
+    },
+    "#academia-theme": {
+      "category": "components",
+      "id": "academia-theme"
+    },
+    "#sentinel-web-client": {
+      "category": "components",
+      "id": "sentinel-web-client"
+    },
+    "#ring-buffer": {
+      "category": "components",
+      "id": "ring-buffer"
+    },
     "#paradigm-runtime": {
       "category": "components",
       "id": "paradigm-runtime"
@@ -16048,30 +16081,6 @@
     "#paradigm-symbols-grammar": {
       "category": "components",
       "id": "paradigm-symbols-grammar"
-    },
-    "#paradigm-logger": {
-      "category": "components",
-      "id": "paradigm-logger"
-    },
-    "#symbol-logger": {
-      "category": "components",
-      "id": "symbol-logger"
-    },
-    "#formatter-pretty": {
-      "category": "components",
-      "id": "formatter-pretty"
-    },
-    "#formatter-json": {
-      "category": "components",
-      "id": "formatter-json"
-    },
-    "#correlation-tracker": {
-      "category": "components",
-      "id": "correlation-tracker"
-    },
-    "#duration-tracker": {
-      "category": "components",
-      "id": "duration-tracker"
     },
     "#MCPServer": {
       "category": "components",
@@ -16901,25 +16910,29 @@
       "category": "components",
       "id": "agent-roster-view"
     },
-    "#header": {
+    "#paradigm-logger": {
       "category": "components",
-      "id": "header"
+      "id": "paradigm-logger"
     },
-    "#seal": {
+    "#symbol-logger": {
       "category": "components",
-      "id": "seal"
+      "id": "symbol-logger"
     },
-    "#timer": {
+    "#formatter-pretty": {
       "category": "components",
-      "id": "timer"
+      "id": "formatter-pretty"
     },
-    "#courses-view": {
+    "#formatter-json": {
       "category": "components",
-      "id": "courses-view"
+      "id": "formatter-json"
     },
-    "#plsatview": {
+    "#correlation-tracker": {
       "category": "components",
-      "id": "plsatview"
+      "id": "correlation-tracker"
+    },
+    "#duration-tracker": {
+      "category": "components",
+      "id": "duration-tracker"
     },
     "#App": {
       "category": "components",
@@ -17061,21 +17074,25 @@
       "category": "components",
       "id": "symbol-badge"
     },
-    "#generator": {
+    "#header": {
       "category": "components",
-      "id": "generator"
+      "id": "header"
     },
-    "#component-scanner": {
+    "#seal": {
       "category": "components",
-      "id": "component-scanner"
+      "id": "seal"
     },
-    "#protocol-handler": {
+    "#timer": {
       "category": "components",
-      "id": "protocol-handler"
+      "id": "timer"
     },
-    "#matcher": {
+    "#courses-view": {
       "category": "components",
-      "id": "matcher"
+      "id": "courses-view"
+    },
+    "#plsatview": {
+      "category": "components",
+      "id": "plsatview"
     },
     "#aggregator": {
       "category": "components",
@@ -17096,6 +17113,22 @@
     "#reference-tracker": {
       "category": "components",
       "id": "reference-tracker"
+    },
+    "#generator": {
+      "category": "components",
+      "id": "generator"
+    },
+    "#component-scanner": {
+      "category": "components",
+      "id": "component-scanner"
+    },
+    "#protocol-handler": {
+      "category": "components",
+      "id": "protocol-handler"
+    },
+    "#matcher": {
+      "category": "components",
+      "id": "matcher"
     },
     "#purpose-parser": {
       "category": "components",
@@ -17120,6 +17153,30 @@
     "#symbol-extractor": {
       "category": "components",
       "id": "symbol-extractor"
+    },
+    "#evaluator": {
+      "category": "components",
+      "id": "evaluator"
+    },
+    "#context-resolver": {
+      "category": "components",
+      "id": "context-resolver"
+    },
+    "#gate-decorator": {
+      "category": "components",
+      "id": "gate-decorator"
+    },
+    "#require-decorator": {
+      "category": "components",
+      "id": "require-decorator"
+    },
+    "#portal-client": {
+      "category": "components",
+      "id": "portal-client"
+    },
+    "#gate-client": {
+      "category": "components",
+      "id": "gate-client"
     },
     "#websocket-server": {
       "category": "components",
@@ -17160,30 +17217,6 @@
     "#command-generator": {
       "category": "components",
       "id": "command-generator"
-    },
-    "#evaluator": {
-      "category": "components",
-      "id": "evaluator"
-    },
-    "#context-resolver": {
-      "category": "components",
-      "id": "context-resolver"
-    },
-    "#gate-decorator": {
-      "category": "components",
-      "id": "gate-decorator"
-    },
-    "#require-decorator": {
-      "category": "components",
-      "id": "require-decorator"
-    },
-    "#portal-client": {
-      "category": "components",
-      "id": "portal-client"
-    },
-    "#gate-client": {
-      "category": "components",
-      "id": "gate-client"
     },
     "#gate-schemas": {
       "category": "components",
@@ -17473,29 +17506,13 @@
       "category": "components",
       "id": "soft-provenance"
     },
-    "#UniversityTypes": {
+    "#outcome-reference-tracking": {
       "category": "components",
-      "id": "UniversityTypes"
+      "id": "outcome-reference-tracking"
     },
-    "#AgentTypes": {
+    "#compliance-health": {
       "category": "components",
-      "id": "AgentTypes"
-    },
-    "#NotebookTypes": {
-      "category": "components",
-      "id": "NotebookTypes"
-    },
-    "#AmbientTypes": {
-      "category": "components",
-      "id": "AmbientTypes"
-    },
-    "#KnowledgeStreamTypes": {
-      "category": "components",
-      "id": "KnowledgeStreamTypes"
-    },
-    "#DataPolicyTypes": {
-      "category": "components",
-      "id": "DataPolicyTypes"
+      "id": "compliance-health"
     },
     "#ResourceIndex": {
       "category": "components",
@@ -17529,33 +17546,29 @@
       "category": "components",
       "id": "ContextResources"
     },
-    "#PlatformServer": {
+    "#UniversityTypes": {
       "category": "components",
-      "id": "PlatformServer"
+      "id": "UniversityTypes"
     },
-    "#PlatformWebSocket": {
+    "#AgentTypes": {
       "category": "components",
-      "id": "PlatformWebSocket"
+      "id": "AgentTypes"
     },
-    "#AgentPresenceManager": {
+    "#NotebookTypes": {
       "category": "components",
-      "id": "AgentPresenceManager"
+      "id": "NotebookTypes"
     },
-    "#UserStateTracker": {
+    "#AmbientTypes": {
       "category": "components",
-      "id": "UserStateTracker"
+      "id": "AmbientTypes"
     },
-    "#AgentCommandRoute": {
+    "#KnowledgeStreamTypes": {
       "category": "components",
-      "id": "AgentCommandRoute"
+      "id": "KnowledgeStreamTypes"
     },
-    "#graph-server": {
+    "#DataPolicyTypes": {
       "category": "components",
-      "id": "graph-server"
-    },
-    "#symbols-route": {
-      "category": "components",
-      "id": "symbols-route"
+      "id": "DataPolicyTypes"
     },
     "#symphony-peek": {
       "category": "components",
@@ -17628,6 +17641,38 @@
     "#AmbientTools": {
       "category": "components",
       "id": "AmbientTools"
+    },
+    "#tool-aliases": {
+      "category": "components",
+      "id": "tool-aliases"
+    },
+    "#PlatformServer": {
+      "category": "components",
+      "id": "PlatformServer"
+    },
+    "#PlatformWebSocket": {
+      "category": "components",
+      "id": "PlatformWebSocket"
+    },
+    "#AgentPresenceManager": {
+      "category": "components",
+      "id": "AgentPresenceManager"
+    },
+    "#UserStateTracker": {
+      "category": "components",
+      "id": "UserStateTracker"
+    },
+    "#AgentCommandRoute": {
+      "category": "components",
+      "id": "AgentCommandRoute"
+    },
+    "#graph-server": {
+      "category": "components",
+      "id": "graph-server"
+    },
+    "#symbols-route": {
+      "category": "components",
+      "id": "symbols-route"
     },
     "#pipeline-types": {
       "category": "components",
@@ -17716,6 +17761,26 @@
     "#conductor-install": {
       "category": "components",
       "id": "conductor-install"
+    },
+    "#SymbolPage": {
+      "category": "components",
+      "id": "SymbolPage"
+    },
+    "#FlowPage": {
+      "category": "components",
+      "id": "FlowPage"
+    },
+    "#PortalPage": {
+      "category": "components",
+      "id": "PortalPage"
+    },
+    "#CategoryListPage": {
+      "category": "components",
+      "id": "CategoryListPage"
+    },
+    "#ContentPage": {
+      "category": "components",
+      "id": "ContentPage"
     },
     "#plsat-v3": {
       "category": "components",
@@ -18137,25 +18202,9 @@
       "category": "components",
       "id": "para-701-agent-pods-nevrland"
     },
-    "#SymbolPage": {
+    "#grid-preset": {
       "category": "components",
-      "id": "SymbolPage"
-    },
-    "#FlowPage": {
-      "category": "components",
-      "id": "FlowPage"
-    },
-    "#PortalPage": {
-      "category": "components",
-      "id": "PortalPage"
-    },
-    "#CategoryListPage": {
-      "category": "components",
-      "id": "CategoryListPage"
-    },
-    "#ContentPage": {
-      "category": "components",
-      "id": "ContentPage"
+      "id": "grid-preset"
     },
     "#UniversityStorage": {
       "category": "components",
@@ -18185,6 +18234,26 @@
       "category": "components",
       "id": "manual-provider"
     },
+    "#lore-types": {
+      "category": "components",
+      "id": "lore-types"
+    },
+    "#lore-storage": {
+      "category": "components",
+      "id": "lore-storage"
+    },
+    "#lore-filter": {
+      "category": "components",
+      "id": "lore-filter"
+    },
+    "#lore-normalize": {
+      "category": "components",
+      "id": "lore-normalize"
+    },
+    "#lore-resolve-author": {
+      "category": "components",
+      "id": "lore-resolve-author"
+    },
     "#adapter-base": {
       "category": "components",
       "id": "adapter-base"
@@ -18212,26 +18281,6 @@
     "#adapter-registry": {
       "category": "components",
       "id": "adapter-registry"
-    },
-    "#lore-types": {
-      "category": "components",
-      "id": "lore-types"
-    },
-    "#lore-storage": {
-      "category": "components",
-      "id": "lore-storage"
-    },
-    "#lore-filter": {
-      "category": "components",
-      "id": "lore-filter"
-    },
-    "#lore-normalize": {
-      "category": "components",
-      "id": "lore-normalize"
-    },
-    "#lore-resolve-author": {
-      "category": "components",
-      "id": "lore-resolve-author"
     },
     "#UniversityCommands": {
       "category": "components",
@@ -18393,10 +18442,6 @@
       "category": "components",
       "id": "AgentCommands"
     },
-    "#grid-preset": {
-      "category": "components",
-      "id": "grid-preset"
-    },
     "#DocsSection": {
       "category": "components",
       "id": "DocsSection"
@@ -18529,14 +18574,6 @@
       "category": "components",
       "id": "session"
     },
-    "$$plsat-exam-flow": {
-      "category": "flows",
-      "id": "$plsat-exam-flow"
-    },
-    "$event-ingestion": {
-      "category": "flows",
-      "id": "event-ingestion"
-    },
     "$incident-triage": {
       "category": "flows",
       "id": "incident-triage"
@@ -18564,6 +18601,14 @@
     "$$university-flow": {
       "category": "flows",
       "id": "$university-flow"
+    },
+    "$$plsat-exam-flow": {
+      "category": "flows",
+      "id": "$plsat-exam-flow"
+    },
+    "$event-ingestion": {
+      "category": "flows",
+      "id": "event-ingestion"
     },
     "$$schema-migration": {
       "category": "flows",
@@ -18805,22 +18850,6 @@
       "category": "flows",
       "id": "property-edit"
     },
-    "!!plsat-completed": {
-      "category": "signals",
-      "id": "!plsat-completed"
-    },
-    "!!quiz-completed": {
-      "category": "signals",
-      "id": "!quiz-completed"
-    },
-    "!events-flushed": {
-      "category": "signals",
-      "id": "events-flushed"
-    },
-    "!events-dropped": {
-      "category": "signals",
-      "id": "events-dropped"
-    },
     "!incident-recorded": {
       "category": "signals",
       "id": "incident-recorded"
@@ -18853,9 +18882,21 @@
       "category": "signals",
       "id": "!plsat-passed"
     },
-    "!log-emitted": {
+    "!!plsat-completed": {
       "category": "signals",
-      "id": "log-emitted"
+      "id": "!plsat-completed"
+    },
+    "!!quiz-completed": {
+      "category": "signals",
+      "id": "!quiz-completed"
+    },
+    "!events-flushed": {
+      "category": "signals",
+      "id": "events-flushed"
+    },
+    "!events-dropped": {
+      "category": "signals",
+      "id": "events-dropped"
     },
     "!context-loaded": {
       "category": "signals",
@@ -19105,6 +19146,10 @@
       "category": "signals",
       "id": "!tasks-archived"
     },
+    "!log-emitted": {
+      "category": "signals",
+      "id": "log-emitted"
+    },
     "!node-selected": {
       "category": "signals",
       "id": "node-selected"
@@ -19121,13 +19166,13 @@
       "category": "signals",
       "id": "symbol-updated"
     },
-    "!index-generated": {
-      "category": "signals",
-      "id": "index-generated"
-    },
     "!aggregation-complete": {
       "category": "signals",
       "id": "aggregation-complete"
+    },
+    "!index-generated": {
+      "category": "signals",
+      "id": "index-generated"
     },
     "!parse-success": {
       "category": "signals",
@@ -19145,14 +19190,6 @@
       "category": "signals",
       "id": "validation-failed"
     },
-    "!decision-received": {
-      "category": "signals",
-      "id": "decision-received"
-    },
-    "!session-started": {
-      "category": "signals",
-      "id": "session-started"
-    },
     "!gate-passed": {
       "category": "signals",
       "id": "gate-passed"
@@ -19160,6 +19197,14 @@
     "!gate-denied": {
       "category": "signals",
       "id": "gate-denied"
+    },
+    "!decision-received": {
+      "category": "signals",
+      "id": "decision-received"
+    },
+    "!session-started": {
+      "category": "signals",
+      "id": "session-started"
     },
     "!budget-exceeded": {
       "category": "signals",
@@ -19260,22 +19305,6 @@
     "!prop-changed": {
       "category": "signals",
       "id": "prop-changed"
-    },
-    "~~plsat-pass-threshold-90pct": {
-      "category": "aspects",
-      "id": "~plsat-pass-threshold-90pct"
-    },
-    "~~plsat-fisher-yates-shuffle": {
-      "category": "aspects",
-      "id": "~plsat-fisher-yates-shuffle"
-    },
-    "~~plsat-v3-variant-resolution": {
-      "category": "aspects",
-      "id": "~plsat-v3-variant-resolution"
-    },
-    "~~university-cors-wildcard": {
-      "category": "aspects",
-      "id": "~university-cors-wildcard"
     },
     "~rust-batch-size-default-50": {
       "category": "aspects",
@@ -19541,6 +19570,22 @@
       "category": "aspects",
       "id": "resolution-strategy-10-options"
     },
+    "~~plsat-pass-threshold-90pct": {
+      "category": "aspects",
+      "id": "~plsat-pass-threshold-90pct"
+    },
+    "~~plsat-fisher-yates-shuffle": {
+      "category": "aspects",
+      "id": "~plsat-fisher-yates-shuffle"
+    },
+    "~~plsat-v3-variant-resolution": {
+      "category": "aspects",
+      "id": "~plsat-v3-variant-resolution"
+    },
+    "~~university-cors-wildcard": {
+      "category": "aspects",
+      "id": "~university-cors-wildcard"
+    },
     "~~activation-requires-purpose-files": {
       "category": "aspects",
       "id": "~activation-requires-purpose-files"
@@ -19564,26 +19609,6 @@
     "~~symbol-injection-scope": {
       "category": "aspects",
       "id": "~symbol-injection-scope"
-    },
-    "~~log-level-env-resolution": {
-      "category": "aspects",
-      "id": "~log-level-env-resolution"
-    },
-    "~~format-auto-detection": {
-      "category": "aspects",
-      "id": "~format-auto-detection"
-    },
-    "~~symbol-auto-prefix-normalization": {
-      "category": "aspects",
-      "id": "~symbol-auto-prefix-normalization"
-    },
-    "~~correlation-async-local-storage": {
-      "category": "aspects",
-      "id": "~correlation-async-local-storage"
-    },
-    "~~symbol-filter-env-var": {
-      "category": "aspects",
-      "id": "~symbol-filter-env-var"
     },
     "~token-tracking": {
       "category": "aspects",
@@ -19865,6 +19890,26 @@
       "category": "aspects",
       "id": "file-safety"
     },
+    "~~log-level-env-resolution": {
+      "category": "aspects",
+      "id": "~log-level-env-resolution"
+    },
+    "~~format-auto-detection": {
+      "category": "aspects",
+      "id": "~format-auto-detection"
+    },
+    "~~symbol-auto-prefix-normalization": {
+      "category": "aspects",
+      "id": "~symbol-auto-prefix-normalization"
+    },
+    "~~correlation-async-local-storage": {
+      "category": "aspects",
+      "id": "~correlation-async-local-storage"
+    },
+    "~~symbol-filter-env-var": {
+      "category": "aspects",
+      "id": "~symbol-filter-env-var"
+    },
     "~v2-symbols-only": {
       "category": "aspects",
       "id": "v2-symbols-only"
@@ -19872,14 +19917,6 @@
     "~responsive-layout": {
       "category": "aspects",
       "id": "responsive-layout"
-    },
-    "~~visual-tag-inference-patterns": {
-      "category": "aspects",
-      "id": "~visual-tag-inference-patterns"
-    },
-    "~~scan-index-schema-version-1-0-0": {
-      "category": "aspects",
-      "id": "~scan-index-schema-version-1-0-0"
     },
     "~~symbol-blocklist-framework-aliases": {
       "category": "aspects",
@@ -19893,6 +19930,14 @@
       "category": "aspects",
       "id": "~anchor-parse-formats"
     },
+    "~~visual-tag-inference-patterns": {
+      "category": "aspects",
+      "id": "~visual-tag-inference-patterns"
+    },
+    "~~scan-index-schema-version-1-0-0": {
+      "category": "aspects",
+      "id": "~scan-index-schema-version-1-0-0"
+    },
     "~~purpose-schema-passthrough": {
       "category": "aspects",
       "id": "~purpose-schema-passthrough"
@@ -19904,18 +19949,6 @@
     "~~purpose-glob-ignore-patterns": {
       "category": "aspects",
       "id": "~purpose-glob-ignore-patterns"
-    },
-    "~~viewer-ws-port-42196": {
-      "category": "aspects",
-      "id": "~viewer-ws-port-42196"
-    },
-    "~~viewer-cors-wildcard": {
-      "category": "aspects",
-      "id": "~viewer-cors-wildcard"
-    },
-    "~~viewer-sdk-ui-client-routing": {
-      "category": "aspects",
-      "id": "~viewer-sdk-ui-client-routing"
     },
     "~~safe-expression-evaluator-no-eval": {
       "category": "aspects",
@@ -19940,6 +19973,18 @@
     "~~validator-max-stored-results-100": {
       "category": "aspects",
       "id": "~validator-max-stored-results-100"
+    },
+    "~~viewer-ws-port-42196": {
+      "category": "aspects",
+      "id": "~viewer-ws-port-42196"
+    },
+    "~~viewer-cors-wildcard": {
+      "category": "aspects",
+      "id": "~viewer-cors-wildcard"
+    },
+    "~~viewer-sdk-ui-client-routing": {
+      "category": "aspects",
+      "id": "~viewer-sdk-ui-client-routing"
     },
     "~~portal-yaml-version-required": {
       "category": "aspects",
@@ -20117,14 +20162,6 @@
       "category": "components",
       "id": "EventTable"
     },
-    "~symbol-typed-logging": {
-      "category": "aspects",
-      "id": "symbol-typed-logging"
-    },
-    "~correlation-tracked": {
-      "category": "aspects",
-      "id": "correlation-tracked"
-    },
     "~mcp-tool-handler": {
       "category": "aspects",
       "id": "mcp-tool-handler"
@@ -20192,6 +20229,14 @@
     "#vision-gaze-provider.": {
       "category": "components",
       "id": "vision-gaze-provider."
+    },
+    "~symbol-typed-logging": {
+      "category": "aspects",
+      "id": "symbol-typed-logging"
+    },
+    "~correlation-tracked": {
+      "category": "aspects",
+      "id": "correlation-tracked"
     },
     "#ZoomControls": {
       "category": "components",

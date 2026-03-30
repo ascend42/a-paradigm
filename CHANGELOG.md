@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.33.0] — 2026-03-30
+
+### Added
+
+- **Outcome Reference Tracking (P4)** — Records which notebook entries are loaded into agent prompts during orchestration. `NotebookReferenceEntry` type in session work log, `recordNotebookReference()` function called at both orchestration prompt-building sites. Pure data collection — no scoring (per team verdict: Goodhart's Law concern, collect data first). Count surfaced in `paradigm_status`.
+- **Change-Based Health (P5)** — Tracks stop hook violation frequency over time via `compliance-history.jsonl`. `getComplianceTrend()` computes `improving | stable | degrading` from split-window violation rate comparison. `getHealthDot()` maps trend to `green | yellow | orange | red` for Conductor. Stop hook now writes compliance snapshots (non-fatal).
+- **Tool Aliases (P6)** — `aliases` field on `ToolDefinition` for better LLM tool matching. 10 tools aliased: search, status, ripple, navigate, orchestrate, lore_search, aspect_check, gates_for_route, session_recover, reindex. Simple string arrays — NOT semantic embeddings (per team verdict: domain vocabulary blindness).
+
+### Fixed
+
+- **Health dot `rootDir` passthrough** — `getHealthDot()` in `paradigm_status` now receives `ctx.rootDir` so it can read actual violation history. Previously always resolved `green` for stable trends.
+
+Symbols: #outcome-reference-tracking, #compliance-health, #tool-aliases, #session-work-log, #orchestration, #tool-registry, #enforcement-hooks
+
 ## [5.32.0] — 2026-03-30
 
 ### Added

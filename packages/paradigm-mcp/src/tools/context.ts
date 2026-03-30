@@ -241,6 +241,7 @@ export function getContextToolsList() {
         readOnlyHint: true,
         destructiveHint: false,
       },
+      aliases: ['resume', 'pick up', 'continue', 'what was I doing', 'last session', 'recover'],
     },
     {
       name: 'paradigm_session_checkpoint',

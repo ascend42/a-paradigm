@@ -2,99 +2,178 @@ version: 2.0.0
 description: |
   MCP tool handlers — dispatch layer for all paradigm_* tool calls.
   Each tool file exports getXToolsList() + handleXTool() functions.
-
 components:
   symphony-peek:
     description: Ultra-cheap inbox check — fs.stat only, no parsing. Returns hasNew true/false for near-free /loop monitoring
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-poll:
     description: Poll Score part for new notes (agent heartbeat)
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-send:
     description: Send a note to other agents or broadcast via The Score
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-status:
     description: List agents, threads, peers, and unread count in The Score
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-thread:
     description: Get full thread context with notes and decisions
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-request-file:
     description: Request a file from another agent's project via The Score
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   symphony-approve-file:
     description: Approve or deny a pending file request
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, symphony, mcp]
+    tags:
+      - feature
+      - symphony
+      - mcp
   SymphonyEventBridge:
     description: Bridges Score notes to Sentinel events via fire-and-forget POST. Auto-registers paradigm-symphony schema on first call, maps MessageIntent to event types and categories.
     type: integration
     parent: '#SymphonyTools'
-    tags: [integration, symphony, sentinel]
     anchors:
       - symphony.ts:657-756
+    tags:
+      - integration
+      - symphony
+      - sentinel
   graduation-check:
-    description: "paradigm_graduate_check: check habit graduation eligibility with compliance data and reasoning"
+    description: 'paradigm_graduate_check: check habit graduation eligibility with compliance data and reasoning'
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, graduation, mcp]
+    tags:
+      - feature
+      - graduation
+      - mcp
   graduation-status:
-    description: "paradigm_graduate_status: show automation tier map (hook/habit/mcp) with savings estimate"
+    description: 'paradigm_graduate_status: show automation tier map (hook/habit/mcp) with savings estimate'
     type: tool
     parent: '#ToolHandlers'
-    tags: [feature, graduation, mcp]
+    tags:
+      - feature
+      - graduation
+      - mcp
   lore-assess:
-    description: "paradigm_lore_assess: record human assessment verdict (correct/partial/incorrect) on a lore entry, auto-compute calibration delta"
+    description: 'paradigm_lore_assess: record human assessment verdict (correct/partial/incorrect) on a lore entry, auto-compute calibration delta'
     type: tool
     parent: '#LoreTools'
-    tags: [feature, lore, calibration, mcp]
+    tags:
+      - feature
+      - lore
+      - calibration
+      - mcp
   lore-calibration:
-    description: "paradigm_lore_calibration: query calibration statistics — accuracy rate, avg confidence, calibration score, verdict breakdown, groupBy (symbol/tag/type), low-N insights"
+    description: 'paradigm_lore_calibration: query calibration statistics — accuracy rate, avg confidence, calibration score, verdict breakdown, groupBy (symbol/tag/type), low-N insights'
     type: tool
     parent: '#LoreTools'
-    tags: [feature, lore, calibration, mcp]
+    tags:
+      - feature
+      - lore
+      - calibration
+      - mcp
   UniversityTools:
     description: 9 MCP tools for per-project university (search, get, create, update, quiz, submit, onboard, diplomas, validate)
     type: tool-group
-    tags: [feature, university, mcp]
+    tags:
+      - feature
+      - university
+      - mcp
   PlatformTools:
     description: 5 MCP tools for agent-driven UI (navigate, highlight, annotate, observe, clear) — HTTP bridge to Platform server
     type: tool-group
-    tags: [feature, platform, agent-ui, mcp]
+    tags:
+      - feature
+      - platform
+      - agent-ui
+      - mcp
   AgentTools:
     description: 3 MCP tools for agent identity (paradigm_agent_list, paradigm_agent_expertise, paradigm_agent_get) — persistent profiles with expertise tracking, permission display, integrity verification
     type: tool-group
-    tags: [feature, agent-identity, permissions, mcp]
+    tags:
+      - feature
+      - agent-identity
+      - permissions
+      - mcp
   NotebookTools:
-    description: "3 MCP tools for agent notebooks (paradigm_notebook_search, paradigm_notebook_add, paradigm_notebook_promote) — curated snippet libraries"
+    description: 3 MCP tools for agent notebooks (paradigm_notebook_search, paradigm_notebook_add, paradigm_notebook_promote) — curated snippet libraries
     type: tool-group
-    tags: [feature, notebooks, agent-identity, mcp]
+    tags:
+      - feature
+      - notebooks
+      - agent-identity
+      - mcp
   DocsTools:
     description: MCP tools for auto-generated documentation — manifest, page, search
     type: tool-group
-    tags: [feature, docs]
+    tags:
+      - feature
+      - docs
   StreamsTools:
-    description: "6 MCP tools for the three knowledge streams — paradigm_work_log_record/search, paradigm_journal_record/search, paradigm_decision_record/search"
+    description: 6 MCP tools for the three knowledge streams — paradigm_work_log_record/search, paradigm_journal_record/search, paradigm_decision_record/search
     type: tool-group
-    tags: [feature, knowledge-streams, work-log, journal, decisions, mcp]
+    tags:
+      - feature
+      - knowledge-streams
+      - work-log
+      - journal
+      - decisions
+      - mcp
   AmbientTools:
-    description: "8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_neverland (validation metrics), paradigm_context_compose, plus surfacing config"
+    description: 8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_neverland (validation metrics), paradigm_context_compose, plus surfacing config
     type: tool-group
-    tags: [feature, ambient, nominations, events, context-composition, learning, neverland, mcp]
+    tags:
+      - feature
+      - ambient
+      - nominations
+      - events
+      - context-composition
+      - learning
+      - neverland
+      - mcp
   OrchestrationTools:
-    description: "2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage) and paradigm_agent_prompt (single agent with full context injection)"
+    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage) and paradigm_agent_prompt (single agent with full context injection)
     type: tool-group
-    tags: [feature, orchestration, maestro, agents, symphony, documentor, mcp]
+    tags:
+      - feature
+      - orchestration
+      - maestro
+      - agents
+      - symphony
+      - documentor
+      - mcp
+  tool-aliases:
+    description: Alternate names and intent phrases on tool definitions for better LLM tool matching. Simple string arrays, not semantic embeddings.
+    file: packages/paradigm-mcp/src/tools/tool-registry.ts
+    type: utility

@@ -55,6 +55,7 @@ export const navigateTool: Tool = {
     readOnlyHint: true,
     destructiveHint: false,
   },
+  aliases: ['go to', 'open', 'show me', 'find file', 'explore', 'browse', 'locate code'],
 };
 
 /**

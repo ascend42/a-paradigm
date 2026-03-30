@@ -167,6 +167,7 @@ export function getTagsToolsList() {
         readOnlyHint: true,
         destructiveHint: false,
       },
+      aliases: ['cross-cutting', 'aspect enforcement', 'policy check', 'verify aspect'],
     },
   ];
 }

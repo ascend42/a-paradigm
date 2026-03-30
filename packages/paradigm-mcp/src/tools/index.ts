@@ -429,6 +429,7 @@ function getInlineToolDefinitions() {
         required: ['query'],
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
+      aliases: ['find', 'lookup', 'locate', 'where is', 'which symbol', 'find symbol'],
     },
     {
       name: 'paradigm_related',
@@ -452,6 +453,7 @@ function getInlineToolDefinitions() {
         },
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
+      aliases: ['health', 'overview', 'dashboard', 'project status', 'orientation'],
     },
     {
       name: 'paradigm_gates_for_route',
@@ -466,6 +468,7 @@ function getInlineToolDefinitions() {
         required: ['route'],
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
+      aliases: ['auth', 'permissions', 'route security', 'what gates', 'protect route'],
     },
     {
       name: 'paradigm_plugin_check',
@@ -788,6 +791,28 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               // Health check is optional
             }
 
+            // Count notebook references this session (non-fatal)
+            let notebookReferences: number | undefined;
+            try {
+              const { countNotebookReferences } = await import('../utils/session-work-log.js');
+              const count = countNotebookReferences(ctx.rootDir);
+              if (count > 0) notebookReferences = count;
+            } catch {
+              // Non-fatal
+            }
+
+            // Load compliance trend (non-fatal)
+            let complianceHealth: { trend: string; dot: string } | undefined;
+            try {
+              const { getComplianceTrend, getHealthDot } = await import('../utils/compliance-health.js');
+              const trend = getComplianceTrend(ctx.rootDir);
+              if (trend) {
+                complianceHealth = { trend, dot: getHealthDot(trend, ctx.rootDir) };
+              }
+            } catch {
+              // Non-fatal
+            }
+
             return JSON.stringify({
               project: ctx.projectName,
               symbolSystem: 'v2',
@@ -810,6 +835,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               purposeFiles: ctx.aggregation.purposeFiles.length,
               ...(purposeHealthScore !== undefined ? { purposeHealthScore } : {}),
               ...(protocols ? { protocols } : {}),
+              ...(notebookReferences !== undefined ? { notebookReferences } : {}),
+              ...(complianceHealth ? { complianceHealth } : {}),
               note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification. Use type field for structural role (view, service, tool, etc.)',
               environment: {
                 os: platform,

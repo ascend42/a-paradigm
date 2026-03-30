@@ -129,6 +129,7 @@ export function getLoreToolsList() {
         readOnlyHint: true,
         destructiveHint: false,
       },
+      aliases: ['history', 'what happened', 'past work', 'project history', 'previous sessions', 'lore'],
     },
     {
       name: 'paradigm_lore_record',

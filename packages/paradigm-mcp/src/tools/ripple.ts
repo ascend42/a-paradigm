@@ -63,6 +63,7 @@ export function getRippleToolsList(): ToolDefinition[] {
         required: ['symbol'],
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
+      aliases: ['dependencies', 'impact', 'blast radius', 'what would break', 'dependents', 'affects'],
     },
   ];
 }

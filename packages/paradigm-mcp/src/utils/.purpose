@@ -191,3 +191,11 @@ components:
     type: service
     components:
       - '#notebook-loader'
+  outcome-reference-tracking:
+    description: Records which notebook entries were loaded into agent prompts during orchestration. Pure data collection — no scoring or attribution.
+    type: utility
+    file: packages/paradigm-mcp/src/utils/session-work-log.ts
+  compliance-health:
+    description: Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.
+    file: packages/paradigm-mcp/src/utils/compliance-health.ts
+    type: utility

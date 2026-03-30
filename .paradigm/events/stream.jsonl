@@ -848,3 +848,25 @@
 {"id":"ev-1774902181279-2162","timestamp":"2026-03-30T20:23:01.279Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#activity-metrics"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
 {"id":"ev-1774902183035-1522","timestamp":"2026-03-30T20:23:03.035Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#soft-provenance"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
 {"id":"ev-1774902201288-5572","timestamp":"2026-03-30T20:23:21.288Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1774902985905-9825","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:36:25.905Z","path":"packages/paradigm-mcp/src/utils/session-work-log.ts"}
+{"id":"ev-1774902998722-9371","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:36:38.722Z","path":"packages/paradigm-mcp/src/utils/session-work-log.ts"}
+{"id":"ev-1774903022582-6952","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:37:02.582Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774903033436-0706","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:37:13.436Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774903050168-1070","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:37:30.168Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
+{"id":"ev-1774903074752-0057","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:37:54.752Z","path":"packages/paradigm-mcp/src/utils/compliance-health.ts"}
+{"id":"ev-1774903121118-4227","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:38:41.118Z","path":"packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh"}
+{"id":"ev-1774903131580-4752","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:38:51.580Z","path":"packages/paradigm-mcp/src/utils/tool-registry.ts"}
+{"id":"ev-1774903141047-1782","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:39:01.047Z","path":"packages/paradigm-mcp/src/tools/ripple.ts"}
+{"id":"ev-1774903146626-7269","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:39:06.626Z","path":"packages/paradigm-mcp/src/tools/navigate.ts"}
+{"id":"ev-1774903161402-9060","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:39:21.402Z","path":"packages/paradigm-mcp/src/tools/orchestration.ts"}
+{"id":"ev-1774903173806-1550","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:39:33.806Z","path":"packages/paradigm-mcp/src/tools/lore.ts"}
+{"id":"ev-1774903252348-1633","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:40:52.348Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
+{"id":"ev-1774903254006-7847","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:40:54.006Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
+{"id":"ev-1774903255816-7494","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:40:55.816Z","path":"packages/paradigm-mcp/src/tools/index.ts"}
+{"id":"ev-1774903268763-1165","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:41:08.763Z","path":"packages/paradigm-mcp/src/tools/context.ts"}
+{"id":"ev-1774903270637-1599","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:41:10.637Z","path":"packages/paradigm-mcp/src/tools/reindex.ts"}
+{"id":"ev-1774903272318-5037","type":"file-modified","source":"post-write-hook","timestamp":"2026-03-30T20:41:12.318Z","path":"packages/paradigm-mcp/src/tools/tags.ts"}
+{"id":"ev-1774903326171-5130","timestamp":"2026-03-30T20:42:06.171Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#outcome-reference-tracking"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774903326498-7816","timestamp":"2026-03-30T20:42:06.498Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#compliance-health"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774903327161-7549","timestamp":"2026-03-30T20:42:07.161Z","type":"file-modified","source":"mcp-tool-call","tool":"paradigm_purpose_add_component","symbols":["#tool-aliases"],"context":"Purpose/portal update via paradigm_purpose_add_component"}
+{"id":"ev-1774903327424-9200","timestamp":"2026-03-30T20:42:07.424Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}

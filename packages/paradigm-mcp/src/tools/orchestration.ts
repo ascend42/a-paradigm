@@ -588,6 +588,7 @@ Examples:
         readOnlyHint: true,
         destructiveHint: false,
       },
+      aliases: ['plan', 'coordinate', 'team', 'multi-agent', 'orchestrate', 'agents', 'spawn agents'],
     },
     {
       name: 'paradigm_agent_prompt',
@@ -842,6 +843,16 @@ async function handleOrchestrateInline(
                   snippet: e.snippet,
                   concepts: e.concepts,
                 }));
+
+                // Record which notebook entries were injected (non-blocking, pure data collection)
+                try {
+                  const { recordNotebookReference } = await import('../utils/session-work-log.js');
+                  recordNotebookReference(
+                    ctx.rootDir,
+                    agentStep.name,
+                    sorted.map(e => e.id)
+                  );
+                } catch { /* non-fatal */ }
               }
             } catch { /* notebook loading is non-fatal */ }
 
@@ -1357,6 +1368,12 @@ async function handleAgentPrompt(
             snippet: e.snippet,
             concepts: e.concepts,
           }));
+
+          // Record which notebook entries were injected (non-blocking, pure data collection)
+          try {
+            const { recordNotebookReference } = await import('../utils/session-work-log.js');
+            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => e.id));
+          } catch { /* non-fatal */ }
         }
       } catch { /* notebook loading is non-fatal */ }
 
