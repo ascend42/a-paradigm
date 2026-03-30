@@ -14,6 +14,7 @@ import {
   addNotebookEntry,
   promoteFromLore,
 } from '../utils/notebook-loader.js';
+import type { NotebookEntry } from '../types/notebooks.js';
 
 /**
  * Get list of notebook tools
@@ -95,6 +96,15 @@ export function getNotebookToolsList() {
             type: 'string',
             enum: ['global', 'project'],
             description: 'Where to store: global travels across projects (default: "global")',
+          },
+          parentId: {
+            type: 'string',
+            description: 'Optional: ID of the parent notebook entry this was derived from (soft provenance, no validation)',
+          },
+          lineageType: {
+            type: 'string',
+            enum: ['fix', 'derive', 'capture', 'promote'],
+            description: 'Optional: relationship to parent — fix (corrects parent), derive (modified from parent), capture (new observation), promote (promoted from lower confidence)',
           },
         },
         required: ['agentId', 'context', 'snippet', 'concepts'],
@@ -200,20 +210,21 @@ export async function handleNotebookTool(
       const tags = (args.tags as string[]) || [];
       const confidence = (args.confidence as number) ?? 0.7;
       const scope = (args.scope as 'global' | 'project') || (ctx.rootDir ? 'project' : 'global');
+      const parentId = args.parentId as string | undefined;
+      const lineageType = args.lineageType as NotebookEntry['lineageType'] | undefined;
 
-      const result = addNotebookEntry(
-        agentId,
-        {
-          context,
-          snippet,
-          provenance: { source: 'manual', createdBy: agentId },
-          confidence,
-          concepts,
-          tags,
-        },
-        scope,
-        ctx.rootDir
-      );
+      const entryData: Parameters<typeof addNotebookEntry>[1] = {
+        context,
+        snippet,
+        provenance: { source: 'manual', createdBy: agentId },
+        confidence,
+        concepts,
+        tags,
+        ...(parentId ? { parentId } : {}),
+        ...(lineageType ? { lineageType } : {}),
+      };
+
+      const result = addNotebookEntry(agentId, entryData, scope, ctx.rootDir);
 
       return {
         handled: true,
@@ -224,6 +235,8 @@ export async function handleNotebookTool(
           scope,
           filePath: result.filePath,
           concepts: result.entry.concepts,
+          ...(parentId ? { parentId } : {}),
+          ...(lineageType ? { lineageType } : {}),
         }, null, 2),
       };
     }

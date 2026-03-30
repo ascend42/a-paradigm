@@ -202,7 +202,20 @@ export function enforce(
     };
   }
 
-  // Default: allow
+  // Notebook boundaries — deny-by-default for write paths
+  if (boundary === 'notebook-promotion' || boundary === 'notebook-publish') {
+    const destinationRing = opts.destinationRing || 'user-scoped';
+    const allowed = isRingAllowed(destinationRing, policy.default_ring);
+    return {
+      boundary,
+      allowed,
+      ring_checked: destinationRing,
+      timestamp,
+      filtered: allowed ? undefined : [`blocked: content cannot cross to ring ${destinationRing}`],
+    };
+  }
+
+  // Default: allow (only reached by read-path boundaries)
   return {
     boundary,
     allowed: true,

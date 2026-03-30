@@ -721,6 +721,7 @@ program
   .command('doctor')
   .description('Health check - validate Paradigm setup')
   .option('--context', 'Run only context audit checks (CLAUDE.md quality)')
+  .option('--explain', 'Include human-readable gap narrations explaining each issue and how to fix it')
   .action(async (options) => {
     const { doctorCommand } = await import('./commands/doctor/index.js');
     await doctorCommand(options);

@@ -55,6 +55,8 @@ components:
       - feature
       - notebooks
       - agent-identity
+    components:
+      - '#soft-provenance'
   tool-registry:
     description: Tiered tool registration system — core/feature/advanced tiers with auto-detection
     type: loader
@@ -165,11 +167,27 @@ components:
       - maestro
       - learning
       - session
+    components:
+      - '#activity-metrics'
   agent-state:
     description: Per-project + global state tracking for agent continuity. Tracks last session summary, pending work, decisions, patterns, and career stats across sessions.
-    file: packages/paradigm-mcp/src/utils/agent-state.ts
+    type: service
     flows:
       - $agent-learning-loop
     signals:
       - '!agent-state-recorded'
+    file: packages/paradigm-mcp/src/utils/agent-state.ts
+  gap-narrator:
+    description: Human-readable narration engine for enforcement check gaps. Produces explanations and fix instructions for 13 check types (missing-purpose, missing-gates, aspect-drift, stale-purpose, unregistered-symbol, unregistered-event, missing-flow, uncovered-endpoint, uncovered-gate, uncovered-flow, undocumented-aspect, missing-tests, missing-lore). Used by doctor --explain and postflight report generation.
+    type: engine
+    file: gap-narrator.ts
+  activity-metrics:
+    description: 'Proxy metrics tracking for session activity. Records tool call count, payload size, and session duration per agent. No dollar figures or token counts. Types: ActivityMetric, SessionActivitySummary. Functions: recordActivityMetric(), getSessionActivitySummary(), clearActivityMetrics().'
     type: service
+    components:
+      - '#session-work-log'
+  soft-provenance:
+    description: Optional parentId and lineageType fields on NotebookEntry for tracking derivation chains without DAG validation. Enables notebook promotion lineage tracking (promoted-from-lore, derived-from-notebook, manual-input). Used by paradigm_notebook_add tool and prepareForPublish() ringfencing.
+    type: service
+    components:
+      - '#notebook-loader'

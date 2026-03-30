@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.32.0] — 2026-03-30
+
+### Added
+
+- **Gap Narration Engine (P1)** — `gap-narrator.ts` with 13 human-readable narration templates, one per enforcement check type. Each template explains WHY a gap matters and HOW to fix it. Integrated into `paradigm doctor --explain` and postflight reports. NOT in stop hook (per team verdict: stop hook value is terseness).
+- **Activity Metrics (P2)** — `SessionActivitySummary` tracking tool call count, response payload size, and session duration per agent. Stored in session work log. No dollar figures, no token counts — proxy metrics only (per team verdict: MCP cannot see token counts, showing costs creates behavioral distortion).
+- **Soft Provenance (P3)** — Optional `parentId` and `lineageType` fields on `NotebookEntry` for tracking derivation chains (`fix`, `derive`, `capture`, `promote`). No DAG validation, no migration. `paradigm_notebook_add` accepts both fields.
+- **`prepareForPublish()` function** — Strips `parentId` and `lineageType` before external sharing. Only `public` shareability entries can be published; `team` and `private` return null.
+- **4 new `ContentCategory` values** — `gap_narrations`, `cost_data`, `health_status`, `execution_metrics` with `RING1_CONTENT_CATEGORIES` constant for project-locked enforcement.
+- **`notebook-publish` enforcement boundary** — Deny-by-default boundary for notebook content crossing trust rings. `enforce()` now has explicit handlers for both `notebook-promotion` and `notebook-publish` (previously fell through to allow-by-default).
+- **`shareability` field on `NotebookEntry`** — `'public' | 'team' | 'private'` controlling what publish boundaries an entry can cross. Defaults to `'team'`.
+
+### Fixed
+
+- **Symphony relay content filtering** — Ring 1 content categories now blocked on BOTH incoming messages AND outbox watcher (previously only incoming was filtered, outbound could leak project-locked data).
+- **`enforce()` allow-by-default for notebook boundaries** — `notebook-promotion` and `notebook-publish` now use deny-by-default with explicit ring checks instead of falling through to `allowed: true`.
+- **Incomplete `deny_content` lists** — Added all 4 new content categories to `learning_journal` and `team_decisions` stream deny lists in `DEFAULT_DATA_POLICY`.
+
+Symbols: #gap-narrator, #activity-metrics, #soft-provenance, #data-policy, #symphony, #notebook-loader, #session-work-log, #compliance-checker, #enforcement-hooks
+
 ## [5.31.0] — 2026-03-28
 
 ### Added

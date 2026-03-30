@@ -29,6 +29,8 @@ import {
   type SymphonyMessage,
 } from './symphony-loader.js';
 
+import { RING1_CONTENT_CATEGORIES } from '../types/data-policy.js';
+
 import {
   type AgentSummary,
   type PairingState,
@@ -543,6 +545,14 @@ export class SymphonyRelay {
     message: SymphonyMessage,
     origin: string,
   ): void {
+    // ── Content-type filtering: block Ring 1 project-locked categories ──
+    const contentType = (message as unknown as Record<string, unknown>).contentType as string | undefined;
+    if (contentType && RING1_CONTENT_CATEGORIES.includes(contentType as (typeof RING1_CONTENT_CATEGORIES)[number])) {
+      // Ack silently — the sender doesn't need to know why it was dropped
+      sendFrame(senderWs, { type: 'message_ack', messageId: message.id });
+      return;
+    }
+
     // ── Dedup ──
     if (this.seenMessageIds.has(message.id)) {
       sendFrame(senderWs, { type: 'message_ack', messageId: message.id });
@@ -662,6 +672,13 @@ export class SymphonyRelay {
           for (const msg of newMessages) {
             // Skip if already seen (prevents echo)
             if (this.seenMessageIds.has(msg.id)) continue;
+
+            // ── Outbox content-type filtering: block Ring 1 categories ──
+            const outboundContentType = (msg as unknown as Record<string, unknown>).contentType as string | undefined;
+            if (outboundContentType && RING1_CONTENT_CATEGORIES.includes(outboundContentType as (typeof RING1_CONTENT_CATEGORIES)[number])) {
+              continue; // Ring 1 content must never leave the project
+            }
+
             this.addToSeenIds(msg.id);
 
             const frame: RelayFrame = {

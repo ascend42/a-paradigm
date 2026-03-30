@@ -24,6 +24,8 @@ interface DoctorOptions {
   quiet?: boolean;
   rootDir?: string;
   context?: boolean;
+  /** When true, include human-readable gap narrations in the output */
+  explain?: boolean;
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
@@ -805,6 +807,42 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
       console.log(`${parts.join(', ')} found.\n`);
       console.log(chalk.gray('Run the suggested commands to fix issues.\n'));
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Gap narrations (--explain flag)
+  // ──────────────────────────────────────────────────────────────────────
+
+  if (!quiet && options.explain && !healthy) {
+    try {
+      const { narrateAllGaps } = await import('../../utils/gap-narrator.js');
+
+      // Map doctor results to gap-narrator CheckResults
+      const gapCheckResults = [];
+
+      for (const result of results) {
+        if (result.status === 'ok') continue;
+        // Map doctor check names to gap-narrator check types
+        if (result.name === '.purpose' || result.name.startsWith('Purpose-required')) {
+          gapCheckResults.push({ type: 'missing-purpose' as const, target: result.name, severity: 'improvement' as const });
+        } else if (result.name === '.paradigm/scan-index.json' && result.status === 'warn') {
+          gapCheckResults.push({ type: 'index-stale' as const, target: result.name, severity: 'improvement' as const });
+        } else if (result.name === 'Portal compliance') {
+          gapCheckResults.push({ type: 'portal-mismatch' as const, target: result.name, severity: (result.status === 'error' ? 'blocking' : 'improvement') as const });
+        } else if (result.name === 'Clarification markers') {
+          gapCheckResults.push({ type: 'missing-description' as const, target: result.name, severity: 'improvement' as const });
+        }
+      }
+
+      if (gapCheckResults.length > 0) {
+        const report = narrateAllGaps(gapCheckResults);
+        console.log(chalk.blue('\n  Gap Narrations (--explain)\n'));
+        console.log(chalk.gray(report.narrative));
+        console.log('');
+      }
+    } catch {
+      // Gap narrations are advisory — do not fail if narrator cannot load
     }
   }
 

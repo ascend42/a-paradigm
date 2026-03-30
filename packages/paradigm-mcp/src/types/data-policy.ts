@@ -55,7 +55,22 @@ export type ContentCategory =
   | 'file_contents'
   | 'diff_content'
   | 'implementation_details'
-  | 'architectural_decisions';
+  | 'architectural_decisions'
+  | 'gap_narrations'
+  | 'cost_data'
+  | 'health_status'
+  | 'execution_metrics';
+
+/**
+ * Content categories that are Ring 1 project-locked (must never leave the project).
+ * These categories contain internal compliance/diagnostic data that should not be relayed.
+ */
+export const RING1_CONTENT_CATEGORIES: ContentCategory[] = [
+  'gap_narrations',
+  'cost_data',
+  'health_status',
+  'execution_metrics',
+];
 
 export interface RedactionPattern {
   /** Regex pattern to match sensitive content */
@@ -194,7 +209,8 @@ export type EnforcementBoundary =
   | 'cross-project-transfer'
   | 'upstream-feedback'
   | 'network-aggregation'
-  | 'notebook-promotion';
+  | 'notebook-promotion'
+  | 'notebook-publish';
 
 export interface EnforcementResult {
   /** The boundary where enforcement occurred */
@@ -249,12 +265,12 @@ export const DEFAULT_DATA_POLICY: DataPolicy = {
     work_log: {
       ring: 'project-locked',
       allow_content: ['file_paths', 'symbol_names', 'outcome'],
-      deny_content: ['code_snippets', 'file_contents', 'diff_content'],
+      deny_content: ['code_snippets', 'file_contents', 'diff_content', 'gap_narrations'],
     },
     learning_journal: {
       ring: 'user-scoped',
       allow_content: ['pattern_descriptions', 'confidence_adjustments', 'approach_descriptions'],
-      deny_content: ['code_snippets', 'file_contents', 'symbol_names_with_context'],
+      deny_content: ['code_snippets', 'file_contents', 'symbol_names_with_context', 'gap_narrations', 'cost_data', 'health_status', 'execution_metrics'],
       redaction: [
         { pattern: '\\b[A-Z_]{2,}_KEY\\b' },
         { pattern: 'password|secret|token' },
@@ -263,7 +279,7 @@ export const DEFAULT_DATA_POLICY: DataPolicy = {
     team_decisions: {
       ring: 'project-locked',
       allow_content: ['rationale', 'alternatives', 'symbol_references'],
-      deny_content: ['implementation_details'],
+      deny_content: ['implementation_details', 'gap_narrations', 'cost_data', 'health_status', 'execution_metrics'],
     },
   },
   upstream: {

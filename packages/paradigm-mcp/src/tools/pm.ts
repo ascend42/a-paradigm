@@ -25,6 +25,7 @@ import {
 import { getComplianceRate } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
 import { execSync } from 'child_process';
+import { narrateAllGaps, type CheckResult as GapCheckResult } from '../utils/gap-narrator.js';
 
 // ============================================================================
 // Constants
@@ -588,6 +589,27 @@ function runPostflightCheck(
     // Habits are optional
   }
 
+  // 7. Gap narrations — map violations to human-readable explanations
+  const gapCheckResults: GapCheckResult[] = violations.map(v => {
+    const typeMap: Record<string, GapCheckResult['type']> = {
+      'missing-purpose': 'missing-purpose',
+      'missing-portal-gate': 'missing-gate',
+      'unregistered-symbol': 'missing-purpose',
+      'uncaptured-wisdom': 'missing-description',
+      'stale-aspect': 'aspect-drift',
+      'broken-reference': 'broken-reference',
+    };
+    return {
+      type: typeMap[v.type] ?? 'missing-description',
+      target: v.file || v.message.slice(0, 80),
+      severity: v.severity === 'error' ? 'blocking' : 'improvement',
+    };
+  });
+
+  const narrationReport = gapCheckResults.length > 0
+    ? narrateAllGaps(gapCheckResults)
+    : null;
+
   return {
     status,
     violations,
@@ -599,5 +621,6 @@ function runPostflightCheck(
     },
     blocksCompletion: errors > 0,
     habitsEvaluation,
+    ...(narrationReport ? { narrations: narrationReport } : {}),
   };
 }

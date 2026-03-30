@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
+const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -37,6 +38,37 @@ export interface SessionWorkEntry {
   // Decisions
   decisionTitle?: string;
   decisionRationale?: string;
+}
+
+/**
+ * Activity metric snapshot — proxy metrics for understanding session scope.
+ * No dollar figures, no token counts — these measure behavioral proxies only.
+ */
+export interface ActivityMetric {
+  timestamp: string;
+  type: 'activity';
+  /** Number of tool calls made */
+  toolCallCount?: number;
+  /** Approximate payload size in bytes (for relative comparison, not billing) */
+  responsePayloadBytes?: number;
+  /** Session duration in milliseconds */
+  sessionDurationMs?: number;
+  /** Agent ID this metric belongs to (optional — for per-agent breakdown) */
+  agentId?: string;
+}
+
+/**
+ * Aggregated summary of session activity across all agents.
+ */
+export interface SessionActivitySummary {
+  /** Total number of tool calls this session */
+  toolCallCount: number;
+  /** Total approximate payload bytes (proxy metric — not billing data) */
+  responsePayloadBytes: number;
+  /** Total session duration in milliseconds */
+  sessionDurationMs: number;
+  /** Per-agent breakdown */
+  agentBreakdown: Record<string, { toolCalls: number; payloadBytes: number }>;
 }
 
 // ── Append ───────────────────────────────────────────────────────────
@@ -184,4 +216,111 @@ export function getAgentVerdicts(rootDir: string, agentId: string): Array<{
   }
 
   return pairs;
+}
+
+// ── Activity Metrics ─────────────────────────────────────────────────
+
+/**
+ * Record an activity metric for the current session.
+ * Stored in a separate metrics file alongside the session log.
+ * Non-fatal — failure is silently ignored.
+ *
+ * NOTE: No dollar figures, no token counts. These are proxy metrics
+ * for understanding session scope (how much work was done), not billing.
+ */
+export function recordActivityMetric(rootDir: string, metric: Omit<ActivityMetric, 'timestamp' | 'type'>): void {
+  try {
+    const filePath = path.join(rootDir, SESSION_METRICS_FILE);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const entry: ActivityMetric = {
+      timestamp: new Date().toISOString(),
+      type: 'activity',
+      ...metric,
+    };
+
+    const line = JSON.stringify(entry) + '\n';
+    fs.appendFileSync(filePath, line, 'utf8');
+  } catch {
+    // Non-fatal — metrics are advisory
+  }
+}
+
+/**
+ * Read all activity metrics from the current session.
+ */
+function readActivityMetrics(rootDir: string): ActivityMetric[] {
+  try {
+    const filePath = path.join(rootDir, SESSION_METRICS_FILE);
+    if (!fs.existsSync(filePath)) return [];
+
+    return fs.readFileSync(filePath, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try { return JSON.parse(line) as ActivityMetric; }
+        catch { return null; }
+      })
+      .filter((e): e is ActivityMetric => e !== null && e.type === 'activity');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Aggregate all activity metrics into a session summary.
+ * Returns proxy metrics — not billing data.
+ */
+export function getSessionActivitySummary(rootDir: string): SessionActivitySummary {
+  const metrics = readActivityMetrics(rootDir);
+
+  const summary: SessionActivitySummary = {
+    toolCallCount: 0,
+    responsePayloadBytes: 0,
+    sessionDurationMs: 0,
+    agentBreakdown: {},
+  };
+
+  for (const metric of metrics) {
+    if (metric.toolCallCount != null) {
+      summary.toolCallCount += metric.toolCallCount;
+    }
+    if (metric.responsePayloadBytes != null) {
+      summary.responsePayloadBytes += metric.responsePayloadBytes;
+    }
+    if (metric.sessionDurationMs != null) {
+      // Take the max duration rather than summing (each metric may report elapsed time)
+      summary.sessionDurationMs = Math.max(summary.sessionDurationMs, metric.sessionDurationMs);
+    }
+
+    // Per-agent breakdown
+    if (metric.agentId) {
+      if (!summary.agentBreakdown[metric.agentId]) {
+        summary.agentBreakdown[metric.agentId] = { toolCalls: 0, payloadBytes: 0 };
+      }
+      const agentEntry = summary.agentBreakdown[metric.agentId];
+      if (metric.toolCallCount != null) agentEntry.toolCalls += metric.toolCallCount;
+      if (metric.responsePayloadBytes != null) agentEntry.payloadBytes += metric.responsePayloadBytes;
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Clear activity metrics. Called at session start alongside clearSessionWorkLog.
+ */
+export function clearActivityMetrics(rootDir: string): void {
+  try {
+    const filePath = path.join(rootDir, SESSION_METRICS_FILE);
+    if (fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '', 'utf8');
+    }
+  } catch {
+    // Non-fatal
+  }
 }

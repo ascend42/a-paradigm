@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-27T14:18:07.656Z'
+generated: '2026-03-30T20:23:21.299Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -469,7 +469,7 @@ protocols:
       - versioning
   - id: P-update-university-content
     name: Update University content
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:50.959Z'
     trigger:
       - update university
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 27
-  stale: 10
+  current: 26
+  stale: 11
   broken: 0

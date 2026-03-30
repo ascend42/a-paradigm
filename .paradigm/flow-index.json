@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-03-27T14:18:07.589Z",
+  "generatedAt": "2026-03-30T20:23:21.247Z",
   "flows": {
     "$plsat-exam-flow": {
       "id": "$plsat-exam-flow",
@@ -125,6 +125,43 @@
       ],
       "definedIn": "packages/paradigm/src/core/.purpose"
     },
+    "$symbol-aggregation": {
+      "id": "$symbol-aggregation",
+      "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Find all .purpose files via glob",
+          "symbol": "#aggregator"
+        },
+        {
+          "id": "step-2",
+          "action": "Parse each file with yaml + Zod validation",
+          "symbol": "#source-loader"
+        },
+        {
+          "id": "step-3",
+          "action": "Extract components, gates, signals, flows, aspects",
+          "symbol": "#aggregator"
+        },
+        {
+          "id": "step-4",
+          "action": "Build searchable in-memory index",
+          "symbol": "#symbol-index"
+        },
+        {
+          "id": "step-5",
+          "action": "Resolve cross-file symbol references",
+          "symbol": "#reference-tracker"
+        },
+        {
+          "id": "step-6",
+          "action": "Build relationship graph",
+          "symbol": "#graph-builder"
+        }
+      ],
+      "definedIn": "packages/premise/core/.purpose"
+    },
     "$purpose-parsing": {
       "id": "$purpose-parsing",
       "description": "Parse a .purpose file from raw YAML into validated structured data",
@@ -183,43 +220,6 @@
         }
       ],
       "definedIn": "packages/portal/core/.purpose"
-    },
-    "$symbol-aggregation": {
-      "id": "$symbol-aggregation",
-      "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Find all .purpose files via glob",
-          "symbol": "#aggregator"
-        },
-        {
-          "id": "step-2",
-          "action": "Parse each file with yaml + Zod validation",
-          "symbol": "#source-loader"
-        },
-        {
-          "id": "step-3",
-          "action": "Extract components, gates, signals, flows, aspects",
-          "symbol": "#aggregator"
-        },
-        {
-          "id": "step-4",
-          "action": "Build searchable in-memory index",
-          "symbol": "#symbol-index"
-        },
-        {
-          "id": "step-5",
-          "action": "Resolve cross-file symbol references",
-          "symbol": "#reference-tracker"
-        },
-        {
-          "id": "step-6",
-          "action": "Build relationship graph",
-          "symbol": "#graph-builder"
-        }
-      ],
-      "definedIn": "packages/premise/core/.purpose"
     }
   },
   "symbolToFlows": {
@@ -271,6 +271,21 @@
     "#audit-logger": [
       "$agent-orchestration-flow"
     ],
+    "#aggregator": [
+      "$symbol-aggregation"
+    ],
+    "#source-loader": [
+      "$symbol-aggregation"
+    ],
+    "#symbol-index": [
+      "$symbol-aggregation"
+    ],
+    "#reference-tracker": [
+      "$symbol-aggregation"
+    ],
+    "#graph-builder": [
+      "$symbol-aggregation"
+    ],
     "#yaml-parser": [
       "$purpose-parsing",
       "$portal-validation-flow"
@@ -290,21 +305,6 @@
     ],
     "#topology-checker": [
       "$portal-validation-flow"
-    ],
-    "#aggregator": [
-      "$symbol-aggregation"
-    ],
-    "#source-loader": [
-      "$symbol-aggregation"
-    ],
-    "#symbol-index": [
-      "$symbol-aggregation"
-    ],
-    "#reference-tracker": [
-      "$symbol-aggregation"
-    ],
-    "#graph-builder": [
-      "$symbol-aggregation"
     ],
     "#task-classifier": [
       "$agent-orchestration-flow"
