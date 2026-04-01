@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
-import { loadProjectRoster } from '../utils/agent-loader.js';
+import { loadProjectRoster, isAgentActive } from '../utils/agent-loader.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
@@ -815,8 +815,8 @@ async function handleOrchestrateInline(
         if (!agentProfiles.has(agentStep.name)) {
           const profile = loadAgentProfile(ctx.rootDir, agentStep.name);
           if (profile) {
-            // Skip benched agents — Maestro does not consult them
-            if (profile.benched) continue;
+            // Skip agents not on this project's roster
+            if (!isAgentActive(agentStep.name, ctx.rootDir)) continue;
 
             // Load per-agent journal insights
             const journalInsights = loadJournalEntries(agentStep.name, {

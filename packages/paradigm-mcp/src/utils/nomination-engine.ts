@@ -24,7 +24,7 @@ import type {
 import type { AgentProfile, AgentAttention } from '../types/agents.js';
 import { emitEvent, scoreEventForAgent } from './event-stream.js';
 import { loadDataPolicy, canObservePath } from './data-policy-loader.js';
-import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile } from './agent-loader.js';
+import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile, isAgentActive } from './agent-loader.js';
 
 const EVENTS_DIR = '.paradigm/events';
 const NOMINATIONS_FILE = 'nominations.jsonl';
@@ -65,7 +65,7 @@ export function processEvent(
 
   for (const profile of profiles) {
     if (!profile.attention) continue;
-    if (profile.benched) continue; // Skip benched agents
+    if (!isAgentActive(profile.id, rootDir)) continue; // Skip agents not on roster
 
     // Data policy check: skip agents denied observation of this path
     if (event.path && !canObservePath(policy, event.path, profile.id)) {
@@ -788,7 +788,7 @@ export function getNeverlandMetrics(
 } {
   const profiles = loadAllAgentProfiles(rootDir);
   const agentMetrics = profiles
-    .filter(p => !p.benched)
+    .filter(p => isAgentActive(p.id, rootDir))
     .map(p => {
       const stats = getNominationStats(rootDir, p.id);
 

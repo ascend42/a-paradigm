@@ -44,6 +44,35 @@ interface AgentProfile {
 const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.paradigm', 'agents');
 const PROJECT_AGENTS_DIR = '.paradigm/agents';
 const AGENT_EXT = '.agent';
+const ROSTER_FILE = '.paradigm/roster.yaml';
+
+// ── Roster helpers (per-project active list) ──
+
+function loadRoster(rootDir: string): string[] | null {
+  const rosterPath = path.join(rootDir, ROSTER_FILE);
+  if (!fs.existsSync(rosterPath)) return null;
+  try {
+    const data = yaml.load(fs.readFileSync(rosterPath, 'utf8')) as { active?: string[] };
+    return data?.active ?? null;
+  } catch { return null; }
+}
+
+function saveRoster(rootDir: string, active: string[]): void {
+  const rosterPath = path.join(rootDir, ROSTER_FILE);
+  const dir = path.dirname(rosterPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const data = { version: '1.0', active: active.sort() };
+  fs.writeFileSync(rosterPath, yaml.dump(data, { lineWidth: -1, noRefs: true }), 'utf8');
+}
+
+function listAllGlobalAgentIds(): string[] {
+  if (!fs.existsSync(GLOBAL_AGENTS_DIR)) return [];
+  try {
+    return fs.readdirSync(GLOBAL_AGENTS_DIR)
+      .filter(f => f.endsWith(AGENT_EXT))
+      .map(f => f.replace(AGENT_EXT, ''));
+  } catch { return []; }
+}
 
 const DEFAULT_PERSONALITIES: Record<string, { style: string; risk: string; verbosity: string }> = {
   architect: { style: 'deliberate', risk: 'conservative', verbosity: 'detailed' },
@@ -438,13 +467,15 @@ export async function agentRosterCommand(options: { json?: boolean } = {}) {
     }
   }
 
-  const active = profiles.filter(p => !(p as any).benched);
-  const benched = profiles.filter(p => (p as any).benched);
+  // Use project roster to determine active vs benched (not global profile.benched)
+  const roster = loadRoster(cwd);
+  const active = roster ? profiles.filter(p => roster.includes(p.id)) : profiles;
+  const benched = roster ? profiles.filter(p => !roster.includes(p.id)) : [];
 
   if (options.json) {
     console.log(JSON.stringify({
-      active: active.map(rosterSummarize),
-      benched: benched.map(rosterSummarize),
+      active: active.map(p => rosterSummarize(p, false)),
+      benched: benched.map(p => rosterSummarize(p, true)),
     }, null, 2));
     tracker.success(`${active.length} active, ${benched.length} benched`);
     return;
@@ -489,13 +520,13 @@ function printRosterRow(p: AgentProfile, dimmed = false) {
   console.log(`      Top: ${topSymbol} | ${expertise.length} symbols${thresholdStr}`);
 }
 
-function rosterSummarize(p: AgentProfile) {
+function rosterSummarize(p: AgentProfile, isBenched = false) {
   const expertise = (p.expertise || []).sort((a, b) => b.confidence - a.confidence);
   return {
     id: p.id,
     role: p.role,
     nickname: (p as any).nickname,
-    benched: (p as any).benched || false,
+    benched: isBenched,
     expertiseCount: expertise.length,
     topExpertise: expertise.slice(0, 3).map(e => ({
       symbol: e.symbol,
@@ -520,13 +551,19 @@ export async function agentBenchCommand(id: string) {
     return;
   }
 
-  (profile as any).benched = true;
-  profile.updated = new Date().toISOString();
-  saveProfile(cwd, id, profile);
+  // Remove from project roster (per-project, not global)
+  let currentRoster = loadRoster(cwd);
+  if (currentRoster) {
+    currentRoster = currentRoster.filter(agentId => agentId !== profile.id);
+  } else {
+    // No roster yet — create one with all agents MINUS this one
+    currentRoster = listAllGlobalAgentIds().filter(agentId => agentId !== profile.id);
+  }
+  saveRoster(cwd, currentRoster);
 
-  console.log(chalk.yellow(`\n  ⏸ Agent "${id}" is now benched.`));
-  console.log(chalk.gray('  Maestro will skip this agent during orchestration.\n'));
-  tracker.success(`Benched ${id}`);
+  console.log(chalk.yellow(`\n  Agent "${profile.id}" removed from this project's roster.`));
+  console.log(chalk.gray('  Maestro will skip this agent during orchestration. Still available globally.\n'));
+  tracker.success(`Benched ${profile.id} (roster: ${currentRoster.length} active)`);
 }
 
 export async function agentActivateCommand(id: string) {
@@ -540,13 +577,22 @@ export async function agentActivateCommand(id: string) {
     return;
   }
 
-  (profile as any).benched = false;
-  profile.updated = new Date().toISOString();
-  saveProfile(cwd, id, profile);
+  // Add to project roster (per-project, not global)
+  let currentRoster = loadRoster(cwd);
+  if (currentRoster) {
+    if (!currentRoster.includes(profile.id)) {
+      currentRoster.push(profile.id);
+    }
+  } else {
+    // No roster yet — create one with all agents PLUS this one
+    const allAgents = listAllGlobalAgentIds();
+    currentRoster = allAgents.includes(profile.id) ? allAgents : [...allAgents, profile.id];
+  }
+  saveRoster(cwd, currentRoster);
 
-  console.log(chalk.green(`\n  ▶ Agent "${id}" is now active.`));
-  console.log(chalk.gray('  Maestro will include this agent in orchestration.\n'));
-  tracker.success(`Activated ${id}`);
+  console.log(chalk.green(`\n  ▶ Agent "${profile.id}" added to this project's roster.`));
+  console.log(chalk.gray('  Maestro will include this agent in orchestration. Roster is per-project.\n'));
+  tracker.success(`Activated ${profile.id} (roster: ${currentRoster.length} active)`);
 }
 
 // ============================================================================

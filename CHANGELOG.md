@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.35.1] — 2026-04-01
+
+### Fixed
+
+- **Agent benching is now per-project, not global** — Previously `paradigm_agent_bench` set `benched: true` on the global `~/.paradigm/agents/*.agent` file, disabling the agent across ALL projects. Now bench/activate modify the project's `.paradigm/roster.yaml` instead. Agents not on the roster are skipped by orchestration and nomination for that project only. Other projects are unaffected.
+- **Orchestration uses roster for agent filtering** — `orchestration.ts` no longer checks `profile.benched`. Uses `loadProjectRoster()` to determine which agents are active per project. If no roster exists, all agents are available (backward compatible).
+- **Nomination engine uses roster for agent filtering** — `nomination-engine.ts` now calls `isAgentActive(id, rootDir)` instead of checking `profile.benched`.
+- **`paradigm_agent_activate` uses roster** — Previously wrote `benched: false` to the global `.agent` file. Now adds the agent to the project roster.
+- **Stripped `benched: true` from all global .agent files** — The `benched` field on global profiles is now deprecated. Activation is controlled entirely by per-project rosters.
+
+Symbols: #agent-roster, #orchestration, #nomination-engine, #agent-loader
+
 ## [5.35.0] — 2026-04-01
 
 ### Changed
