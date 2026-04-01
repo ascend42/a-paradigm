@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.35.0] — 2026-04-01
+
+### Changed
+
+- **Analyst agent (Sage) reworked to general-purpose data savant** — Broadened from product-metrics specialist to a number-crunching generalist that handles any dataset: financial, operational, market, product, and client reporting. New behaviors: `financial-analysis` (P&L, unit economics, cash flow, forecasting), `operational-reporting` (throughput, SLA, bottleneck identification, capacity planning), `report-generation` (structured reports adapted to audience depth), `anomaly-detection` (statistical outliers, trend breaks, correlation shifts). All existing depth retained (SQL, A/B testing, dashboards, cohorts, tracking plans). Unbenched.
+- **Analyst added to roster suggestions** — Now auto-rostered for `saas-web-app`, `backend-api`, and `python-project` project types.
+
+Symbols: #analyst, #agent-roster
+
 ## [5.34.0] — 2026-03-31
 
 ### Added

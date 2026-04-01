@@ -73,7 +73,7 @@ export const ROSTER_SUGGESTIONS: Record<ProjectType, string[]> = {
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
     'designer', 'copywriter', 'performance', 'devops', 'dba', 'e2e',
     'dx', 'seo', 'pm', 'product', 'sales', 'legal', 'a11y', 'qa',
-    'debugger', 'release', 'narrator',
+    'debugger', 'release', 'narrator', 'analyst',
   ],
   'web-app': [
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
@@ -82,7 +82,7 @@ export const ROSTER_SUGGESTIONS: Record<ProjectType, string[]> = {
   ],
   'backend-api': [
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
-    'devops', 'dba', 'performance', 'dx', 'qa', 'debugger', 'release',
+    'devops', 'dba', 'performance', 'dx', 'qa', 'debugger', 'release', 'analyst',
   ],
   'ios-app': [
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
@@ -106,7 +106,7 @@ export const ROSTER_SUGGESTIONS: Record<ProjectType, string[]> = {
   ],
   'python-project': [
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
-    'performance', 'debugger', 'qa',
+    'performance', 'debugger', 'qa', 'analyst',
   ],
   'generic': [
     'advocate', 'architect', 'builder', 'compliance', 'reviewer', 'tester', 'security', 'documentor',
