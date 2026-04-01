@@ -9,9 +9,9 @@ components:
     type: command-group
     tags: [feature, agent-identity, permissions, cli]
   AdoptionCRUD:
-    description: "CRUD for .paradigm/adoptions.yaml — load, save, add, remove adoption records. Handles kebab/camelCase normalization and roster migration."
+    description: "CRUD for .paradigm/adoptions.yaml — load, save, add, remove adoption records. Handles kebab/camelCase normalization, roster migration, and SHA-256 integrity hashing for tamper detection."
     type: module
-    tags: [feature, agent-adoption, cli]
+    tags: [feature, agent-adoption, cli, security]
   AdoptionRendering:
     description: "Terminal rendering for adoption ceremony UX — marketplace install cards (renderAdoptionCard) and shift batch summary (renderBatchSummary)."
     type: module

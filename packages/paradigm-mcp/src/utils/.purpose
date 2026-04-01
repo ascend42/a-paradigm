@@ -42,12 +42,13 @@ components:
       - symphony
       - networking
   agent-loader:
-    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification
+    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade
     type: loader
     tags:
       - feature
       - agent-identity
       - permissions
+      - security
   notebook-loader:
     description: CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count
     type: loader

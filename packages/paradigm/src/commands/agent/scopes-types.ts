@@ -67,6 +67,10 @@ export interface AdoptionsFile {
   adoptedAt: string;
   projectType: string;
   agents: Record<string, AdoptionRecord>;
+  /** Whether the integrity hash was verified on load */
+  verified?: boolean;
+  /** SHA-256 hash of the agents record for tamper detection */
+  integrityHash?: string;
 }
 
 // ============================================================================

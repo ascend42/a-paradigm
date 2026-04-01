@@ -10,6 +10,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from '../../utils/logger.js';
@@ -22,6 +23,24 @@ import type {
 
 const ADOPTIONS_FILE = '.paradigm/adoptions.yaml';
 const ROSTER_FILE = '.paradigm/roster.yaml';
+
+// ============================================================================
+// Integrity Hashing
+// ============================================================================
+
+/**
+ * Compute a SHA-256 hash of the agents record for tamper detection.
+ * Sorts keys for deterministic output.
+ */
+function computeAdoptionHash(agents: Record<string, AdoptionRecord>): string {
+  const sortedKeys = Object.keys(agents).sort();
+  const ordered: Record<string, AdoptionRecord> = {};
+  for (const key of sortedKeys) {
+    ordered[key] = agents[key];
+  }
+  const payload = JSON.stringify(ordered);
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
 
 // ============================================================================
 // CRUD Operations
@@ -39,11 +58,29 @@ export async function loadAdoptions(rootDir: string): Promise<AdoptionsFile | nu
     if (!data || typeof data !== 'object') return null;
 
     // Map kebab-case YAML keys to camelCase interface fields
+    const agents = normalizeAgents(data.agents as Record<string, unknown> | undefined);
+    const storedHash = (data['integrity-hash'] as string) || (data.integrityHash as string) || undefined;
+
+    // Verify integrity hash if present
+    let verified = true;
+    if (storedHash) {
+      const computedHash = computeAdoptionHash(agents);
+      if (computedHash !== storedHash) {
+        verified = false;
+        log.component('adoption').warn('Adoption integrity hash mismatch — adoptions.yaml may have been tampered with', {
+          expected: storedHash.slice(0, 12) + '...',
+          computed: computedHash.slice(0, 12) + '...',
+        });
+      }
+    }
+
     return {
       version: (data.version as string) || '1.0',
       adoptedAt: (data['adopted-at'] as string) || (data.adoptedAt as string) || '',
       projectType: (data['project-type'] as string) || (data.projectType as string) || '',
-      agents: normalizeAgents(data.agents as Record<string, unknown> | undefined),
+      agents,
+      verified,
+      integrityHash: storedHash,
     };
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
@@ -63,11 +100,15 @@ export async function saveAdoptions(rootDir: string, adoptions: AdoptionsFile): 
 
   await fs.mkdir(dir, { recursive: true });
 
+  // Compute integrity hash before serialization
+  const integrityHash = computeAdoptionHash(adoptions.agents);
+
   // Convert camelCase fields to kebab-case for YAML output
   const output: Record<string, unknown> = {
     version: adoptions.version,
     'adopted-at': adoptions.adoptedAt,
     'project-type': adoptions.projectType,
+    'integrity-hash': integrityHash,
     agents: denormalizeAgents(adoptions.agents),
   };
 
