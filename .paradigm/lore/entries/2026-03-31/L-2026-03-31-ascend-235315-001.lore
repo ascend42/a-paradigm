@@ -1,0 +1,133 @@
+id: L-2026-03-31-ascend-235315-001
+type: decision
+timestamp: '2026-03-31T23:53:15.526Z'
+duration_minutes: 90
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Agent Adoption Contracts, Scoped Permissions, Shift Guarantees — Team Design Complete
+summary: 'Full team analysis (Architect, Advocate, Jinx) across 3 rounds on two connected proposals: (1) extending Documentor to maintain university content, (2) per-project agent preferences on activation. Documentor extension reshaped into a broader agent adoption system with scoped permissions (EULA-style), guaranteed file creation in paradigm shift, and post-shift recommendations. Team unanimously approved for implementation with 3 conditions from Jinx.'
+symbols_touched:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+symbols_created:
+  - '#agent-scopes'
+  - '#agent-adoption'
+  - '#shift-recommendations'
+  - $agent-adoption-flow
+  - $agent-update-flow
+decisions:
+  - id: documentor-flag-only
+    decision: Documentor does NOT write university content. It flags stale content only. University writing is gated by agent-prefs, not hardcoded.
+    rationale: 'Jinx: Documentor runs at haiku (tier-3), educational content requires tier-2+. Haiku would produce .purpose rephrases disguised as notes — a knowledge pollution engine. Educator agent already exists at tier-2 with content design notebooks.'
+  - id: adoption-not-recurring-config
+    decision: Agent preferences are a one-time adoption ceremony (like hiring), not recurring configuration. EULA-style scope approval on version updates.
+    rationale: 'User framing: ''just like hiring a new team member you want to make sure even you understand what they are doing.'' One-time at project start or agent install. Updates show scoped diffs for quick approval.'
+  - id: scoped-permissions-model
+    decision: Agents declare scopes (read, write, tool, net, exec) in .agent files. 5-6 coarse categories, not fine-grained. Auto-approve when scopes unchanged on version bumps.
+    rationale: 'Jinx: fine-grained scopes become click-through fatigue within a month. Coarse scopes with batch approval and auto-approve for same-scope updates. Maps to OAuth model (Meta/Google ad networks).'
+  - id: shift-guaranteed-files
+    decision: paradigm shift guarantees 31 files/directories exist after completion. Creates skeletons for detected ecosystems only, not all possible agents.
+    rationale: 'User: ''certain files are just not always added whenever a project is initialized.'' Jinx: create only for detected ecosystems, use post-shift recommendations for optional ones. Never truly blank — pre-fill with role defaults + project-type-specific patterns.'
+  - id: post-shift-recommendations
+    decision: Shift outputs conditional, actionable recommendations (max 3-4 items) based on actual project state, replacing the current hardcoded 'Next steps' text.
+    rationale: 'Loid: conditional recommendations get read, static ones get ignored. Each item has a copy-paste command + one-line rationale. Mature projects show ''No recommendations — everything looks good.'''
+  - id: adoptions-yaml
+    decision: New .paradigm/adoptions.yaml unifies core roster and marketplace agent records. Tracks adoption date, source, defaults-accepted, overrides, and marketplace version/offerings.
+    rationale: 'Apex: unifies two currently separate flows (roster for core, install for marketplace) into one adoption model. The adoption record is the single source of truth for what agents a project uses and what the user agreed to.'
+  - id: pan-standard
+    decision: Agent contracts and scoped permissions become PAN (Paradigm Agent Norm) — the standard for any agent including Neverland marketplace agents.
+    rationale: 'User: ''this even feels like it is a PAN / project neverland agent system norm that should be standardized.'' All three agents agree marketplace agents need a common protocol for declaring capabilities and respecting project context.'
+  - id: ship-both-phases-together
+    decision: Contracts (transparency) and preferences (configuration) ship in one release, not phased.
+    rationale: 'User: ''let''s go big and then from user feedback we will adjust accordingly.'' Jinx agrees: both features modify the same surfaces (.agent schema, shift.ts, roster). One disruption is better than two separate migrations.'
+  - id: consider-identity-migration
+    decision: Consider landing three-layer identity model (id/nickname/archetype) in this release to avoid future migration debt for Neverland.
+    rationale: 'Jinx: ecosystem agents are a new archetype category. Shipping them on the current two-field identity (id+nickname) means another migration when nevr.land launches. Can accept the debt if scope is too large.'
+learnings:
+  - 'Three rounds of team analysis progressively refined the proposal: Round 1 debated Documentor extension (Jinx killed tier mismatch), Round 2 expanded to agent preferences (Jinx killed recurring config), Round 3 converged on adoption ceremonies with scoped permissions (all approved)'
+  - 'The user''s hiring analogy resolved the ''configuration hell'' concern: one-time adoption is fundamentally different from recurring preference prompts. The team''s initial framing of ''preferences'' was wrong — the user was describing ''informed hiring decisions'''
+  - Jinx's separation of transparency (understand what agents do) from configuration (change how they behave) was the key architectural insight — both are needed but serve different purposes
+  - 'Loid''s trust-not-payment axis for ceremony level was a breakthrough: a free unknown agent needs MORE ceremony than a paid verified one, because payment itself is a trust signal'
+  - The EULA/OAuth scopes model works for agent permissions when scopes are coarse (5-6 categories) and same-scope updates auto-approve. Fine-grained scopes would recreate the cookie-consent-banner problem
+  - 'Existing infrastructure supports more than the team initially assumed: AgentProjectContext.contexts already has per-project data, .paradigm/agents/ directory already supports project-level overrides, buildProfileEnrichment is the natural injection point'
+  - Shift's guaranteed-files gap is real — 16+ files that should exist after init are not consistently created, causing downstream tools to fail or return empty results
+tags:
+  - agent-adoption
+  - scoped-permissions
+  - pan-standard
+  - shift-guarantees
+  - team-design
+  - neverland
+  - architecture
+body: |-
+  ## Session Overview
+
+  Three-round team analysis that evolved from a narrow question (should Documentor maintain university content?) into a foundational agent adoption and permissions system.
+
+  ### Round 1: Documentor University Extension
+  - Apex: extend Documentor, two internal phases, 5-op cap
+  - Loid: extend, passes "competent coworker" test, but enforce quality bar — notes must add rationale/relationships, not restate .purpose
+  - Jinx: KILLED tier mismatch (haiku can't write educational content), proposed flag-only for Documentor + Educator for content creation
+  - Judge: approve with conditions (draft-based content, hardcode type:'note' constraint)
+
+  ### Round 2: Agent Project Preferences
+  - User proposed: agents should adapt to project preferences on activation, standardize as PAN
+  - Apex: full agent-prefs.yaml schema with defaults + per-archetype + marketplace custom sections, PAN spec with 7 requirements
+  - Loid: zero required config, progressive disclosure, phase it
+  - Jinx: KILLED per-agent preferences — configuration hell, social engineering vector, misdiagnosed problem. Counter-proposed project norms file
+  - Synthesis: two features hiding in one proposal (transparency vs configuration)
+
+  ### Round 3: Adoption Ceremony (User's Clarification)
+  - User reframed as hiring analogy: one-time adoption, not recurring config. EULA-style scope approval on updates.
+  - User: "paradigm shift should always create all core agent files"
+  - User: "ship both phases together, go big"
+  - Apex: full adoption pipeline spec — adoptions.yaml, shift adoption ceremony, scoped permissions, post-shift recommendations
+  - Loid: batch adopt for core (one prompt), individual for marketplace. Trust axis, not payment axis. Smart defaults not blank files.
+  - Jinx: BUILD with 3 conditions — coarse scopes, detected-ecosystems-only file creation, consider identity migration
+
+  ## Implementation Scope
+
+  ### New Files
+  - `packages/paradigm/src/commands/agent/scopes-types.ts`
+  - `packages/paradigm/src/commands/shift-files.ts` (GUARANTEED_FILES manifest)
+  - `packages/paradigm/src/commands/shift-recommendations.ts`
+  - `packages/paradigm/src/commands/agent/scopes.ts`
+  - `packages/paradigm/src/commands/agent/scopes-review.ts`
+
+  ### Modified Files
+  - `packages/paradigm/src/commands/shift.ts` — guaranteed files step, adoption ceremony, recommendations engine
+  - `packages/paradigm/src/commands/agent/index.ts` — scope handling
+  - `packages/paradigm/src/commands/agent/types.ts` — new options types
+  - `packages/paradigm/src/index.ts` — register new commands
+  - Agent `.agent` files — add `configurable` and `scopes` sections
+
+  ### New CLI Commands
+  - `paradigm agent review [id]` — review pending scope changes
+  - `paradigm agent approve <id>` — approve current scopes
+  - `paradigm agent deny <id>` — deny and revert
+  - `paradigm agent scopes <id>` — show approved scopes
+
+  ## PAN v1.0 Requirements (for Neverland)
+  1. DECLARE BEHAVIORS — agents must list configurable behaviors with types/defaults
+  2. RESPECT PROJECT PREFERENCES — read and apply agent-prefs.yaml
+  3. SURFACE CONFIGURATION — support `paradigm agent show <id> --prefs`
+  4. FALLBACK GRACEFULLY — missing preferences use declared defaults
+  5. NO UNDECLARED SIDE EFFECTS — configurable actions require explicit enablement
+  6. REPORT APPLIED PREFERENCES — one-line summary in orchestration output
+  7. MARKETPLACE COMPATIBILITY — nevr.land validates declared-behaviors on publish
+linked_lore:
+  - L-2026-03-30-ascend-204749-001
+  - L-2026-03-30-ascend-175732-001
+confidence: 0.88
+git_context:
+  ref: 6077a40bb880e2264bba69b7b55ec4327c3cc0ff
+  branch: main
+  dirty: true

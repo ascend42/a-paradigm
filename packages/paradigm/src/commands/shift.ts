@@ -10,6 +10,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
@@ -25,6 +26,105 @@ import { hooksInstallCommand } from './hooks/index.js';
 import { detectDiscipline } from '../core/discipline.js';
 import { detectProjectRole } from './workspace/index.js';
 import { detectProjectType, ROSTER_SUGGESTIONS } from '../core/project-type.js';
+import { ensureGuaranteedFiles } from './shift-files.js';
+import { getRecommendations, formatRecommendations } from './shift-recommendations.js';
+import {
+  loadAdoptions,
+  saveAdoptions,
+  migrateFromRoster,
+  createDefaultAdoptionsFile,
+  renderBatchSummary,
+} from './agent/adoption.js';
+import type { AdoptionsFile } from './agent/scopes-types.js';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * The 8 core agent IDs present in every Paradigm project.
+ * Agents in the roster but not in this set are classified as "ecosystem".
+ */
+const CORE_AGENT_IDS = new Set([
+  'architect',
+  'builder',
+  'reviewer',
+  'security',
+  'advocate',
+  'tester',
+  'compliance',
+  'documentor',
+]);
+
+/**
+ * Fallback metadata for core agents when .agent profiles are unavailable.
+ * Maps agent ID → { nickname, role }.
+ */
+const CORE_AGENT_META: Record<string, { nickname: string; role: string }> = {
+  architect: { nickname: 'Apex', role: 'System design, specifications' },
+  builder: { nickname: 'Kit', role: 'Implementation, tests' },
+  reviewer: { nickname: 'Judge', role: 'Code quality, compliance' },
+  security: { nickname: 'Aegis', role: 'Auth flows, vulnerability scanning' },
+  advocate: { nickname: 'Jinx', role: 'Stress testing, edge cases' },
+  tester: { nickname: 'Probe', role: 'Unit and integration tests' },
+  compliance: { nickname: 'Rune', role: 'Symbol compliance enforcement' },
+  documentor: { nickname: 'Scribe', role: '.purpose, portal.yaml maintenance' },
+};
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Build the agent summaries array for renderBatchSummary from an AdoptionsFile.
+ * Loads .agent profiles from ~/.paradigm/agents/ when available for nickname/role,
+ * falls back to CORE_AGENT_META or generic values.
+ */
+function buildAgentSummaries(
+  adoptions: AdoptionsFile,
+): Array<{ id: string; nickname?: string; role: string; source: 'core' | 'ecosystem' }> {
+  const summaries: Array<{ id: string; nickname?: string; role: string; source: 'core' | 'ecosystem' }> = [];
+  const globalAgentsDir = path.join(os.homedir(), '.paradigm', 'agents');
+
+  for (const [agentId, record] of Object.entries(adoptions.agents)) {
+    let nickname: string | undefined;
+    let role = agentId;
+
+    // Try loading from .agent profile
+    const agentFile = path.join(globalAgentsDir, `${agentId}.agent`);
+    if (fs.existsSync(agentFile)) {
+      try {
+        const content = fs.readFileSync(agentFile, 'utf8');
+        const profile = yaml.load(content) as { nickname?: string; role?: string };
+        if (profile?.nickname) nickname = profile.nickname;
+        if (profile?.role) role = profile.role;
+      } catch {
+        // Fall through to fallback
+      }
+    }
+
+    // Fallback to known core agent metadata
+    if (!nickname && CORE_AGENT_META[agentId]) {
+      nickname = CORE_AGENT_META[agentId].nickname;
+      role = CORE_AGENT_META[agentId].role;
+    }
+
+    const source: 'core' | 'ecosystem' =
+      record.source === 'core' || record.source === 'ecosystem'
+        ? record.source
+        : CORE_AGENT_IDS.has(agentId)
+          ? 'core'
+          : 'ecosystem';
+
+    summaries.push({ id: agentId, nickname, role, source });
+  }
+
+  return summaries;
+}
+
+// ============================================================================
+// Main
+// ============================================================================
 
 export interface ShiftOptions {
   force?: boolean;
@@ -288,6 +388,58 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
+  // Step 2c-adopt: Adoption ceremony
+  {
+    const adoptionsPath = path.join(cwd, '.paradigm', 'adoptions.yaml');
+    const adoptionsExist = fs.existsSync(adoptionsPath);
+
+    try {
+      const projectType = detectProjectType(cwd);
+      let adoptions = adoptionsExist ? await loadAdoptions(cwd) : null;
+
+      // Treat an existing file with no agents the same as no file
+      const hasAgents = adoptions && Object.keys(adoptions.agents).length > 0;
+
+      if (!hasAgents && fs.existsSync(rosterPath)) {
+        // Roster exists without adoptions (or with empty adoptions) — migrate
+        adoptions = await migrateFromRoster(cwd);
+        await saveAdoptions(cwd, adoptions);
+        log.operation('shift').debug('Migrated roster to adoptions', {
+          count: Object.keys(adoptions.agents).length,
+        });
+      } else if (!hasAgents) {
+        // Fresh project with no roster yet — create default adoptions
+        // from the roster we just wrote above (if it exists)
+        adoptions = createDefaultAdoptionsFile(projectType);
+        const rosterContent = fs.existsSync(rosterPath)
+          ? yaml.load(fs.readFileSync(rosterPath, 'utf8')) as { active?: string[] }
+          : { active: [] };
+
+        const now = new Date().toISOString();
+        for (const agentId of rosterContent.active || []) {
+          adoptions.agents[agentId] = {
+            adopted: now,
+            source: CORE_AGENT_IDS.has(agentId) ? 'core' : 'ecosystem',
+            defaultsAccepted: true,
+          };
+        }
+        if (Object.keys(adoptions.agents).length > 0) {
+          await saveAdoptions(cwd, adoptions);
+        }
+      }
+
+      // Render the batch summary
+      if (adoptions && Object.keys(adoptions.agents).length > 0) {
+        const agentSummaries = buildAgentSummaries(adoptions);
+        const summary = renderBatchSummary(agentSummaries, projectType);
+        console.log(summary);
+        console.log(chalk.green(`  ✓ ${Object.keys(adoptions.agents).length} agents adopted`));
+      }
+    } catch (e) {
+      log.operation('shift').debug('Adoption ceremony failed', { error: (e as Error).message });
+    }
+  }
+
   // Step 2d: Model tier configuration
   {
     const configForTiers = path.join(paradigmDir, 'config.yaml');
@@ -330,6 +482,17 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       }
     } catch (e) {
       log.operation('shift').debug('Enforcement config setup failed', { error: (e as Error).message });
+    }
+  }
+
+  // Step 2f: Guaranteed files
+  {
+    spinner.start('Ensuring core files...');
+    try {
+      const { created, existed } = await ensureGuaranteedFiles(cwd);
+      spinner.succeed(chalk.green(`Core files ensured: ${chalk.cyan(String(created.length))} created, ${chalk.cyan(String(existed.length))} already existed`));
+    } catch (e) {
+      spinner.warn(chalk.yellow(`Guaranteed files warning: ${(e as Error).message}`));
     }
   }
 
@@ -500,6 +663,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     { path: '.paradigm/config.yaml', desc: 'Project configuration' },
     { path: '.paradigm/navigator.yaml', desc: 'Symbol navigation map' },
     { path: '.paradigm/agents.yaml', desc: 'Team agent configuration' },
+    { path: '.paradigm/adoptions.yaml', desc: 'Agent adoption records' },
     { path: '.purpose', desc: 'Root feature definitions' },
     { path: '.paradigm/lore/', desc: 'Project lore timeline', isDir: true },
     { path: 'portal.yaml', desc: 'Authorization gates' },
@@ -535,29 +699,23 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     }
   }
 
-  console.log('');
-  console.log(chalk.white('  AI agents will now:'));
-  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
-  console.log(chalk.cyan('  • ') + chalk.white('Use MCP tools for navigation (paradigm_search, etc.)'));
-  console.log(chalk.cyan('  • ') + chalk.white('Check .purpose files before modifying features'));
-  console.log(chalk.cyan('  • ') + chalk.white('Update Paradigm files when making structural changes'));
-  console.log(chalk.cyan('  • ') + chalk.white('Follow antipatterns and team preferences'));
-  console.log(chalk.cyan('  • ') + chalk.white('Record lore entries to capture work history'));
-  console.log('');
-
-  console.log(chalk.white('  Next steps:'));
-  console.log(chalk.gray('  ─────────────────────────────────────────────────'));
-
-  // Show workspace-specific next steps if configured
-  let nextStep = 1;
-  if (options.workspace) {
-    console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Run ') + chalk.cyan(`paradigm shift --workspace "${options.workspace}"`) + chalk.gray(' in sibling projects'));
+  // Post-shift recommendations
+  try {
+    const recs = await getRecommendations(cwd);
+    const recsOutput = formatRecommendations(recs);
+    if (recsOutput) {
+      console.log(recsOutput);
+    }
+  } catch (e) {
+    log.operation('shift').debug('Recommendations engine failed', { error: (e as Error).message });
+    // Fallback: show minimal next steps if recommendations engine fails
+    console.log('');
+    console.log(chalk.white('  Next steps:'));
+    console.log(chalk.gray('  ' + '\u2500'.repeat(49)));
+    console.log(chalk.white('  1. ') + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
+    console.log(chalk.white('  2. ') + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
+    console.log('');
   }
-
-  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Edit ') + chalk.cyan('.purpose') + chalk.gray(' to define your features'));
-  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Add ') + chalk.cyan('.purpose') + chalk.gray(' files to feature directories'));
-  console.log(chalk.white(`  ${nextStep++}. `) + chalk.gray('Run ') + chalk.cyan('paradigm shift --verify') + chalk.gray(' to check health'));
-  console.log('');
 
   tracker.success('Paradigm shift complete', { project: projectName });
 }

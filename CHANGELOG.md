@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.34.0] — 2026-03-31
+
+### Added
+
+- **Agent Adoption Contracts** — New `.paradigm/adoptions.yaml` as single source of truth for adopted agents. Records adoption date, source (core/ecosystem/marketplace), defaults accepted, user overrides, and scope approval status. Unified model for core roster agents and future Neverland marketplace agents.
+- **Scoped Permissions (PAN-2)** — Agents declare capabilities as typed scopes (`read:`, `write:`, `tool:`, `net:`, `exec:`) in `.agent` profiles. 5 coarse categories with human-readable descriptions. `dangerous` scopes list for runtime confirmation. All 55 agent profiles updated with role-appropriate scopes.
+- **Agent Configurable Behaviors (PAN-1)** — `configurable` section in `.agent` profiles declares per-agent behavioral options with types, defaults, and descriptions. Users override via adoption records. All 55 agent profiles updated with 1-3 configurable options each (e.g., builder: `run-tests-before-handoff`, documentor: `write-university-notes`, security: `vulnerability-threshold`).
+- **Shift Guaranteed Files** — `paradigm shift` now ensures 36 core files/directories exist after completion. Skeletal YAML and empty JSONL files created idempotently via `GUARANTEED_FILES` manifest. Includes event streams, history, lore, wisdom, notebooks, university, and protocol indexes.
+- **Post-Shift Recommendations** — Replaces hardcoded "Next steps" with a conditional recommendation engine. 9 checks against actual project state (empty .purpose, missing sub-purposes, empty portal, pending scope reviews, etc.). Max 4 action items + informational items. Each with copy-paste command.
+- **Scope Approval Flow** — `paradigm agent review [id]`, `paradigm agent approve <id>`, `paradigm agent deny <id>`, `paradigm agent scopes <id>` CLI commands. Diff-style scope display showing `[new]`, `[kept]`, `[removed]`, `[expanded]`. Auto-approve when scope IDs unchanged. Non-interactive fallback writes to `.pending-scope-reviews`.
+- **Adoption Ceremony in Shift** — `paradigm shift` now includes an adoption step after roster setup. Migrates existing rosters to adoption records. Shows batch summary of core + detected ecosystem agents. Auto-accepts defaults in non-interactive mode.
+- **`scopes` and `configurable` on AgentProfile** — MCP `AgentProfile` type extended with optional `scopes` (permissions array + dangerous list) and `configurable` (typed option declarations) fields.
+- **Agent Adoption Spec** — Full specification at `docs/specs/agent-adoption.md` covering scoped permissions, adoption ceremony UX, PAN v1.0 standard (7 requirements), shift guarantees, and post-shift recommendations.
+
+Symbols: #agent-adoption, #agent-scopes, #shift, #shift-recommendations, $agent-adoption-flow, $agent-update-flow, #agent-identity
+
 ## [5.33.0] — 2026-03-30
 
 ### Added

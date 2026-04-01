@@ -2481,6 +2481,42 @@ agentCmd
     await agentActivateCommand(id);
   });
 
+agentCmd
+  .command('review [id]')
+  .description('Review pending scope changes for agents')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentReviewCommand } = await import('./commands/agent/scopes-commands.js');
+    await agentReviewCommand(id, options);
+  });
+
+agentCmd
+  .command('approve <id>')
+  .description('Quick-approve an agent\'s pending scope changes')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentApproveCommand } = await import('./commands/agent/scopes-commands.js');
+    await agentApproveCommand(id, options);
+  });
+
+agentCmd
+  .command('deny <id>')
+  .description('Deny an agent\'s pending scope changes')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentDenyCommand } = await import('./commands/agent/scopes-commands.js');
+    await agentDenyCommand(id, options);
+  });
+
+agentCmd
+  .command('scopes <id>')
+  .description('Display an agent\'s current approved scopes')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { agentScopesCommand } = await import('./commands/agent/scopes-commands.js');
+    await agentScopesCommand(id, options);
+  });
+
 // Default agent action (list)
 agentCmd
   .action(async () => {

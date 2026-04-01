@@ -61,6 +61,24 @@ export interface AgentProfile {
 
   /** PAN agent network configuration — links Paradigm identity to PAN agent */
   network?: AgentNetwork;
+
+  // ── Adoption Contract Extensions ──
+
+  /** Scoped permissions declared by this agent (PAN-2) */
+  scopes?: {
+    version: string;
+    approved?: string;
+    permissions: Array<{ id: string; description: string }>;
+    dangerous?: string[];
+  };
+
+  /** Configurable behaviors with types, defaults, and descriptions (PAN-1) */
+  configurable?: Record<string, {
+    type: 'boolean' | 'string' | 'number' | 'enum';
+    default: unknown;
+    description: string;
+    values?: string[];
+  }>;
 }
 
 export interface AgentNetwork {
