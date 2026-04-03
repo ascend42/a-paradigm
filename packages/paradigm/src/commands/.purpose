@@ -54,3 +54,10 @@ components:
     description: 'Global binary install for Conductor. --install copies native binary to ~/.paradigm/conductor/bin/. Three-tier resolution: installed → monorepo dev → error.'
     file: packages/paradigm/src/commands/conductor.ts
     type: command
+  UtilNamespace:
+    description: 'paradigm util — utility command namespace grouping beacon, constellation, echo, sync-llms, thread, and probe under a single namespace. Top-level registrations of those commands emit a deprecation notice to stderr.'
+    file: packages/paradigm/src/commands/util/index.ts
+    type: command-group
+    tags:
+      - feature
+      - util

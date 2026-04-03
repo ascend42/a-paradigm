@@ -5,6 +5,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'node:module';
+import { registerUtilCommands } from './commands/util/index.js';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
@@ -266,6 +267,7 @@ program
   .description('Generate llms.txt — LLM-readable project summary')
   .option('-o, --output <path>', 'Output path (default: ./llms.txt)')
   .action(async (options) => {
+    process.stderr.write('⚠ `paradigm sync-llms` has moved. Use `paradigm util sync-llms` instead.\n');
     const { syncLlmsCommand } = await import('./commands/sync-llms.js');
     await syncLlmsCommand(options);
   });
@@ -307,6 +309,7 @@ probeCmd
   .option('-o, --output <path>', 'Output path for probe-index.json')
   .option('-q, --quiet', 'Suppress output')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm probe` has moved. Use `paradigm util probe` instead.\n');
     const { indexCommand } = await import('./commands/probe/index.js');
     await indexCommand(path, options);
   });
@@ -824,6 +827,7 @@ program
   .option('-o, --output <path>', 'Custom output path')
   .option('-q, --quiet', 'Suppress output')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm constellation` has moved. Use `paradigm util constellation` instead.\n');
     const { constellationCommand } = await import('./commands/constellation.js');
     await constellationCommand(path, options);
   });
@@ -837,6 +841,7 @@ program
   .option('--json', 'Output as JSON (for AI agent queries)')
   .option('-q, --quiet', 'Suppress output')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm beacon` has moved. Use `paradigm util beacon` instead.\n');
     const { beaconCommand } = await import('./commands/beacon.js');
     await beaconCommand(path, options);
   });
@@ -864,6 +869,7 @@ threadCmd
   .description('Show current thread')
   .option('--json', 'Output as JSON (for AI agent queries)')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadShowCommand } = await import('./commands/thread.js');
     await threadShowCommand(path, options);
   });
@@ -873,6 +879,7 @@ threadCmd
   .description('Save activity to the thread trail')
   .option('-q, --quiet', 'Suppress output')
   .action(async (message, path, options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadSaveCommand } = await import('./commands/thread.js');
     await threadSaveCommand(message, path, options);
   });
@@ -882,6 +889,7 @@ threadCmd
   .description('Add a loose end (unfinished task)')
   .option('-q, --quiet', 'Suppress output')
   .action(async (task, path, options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadTodoCommand } = await import('./commands/thread.js');
     await threadTodoCommand(task, path, options);
   });
@@ -891,6 +899,7 @@ threadCmd
   .description('Add a breadcrumb (note for next agent)')
   .option('-q, --quiet', 'Suppress output')
   .action(async (note, path, options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadNoteCommand } = await import('./commands/thread.js');
     await threadNoteCommand(note, path, options);
   });
@@ -900,6 +909,7 @@ threadCmd
   .description('Clear the thread')
   .option('-q, --quiet', 'Suppress output')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadClearCommand } = await import('./commands/thread.js');
     await threadClearCommand(path, options);
   });
@@ -908,6 +918,7 @@ threadCmd
 threadCmd
   .option('--json', 'Output as JSON (for AI agent queries)')
   .action(async (options) => {
+    process.stderr.write('⚠ `paradigm thread` is being consolidated. Use `paradigm util thread` instead.\n');
     const { threadShowCommand } = await import('./commands/thread.js');
     await threadShowCommand(undefined, options);
   });
@@ -923,6 +934,7 @@ echoCmd
   .description('Look up an error code')
   .option('--json', 'Output as JSON (for AI agent queries)')
   .action(async (errorCode, path, options) => {
+    process.stderr.write('⚠ `paradigm echo` has moved. Use `paradigm util echo` instead.\n');
     const { echoCommand } = await import('./commands/echo.js');
     await echoCommand(errorCode, path, options);
   });
@@ -932,6 +944,7 @@ echoCmd
   .description('Create .paradigm/echoes.yaml template')
   .option('-q, --quiet', 'Suppress output')
   .action(async (path, options) => {
+    process.stderr.write('⚠ `paradigm echo` has moved. Use `paradigm util echo` instead.\n');
     const { echoInitCommand } = await import('./commands/echo.js');
     await echoInitCommand(path, options);
   });
@@ -941,6 +954,7 @@ echoCmd
   .alias('ls')
   .description('List all error mappings')
   .action(async (path) => {
+    process.stderr.write('⚠ `paradigm echo` has moved. Use `paradigm util echo` instead.\n');
     const { echoListCommand } = await import('./commands/echo.js');
     await echoListCommand(path);
   });
@@ -950,6 +964,7 @@ echoCmd
   .argument('[errorCode]', 'Error code to look up')
   .option('--json', 'Output as JSON (for AI agent queries)')
   .action(async (errorCode, options) => {
+    process.stderr.write('⚠ `paradigm echo` has moved. Use `paradigm util echo` instead.\n');
     if (errorCode) {
       const { echoCommand } = await import('./commands/echo.js');
       await echoCommand(errorCode, undefined, options);
@@ -2583,6 +2598,9 @@ program
     const { complianceCheckCommand } = await import('./commands/compliance.js');
     await complianceCheckCommand(options);
   });
+
+// paradigm util — utility command namespace (canonical home for beacon, constellation, echo, sync-llms, thread, probe)
+registerUtilCommands(program);
 
 // Parse and run
 program.parse();

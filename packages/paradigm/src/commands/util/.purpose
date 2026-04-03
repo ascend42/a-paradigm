@@ -1,0 +1,9 @@
+version: 2.0.0
+description: Utility command namespace — groups beacon, constellation, echo, sync-llms, thread, and probe under `paradigm util`
+components:
+  util-namespace:
+    description: 'registerUtilCommands() attaches a `util` subcommand group to the root Commander program with 6 nested subcommands: beacon, constellation, echo, sync-llms, thread, probe. Action handlers delegate to the original command modules.'
+    type: command-group
+    tags:
+      - feature
+      - util

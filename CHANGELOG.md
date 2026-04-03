@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.3] — 2026-04-03
+
+### Changed
+
+- **`paradigm util` namespace** — Six standalone CLI commands (`beacon`, `constellation`, `echo`, `sync-llms`, `thread`, `probe`) are now grouped under `paradigm util <subcommand>`. The top-level aliases are preserved as deprecated shims that print a migration notice to stderr on use (not on `--help`). Reduces default help surface from ~70+ commands; the util group is a single entry.
+- **`#util-namespace` component** — New component registered at `packages/paradigm/src/commands/util/`. Uses Paradigm logger for activity tracking. All 6 subcommands use dynamic imports to avoid startup cost for non-invoked commands.
+
+Symbols: #util-namespace, #cli-surface
+
 ## [5.36.2] — 2026-04-03
 
 ### Changed
