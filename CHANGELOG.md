@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.1] — 2026-04-02
+
+### Changed
+
+- **Loid (Forge) consolidated as Agent Intelligence Officer** — Loid now owns the full agent lifecycle: strategic (designs agents, roster analysis, team composition) AND reactive (session learning after every orchestrated session). She is no longer a meta-agent who only activates on demand — she is Cid's partner in closing every session with learning, not just navigation.
+- **Loid's `session-learning` behavior** — After Cid's debrief, Loid receives `sessionInsights` and processes per-agent: what was accomplished, what patterns are notebook-worthy, what nominations are targeted enough to be actionable. Journal entry quality standard enforced: no file-path templates, only grounded insights that a future agent would actually use.
+- **Cid debrief produces `sessionInsights`** — `paradigm_captain_debrief` now parses `.paradigm/events/session-log.jsonl` to build per-agent contribution data, emits a `learningHandoff` block in its output, and passes `sessionInsights` to Loid's learning pass.
+- **Orchestration final step is now a three-step sequence** — (1) `paradigm_captain_debrief`, (2) `paradigm_ambient_learn_postflight` with `sessionInsights` (Loid's learning pass), (3) session complete. The session is not done until both Cid and Loid have run.
+- **Cid and Loid cross-reference each other** — Both agent files updated with explicit `pairs_well_with` entries describing the handoff: Cid closes navigation, Loid closes learning.
+
+Symbols: #cid, #forge, #orchestration, #session-learning, #ambient-learning
+
 ## [5.36.0] — 2026-04-02
 
 ### Added

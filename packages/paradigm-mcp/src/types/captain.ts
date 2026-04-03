@@ -70,6 +70,26 @@ export interface ContextBrief {
 // Debrief Report
 // ────────────────────────────────────────────────────────
 
+export interface SessionInsightsAgentContribution {
+  agentId: string;
+  contribution: string;
+  symbolsTouched: string[];
+  patternsObserved: string[];
+}
+
+export interface SessionInsights {
+  taskDescription: string;
+  orchestrationId: string;
+  agentContributions: SessionInsightsAgentContribution[];
+  coverageDelta: {
+    before: number;
+    after: number;
+  };
+  newSymbols: string[];
+  touchedFiles: string[];
+  notes: string;
+}
+
 export interface DebriefReport {
   coverageAdded: string[];
   delegatedToDocumentor: string[];
@@ -80,6 +100,7 @@ export interface DebriefReport {
     delta: number;
   };
   stopHookCleared: boolean;
+  sessionInsights: SessionInsights;
 }
 
 // ────────────────────────────────────────────────────────

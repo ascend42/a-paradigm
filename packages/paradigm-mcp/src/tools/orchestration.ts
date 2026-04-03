@@ -1070,18 +1070,36 @@ async function handleOrchestrateInline(
       'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
 
-    // Mandatory final step: Cid debrief closes the session
+    // Mandatory final steps: Cid debrief closes the session, Loid runs the learning pass
     finalStep: {
       mandatory: true,
-      description: 'After ALL agents complete, run paradigm_captain_debrief to close the session.',
-      tool: 'paradigm_captain_debrief',
-      args: {
-        orchestrationId: `${orchestrationId} (use the orchestrationId from this response)`,
-        sessionSummary: '(summarize what was accomplished)',
-        touchedFiles: '(list all files modified during this session)',
-        newSymbols: '(optional: list any new symbols registered)',
-      },
-      note: 'This closes the session, updates .purpose coverage, records lore, and clears the stop hook. The session is NOT complete until debrief runs.',
+      description: 'FINAL STEPS (mandatory, in order):',
+      steps: [
+        {
+          order: 1,
+          action: 'Call paradigm_captain_debrief',
+          args: {
+            orchestrationId: `${orchestrationId} (use the orchestrationId from this response)`,
+            sessionSummary: '(summarize what was accomplished)',
+            touchedFiles: '(list all files modified during this session)',
+            newSymbols: '(optional: list any new symbols registered)',
+          },
+        },
+        {
+          order: 2,
+          action: 'Take the sessionInsights from the debrief result and call paradigm_ambient_learn_postflight',
+          args: {
+            sessionId: `${orchestrationId} (use the orchestrationId from this response)`,
+            context: '(pass the sessionInsights object from the debrief result here)',
+          },
+          note: "This is Loid's learning pass — she processes what the crew learned and ensures it compounds.",
+        },
+        {
+          order: 3,
+          action: 'Session is complete.',
+        },
+      ],
+      note: 'Step 1 closes the session, updates .purpose coverage, records lore, and clears the stop hook. Step 2 runs Loid\'s learning pass on the session insights. Both steps are required — the session is NOT complete until both run.',
     },
 
     // Claude Code: Use Task tool for parallel agent spawning

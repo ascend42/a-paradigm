@@ -162,8 +162,24 @@ components:
       - learning
       - neverland
       - mcp
+  CaptainTools:
+    description: 2 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt) and paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid for the learning pass). Core-tier always loaded. Cid closes navigation; Loid closes learning.
+    type: tool-group
+    tags:
+      - core
+      - captain
+      - cid
+      - orchestration
+      - coverage
+      - session-learning
+      - mcp
+    signals:
+      - '!cid-brief-produced'
+      - '!cid-debrief-complete'
+      - '!coverage-stub-created'
+      - '!session-insights-ready'
   OrchestrationTools:
-    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage) and paradigm_agent_prompt (single agent with full context injection)
+    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection)
     type: tool-group
     tags:
       - feature

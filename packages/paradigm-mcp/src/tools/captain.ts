@@ -26,6 +26,8 @@ import type {
   ContextBriefSymbol,
   ContextBriefBlastRadius,
   DebriefReport,
+  SessionInsights,
+  SessionInsightsAgentContribution,
   CidSessionMarker,
   CidBriefedMarker,
 } from '../types/captain.js';
@@ -643,6 +645,95 @@ async function handleCaptainDebrief(
     // Marker write is non-fatal
   }
 
+  // ── Step 6: Build sessionInsights for Loid ──────────
+  const sessionInsights: SessionInsights = {
+    taskDescription: sessionSummary,
+    orchestrationId,
+    agentContributions: [] as SessionInsightsAgentContribution[],
+    coverageDelta: {
+      before: scoreBefore,
+      after: scoreAfter,
+    },
+    newSymbols: newSymbols,
+    touchedFiles: touchedFiles,
+    notes: notes || '',
+  };
+
+  // Parse the session work log for per-agent contributions (fault-tolerant)
+  try {
+    const sessionLogPath = path.join(paradigmDir, 'events', 'session-log.jsonl');
+    if (fs.existsSync(sessionLogPath)) {
+      const logContent = fs.readFileSync(sessionLogPath, 'utf8');
+      const lines = logContent.split('\n').filter(l => l.trim().length > 0);
+      // Take the last 50 lines to avoid processing unbounded history
+      const recentLines = lines.slice(-50);
+
+      const byAgent = new Map<string, {
+        contributions: string[];
+        symbolsTouched: Set<string>;
+        patternsObserved: string[];
+      }>();
+
+      for (const line of recentLines) {
+        try {
+          const entry = JSON.parse(line) as Record<string, unknown>;
+          const agentId = (entry.agentId || entry.agent || entry.role || '') as string;
+          if (!agentId) continue;
+
+          if (!byAgent.has(agentId)) {
+            byAgent.set(agentId, { contributions: [], symbolsTouched: new Set(), patternsObserved: [] });
+          }
+          const bucket = byAgent.get(agentId)!;
+
+          const action = (entry.action || entry.event || entry.message || '') as string;
+          if (action) bucket.contributions.push(String(action).slice(0, 120));
+
+          // Collect symbols mentioned in the log entry
+          if (Array.isArray(entry.symbols)) {
+            for (const sym of entry.symbols as string[]) {
+              bucket.symbolsTouched.add(String(sym));
+            }
+          }
+          const entrySymbol = (entry.symbol || '') as string;
+          if (entrySymbol) bucket.symbolsTouched.add(entrySymbol);
+
+          // Collect patterns if recorded
+          if (Array.isArray(entry.patterns)) {
+            for (const p of entry.patterns as string[]) {
+              if (!bucket.patternsObserved.includes(String(p))) {
+                bucket.patternsObserved.push(String(p));
+              }
+            }
+          }
+        } catch {
+          // Malformed log line — skip silently
+        }
+      }
+
+      // Convert grouped contributions into the sessionInsights array
+      for (const [agentId, data] of byAgent.entries()) {
+        sessionInsights.agentContributions.push({
+          agentId,
+          contribution: data.contributions.slice(-3).join(' | '),
+          symbolsTouched: Array.from(data.symbolsTouched).slice(0, 10),
+          patternsObserved: data.patternsObserved.slice(0, 5),
+        });
+      }
+    }
+  } catch {
+    // Session log parsing is non-fatal
+  }
+
+  // Fallback: if no contributions were parsed, create one from the session summary
+  if (sessionInsights.agentContributions.length === 0) {
+    sessionInsights.agentContributions.push({
+      agentId: 'session',
+      contribution: sessionSummary.slice(0, 200),
+      symbolsTouched: newSymbols.slice(0, 10),
+      patternsObserved: [],
+    });
+  }
+
   // ── Assemble debrief report ───────────────────────────
   const report: DebriefReport = {
     coverageAdded,
@@ -654,9 +745,22 @@ async function handleCaptainDebrief(
       delta: scoreAfter - scoreBefore,
     },
     stopHookCleared,
+    sessionInsights,
   };
 
-  const text = JSON.stringify(report, null, 2);
+  const learningHandoff = [
+    '',
+    '━━━ LEARNING HANDOFF (→ Loid) ━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    "Cid has prepared session insights for Loid's learning pass.",
+    'Call paradigm_ambient_learn_postflight with the sessionInsights',
+    'from this debrief to complete the session.',
+    '',
+    'sessionInsights available in: debrief.sessionInsights',
+  ].join('\n');
+
+  const reportJson = JSON.stringify(report, null, 2);
+  const text = reportJson + '\n' + learningHandoff;
   trackToolCall(text.length, 'paradigm_captain_debrief');
   return { handled: true, text };
 }
