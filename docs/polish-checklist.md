@@ -61,10 +61,10 @@
 - [x] Overview Section — Stats auto-refresh every 15s, skips when hidden
 - [x] Lore Section — DetailPanel decomposed (358→52 lines, 5 sub-components). Thread/search solid.
 - [~] Graph Section — Symbol visualization works. Auto-layout missing (nice-to-have).
-- [x] Canvas Section — Working. Hardcoded colors replaced with tokens.
+- [~] Canvas Section — Base Craft.js editor wired, hardcoded colors replaced with tokens. Paradigm symbol integration (symbol cards, flow path shapes, `.canvas` files, MCP tools) not yet built.
 - [x] Git Section — Solid. No issues found.
 - [x] Sentinel Section — Solid. Color maps replaced with CSS tokens (3 tabs).
-- [~] University Section — Still "Coming Soon" — no platform server API routes exist. Needs backend first.
+- [x] University Section — Complete. Platform component, store, and server API routes all built and wired.
 - [x] Symphony Section — Solid. Polling efficient with conditional tabs.
 - [x] Docs Section — Solid. Search + multi-type page rendering.
 - [x] Ambient Section — Using shared StatCard. SSE + polling. Visibility-aware.
@@ -92,7 +92,7 @@
 - [x] Course Content — 7 courses (PARA 101-701) accurate with v5.x. Scenario-based quizzes.
 - [x] PLSAT Certification — Complete. 99 questions, 90 minutes, 90% threshold (fixed this session).
 - [x] Quiz System — Multi-choice with explanations. Deep questions in PARA 701.
-- [~] University UI — Still "Coming Soon" in Platform. No platform server API routes exist. Needs backend.
+- [x] University UI — Complete. Platform section built (component, store, server routes all wired).
 - [x] Diploma Tracking — Completion and certification records working.
 
 ## 11. CLI
@@ -149,7 +149,7 @@
 **Polish sprint complete.** 18 sections assessed, 10 releases shipped (v5.12.0 → v5.21.0).
 
 **Remaining [~] items (minor, non-blocking):**
-- University UI needs platform server API routes before it can be wired into Platform
+- Canvas Paradigm integration not built (symbol cards, flow shapes, `.canvas` files, MCP tools)
 - CLI error messages could be more prescriptive (suggest fixes)
 - Multimodal input event prioritization unclear
 - Graph auto-layout is a nice-to-have

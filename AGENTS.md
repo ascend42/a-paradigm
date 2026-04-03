@@ -89,7 +89,7 @@ Paradigm provides MCP tools for token-efficient, always-fresh data. Prefer these
 | `paradigm_gates_for_route` | Suggest gates for an API endpoint | Adding API routes |
 | `paradigm_wisdom_context` | Team preferences and antipatterns | Before implementing |
 | `paradigm_history_fragility` | Stability warnings for symbols | Before modifying fragile areas |
-| `paradigm_flow_validate` | Validate flow definitions | Before/after implementing flows |
+| `paradigm_flow_check` | Validate flow definitions | Before/after implementing flows |
 | `paradigm_flows_affected` | Flows impacted by symbol changes | After modifying symbols |
 | `paradigm_test_fixtures` | Get test data for validation | Writing tests |
 | `paradigm_orchestrate_inline` | Multi-agent task planning | Complex tasks (3+ files) |
@@ -160,7 +160,7 @@ Before exploring this codebase:
 1. **Postflight**: Call `paradigm_pm_postflight` with modified files and symbols
    - Checks for missing .purpose files, unregistered routes, uncaptured wisdom
 2. **Reindex**: Call `paradigm_reindex` to rebuild static index files
-3. **Validate flows**: Call `paradigm_flow_validate` if you touched flow-related symbols
+3. **Validate flows**: Call `paradigm_flow_check` if you touched flow-related symbols
 
 ## Commit Messages
 

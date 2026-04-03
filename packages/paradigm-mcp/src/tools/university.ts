@@ -6,10 +6,7 @@
  * - paradigm_university_get: Fetch content item by ID (full body)
  * - paradigm_university_create: Create note/policy/quiz/path
  * - paradigm_university_update: Update existing content
- * - paradigm_university_quiz: Get quiz for taking (no answers)
- * - paradigm_university_submit: Submit quiz answers, grade, save diploma
  * - paradigm_university_onboard: Get recommended onboarding sequence
- * - paradigm_university_diplomas: List earned diplomas
  * - paradigm_university_validate: Validate content integrity
  */
 
@@ -19,11 +16,9 @@ import {
   loadNote,
   loadQuiz,
   loadPath,
-  loadDiplomas,
   saveNote,
   saveQuiz,
   savePath,
-  saveDiploma,
   rebuildUniversityIndex,
   validateUniversityContent,
   getOnboardingSequence,
@@ -33,7 +28,6 @@ import type {
   UniversityFrontmatter,
   UniversityQuiz,
   LearningPath,
-  Diploma,
   Difficulty,
 } from '../types/university.js';
 import { trackToolCall } from './context.js';
@@ -236,50 +230,6 @@ export function getUniversityToolsList() {
       },
     },
     {
-      name: 'paradigm_university_quiz',
-      description: 'Get a quiz for taking — returns questions WITHOUT answers. Use paradigm_university_submit to submit answers. ~200 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'string',
-            description: 'Quiz ID (e.g., "Q-onboarding-basics")',
-          },
-        },
-        required: ['id'],
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_submit',
-      description: 'Submit quiz answers for grading. Returns score and saves diploma if passed. ~150 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          quizId: {
-            type: 'string',
-            description: 'Quiz ID',
-          },
-          answers: {
-            type: 'object',
-            description: 'Map of question ID to answer key (e.g., {"q1": "B", "q2": "A"})',
-          },
-          student: {
-            type: 'string',
-            description: 'Student name (auto-resolved if omitted)',
-          },
-        },
-        required: ['quizId', 'answers'],
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-      },
-    },
-    {
       name: 'paradigm_university_onboard',
       description: 'Get recommended onboarding sequence for the project university. Shows learning paths, suggested content, and completion status. ~200 tokens.',
       inputSchema: {
@@ -288,28 +238,6 @@ export function getUniversityToolsList() {
           student: {
             type: 'string',
             description: 'Student name to check completion (auto-resolved if omitted)',
-          },
-        },
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_diplomas',
-      description: 'List earned diplomas (PLSAT, quiz completions, path completions). ~100 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          student: {
-            type: 'string',
-            description: 'Filter by student name',
-          },
-          type: {
-            type: 'string',
-            enum: ['plsat', 'quiz', 'path'],
-            description: 'Filter by diploma type',
           },
         },
       },
@@ -582,101 +510,6 @@ export async function handleUniversityTool(
     return { handled: true, text };
   }
 
-  // ── Quiz (for taking — no answers) ────────────────────
-  if (name === 'paradigm_university_quiz') {
-    const id = args.id as string;
-    const quiz = loadQuiz(ctx.rootDir, id);
-    if (!quiz) {
-      const text = JSON.stringify({ error: `Quiz "${id}" not found` });
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Strip answers
-    const sanitized = {
-      id: quiz.id,
-      title: quiz.title,
-      description: quiz.description,
-      difficulty: quiz.difficulty,
-      passThreshold: quiz.passThreshold,
-      questionCount: quiz.questions.length,
-      questions: quiz.questions.map(q => ({
-        id: q.id,
-        question: q.question,
-        choices: q.choices,
-      })),
-    };
-
-    const text = JSON.stringify(sanitized, null, 2);
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Submit quiz answers ────────────────────────────────
-  if (name === 'paradigm_university_submit') {
-    const quizId = args.quizId as string;
-    const answers = args.answers as Record<string, string>;
-    const student = (args.student as string) || resolveAuthor();
-
-    const quiz = loadQuiz(ctx.rootDir, quizId);
-    if (!quiz) {
-      const text = JSON.stringify({ error: `Quiz "${quizId}" not found` });
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Grade
-    let correct = 0;
-    const total = quiz.questions.length;
-    const feedback: Array<{ id: string; correct: boolean; expected?: string; explanation?: string }> = [];
-
-    for (const q of quiz.questions) {
-      const answer = answers[q.id];
-      const isCorrect = answer === q.correct;
-      if (isCorrect) correct++;
-      feedback.push({
-        id: q.id,
-        correct: isCorrect,
-        ...(isCorrect ? {} : { expected: q.correct }),
-        ...(q.explanation ? { explanation: q.explanation } : {}),
-      });
-    }
-
-    const percentage = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
-    const passed = percentage / 100 >= quiz.passThreshold;
-
-    // Save diploma
-    const diplomaId = `D-${todayStr()}-${student}-${quizId.replace(/^Q-/, '')}`;
-    const diploma: Diploma = {
-      id: diplomaId,
-      type: 'quiz',
-      student,
-      earnedAt: new Date().toISOString(),
-      source: quizId,
-      score: correct,
-      total,
-      percentage,
-      passed,
-    };
-
-    saveDiploma(ctx.rootDir, diploma);
-
-    const text = JSON.stringify({
-      quizId,
-      student,
-      score: correct,
-      total,
-      percentage,
-      passThreshold: quiz.passThreshold * 100,
-      passed,
-      diplomaId,
-      feedback,
-    }, null, 2);
-
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
   // ── Onboard ────────────────────────────────────────────
   if (name === 'paradigm_university_onboard') {
     const student = (args.student as string) || resolveAuthor();
@@ -687,32 +520,6 @@ export async function handleUniversityTool(
       university: config.branding.name,
       student,
       ...sequence,
-    }, null, 2);
-
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Diplomas ───────────────────────────────────────────
-  if (name === 'paradigm_university_diplomas') {
-    const diplomas = loadDiplomas(ctx.rootDir, {
-      student: args.student as string | undefined,
-      type: args.type as string | undefined,
-    });
-
-    const text = JSON.stringify({
-      count: diplomas.length,
-      diplomas: diplomas.map(d => ({
-        id: d.id,
-        type: d.type,
-        student: d.student,
-        source: d.source,
-        score: d.score,
-        total: d.total,
-        percentage: d.percentage,
-        passed: d.passed,
-        earnedAt: d.earnedAt,
-      })),
     }, null, 2);
 
     trackToolCall(text.length, name);

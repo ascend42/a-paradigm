@@ -186,31 +186,29 @@ When a session identifies work items that won't be completed immediately:
 4. Shelve tasks that aren't relevant now with paradigm_task_shelve
 ```
 
-### Recording Assessments
+### Recording Lore (Session Insights)
 
-When a significant milestone, decision, or insight emerges:
+When a significant milestone, decision, or insight emerges, record it with `paradigm_lore_record`:
+
+> **Note:** `paradigm_assessment_*` tools were removed in v5.36.7. Use the lore tools directly.
 
 ```
-1. Choose or create an arc:
-   - Arcs group related reflections (e.g., arc-auth-hardening, arc-perf-optimization)
-   - paradigm_assessment_record auto-creates arcs if arc_name is provided
-
-2. Record the entry with paradigm_assessment_record:
+1. Record the entry with paradigm_lore_record:
    - title + summary (required) — what happened
    - body — full reflection (what was learned, what changed)
    - type: retro | insight | decision | milestone
-   - Link to lore, tasks, and commits for traceability
+   - symbols, tags — for classification and later retrieval
 
-3. Close arcs when the work thread is complete:
-   - paradigm_assessment_arc_close with status complete or archived
+2. Search past entries with paradigm_lore_search (by symbol, type, date)
+
+3. Retrieve full detail with paradigm_lore_get (by entry ID)
 ```
 
-**Three-Layer Model:**
+**Two-Layer Model:**
 | Layer | Nature | Granularity |
 |-------|--------|-------------|
 | Commits | Raw facts | Per-change |
-| Lore | Session events | Per-session |
-| Assessments | Synthesized insight | Per-arc milestone |
+| Lore | Session events and synthesized insights | Per-session / per-milestone |
 
 ### Adding a Multi-Step Flow (Flow-First Development)
 
@@ -331,7 +329,7 @@ After implementation:
 10. □ Run paradigm_pm_postflight with modified files and symbols
 11. □ Run paradigm_reindex to rebuild static index
 12. □ Record lore if 3+ files were modified
-13. □ Run paradigm_flow_validate if flows were affected
+13. □ Run paradigm_flow_check if flows were affected
 ```
 
 ---

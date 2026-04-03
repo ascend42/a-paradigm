@@ -77,7 +77,7 @@ security: 1 journal entry (correction_received, confidence 0.4)
 
 Call Neverland metrics:
 ```
-paradigm_ambient_neverland({})
+paradigm_ambient_health({})
 ```
 
 Present a compact health summary:

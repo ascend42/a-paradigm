@@ -3,7 +3,7 @@
  *
  * Provides:
  * - paradigm_flows_affected: Find flows affected by symbol changes
- * - paradigm_flow_validate: Validate flow definitions against codebase
+ * - paradigm_flow_check: Check flow definition completeness (was: paradigm_flow_validate)
  */
 
 import * as fs from 'fs';
@@ -53,9 +53,9 @@ export function getFlowsToolsList() {
       },
     },
     {
-      name: 'paradigm_flow_validate',
+      name: 'paradigm_flow_check',
       description:
-        'Validate flow definitions against the codebase. Checks that gates exist in portal.yaml, actions are implemented, and signals are emitted. Returns per-step validation results with issue severity. ~200-400 tokens depending on flow size.',
+        'Check flow definition completeness — verifies that gates referenced in flows.yaml exist in portal.yaml and that required fields are present. Does not trace code execution paths.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -162,6 +162,8 @@ flows:
       return { handled: true, text };
     }
 
+    case 'paradigm_flow_check':
+    // backward-compat alias — old callers using paradigm_flow_validate still work
     case 'paradigm_flow_validate': {
       const { flowId, checkImplementation = false } = args as {
         flowId?: string;

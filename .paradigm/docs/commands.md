@@ -949,13 +949,13 @@ See `.paradigm/specs/navigator.md` for full specification.
 
 **Session-aware context monitoring for handoff recommendations.**
 
-### MCP Tool: paradigm_context_check
+### MCP Tool: paradigm_session_health
 
 Check if context handoff is recommended:
 
 ```bash
 # Via MCP tool call
-paradigm_context_check({ contextWindowSize: 200000 })
+paradigm_session_health({ contextWindowSize: 200000 })
 ```
 
 **Returns:**
@@ -1081,78 +1081,30 @@ paradigm_task_shelve({ id: "T-2026-02-26-001" })
 
 ---
 
-## Assessment Loops (MCP)
+## Lore (MCP) — Session Insights and History
 
-**Synthesized insights organized into arcs.** Assessments sit above lore in the three-layer model: Commits (raw facts) → Lore (session events) → Assessments (synthesized insight). Stored in `.paradigm/assessments/arcs/{arc-id}/`.
+> **Note:** Assessment tools (`paradigm_assessment_*`) were removed in v5.36.7. Use `paradigm_lore_record`, `paradigm_lore_search`, and `paradigm_lore_get` directly for recording and retrieving session insights, decisions, and milestones.
 
-### MCP Tool: paradigm_assessment_record
+### MCP Tool: paradigm_lore_record
 
-Add a reflection entry to an arc (creates the arc if new):
+Record a lore entry (session insight, decision, or milestone):
 
 ```bash
-paradigm_assessment_record({
-  arc_id: "arc-auth-hardening",
-  arc_name: "Auth Hardening",
+paradigm_lore_record({
   title: "JWT refresh token rotation complete",
   summary: "Implemented RS256 token rotation with httpOnly cookies",
   body: "Full reflection text...",
   type: "milestone",
-  symbols: ["#auth-middleware", "^authenticated"],
-  linked_commits: ["a1b2c3d"],
-  linked_tasks: ["T-2026-02-25-001"]
+  symbols: ["#auth-middleware", "^authenticated"]
 })
 ```
 
-**Parameters:**
-- `arc_id` (required) — Arc ID (e.g., `arc-telemetry`). Auto-creates if new.
-- `arc_name` — Human-readable name (required when creating a new arc)
-- `arc_description` — Arc description (used when creating a new arc)
-- `title` (required), `summary` (required) — Entry title and summary
-- `body` — Full reflection text
-- `type` — `retro` (default), `insight`, `decision`, or `milestone`
-- `symbols`, `tags` — Classification
-- `linked_lore`, `linked_tasks`, `linked_commits` — Cross-references
+### MCP Tool: paradigm_lore_search
 
-**Returns:** Entry ID (e.g., `A-2026-02-26-001`) — globally unique across all arcs.
-
-### MCP Tool: paradigm_assessment_list
-
-List arcs or entries within an arc:
+Search lore entries by symbol, type, author, or date range:
 
 ```bash
-# List all active arcs
-paradigm_assessment_list({ status: "active" })
-
-# List entries in a specific arc
-paradigm_assessment_list({ arc_id: "arc-auth-hardening" })
-```
-
-**Parameters:**
-- `arc_id` — If provided, lists entries in this arc. Otherwise lists all arcs.
-- `status` — Filter arcs: `active` (default), `complete`, `archived`, or `all`
-- `limit` — Maximum results (default: 20)
-
-### MCP Tool: paradigm_assessment_get
-
-Get full detail for an entry or arc:
-
-```bash
-# Get an entry
-paradigm_assessment_get({ id: "A-2026-02-26-001" })
-
-# Get an arc with its entries
-paradigm_assessment_get({ id: "arc-auth-hardening" })
-```
-
-**Parameters:**
-- `id` (required) — Entry ID (`A-*`) or arc ID (`arc-*`)
-
-### MCP Tool: paradigm_assessment_search
-
-Cross-arc search by symbol, tag, type, or date range:
-
-```bash
-paradigm_assessment_search({
+paradigm_lore_search({
   symbol: "#auth-middleware",
   type: "decision",
   dateFrom: "2026-02-01",
@@ -1160,28 +1112,12 @@ paradigm_assessment_search({
 })
 ```
 
-**Parameters:**
-- `symbol`, `tag`, `type`, `dateFrom`, `dateTo`, `limit`
+### MCP Tool: paradigm_lore_get
 
-### MCP Tool: paradigm_assessment_arc_create
-
-Explicitly create an arc without adding an entry:
+Get full detail for a lore entry by ID:
 
 ```bash
-paradigm_assessment_arc_create({
-  id: "arc-performance",
-  name: "Performance Optimization",
-  description: "Tracking all perf-related decisions and benchmarks",
-  tags: ["performance"]
-})
-```
-
-### MCP Tool: paradigm_assessment_arc_close
-
-Mark an arc as complete or archived:
-
-```bash
-paradigm_assessment_arc_close({ arc_id: "arc-auth-hardening", status: "complete" })
+paradigm_lore_get({ id: "L-2026-02-26-001" })
 ```
 
 ---

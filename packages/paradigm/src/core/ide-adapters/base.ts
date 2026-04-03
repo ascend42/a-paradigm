@@ -392,7 +392,7 @@ export function generateMcpToolReference(): string {
   lines.push('| `paradigm_gates_for_route` | Suggest gates for an API endpoint | Adding API routes |');
   lines.push('| `paradigm_wisdom_context` | Team preferences and antipatterns | Before implementing |');
   lines.push('| `paradigm_history_fragility` | Stability warnings for symbols | Before modifying fragile areas |');
-  lines.push('| `paradigm_flow_validate` | Validate flow definitions | Before/after implementing flows |');
+  lines.push('| `paradigm_flow_check` | Validate flow definitions | Before/after implementing flows |');
   lines.push('| `paradigm_flows_affected` | Flows impacted by symbol changes | After modifying symbols |');
   lines.push('| `paradigm_test_fixtures` | Get test data for validation | Writing tests |');
   lines.push('| `paradigm_orchestrate_inline` | Multi-agent task planning | Complex tasks (3+ files) |');
@@ -432,7 +432,7 @@ export function generateWorkflowProtocol(): string {
   lines.push('1. **Postflight**: Call `paradigm_pm_postflight` with modified files and symbols');
   lines.push('   - Checks for missing .purpose files, unregistered routes, uncaptured wisdom');
   lines.push('2. **Reindex**: Call `paradigm_reindex` to rebuild static index files');
-  lines.push('3. **Validate flows**: Call `paradigm_flow_validate` if you touched flow-related symbols');
+  lines.push('3. **Validate flows**: Call `paradigm_flow_check` if you touched flow-related symbols');
   lines.push('');
 
   return lines.join('\n');

@@ -131,8 +131,8 @@ export function getAmbientToolsList() {
       },
     },
     {
-      name: 'paradigm_ambient_neverland',
-      description: 'Neverland Validation — aggregate learning metrics across all agents. Shows acceptance rates, threshold drift, expertise growth, notebook counts, cross-project transfer, and overall health status (cold-start → accumulating → calibrating → mature). ~200 tokens.',
+      name: 'paradigm_ambient_health',
+      description: 'Agent learning health metrics — aggregate learning quality across all agents: nomination acceptance rates, threshold drift, notebook counts, expertise growth, and overall health status (cold-start → accumulating → calibrating → mature).',
       inputSchema: {
         type: 'object' as const,
         properties: {},
@@ -460,6 +460,8 @@ export async function handleAmbientTool(
       };
     }
 
+    case 'paradigm_ambient_health':
+    // backward-compat alias — old callers using paradigm_ambient_neverland still work
     case 'paradigm_ambient_neverland': {
       const metrics = getNeverlandMetrics(ctx.rootDir);
       return {

@@ -18,7 +18,7 @@ paradigm_agent_list({ scope: "all" })
 
 Also check Neverland health:
 ```
-paradigm_ambient_neverland({})
+paradigm_ambient_health({})
 ```
 
 ## Step 2: Determine Action

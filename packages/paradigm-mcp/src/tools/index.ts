@@ -45,11 +45,9 @@ import { getHabitsToolsList, handleHabitsTool } from './habits.js';
 import { getGraduationToolsList, handleGraduationTool } from './graduation.js';
 import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.js';
 import { getTasksToolsList, handleTasksTool } from './tasks.js';
-import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { getPersonaToolsList, handlePersonaTool } from './personas.js';
 import { getProtocolsToolsList, handleProtocolsTool } from './protocols.js';
 import { getGraphToolsList, handleGraphTool } from './graph.js';
-import { getHeatmapToolsList, handleHeatmapTool } from './heatmap.js';
 import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
 import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
@@ -81,7 +79,7 @@ import { emitAndProcess } from '../utils/nomination-engine.js';
  * Tiers:
  *   core     — always loaded (context, navigate, tags, purpose-portal, pm, reindex, docs)
  *   feature  — auto-detected (lore, agents, orchestration, habits, notebooks, etc.)
- *   advanced — on-demand (conductor, platform, pipeline, graduation, assessment)
+ *   advanced — on-demand (conductor, platform, pipeline, graduation)
  *
  * The registry provides tiered listing via getActiveTools() and
  * Map-based dispatch via dispatch().
@@ -287,13 +285,6 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       handleTool: wrap(handleGraphTool),
       detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
     },
-    {
-      key: 'heatmap',
-      tier: 'feature',
-      getToolsList: getHeatmapToolsList,
-      handleTool: wrap(handleHeatmapTool),
-      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
-    },
   ]);
 
   // ── Advanced tier (on-demand) ─────────────────────────
@@ -322,12 +313,6 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'advanced',
       getToolsList: getGraduationToolsList,
       handleTool: wrap(handleGraduationTool),
-    },
-    {
-      key: 'assessment',
-      tier: 'advanced',
-      getToolsList: getAssessmentToolsList,
-      handleTool: wrap(handleAssessmentTool),
     },
   ]);
 

@@ -122,7 +122,7 @@ interface SessionWorkEntry {
 
 **Who reads it:**
 - Maestro at postflight → cross-references to write targeted journal entries
-- `paradigm_ambient_neverland` → reads for per-session metrics
+- `paradigm_ambient_health` → reads for per-session metrics
 - Handoff → includes in handoff summary
 
 ### Maestro's Postflight Learning Pass

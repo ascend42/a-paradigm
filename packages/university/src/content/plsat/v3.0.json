@@ -847,14 +847,14 @@
           "scenario": "You're debugging an issue where the `$order-fulfillment` flow is failing at the 'ship order' step. The flow has 6 steps spanning 4 components. You suspect the gate `^warehouse-authorized` is rejecting valid requests.",
           "question": "Which combination of tools gives you the MOST diagnostic information?",
           "choices": {
-            "A": "`paradigm_flow_validate({ flowId: '$order-fulfillment' })` + `paradigm_sentinel_triage({ symbol: '^warehouse-authorized' })`",
+            "A": "`paradigm_flow_check({ flowId: '$order-fulfillment' })` + `paradigm_sentinel_triage({ symbol: '^warehouse-authorized' })`",
             "B": "`paradigm_search({ query: 'warehouse' })` + read all matching files",
             "C": "`paradigm_ripple({ symbol: '$order-fulfillment' })` only",
             "D": "`paradigm_history_context({ symbols: ['$order-fulfillment'] })` only",
             "E": "`paradigm_navigate({ intent: 'find', target: '^warehouse-authorized' })` + read the gate code"
           },
           "correct": "A",
-          "explanation": "The best combination is: (1) `paradigm_flow_validate` checks the flow definition against the codebase \u2014 are all steps implemented, do the gates exist, are signals emitted? This could reveal if the flow definition is out of sync with the code. (2) `paradigm_sentinel_triage` filtered by `^warehouse-authorized` shows if there are incidents or known patterns for this gate failing. Together, these give you structural validation AND operational history. Ripple (C) shows dependencies but not failures. History (D) shows changes but not current errors."
+          "explanation": "The best combination is: (1) `paradigm_flow_check` checks the flow definition against the codebase \u2014 are all steps implemented, do the gates exist, are signals emitted? This could reveal if the flow definition is out of sync with the code. (2) `paradigm_sentinel_triage` filtered by `^warehouse-authorized` shows if there are incidents or known patterns for this gate failing. Together, these give you structural validation AND operational history. Ripple (C) shows dependencies but not failures. History (D) shows changes but not current errors."
         }
       ]
     },
@@ -1127,14 +1127,14 @@
           "scenario": "You want to validate that a specific flow `$checkout-flow` is correctly implemented. The flow has 5 steps, involves 3 gates, and emits 2 signals. You want to verify that all steps have implementations, gates exist in portal.yaml, and signals are actually emitted in the code.",
           "question": "Which MCP tool call gives you this deep implementation check?",
           "choices": {
-            "A": "`paradigm_flow_validate({ flowId: '$checkout-flow' })` \u2014 validates flow definition only",
-            "B": "`paradigm_flow_validate({ flowId: '$checkout-flow', checkImplementation: true })` \u2014 deep check against codebase",
+            "A": "`paradigm_flow_check({ flowId: '$checkout-flow' })` \u2014 validates flow definition only",
+            "B": "`paradigm_flow_check({ flowId: '$checkout-flow', checkImplementation: true })` \u2014 deep check against codebase",
             "C": "`paradigm_purpose_validate()` \u2014 validates all purpose files including flows",
             "D": "`paradigm_ripple({ symbol: '$checkout-flow' })` \u2014 shows flow dependencies",
             "E": "`paradigm_related({ symbol: '$checkout-flow' })` \u2014 shows what's connected to the flow"
           },
           "correct": "B",
-          "explanation": "`paradigm_flow_validate` with `checkImplementation: true` performs a deep validation: it checks that gates exist in portal.yaml, actions are implemented in the codebase, and signals are emitted. Without `checkImplementation`, it only validates the YAML structure (A). `paradigm_purpose_validate` (C) checks structural validity of purpose files but doesn't do the deep codebase cross-reference. `paradigm_ripple` (D) shows what depends on the flow, not whether it's correctly implemented. The `checkImplementation` flag is the key to going from structural validation to implementation verification."
+          "explanation": "`paradigm_flow_check` with `checkImplementation: true` performs a deep validation: it checks that gates exist in portal.yaml, actions are implemented in the codebase, and signals are emitted. Without `checkImplementation`, it only validates the YAML structure (A). `paradigm_purpose_validate` (C) checks structural validity of purpose files but doesn't do the deep codebase cross-reference. `paradigm_ripple` (D) shows what depends on the flow, not whether it's correctly implemented. The `checkImplementation` flag is the key to going from structural validation to implementation verification."
         }
       ]
     },
@@ -1348,7 +1348,7 @@
         },
         {
           "id": "plsat-059b",
-          "scenario": "Your project has three flows with these `relatedFlows` references:\n- `$checkout-flow` → `[$payment-flow]`\n- `$payment-flow` → `[$receipt-flow]`\n- `$receipt-flow` → `[$checkout-flow]`\n\nYou run `paradigm_flow_validate({})` to validate all flows.",
+          "scenario": "Your project has three flows with these `relatedFlows` references:\n- `$checkout-flow` → `[$payment-flow]`\n- `$payment-flow` → `[$receipt-flow]`\n- `$receipt-flow` → `[$checkout-flow]`\n\nYou run `paradigm_flow_check({})` to validate all flows.",
           "question": "What will the circular dependency detection report?",
           "choices": {
             "A": "No issues — each flow only references one other flow",

@@ -836,7 +836,7 @@ flows:
 
 2. **Validate before implementing:**
    \`\`\`
-   paradigm_flow_validate({ flowId: "$task-creation" })
+   paradigm_flow_check({ flowId: "$task-creation" })
    \`\`\`
    - Ensures all gates are declared in portal.yaml
    - Checks for missing symbols
@@ -849,14 +849,14 @@ flows:
 
 ## Flow Validation
 
-Call \`paradigm_flow_validate\` to check flows:
+Call \`paradigm_flow_check\` to check flows:
 
 \`\`\`
 // Validate specific flow
-paradigm_flow_validate({ flowId: "$task-creation" })
+paradigm_flow_check({ flowId: "$task-creation" })
 
 // Validate all flows
-paradigm_flow_validate({ checkImplementation: true })
+paradigm_flow_check({ checkImplementation: true })
 \`\`\`
 
 **What gets checked:**
@@ -884,7 +884,7 @@ paradigm_flow_validate({ checkImplementation: true })
 
 | Tool | Purpose |
 |------|---------|
-| \`paradigm_flow_validate\` | Validate flow definitions |
+| \`paradigm_flow_check\` | Validate flow definitions |
 | \`paradigm_flows_affected\` | Check which flows are impacted by symbol changes |
 
 ## CLI Commands

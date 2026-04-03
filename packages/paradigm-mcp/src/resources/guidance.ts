@@ -247,15 +247,15 @@ flows:
 ## Flow-First Protocol
 
 1. **Define the flow first** — What gates, actions, and signals?
-2. **Validate** — Call \`paradigm_flow_validate\` to check completeness
+2. **Validate** — Call \`paradigm_flow_check\` to check completeness
 3. **Implement** — Each step becomes a clear implementation target
 
 ## Flow Validation
 
 \`\`\`
-paradigm_flow_validate({ flowId: "$task-creation" })   # Specific flow
-paradigm_flow_validate({})                              # All flows
-paradigm_flow_validate({ checkImplementation: true })   # Deep check
+paradigm_flow_check({ flowId: "$task-creation" })   # Specific flow
+paradigm_flow_check({})                              # All flows
+paradigm_flow_check({ checkImplementation: true })   # Deep check
 \`\`\`
 
 After modifying symbols, check affected flows:
@@ -350,7 +350,7 @@ No configuration needed — the learning pipeline IS the training mechanism.
 
 ## Neverland Validation
 
-Track learning progress with \`paradigm_ambient_neverland\`:
+Track learning progress with \`paradigm_ambient_health\`:
 - Per-agent: acceptance rate, threshold, expertise count, notebook count
 - Aggregate: average accept rate, total expertise, total notebooks
 - Health status: cold-start → accumulating → calibrating → mature
@@ -365,7 +365,7 @@ Track learning progress with \`paradigm_ambient_neverland\`:
 | \`paradigm_agent_list\` | List all agents with expertise + bench status |
 | \`paradigm_agent_bench\` | Bench an agent |
 | \`paradigm_agent_activate\` | Activate a benched agent |
-| \`paradigm_ambient_neverland\` | Neverland validation metrics |
+| \`paradigm_ambient_health\` | Neverland validation metrics |
 | \`paradigm_context_compose\` | Compose full ambient context for an agent |`,
   },
 
@@ -429,8 +429,7 @@ Every project can maintain a university at \`.paradigm/university/\` — a struc
 | \`paradigm_university_search\` | Search by type, tag, difficulty, symbol |
 | \`paradigm_university_get\` | Fetch full content by ID |
 | \`paradigm_university_create\` | Create new content (agent-authored) |
-| \`paradigm_university_quiz\` | Get quiz questions for taking |
-| \`paradigm_university_submit\` | Submit answers, auto-grade |
+| \`paradigm_university_update\` | Update existing content |
 | \`paradigm_university_onboard\` | Get recommended onboarding sequence |
 | \`paradigm_university_validate\` | Validate content integrity |`,
   },

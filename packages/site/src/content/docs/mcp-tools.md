@@ -32,7 +32,7 @@ Paradigm exposes 90+ MCP tools that AI agents can call for context-aware develop
 | Tool | Description | Tokens |
 |------|-------------|--------|
 | `paradigm_purpose_validate` | Validate .purpose and portal.yaml | ~200 |
-| `paradigm_flow_validate` | Check flow completeness | ~200 |
+| `paradigm_flow_check` | Check flow completeness | ~200 |
 | `paradigm_flows_affected` | Which flows are impacted by a change | ~200 |
 | `paradigm_gates_for_route` | Suggest gates for an API endpoint | ~150 |
 | `paradigm_pm_preflight` | Compliance plan before starting work | ~200 |

@@ -792,7 +792,7 @@ function evalFlowCoverage(habit: HabitDefinition, ctx: EvaluationContext): Habit
   if (ctx.hasFlowCoverage) {
     return { habit, result: 'followed', reason: 'Flow coverage exists for multi-component changes' };
   }
-  const flowTools = ['paradigm_flow_validate', 'paradigm_flows_affected', 'paradigm_purpose_add_flow'];
+  const flowTools = ['paradigm_flow_check', 'paradigm_flows_affected', 'paradigm_purpose_add_flow'];
   const called = flowTools.filter((t) => ctx.toolsCalled.includes(t));
   if (called.length > 0) {
     return { habit, result: 'followed', reason: `Flow tools called: ${called.join(', ')}`, evidence: called };

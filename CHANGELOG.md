@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.7] — 2026-04-03
+
+### Removed
+
+- **Heatmap system** (`paradigm_heatmap_record`, `paradigm_heatmap_query`, `paradigm_heatmap_stats`) — required AI to manually record keyword→symbol associations into a data store that was never populated. `paradigm_navigate` and `paradigm_search` cover the use case without the overhead. ~3 tools, ~350 lines removed from schema.
+- **Assessment deprecated tools** (`paradigm_assessment_record`, `paradigm_assessment_list`, `paradigm_assessment_get`, `paradigm_assessment_search`, `paradigm_assessment_arc_create`, `paradigm_assessment_arc_close`) — source file opened with `[DEPRECATED]` and all 6 were thin wrappers forwarding to lore tools. Removed from active MCP schema. `assessment.ts` and `assessment-loader.ts` retained as dead files pending migration audit. Use `paradigm_lore_record`, `paradigm_lore_search`, `paradigm_lore_get` directly. Docs updated.
+- **University quiz/diploma MCP tools** (`paradigm_university_quiz`, `paradigm_university_submit`, `paradigm_university_diplomas`) — diplomas were YAML files consulted by nothing; quizzes had no behavioral consequence for agents. The quiz/diploma experience continues in the standalone university UI and platform server API. MCP layer kept to: `search`, `get`, `create`, `update`, `validate`, `onboard`.
+
+### Changed
+
+- **`paradigm_flow_validate` renamed to `paradigm_flow_check`** — the old name implied code-level execution path tracing. The tool only checks that gates referenced in `flows.yaml` exist in `portal.yaml` and required fields are present. Updated description is honest about scope. Backward-compat alias retained.
+- **`paradigm_ambient_neverland` renamed to `paradigm_ambient_health`** — "Neverland" is the nevr.land product codename; using it for a local learning health check conflated two distinct things. New name matches what the tool returns: agent learning health metrics (cold-start → accumulating → calibrating → mature). Backward-compat alias retained. 3 skill files, guidance resource, and university course para-601 updated.
+- **Canvas and University checklist entries corrected** — both `docs/polish-checklist.md` entries were stale. Canvas: base Craft.js editor is wired, Paradigm symbol integration (symbol cards, `.canvas` files, MCP tools) is not built — corrected to `[~]`. University Platform UI: component, store, and server routes are all complete — corrected to `[x]`.
+
+Symbols: #heatmap, #assessment, #university, #flow-loader, #ambient-learning, #context-tools
+
 ## [5.36.6] — 2026-04-03
 
 ### Added

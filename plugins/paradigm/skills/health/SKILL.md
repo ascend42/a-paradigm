@@ -12,7 +12,7 @@ growth into one actionable dashboard.
 ## Step 1: Neverland Metrics
 
 ```
-paradigm_ambient_neverland({})
+paradigm_ambient_health({})
 ```
 
 ## Step 2: Nomination Stats Per Agent

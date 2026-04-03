@@ -129,10 +129,10 @@
         },
         {
           "id": "paradigm-flow-validate",
-          "name": "paradigm_flow_validate",
+          "name": "paradigm_flow_check",
           "description": "Validate flow definitions against the codebase. With checkImplementation=true, verifies gates exist, actions are implemented, and signals are emitted.",
           "when": "After modifying flows or their constituent components. Use checkImplementation for deep verification.",
-          "example": "paradigm_flow_validate({ flowId: '$checkout-flow', checkImplementation: true })"
+          "example": "paradigm_flow_check({ flowId: '$checkout-flow', checkImplementation: true })"
         },
         {
           "id": "paradigm-aspect-check",

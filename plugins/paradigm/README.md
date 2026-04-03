@@ -26,7 +26,7 @@ All tools are available immediately — no configuration needed:
 | Portal / Auth | `paradigm_portal_*`, `paradigm_gates_for_route` | Authorization gate management |
 | Wisdom | `paradigm_wisdom_*` (4 tools) | Team learning — antipatterns and decisions |
 | History | `paradigm_history_*` (4 tools) | Implementation tracking and fragility scores |
-| Flows | `paradigm_flows_affected`, `paradigm_flow_validate` | Multi-step flow validation |
+| Flows | `paradigm_flows_affected`, `paradigm_flow_check` | Multi-step flow validation |
 | Sentinel | `paradigm_sentinel_*` (8 tools) | Incident tracking and pattern detection |
 | Lore | `paradigm_lore_*` (3 tools) | Project timeline and session recording |
 | Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent_prompt` | Multi-agent task coordination |
