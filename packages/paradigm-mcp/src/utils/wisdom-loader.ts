@@ -20,6 +20,7 @@ import {
   loadGlobalDecisions,
   loadGlobalPreferences,
 } from './global-store.js';
+import { log } from './mcp-logger.js';
 
 /** TTL for wisdom cache (30 seconds) */
 const WISDOM_CACHE_TTL_MS = 30 * 1000;
@@ -202,7 +203,7 @@ async function loadPreferences(wisdomPath: string): Promise<WisdomPreferences | 
     const data = yaml.load(content) as WisdomPreferences;
     return data;
   } catch (error) {
-    console.error('[wisdom-loader] Error parsing preferences.yaml:', error);
+    log.component('#wisdom-loader').error('Error parsing preferences.yaml', { error });
     return null;
   }
 }
@@ -222,7 +223,7 @@ async function loadAntipatterns(wisdomPath: string): Promise<WisdomAntipattern[]
     const data = yaml.load(content) as WisdomAntipatterns;
     return data.antipatterns || [];
   } catch (error) {
-    console.error('[wisdom-loader] Error parsing antipatterns.yaml:', error);
+    log.component('#wisdom-loader').error('Error parsing antipatterns.yaml', { error });
     return [];
   }
 }
@@ -242,7 +243,7 @@ async function loadExpertise(wisdomPath: string): Promise<WisdomExpertise | null
     const data = yaml.load(content) as WisdomExpertise;
     return data;
   } catch (error) {
-    console.error('[wisdom-loader] Error parsing expertise.yaml:', error);
+    log.component('#wisdom-loader').error('Error parsing expertise.yaml', { error });
     return null;
   }
 }
@@ -273,11 +274,11 @@ async function loadDecisions(wisdomPath: string): Promise<WisdomDecision[]> {
         const decision = yaml.load(content) as WisdomDecision;
         decisions.push(decision);
       } catch (error) {
-        console.error(`[wisdom-loader] Error parsing ${file}:`, error);
+        log.component('#wisdom-loader').error(`Error parsing ${file}`, { error });
       }
     }
   } catch (error) {
-    console.error('[wisdom-loader] Error reading decisions directory:', error);
+    log.component('#wisdom-loader').error('Error reading decisions directory', { error });
   }
 
   // Sort by ID

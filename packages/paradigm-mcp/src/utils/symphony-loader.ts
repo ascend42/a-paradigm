@@ -27,7 +27,7 @@ import {
   type AuditEntry,
   type EnforcementBoundary,
 } from '../types/data-policy.js';
-import { log } from '@a-company/paradigm-logger';
+import { log } from './mcp-logger.js';
 
 // ────────────────────────────────────────────────────────
 // Types

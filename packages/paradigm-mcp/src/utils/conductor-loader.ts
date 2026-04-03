@@ -13,6 +13,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { log } from './mcp-logger.js';
 import * as os from 'os';
 import { execSync } from 'child_process';
 
@@ -229,9 +230,9 @@ export function autoRegisterWithConductor(projectDir: string): void {
       process.exit(0);
     });
 
-    console.error(`[paradigm-mcp] Auto-registered with Conductor (PID ${pid})`);
+    log.component('#conductor-loader').info('Auto-registered with Conductor', { pid });
   } catch {
     // Best-effort — never block startup
-    console.error('[paradigm-mcp] Auto-registration with Conductor skipped (non-fatal)');
+    log.component('#conductor-loader').warn('Auto-registration with Conductor skipped (non-fatal)');
   }
 }

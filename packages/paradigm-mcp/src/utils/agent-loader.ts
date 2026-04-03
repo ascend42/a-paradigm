@@ -17,6 +17,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 import type {
   AgentProfile,
   AgentPermissions,
@@ -138,7 +139,7 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
         const status = determineIntegrityStatus(profile);
         (profile as any).__integrityStatus = status;
         if (status === 'invalid') {
-          console.error(`[paradigm] WARNING: Agent "${agentId}" failed integrity verification — profile may have been tampered with`);
+          log.component('#agent-loader').warn('Agent failed integrity verification — profile may have been tampered with', { agentId });
         }
         return profile;
       }
@@ -161,7 +162,7 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
           const status = determineIntegrityStatus(merged);
           (merged as any).__integrityStatus = status;
           if (status === 'invalid') {
-            console.error(`[paradigm] WARNING: Agent "${agentId}" failed integrity verification after merge — profile may have been tampered with`);
+            log.component('#agent-loader').warn('Agent failed integrity verification after merge — profile may have been tampered with', { agentId });
           }
           return merged;
         } catch { /* use global */ }
@@ -171,7 +172,7 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
         const status = determineIntegrityStatus(globalProfile);
         (globalProfile as any).__integrityStatus = status;
         if (status === 'invalid') {
-          console.error(`[paradigm] WARNING: Agent "${agentId}" failed integrity verification — profile may have been tampered with`);
+          log.component('#agent-loader').warn('Agent failed integrity verification — profile may have been tampered with', { agentId });
         }
       }
       return globalProfile;
@@ -224,7 +225,7 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
             const status = determineIntegrityStatus(profile);
             (profile as any).__integrityStatus = status;
             if (status === 'invalid') {
-              console.error(`[paradigm] WARNING: Agent "${profile.id}" failed integrity verification — profile may have been tampered with`);
+              log.component('#agent-loader').warn('Agent failed integrity verification — profile may have been tampered with', { agentId: profile.id });
             }
             profiles.set(profile.id, profile);
           }
@@ -251,14 +252,14 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
             const status = determineIntegrityStatus(merged);
             (merged as any).__integrityStatus = status;
             if (status === 'invalid') {
-              console.error(`[paradigm] WARNING: Agent "${merged.id}" failed integrity verification after merge — profile may have been tampered with`);
+              log.component('#agent-loader').warn('Agent failed integrity verification after merge — profile may have been tampered with', { agentId: merged.id });
             }
             profiles.set(projectProfile.id, merged);
           } else {
             const status = determineIntegrityStatus(projectProfile);
             (projectProfile as any).__integrityStatus = status;
             if (status === 'invalid') {
-              console.error(`[paradigm] WARNING: Agent "${projectProfile.id}" failed integrity verification — profile may have been tampered with`);
+              log.component('#agent-loader').warn('Agent failed integrity verification — profile may have been tampered with', { agentId: projectProfile.id });
             }
             profiles.set(projectProfile.id, projectProfile);
           }

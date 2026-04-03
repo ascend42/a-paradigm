@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 import type {
   NavigatorConfig,
   NavigatorContext,
@@ -42,7 +43,7 @@ export async function loadNavigatorContext(rootDir: string): Promise<NavigatorCo
       configPath,
     };
   } catch (error) {
-    console.error('[navigator-loader] Error parsing navigator.yaml:', error);
+    log.component('#navigator-loader').error('Error parsing navigator.yaml', { error });
     return {
       config: null,
       configPath,

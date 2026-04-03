@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 import {
   buildSymbolIndex,
   searchSymbols,
@@ -124,7 +125,7 @@ export function loadWorkspaceContext(
   const workspacePath = path.resolve(absoluteRoot, configWorkspacePath);
 
   if (!fs.existsSync(workspacePath)) {
-    console.error(`Warning: Workspace file not found at ${workspacePath}`);
+    log.component('#workspace-loader').warn('Workspace file not found', { workspacePath });
     return null;
   }
 
@@ -132,7 +133,7 @@ export function loadWorkspaceContext(
   try {
     config = loadWorkspaceConfig(workspacePath);
   } catch (e) {
-    console.error(`Warning: Could not parse workspace file: ${(e as Error).message}`);
+    log.component('#workspace-loader').warn('Could not parse workspace file', { error: (e as Error).message });
     return null;
   }
 
@@ -149,7 +150,7 @@ export function loadWorkspaceContext(
   }
 
   if (!currentMember) {
-    console.error(`Warning: Current directory is not a member of workspace "${config.name}"`);
+    log.component('#workspace-loader').warn('Current directory is not a member of workspace', { workspace: config.name });
     return null;
   }
 
@@ -163,7 +164,7 @@ export function loadWorkspaceContext(
     const scanIndexPath = path.join(memberAbsPath, '.paradigm', 'scan-index.json');
 
     if (!fs.existsSync(scanIndexPath)) {
-      console.error(`Warning: No scan-index.json for workspace member "${member.name}" at ${scanIndexPath}`);
+      log.component('#workspace-loader').warn('No scan-index.json for workspace member', { member: member.name, scanIndexPath });
       continue;
     }
 
@@ -194,7 +195,7 @@ export function loadWorkspaceContext(
 
       siblingIndices.set(member.name, { index, gateConfig });
     } catch (e) {
-      console.error(`Warning: Could not load index for workspace member "${member.name}": ${(e as Error).message}`);
+      log.component('#workspace-loader').warn('Could not load index for workspace member', { member: member.name, error: (e as Error).message });
     }
   }
 

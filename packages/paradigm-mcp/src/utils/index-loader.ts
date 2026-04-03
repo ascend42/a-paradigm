@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
@@ -63,7 +64,7 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
       gateConfig = await parseGateConfig(portalPath);
     } catch (e) {
       // Gate config is optional
-      console.error('Warning: Could not parse portal.yaml:', (e as Error).message);
+      log.component('#index-loader').warn('Could not parse portal.yaml', { error: (e as Error).message });
     }
   }
 
@@ -94,10 +95,10 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
       // Lightweight config validation (full Zod schema runs in paradigm doctor)
       if (config && typeof config === 'object') {
         if (!config.version) {
-          console.error('[paradigm] Warning: config.yaml missing "version" field');
+          log.component('#index-loader').warn('config.yaml missing "version" field');
         }
         if (!config.project) {
-          console.error('[paradigm] Warning: config.yaml missing "project" field');
+          log.component('#index-loader').warn('config.yaml missing "project" field');
         }
       }
 
@@ -105,7 +106,7 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
         workspace = loadWorkspaceContext(absoluteRoot, config.workspace);
       }
     } catch (e) {
-      console.error(`[paradigm] Warning: Failed to load workspace config: ${(e as Error).message}`);
+      log.component('#index-loader').warn('Failed to load workspace config', { error: (e as Error).message });
     }
   }
 

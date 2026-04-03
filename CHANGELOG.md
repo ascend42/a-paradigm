@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.4] — 2026-04-03
+
+### Changed
+
+- **`console.*` eliminated from `packages/paradigm-mcp/`** — Library code must never use `console.*` (stdout = JSON-RPC wire in stdio MCP servers). All 51 violations replaced with Paradigm logger calls across 12 files.
+- **`mcp-logger.ts` singleton** — New module at `packages/paradigm-mcp/src/utils/mcp-logger.ts`. Pre-configured `ParadigmLogger` that writes to stderr (not stdout), safe for stdio MCP context. All files in `paradigm-mcp` import from this singleton rather than `@a-company/paradigm-logger` directly.
+- **`symphony-loader.ts` migrated** — Was importing `log` directly from `@a-company/paradigm-logger` (bypassing the stderr override). Now uses `mcp-logger.ts`.
+- **ESLint config added to paradigm CLI** — `packages/paradigm/eslint.config.js` with `no-console: warn` scoped to `src/commands/**`. Flags future violations in CLI command files without breaking CI. `paradigm lint` script added.
+- **Commands refactor queued** — The 2,676 `console.*` violations in `packages/paradigm/src/commands/` are logged as a separate team task. Convention enforcement is now: ESLint warns on new violations; existing ones addressed in waves.
+
+Symbols: #paradigm-mcp, #mcp-logger, #symphony-loader, #cli-surface
+
 ## [5.36.3] — 2026-04-03
 
 ### Changed

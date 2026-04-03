@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getSessionDir, writeProjectMeta } from './global-store.js';
+import { log } from './mcp-logger.js';
 
 /**
  * Supported Claude models with pricing per 1M tokens
@@ -234,7 +235,7 @@ class SessionTracker {
     try {
       jsonData = JSON.stringify(data, null, 2);
     } catch (err) {
-      console.error('[paradigm-mcp] persistBreadcrumbs: JSON.stringify failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistBreadcrumbs: JSON.stringify failed', { error: (err as Error).message });
       return;
     }
 
@@ -247,7 +248,7 @@ class SessionTracker {
       }
       fs.writeFileSync(filePath, jsonData);
     } catch (err) {
-      console.error('[paradigm-mcp] persistBreadcrumbs: local write failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistBreadcrumbs: local write failed', { error: (err as Error).message });
     }
 
     // Write to global ~/.paradigm/sessions/{hash}/breadcrumbs.json
@@ -256,7 +257,7 @@ class SessionTracker {
       fs.writeFileSync(path.join(globalSessionDir, 'breadcrumbs.json'), jsonData);
       writeProjectMeta(this.rootDir);
     } catch (err) {
-      console.error('[paradigm-mcp] persistBreadcrumbs: global write failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistBreadcrumbs: global write failed', { error: (err as Error).message });
     }
   }
 
@@ -383,7 +384,7 @@ class SessionTracker {
     const result = { local: false, global: false };
 
     if (!this.rootDir) {
-      console.error('[paradigm-mcp] persistCheckpoint: rootDir not set, skipping write');
+      log.component('#session-tracker').warn('persistCheckpoint: rootDir not set, skipping write');
       return result;
     }
 
@@ -391,7 +392,7 @@ class SessionTracker {
     try {
       jsonData = JSON.stringify(checkpoint, null, 2);
     } catch (err) {
-      console.error('[paradigm-mcp] persistCheckpoint: JSON.stringify failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistCheckpoint: JSON.stringify failed', { error: (err as Error).message });
       return result;
     }
 
@@ -405,7 +406,7 @@ class SessionTracker {
       fs.writeFileSync(filePath, jsonData);
       result.local = true;
     } catch (err) {
-      console.error('[paradigm-mcp] persistCheckpoint: local write failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistCheckpoint: local write failed', { error: (err as Error).message });
     }
 
     // Write to global ~/.paradigm/sessions/{hash}/checkpoint.json
@@ -415,7 +416,7 @@ class SessionTracker {
       writeProjectMeta(this.rootDir);
       result.global = true;
     } catch (err) {
-      console.error('[paradigm-mcp] persistCheckpoint: global write failed:', (err as Error).message);
+      log.component('#session-tracker').error('persistCheckpoint: global write failed', { error: (err as Error).message });
     }
 
     return result;

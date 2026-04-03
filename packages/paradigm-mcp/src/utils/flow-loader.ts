@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { log } from './mcp-logger.js';
 import type { FlowIndex, TestableFlow } from '@a-company/premise-core';
 
 /** TTL for flow cache (30 seconds) */
@@ -63,7 +64,7 @@ async function loadFlowIndexFresh(rootDir: string): Promise<FlowIndex | null> {
     const content = fs.readFileSync(flowIndexPath, 'utf8');
     return JSON.parse(content) as FlowIndex;
   } catch (error) {
-    console.error('[flow-loader] Error parsing flow-index.json:', error);
+    log.component('#flow-loader').error('Error parsing flow-index.json', { error });
     return null;
   }
 }

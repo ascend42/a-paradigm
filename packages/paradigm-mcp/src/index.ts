@@ -27,6 +27,7 @@ import { registerTools } from './tools/index.js';
 import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
 import { autoRegisterWithConductor } from './utils/conductor-loader.js';
+import { log } from './utils/mcp-logger.js';
 
 // Get project directory from args or use cwd
 const projectDir = process.argv[2] || process.cwd();
@@ -54,7 +55,7 @@ async function reloadContext(): Promise<void> {
   context = await loadProjectContext(projectDir);
   // Rebuild static files in background (non-blocking)
   rebuildStaticFiles(projectDir, context).catch((err) => {
-    console.error('[paradigm-mcp] Background reindex:', (err as Error).message);
+    log.component('#paradigm-mcp').warn('Background reindex failed', { error: (err as Error).message });
   });
 }
 
@@ -63,14 +64,14 @@ async function reloadContext(): Promise<void> {
  */
 async function main() {
   // Load project context
-  console.error(`[paradigm-mcp] Loading project from: ${projectDir}`);
-  
+  log.component('#paradigm-mcp').info('Loading project', { projectDir });
+
   try {
     context = await loadProjectContext(projectDir);
     getSessionTracker().setRootDir(context.rootDir);
-    console.error(`[paradigm-mcp] Loaded ${context.aggregation.symbols.length} symbols from ${context.projectName}`);
+    log.component('#paradigm-mcp').info('Project loaded', { symbols: context.aggregation.symbols.length, project: context.projectName });
   } catch (error) {
-    console.error(`[paradigm-mcp] Error loading project:`, error);
+    log.component('#paradigm-mcp').error('Error loading project', { error: (error as Error).message });
     process.exit(1);
   }
 
@@ -97,18 +98,18 @@ async function main() {
 
   // Handle errors
   server.onerror = (error) => {
-    console.error('[paradigm-mcp] Server error:', error);
+    log.component('#paradigm-mcp').error('Server error', { error: String(error) });
   };
 
   // Connect to stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
-  console.error('[paradigm-mcp] Server running on stdio');
+
+  log.component('#paradigm-mcp').info('Server running on stdio');
 }
 
 // Run
 main().catch((error) => {
-  console.error('[paradigm-mcp] Fatal error:', error);
+  log.component('#paradigm-mcp').error('Fatal error', { error: (error as Error).message });
   process.exit(1);
 });

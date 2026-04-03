@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 
 /** TTL for fixtures cache (60 seconds - fixtures change less frequently) */
 const FIXTURES_CACHE_TTL_MS = 60 * 1000;
@@ -92,7 +93,7 @@ async function loadFixturesFresh(rootDir: string): Promise<TestFixtures | null> 
     const content = fs.readFileSync(fixturesPath, 'utf8');
     return yaml.load(content) as TestFixtures;
   } catch (error) {
-    console.error('[fixtures-loader] Error parsing fixtures.yaml:', error);
+    log.component('#fixtures-loader').error('Error parsing fixtures.yaml', { error });
     return null;
   }
 }

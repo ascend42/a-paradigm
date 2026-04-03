@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { log } from './mcp-logger.js';
 import type {
   HistoryContext,
   HistoryEntry,
@@ -64,7 +65,7 @@ async function loadHistoryIndex(historyPath: string): Promise<HistoryIndex | nul
     const data = yaml.load(content) as HistoryIndex;
     return data;
   } catch (error) {
-    console.error('[history-loader] Error parsing index.yaml:', error);
+    log.component('#history-loader').error('Error parsing index.yaml', { error: (error as Error).message });
     return null;
   }
 }
@@ -84,7 +85,7 @@ async function loadValidationSummary(historyPath: string): Promise<ValidationSum
     const data = yaml.load(content) as ValidationSummary;
     return data;
   } catch (error) {
-    console.error('[history-loader] Error parsing validation.yaml:', error);
+    log.component('#history-loader').error('Error parsing validation.yaml', { error: (error as Error).message });
     return null;
   }
 }
@@ -110,11 +111,11 @@ export async function loadHistoryLog(rootDir: string): Promise<HistoryEntry[]> {
         const entry = JSON.parse(line) as HistoryEntry;
         entries.push(entry);
       } catch (error) {
-        console.error('[history-loader] Error parsing log line:', error);
+        log.component('#history-loader').error('Error parsing log line', { error: (error as Error).message });
       }
     }
   } catch (error) {
-    console.error('[history-loader] Error reading log.jsonl:', error);
+    log.component('#history-loader').error('Error reading log.jsonl', { error: (error as Error).message });
   }
 
   return entries;
@@ -152,7 +153,7 @@ export async function loadRecentHistory(
       }
     }
   } catch (error) {
-    console.error('[history-loader] Error reading log.jsonl:', error);
+    log.component('#history-loader').error('Error reading log.jsonl', { error: (error as Error).message });
   }
 
   return entries;
