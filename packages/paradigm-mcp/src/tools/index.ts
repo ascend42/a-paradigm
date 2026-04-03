@@ -59,6 +59,7 @@ import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getRippleToolsList, handleRippleTool } from './ripple.js';
+import { getCaptainToolsList, handleCaptainTool } from './captain.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
@@ -152,6 +153,12 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'core',
       getToolsList: getRippleToolsList,
       handleTool: wrap(handleRippleTool),
+    },
+    {
+      key: 'captain',
+      tier: 'core',
+      getToolsList: getCaptainToolsList,
+      handleTool: wrap(handleCaptainTool),
     },
   ]);
 

@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.0] — 2026-04-02
+
+### Added
+
+- **Cid — The Captain Agent** — New protected core agent who runs as the mandatory first and last stage of every orchestration. Named after Final Fantasy's recurring engineer-captain archetype. Cid cannot be benched via normal roster operations — requires `PARADIGM_SKIP_CAPTAIN=1` to disable.
+- **`paradigm_captain_brief`** — Pre-task context discovery tool. Takes the task description, extracts keyword clusters, runs symbol search + navigate + ripple on top symbols, checks gates for any route patterns, surfaces wisdom antipatterns, finds matching protocols, queries recent lore, computes a coverage confidence score, and returns a structured Context Brief. The brief is injected into every agent's prompt in the orchestration chain.
+- **`paradigm_captain_debrief`** — Post-task maintenance tool. Audits `.purpose` coverage for every touched directory, creates stubs for uncovered areas, queues rich-doc gaps to `.pending-review` for Documentor, records the session to lore, updates coverage scores, and writes the `.cid-briefed` marker that signals the stop hook to run a lightweight check instead of the full suite.
+- **Context Brief injection** — Every agent in execute mode now receives Cid's Context Brief in their prompt: territory, symbols, blast radius, gates, matched protocol, warnings, and coverage confidence. Agents start from a map, not from scratch.
+- **Coverage confidence score** — Cid computes a `0.0–1.0` coverage score for the affected area on every brief (`sparse → partial → reliable → comprehensive`). Makes the value of `.purpose` investment legible in real time.
+- **Stop hook integration** — If `.cid-briefed` marker exists, the stop hook runs only the route-without-portal check and exits. Full 13-check compliance suite runs only when Cid was not invoked. Enforcement is cooperative rather than adversarial.
+- **ADR-CID-001** — Architecture decision recorded at `.paradigm/decisions/ADR-CID-001.yaml`.
+- **Cid added to project roster** — `cid` is now the first agent in `.paradigm/roster.yaml`.
+
+### Changed
+
+- **Orchestration quick mode** — Cid brief (quick depth) now runs before the Advocate stress-test, giving Jinx a map to challenge rather than working blind.
+- **Orchestration execute mode** — Final step instructs the orchestrating session to call `paradigm_captain_debrief` after all agents complete.
+
+Symbols: #cid, #orchestration, #paradigm-mcp, #purpose-files, #stop-hook
+
 ## [5.35.1] — 2026-04-01
 
 ### Fixed

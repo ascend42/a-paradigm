@@ -1,0 +1,23 @@
+id: ADR-CID-001
+title: "Cid — Captain Agent as mandatory orchestration bookend"
+date: "2026-04-02"
+status: accepted
+context: >-
+  Paradigm's symbol system only provides value if agents navigate through it.
+  Navigation was optional behavior in CLAUDE.md. Audit found the system was
+  underutilized and maintenance had no visible feedback loop.
+decision: >-
+  Add Cid (the Captain agent) as a protected agent who runs before and after
+  all orchestration. Pre-task: produces a Context Brief injected into every
+  agent's prompt. Post-task: audits coverage, creates stubs, delegates rich
+  docs to Documentor, writes .cid-briefed marker to clear the stop hook.
+consequences:
+  positive:
+    - Symbol system is utilized on every orchestrated session
+    - .purpose maintenance has a feedback loop (coverage score)
+    - Stop hook enforcement is no longer adversarial
+    - Context Brief makes sparse coverage visible in real time
+  negative:
+    - Adds ~1,500-4,000 tokens per orchestrated session for the brief
+    - Requires brief to be well-implemented or it wastes tokens on empty results
+symbols: ['#cid', '#orchestration', '#paradigm-mcp', '#purpose-files']

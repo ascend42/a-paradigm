@@ -13,6 +13,7 @@ import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { loadProjectRoster, isAgentActive } from '../utils/agent-loader.js';
+import { handleCaptainTool } from './captain.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
@@ -898,6 +899,22 @@ async function handleOrchestrateInline(
     // .agent profile loading is optional — falls back to agents.yaml behavior
   }
 
+  // Run Cid's pre-task brief (non-fatal — agents proceed without it if brief fails)
+  let captainBriefText: string | undefined;
+  try {
+    const briefResult = await handleCaptainTool('paradigm_captain_brief', {
+      taskDescription: task,
+      symbols,
+      depth: 'standard',
+    }, ctx);
+    if (briefResult.handled) {
+      const briefData = JSON.parse(briefResult.text);
+      captainBriefText = briefData.renderedBrief;
+    }
+  } catch {
+    // Captain brief failure is non-fatal — agents proceed without it
+  }
+
   const stagePrompts: Array<{
     stage: number;
     canRunParallel: boolean;
@@ -928,6 +945,7 @@ async function handleOrchestrateInline(
         dependsOn: agentStep.dependsOn,
         profileEnrichment: profileData?.enrichment,
         nickname: profileData?.nickname,
+        captainBrief: captainBriefText,
       });
 
       agentPrompts.push(promptResult);
@@ -1052,6 +1070,20 @@ async function handleOrchestrateInline(
       'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
 
+    // Mandatory final step: Cid debrief closes the session
+    finalStep: {
+      mandatory: true,
+      description: 'After ALL agents complete, run paradigm_captain_debrief to close the session.',
+      tool: 'paradigm_captain_debrief',
+      args: {
+        orchestrationId: `${orchestrationId} (use the orchestrationId from this response)`,
+        sessionSummary: '(summarize what was accomplished)',
+        touchedFiles: '(list all files modified during this session)',
+        newSymbols: '(optional: list any new symbols registered)',
+      },
+      note: 'This closes the session, updates .purpose coverage, records lore, and clears the stop hook. The session is NOT complete until debrief runs.',
+    },
+
     // Claude Code: Use Task tool for parallel agent spawning
     claudeCode: {
       method: 'Task tool',
@@ -1120,6 +1152,25 @@ async function handleQuickCheck(
   ctx: ProjectContext
 ): Promise<{ handled: boolean; text: string }> {
   const taskLower = task.toLowerCase();
+
+  // Run Cid's quick brief (search + navigate only — lightweight)
+  let quickBriefSummary: { coverage: string; warnings: string[] } | undefined;
+  try {
+    const briefResult = await handleCaptainTool('paradigm_captain_brief', {
+      taskDescription: task,
+      symbols,
+      depth: 'quick',
+    }, ctx);
+    if (briefResult.handled) {
+      const briefData = JSON.parse(briefResult.text);
+      quickBriefSummary = {
+        coverage: `${briefData.coverage?.label || 'unknown'} (${Math.round((briefData.coverage?.score || 0) * 100)}%)`,
+        warnings: briefData.warnings || [],
+      };
+    }
+  } catch {
+    // Quick brief failure is non-fatal
+  }
 
   // Determine if this should auto-escalate to full orchestration
   const escalationSignals: string[] = [];
@@ -1264,6 +1315,7 @@ async function handleQuickCheck(
     },
     ...(escalationSignals.length > 0 ? { escalationSignals } : {}),
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
+    ...(quickBriefSummary ? { captainBrief: quickBriefSummary } : {}),
     symbols,
     instructions: verdict === 'greenlight'
       ? [
@@ -1826,6 +1878,8 @@ interface PromptBuildOptions {
   profileEnrichment?: string;
   /** Optional display nickname from .agent profile */
   nickname?: string;
+  /** Rendered Context Brief from Cid (captain), injected after profileEnrichment */
+  captainBrief?: string;
 }
 
 function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResult {
@@ -1837,6 +1891,12 @@ function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResul
   if (options.profileEnrichment) {
     parts.push(options.profileEnrichment);
     parts.push('---');
+    parts.push('');
+  }
+
+  // Captain's Context Brief (injected into every agent)
+  if (options.captainBrief) {
+    parts.push(options.captainBrief);
     parts.push('');
   }
 
