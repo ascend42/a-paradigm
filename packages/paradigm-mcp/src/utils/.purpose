@@ -3,10 +3,10 @@ description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
   symphony-loader:
-    description: 'The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained).'
+    description: 'The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained). Ring 1 content filtering seam: isRing1Content, recordRing1Interception (audit trail), readOutboxRaw (unfiltered, relay-internal), readOutbox (filtered). SymphonyMessage.contentType field added.'
     type: loader
     anchors:
-      - symphony-loader.ts:1-988
+      - symphony-loader.ts:1-1205
     tags:
       - feature
       - symphony
@@ -33,10 +33,10 @@ components:
       - symphony
       - networking
   symphony-relay:
-    description: WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect.
+    description: WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect. Unsafe inline Ring 1 filter sites removed; delegates to symphony-loader for content filtering.
     type: integration
     anchors:
-      - symphony-relay.ts:1-925
+      - symphony-relay.ts:1-1000
     tags:
       - feature
       - symphony

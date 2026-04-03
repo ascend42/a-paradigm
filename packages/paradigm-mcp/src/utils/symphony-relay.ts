@@ -23,13 +23,13 @@ import { WebSocketServer, WebSocket } from 'ws';
 
 import {
   listAgents,
-  readOutbox,
+  readOutboxRaw,
   appendToInbox,
   isAgentAsleep,
+  isRing1Content,
+  recordRing1Interception,
   type SymphonyMessage,
 } from './symphony-loader.js';
-
-import { RING1_CONTENT_CATEGORIES } from '../types/data-policy.js';
 
 import {
   type AgentSummary,
@@ -546,9 +546,8 @@ export class SymphonyRelay {
     origin: string,
   ): void {
     // ── Content-type filtering: block Ring 1 project-locked categories ──
-    const contentType = (message as unknown as Record<string, unknown>).contentType as string | undefined;
-    if (contentType && RING1_CONTENT_CATEGORIES.includes(contentType as (typeof RING1_CONTENT_CATEGORIES)[number])) {
-      // Ack silently — the sender doesn't need to know why it was dropped
+    if (isRing1Content(message)) {
+      recordRing1Interception(message.sender.id, message, 'cross-project-transfer');
       sendFrame(senderWs, { type: 'message_ack', messageId: message.id });
       return;
     }
@@ -649,8 +648,13 @@ export class SymphonyRelay {
   /**
    * Start polling local agent outboxes for new messages to relay.
    *
-   * Reads each outbox as an array, compares length against the stored
-   * position, and forwards any new entries to all connected peers.
+   * Tracks position using raw JSONL line count so Ring 1 messages (which are
+   * excluded from the filtered readOutbox view but present in the raw file)
+   * do not cause the position cursor to drift out of sync with the actual file.
+   *
+   * Each poll slices from the last raw position, then applies the Ring 1 filter
+   * inline before forwarding — so Ring 1 messages are never relayed regardless
+   * of where they appear in the file.
    */
   private startOutboxWatcher(): void {
     if (this.outboxWatchInterval) return;
@@ -662,22 +666,27 @@ export class SymphonyRelay {
         const agents = listAgents();
 
         for (const agent of agents) {
-          const messages = readOutbox(agent.id);
+          // Use raw line count for position tracking — filtered length would
+          // drift when Ring 1 messages exist at arbitrary positions in the file.
+          const rawMessages = readOutboxRaw(agent.id);
           const lastPosition = this.outboxPositions.get(agent.id) ?? 0;
 
-          if (messages.length <= lastPosition) continue;
+          if (rawMessages.length <= lastPosition) {
+            this.outboxPositions.set(agent.id, rawMessages.length);
+            continue;
+          }
 
-          // Forward new messages
-          const newMessages = messages.slice(lastPosition);
-          for (const msg of newMessages) {
-            // Skip if already seen (prevents echo)
+          // Advance the cursor before processing, so a throw mid-loop doesn't
+          // re-process the same messages on the next tick.
+          this.outboxPositions.set(agent.id, rawMessages.length);
+
+          const newRawMessages = rawMessages.slice(lastPosition);
+          for (const msg of newRawMessages) {
+            // Skip Ring 1 content — must never leave the originating project.
+            if (isRing1Content(msg)) continue;
+
+            // Skip if already seen (prevents echo from messages we received).
             if (this.seenMessageIds.has(msg.id)) continue;
-
-            // ── Outbox content-type filtering: block Ring 1 categories ──
-            const outboundContentType = (msg as unknown as Record<string, unknown>).contentType as string | undefined;
-            if (outboundContentType && RING1_CONTENT_CATEGORIES.includes(outboundContentType as (typeof RING1_CONTENT_CATEGORIES)[number])) {
-              continue; // Ring 1 content must never leave the project
-            }
 
             this.addToSeenIds(msg.id);
 
@@ -691,8 +700,6 @@ export class SymphonyRelay {
               sendFrame(peerWs, frame);
             }
           }
-
-          this.outboxPositions.set(agent.id, messages.length);
         }
       } catch (err) {
         this.events.onError?.(err instanceof Error ? err : new Error(String(err)));

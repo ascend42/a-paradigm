@@ -21,6 +21,13 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
+import {
+  type ContentCategory,
+  RING1_CONTENT_CATEGORIES,
+  type AuditEntry,
+  type EnforcementBoundary,
+} from '../types/data-policy.js';
+import { log } from '@a-company/paradigm-logger';
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -159,6 +166,45 @@ export interface SymphonyMessage {
   attachments?: Attachment[];
   metadata?: MessageMetadata;
   origin?: string;  // Peer ID that originated this message (set by relay)
+  contentType?: ContentCategory;
+}
+
+/**
+ * Returns true if a message carries a Ring 1 content category that must
+ * never leave the originating project.
+ */
+export function isRing1Content(message: SymphonyMessage): boolean {
+  return message.contentType !== undefined &&
+    RING1_CONTENT_CATEGORIES.includes(message.contentType as (typeof RING1_CONTENT_CATEGORIES)[number]);
+}
+
+/**
+ * Record a Ring 1 interception to the audit trail at
+ * ~/.paradigm/events/audit-ring1.jsonl.
+ *
+ * Failures are swallowed — audit writes must never affect the critical path.
+ */
+export function recordRing1Interception(
+  agentId: string,
+  message: SymphonyMessage,
+  boundary: EnforcementBoundary,
+): void {
+  try {
+    const entry: AuditEntry = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      agent: agentId,
+      boundary,
+      data_category: message.contentType as ContentCategory,
+      action: 'blocked',
+      destination_ring: 'network-public',
+      details: message.id,
+    };
+    const auditPath = path.join(os.homedir(), '.paradigm', 'events', 'audit-ring1.jsonl');
+    appendJsonlLine(auditPath, entry);
+  } catch (err) {
+    log.component('#symphony-loader').warn(`Ring 1 audit write failed: ${err}`);
+  }
 }
 
 export type FileUrgency = 'normal' | 'urgent';
@@ -631,8 +677,19 @@ export function appendToOutbox(agentId: string, message: SymphonyMessage): void 
   appendJsonlLine(outboxPath(agentId), message);
 }
 
-export function readOutbox(agentId: string): SymphonyMessage[] {
+/**
+ * Returns all outbox messages including Ring 1 content, unfiltered.
+ *
+ * @internal — use {@link readOutbox} for general consumers.
+ * Also used by the Symphony relay for raw-line position tracking and
+ * new-message slicing before inline Ring 1 filtering is applied.
+ */
+export function readOutboxRaw(agentId: string): SymphonyMessage[] {
   return readJsonlFile<SymphonyMessage>(outboxPath(agentId));
+}
+
+export function readOutbox(agentId: string): SymphonyMessage[] {
+  return readOutboxRaw(agentId).filter(msg => !isRing1Content(msg));
 }
 
 export function acknowledgeMessages(agentId: string, lastMessageId: string): void {
@@ -768,8 +825,8 @@ export function getThreadMessages(threadId: string): SymphonyMessage[] {
 
     for (const msg of [...inbox, ...outbox]) {
       if (msg.threadRoot === threadId || msg.id === threadId) {
-        // Deduplicate by message ID
-        if (!messages.some(m => m.id === msg.id)) {
+        // Deduplicate by message ID; exclude Ring 1 content
+        if (!messages.some(m => m.id === msg.id) && !isRing1Content(msg)) {
           messages.push(msg);
         }
       }

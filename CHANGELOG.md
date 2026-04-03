@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.2] — 2026-04-03
+
+### Changed
+
+- **Ring 1 content filtering moved to the loader layer** — `RING1_CONTENT_CATEGORIES` filtering is no longer embedded in the Symphony relay transport. The relay is now a pure forwarder with no content policy knowledge. Two unsafe `as unknown as Record` casts eliminated.
+- **`isRing1Content(message)`** — new exported predicate in `symphony-loader.ts`. Authoritative Ring 1 classifier, operates on properly-typed `SymphonyMessage.contentType?: ContentCategory`. Single source of truth for all filtering decisions.
+- **`recordRing1Interception(agentId, message, boundary)`** — new exported function. Writes a structured `AuditEntry` to `~/.paradigm/events/audit-ring1.jsonl` on every Ring 1 interception at the relay boundary. Previously silent drops now produce an auditable record. Uses Paradigm logger for write failures; non-fatal.
+- **`readOutbox` is now filtered by default** — returns only non-Ring-1 messages. Raw access available via `readOutboxRaw` (exported, `@internal`, used by relay for accurate position tracking).
+- **`getThreadMessages` filtered** — `paradigm_symphony_thread` MCP tool and Platform UI thread view no longer return Ring 1 content.
+- **Outbox watcher position tracking fixed** — `startOutboxWatcher` now tracks raw JSONL line count (not filtered array length) to prevent cursor drift when Ring 1 messages exist at arbitrary positions in the outbox file.
+- **`SymphonyMessage` interface** — added `contentType?: ContentCategory` field, typed against the `ContentCategory` union rather than `string`.
+- **Audit entries use `destination_ring: 'network-public'`** — relay peers are arbitrary network machines; `'user-scoped'` (Ring 2) was incorrect for a cross-machine relay boundary.
+
+Symbols: #symphony-loader, #symphony-relay, ~ring1-filtering
+
 ## [5.36.1] — 2026-04-02
 
 ### Changed

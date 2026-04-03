@@ -23,6 +23,7 @@
     "context"
   ],
   "dependencies": {
+    "@a-company/paradigm-logger": "*",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
     "@a-company/probe-core": "*",
