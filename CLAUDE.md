@@ -86,6 +86,8 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 **Resuming:** Call `paradigm_session_recover`
 
+**Tool names:** Paradigm tools are documented as `paradigm_status`, `paradigm_ripple`, etc. When loaded as a Claude Code plugin, the same tools may appear as `plugin_paradigm_paradigm_status`, `plugin_paradigm_paradigm_ripple`, etc. Both names refer to the same tool — use whichever appears in your available tool list.
+
 ## Before Implementing
 
 0. Call `paradigm_protocol_search` — if a protocol matches, follow it
