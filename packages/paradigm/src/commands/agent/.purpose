@@ -24,6 +24,10 @@ components:
     description: "CLI command handlers for agent scope management: paradigm agent review, approve, deny, scopes. User-facing entry points that delegate to ScopesEngine and AdoptionCRUD."
     type: command-group
     tags: [feature, agent-identity, scopes, cli]
+  RegistryCommands:
+    description: "CLI: paradigm agent install, search, publish — wires Paradigm to nevr.land registry via @a-company/registry-client. Lazy-loads the client, writes .agent profiles, records adoption."
+    type: command-group
+    tags: [feature, agent-registry, nevr, cli]
 
 signals:
   agent-created:
@@ -41,6 +45,9 @@ signals:
   !scopes-denied:
     description: Emitted when a user denies an agent's scope update
     tags: [agent-identity, scopes]
+  !agent-installed:
+    description: Emitted when an agent is installed from the nevr.land registry
+    tags: [agent-registry, nevr]
 
 flows:
   $agent-expertise-flow:
@@ -52,3 +59,6 @@ flows:
   $scope-approval-flow:
     description: "Scope change detected → diff computed → user prompted → approved/denied → adoption record updated → pending review cleared"
     tags: [agent-identity, scopes, adoption]
+  $agent-install-flow:
+    description: "User runs install → registry queried → package downloaded (or metadata fallback) → .agent profile written → adoption recorded"
+    tags: [agent-registry, nevr, adoption]

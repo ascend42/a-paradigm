@@ -2542,6 +2542,35 @@ agentCmd
     await agentScopesCommand(id, options);
   });
 
+// --- nevr.land registry commands ---
+
+agentCmd
+  .command('install <source>')
+  .description('Install an agent from nevr.land registry')
+  .option('--global', 'Install globally to ~/.paradigm/agents/')
+  .action(async (source: string, options: { global?: boolean }) => {
+    const { agentInstallCommand } = await import('./commands/agent/registry.js');
+    await agentInstallCommand(source, options);
+  });
+
+agentCmd
+  .command('search <query>')
+  .description('Search nevr.land registry for agents')
+  .option('--limit <n>', 'Limit results', '10')
+  .action(async (query: string, options: { limit?: string }) => {
+    const { agentSearchCommand } = await import('./commands/agent/registry.js');
+    await agentSearchCommand(query, options);
+  });
+
+agentCmd
+  .command('publish')
+  .description('Publish agent to nevr.land registry')
+  .option('--namespace <ns>', 'Organization namespace')
+  .action(async (options: { namespace?: string }) => {
+    const { agentPublishCommand } = await import('./commands/agent/registry.js');
+    await agentPublishCommand(options);
+  });
+
 // Default agent action (list)
 agentCmd
   .action(async () => {
