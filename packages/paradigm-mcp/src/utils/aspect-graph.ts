@@ -690,6 +690,8 @@ export function getHeatmap(
  * @param rootDir - Absolute path to the project root directory
  * @param aspectId - Optional aspect ID to scope the check
  * @param autoHeal - Auto-update anchors for high-confidence shifts (default: true)
+ * @param suggestThreshold - Minimum score to suggest relocation (default: 0.7, configurable via drift.suggest-threshold in config.yaml)
+ * @param healThreshold - Minimum score to auto-heal (default: 0.85, configurable via drift.auto-heal-threshold in config.yaml)
  * @returns Array of drift results for each anchor
  */
 export function checkDrift(
@@ -697,6 +699,8 @@ export function checkDrift(
   rootDir: string,
   aspectId?: string,
   autoHeal: boolean = true,
+  suggestThreshold: number = 0.7,
+  healThreshold: number = 0.85,
 ): DriftResult[] {
   const anchorRows: AnchorRow[] = aspectId
     ? queryRows<AnchorRow>(db, 'SELECT * FROM anchors WHERE aspect_id = ?', [aspectId])
@@ -911,8 +915,8 @@ export function checkDrift(
         const { contentSearch } = require('./aspect-fingerprint.js');
         const searchResult = contentSearch(rootDir, anchor.file_path, anchor.original_content, autoHeal);
 
-        if (searchResult.found && searchResult.score >= 0.7) {
-          const isAutoHeal = autoHeal && searchResult.score >= 0.85 && !searchResult.suggestedPath;
+        if (searchResult.found && searchResult.score >= suggestThreshold) {
+          const isAutoHeal = autoHeal && searchResult.score >= healThreshold && !searchResult.suggestedPath;
 
           if (isAutoHeal && searchResult.suggestedStart && searchResult.suggestedEnd) {
             // Auto-relocate within same file

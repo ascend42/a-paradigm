@@ -859,6 +859,14 @@ async function handleOrchestrateInline(
                     sorted.map(e => e.id)
                   );
                 } catch { /* non-fatal */ }
+
+                // Increment appliedCount for each injected entry (drives popularity scoring)
+                try {
+                  const { incrementApplied } = await import('../utils/notebook-loader.js');
+                  for (const e of sorted) {
+                    incrementApplied(agentStep.name, e.id, ctx.rootDir);
+                  }
+                } catch { /* non-fatal */ }
               }
             } catch { /* notebook loading is non-fatal */ }
 

@@ -13,6 +13,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   openAspectGraph,
@@ -721,11 +722,24 @@ async function handleAspectDrift(
     ? (aspectId.startsWith('~') ? aspectId.slice(1) : aspectId)
     : undefined;
 
+  // Read drift thresholds from .paradigm/config.yaml (fall back to defaults)
+  let suggestThreshold = 0.7;
+  let healThreshold = 0.85;
+  try {
+    const configPath = path.join(ctx.rootDir, '.paradigm', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const raw = yaml.load(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+      const drift = raw?.drift as Record<string, number> | undefined;
+      if (typeof drift?.['suggest-threshold'] === 'number') suggestThreshold = drift['suggest-threshold'];
+      if (typeof drift?.['auto-heal-threshold'] === 'number') healThreshold = drift['auto-heal-threshold'];
+    }
+  } catch { /* config read failure is non-fatal */ }
+
   let db: Database | null = null;
   try {
     db = await openAspectGraph(ctx.rootDir);
 
-    const results = checkDrift(db, ctx.rootDir, normalizedId, autoHeal);
+    const results = checkDrift(db, ctx.rootDir, normalizedId, autoHeal, suggestThreshold, healThreshold);
 
     const cleanCount = results.filter((r) => r.status === 'clean').length;
     const cosmeticCount = results.filter((r) => r.status === 'cosmetic').length;

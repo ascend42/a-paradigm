@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.0] — 2026-04-03
+
+### Fixed
+
+- **B2 — Drift thresholds now read from config** — `paradigm_aspect_drift` was using hardcoded `0.7` (suggest) and `0.85` (auto-heal) thresholds even though `.paradigm/config.yaml` supports `drift.suggest-threshold` and `drift.auto-heal-threshold`. `checkDrift` now accepts threshold parameters with those defaults; `handleAspectDrift` reads config.yaml and passes the configured values through. Configuring `drift` in config.yaml now actually takes effect.
+- **B4 — Notebook appliedCount incremented on inject** — When orchestration execute mode injects notebook entries into agent prompts, `incrementApplied` was never called. Entries were injected but their `appliedCount` stayed at 0 permanently, breaking popularity-based sorting. Added `incrementApplied` call for each injected entry after `recordNotebookReference`.
+
+### Not reproduced
+
+- **B3 — purpose-tracker.ts v1 symbols** — No `purpose-tracker.ts` exists. `captain.ts` `buildPurposeStub` already uses v2 format (`components:` with `tags:`). No v1 symbol generation (`@feature`, `&integration`) found in any stub-generating code path. Bug does not exist in current codebase.
+- **B5 — team/orchestrate.ts cross-package import** — `packages/paradigm/src/commands/team/orchestrate.ts` imports only from `../../core/` (within package). No `paradigm-mcp/src` imports present. Other files (`commands/symphony/`, `platform-server/`) do import from paradigm-mcp/src but are intentional monorepo patterns with documented rationale.
+
+Symbols: #aspect-fingerprint, #orchestration, #notebook-loader
+
 ## [5.36.9] — 2026-04-03
 
 ### Changed
