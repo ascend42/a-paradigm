@@ -2077,6 +2077,16 @@ docsCmd
     await docsBuildCommand(options);
   });
 
+docsCmd
+  .command('scaffold')
+  .description('Generate .index.yaml stubs for docs-class .paradigm/ subdirectories')
+  .option('--dry-run', 'Preview what would be created without writing files')
+  .option('-q, --quiet', 'Suppress output')
+  .action(async (options) => {
+    const { docsScaffoldCommand } = await import('./commands/docs/scaffold.js');
+    await docsScaffoldCommand({ dryRun: options.dryRun, quiet: options.quiet });
+  });
+
 // Default docs action: launch serve (bare `paradigm docs`)
 docsCmd
   .action(async () => {

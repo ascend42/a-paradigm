@@ -163,6 +163,35 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           });
         }
 
+        // Check docs-class directories for .index.yaml coverage
+        const docsClassDirs = ['specs', 'implementation-guides', 'prompts', 'decisions'];
+        const missingIndexDirs: string[] = [];
+
+        for (const dirName of docsClassDirs) {
+          const dirPath = path.join(paradigmDir, dirName);
+          if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+            const indexPath = path.join(dirPath, '.index.yaml');
+            if (!fs.existsSync(indexPath)) {
+              missingIndexDirs.push(`.paradigm/${dirName}/`);
+            }
+          }
+        }
+
+        if (missingIndexDirs.length > 0) {
+          results.push({
+            name: 'Docs-class indexes',
+            status: 'warn',
+            message: `${missingIndexDirs.length} director${missingIndexDirs.length === 1 ? 'y' : 'ies'} missing .index.yaml: ${missingIndexDirs.join(', ')}`,
+            fix: 'paradigm docs scaffold',
+          });
+        } else {
+          results.push({
+            name: 'Docs-class indexes',
+            status: 'ok',
+            message: 'All docs-class directories have .index.yaml',
+          });
+        }
+
         // Check scan index
         const scanIndexPath = path.join(paradigmDir, 'scan-index.json');
         const legacyScanIndex = path.join(cwd, '.paradigm-scan-index.json');

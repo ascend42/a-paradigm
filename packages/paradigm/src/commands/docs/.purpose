@@ -1,6 +1,10 @@
 version: 2.0.0
 components:
   DocsCommands:
-    description: CLI commands for auto-generated documentation — serve and build
+    description: CLI commands for documentation management — serve, build, and scaffold
     type: command-group
     tags: [feature, docs, cli]
+  "#docs-scaffold":
+    description: "paradigm docs scaffold — generates .index.yaml stubs for docs-class .paradigm/ subdirectories (specs, implementation-guides, prompts, decisions)"
+    type: command
+    file: scaffold.ts

@@ -23,6 +23,9 @@ describe('doctorCommand', () => {
     cleanup = c;
     // Doctor checks for prompts dir, .premise file, and hooks
     fs.mkdirSync(path.join(rootDir, '.paradigm', 'prompts'), { recursive: true });
+    // Satisfy docs-class index check — add .index.yaml stubs for specs and prompts
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'specs', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'prompts', '.index.yaml'), 'version: 1.0.0\ndescription: stub\n', 'utf8');
     fs.writeFileSync(path.join(rootDir, '.premise'), '', 'utf8');
     // Create hooks so the hooks check passes
     fs.mkdirSync(path.join(rootDir, 'plugins', 'paradigm'), { recursive: true });

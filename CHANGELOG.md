@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.6] — 2026-04-03
+
+### Added
+
+- **`paradigm docs scaffold`** — new command that generates `.index.yaml` stubs for docs-class `.paradigm/` subdirectories (`specs/`, `implementation-guides/`, `prompts/`, `decisions/`). Supports `--dry-run` and `--quiet`. Only writes to directories that exist and are missing an index; silently skips system-written runtime dirs (`events/`, `agent-state/`, `tasks/`, etc.).
+- **Doctor check: docs-class indexes** — `paradigm doctor` now warns when any of the four docs-class directories exists but is missing `.index.yaml`. Status: `warn` (not error). Fix suggestion: `paradigm docs scaffold`.
+
+### Changed
+
+- **`paradigm docs` subcommand group** — `scaffold` joins the existing `serve` and `build` subcommands under `paradigm docs`.
+
+Symbols: #doctor, #docs-scaffold
+
 ## [5.36.5] — 2026-04-03
 
 ### Changed
