@@ -1,4 +1,4 @@
-// EyebrowCalibrationWindowController.swift — #eyebrow-calibration
+// EyebrowCalibrationWindowController.swift — #eyebrow-calibration [EXPERIMENTAL]
 // Borderless fullscreen NSWindow hosting EyebrowCalibrationView.
 // Mirrors CalibrationWindowController pattern for eyebrow threshold calibration.
 

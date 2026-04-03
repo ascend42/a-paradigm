@@ -127,6 +127,8 @@ routes:
 3. Implement the gate checks in your middleware/code
 4. Test that unauthorized access returns 403
 
+> **Portal.yaml is a documentation contract, not a runtime enforcement layer.** Paradigm's compliance checker validates that gates are declared in portal.yaml and referenced in .purpose files — it does not verify that your code actually enforces them. Step 3 (implementing gate checks) is your responsibility.
+
 ## Common Gate Patterns
 
 | Pattern | Gate Name | Description |

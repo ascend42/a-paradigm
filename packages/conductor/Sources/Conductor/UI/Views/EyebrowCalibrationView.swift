@@ -1,6 +1,7 @@
-// EyebrowCalibrationView.swift — #eyebrow-calibration
+// EyebrowCalibrationView.swift — #eyebrow-calibration [EXPERIMENTAL]
 // Fullscreen overlay for calibrating eyebrow detection thresholds.
 // 4-step, ~15 seconds. Real-time distance bars.
+// Experimental: requires stable lighting and favorable face geometry. Maintained at fixes-only priority.
 
 import SwiftUI
 
@@ -15,7 +16,7 @@ struct EyebrowCalibrationView: View {
     var body: some View {
         VStack(spacing: 24) {
             // Header
-            Text("Eyebrow Calibration")
+            Text("Eyebrow Calibration (Experimental)")
                 .font(.title.bold())
                 .foregroundStyle(.white)
 

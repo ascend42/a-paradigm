@@ -520,7 +520,7 @@ const portalAddGateTool: Tool = {
       },
       location: {
         type: 'string',
-        description: 'Where the gate is enforced (e.g. "middleware", "route-handler")',
+        description: 'Where the gate is checked in your code (e.g. "middleware", "route-handler")',
       },
       requires: {
         type: 'array',

@@ -1,4 +1,4 @@
-// EyebrowDetector.swift — #eyebrow-detector
+// EyebrowDetector.swift — #eyebrow-detector [EXPERIMENTAL]
 // Consumes raw EyebrowFrame stream, applies 1D Kalman smoothing,
 // and emits discrete EyebrowEvent values via threshold + hysteresis.
 

@@ -51,6 +51,8 @@ Agent update (v1 → v2)
 
 ## Scoped Permissions Model
 
+> **Advisory only.** Scoped permissions are text instructions injected into agent prompts. They guide agent behavior but are not wired to Claude Code's tool permission system. A "denied" scope is a recommendation, not a technical block. Pair with Claude Code tool permission controls if hard enforcement is required.
+
 ### Scope Categories
 
 5 coarse categories. Agents declare which they need. Users approve the bundle.

@@ -267,7 +267,7 @@ struct HelpView: View {
                 "5-point calibration for screen-space mapping",
             ])
 
-            noteBox("Voice and gaze features are experimental. Gaze calibration UI is still in development. These features work best with good lighting and a stable camera position.")
+            noteBox("Voice, gaze, and eyebrow detection are experimental. Gaze calibration UI is still in development. Eyebrow detection requires stable lighting and specific face geometry — use voice + hotkeys for reliable input. These features are maintained at lower priority.")
         }
     }
 

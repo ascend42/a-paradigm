@@ -5,6 +5,17 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.8] — 2026-04-03
+
+### Changed
+
+- **E3 — Gate enforcement framing** — `paradigm_portal_add_gate` input field `location` description updated from "Where the gate is enforced" to "Where the gate is checked in your code". Portal guidance resource (`paradigm://guidance/portal`) now explicitly states that portal.yaml is a documentation contract, not a runtime enforcement layer — the compliance checker validates declarations, not code execution.
+- **A1 — Orchestration mode clarity** — `paradigm_orchestrate_inline` tool description now documents both execution models: faceted (default, Claude Code Task tool, true multi-agent with isolated context windows per agent) vs. sequential/solo (same session context, works in Cursor and IDEs without Task tool support). CLAUDE.md updated with a one-paragraph explanation.
+- **A3 — Adoption contracts framing** — CLAUDE.md and `docs/specs/agent-adoption.md` now state that scoped permissions in `.agent` files are advisory text instructions injected into agent prompts, not wired to Claude Code's tool permission system. A "denied" scope is a recommendation, not a hard block.
+- **U1 — Eyebrow detection marked experimental** — `EyebrowCalibrationView`, `EyebrowCalibrationWindowController`, and `EyebrowDetector` header comments updated with `[EXPERIMENTAL]`. Calibration UI title updated to "Eyebrow Calibration (Experimental)". Conductor help screen expanded to explicitly name eyebrow detection in the experimental notice. Feature is maintained at fixes-only priority; use voice + hotkeys for reliable input.
+
+Symbols: #portal-gate, #orchestration, #agent-adoption, #eyebrow-calibration
+
 ## [5.36.7] — 2026-04-03
 
 ### Removed

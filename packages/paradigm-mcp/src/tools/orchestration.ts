@@ -503,7 +503,7 @@ and every aspect has a valid anchor.
 - paradigm_purpose_add_signal / paradigm_purpose_add_aspect / paradigm_purpose_add_gate
 - paradigm_purpose_validate / paradigm_purpose_link
 - paradigm_aspect_check / paradigm_aspect_drift / paradigm_aspect_confirm
-- paradigm_flow_validate / paradigm_flows_affected
+- paradigm_flow_check / paradigm_flows_affected
 - paradigm_reindex
 
 ## What You NEVER Do
@@ -554,6 +554,11 @@ Plans and coordinates multi-agent task execution within the same session.
 - mode: "execute" - Get full prompts and execution strategy for any IDE
 
 After getting prompts, launch agents using the Task tool. Stages marked canRunParallel: true can be launched simultaneously in a single message.
+
+**Orchestration modes:** Two execution models depending on environment:
+- Faceted (default): Each agent launches as an isolated Task tool context — separate memory, separate prompt, true multi-agent. Requires Claude Code (Task tool support).
+- Sequential (solo): Agents run in the same session context one after another. Same memory throughout. Works in Cursor and other IDEs without Task tool support.
+The active mode is set via \`orchestration.default_mode\` in agents.yaml (defaults to "faceted").
 
 When to use this tool:
 - mode="quick": Before any implementation — fast sanity check that satisfies orchestration-required enforcement
