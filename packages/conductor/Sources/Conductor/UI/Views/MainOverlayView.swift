@@ -22,8 +22,8 @@ struct MainOverlayView: View {
 
     // MARK: - Collapsible Region State
     @State private var showInput = true
-    @State private var showSessions = true
     @State private var showTeam = true
+    @State private var showSessions = false
     @State private var showMonitoring = false
 
     /// Merged instances from AX detection + file-registered sessions.
@@ -211,22 +211,7 @@ struct MainOverlayView: View {
 
                 Divider()
 
-                // Region 2: Sessions & Workspace
-                DisclosureGroup(isExpanded: $showSessions) {
-                    VStack(spacing: 12) {
-                        sessionSection
-                        workspaceSection
-                    }
-                    .padding(.top, 4)
-                } label: {
-                    Label("Sessions & Workspace", systemImage: "rectangle.stack")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.secondary)
-                }
-
-                Divider()
-
-                // Region 3: Team
+                // Region 2: Team
                 DisclosureGroup(isExpanded: $showTeam) {
                     VStack(spacing: 12) {
                         symphonyNotificationsSection
@@ -238,6 +223,21 @@ struct MainOverlayView: View {
                     .padding(.top, 4)
                 } label: {
                     Label("Team", systemImage: "person.3")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                // Region 3: Sessions & Workspace (collapsed by default)
+                DisclosureGroup(isExpanded: $showSessions) {
+                    VStack(spacing: 12) {
+                        sessionSection
+                        workspaceSection
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Label("Sessions & Workspace", systemImage: "rectangle.stack")
                         .font(.subheadline.bold())
                         .foregroundStyle(.secondary)
                 }

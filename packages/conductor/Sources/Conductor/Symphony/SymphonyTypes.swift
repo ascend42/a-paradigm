@@ -94,6 +94,7 @@ struct ApprovalRequestPayload: Codable, Sendable {
 
 enum ApprovalDecision: String, Codable, Sendable {
     case approved
+    case approvedWithNotes
     case rejected
     case redirected
 }

@@ -11,6 +11,7 @@ struct ApprovalView: View {
     let onDismiss: () -> Void
 
     @State private var feedback = ""
+    @State private var includeNotes = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -104,10 +105,17 @@ struct ApprovalView: View {
                     .italic()
             }
 
-            // Feedback field
-            TextField("Optional feedback...", text: $feedback)
-                .textFieldStyle(.roundedBorder)
-                .font(.caption)
+            // Feedback field (redirect always requires it; approve shows it on toggle)
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Feedback / redirect target...", text: $feedback)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                if !includeNotes {
+                    Toggle("Approve with notes", isOn: $includeNotes)
+                        .font(.caption)
+                        .toggleStyle(.checkbox)
+                }
+            }
 
             // Action buttons
             HStack(spacing: 8) {
@@ -127,8 +135,8 @@ struct ApprovalView: View {
                 .buttonStyle(.bordered)
                 .disabled(feedback.isEmpty)
 
-                Button("Approve") {
-                    respond(decision: .approved)
+                Button(includeNotes ? "Approve with Notes" : "Approve") {
+                    respond(decision: includeNotes && !feedback.isEmpty ? .approvedWithNotes : .approved)
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
@@ -142,10 +150,11 @@ struct ApprovalView: View {
     // MARK: - Respond
 
     private func respond(decision: ApprovalDecision) {
+        let carryFeedback = decision == .approvedWithNotes || decision == .redirected
         let responsePayload = ApprovalResponsePayload(
             taskId: approvalRequest.taskId,
             decision: decision,
-            feedback: feedback.isEmpty ? nil : feedback
+            feedback: carryFeedback && !feedback.isEmpty ? feedback : nil
         )
 
         let sender = Participant(

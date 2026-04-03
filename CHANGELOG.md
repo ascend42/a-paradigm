@@ -5,6 +5,15 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.9] — 2026-04-03
+
+### Changed
+
+- **U2 — Conductor section reorder** — Main overlay sections now ordered by usage priority: Input & Buffer → Team → Sessions & Workspace → Monitoring. Team (agents, tasks, approvals, Symphony threads) was previously buried behind Sessions. Sessions & Workspace now collapses by default (`showSessions = false`).
+- **U4 — Approval flow: Approve with notes** — Added `.approvedWithNotes` to `ApprovalDecision` enum. Approval UI gains an "Approve with notes" checkbox toggle; when checked, button label updates and feedback is attached to the approval response with distinct decision semantics. Plain Approve still sends no feedback. Redirect + Feedback behavior unchanged.
+
+Symbols: #conductor-app, #approval-view
+
 ## [5.36.8] — 2026-04-03
 
 ### Changed
