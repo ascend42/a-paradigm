@@ -38,7 +38,7 @@ The MCP server tracks session interactions and provides:
 
 ## MCP Tools
 
-### paradigm_context_check
+### paradigm_session_health
 
 Check if context handoff is recommended.
 
@@ -133,11 +133,11 @@ Markdown guide for when and how to perform handoffs.
 
 ### Periodic Checks
 
-For long sessions, periodically call `paradigm_context_check`:
+For long sessions, periodically call `paradigm_session_health`:
 
 ```
 After every 10-15 significant interactions:
-1. Call paradigm_context_check
+1. Call paradigm_session_health
 2. If recommendation != "continue":
    - Inform user of recommendation
    - Offer to prepare handoff
@@ -186,7 +186,7 @@ Context tracking complements the Team system:
 
 Typical flow:
 ```
-paradigm_context_check → paradigm_handoff_prepare → paradigm team handoff → new session → paradigm team accept
+paradigm_session_health → paradigm_handoff_prepare → paradigm team handoff → new session → paradigm team accept
 ```
 
 ---

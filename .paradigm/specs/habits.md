@@ -27,7 +27,7 @@ Each habit definition specifies a `check.type` that determines how compliance is
 |---|---|---|
 | `commit-message-format` | Commit messages match required patterns | `messagePatterns?: string[]` — regex patterns (default: conventional commit + Symbols: trailer) |
 | `flow-coverage` | Multi-component changes have documented flows | `minSteps?: number` — minimum components to trigger (default: 3) |
-| `context-checked` | Session context/recovery tools were called | `contextTools?: string[]` — tool names (default: paradigm_context_check, paradigm_session_recover, paradigm_session_checkpoint) |
+| `context-checked` | Session context/recovery tools were called | `contextTools?: string[]` — tool names (default: paradigm_session_health, paradigm_session_recover, paradigm_session_checkpoint) |
 | `aspect-anchored` | Touched aspects have valid code anchors | `checkAnchors?: boolean` |
 
 ---

@@ -22,7 +22,7 @@ Paradigm exposes 90+ MCP tools that AI agents can call for context-aware develop
 
 | Tool | Description | Tokens |
 |------|-------------|--------|
-| `paradigm_context_check` | Check context window usage | ~100 |
+| `paradigm_session_health` | Check context window usage | ~100 |
 | `paradigm_handoff_prepare` | Prepare context for session handoff | ~200 |
 | `paradigm_session_checkpoint` | Save work-in-progress state | ~100 |
 | `paradigm_session_recover` | Recover previous session context | ~200 |
@@ -76,5 +76,5 @@ Paradigm exposes 90+ MCP tools that AI agents can call for context-aware develop
 
 - Prefer MCP tools over file reads (~100-300 tokens vs ~2000+ for files)
 - Use `response_format: 'concise'` to halve token usage on supported tools
-- Call `paradigm_context_check` every 10-15 tool calls to monitor usage
+- Call `paradigm_session_health` every 10-15 tool calls to monitor usage
 - Results are cached for 30 seconds — repeated calls are free

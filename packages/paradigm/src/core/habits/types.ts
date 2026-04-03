@@ -52,7 +52,7 @@ export interface HabitCheckParams {
   messagePatterns?: string[];
   /** For flow-coverage: minimum number of flow steps to require for multi-component changes */
   minSteps?: number;
-  /** For context-checked: list of context tools (paradigm_context_check, paradigm_session_recover, etc.) */
+  /** For context-checked: list of context tools (paradigm_session_health, paradigm_session_recover, etc.) */
   contextTools?: string[];
   /** For aspect-anchored: whether to check anchor validity for touched aspects */
   checkAnchors?: boolean;

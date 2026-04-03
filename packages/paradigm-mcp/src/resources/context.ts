@@ -64,7 +64,7 @@ export async function handleContextResource(
 1. **Get oriented**: Call \`paradigm_status\` to see project symbols and health
 2. **Find relevant code**: Call \`paradigm_navigate\` with intent "find" or "explore"
 3. **Before editing**: Call \`paradigm_ripple\` on symbols you'll modify
-4. **Check context**: Call \`paradigm_context_check\` every 10-15 tool calls
+4. **Check context**: Call \`paradigm_session_health\` every 10-15 tool calls
 
 ## Benefits
 
@@ -74,7 +74,7 @@ export async function handleContextResource(
 
 ## Context Monitoring
 
-Call \`paradigm_context_check\` periodically to monitor session health:
+Call \`paradigm_session_health\` periodically to monitor session health:
 - **<50%**: Continue working
 - **50-70%**: Plan a stopping point
 - **70-85%**: Prepare handoff soon
@@ -89,7 +89,7 @@ Call \`paradigm_context_check\` periodically to monitor session health:
 | \`paradigm_ripple\` | Impact analysis before changes |
 | \`paradigm_related\` | Symbol dependencies |
 | \`paradigm_navigate\` | Codebase exploration |
-| \`paradigm_context_check\` | Session health monitoring |
+| \`paradigm_session_health\` | Session health monitoring |
 | \`paradigm_handoff_prepare\` | Prepare context handoff |
 
 ---
@@ -119,7 +119,7 @@ Call \`paradigm_context_check\` periodically to monitor session health:
         },
         tokens: {
           estimatedMcpContribution: stats.totals.totalTokens,
-          note: 'Use paradigm_context_check tool for full analysis with handoff recommendations',
+          note: 'Use paradigm_session_health tool for full analysis with handoff recommendations',
         },
       }, null, 2),
     };
@@ -140,7 +140,7 @@ Handoff is recommended when:
 
 ## How to Check
 
-Call the \`paradigm_context_check\` tool to get:
+Call the \`paradigm_session_health\` tool to get:
 - Current estimated context usage
 - Handoff recommendation
 - Session statistics

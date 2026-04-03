@@ -802,7 +802,7 @@ function evalFlowCoverage(habit: HabitDefinition, ctx: EvaluationContext): Habit
 
 function evalContextChecked(habit: HabitDefinition, ctx: EvaluationContext): HabitEvaluation {
   const contextTools = habit.check.params.contextTools || [
-    'paradigm_context_check', 'paradigm_session_recover', 'paradigm_session_checkpoint',
+    'paradigm_session_health', 'paradigm_session_recover', 'paradigm_session_checkpoint',
   ];
   const called = contextTools.filter((t) => ctx.toolsCalled.includes(t));
   if (called.length > 0) {

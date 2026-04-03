@@ -131,7 +131,7 @@ describe('generateHandoffProtocol', () => {
   it('mentions session recovery', () => {
     const result = generateHandoffProtocol();
     expect(result).toContain('paradigm_session_recover');
-    expect(result).toContain('paradigm_context_check');
+    expect(result).toContain('paradigm_session_health');
     expect(result).toContain('paradigm_handoff_prepare');
   });
 });

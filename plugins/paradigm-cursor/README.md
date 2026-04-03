@@ -46,7 +46,7 @@ All tools are available via the MCP server — no configuration needed:
 | Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent_prompt` | Multi-agent task coordination |
 | Governance | `paradigm_pm_preflight`, `paradigm_pm_postflight` | Pre/post-task compliance |
 | Tags | `paradigm_tags`, `paradigm_tags_suggest` | Symbol classification |
-| Context | `paradigm_context_check`, `paradigm_session_*`, `paradigm_handoff_prepare` | Session management |
+| Context | `paradigm_session_health`, `paradigm_session_*`, `paradigm_handoff_prepare` | Session management |
 | Index | `paradigm_reindex` | Rebuild symbol index |
 
 ### Skills

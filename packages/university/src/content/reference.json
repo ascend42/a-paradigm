@@ -389,7 +389,7 @@
         {
           "id": "context-checked",
           "name": "context-checked",
-          "description": "Verifies that session context/recovery tools (paradigm_context_check, paradigm_session_recover, paradigm_session_checkpoint) were called.",
+          "description": "Verifies that session context/recovery tools (paradigm_session_health, paradigm_session_recover, paradigm_session_checkpoint) were called.",
           "when": "Preflight trigger to encourage session continuity and context awareness."
         },
         {
@@ -621,7 +621,7 @@
           "id": "preparing-a-handoff",
           "name": "Preparing a Handoff",
           "steps": [
-            "1. Call paradigm_context_check to confirm handoff is recommended",
+            "1. Call paradigm_session_health to confirm handoff is recommended",
             "2. Finish or checkpoint the current task",
             "3. Call paradigm_handoff_prepare with: summary, modifiedFiles, symbolsTouched, nextSteps, openQuestions",
             "4. Inform the user of the handoff file location",

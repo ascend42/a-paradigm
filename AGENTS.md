@@ -96,7 +96,7 @@ Paradigm provides MCP tools for token-efficient, always-fresh data. Prefer these
 | `paradigm_pm_preflight` | Pre-task compliance check | Starting any task |
 | `paradigm_pm_postflight` | Post-task violation detection | Finishing any task |
 | `paradigm_session_recover` | Load previous session breadcrumbs | Starting a new session |
-| `paradigm_context_check` | Check context window usage | Every 10-15 tool calls |
+| `paradigm_session_health` | Check context window usage | Every 10-15 tool calls |
 | `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |
 | `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |
 | `paradigm_session_checkpoint` | Save cognitive-transition checkpoint | Phase transitions |
@@ -204,7 +204,7 @@ Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ### Context Monitoring
 
-Call `paradigm_context_check` every 10-15 tool calls to track context usage.
+Call `paradigm_session_health` every 10-15 tool calls to track context usage.
 
 | Usage | Recommendation | Action |
 |-------|----------------|--------|

@@ -617,13 +617,13 @@
           "question": "What should you do before starting the refactor?",
           "choices": {
             "A": "Just continue \u2014 context management is handled automatically",
-            "B": "Call `paradigm_context_check` to see if a handoff is recommended",
+            "B": "Call `paradigm_session_health` to see if a handoff is recommended",
             "C": "Start a new Claude session immediately to get fresh context",
             "D": "Save all files and run `paradigm scan` to rebuild the index",
             "E": "Call `paradigm_session_stats` and if over 100 tool calls, panic"
           },
           "correct": "B",
-          "explanation": "The protocol says to call `paradigm_context_check` periodically (every 10-15 tool calls) during long sessions. At 47 tool calls, you're well overdue for a check. This tool analyzes your context window usage and recommends whether to continue, prepare a handoff, or urgently wrap up. If usage is over 85%, you should prioritize completing your current task and prepare a handoff with `paradigm_handoff_prepare`. Don't just start a new session (C) without preparing a handoff \u2014 you'd lose all context about what was done."
+          "explanation": "The protocol says to call `paradigm_session_health` periodically (every 10-15 tool calls) during long sessions. At 47 tool calls, you're well overdue for a check. This tool analyzes your context window usage and recommends whether to continue, prepare a handoff, or urgently wrap up. If usage is over 85%, you should prioritize completing your current task and prepare a handoff with `paradigm_handoff_prepare`. Don't just start a new session (C) without preparing a handoff \u2014 you'd lose all context about what was done."
         }
       ]
     },
@@ -1458,7 +1458,7 @@
             "E": "Both partial — the agent did some work for each"
           },
           "correct": "B",
-          "explanation": "context-session-awareness checks if paradigm_context_check, paradigm_session_recover, or paradigm_session_checkpoint was called — paradigm_aspect_check does not count. aspect-anchors-valid checks if paradigm_aspect_check was called for touched aspects, which it was. So the first is skipped and the second is followed."
+          "explanation": "context-session-awareness checks if paradigm_session_health, paradigm_session_recover, or paradigm_session_checkpoint was called — paradigm_aspect_check does not count. aspect-anchors-valid checks if paradigm_aspect_check was called for touched aspects, which it was. So the first is skipped and the second is followed."
         }
       ]
     },

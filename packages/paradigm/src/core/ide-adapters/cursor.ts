@@ -485,7 +485,7 @@ Always available in \`navigator.yaml\`:
    * Context monitoring rules - session management and handoff
    */
   private generateContextMdc(): string {
-    return frontmatter('Session recovery and handoff - call paradigm_session_recover at session start, paradigm_context_check periodically during long sessions, paradigm_handoff_prepare when context is high.') +
+    return frontmatter('Session recovery and handoff - call paradigm_session_recover at session start, paradigm_session_health periodically during long sessions, paradigm_handoff_prepare when context is high.') +
       `# Context Monitoring Protocol
 
 ## Session Start (EVERY new session)
@@ -498,7 +498,7 @@ Returns: symbols modified, files explored, recent actions, and suggestions.
 **Every 10-15 tool calls** (or when user asks about context), call:
 
 \`\`\`
-paradigm_context_check()
+paradigm_session_health()
 \`\`\`
 
 This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-recommended\`, or \`handoff-urgent\`.

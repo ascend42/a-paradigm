@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.5] — 2026-04-03
+
+### Changed
+
+- **`paradigm_context_check` renamed to `paradigm_session_health`** — All four session continuity tools now share the `paradigm_session_*` prefix: `session_health`, `session_checkpoint`, `session_recover`, `handoff_prepare`. The old name is preserved as a deprecated alias (routes to the same handler) and will be removed in a future version.
+- **`handoff_prepare` silent data loss fixed** — `persisted: true` was hardcoded regardless of whether the disk write succeeded. Now accurately reflects actual write result.
+- **Duplicate `session_checkpoint` registration removed** — Tool was registered twice in `getContextToolsList()`, with the second incomplete entry (missing `annotations`) silently overwriting the first. Second registration removed.
+- **`loadRecoveryData` extracted** — `buildRecoveryPreamble` (auto-fires on first tool call) and the `session_recover` handler shared near-identical checkpoint/handoff loading logic in two separate copies. Consolidated into one private function to eliminate drift risk.
+- **`session_recover` description updated** — Now documents that auto-recovery fires on the first tool call of every session, making explicit calls redundant in most cases (retained for direct inspection or forcing a second recovery pass).
+
+Symbols: #context-tools, #session-tracker, #habits-loader, #ide-adapters, #university
+
 ## [5.36.4] — 2026-04-03
 
 ### Changed

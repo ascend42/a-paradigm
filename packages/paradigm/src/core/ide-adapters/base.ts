@@ -399,7 +399,7 @@ export function generateMcpToolReference(): string {
   lines.push('| `paradigm_pm_preflight` | Pre-task compliance check | Starting any task |');
   lines.push('| `paradigm_pm_postflight` | Post-task violation detection | Finishing any task |');
   lines.push('| `paradigm_session_recover` | Load previous session breadcrumbs | Starting a new session |');
-  lines.push('| `paradigm_context_check` | Check context window usage | Every 10-15 tool calls |');
+  lines.push('| `paradigm_session_health` | Check context window usage | Every 10-15 tool calls |');
   lines.push('| `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |');
   lines.push('| `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |');
   lines.push('| `paradigm_session_checkpoint` | Save cognitive-transition checkpoint | Phase transitions |');
@@ -453,7 +453,7 @@ export function generateHandoffProtocol(): string {
   lines.push('');
   lines.push('### Context Monitoring');
   lines.push('');
-  lines.push('Call `paradigm_context_check` every 10-15 tool calls to track context usage.');
+  lines.push('Call `paradigm_session_health` every 10-15 tool calls to track context usage.');
   lines.push('');
   lines.push('| Usage | Recommendation | Action |');
   lines.push('|-------|----------------|--------|');

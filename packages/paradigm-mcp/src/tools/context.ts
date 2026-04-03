@@ -11,6 +11,7 @@ import {
   getSessionTracker,
   resetSessionTracker,
   type SessionCheckpoint,
+  type PersistedSession,
 } from '../utils/session-tracker.js';
 import {
   writePendingHandoff,
@@ -156,7 +157,7 @@ export function addToolBreadcrumb(toolName: string, args: Record<string, unknown
 export function getContextToolsList() {
   return [
     {
-      name: 'paradigm_context_check',
+      name: 'paradigm_session_health',
       description: 'Check if context handoff is recommended based on session activity. Call this periodically during long sessions. Returns usage percentage and recommendation (continue, consider-handoff, handoff-recommended, handoff-urgent). ~100 tokens.',
       inputSchema: {
         type: 'object',
@@ -170,6 +171,18 @@ export function getContextToolsList() {
             description: 'Context window size in tokens (default: 200000)',
           },
         },
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
+    },
+    {
+      name: 'paradigm_context_check',
+      description: 'DEPRECATED: renamed to paradigm_session_health. This alias will be removed in a future version.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
       },
       annotations: {
         readOnlyHint: true,
@@ -232,7 +245,7 @@ export function getContextToolsList() {
     },
     {
       name: 'paradigm_session_recover',
-      description: 'Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before. Returns symbols modified, files explored, recent actions, and suggestions for continuity. ~200 tokens.',
+      description: 'Load previous session breadcrumbs for continuity. Call this at the start of a new session to understand what was done before. Returns symbols modified, files explored, recent actions, and suggestions for continuity. ~200 tokens. NOTE: Recovery data is automatically surfaced as a preamble on the first tool call of each session — explicit calls are retained for direct inspection or forcing a second recovery pass.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -289,48 +302,6 @@ export function getContextToolsList() {
         destructiveHint: false,
       },
     },
-    {
-      name: 'paradigm_session_checkpoint',
-      description: 'Save a cognitive-transition checkpoint for crash recovery. Call when transitioning between phases (planning → implementing → validating → complete). ~100 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          phase: {
-            type: 'string',
-            enum: ['planning', 'implementing', 'validating', 'complete'],
-            description: 'Current workflow phase',
-          },
-          context: {
-            type: 'string',
-            description: 'What\'s top-of-mind right now (1-3 sentences)',
-          },
-          externalId: {
-            type: 'string',
-            description: 'Optional: deterministic ID from external source for automatic session recovery (e.g. "linear:PROJ-123", "github:owner/repo#42")',
-          },
-          plan: {
-            type: 'string',
-            description: 'Optional: the current plan or approach',
-          },
-          modifiedFiles: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional: files modified so far',
-          },
-          symbolsTouched: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional: symbols touched so far',
-          },
-          decisions: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional: key decisions made so far',
-          },
-        },
-        required: ['phase', 'context'],
-      },
-    },
   ];
 }
 
@@ -344,7 +315,7 @@ export async function handleContextTool(
 ): Promise<{ handled: boolean; text: string }> {
   const tracker = getSessionTracker();
 
-  if (name === 'paradigm_context_check') {
+  if (name === 'paradigm_session_health' || name === 'paradigm_context_check') {
     const contextWindowSize = (args.contextWindowSize as number) || 200000;
     const estimatedTotal = args.estimatedTotalTokens as number | undefined;
 
@@ -415,10 +386,12 @@ export async function handleContextTool(
     };
 
     // Persist handoff to global store (~/.paradigm/sessions/{hash}/pending-handoffs/)
+    let persisted = false;
     try {
       writePendingHandoff(_ctx.rootDir, handoffPayload);
+      persisted = true;
     } catch {
-      // Best-effort persistence
+      // Best-effort persistence — caller receives persisted: false
     }
 
     // Generate markdown handoff summary for display
@@ -444,7 +417,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
       text: JSON.stringify({
         handoff: handoffPayload,
         markdownSummary,
-        persisted: true,
+        persisted,
         recovery: 'The next session will automatically receive this handoff via paradigm_session_recover.',
       }, null, 2),
     };
@@ -500,19 +473,7 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
   }
 
   if (name === 'paradigm_session_recover') {
-    // Set root dir for the tracker so it can load breadcrumbs
-    tracker.setRootDir(_ctx.rootDir);
-
-    const previousSession = tracker.loadPreviousSession();
-    const checkpoint = tracker.loadCheckpoint();
-
-    // Load pending handoffs from global store
-    let pendingHandoffs: PendingHandoff[] = [];
-    try {
-      pendingHandoffs = loadPendingHandoffs(_ctx.rootDir);
-    } catch {
-      // Best-effort
-    }
+    const { checkpoint, pendingHandoffs, previousSession } = loadRecoveryData(_ctx.rootDir);
 
     if (!previousSession && pendingHandoffs.length === 0 && !checkpoint) {
       return {
@@ -691,16 +652,18 @@ ${nextSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') || '(none specified
   return { handled: false, text: '' };
 }
 
-/**
- * Build a recovery preamble from checkpoint + handoff data.
- * Returns null if no recovery data is available.
- * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
- */
-export async function buildRecoveryPreamble(rootDir: string): Promise<string | null> {
+interface RecoveryData {
+  checkpoint: SessionCheckpoint | null;
+  pendingHandoffs: PendingHandoff[];
+  previousSession: PersistedSession | null;
+}
+
+function loadRecoveryData(rootDir: string): RecoveryData {
   const tracker = getSessionTracker();
   tracker.setRootDir(rootDir);
 
   const checkpoint = tracker.loadCheckpoint();
+  const previousSession = tracker.loadPreviousSession();
 
   let pendingHandoffs: PendingHandoff[] = [];
   try {
@@ -708,6 +671,17 @@ export async function buildRecoveryPreamble(rootDir: string): Promise<string | n
   } catch {
     // Best-effort
   }
+
+  return { checkpoint, pendingHandoffs, previousSession };
+}
+
+/**
+ * Build a recovery preamble from checkpoint + handoff data.
+ * Returns null if no recovery data is available.
+ * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
+ */
+export async function buildRecoveryPreamble(rootDir: string): Promise<string | null> {
+  const { checkpoint, pendingHandoffs } = loadRecoveryData(rootDir);
 
   if (!checkpoint && pendingHandoffs.length === 0) {
     return null;
