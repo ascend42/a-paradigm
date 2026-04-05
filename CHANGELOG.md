@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.1] — 2026-04-05
+
+### Fixed
+
+- **paradigm-mcp crash on startup** — `paradigm-mcp` was crashing with `Error: Dynamic require of "async_hooks" is not supported` on every launch, taking down the entire MCP server. Root cause: `@a-company/paradigm-logger` lacked an `exports` field in its `package.json`, so tsup (via esbuild) resolved the CJS build (`dist/index.js`) when bundling inline into the ESM output. The CJS build uses `require("async_hooks")` which hits esbuild's dynamic-require shim and crashes in ESM context. Added `exports` + `module` fields to `packages/logger/package.json` so esbuild now correctly picks `dist/index.mjs` (ESM) when bundling, which uses proper `import` statements.
+
+Symbols: #paradigm-mcp, #paradigm-logger
+
 ## [5.37.0] — 2026-04-03
 
 ### Fixed
