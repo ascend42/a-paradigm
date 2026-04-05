@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.3] — 2026-04-05
+
+### Fixed
+
+- **Conductor "Show Container" not working** — `switchToContainer()` never called `NSApp.setActivationPolicy(.regular)`, which only ran at launch. Container window was opening while the app remained in `.accessory` mode, so macOS treated it as a background app and wouldn't bring the window forward. Fixed by calling `setActivationPolicy(.regular)` + `NSApp.activate()` in `switchToContainer()`, and `setActivationPolicy(.accessory)` in `switchToSidebar()` for symmetry.
+- **Conductor crash on "Show Sidebar"** — `ContainerView.onAppear` registered an `NSEvent.addLocalMonitorForEvents` monitor but never stored the token or removed it. When the container window closed, the monitor remained live and fired into the torn-down view, causing a crash. Fixed by storing the monitor token in `@State var keyEventMonitor` and removing it in `.onDisappear`.
+- Conductor VERSION bumped to 0.5.1.
+
+Symbols: #conductor-app, #container-view
+
 ## [5.37.2] — 2026-04-05
 
 ### Changed

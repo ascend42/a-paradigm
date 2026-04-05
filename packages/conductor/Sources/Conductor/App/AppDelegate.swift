@@ -510,6 +510,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         conductorPanel?.close()
         conductorPanel = nil
         useContainerMode = true
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
         launchContainer()
     }
 
@@ -517,6 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         containerWindow?.close()
         containerWindow = nil
         useContainerMode = false
+        NSApp.setActivationPolicy(.accessory)
         launchPanel()
     }
 

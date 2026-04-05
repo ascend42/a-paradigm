@@ -11,6 +11,7 @@ struct ContainerView: View {
     @State private var showSidebar = true
     @State private var showHelp = false
     @State private var sidebarTab: SidebarTab = .sessions
+    @State private var keyEventMonitor: Any? = nil
 
     /// The gap between cells.
     private let cellGap: CGFloat = 8
@@ -55,7 +56,7 @@ struct ContainerView: View {
         // Keyboard shortcuts (Cmd+ only — terminals pass these to the OS)
         .keyboardShortcut("t", modifiers: .command) // Cmd+T: handled by sheet trigger below
         .onAppear {
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
                 guard event.modifierFlags.contains(.command) else { return event }
 
                 switch event.charactersIgnoringModifiers {
@@ -97,6 +98,12 @@ struct ContainerView: View {
                 default:
                     return event
                 }
+            }
+        }
+        .onDisappear {
+            if let monitor = keyEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyEventMonitor = nil
             }
         }
     }
