@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.2] — 2026-04-05
+
+### Changed
+
+- **`paradigm conductor` — smart auto-install flow** — Command now detects OS (macOS-only, exits clearly on Linux/Windows), checks if the binary is already installed, and auto-installs on first run without requiring an explicit `--install` flag. Install priority: (1) build from monorepo source if the a-paradigm repo is found anywhere up the directory tree, (2) download pre-compiled binary from GitHub releases for the detected arch (arm64 / x86_64). After install, launches automatically. Future calls detect the installed binary and launch instantly. `--install` now forces a reinstall. `--build` forces a source rebuild (requires monorepo + Swift toolchain, now with a clear Xcode install prompt on failure). Removed the cryptic "Cannot install — not in the Paradigm monorepo" dead-end; replaced with clear clone instructions and a releases link.
+
+Symbols: #conductor-app, #paradigm-cli
+
 ## [5.37.1] — 2026-04-05
 
 ### Fixed
