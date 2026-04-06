@@ -1,0 +1,16 @@
+version: "1.0"
+adopted-at: "2026-04-03T22:04:01.180Z"
+project-type: unknown
+integrity-hash: 0fe3eff1a025e28d0592e76988d7b03c79f73923b1bb235d0d36e6d7e8f8ae75
+agents:
+  architect:
+    adopted: "2026-04-03T22:06:02.168Z"
+    source: marketplace
+    defaults-accepted: true
+    version: 0.1.0
+  ftux:
+    adopted: "2026-04-05T00:00:00.000Z"
+    source: core
+    nickname: Nora
+    defaults-accepted: true
+    version: 0.1.0

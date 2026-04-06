@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.4] — 2026-04-05
+
+### Added
+
+- **Nora (ftux) — First-Time User Experience agent** — New core tier-1 agent that simulates a first-time user actively trying to use any feature or documentation surface. Nora reads only user-facing content (README, --help, docs, changelogs, error strings) — never source code or internal specs; her confusion is the data. She walks step-by-step through tasks, classifies every friction point by type (`missing_coverage`, `assumed_context`, `undefined_term`, `broken_flow`, `buried_info`, `contradictory`) and severity (critical / high / medium / low), and stores structured reports at `.paradigm/ftux/reports/YYYY-MM-DD.md`. Position in orchestration: after Builder (when task touches user-visible surface), before Documentor. Registered in `AGENT_TIERS` as tier-1 (opus), added to `ROLE_PROMPTS` with full simulation integrity rules, added to `paradigm_agent_prompt` enum, `.paradigm/roster.yaml`, `.paradigm/agents.yaml`, `.paradigm/adoptions.yaml`. Reports directory bootstrapped at `.paradigm/ftux/`.
+
+Symbols: #paradigm-mcp, #orchestration
+
 ## [5.37.3] — 2026-04-05
 
 ### Fixed

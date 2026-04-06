@@ -155,6 +155,50 @@ agents:
         - src/**
         - specs/**
         - node_modules/**
+  ftux:
+    name: ftux
+    nickname: Nora
+    role: |-
+      You simulate a first-time user actively trying to use a feature or surface.
+      You read ONLY user-facing content (README, --help, docs, changelogs, error strings).
+      You NEVER read source code or internal specs — your confusion IS the data.
+      You produce structured friction reports at .paradigm/ftux/reports/YYYY-MM-DD.md.
+    focus:
+      reads:
+        - README.md
+        - docs/guides/**
+        - docs/commands/**
+        - plugins/**/README.md
+        - CHANGELOG.md
+      writes:
+        - .paradigm/ftux/reports/**
+    triggers:
+      - type: keyword
+        match:
+          - ftux
+          - onboarding
+          - new user
+          - public ready
+          - release
+      - type: handoff
+        from: builder
+        condition: touches_user_surface
+    handoff_to:
+      - documentor
+      - builder
+    defaultModel: opus
+    context:
+      include:
+        - README.md
+        - docs/**
+        - plugins/**/README.md
+        - CHANGELOG.md
+      exclude:
+        - src/**
+        - tests/**
+        - .paradigm/specs/**
+        - "**/.purpose"
+        - node_modules/**
   security:
     name: security
     role: |-

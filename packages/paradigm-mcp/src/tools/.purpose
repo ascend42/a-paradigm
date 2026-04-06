@@ -151,7 +151,7 @@ components:
       - decisions
       - mcp
   AmbientTools:
-    description: 8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_neverland (validation metrics), paradigm_context_compose, plus surfacing config
+    description: 8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_health (validation metrics), paradigm_context_compose, plus surfacing config
     type: tool-group
     tags:
       - feature
@@ -179,7 +179,7 @@ components:
       - '!coverage-stub-created'
       - '!session-insights-ready'
   OrchestrationTools:
-    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection)
+    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection). Nora (ftux) is a core tier-1 agent in the roster — runs after Builder on user-visible surfaces, before Documentor.
     type: tool-group
     tags:
       - feature
@@ -188,6 +188,7 @@ components:
       - agents
       - symphony
       - documentor
+      - ftux
       - mcp
   tool-aliases:
     description: Alternate names and intent phrases on tool definitions for better LLM tool matching. Simple string arrays, not semantic embeddings.
