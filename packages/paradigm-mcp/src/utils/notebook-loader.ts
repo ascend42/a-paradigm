@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'js-yaml';
-import type { NotebookEntry, NotebookProvenance } from '../types/notebooks.js';
+import type { NotebookEntry, NotebookProvenance, NotebookScope } from '../types/notebooks.js';
 
 // ────────────────────────────────────────────────────────
 // Constants
@@ -105,6 +105,47 @@ export function searchNotebooks(
 }
 
 // ────────────────────────────────────────────────────────
+// Scope Auto-Classification
+// ────────────────────────────────────────────────────────
+
+/**
+ * Auto-classify a notebook entry's publish scope based on content signals.
+ *
+ * Rules (in priority order):
+ * - platform-specific: mentions Paradigm/nevr.land internals (MCP tools, .paradigm paths,
+ *   lore/aspect/gate/portal terminology, symphony, ambient, PAN)
+ * - project-specific: contains absolute file paths or Paradigm symbol IDs (#x, $x, ^x, !x, ~x)
+ * - generalizable: everything else
+ *
+ * This is a suggestion — the owner confirms/overrides via `nevr notebook audit`.
+ */
+export function classifyNotebookScope(entry: {
+  context: string;
+  snippet: string;
+  concepts: string[];
+  tags: string[];
+}): NotebookScope {
+  const text = [entry.context, entry.snippet, ...entry.concepts, ...entry.tags]
+    .join(' ')
+    .toLowerCase();
+
+  const platformTerms = [
+    'paradigm', 'mcp_', 'mcp tool', '.paradigm/', 'lore entry', 'lore record',
+    'aspect', '^gate', 'portal.yaml', '.purpose', 'sentinel', 'symphony',
+    'ambient nomination', 'paradigm_', ' pan ', 'agent notebook', 'concept anchor',
+    'symbol system', 'work log', 'knowledge stream', 'nevr.land', 'neverland',
+  ];
+  if (platformTerms.some(t => text.includes(t))) return 'platform-specific';
+
+  // Paradigm symbol IDs (#x-y, $x-y, ^x-y, !x-y, ~x-y) or absolute paths
+  if (/[#$^!~][a-z][a-z0-9-]{2,}/.test(text) || /\/[a-z0-9_-]{2,}\/[a-z0-9_-]/.test(text)) {
+    return 'project-specific';
+  }
+
+  return 'generalizable';
+}
+
+// ────────────────────────────────────────────────────────
 // Write Operations
 // ────────────────────────────────────────────────────────
 
@@ -130,9 +171,19 @@ export function addNotebookEntry(
   const agentSlug = agentId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const id = `nb-${agentSlug}-${conceptSlug}`;
 
+  // Auto-classify scope if not explicitly set
+  const resolvedScope: NotebookScope = entry.scope ?? classifyNotebookScope({
+    context: entry.context,
+    snippet: entry.snippet,
+    concepts: entry.concepts,
+    tags: entry.tags,
+  });
+
   const fullEntry: NotebookEntry = {
     ...entry,
     id,
+    scope: resolvedScope,
+    publishable: entry.publishable ?? true,
     appliedCount: 0,
     created: now,
     updated: now,

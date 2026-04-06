@@ -213,6 +213,9 @@ export async function handleNotebookTool(
       const parentId = args.parentId as string | undefined;
       const lineageType = args.lineageType as NotebookEntry['lineageType'] | undefined;
 
+      const publishableArg = args.publishable as boolean | undefined;
+      const scopeArg = args.scope as NotebookEntry['scope'] | undefined;
+
       const entryData: Parameters<typeof addNotebookEntry>[1] = {
         context,
         snippet,
@@ -220,6 +223,8 @@ export async function handleNotebookTool(
         confidence,
         concepts,
         tags,
+        ...(scopeArg ? { scope: scopeArg } : {}),
+        ...(publishableArg !== undefined ? { publishable: publishableArg } : {}),
         ...(parentId ? { parentId } : {}),
         ...(lineageType ? { lineageType } : {}),
       };
@@ -266,9 +271,14 @@ export async function handleNotebookTool(
           agentId,
           loreEntryId,
           scope,
+          publishScope: result.entry.scope,
+          publishable: result.entry.publishable,
           filePath: result.filePath,
           concepts: result.entry.concepts,
           confidence: result.entry.confidence,
+          note: result.entry.scope !== 'generalizable'
+            ? `scope auto-classified as "${result.entry.scope}" — confirm or override with "nevr notebook audit"`
+            : undefined,
         }, null, 2),
       };
     }

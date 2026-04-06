@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.6] — 2026-04-06
+
+### Added
+
+- **`scope` + `publishable` on `NotebookEntry`** — New fields required by the nevr.land notebook publishing pipeline. `scope: 'generalizable' | 'project-specific' | 'platform-specific'` (default: `generalizable`) controls which audiences receive the entry when the agent is published. `publishable: boolean` (default: `true`) is the owner's binary kill switch. Both fields are optional with defaults — existing YAML files load without changes.
+- **`NotebookScope` exported type** — Matches `@a-company/agent-format`; Paradigm is the local source until full cross-package import is wired.
+- **`classifyNotebookScope()` auto-classifier** — Detects platform-specific (Paradigm/nevr.land internals: MCP tool names, `.paradigm/` paths, lore/aspect/gate terminology) and project-specific (absolute paths, Paradigm symbol IDs like `#x-y`) signals. Defaults to `generalizable`. Applied at `addNotebookEntry` time. Owner confirms/overrides via `nevr notebook audit`.
+- **`paradigm_notebook_promote` shows auto-classified scope** — Output includes `publishScope`, `publishable`, and a note when scope is non-generalizable prompting `nevr notebook audit` review.
+- **`paradigm_notebook_add` accepts `scope` + `publishable` args** — Explicit override of auto-classification.
+
+### Fixed
+
+- **`autoPromoteJournalEntries` provenance schema** — Was writing `source: 'journal-auto-promote'` with a non-existent `sourceId` field. Changed to `source: 'lore'` + `loreEntryId` per the `NotebookProvenance` type.
+- **`prepareForPublish` updated** — Now uses `scope` + `publishable` instead of old `shareability` logic. `project-specific` entries never publish; `publishable: false` is an absolute kill switch; everything else passes through.
+
+Symbols: #paradigm-mcp, #notebook-entry, $notebook-publish-flow
+
 ## [5.37.5] — 2026-04-06
 
 ### Fixed

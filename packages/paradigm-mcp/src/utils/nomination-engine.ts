@@ -949,8 +949,8 @@ export function autoPromoteJournalEntries(
           snippet: entry.pattern?.correct_approach || entry.insight,
           concepts: entry.tags || [entry.pattern?.id || 'learned-pattern'],
           provenance: {
-            source: 'journal-auto-promote',
-            sourceId: entry.id,
+            source: 'lore',
+            loreEntryId: entry.id,
             createdBy: agentId,
           },
         },
