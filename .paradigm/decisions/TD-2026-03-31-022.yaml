@@ -1,0 +1,24 @@
+id: TD-2026-03-31-022
+timestamp: '2026-03-31T23:53:15.685Z'
+title: Shift outputs conditional, actionable recommendations (max 3-4 items) based on actual project state,
+decision: >-
+  Shift outputs conditional, actionable recommendations (max 3-4 items) based on actual project state, replacing the
+  current hardcoded 'Next steps' text.
+rationale: >-
+  Loid: conditional recommendations get read, static ones get ignored. Each item has a copy-paste command + one-line
+  rationale. Mature projects show 'No recommendations — everything looks good.'
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

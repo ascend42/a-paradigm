@@ -1,0 +1,24 @@
+id: TD-2026-03-31-613
+timestamp: '2026-03-31T23:53:15.685Z'
+title: Agent preferences are a one-time adoption ceremony (like hiring), not recurring configuration. EULA-
+decision: >-
+  Agent preferences are a one-time adoption ceremony (like hiring), not recurring configuration. EULA-style scope
+  approval on version updates.
+rationale: >-
+  User framing: 'just like hiring a new team member you want to make sure even you understand what they are doing.'
+  One-time at project start or agent install. Updates show scoped diffs for quick approval.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

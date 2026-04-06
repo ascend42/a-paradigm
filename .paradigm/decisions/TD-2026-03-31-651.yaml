@@ -1,0 +1,25 @@
+id: TD-2026-03-31-651
+timestamp: '2026-03-31T23:53:15.685Z'
+title: Documentor does NOT write university content. It flags stale content only. University writing is gat
+decision: >-
+  Documentor does NOT write university content. It flags stale content only. University writing is gated by agent-prefs,
+  not hardcoded.
+rationale: >-
+  Jinx: Documentor runs at haiku (tier-3), educational content requires tier-2+. Haiku would produce .purpose rephrases
+  disguised as notes — a knowledge pollution engine. Educator agent already exists at tier-2 with content design
+  notebooks.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

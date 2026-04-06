@@ -1,0 +1,64 @@
+id: L-2026-04-06-ascend-222101-001
+type: agent-session
+timestamp: '2026-04-06T22:21:01.127Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Nora (ftux) + Ambient Loop Cold-Start + Notebook Publish Contract
+summary: 'Shipped three major work streams: (1) Nora, a new core tier-1 FTUX agent that simulates first-time users and produces structured friction reports; (2) fixed the ambient learning loop cold-start — null crash in nominations, durable verdicts.jsonl, auto-triggered postflight via stop hook; (3) implemented the full nevr.land notebook publish contract — scope/publishable fields, classifyNotebookScope() auto-classifier, deterministic IDs, prepareForPublish updated. Coordinated schema ownership and 4 architectural decisions directly with a-neverland/core via Symphony.'
+symbols_touched:
+  - '#orchestration'
+  - '#paradigm-mcp'
+  - '#notebook-entry'
+  - '#conductor-app'
+  - '#container-view'
+files_created:
+  - packages/paradigm/src/commands/ambient.ts
+  - .paradigm/ftux/README.md
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+  - packages/paradigm-mcp/src/tools/notebooks.ts
+  - packages/paradigm-mcp/src/utils/event-stream.ts
+  - packages/paradigm-mcp/src/utils/session-work-log.ts
+  - packages/paradigm-mcp/src/utils/notebook-loader.ts
+  - packages/paradigm-mcp/src/utils/nomination-engine.ts
+  - packages/paradigm-mcp/src/types/notebooks.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+decisions:
+  - id: ftux-tier-1
+    decision: Nora (ftux) is tier-1 (opus)
+    rationale: Simulating human cognition for first-time user walkthrough requires best-in-class reasoning
+  - id: verdicts-durable
+    decision: Verdicts stored in durable verdicts.jsonl separate from session-log.jsonl
+    rationale: session-log.jsonl is cleared on session start, causing verdicts to be lost before postflight runs
+  - id: notebook-ids-deterministic
+    decision: Notebook IDs use nb-{agentId}-{conceptSlug} format — no timestamps
+    rationale: nevr.land merge-by-id algorithm requires stable IDs across republishes
+  - id: schema-ownership
+    decision: '@a-company/agent-format owns NotebookEntry canonical schema'
+    rationale: Prevents type drift between Paradigm and nevr.land publish pipeline
+verification:
+  status: pass
+  details:
+    build: pass
+    paradigm-mcp: pass
+    paradigm-cli: pass
+tags:
+  - ftux
+  - ambient
+  - notebooks
+  - nevr.land
+  - symphony
+  - publish-pipeline
+linked_commits:
+  - 5123f401
+  - 8c6b957e
+  - 38c75d0b
+confidence: 0.95
+git_context:
+  ref: 38c75d0b0a4bb629fa689f1ca3d74330828dff53
+  branch: main
+  dirty: true

@@ -1,0 +1,24 @@
+id: TD-2026-03-31-926
+timestamp: '2026-03-31T23:53:15.685Z'
+title: New .paradigm/adoptions.yaml unifies core roster and marketplace agent records. Tracks adoption date
+decision: >-
+  New .paradigm/adoptions.yaml unifies core roster and marketplace agent records. Tracks adoption date, source,
+  defaults-accepted, overrides, and marketplace version/offerings.
+rationale: >-
+  Apex: unifies two currently separate flows (roster for core, install for marketplace) into one adoption model. The
+  adoption record is the single source of truth for what agents a project uses and what the user agreed to.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

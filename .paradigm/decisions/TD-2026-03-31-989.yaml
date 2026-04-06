@@ -1,0 +1,24 @@
+id: TD-2026-03-31-989
+timestamp: '2026-03-31T23:53:15.686Z'
+title: Agent contracts and scoped permissions become PAN (Paradigm Agent Norm) — the standard for any agent
+decision: >-
+  Agent contracts and scoped permissions become PAN (Paradigm Agent Norm) — the standard for any agent including
+  Neverland marketplace agents.
+rationale: >-
+  User: 'this even feels like it is a PAN / project neverland agent system norm that should be standardized.' All three
+  agents agree marketplace agents need a common protocol for declaring capabilities and respecting project context.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

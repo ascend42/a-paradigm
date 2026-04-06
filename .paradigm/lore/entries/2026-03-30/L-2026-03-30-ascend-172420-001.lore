@@ -1,0 +1,44 @@
+id: L-2026-03-30-ascend-172420-001
+type: insight
+timestamp: '2026-03-30T17:24:20.231Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cross-Study: OpenSpace, AnyTool, ClawWork, World Monitor'
+summary: 'Researched 4 external repos for patterns Paradigm can learn from. Top findings: outcome-based learning metrics (OpenSpace), token cost tracking per orchestration unit (ClawWork), semantic tool retrieval pipeline (AnyTool), intelligence gap narration (World Monitor), skill lineage DAG with FIX/DERIVE/CAPTURE operations (OpenSpace), and per-subsystem staleness thresholds (World Monitor). Three convergent patterns across repos: quality tracking with decay, JSONL append-only logs, hybrid BM25+semantic search.'
+symbols_touched:
+  - '#orchestration'
+  - '#nomination-engine'
+  - '#session-work-log'
+  - '#conductor'
+  - '#sentinel'
+  - '#tool-registry'
+  - '#university'
+decisions:
+  - id: cross-study-repos
+    decision: Selected OpenSpace, AnyTool, ClawWork, World Monitor as cross-study targets
+    rationale: 'Each covers a different dimension relevant to Paradigm: skill evolution (OpenSpace), tool management at scale (AnyTool), economic accountability (ClawWork), observability architecture (World Monitor)'
+  - id: top-tier-selection
+    decision: Prioritized 6 top-tier takeaways from 15 total findings
+    rationale: Outcome metrics, cost tracking, semantic retrieval, gap narration, lineage DAG, and staleness thresholds address real gaps in Paradigm's current architecture. Others are strong but lower urgency.
+learnings:
+  - Outcome-based learning (did guidance actually help?) is stronger than observation-based learning (what patterns exist?) — OpenSpace tracks selection rate, application rate, completion rate, fallback frequency per skill
+  - Token cost tracking per agent/phase/session is absent from Paradigm but standard in economic agent frameworks — ClawWork's EconomicTracker is the reference implementation
+  - Progressive tool filtering (BM25 → semantic embedding → LLM classification → quality penalty) scales to 10,000+ tools — AnyTool solves context pollution Paradigm will face as tool surface grows
+  - Intelligence gap narration (describing what the team CANNOT see) is more actionable than generic 'missing X' warnings — World Monitor's per-source narration pattern
+  - Skill versioning needs FIX/DERIVE/CAPTURE operations, not append-only — OpenSpace's DAG lineage gives notebooks a version history
+  - Per-subsystem staleness thresholds prevent both false positives and false negatives in health monitoring — World Monitor assigns each of 100+ sources its own maxStaleMin
+  - Quality decay curves (multiplicative penalty 0.2–1.0 on unreliable tools) appeared independently in both AnyTool and ClawWork — emerging standard pattern
+  - Convergence-over-volume scoring (3 different signal types > 50 of the same type) applies directly to ripple analysis diversity weighting
+tags:
+  - cross-study
+  - competitive-analysis
+  - architecture
+  - learning-loop
+  - observability
+body: '## Cross-Study Sources\n\n- **OpenSpace** (HKUDS) — Self-evolving skill engine. 2k stars. Persistent, versionable, shareable skills with DAG lineage. 46% token reduction, 4.2x income on GDPVal benchmark.\n- **AnyTool** (HKUDS) — Universal tool-use layer. Progressive filtering pipeline (BM25 → semantic → LLM → quality penalty). Solves context pollution at 10,000+ tools.\n- **ClawWork** (HKUDS) — Economic survival benchmark. Agents start with $10, must earn through quality work. Quality gate at 0.6, BLS wage grounding, work/learn tradeoff.\n- **World Monitor** (koala73) — Real-time global intelligence. 45k stars. 30+ source correlation, per-source staleness, intelligence gap narration, convergence-over-volume scoring.\n\n## Top-Tier Takeaways\n\n1. Outcome-based learning metrics (OpenSpace + ClawWork)\n2. Token cost tracking per orchestration unit (ClawWork)\n3. Semantic tool retrieval pipeline (AnyTool)\n4. Intelligence gap narration (World Monitor)\n5. Skill lineage DAG — FIX/DERIVE/CAPTURE (OpenSpace)\n6. Per-subsystem staleness thresholds (World Monitor)\n\n## Second-Tier Takeaways\n\n7. Quality-gated workflow progression (ClawWork)\n8. Convergence scoring in ripple analysis (World Monitor)\n9. Pure-functional analysis core (World Monitor)\n10. Fuzzy symbol ID correction (OpenSpace)\n11. Staleness metadata in MCP responses (World Monitor)\n12. Adaptive agent behavior based on session health (ClawWork)\n13. Meta-tools for tool introspection (AnyTool)\n14. Two-phase execution with clean reset (OpenSpace)\n15. Negative-caching sentinel values (World Monitor)\n\n## Competitive Position\n\nParadigm''s moat: structured codebase context (symbols, purpose, portal) + multi-agent orchestration. No other system combines both.\nParadigm''s gaps: outcome-based learning, token cost tracking, semantic tool retrieval. All addressable.'
+git_context:
+  ref: 75b3b9e8aeedeb1719cd664e1b7cf53e356d49e8
+  branch: main
+  dirty: true

@@ -1,0 +1,103 @@
+id: L-2026-03-30-ascend-204749-001
+type: milestone
+timestamp: '2026-03-30T20:47:49.019Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cross-Study P1-P6: Gap Narration, Activity Metrics, Soft Provenance, Outcome Tracking, Compliance Health, Tool Aliases'
+summary: 'Implemented all 6 cross-study features from team verdict (v5.32.0 + v5.33.0). Security prerequisites shipped first: 4 new ContentCategory values, notebook-publish boundary, deny-by-default enforce(), bidirectional Symphony relay filtering, shareability + prepareForPublish(). Then P1 gap narration (13 templates, doctor --explain, postflight), P2 activity metrics (tool calls, payload, duration per agent), P3 soft provenance (parentId/lineageType on NotebookEntry), P4 outcome reference tracking (notebook entry IDs per agent per orchestration), P5 change-based health (compliance trends + health dot), P6 tool aliases (10 tools aliased). 8 agents across 2 orchestrations, 1 reviewer-caught bug fixed.'
+symbols_touched:
+  - '#gap-narrator'
+  - '#activity-metrics'
+  - '#soft-provenance'
+  - '#outcome-reference-tracking'
+  - '#compliance-health'
+  - '#tool-aliases'
+  - '#data-policy'
+  - '#symphony'
+  - '#notebook-loader'
+  - '#session-work-log'
+  - '#orchestration'
+  - '#tool-registry'
+  - '#enforcement-hooks'
+  - '#compliance-checker'
+symbols_created:
+  - '#gap-narrator'
+  - '#activity-metrics'
+  - '#soft-provenance'
+  - '#outcome-reference-tracking'
+  - '#compliance-health'
+  - '#tool-aliases'
+files_created:
+  - packages/paradigm-mcp/src/utils/gap-narrator.ts
+  - packages/paradigm/src/utils/gap-narrator.ts
+  - packages/paradigm-mcp/src/utils/compliance-health.ts
+files_modified:
+  - packages/paradigm-mcp/src/types/data-policy.ts
+  - packages/paradigm-mcp/src/types/notebooks.ts
+  - packages/paradigm-mcp/src/utils/data-policy-loader.ts
+  - packages/paradigm-mcp/src/utils/symphony-relay.ts
+  - packages/paradigm-mcp/src/utils/session-work-log.ts
+  - packages/paradigm-mcp/src/utils/tool-registry.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/notebooks.ts
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/ripple.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/tools/navigate.ts
+  - packages/paradigm-mcp/src/tools/context.ts
+  - packages/paradigm-mcp/src/tools/reindex.ts
+  - packages/paradigm-mcp/src/tools/tags.ts
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/index.ts
+decisions:
+  - id: enforce-deny-by-default
+    decision: enforce() now deny-by-default for notebook boundaries (notebook-promotion, notebook-publish)
+    rationale: Security audit found both fell through to allowed:true. Write-path boundaries must never default to allow.
+  - id: bidirectional-relay-filtering
+    decision: Ring 1 content filtering on both incoming AND outbox watcher in Symphony relay
+    rationale: 'Security audit: filtering only on receipt is insufficient — outbound messages from local agents could still leak project-locked content to peers.'
+  - id: health-dot-rootdir
+    decision: Pass rootDir to getHealthDot() so it reads actual violation history
+    rationale: 'Reviewer caught: without rootDir, recentRate stays 0, making stable+violations show green instead of yellow.'
+  - id: aliases-not-matching-engine
+    decision: Tool aliases are metadata on tool definitions, not a matching engine rewrite
+    rationale: Aliases are visible to LLMs in tool descriptions. Simple string-includes in tags.ts for tag-based search. No need for embedding pipeline at 50 tools.
+  - id: compliance-checks-proxy
+    decision: Stop hook compliance snapshot uses SOURCE_COUNT+PARADIGM_COUNT as proxy for checks run
+    rationale: Reviewer noted this is a file count proxy, not actual check count. Acceptable for v1 trend analysis — a 2x inflation in checks doesn't affect trend direction.
+learnings:
+  - Security agent running in parallel with builder catches architectural gaps the builder misses — enforce() allow-by-default and one-sided relay filtering were both invisible to the builder but critical blockers
+  - Reviewer caught a functional bug (missing rootDir argument) that would have made health dots meaningless — the two-stage review protocol works
+  - Builder agents can handle 3 features in one pass if they share the same codebase area, but they reliably miss 'negative space' requirements (things that should NOT exist, like scoring in P4)
+  - 'Tool aliases as metadata-on-definitions is the right v1: LLMs see them in tool listings, tags.ts does string-includes matching, zero new infrastructure. Revisit only if tool count exceeds 200'
+  - The shell stop hook is the right place for compliance snapshots — it runs on every session end, has access to VIOLATION_COUNT, and printf-to-JSONL is zero-dependency
+verification:
+  status: pass
+  details:
+    build-mcp: pass
+    build-cli: pass
+    link: pass
+    reviewer-p1-p3: no blockers
+    reviewer-p4-p6: 1 bug found and fixed
+tags:
+  - cross-study
+  - implementation
+  - security
+  - v5.32.0
+  - v5.33.0
+  - team-orchestration
+body: '## Session Overview\n\nContinuation of cross-study team verdict session. Previous session did research (4 external repos) and team analysis (Architect, Sage, Jinx, Sentinel shaped 6 features). This session implemented all 6.\n\n## Two Orchestrations\n\n### Orchestration 1: Security Prereqs + P1-P3 (v5.32.0)\n\nStage 0 (parallel):\n- [security] — 12 findings: 4 blocking (enforce allow-by-default, one-sided relay, missing prepareForPublish, raw sharedSecret), 4 high, 3 medium\n- [builder] — Implemented all features but missed 2 blocking security gaps\n\nOrchestrator intervention: Fixed enforce() handlers, outbox filtering, deny_content lists\n\nStage 1: [reviewer] — Confirmed spec compliance (gap narrations NOT in stop hook)\nStage 2: [documentor] — Registered #gap-narrator, #activity-metrics, #soft-provenance (1,240 symbols)\n\n### Orchestration 2: P4-P6 (v5.33.0)\n\nStage 0: [builder] — Implemented all 3 features, added aliases to 4 tools\nOrchestrator: Added aliases to 6 more tools (10 total)\nStage 1+2 (parallel): [reviewer] found getHealthDot rootDir bug, [documentor] registered 3 new components (1,243 symbols)\n\n## What Shipped\n\n### v5.32.0 — Security + P1-P3\n- 4 new ContentCategory values (gap_narrations, cost_data, health_status, execution_metrics)\n- RING1_CONTENT_CATEGORIES constant for project-locked enforcement\n- notebook-publish enforcement boundary (deny-by-default)\n- Bidirectional Symphony relay Ring 1 filtering (incoming + outbox)\n- shareability field on NotebookEntry + prepareForPublish()\n- Gap narrator: 13 templates, doctor --explain, postflight integration\n- Activity metrics: tool calls, payload size, duration per agent\n- Soft provenance: parentId + lineageType on NotebookEntry\n\n### v5.33.0 — P4-P6\n- Outcome reference tracking: notebook entry IDs per agent per orchestration\n- Compliance health: trend analysis + health dot in paradigm_status\n- Tool aliases: 10 tools aliased for LLM matching\n\n## Remaining\n- npm publish v5.31.0-5.33.0\n- No more cross-study features to implement — all 6 done'
+linked_lore:
+  - L-2026-03-30-ascend-175732-001
+linked_commits:
+  - 39bfb43b
+  - 6077a40b
+confidence: 0.91
+git_context:
+  ref: 6077a40bb880e2264bba69b7b55ec4327c3cc0ff
+  branch: main
+  dirty: true

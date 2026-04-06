@@ -1,0 +1,2 @@
+version: 1.0.0
+description: 'Portal package — security and auth gate definitions, route protection, and portal.yaml management. Sub-packages: core, manager, sdk, viewer, e2e.'

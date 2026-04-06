@@ -1,0 +1,90 @@
+id: L-2026-03-30-ascend-175732-001
+type: decision
+timestamp: '2026-03-30T17:57:32.395Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cross-Study Team Verdict: 6 features scoped, 4 security prerequisites, university shipped'
+summary: 'Full team analysis (Architect, Sage, Jinx, Sentinel) on 6 cross-study features from OpenSpace/AnyTool/ClawWork/World Monitor. Jinx killed 2 outright (semantic retrieval, time-based staleness), reshaped 4 others. Final scope: gap narration (doctor-only), activity metrics (not dollar costs), soft provenance (not full DAG), outcome reference tracking (data collection only), change-based health (compliance trends), tool aliases (not embeddings). Also shipped v5.31.0 university restructuring: 8 courses, 82 lessons, PARA 001 Quick Start, 5 new lessons across PARA 301/401/501, quiz WHAT→HOW upgrades.'
+symbols_touched:
+  - '#university'
+  - '#orchestration'
+  - '#nomination-engine'
+  - '#session-work-log'
+  - '#conductor'
+  - '#sentinel'
+  - '#tool-registry'
+  - '#notebook-loader'
+  - '#compliance-checker'
+  - '#enforcement-hooks'
+  - '#gap-narrator'
+  - '#shift-command'
+files_created:
+  - packages/university/src/content/courses/para-001.json
+files_modified:
+  - packages/university/src/content/courses/para-101.json
+  - packages/university/src/content/courses/para-201.json
+  - packages/university/src/content/courses/para-301.json
+  - packages/university/src/content/courses/para-401.json
+  - packages/university/src/content/courses/para-501.json
+  - packages/university/src/content/courses/.purpose
+  - CHANGELOG.md
+  - packages/paradigm/package.json
+  - packages/university/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+lines_added: 1291
+lines_removed: 323
+decisions:
+  - id: gap-narration-doctor-only
+    decision: Gap narration ships in paradigm doctor and postflight, NOT in the stop hook
+    rationale: 'Jinx: stop hook value is terseness, verbosity kills compliance. Sage: adaptive verbosity is right long-term but overkill for v1. Sentinel: gap narrations are attack surface maps, must be Ring 1 project-locked, never relayed via Symphony.'
+  - id: activity-metrics-not-dollars
+    decision: Track tool call count, payload size, session duration per agent — NOT dollar costs
+    rationale: 'Jinx: MCP tools cannot see token counts, dollar costs are guesses. Sage: showing costs creates behavioral distortion (developers avoid Opus when it''s the right choice). Revisit when Claude Code exposes token usage in hooks.'
+  - id: soft-provenance-not-dag
+    decision: Add optional parentId and lineageType fields to NotebookEntry, not a full DAG
+    rationale: 'Jinx: migration destroys simplicity that makes notebooks adoptable. YAML stays human-readable. Architect''s full DAG is v2 design if soft provenance proves valuable. Sentinel: requires prepareForPublish() sanitization before any nevr.land integration.'
+  - id: outcome-tracking-phase1-only
+    decision: Instrument notebook reference recording in session work log, defer effective_rate scoring
+    rationale: 'Jinx: Goodhart''s Law will destroy notebook quality — easy-to-follow entries score high, nuanced entries get pruned. Attribution problem unsolved. Collect data first, analyze after 50+ sessions.'
+  - id: change-based-health-not-time
+    decision: Track compliance trend (improving/stable/degrading) from stop hook violation frequency, not time-based staleness
+    rationale: 'Jinx: time-based staleness creates false positives for stable code. Stop hook already does change-based freshness. Conductor health dot based on violation trends, not maxStaleDuration.'
+  - id: tool-aliases-not-embeddings
+    decision: Improve tool descriptions with aliases field instead of semantic embedding retrieval
+    rationale: 'Jinx: domain vocabulary blindness means general embeddings won''t match paradigm_ripple to ''show dependencies''. Existing 3-tier system works offline, zero latency, no dependencies. Revisit at 200+ tools.'
+  - id: security-prerequisites
+    decision: '4 security items ship before or alongside P1: new ContentCategory entries, notebook-publish boundary, Symphony content filtering, NotebookEntry shareability field'
+    rationale: 'Sentinel audit found: no notebook-publish enforcement boundary exists, Symphony relay has no content-type filtering, ContentCategory is incomplete for new data types. These are architectural prerequisites.'
+  - id: university-restructuring-shipped
+    decision: 'Shipped v5.31.0 with 8-phase university restructuring: PARA 001 Quick Start, enforcement/shift/quick-check/conductor lessons, quiz WHAT→HOW upgrades'
+    rationale: Audit found courses teach WHAT (57%) more than HOW (43%), no day-1 course, First Steps buried at lesson 8/9. Now 8 courses, 82 lessons, 361 quizzes, HOW-first throughout new content.
+learnings:
+  - Jinx's stress-testing prevented 2 features from shipping with fundamental flaws (semantic retrieval domain blindness, time-based staleness false positives) and reshaped 4 others into simpler, more honest versions
+  - 'Sage''s UX principle — ''Paradigm should feel like a competent coworker who keeps things organized in the background'' — resolved every visibility debate: invisible by default, on-demand for power users, never blocking unless enforcement level demands it'
+  - Sentinel identified that gap narrations are attack surface maps and Symphony relay has no content-type filtering — both are architectural gaps that must be fixed before features that produce sensitive metadata
+  - The cross-study pattern of quality-decay-curves appeared independently in AnyTool and ClawWork — this is an emerging standard pattern the industry is converging on
+  - Architect's designs were architecturally sound but Jinx correctly identified that 3 of 6 features solve theoretical problems (semantic retrieval at 50 tools, time-based staleness, dollar cost tracking without data) rather than real ones
+verification:
+  status: pass
+  details:
+    build-university: pass
+    build-mcp: pass
+    build-cli: pass
+    course-count: 8 courses, 82 lessons, 361 quizzes
+tags:
+  - cross-study
+  - team-verdict
+  - architecture
+  - security
+  - university-restructuring
+  - v5.31.0
+body: '## Session Overview\n\nTwo major workstreams in one session:\n\n### 1. University Restructuring (v5.31.0 — SHIPPED)\n\n8-phase restructuring based on prior session''s audit:\n- PARA 001: Quick Start (3 lessons, 9 quizzes — shift→team→build)\n- PARA 101: First Steps moved from lesson 8→2\n- PARA 201: Aspect Graph condensed 10,688→3,376 chars\n- PARA 301: +2 lessons (Enforcement Levels, paradigm shift)\n- PARA 401: Agent Roles rewritten (5→54 bridge, Rune), +1 Quick-Check lesson\n- PARA 501: +1 Conductor Workspace lesson\n- Quiz upgrades WHAT→HOW across PARA 101, 201, 301\n- All new content written HOW-first (scenario-based)\n\n### 2. Cross-Study Research + Team Analysis\n\n4 repos studied in parallel (4 architect agents):\n- OpenSpace (HKUDS): self-evolving skills, lineage DAG, outcome metrics\n- AnyTool (HKUDS): progressive tool filtering, semantic retrieval\n- ClawWork (HKUDS): economic survival benchmark, quality gates\n- World Monitor (koala73): 30+ source correlation, staleness, gap narration\n\n4 team agents analyzed 6 proposed features in parallel:\n- Architect: full system designs with data structures and file locations\n- Sage: UX evaluation across 3 developer personas\n- Jinx: stress-tested all 6, killed 2, reshaped 4\n- Sentinel: security audit, found 4 critical prerequisites\n\n## Implementation Priority (Post-Session)\n\nP1: Gap Narration (doctor + postflight only) — S scope\nP2: Activity Metrics (tool calls, not dollars) — S-M scope\nP3: Soft Provenance (optional lineage fields) — S scope\nP4: Outcome Reference Tracking (data collection) — M scope\nP5: Change-Based Health (compliance trends) — S-M scope\nP6: Tool Aliases (not semantic retrieval) — S scope\n\nSecurity prerequisites: 4 items ship before/alongside P1.'
+linked_commits:
+  - 75b3b9e8
+confidence: 0.92
+git_context:
+  ref: 75b3b9e8aeedeb1719cd664e1b7cf53e356d49e8
+  branch: main
+  dirty: true

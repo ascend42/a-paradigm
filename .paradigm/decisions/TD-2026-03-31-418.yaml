@@ -1,0 +1,24 @@
+id: TD-2026-03-31-418
+timestamp: '2026-03-31T23:53:15.685Z'
+title: Agents declare scopes (read, write, tool, net, exec) in .agent files. 5-6 coarse categories, not fin
+decision: >-
+  Agents declare scopes (read, write, tool, net, exec) in .agent files. 5-6 coarse categories, not fine-grained.
+  Auto-approve when scopes unchanged on version bumps.
+rationale: >-
+  Jinx: fine-grained scopes become click-through fatigue within a month. Coarse scopes with batch approval and
+  auto-approve for same-scope updates. Maps to OAuth model (Meta/Google ad networks).
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

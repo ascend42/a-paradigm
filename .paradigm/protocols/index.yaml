@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-03-30T20:42:07.433Z'
+generated: '2026-04-06T22:24:14.950Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -107,7 +107,7 @@ protocols:
       - plugin
   - id: P-add-ide-adapter
     name: Add an IDE adapter
-    status: current
+    status: stale
     last_verified: '2026-03-18T00:41:55.618Z'
     trigger:
       - ide adapter
@@ -120,7 +120,7 @@ protocols:
       - sync
   - id: P-add-integration-test
     name: Add an integration test
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:25:14.957Z'
     trigger:
       - integration test
@@ -338,7 +338,7 @@ protocols:
       - sentinel
   - id: P-add-tool-with-workspace-support
     name: Add a workspace-aware MCP tool
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - workspace support
@@ -486,6 +486,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 26
-  stale: 11
+  current: 23
+  stale: 14
   broken: 0

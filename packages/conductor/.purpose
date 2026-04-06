@@ -68,7 +68,7 @@ context:
   type: config
   tags: [app, lifecycle, macos, single-owner, hotkeys]
   anchors:
-    - Sources/Conductor/App/:1
+    - Sources/Conductor/App/AppDelegate.swift:1
 
 #conductor-panel:
   description: NSPanel floating overlay window — always-on-top, draggable, transparent
@@ -309,7 +309,7 @@ context:
   type: model
   tags: [models, types]
   anchors:
-    - Sources/Conductor/Models/:1
+    - Sources/Conductor/Models/ManagedInstance.swift:1
 
 #eyebrow-detector:
   description: Consumes eyebrow stream, KalmanFilter1D smoothing, threshold + hysteresis → emits EyebrowEvent

@@ -1,0 +1,22 @@
+id: TD-2026-03-31-225
+timestamp: '2026-03-31T23:53:15.686Z'
+title: Contracts (transparency) and preferences (configuration) ship in one release, not phased.
+decision: Contracts (transparency) and preferences (configuration) ship in one release, not phased.
+rationale: >-
+  User: 'let's go big and then from user feedback we will adjust accordingly.' Jinx agrees: both features modify the
+  same surfaces (.agent schema, shift.ts, roster). One disruption is better than two separate migrations.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

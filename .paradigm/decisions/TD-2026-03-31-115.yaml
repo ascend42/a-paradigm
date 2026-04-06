@@ -1,0 +1,24 @@
+id: TD-2026-03-31-115
+timestamp: '2026-03-31T23:53:15.686Z'
+title: 'Consider landing three-layer identity model (id/nickname/archetype) in this release to avoid future '
+decision: >-
+  Consider landing three-layer identity model (id/nickname/archetype) in this release to avoid future migration debt for
+  Neverland.
+rationale: >-
+  Jinx: ecosystem agents are a new archetype category. Shipping them on the current two-field identity (id+nickname)
+  means another migration when nevr.land launches. Can accept the debt if scope is too large.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001

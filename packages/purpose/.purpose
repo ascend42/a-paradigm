@@ -1,0 +1,2 @@
+version: 1.0.0
+description: Purpose package — .purpose file parsing, validation, and management utilities.

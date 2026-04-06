@@ -10258,7 +10258,7 @@
           "name": "AmbientTools",
           "category": "component",
           "prefix": "#",
-          "description": "8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_neverland (validation metrics), paradigm_context_compose, plus surfacing config",
+          "description": "8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_health (validation metrics), paradigm_context_compose, plus surfacing config",
           "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose"
         },
         "label": "#AmbientTools"

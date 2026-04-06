@@ -1,0 +1,25 @@
+id: TD-2026-03-31-129
+timestamp: '2026-03-31T23:53:15.685Z'
+title: paradigm shift guarantees 31 files/directories exist after completion. Creates skeletons for detecte
+decision: >-
+  paradigm shift guarantees 31 files/directories exist after completion. Creates skeletons for detected ecosystems only,
+  not all possible agents.
+rationale: >-
+  User: 'certain files are just not always added whenever a project is initialized.' Jinx: create only for detected
+  ecosystems, use post-shift recommendations for optional ones. Never truly blank — pre-fill with role defaults +
+  project-type-specific patterns.
+participants:
+  - id: agent/claude-opus-4-6
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#shift'
+  - '#agent-identity'
+  - '#documentor'
+  - '#university'
+  - '#orchestration'
+  - '#agent-loader'
+  - '#roster'
+  - '#enforcement-hooks'
+status: active
+linked_lore: L-2026-03-31-ascend-235315-001
