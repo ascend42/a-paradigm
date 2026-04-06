@@ -119,13 +119,16 @@ export function addNotebookEntry(
 ): { entry: NotebookEntry; filePath: string } {
   const now = new Date().toISOString();
 
-  // Generate ID from first concept or context
-  const conceptSlug = (entry.concepts[0] || 'entry')
+  // Generate stable deterministic ID: nb-{agentId}-{slug}
+  // Slug derived from first concept — no timestamps, no random suffixes.
+  // Stable IDs are required for the nevr.land merge-by-id algorithm.
+  const conceptSlug = (entry.concepts[0] || entry.context.split(' ').slice(0, 4).join(' ') || 'entry')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  const timestamp = Date.now().toString(36);
-  const id = `nb-${conceptSlug}-${timestamp}`;
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  const agentSlug = agentId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const id = `nb-${agentSlug}-${conceptSlug}`;
 
   const fullEntry: NotebookEntry = {
     ...entry,

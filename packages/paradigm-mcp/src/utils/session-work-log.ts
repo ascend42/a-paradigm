@@ -15,6 +15,7 @@ import * as path from 'path';
 
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
+const VERDICTS_LOG_FILE = '.paradigm/events/verdicts.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -176,6 +177,73 @@ export function clearSessionWorkLog(rootDir: string): void {
     if (fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, '', 'utf8');
     }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ── Durable Verdicts ──────────────────────────────────────────────────
+// Unlike session-log.jsonl (cleared on session start), verdicts.jsonl
+// persists across sessions so postflight can run in any session after engagement.
+
+/**
+ * Append a user verdict to the durable verdicts log.
+ * This file is NOT cleared on session start — verdicts survive until postflight consumes them.
+ */
+export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
+  try {
+    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Read all unconsumed verdicts from the durable verdicts log.
+ */
+export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
+  try {
+    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    if (!fs.existsSync(filePath)) return [];
+    return fs.readFileSync(filePath, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try { return JSON.parse(line) as SessionWorkEntry & { consumed?: boolean }; }
+        catch { return null; }
+      })
+      .filter((e): e is SessionWorkEntry => e !== null && !(e as Record<string, unknown>).consumed);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Mark verdicts as consumed after postflight processes them.
+ * Rewrites the file with a `consumed: true` flag on each processed entry.
+ */
+export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
+  try {
+    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    if (!fs.existsSync(filePath)) return;
+    const consumed = new Set(nominationIds);
+    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
+    const updated = lines.map(line => {
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        if (entry.nominationId && consumed.has(entry.nominationId as string)) {
+          return JSON.stringify({ ...entry, consumed: true });
+        }
+        return line;
+      } catch { return line; }
+    });
+    fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
   } catch {
     // Non-fatal
   }

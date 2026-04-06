@@ -17,7 +17,7 @@ import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
 import { loadJournalEntries, recordJournalEntry } from '../utils/journal-loader.js';
-import { readSessionWorkLog } from '../utils/session-work-log.js';
+import { readSessionWorkLog, readPendingVerdicts, markVerdictsConsumed } from '../utils/session-work-log.js';
 import type { NominationUrgencyLevel } from '../types/ambient.js';
 import type { JournalTrigger } from '../types/knowledge-streams.js';
 
@@ -292,20 +292,24 @@ export async function handleAmbientTool(
       const reason = args.reason as string | undefined;
       const engaged = engageNomination(ctx.rootDir, nominationId, response, reason);
 
-      // Log verdict to session work log for Maestro's postflight learning pass
+      // Log verdict to session work log + durable verdicts store
       if (engaged) {
         try {
-          const { appendSessionWorkEntry } = await import('../utils/session-work-log.js');
+          const { appendSessionWorkEntry, appendVerdictEntry } = await import('../utils/session-work-log.js');
           const noms = loadNominations(ctx.rootDir, { limit: 500 });
           const nom = noms.find(n => n.id === nominationId);
-          appendSessionWorkEntry(ctx.rootDir, {
+          const verdictEntry = {
             timestamp: new Date().toISOString(),
-            type: 'user-verdict',
+            type: 'user-verdict' as const,
             agent: nom?.agent,
             nominationId,
             verdict: response,
             reason,
-          });
+          };
+          // Ephemeral: for current-session context enrichment
+          appendSessionWorkEntry(ctx.rootDir, verdictEntry);
+          // Durable: survives session restart so postflight can consume in any session
+          appendVerdictEntry(ctx.rootDir, verdictEntry);
         } catch { /* non-fatal */ }
       }
 
@@ -544,11 +548,12 @@ export async function runPostflightLearning(
   const dryRun = args.dry_run === true;
   const projectName = resolveProjectName(rootDir);
 
-  // 1. Read session work log
-  const allEntries = readSessionWorkLog(rootDir);
-  const verdictEntries = allEntries.filter(
-    e => e.type === 'user-verdict' && e.verdict && e.agent
+  // 1. Read verdicts from durable store (survives session restart)
+  const verdictEntries = readPendingVerdicts(rootDir).filter(
+    e => e.verdict && e.agent
   );
+  // Also read session log for contribution context (ephemeral, enrichment only)
+  const allEntries = readSessionWorkLog(rootDir);
 
   if (verdictEntries.length === 0) {
     return {
@@ -670,6 +675,14 @@ export async function runPostflightLearning(
         // Non-fatal
       }
     }
+  }
+
+  // Mark processed verdicts as consumed so they don't re-run on next postflight
+  if (!dryRun && verdictEntries.length > 0) {
+    markVerdictsConsumed(
+      rootDir,
+      verdictEntries.map(v => v.nominationId).filter(Boolean) as string[]
+    );
   }
 
   return {

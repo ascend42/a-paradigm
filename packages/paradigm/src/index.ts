@@ -2361,6 +2361,27 @@ symphonyCmd
     await symphonyStatusCommand({});
   });
 
+// paradigm ambient <command> — Ambient coordination tools
+const ambientCmd = program
+  .command('ambient')
+  .description('Ambient coordination — nominations, verdicts, and learning loop');
+
+ambientCmd
+  .command('postflight')
+  .description('Run postflight learning pass — converts pending verdicts into journal entries and promotes high-confidence entries to notebooks')
+  .option('--dry-run', 'Preview what would be written without writing')
+  .option('--project <path>', 'Project root (defaults to cwd)')
+  .action(async (options) => {
+    const { ambientPostflightCommand } = await import('./commands/ambient.js');
+    await ambientPostflightCommand(options);
+  });
+
+ambientCmd
+  .action(async () => {
+    const { ambientPostflightCommand } = await import('./commands/ambient.js');
+    await ambientPostflightCommand({});
+  });
+
 // paradigm notebook <command> — Agent notebook management
 const notebookCmd = program
   .command('notebook')

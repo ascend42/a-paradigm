@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.5] — 2026-04-06
+
+### Fixed
+
+- **Null crash in `paradigm_ambient_nominations`** — `scoreEventForAgent` in `event-stream.ts` crashed with `Cannot read properties of null (reading 'toLowerCase')` when an agent's `attention.concepts` array contained a null entry. Added null guard: `if (concept && ...)`. Also guarded `event.type` to avoid the string `"null"` appearing in keyword matching.
+- **Ambient learning loop never closing** — Verdicts recorded via `paradigm_ambient_engage` were written only to `session-log.jsonl`, which is cleared at every session start. If postflight didn't run in the same session as the engagement, verdicts were silently lost and `runPostflightLearning` returned `journalsWritten: 0` every time. Fixed by introducing a durable `.paradigm/events/verdicts.jsonl` that is NOT cleared on session start. `paradigm_ambient_engage` now writes to both files. Postflight reads from the durable file and marks entries consumed after processing. The cold-start path can now close across multiple sessions.
+- **Deterministic notebook IDs** — `addNotebookEntry` was generating IDs as `nb-{concept}-{randomTimestamp}`, making them non-stable across republishes. Changed to `nb-{agentId}-{conceptSlug}` — deterministic, human-readable, required for the nevr.land merge-by-id algorithm.
+
+### Added
+
+- **`paradigm ambient postflight` CLI command** — Thin wrapper around `runPostflightLearning`. Reports pending verdict count, journals written, and entries promoted to notebooks. Accepts `--dry-run` and `--project`.
+- **Stop hook auto-runs postflight** — `paradigm-stop.sh` now fires `paradigm ambient postflight` in the background (non-blocking) when `.paradigm/events/verdicts.jsonl` exists. The learning loop now closes automatically at session end without manual intervention.
+
+Symbols: #paradigm-mcp, #orchestration
+
 ## [5.37.4] — 2026-04-05
 
 ### Added

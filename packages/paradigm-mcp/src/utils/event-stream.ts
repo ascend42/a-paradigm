@@ -159,12 +159,12 @@ export function scoreEventForAgent(
     const eventText = [
       event.context || '',
       ...(event.keywords || []),
-      event.type,
+      event.type || '',
     ].join(' ').toLowerCase();
 
     let matched = 0;
     for (const concept of attention.concepts) {
-      if (eventText.includes(concept.toLowerCase())) {
+      if (concept && eventText.includes(concept.toLowerCase())) {
         matched++;
       }
     }
