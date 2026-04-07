@@ -11,10 +11,13 @@ This guide walks you through setting up Paradigm's MCP (Model Context Protocol) 
 paradigm mcp setup
 
 # Or specify a client
+paradigm mcp setup --client claude-code
 paradigm mcp setup --client cursor
 paradigm mcp setup --client claude-desktop
 paradigm mcp setup --client all
 ```
+
+**For Claude Code users:** The fastest path is the plugin — see [Claude Code Plugin](#claude-code-plugin) below.
 
 **For Cursor users:** After setup, you must enable the server in Cursor Settings → Tools → Installed MCP Servers (toggle ON).
 
@@ -66,7 +69,9 @@ Before setting up MCP, ensure you have:
 
 1. **A Paradigm project** — Run `paradigm init` if you haven't already
 2. **Node.js 18+** — Required for the MCP server
-3. **A supported AI client** — Cursor, Claude Desktop, Continue, or Cline
+3. **A supported AI client** — Claude Code, Cursor, Claude Desktop, Continue, or Cline
+
+> **Claude Code users:** The fastest path is the Claude Code plugin — it handles both enforcement hooks and MCP in one step. See [Claude Code Plugin](#claude-code-plugin) below. If you prefer manual config without the plugin, see [Claude Code (Manual)](#claude-code-manual) in the Manual Setup section.
 
 Verify your project is set up:
 
@@ -85,6 +90,7 @@ The easiest way to set up MCP is using the `paradigm mcp` command:
 paradigm mcp setup
 
 # Configure a specific client
+paradigm mcp setup --client claude-code
 paradigm mcp setup --client cursor
 paradigm mcp setup --client claude-desktop
 
@@ -110,15 +116,15 @@ For user-level clients like Claude Desktop, each project you set up is **merged*
 paradigm mcp list
 
 # Output:
-# 🔌 Configured MCP Servers
+# Configured MCP Servers
 #
 # Claude Desktop (user-level):
-#   ○ project-one     → /Users/me/projects/project-one
-#   ● project-two     → (current)
-#   ○ leadsync        → /Users/me/projects/leadsync-dash
+#   o project-one     -> /Users/me/projects/project-one
+#   * project-two     -> (current)
+#   o leadsync        -> /Users/me/projects/leadsync-dash
 #
 # Cursor (this project):
-#   ● a-paradigm       → (current)
+#   * a-paradigm       -> (current)
 ```
 
 ### Removing Servers
@@ -140,6 +146,7 @@ paradigm mcp remove old-project --client all
 
 | Client | Config Type | Config Location |
 |--------|-------------|-----------------|
+| **Claude Code** | User-level (plugin) or project-level | Plugin: automatic. Manual: `~/.claude/claude.json` |
 | **Cursor** | Project-level | `.cursor/mcp.json` |
 | **Claude Desktop** | User-level | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Continue (VS Code)** | User-level | `~/.continue/config.json` |
@@ -148,11 +155,68 @@ paradigm mcp remove old-project --client all
 **Project-level** configs are specific to a project and can be shared with your team.
 **User-level** configs apply to all projects and are stored in your home directory.
 
+### Claude Code Plugin
+
+The Claude Code plugin is the recommended install path. It configures MCP, enforcement hooks, skills, and agents in one step — no manual config needed.
+
+**Install:**
+```
+/plugin marketplace add ascend42/a-paradigm
+```
+
+Restart Claude Code after installing. All 50+ Paradigm MCP tools will be available immediately in every project.
+
+**What the plugin provides vs per-project setup:**
+
+| | Plugin | `paradigm mcp setup --client claude-code` |
+|---|---|---|
+| **MCP tools** | All 50+, globally for every project | Per-project config in `~/.claude/claude.json` |
+| **Enforcement hooks** | Stop, PreToolUse, PostToolUse | Must run `paradigm hooks install --claude-code` separately |
+| **Skills** | `/paradigm:init`, `/paradigm:shift`, `/paradigm:scan`, etc. | Not included |
+| **Agents** | architect, builder, reviewer, tester, security | Not included |
+| **Updates** | Update plugin once | Re-run setup per project |
+
+Most teams use the plugin globally and `paradigm shift` for per-project context files (`.paradigm/`, `portal.yaml`, etc.).
+
 ---
 
 ## Manual Setup
 
 If you prefer manual configuration, here are the config formats for each client:
+
+### Claude Code (Manual)
+
+Use this only if you want a manual per-project MCP config without installing the plugin.
+
+Run the automated setup:
+
+```bash
+paradigm mcp setup --client claude-code
+```
+
+Or configure manually by editing `~/.claude/claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "your-project": {
+      "command": "npx",
+      "args": ["@a-company/paradigm-mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+After editing, start a new Claude Code conversation and verify:
+
+```
+What Paradigm tools do you have access to?
+```
+
+You should see `paradigm_status`, `paradigm_search`, `paradigm_ripple`, `paradigm_navigate`, and others listed.
+
+> **Note:** Manual config only enables MCP tools. It does not install enforcement hooks or skills. For hooks, run `paradigm hooks install --claude-code` separately. For the full experience (hooks + MCP + skills + agents), use the plugin instead.
 
 ### Cursor
 
@@ -312,7 +376,7 @@ The MCP server also provides a `paradigm://context/agent-protocol` resource with
 **Impact Analysis:**
 > **You:** "What would break if I removed the ^authenticated gate?"
 >
-> **Claude:** *[calls paradigm_ripple with symbol="^authenticated"]* 
+> **Claude:** *[calls paradigm_ripple with symbol="^authenticated"]*
 > "Removing ^authenticated would affect 12 features directly: #checkout, #profile, #settings, #dashboard... and 8 more features indirectly through ^admin-only which requires it."
 
 **Finding Related Code:**
@@ -392,6 +456,35 @@ For development, point to your local build:
 
 ## Troubleshooting
 
+### Claude Code: Tools not appearing after plugin install
+
+1. **Restart Claude Code completely** — quit and relaunch, do not just close the window
+2. **Verify the plugin is installed** — run `/plugin list` in Claude Code and confirm `paradigm` appears
+3. **Start a new conversation** — MCP tools are loaded at conversation start
+4. **Ask directly** — Try: "What Paradigm tools do you have access to?" — Claude should list `paradigm_status`, `paradigm_ripple`, etc.
+5. **Check plugin logs** — In Claude Code, open the plugin panel and look for any error messages from the Paradigm plugin
+
+### Claude Code: Manual MCP config not working
+
+1. **Check `~/.claude/claude.json`** — Confirm the `mcpServers` entry exists and `cwd` points to a valid Paradigm project
+2. **Verify JSON syntax** — Use a JSON validator to check for syntax errors
+3. **Run `paradigm mcp status`** — Confirms whether the config file was written correctly
+4. **Test the MCP server directly**:
+   ```bash
+   cd /path/to/your/project
+   npx @a-company/paradigm-mcp
+   ```
+   If it starts without errors, the server is functional and the issue is in the config.
+5. **Start a new conversation** — MCP config is read at conversation start, not mid-session
+
+### Claude Code: Plugin installed but hooks not running
+
+The Stop, PreToolUse, and PostToolUse hooks are bundled in the plugin. If they are not running:
+
+1. **Check Claude Code version** — Hooks require Claude Code 1.0.33 or later
+2. **Verify the plugin is active** — `/plugin list` should show `paradigm` as enabled
+3. **For per-project hooks** (if you ran `paradigm hooks install --claude-code` manually): check `.claude/hooks/` in your project for the hook scripts
+
 ### Cursor: MCP server not working after setup
 
 New MCP servers are **disabled by default** in Cursor. You must manually enable them:
@@ -453,10 +546,10 @@ paradigm mcp setup --client cursor --force
 
 ## Next Steps
 
-- **Try the TaskFlow Tutorial** — Build a project step-by-step with MCP integration
-- **Explore CLI Commands** — Use `paradigm beacon`, `paradigm ripple` for more context
-- **Join the Community** — Share your MCP workflows and get help
+- **Add project context** — Run `paradigm shift` to generate `.paradigm/`, `.purpose`, and `portal.yaml` in your project
+- **Explore CLI Commands** — Use `paradigm beacon`, `paradigm ripple`, and `paradigm constellation` for richer AI context
+- **Read the Quick Start Guide** — See [docs/guides/quick-start.md](quick-start.md) for step-by-step setup
 
 ---
 
-*Last Updated: 2026-01-27*
+*Last Updated: 2026-04-07*

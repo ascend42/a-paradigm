@@ -6,40 +6,71 @@ Get Paradigm up and running in your project in minutes.
 
 ## Installation
 
-### Option 1: Install from Source (Until npm Package Available)
+### Option 1: Install from npm (Recommended)
 
-**Super Quick Install & Setup (One Command):**
+`@a-company/paradigm` is published on npm. Install globally and you're ready:
 
 ```bash
-git clone https://github.com/ascend42/a-paradigm.git /tmp/paradigm-temp && cd /tmp/paradigm-temp && npm install && npm run build && npm link @a-company/paradigm && cd - && paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor && echo "✅ Paradigm setup complete! Clean up: rm -rf /tmp/paradigm-temp"
+npm install -g @a-company/paradigm
+```
+
+Verify the install:
+
+```bash
+paradigm --version
+```
+
+> **MCP server:** The `paradigm-mcp` binary is included in `@a-company/paradigm` — you do not need to install it separately. Running `paradigm mcp setup --client all` (below) wires it up for your AI client automatically.
+
+**Super Quick Setup (one command, after install):**
+
+```bash
+paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
 ```
 
 **Or step-by-step:**
 
 ```bash
-# 1. Clone and build
-git clone https://github.com/ascend42/a-paradigm.git
-cd a-paradigm
-npm install
-npm run build
-
-# 2. Install CLI globally
-npm link @a-company/paradigm
-
-# 3. Navigate to your project
+# 1. Navigate to your project
 cd /path/to/your/project
 
-# 4. Run setup
-paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
+# 2. Initialize Paradigm (non-interactive, uses auto-detected defaults)
+paradigm init --quick
+
+# 3. Generate IDE instruction files
+paradigm sync --all
+
+# 4. Configure MCP for your AI client
+paradigm mcp setup --client all
+
+# 5. Generate symbol graph and orientation
+paradigm constellation && paradigm beacon
+
+# 6. Verify everything
+paradigm doctor
 ```
 
-### Option 2: Install from npm (When Available)
+> **`--quick` vs interactive:** `paradigm init --quick` skips the interactive prompt and uses auto-detected defaults (language, framework, discipline). Run `paradigm init` without `--quick` for a guided setup where you can review and customize each option before config files are written.
+
+### Option 2: Install from Source
+
+Use this if you want to build from source (e.g., for development or to get unreleased changes):
 
 ```bash
-npm install -g @a-company/paradigm
-cd /path/to/your/project
-paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon
+# 1. Clone to a permanent location (the global CLI symlinks to this directory)
+git clone https://github.com/ascend42/a-paradigm.git ~/.paradigm-cli
+cd ~/.paradigm-cli
+npm install && npm run build
+
+# 2. Install CLI and MCP server globally
+cd packages/paradigm && npm install -g . && cd ../..
+cd packages/paradigm-mcp && npm install -g . && cd ../..
+
+# 3. Verify
+paradigm --version
 ```
+
+> **Important:** Keep the `~/.paradigm-cli/` directory. The global CLIs symlink to it — deleting it will break the install. To uninstall: `npm uninstall -g @a-company/paradigm @a-company/paradigm-mcp && rm -rf ~/.paradigm-cli`
 
 ---
 
@@ -76,7 +107,7 @@ your-project/
 
 | Command | What It Does |
 |---------|--------------|
-| `paradigm init --quick` | Initialize .paradigm/ directory (non-interactive) |
+| `paradigm init --quick` | Initialize .paradigm/ directory (non-interactive, uses auto-detected defaults) |
 | `paradigm sync --all` | Generate IDE instruction files for all IDEs |
 | `paradigm mcp setup --client all` | Configure MCP for all detected AI clients |
 | `paradigm constellation` | Generate symbol relationship graph |
@@ -104,18 +135,18 @@ your-project/
 
 ---
 
-## One-Liner Setup (After CLI is Installed)
+## Full Setup (After CLI is Installed)
 
 ```bash
 paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
 ```
 
 **What this does:**
-1. ✅ Initializes `.paradigm/` directory
-2. ✅ Generates IDE instruction files for Cursor, Claude, Copilot, Windsurf
-3. ✅ Configures MCP for all detected AI clients
-4. ✅ Generates symbol graph and AI orientation guide
-5. ✅ Verifies everything is set up correctly
+1. Initializes `.paradigm/` directory (non-interactive, auto-detected defaults)
+2. Generates IDE instruction files for Cursor, Claude Code, Copilot, Windsurf
+3. Configures MCP for all detected AI clients
+4. Generates symbol graph and AI orientation guide
+5. Verifies everything is set up correctly
 
 ---
 
@@ -147,6 +178,7 @@ Should show which AI clients have MCP configured.
 - Start a chat
 - Try: "What paradigm tools do you have access to?"
 - Should list `paradigm_status`, `paradigm_ripple`, `paradigm_navigate`, etc.
+- (Plugin users: tools are available immediately after restarting Claude Code. Manual config users: confirm the `paradigm` entry exists in `~/.claude/claude.json` first.)
 
 **Claude Desktop:**
 - Restart the app after setup
@@ -186,6 +218,9 @@ paradigm mcp status
 
 # For Cursor: Must enable in Settings → Tools
 # For Claude Desktop: Restart app after setup
+# For Claude Code: If using the plugin, MCP is configured automatically.
+#   If using manual config, check ~/.claude/claude.json for the paradigm-mcp entry.
+#   Start a new conversation and ask: "What Paradigm tools do you have access to?"
 ```
 
 ### "Paradigm not initialized"

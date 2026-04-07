@@ -1,18 +1,26 @@
 # Paradigm — Claude Code Plugin
 
 AI-native project architecture for Claude Code. One install gives you structured
-context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools.
+context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools — in
+every project, automatically.
 
 ## Installation
 
 ```
 /plugin marketplace add ascend42/a-paradigm
-/plugin install paradigm@a-paradigm
 ```
 
-Restart Claude Code after installing. The MCP server starts automatically.
+Restart Claude Code after installing. The MCP server and enforcement hooks start automatically.
 
 ## What You Get
+
+### Enforcement Hooks (deterministic)
+
+| Hook | Event | Behavior |
+|---|---|---|
+| Stop | Session end | **Blocks** if source files modified without .purpose updates, missing portal.yaml, no lore entry. Lists violations and prompts auto-fix. |
+| PreToolUse | Before `git commit` | Auto-rebuilds symbol index before commits |
+| PostToolUse | After file edits | Advisory reminder about .purpose coverage |
 
 ### 50+ MCP Tools (automatic)
 
@@ -58,20 +66,58 @@ All tools are available immediately — no configuration needed:
 | `reviewer` | inherit | Code review, quality analysis (read-only) |
 | `security` | inherit | Security analysis, auth review (read-only) |
 
-### Hooks (automatic enforcement)
-
-| Hook | Event | Behavior |
-|---|---|---|
-| Stop | Session end | **Blocks** if source files modified without .purpose updates, missing portal.yaml, no lore entry |
-| PreToolUse | Before `git commit` | Auto-rebuilds symbol index before commits |
-| PostToolUse | After file edits | Advisory reminder about .purpose coverage |
-
 ## Getting Started
 
 After installing the plugin:
 
 1. **New project**: Run `/paradigm:init` or `/paradigm:shift` for full setup
-2. **Existing project**: If already using Paradigm, see [Migration](#migrating-from-per-project-setup)
+2. **Existing project**: If already using Paradigm, see [Migrating from Per-Project Setup](#migrating-from-per-project-setup)
+
+## How Enforcement Works
+
+CLAUDE.md is **advisory** — agents can and do ignore it. Paradigm's hooks are
+**deterministic** — they execute as shell scripts at guaranteed lifecycle points.
+
+### The Compliance Loop
+
+1. **PostToolUse** tracks every source file modification after an edit
+2. **Stop** validates compliance at session end
+3. If violations are found, the session is blocked with a list of what needs fixing
+4. The agent fixes violations and completes the session
+
+### Task-Size Tiers
+
+| Files Modified | Required Actions |
+|---|---|
+| 1 file | Session bookends (recover + postflight) |
+| 2-3 files | + ripple before modify + update .purpose files |
+| 3+ files | + full workflow (ripple, .purpose, lore entry, portal.yaml for routes) |
+
+## Plugin vs Per-Project Setup
+
+| | Plugin | `paradigm shift` (per-project) |
+|---|---|---|
+| **Scope** | Every project automatically | One project at a time |
+| **Hooks** | Bundled in plugin, active for all projects | Copied to `.claude/hooks/` in the project |
+| **MCP** | Configured globally via plugin | `.mcp.json` or `~/.claude/claude.json` per project |
+| **Skills** | `/paradigm:init`, `/paradigm:shift`, etc. | None (skills are plugin-only) |
+| **Rules** | CLAUDE.md protocol injected globally | `CLAUDE.md` generated per-project by `paradigm sync claude` |
+| **Agents** | architect, builder, reviewer, tester, security | None (agents are plugin-only) |
+| **Updates** | Update plugin once, all projects get it | Re-run `paradigm shift` or `paradigm hooks install --claude-code` |
+
+Most teams use both: the plugin for global enforcement, `paradigm shift` for project-specific context (`.paradigm/`, `portal.yaml`, `.purpose` files).
+
+## Verifying Installation
+
+After restarting Claude Code, open a new conversation and ask:
+
+```
+What Paradigm tools do you have access to?
+```
+
+Claude should list `paradigm_status`, `paradigm_ripple`, `paradigm_navigate`, and 50+ others.
+
+To verify hooks are active, check that the Stop hook blocks a session where source files were modified without updating `.purpose` files.
 
 ## Migrating from Per-Project Setup
 
@@ -129,4 +175,5 @@ All agents default to `inherit` (your configured model). For optimal results:
 
 - [GitHub](https://github.com/ascend42/a-paradigm)
 - [npm](https://www.npmjs.com/package/@a-company/paradigm)
-- [Plugin Marketplace Plan](https://github.com/ascend42/a-paradigm/blob/main/docs/PLUGIN-MARKETPLACE-PLAN.md)
+- [MCP Setup Guide](../../docs/guides/mcp-setup.md)
+- [Quick Start Guide](../../docs/guides/quick-start.md)

@@ -82,10 +82,26 @@ These symbols work everywhere — code comments, commit messages, documentation,
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://a-company.org/paradigm/install.sh | bash
+npm install -g @a-company/paradigm
 ```
 
-This clones to `~/.paradigm-cli/`, builds, and installs the `paradigm` and `paradigm-mcp` CLIs globally. Re-running the same command updates to the latest version.
+Then verify:
+
+```bash
+paradigm --version
+```
+
+`@a-company/paradigm` is published on npm. This installs the `paradigm` CLI globally.
+
+> **Note:** The MCP server (`paradigm-mcp`) is included. Run `paradigm mcp setup --client all` after installing to configure it for your AI client.
+
+### Install Script (Alternative)
+
+Prefer a one-step install that also sets up `paradigm-mcp`? Use the install script:
+
+```bash
+curl -fsSL https://a-company.org/paradigm/install.sh | bash
+```
 
 Or download and inspect first:
 
@@ -95,9 +111,11 @@ chmod +x install.sh
 ./install.sh
 ```
 
+This clones the repo to `~/.paradigm-cli/`, builds both `paradigm` and `paradigm-mcp`, and installs them globally. Re-running updates to the latest version. After install, confirm with `paradigm --version`.
+
 > **Note:** The source directory at `~/.paradigm-cli/` must be kept — the global CLIs symlink to it. To uninstall: `npm uninstall -g @a-company/paradigm @a-company/paradigm-mcp && rm -rf ~/.paradigm-cli`
 
-### Manual Install
+### Manual Install from Source
 
 ```bash
 # 1. Clone and build (keep this directory — CLIs symlink to it)
@@ -115,8 +133,6 @@ cd packages/paradigm-mcp && npm install -g . && cd ../..
 paradigm --version
 ```
 
-> **Note:** Paradigm is not yet published to npm. Install from source using the methods above. npm registry publishing is planned.
-
 ---
 
 ## Quick Start
@@ -128,6 +144,8 @@ paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all 
 ```
 
 This initializes config, generates IDE files, configures MCP, builds the symbol graph, creates AI orientation, and verifies everything.
+
+> **`--quick` vs interactive:** `paradigm init --quick` skips the interactive prompt and uses auto-detected defaults (language, framework, discipline). Run `paradigm init` (no flag) for a guided setup that lets you review and customize each option before writing config files.
 
 ### Step-by-Step
 
@@ -273,8 +291,8 @@ Or manually configure your AI client:
 {
   "mcpServers": {
     "paradigm": {
-      "command": "paradigm-mcp",
-      "args": ["."],
+      "command": "npx",
+      "args": ["-y", "--package=@a-company/paradigm", "paradigm-mcp", "."],
       "cwd": "/path/to/your/project"
     }
   }
@@ -377,6 +395,8 @@ Paradigm ships plugins for both Claude Code and Cursor that bundle hooks, skills
 - **Plugins** provide hooks + skills + MCP globally — install once, works in every project
 - **`paradigm shift`** creates per-project files (`.paradigm/`, `.purpose`, `.cursor/rules/`, `portal.yaml`) committed to git
 - Most teams use both: plugin for enforcement, `paradigm shift` for project-specific context
+
+**Claude Code users:** Installing the plugin (`/plugin marketplace add ascend42/a-paradigm`) handles both enforcement hooks AND MCP in a single step — you do not need to run `paradigm mcp setup --client claude-code` separately. The plugin registers the MCP server globally for all your projects. Use `paradigm mcp setup --client claude-code` only if you want a manual per-project MCP config without using the plugin.
 
 ---
 
