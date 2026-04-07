@@ -29,3 +29,7 @@ components:
     description: "Type definitions for data sovereignty — TrustRing, DataPolicy, ObservationRules, EnforcementResult, AuditEntry"
     type: types
     tags: [data-policy, trust-rings, sovereignty, schema]
+  CaptainTypes:
+    description: "Type definitions for Cid (Captain agent) — ContextBrief, DebriefReport, CidSessionMarker, CidBriefedMarker. ContextBrief is the structured pre-task map (territory, symbols, blastRadius, gates, protocol, warnings, coverage, loreRefs, renderedBrief). DebriefReport captures post-task coverage changes and lore recording."
+    type: types
+    tags: [captain, cid, orchestration, coverage, schema]

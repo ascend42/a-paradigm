@@ -298,7 +298,7 @@ For best results, follow this "query before modify" protocol:
 | Understanding code | `paradigm_navigate` with explore intent |
 | Checking dependencies | `paradigm_related` for connections |
 | Getting oriented | `paradigm_status` for project overview |
-| Monitoring session | `paradigm_context_check` every 10-15 tool calls |
+| Monitoring session | `paradigm_session_health` every 10-15 tool calls |
 
 **Why this matters:**
 - **Token efficient**: ~100 tokens per query vs ~2000 for reading files

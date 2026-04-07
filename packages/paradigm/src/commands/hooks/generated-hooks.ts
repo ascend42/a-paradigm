@@ -948,6 +948,11 @@ rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f ".paradigm/.orchestrated"
 
+# Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
+if command -v paradigm >/dev/null 2>&1 && [ -f ".paradigm/events/verdicts.jsonl" ]; then
+  paradigm ambient postflight 2>/dev/null &
+fi
+
 exit 0
 `;
 

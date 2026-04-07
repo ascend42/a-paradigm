@@ -1,59 +1,158 @@
-# Paradigm
+# a-paradigm
 
-> Paradigm is a meta-framework for AI-native software development. It provides structured context, authorization topology, and on-demand intelligence to codebases — enabling AI agents (Claude, Cursor, Copilot, etc.) to navigate and modify projects with 8.5x fewer tokens and 88% lower cost than reading raw source files. It is language-agnostic, framework-agnostic, and works with any AI tool that supports MCP (Model Context Protocol).
+> This project uses Paradigm for structured AI-assisted development.
+> All context, symbols, and specifications live in the .paradigm/ directory.
 
-Paradigm is NOT a code framework — it does not generate boilerplate, impose a runtime, or ship components. It is a metadata layer that sits alongside your existing code and makes it intelligible to AI agents and human developers alike.
+## Symbols
 
-Key concepts:
-- **Five symbols** (`#` Component, `$` Flow, `^` Gate, `!` Signal, `~` Aspect) create a shared vocabulary between code, developers, and AI
-- **`.purpose` files** are YAML metadata files placed in source directories that declare what components, flows, gates, signals, and aspects exist there
-- **`portal.yaml`** defines authorization topology — which gates protect which operations — as a specification separate from implementation
-- **MCP server** with 50+ tools lets AI agents query context on-demand (~100 tokens per query vs ~2000 for reading files)
-- **Disciplines** auto-detect your stack (web, backend, mobile, ML, game, etc.) and configure symbol mappings accordingly
-- **Stack presets** (16 framework-specific configs: Next.js, FastAPI, SwiftUI, Flutter, etc.) layer on top of disciplines for precise scan patterns
-- **Enforcement hooks** for Claude Code and Cursor ensure compliance — they block sessions that modify code without updating `.purpose` files
+| Prefix | Name | Description |
+|--------|------|-------------|
+| `#` | Component | Any documented code unit (feature, service, module, integration) |
+| `$` | Flow | Multi-step processes or user journeys |
+| `^` | Gate | Access control points and authorization rules |
+| `!` | Signal | Events emitted for side effects |
+| `~` | Aspect | Cross-cutting rules with required code anchors |
 
-Install: `curl -fsSL https://a-company.org/paradigm/install.sh | bash`
-Initialize: `paradigm init` (auto-detects discipline and stack)
-MCP setup: `paradigm mcp setup --client all`
+## Key Files
 
-## Getting Started
+### Config
 
-- [README](https://github.com/ascend42/a-paradigm/blob/main/README.md): Full overview, installation, quick start, and architecture
-- [Quick Start Guide](https://github.com/ascend42/a-paradigm/blob/main/docs/guides/quick-start.md): Step-by-step setup walkthrough
-- [MCP Setup Guide](https://github.com/ascend42/a-paradigm/blob/main/docs/guides/mcp-setup.md): Configure MCP for Claude Code, Cursor, Claude Desktop
+- `.paradigm/config.yaml`
+- `package.json`
 
-## Core Concepts
+## Flows
 
-- [Symbol System](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md): The five symbols (#, $, ^, !, ~) and how they work
-- [Purpose Files](https://github.com/ascend42/a-paradigm/blob/main/packages/purpose-core/README.md): YAML metadata format for directory-level documentation
-- [Portal Protocol](https://github.com/ascend42/a-paradigm/blob/main/packages/portal-core/README.md): Authorization topology and gate definitions
-- [Disciplines](https://github.com/ascend42/a-paradigm/blob/main/packages/paradigm/src/core/discipline.ts): 14 domain-specific symbol mappings with auto-detection
+- **$$init-flow**: Project Initialization (trigger: `paradigm init`)
+- **$$sync-flow**: IDE Sync (trigger: `paradigm sync`)
+- **$$probe-flow**: Visual Discovery (trigger: `paradigm probe <screenshot>`)
+- **$$authorization-flow**: Gate Authorization (trigger: `HTTP request to protected route`)
+- **$$orchestration-flow**: Multi-Agent Orchestration (trigger: `paradigm team orchestrate <task>`)
+- **$$purpose-parsing**: Purpose File Parsing (trigger: `File read of *.purpose`)
+- **$$incident-triage**: Incident Triage (trigger: `Error/exception captured by Sentinel transport`)
+- **$$plsat-exam-flow**: PLSAT Certification Exam (trigger: `Student starts PLSAT exam`)
+- **$$handoff-roundtrip**: Session Handoff (trigger: `Agent calls paradigm_handoff_prepare`)
+- **$$wisdom-promotion**: Wisdom Promotion (trigger: `paradigm_wisdom_promote`)
 
-## Commands
+## Gates
 
-- [paradigm init](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/init.md): Initialize Paradigm with smart detection
-- [paradigm sync](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/sync.md): Generate IDE instruction files
-- [paradigm scan](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/scan.md): Build symbol index and navigator
-- [paradigm ripple](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/ripple.md): Impact analysis before changes
-- [paradigm beacon](https://github.com/ascend42/a-paradigm/blob/main/docs/commands/beacon.md): AI quick-start orientation
+| Gate | Description |
+|------|-------------|
+| `^local-only` | Server binds to localhost only — no external access |
+| `^authenticated-session` | Route requires an active Paradigm session (platform server running) |
+| `^read-only` | Route only returns data — no side effects or state mutations |
+| `^write-capable` | Route modifies state — creates, updates, or deletes data |
 
-## Packages
+### Protected Routes
 
-- [@a-company/paradigm](https://github.com/ascend42/a-paradigm/tree/main/packages/paradigm): Unified CLI for all Paradigm tools
-- [@a-company/paradigm-mcp](https://github.com/ascend42/a-paradigm/tree/main/packages/paradigm-mcp): MCP server with 50+ tools for AI agents
-- [@a-company/sentinel](https://github.com/ascend42/a-paradigm/tree/main/packages/sentinel): Symbol-correlated incident tracking and observability
-- [@a-company/university](https://github.com/ascend42/a-paradigm/tree/main/packages/university): Interactive courses and PLSAT certification
+- `GET /api/health`: ^local-only, ^read-only
+- `GET /api/platform/health`: ^local-only, ^read-only
+- `GET /api/platform/sections`: ^local-only, ^read-only
+- `GET /api/info`: ^local-only, ^read-only
+- `GET /api/platform/overview`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/platform/agent-command`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/lore`: ^local-only, ^read-only
+- `GET /api/lore/timeline`: ^local-only, ^read-only
+- `GET /api/lore/symbols`: ^local-only, ^read-only
+- `GET /api/lore/tags`: ^local-only, ^read-only
+- `GET /api/lore/authors`: ^local-only, ^read-only
+- `GET /api/lore/calibration`: ^local-only, ^read-only
+- `GET /api/lore/:id`: ^local-only, ^read-only
+- `PUT /api/lore/:id/assess`: ^local-only, ^authenticated-session, ^write-capable
+- `PUT /api/lore/:id/review`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sessions`: ^local-only, ^read-only
+- `GET /api/sessions/:id`: ^local-only, ^read-only
+- `GET /api/symbols`: ^local-only, ^read-only
+- `GET /api/graphs`: ^local-only, ^read-only
+- `GET /api/graphs/:slug`: ^local-only, ^read-only
+- `GET /api/canvas/files`: ^local-only, ^read-only
+- `GET /api/canvas/files/*`: ^local-only, ^read-only
+- `PUT /api/canvas/files/*`: ^local-only, ^authenticated-session, ^write-capable
+- `DELETE /api/canvas/files/*`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/git/status`: ^local-only, ^read-only
+- `GET /api/git/branches`: ^local-only, ^read-only
+- `GET /api/git/log`: ^local-only, ^read-only
+- `GET /api/git/diff`: ^local-only, ^read-only
+- `POST /api/git/stage`: ^local-only, ^authenticated-session, ^write-capable
+- `POST /api/git/unstage`: ^local-only, ^authenticated-session, ^write-capable
+- `POST /api/git/commit`: ^local-only, ^authenticated-session, ^write-capable
+- `POST /api/git/push`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/ambient/events`: ^local-only, ^read-only
+- `GET /api/ambient/nominations`: ^local-only, ^read-only
+- `POST /api/ambient/nominations/:id/engage`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/ambient/stream`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/ambient/policy`: ^local-only, ^read-only
+- `GET /api/team/roster`: ^local-only, ^read-only
+- `GET /api/team/threads`: ^local-only, ^read-only
+- `PATCH /api/team/agents/:id/bench`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/symphony/agents`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/symphony/agents/me`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/symphony/peers`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/symphony/threads`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/symphony/threads/:threadId`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/symphony/threads/:threadId/resolve`: ^local-only, ^authenticated-session, ^write-capable
+- `POST /api/symphony/messages`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/symphony/inbox`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/symphony/file-requests`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/symphony/file-requests/:requestId/action`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/symphony/status`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/docs/manifest`: ^local-only, ^read-only
+- `GET /api/docs/symbol/:id`: ^local-only, ^read-only
+- `GET /api/docs/flow/:id`: ^local-only, ^read-only
+- `GET /api/docs/portal`: ^local-only, ^read-only
+- `GET /api/docs/page/:slug`: ^local-only, ^read-only
+- `GET /api/docs/search`: ^local-only, ^read-only
+- `POST /api/sentinel/logs`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/logs`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/services`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/services`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/state`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/state`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/state/:service`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/metrics`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/metrics`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/metrics/aggregate/:name`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/traces`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/traces`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/traces/:traceId`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/schemas`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/schemas`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/schemas/:id`: ^local-only, ^authenticated-session, ^read-only
+- `POST /api/sentinel/events`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/events`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/events/scopes`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/events/scope/:value`: ^local-only, ^authenticated-session, ^read-only
+- `GET /api/sentinel/symbols`: ^local-only, ^read-only
+- `PUT /api/sentinel/symbols/:id`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/info`: ^local-only, ^read-only
+- `GET /api/sentinel/commits`: ^local-only, ^read-only
+- `GET /api/sentinel/incidents`: ^local-only, ^read-only
+- `GET /api/sentinel/incidents/:id`: ^local-only, ^read-only
+- `POST /api/sentinel/incidents/:id/resolve`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/sentinel/patterns`: ^local-only, ^read-only
+- `GET /api/sentinel/patterns/:id`: ^local-only, ^read-only
+- `GET /api/courses`: ^local-only, ^read-only
+- `GET /api/courses/:id`: ^local-only, ^read-only
+- `GET /api/courses/:id/lessons/:lessonId`: ^local-only, ^read-only
+- `GET /api/plsat`: ^local-only, ^read-only
+- `GET /api/plsat/:version`: ^local-only, ^read-only
+- `POST /api/plsat/diploma`: ^local-only, ^authenticated-session, ^write-capable
+- `GET /api/reference`: ^local-only, ^read-only
+- `WS /ws`: ^local-only, ^authenticated-session
 
-## Advanced
+## Conventions
 
-- [Multi-Agent Orchestration](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#multi-agent): Coordinate architect, builder, reviewer, tester, security agents
-- [Workspaces](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#workspaces): Multi-project symbol awareness
-- [Enforcement Hooks](https://github.com/ascend42/a-paradigm/blob/main/docs/README.md#hooks): Claude Code and Cursor compliance hooks
-- [Changelog](https://github.com/ascend42/a-paradigm/blob/main/CHANGELOG.md): Full version history
+- Use kebab-case for all symbol IDs (feature-name, not featureName)
+- Document flows when logic spans 3+ components
+- Reference related items using symbol prefixes (# $ ^ ! ~)
+- Add descriptions to all components and gates
+- Update .purpose files when changing feature behavior
+- Keep gates minimal - one responsibility per gate
+- Use signals for side effects, not direct state mutations
+- ALWAYS use Paradigm logger, NEVER raw console.log/print
 
-## Optional
+## Further Reading
 
-- [Agentic Efficiency Study](https://github.com/ascend42/a-paradigm/blob/main/.paradigm/docs/agentic-efficiency-study.md): Benchmark comparing Paradigm vs traditional docs
-- [Contributing](https://github.com/ascend42/a-paradigm/blob/main/CONTRIBUTING.md): Development setup and guidelines
-- [Distribution Strategy](https://github.com/ascend42/a-paradigm/blob/main/docs/DISTRIBUTION.md): Roadmap for npm, JSR, and website
+- `.paradigm/specs/` - Detailed specifications
+- `.paradigm/docs/` - Commands, patterns, troubleshooting
+- `CLAUDE.md` - AI agent instructions (Claude Code)
+- `AGENTS.md` - Universal agent instructions
