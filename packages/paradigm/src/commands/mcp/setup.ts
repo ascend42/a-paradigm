@@ -373,6 +373,7 @@ export async function mcpSetupCommand(options: SetupOptions) {
       }
     } else {
       spinner.fail(`Failed to configure ${client.name}: ${result.message}`);
+      console.log(chalk.gray('    Troubleshooting: .paradigm/docs/troubleshooting.md'));
       tracker.error('MCP configuration failed', { client: client.id, message: result.message });
     }
   }

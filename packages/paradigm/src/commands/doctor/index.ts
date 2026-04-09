@@ -835,7 +835,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       if (contextAdvisoryCount > 0) parts.push(chalk.cyan(`${contextAdvisoryCount} advisor${contextAdvisoryCount > 1 ? 'ies' : 'y'}`));
 
       console.log(`${parts.join(', ')} found.\n`);
-      console.log(chalk.gray('Run the suggested commands to fix issues.\n'));
+      console.log(chalk.gray('Run the suggested commands to fix issues.'));
+      console.log(chalk.gray('Troubleshooting guide: .paradigm/docs/troubleshooting.md\n'));
     }
   }
 

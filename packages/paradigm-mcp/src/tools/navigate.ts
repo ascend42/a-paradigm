@@ -9,6 +9,8 @@
  * ZERO-CONFIG: Auto-generates minimal navigator from .purpose files if navigator.yaml missing
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ProjectContext } from '../utils/index-loader.js';
 import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/navigator.js';
@@ -230,6 +232,15 @@ export async function handleNavigateTool(
     } catch {
       // Fall through with full text if parse fails
     }
+  }
+
+  // Write session sentinel so the PreToolUse navigate-remind hook stays silent
+  // after navigate has been called at least once this session.
+  try {
+    const sentinelPath = path.join(ctx.rootDir, '.paradigm', '.nav-called');
+    fs.writeFileSync(sentinelPath, new Date().toISOString(), 'utf8');
+  } catch {
+    // Non-fatal — sentinel is advisory only
   }
 
   return {

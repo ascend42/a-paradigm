@@ -14,7 +14,7 @@ features:
       - '#manifest-generator'
       - '#model-configurator'
   init-command:
-    description: Initialize Paradigm in a project with smart detection
+    description: Initialize Paradigm in a project with smart detection. Generates .paradigm/init-report.md after completion as a first-run orientation artifact.
     type: command
     flows:
       - $init-flow
@@ -518,7 +518,7 @@ components:
     description: Manages git hooks for automatic history capture
     type: handler
   claude-code-hooks-installer:
-    description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex
+    description: Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex. Includes paradigm-navigate-remind.sh PreToolUse hook (Glob|Grep matcher) that fires once per session to prompt navigate-first behaviour.
     type: installer
   sentinel-launcher:
     description: Launches the Sentinel codebase intelligence UI

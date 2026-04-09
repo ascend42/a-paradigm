@@ -187,6 +187,19 @@ Should show which AI clients have MCP configured.
 
 ---
 
+## Maintenance Cost
+
+Adding a feature to Paradigm takes about 5 minutes of `.purpose` file maintenance. Here's what you get for that:
+
+- Every AI agent that touches your project starts with accurate context instead of guessing
+- Change-impact analysis (`paradigm ripple`) knows which downstream code to warn about
+- The stop hook catches undocumented changes before they become drift
+- Lore entries make sessions recoverable — future agents pick up exactly where you left off
+
+If 5 minutes per feature sounds like overhead, Paradigm is probably not the right fit. If you've lost hours to AI agents that didn't understand your project, it likely is.
+
+---
+
 ## Next Steps
 
 After setup, you can:

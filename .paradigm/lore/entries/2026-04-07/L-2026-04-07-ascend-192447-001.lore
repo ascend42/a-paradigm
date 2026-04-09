@@ -1,0 +1,30 @@
+id: L-2026-04-07-ascend-192447-001
+type: agent-session
+timestamp: '2026-04-07T19:24:47.337Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Fixed all 10 FTUX friction items from Nora''s report across 4 doc files. Critical'
+summary: 'Fixed all 10 FTUX friction items from Nora''s report across 4 doc files. Critical fixes: broken Quick Start one-liner replaced with npm install -g, Claude Code added as first-class client in mcp-setup.md with plugin section + manual setup + troubleshooting, README npm publishing contradiction resolved, plugin vs mcp setup relationship clarified. Created full plugins/paradigm/README.md at parity with Cursor plugin README.'
+symbols_touched: []
+files_modified:
+  - README.md
+  - docs/guides/quick-start.md
+  - docs/guides/mcp-setup.md
+  - plugins/paradigm/README.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mnoxjcz3-mg9l
+meta:
+  orchestrationId: orch-mnoxjcz3-mg9l
+  coverageScore:
+    before: 0
+    after: 1
+  coverageAdded:
+    - docs/guides
+    - plugins/paradigm
+git_context:
+  ref: aef1122aa46bde3aa1f94090bab66fc98821d129
+  branch: main
+  dirty: true

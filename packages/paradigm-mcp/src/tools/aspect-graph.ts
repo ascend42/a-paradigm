@@ -500,6 +500,8 @@ async function handleAspectGraphTraversal(
             target: edge.target,
             relation: edge.relation,
             weight: edge.weight,
+            origin: edge.origin,
+            inferred: edge.origin === 'inferred',
           });
         }
 
@@ -675,6 +677,7 @@ async function handleAspectSuggestScan(
         description: s.suggestedDescription,
         confidence: s.confidence,
         reason: s.reason,
+        inferred: true,
       })),
       tip: suggestions.length > 0
         ? 'Review suggestions and add confirmed aspects to your .purpose files with ~ prefix and code anchors.'

@@ -121,7 +121,7 @@ description: |
     - src/tools/history.ts:1-294
 
 #NavigateTools:
-  description: Codebase navigation tools (find, explore, context) with TTL caching
+  description: Codebase navigation tools (find, explore, context) with TTL caching. Writes .paradigm/.nav-called sentinel file after a successful navigate call to signal first-use to hooks.
   type: tool
   tags: [mcp]
   anchors:
@@ -189,7 +189,7 @@ description: |
     - src/utils/habits-loader.ts:1-400
 
 #AspectGraphTools:
-  description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm
+  description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm. paradigm_aspect_suggest_scan marks all suggestions with inferred:true. paradigm_aspect_graph BFS edge output includes origin and inferred fields.
   type: tool
   tags: [mcp, aspect-graph]
   anchors:

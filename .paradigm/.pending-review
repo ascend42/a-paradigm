@@ -60,3 +60,11 @@ packages/paradigm-mcp/src/tools/navigate.ts
 packages/paradigm-mcp/src/tools/lore.ts
 packages/paradigm-mcp/src/tools/context.ts
 packages/paradigm-mcp/src/tools/tags.ts
+{"path":"docs/guides","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnoxjcz3-mg9l. Files: docs/guides/quick-start.md, docs/guides/mcp-setup.md","timestamp":"2026-04-07T19:24:47.158Z"}
+{"path":"plugins/paradigm","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnoxjcz3-mg9l. Files: plugins/paradigm/README.md","timestamp":"2026-04-07T19:24:47.159Z"}
+{"path":".paradigm/ftux/reports","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnp6i8eg-cpcr. Files: .paradigm/ftux/reports/2026-04-07-graphify.md","timestamp":"2026-04-07T22:27:59.963Z"}
+{"path":".paradigm/events","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnp6i8eg-cpcr. Files: .paradigm/events/verdicts.jsonl","timestamp":"2026-04-07T22:27:59.964Z"}
+{"path":"packages/paradigm/src/commands/hooks/scripts","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnrq39px-xkpr. Files: packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh, packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh, packages/paradigm/src/commands/hooks/scripts/claude-code-navigate-remind.sh","timestamp":"2026-04-09T17:22:48.915Z"}
+{"path":"plugins/paradigm/scripts","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnrq39px-xkpr. Files: plugins/paradigm/scripts/paradigm-navigate-remind.sh","timestamp":"2026-04-09T17:22:48.916Z"}
+{"path":"plugins/paradigm/hooks","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnrq39px-xkpr. Files: plugins/paradigm/hooks/hooks.json","timestamp":"2026-04-09T17:22:48.916Z"}
+{"path":"packages/paradigm/scripts","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mnrq39px-xkpr. Files: packages/paradigm/scripts/generate-hooks.mjs","timestamp":"2026-04-09T17:22:48.917Z"}

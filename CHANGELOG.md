@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.7] — 2026-04-09
+
+### Added
+
+- **PreToolUse navigation-remind hook** — New `paradigm-navigate-remind.sh` hook fires once per session before `Glob`/`Grep` tool calls. Reads scan-index stats and emits an advisory message: "Context available — use `paradigm_navigate` before searching." Non-blocking (exit 0). Fires only once per session via `.paradigm/.nav-reminded` marker. Writes `.paradigm/.nav-called` sentinel in `paradigm_navigate` so the hook stays silent after navigation is used. Installed by `paradigm hooks install --claude-code`; also included in the Claude Code plugin (`hooks.json`).
+- **`init-report.md` first-run artifact** — `paradigm init` now writes `.paradigm/init-report.md` after completing. The report summarises what was created (files, MCP tools available, next steps, maintenance contract). Provides an immediately shareable, human-readable artifact from the first run instead of just YAML.
+- **`inferred: true` on auto-suggested aspects** — `paradigm_aspect_suggest_scan` response now includes `inferred: true` on every suggestion entry. `paradigm_aspect_graph` BFS traversal edges now include `origin` and `inferred: boolean` fields. Agents and developers can now distinguish auto-inferred relationships from explicitly authored ones.
+
+### Changed
+
+- **Stop hooks surface troubleshooting doc** — `claude-code-stop.sh` and `cursor-stop.sh` now append `Help: See .paradigm/docs/troubleshooting.md | paradigm doctor` when blocking. Reduces first-run abandonment.
+- **`paradigm init` terminal output includes maintenance contract** — `displaySummary()` appends a three-line maintenance contract note.
+- **Quick-start guide adds Maintenance Cost section** — `docs/guides/quick-start.md` gains a `## Maintenance Cost` section with honest cost/benefit framing.
+
+Symbols: #paradigm-mcp, #hooks, #init, #aspect-graph, #navigate
+
 ## [5.37.6] — 2026-04-06
 
 ### Added

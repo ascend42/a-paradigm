@@ -74,6 +74,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
+  echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
   exit 2
 fi
 

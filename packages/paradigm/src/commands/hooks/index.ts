@@ -20,6 +20,7 @@ import {
   CLAUDE_CODE_STOP_HOOK,
   CLAUDE_CODE_POSTWRITE_HOOK,
   CLAUDE_CODE_PRECOMMIT_HOOK,
+  CLAUDE_CODE_NAVIGATE_REMIND_HOOK,
   CURSOR_SESSION_START_HOOK,
   CURSOR_STOP_HOOK,
   CURSOR_POSTWRITE_HOOK,
@@ -147,7 +148,7 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
   // Remove hook scripts
   const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
   if (fs.existsSync(claudeHooksDir)) {
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh']) {
       const hookPath = path.join(claudeHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         fs.unlinkSync(hookPath);
@@ -357,6 +358,7 @@ export async function hooksInstallCommand(options: {
       { name: 'claude-code-stop', content: CLAUDE_CODE_STOP_HOOK },
       { name: 'claude-code-precommit', content: CLAUDE_CODE_PRECOMMIT_HOOK },
       { name: 'claude-code-postwrite', content: CLAUDE_CODE_POSTWRITE_HOOK },
+      { name: 'claude-code-navigate-remind', content: CLAUDE_CODE_NAVIGATE_REMIND_HOOK },
       { name: 'cursor-session-start', content: CURSOR_SESSION_START_HOOK },
       { name: 'cursor-stop', content: CURSOR_STOP_HOOK },
       { name: 'cursor-precommit', content: CURSOR_PRECOMMIT_HOOK },
@@ -457,7 +459,7 @@ export async function hooksInstallCommand(options: {
   const installAll = !options.postCommit && !options.prePush && !options.claudeCode && !options.cursor;
   if (installAll || options.claudeCode) {
     if (dryRun) {
-      console.log(chalk.gray('  Claude Code hooks: would install paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh'));
+      console.log(chalk.gray('  Claude Code hooks: would install paradigm-stop.sh, paradigm-precommit.sh, paradigm-postwrite.sh, paradigm-navigate-remind.sh'));
       console.log(chalk.gray(`  → ${path.join(rootDir, '.claude', 'hooks')}/`));
       console.log(chalk.gray('  → Update .claude/settings.json with hook configuration'));
     } else {
@@ -523,6 +525,7 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
     { name: 'paradigm-stop.sh', content: CLAUDE_CODE_STOP_HOOK },
     { name: 'paradigm-precommit.sh', content: CLAUDE_CODE_PRECOMMIT_HOOK },
     { name: 'paradigm-postwrite.sh', content: CLAUDE_CODE_POSTWRITE_HOOK },
+    { name: 'paradigm-navigate-remind.sh', content: CLAUDE_CODE_NAVIGATE_REMIND_HOOK },
   ];
 
   for (const hook of hookScripts) {
@@ -587,6 +590,24 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   );
   if (!hasParadigmPrecommit) {
     preToolUseHooks.push(preCommitHookEntry);
+  }
+  hooks.PreToolUse = preToolUseHooks;
+
+  // Add PreToolUse navigate-remind hook (fires once per session before Glob/Grep)
+  const navigateRemindHookEntry = {
+    matcher: 'Glob|Grep',
+    hooks: [{
+      type: 'command',
+      command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-navigate-remind.sh"`,
+      timeout: 5,
+    }],
+  };
+
+  const hasParadigmNavigateRemind = preToolUseHooks.some(
+    (h) => JSON.stringify(h).includes('paradigm-navigate-remind.sh'),
+  );
+  if (!hasParadigmNavigateRemind) {
+    preToolUseHooks.push(navigateRemindHookEntry);
   }
   hooks.PreToolUse = preToolUseHooks;
 
@@ -940,7 +961,7 @@ export async function hooksStatusCommand(): Promise<void> {
     // Warn about stale project hooks that shadow the plugin
     const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
     const staleHooks: string[] = [];
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh']) {
       if (fs.existsSync(path.join(claudeHooksDir, hookName))) {
         staleHooks.push(hookName);
       }
@@ -966,7 +987,7 @@ export async function hooksStatusCommand(): Promise<void> {
     console.log(chalk.gray('  Plugin: not active (using project-level hooks)'));
 
     const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
-    const claudeHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh'];
+    const claudeHooks = ['paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh'];
 
     for (const hookName of claudeHooks) {
       const hookPath = path.join(claudeHooksDir, hookName);

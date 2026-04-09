@@ -1,10 +1,10 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-04-03T08:15:30.153Z'
-  sessionId: orch-mnimpd9i-u0kr
-  summary: '[Kit (builder)]: builder: Implement: Fold low-frequency CLI commands under `...'
+  date: '2026-04-09T17:00:13.175Z'
+  sessionId: orch-mnrq39px-xkpr
+  summary: '[Kit (builder)]: builder: Implement: Implement 5 DX polish candidates from g...'
   symbolsTouched: []
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 4
+sessionsOnProject: 6

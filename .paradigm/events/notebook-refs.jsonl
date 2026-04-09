@@ -20,3 +20,11 @@
 {"timestamp":"2026-04-03T08:15:30.149Z","type":"notebook-reference","agentId":"documentor","notebookEntryIds":["nb-purpose-files-mn6b4o3w","nb-purpose-files-mn53y3j4","nb-specs-mn53y8bq"]}
 {"timestamp":"2026-04-06T17:52:41.087Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-habits-mn6he1ec","nb-monorepo-mn53wvzd","nb-acl-mn4wi3t1","nb-orchestrate-inline-001","nb-ripple-analysis-001"]}
 {"timestamp":"2026-04-06T17:52:45.585Z","type":"notebook-reference","agentId":"advocate","notebookEntryIds":["nb-pre-mortem-001"]}
+{"timestamp":"2026-04-07T18:05:22.609Z","type":"notebook-reference","agentId":"builder","notebookEntryIds":["nb-acl-mn4wi3vi","nb-build-mn53ww33","nb-conductor-mn53x3e1","nb-mcp-tools-mn53wzsn"]}
+{"timestamp":"2026-04-07T18:05:22.613Z","type":"notebook-reference","agentId":"reviewer","notebookEntryIds":["nb-compliance-mn53xbhx","nb-cross-package-mn53xf98","nb-acl-mn4wi3wd","nb-compliance-check-001"]}
+{"timestamp":"2026-04-07T18:05:22.615Z","type":"notebook-reference","agentId":"documentor","notebookEntryIds":["nb-purpose-files-mn6b4o3w","nb-purpose-files-mn53y3j4","nb-specs-mn53y8bq"]}
+{"timestamp":"2026-04-07T22:16:26.583Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-acl-mn4wi3t1","nb-habits-mn6he1ec","nb-monorepo-mn53wvzd","nb-orchestrate-inline-001","nb-ripple-analysis-001"]}
+{"timestamp":"2026-04-09T17:00:13.127Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-habits-mn6he1ec","nb-monorepo-mn53wvzd","nb-acl-mn4wi3t1","nb-orchestrate-inline-001","nb-ripple-analysis-001"]}
+{"timestamp":"2026-04-09T17:00:13.132Z","type":"notebook-reference","agentId":"builder","notebookEntryIds":["nb-build-mn53ww33","nb-conductor-mn53x3e1","nb-mcp-tools-mn53wzsn","nb-acl-mn4wi3vi"]}
+{"timestamp":"2026-04-09T17:00:13.134Z","type":"notebook-reference","agentId":"reviewer","notebookEntryIds":["nb-acl-mn4wi3wd","nb-compliance-mn53xbhx","nb-compliance-check-001","nb-cross-package-mn53xf98"]}
+{"timestamp":"2026-04-09T17:00:13.136Z","type":"notebook-reference","agentId":"documentor","notebookEntryIds":["nb-purpose-files-mn6b4o3w","nb-purpose-files-mn53y3j4","nb-specs-mn53y8bq"]}

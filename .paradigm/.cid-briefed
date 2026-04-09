@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-04-09T17:22:49.254Z",
+  "sessionId": "orch-mnrq39px-xkpr",
+  "touchedFiles": [
+    "packages/paradigm-mcp/src/tools/navigate.ts",
+    "packages/paradigm-mcp/src/tools/aspect-graph.ts",
+    "packages/paradigm/src/commands/init.ts",
+    "packages/paradigm/src/commands/hooks/index.ts",
+    "packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh",
+    "packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh",
+    "packages/paradigm/src/commands/hooks/scripts/claude-code-navigate-remind.sh",
+    "plugins/paradigm/scripts/paradigm-navigate-remind.sh",
+    "plugins/paradigm/hooks/hooks.json",
+    "packages/paradigm/scripts/generate-hooks.mjs",
+    "docs/guides/quick-start.md",
+    "packages/paradigm-mcp/.purpose",
+    "packages/paradigm/.purpose",
+    "CHANGELOG.md"
+  ],
+  "coverageScore": 1
+}

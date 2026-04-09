@@ -21,6 +21,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/paradigm-navigate-remind.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [

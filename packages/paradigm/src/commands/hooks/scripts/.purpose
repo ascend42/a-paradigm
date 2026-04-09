@@ -1,0 +1,14 @@
+# Auto-generated .purpose stub — created by Cid (captain debrief)
+# Delegate to Scribe (Documentor) for rich documentation
+name: scripts
+description: "TODO: describe what this directory/module does"
+context:
+  - "Stub created by Cid during coverage audit — update with real context"
+# Key files touched:
+# - claude-code-stop.sh
+# - cursor-stop.sh
+# - claude-code-navigate-remind.sh
+components:
+  scripts:
+    description: "TODO: describe this component"
+    tags: []

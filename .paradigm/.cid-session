@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-04-06T17:52:02.289Z",
-  "taskDescription": "Full team debate: Should we add a new core agent called \"FTUX\" (First Time User Experience)?\n\nContext:\n- Paradigm is preparing to go public. The audit identified a major gap: docs/quick-start don't me",
-  "depth": "quick",
+  "timestamp": "2026-04-09T17:00:13.173Z",
+  "taskDescription": "Implement 5 DX polish candidates from graphify cross-study: (1) PreToolUse hook for mandatory context injection via settings.json — hook plumbing already exists, make it enforce navigation step before",
+  "depth": "standard",
   "coverageScore": 0.5
 }
