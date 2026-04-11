@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.8] — 2026-04-10
+
+### Fixed
+
+- **`paradigm-navigate-remind.sh` missing execute bit** — Script was created in v5.37.7 without `chmod +x`, causing `Permission denied` when Claude Code tried to run it as a hook. Set execute bit on the source file in `plugins/paradigm/scripts/`.
+
+Symbols: #hooks, #navigate
+
 ## [5.37.7] — 2026-04-09
 
 ### Added
