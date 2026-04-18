@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.10] — 2026-04-18
+
+### Changed
+
+- **README rewrite — `paradigm shift` as the single entry point** — Team audit (Nora FTUX + architect + reviewer) found the previous README buried `paradigm shift` at line 218, pushed a 6-command Quick Start chain, dead-ended readers at an undefined `.purpose` step, and threw ~20+ undefined jargon terms (`beacon`, `constellation`, `symbol graph`, `auth topology`, etc.) before the first runnable command. New structure: hero → npm install → `paradigm shift` (with realistic CLI output snippet) → what you just got (`.purpose` and `portal.yaml` skeletons) → why this works (efficiency study) → Concepts (symbols, hooks, agent team, below the fold) → Integrations → Ecosystem → commands reference. All 8 `shift` flag overloads in a single table. `.purpose` skeleton and filled example now appear in-line. Re-audit by Nora: all 4 critical original findings fixed, verdict "ship-it" after 3 copy polishes.
+
+Symbols: #readme, #paradigm-shift
+
 ## [5.37.9] — 2026-04-18
 
 ### Fixed
