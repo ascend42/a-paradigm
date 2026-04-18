@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.9] — 2026-04-18
+
+### Fixed
+
+- **`paradigm-navigate-remind.sh` execute bit — actually committed this time** — v5.37.8 claimed to fix the missing execute bit but only touched CHANGELOG and version strings; the file's mode in the git tree remained `100644`, so the plugin cache installed via Claude Code still produced `Permission denied` when the PreToolUse hook fired. Applied `git update-index --chmod=+x` so the executable bit is recorded in the tree itself. Verified via `git ls-files --stage` before commit.
+
+Symbols: #hooks, #navigate
+
 ## [5.37.8] — 2026-04-10
 
 ### Fixed
