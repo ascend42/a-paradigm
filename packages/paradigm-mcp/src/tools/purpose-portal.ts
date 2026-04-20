@@ -838,7 +838,7 @@ async function handleAddAspect(
 
   const data = readPurposeFile(filePath);
 
-  if (!data.aspects) data.aspects = {};
+  if (!data.aspects || Array.isArray(data.aspects)) data.aspects = {};
 
   const bareId = stripSymbolPrefix(id);
 
@@ -851,6 +851,15 @@ async function handleAddAspect(
   };
 
   writePurposeFile(filePath, data);
+
+  // Verify the aspect persisted (defense against silent no-op)
+  const verifyAspects = readPurposeFile(filePath).aspects;
+  if (!verifyAspects || Array.isArray(verifyAspects) || !verifyAspects[bareId]) {
+    return err(
+      `add_aspect write verification failed: aspect "${bareId}" not found in ${filePath} after write.`,
+    );
+  }
+
   await reloadContext();
 
   return ok({
@@ -879,7 +888,7 @@ async function handleAddSignal(
   const filePath = resolvePurposeFilePath(purposeFile, ctx.rootDir);
   const fileData = readPurposeFile(filePath);
 
-  if (!fileData.signals) fileData.signals = {};
+  if (!fileData.signals || Array.isArray(fileData.signals)) fileData.signals = {};
 
   const bareId = stripSymbolPrefix(id);
 
@@ -893,6 +902,15 @@ async function handleAddSignal(
   };
 
   writePurposeFile(filePath, fileData);
+
+  // Verify the signal persisted (defense against silent no-op)
+  const verifySignals = readPurposeFile(filePath).signals;
+  if (!verifySignals || Array.isArray(verifySignals) || !verifySignals[bareId]) {
+    return err(
+      `add_signal write verification failed: signal "${bareId}" not found in ${filePath} after write.`,
+    );
+  }
+
   await reloadContext();
 
   return ok({
@@ -936,6 +954,15 @@ async function handleAddFlow(
   data.flows = flows;
 
   writePurposeFile(filePath, data);
+
+  // Verify the flow persisted (defense against silent no-op)
+  const verifyFlows = normalizeFlowsToRecord(readPurposeFile(filePath).flows);
+  if (!verifyFlows[bareId]) {
+    return err(
+      `add_flow write verification failed: flow "${bareId}" not found in ${filePath} after write.`,
+    );
+  }
+
   await reloadContext();
 
   return ok({
@@ -961,7 +988,7 @@ async function handleAddGate(
   const filePath = resolvePurposeFilePath(purposeFile, ctx.rootDir);
   const data = readPurposeFile(filePath);
 
-  if (!data.gates) data.gates = {};
+  if (!data.gates || Array.isArray(data.gates)) data.gates = {};
 
   const bareId = stripSymbolPrefix(id);
 
@@ -973,6 +1000,15 @@ async function handleAddGate(
   };
 
   writePurposeFile(filePath, data);
+
+  // Verify the gate persisted (defense against silent no-op)
+  const verifyGates = readPurposeFile(filePath).gates;
+  if (!verifyGates || Array.isArray(verifyGates) || !verifyGates[bareId]) {
+    return err(
+      `add_gate write verification failed: gate "${bareId}" not found in ${filePath} after write.`,
+    );
+  }
+
   await reloadContext();
 
   return ok({
@@ -999,7 +1035,7 @@ async function handleAddState(
   const filePath = resolvePurposeFilePath(purposeFile, ctx.rootDir);
   const data = readPurposeFile(filePath);
 
-  if (!data.states) data.states = {};
+  if (!data.states || Array.isArray(data.states)) data.states = {};
 
   const bareId = stripSymbolPrefix(id);
 
@@ -1011,6 +1047,15 @@ async function handleAddState(
   data.states[bareId] = stateDef as PurposeFile['states'] extends Record<string, infer V> ? V : never;
 
   writePurposeFile(filePath, data);
+
+  // Verify the state persisted (defense against silent no-op)
+  const verifyStates = readPurposeFile(filePath).states;
+  if (!verifyStates || Array.isArray(verifyStates) || !verifyStates[bareId]) {
+    return err(
+      `add_state write verification failed: state "${bareId}" not found in ${filePath} after write.`,
+    );
+  }
+
   await reloadContext();
 
   return ok({

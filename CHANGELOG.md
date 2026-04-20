@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.11] — 2026-04-20
+
+### Fixed
+
+- **`paradigm_portal_add_gate` + sibling mutation tools silently no-op'd on v2 scaffold** — Root cause in `packages/paradigm-mcp/src/utils/portal-writer.ts`: the guard `if (!data.gates) data.gates = {}` failed when `gates` parsed as `[]` (truthy Array). Subsequent `data.gates[id] = gate` set a named property on the Array, which `js-yaml.dump` silently dropped — rewriting the file byte-for-byte identical. The handler then built its success response from the input `id` without reading back, returning perfect-looking fake success. Compounded by `packages/paradigm/src/commands/shift-files.ts` emitting `gates: []` / `routes: []` as the v2 init scaffold, so every newly-shifted project was in the vulnerable state by default. Field-reported by an agent running 11 `portal_add_gate` calls that all returned success while `gates: []` stayed empty.
+- **Fix applied (three parts):**
+  - `portal-writer.ts` — `addGateToPortal` and `addRouteToPortal` now normalize Array-shaped `gates`/`routes` to `{}` before mutation, and read back the file after write to assert the mutation landed (throws descriptive error on silent no-op).
+  - `purpose-portal.ts` — same Array→{} normalization + post-write read-back added defensively to `handleAddGate`, `handleAddSignal`, `handleAddState`, `handleAddAspect`, `handleAddFlow`. Returns `err()` envelope on verification failure instead of fake success.
+  - `shift-files.ts` — v2 scaffold now emits `gates: {}` / `routes: {}` so newly-shifted projects never enter the vulnerable state. Existing projects self-heal on first mutation because the writer normalizes on read.
+- **First `tests/` directory in `paradigm-mcp`** — `packages/paradigm-mcp/tests/portal-writer.test.ts` with 8 regression tests covering Array scaffold, Object scaffold, preservation of existing gates, symbol-prefix stripping, route variants, and verification failure (via `/dev/null` symlink on POSIX). `vitest.config.ts` include glob updated to cover `tests/**/*.test.ts`.
+
+### Notes
+
+- Scope deliberately narrow — this is a hotfix. The `writeAndConfirm` wrapper, response envelope extensions (`content_hash`, `bytes_written`), and broader test suite are tracked as follow-up work in `docs/private/plans/silent-no-op-prevention.md`.
+- Residual silent-no-op risk in `handleAddComponent` / `handleLink` / `handleRemove` / `handleRename` tracked as follow-up — not in the blast radius of this specific bug but share the family pattern.
+
+Symbols: #portal-writer, #purpose-portal, #shift-files, ^authenticated
+
 ## [5.37.10] — 2026-04-18
 
 ### Changed

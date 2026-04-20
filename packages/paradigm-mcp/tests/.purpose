@@ -1,0 +1,13 @@
+version: 2.0.0
+description: |
+  Integration tests for paradigm-mcp — covers schema-mutating tools (portal/purpose writers) with write-verify assertions. First tests/ file added in v5.37.11 as regression protection for the silent-no-op bug class.
+components:
+  portal-writer-tests:
+    description: Regression suite for addGateToPortal/addRouteToPortal covering Array→{} normalization, read-back verification, and silent-no-op protection on v2 scaffold shapes
+    type: test
+    anchors:
+      - portal-writer.test.ts:1-400
+    tags:
+      - test
+      - regression
+      - portal

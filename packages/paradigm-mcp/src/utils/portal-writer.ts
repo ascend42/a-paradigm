@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { stripSymbolPrefix } from './purpose-writer.js';
+import { log } from './mcp-logger.js';
 
 // ============================================
 // Types (raw portal.yaml structure)
@@ -105,8 +106,21 @@ export function addGateToPortal(
 ): string {
   const { data, filePath } = readPortalFile(rootDir);
 
-  if (!data.gates) {
+  // Normalize: v2 scaffold writes `gates: []` (empty sequence), which js-yaml
+  // parses as a JavaScript Array. Named-property assignments on Arrays are
+  // silently dropped by yaml.dump, so we must coerce to an object here.
+  if (!data.gates || Array.isArray(data.gates)) {
+    const prev = data.gates;
     data.gates = {};
+    // Defensive: migrate any array-of-gate-objects entries (non-standard form)
+    if (Array.isArray(prev) && prev.length > 0) {
+      for (const item of prev) {
+        if (item && typeof item === 'object' && 'id' in item) {
+          const id = stripSymbolPrefix((item as { id: string }).id);
+          data.gates[id] = item as RawPortalGate;
+        }
+      }
+    }
   }
 
   const gateId = stripSymbolPrefix(params.id);
@@ -129,6 +143,24 @@ export function addGateToPortal(
   data.gates[gateId] = gate;
 
   writePortalFile(filePath, data);
+
+  // Defense-in-depth: re-read the file and confirm the gate persisted.
+  // Converts silent no-op failures into loud, actionable errors.
+  const verify = readPortalFile(rootDir).data;
+  const gatesAfter = verify.gates;
+  if (!gatesAfter || Array.isArray(gatesAfter) || !gatesAfter[gateId]) {
+    const shape = Array.isArray(gatesAfter) ? 'array' : typeof gatesAfter;
+    log.gate(`^${gateId}`).error('portal_add_gate write verification failed', {
+      file: filePath,
+      gateId,
+      shape,
+    });
+    throw new Error(
+      `portal_add_gate write verification failed: gate "${gateId}" not found in ` +
+      `${filePath} after write. Read-back gates shape: ${shape}.`
+    );
+  }
+
   return filePath;
 }
 
@@ -150,7 +182,9 @@ export function addRouteToPortal(
 ): string {
   const { data, filePath } = readPortalFile(rootDir);
 
-  if (!data.routes) {
+  // Normalize: v2 scaffold writes `routes: []` which js-yaml parses as Array;
+  // named-property assignment would silently serialize back to []. Coerce to {}.
+  if (!data.routes || Array.isArray(data.routes)) {
     data.routes = {};
   }
 
@@ -164,5 +198,22 @@ export function addRouteToPortal(
   data.routes[routeKey] = gates;
 
   writePortalFile(filePath, data);
+
+  // Defense-in-depth: verify the route landed on disk
+  const verify = readPortalFile(rootDir).data;
+  const routesAfter = verify.routes;
+  if (!routesAfter || Array.isArray(routesAfter) || !routesAfter[routeKey]) {
+    const shape = Array.isArray(routesAfter) ? 'array' : typeof routesAfter;
+    log.component('#portal-writer').error('portal_add_route write verification failed', {
+      file: filePath,
+      routeKey,
+      shape,
+    });
+    throw new Error(
+      `portal_add_route write verification failed: route "${routeKey}" not found in ` +
+      `${filePath} after write. Read-back routes shape: ${shape}.`
+    );
+  }
+
   return filePath;
 }

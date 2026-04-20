@@ -111,8 +111,8 @@ export const GUARANTEED_FILES: GuaranteedFile[] = [
     path: 'portal.yaml',
     defaultContent: [
       'version: "2.0"',
-      'gates: []',
-      'routes: []',
+      'gates: {}',
+      'routes: {}',
     ].join('\n') + '\n',
   },
   {
