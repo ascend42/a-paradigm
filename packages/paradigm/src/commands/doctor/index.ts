@@ -887,5 +887,14 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
+  // v6.0 (D7): capture a privacy-preserving university metrics snapshot.
+  // Non-fatal on any error — metrics never block doctor.
+  try {
+    const { captureSnapshot } = await import('../../core/university/metrics.js');
+    captureSnapshot(cwd);
+  } catch {
+    // non-fatal
+  }
+
   return healthy;
 }

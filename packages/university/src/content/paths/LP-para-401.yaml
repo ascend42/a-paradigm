@@ -1,0 +1,74 @@
+id: LP-para-401
+title: 'PARA 401: Orchestration'
+description: Advanced course on multi-agent orchestration, MCP tool mastery, and framework-level coordination. Learn to decompose complex tasks across specialized agents, configure provider cascades, enforce governance with the PM layer, and achieve full Paradigm framework mastery.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+steps:
+  - content: N-para-401-mcp-tools-overview
+    required: true
+  - content: Q-para-401-mcp-tools-overview
+    required: true
+    passRequired: true
+  - content: N-para-401-multi-agent-coordination
+    required: true
+  - content: Q-para-401-multi-agent-coordination
+    required: true
+    passRequired: true
+  - content: N-para-401-agent-roles
+    required: true
+  - content: Q-para-401-agent-roles
+    required: true
+    passRequired: true
+  - content: N-para-401-provider-cascade
+    required: true
+  - content: Q-para-401-provider-cascade
+    required: true
+    passRequired: true
+  - content: N-para-401-orchestration-workflow
+    required: true
+  - content: Q-para-401-orchestration-workflow
+    required: true
+    passRequired: true
+  - content: N-para-401-quick-check
+    required: true
+  - content: Q-para-401-quick-check
+    required: true
+    passRequired: true
+  - content: N-para-401-pm-governance
+    required: true
+  - content: Q-para-401-pm-governance
+    required: true
+    passRequired: true
+  - content: N-para-401-commit-conventions
+    required: true
+  - content: Q-para-401-commit-conventions
+    required: true
+    passRequired: true
+  - content: N-para-401-mastery-review
+    required: true
+  - content: Q-para-401-mastery-review
+    required: true
+    passRequired: true
+  - content: N-para-401-agent-interop
+    required: true
+  - content: Q-para-401-agent-interop
+    required: true
+    passRequired: true
+  - content: N-para-401-agent-identity
+    required: true
+  - content: Q-para-401-agent-identity
+    required: true
+    passRequired: true
+  - content: N-para-401-notebooks-permissions
+    required: true
+  - content: Q-para-401-notebooks-permissions
+    required: true
+    passRequired: true

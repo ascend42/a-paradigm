@@ -24,6 +24,14 @@ components:
   MigrateCommand:
     description: paradigm migrate — version-aware project migration
     type: command
+  MigrateDecisionsCommand:
+    description: 'paradigm migrate decisions — v6.0 decision-store consolidation: wisdom/decisions + lore(type=decision) → .paradigm/decisions/TD-*'
+    file: packages/paradigm/src/commands/migrate-decisions.ts
+    type: command
+    tags:
+      - v6
+      - migration
+      - decisions
   DocsServeCommand:
     description: paradigm docs serve — launches the Platform with docs section enabled
     type: command

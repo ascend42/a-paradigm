@@ -1,0 +1,66 @@
+id: Q-para-501-aspect-graph-internals
+title: 'PARA 501: Advanced Systems — Aspect Graph Internals'
+description: 'Quiz for lesson: Aspect Graph Internals'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: What is the default maxDepth for recursive ripple in the aspect graph?
+    choices:
+      A: 3 — to keep traversals fast and focused
+      B: 5 — balancing depth of discovery with performance
+      C: 10 — the maximum allowed value
+      D: Unlimited — ripple traverses until minWeight is reached
+      E: 1 — only direct connections are followed by default
+    correct: B
+    explanation: The default maxDepth for recursive ripple is 5, with a maximum configurable value of 10. This default balances discovery depth with performance — at 5 hops, you see a meaningful neighborhood without traversing the entire graph. The minWeight threshold (default 0.1) provides additional pruning by cutting off low-confidence paths before they reach maxDepth.
+  - id: q2
+    question: What happens to search weights when a result is confirmed via paradigm_aspect_confirm?
+    choices:
+      A: The confirmed result gets +0.5 weight and all others are deleted
+      B: The confirmed result gets +1.0 weight and all other results for the same query decay by *0.95
+      C: All results for the query get +1.0 weight to reinforce the entire set
+      D: The confirmed result is permanently pinned and decay is disabled
+      E: The confirmed result replaces all other entries for that query
+    correct: B
+    explanation: The search learning system adds +1.0 to the confirmed result's weight for that query and multiplies all other existing results for the same query by 0.95 (a 5% decay). This self-correcting mechanism lets the best result rise to the top over time while alternatives gradually fade. The decay only applies to aspects that have existing search_weights entries for the query — it does not penalize unrelated aspects.
+  - id: q3
+    question: Which SQLite table stores aspect access frequency for the heatmap tool?
+    choices:
+      A: aspects — in an access_count column
+      B: edges — access frequency is tracked per edge
+      C: search_weights — all access types feed into search weights
+      D: heatmap — with columns for aspect_id, access_type, count, and last_accessed
+      E: anchors — access is tracked per anchor location
+    correct: D
+    explanation: The `heatmap` table stores aspect access frequency with columns for `aspect_id`, `access_type` (search, ripple, navigate, direct), `count`, and `last_accessed`. This dedicated table allows the `paradigm_aspect_heatmap` tool to rank aspects by usage frequency and break down how each aspect is typically discovered — whether through search, ripple analysis, navigation, or direct access.
+  - id: q4
+    question: What is the queue limit for recursive ripple BFS traversal?
+    choices:
+      A: 100 nodes — to keep memory usage minimal
+      B: 500 nodes — a balance between coverage and performance
+      C: 1000 nodes — preventing runaway traversals in dense graphs
+      D: Unlimited — the queue grows until maxDepth is reached
+      E: 10000 nodes — large enough for enterprise-scale graphs
+    correct: C
+    explanation: The BFS queue limit is 1000 nodes. This prevents runaway traversals in densely connected aspect graphs where the number of reachable nodes could grow exponentially with depth. When the queue exceeds 1000 entries, the oldest entries are dropped, ensuring the algorithm completes in bounded time and memory regardless of graph density.
+  - id: q5
+    question: How are aspect edges inferred from existing data during materialization?
+    choices:
+      A: By analyzing import statements in source code files
+      B: From applies-to references with weight 0.5 and origin 'inferred', and from shared lore references with origin 'learned'
+      C: By running static analysis on anchor code blocks
+      D: From git commit history showing which aspects changed together
+      E: Only explicit edges are created — no inference occurs
+    correct: B
+    explanation: The materialization pipeline creates inferred edges in two ways. First, `materializeAspects` generates edges from `applies-to` references with weight 0.5 and origin 'inferred' — when an aspect applies to a component, a relationship edge is created. Second, `inferLoreEdges` scans for aspects sharing lore references and creates edges with origin 'learned' and weight proportional to the overlap. These supplement explicit YAML edges to build a richer graph.

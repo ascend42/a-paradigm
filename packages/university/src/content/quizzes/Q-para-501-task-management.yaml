@@ -1,0 +1,46 @@
+id: Q-para-501-task-management
+title: 'PARA 501: Advanced Systems — Task Management'
+description: 'Quiz for lesson: Task Management'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: You are midway through adding authentication when you notice the payment service has a null-check bug. You cannot fix it now. What is the correct action?
+    choices:
+      A: Record a lore entry describing the bug for future reference
+      B: Call `paradigm_task_create` with a blurb describing the null-check bug, priority high, and tags [bug, payments]
+      C: Add a TODO comment in the payment service code and move on
+      D: Call `paradigm_sentinel_record` to log it as an incident
+      E: Mention it in the session's handoff summary and hope the next session picks it up
+    correct: B
+    explanation: This is exactly what tasks are for — capturing work you cannot complete in the current session. A task with priority `high` ensures it surfaces at the top of the next session's recovery data. A lore entry (A) records what happened, not what needs to happen. A TODO comment (C) is invisible to Paradigm. Sentinel (D) is for production incidents. A handoff mention (E) is fragile — tasks are persistent.
+  - id: q2
+    question: A new session starts. The agent calls `paradigm_status`. Among the recovery data, it sees 3 high-priority tasks and 12 medium-priority tasks. How were these surfaced?
+    choices:
+      A: The agent must explicitly call `paradigm_task_list` to see tasks — they are not in recovery data
+      B: All 15 tasks appear in the recovery data automatically
+      C: The top 5 open tasks (sorted by priority then date) are automatically included in recovery data on the first Paradigm tool call
+      D: Only high-priority tasks are surfaced during recovery
+      E: Tasks are only surfaced if the previous session created a handoff
+    correct: C
+    explanation: Session recovery automatically includes the top 5 open tasks, sorted by priority (high first) then by date (newest first). So the agent would see the 3 high-priority tasks plus 2 of the most recent medium-priority tasks. The remaining 10 medium-priority tasks are available via `paradigm_task_list` but are not in the initial recovery data.
+  - id: q3
+    question: Your task list has grown to 35 open items. What should you do?
+    choices:
+      A: Delete the oldest tasks to keep the list manageable
+      B: Increase the session recovery limit from 5 to 35 so all tasks are visible
+      C: 'Triage: shelve low-priority items with `paradigm_task_shelve` and focus on what matters — tasks should not accumulate into a large backlog'
+      D: Convert all tasks to lore entries since the list is too long for task management
+      E: Tasks have no practical limit — 35 is fine, just filter by priority when working
+    correct: C
+    explanation: Tasks are meant to be a lightweight scratch pad, not a project management backlog. When the list grows beyond 20-30 items, it is time to triage. Use `paradigm_task_shelve` to park items that are not immediately relevant. Shelved tasks are not deleted — they remain searchable and can be reopened. This keeps the active list focused and the session recovery data meaningful.

@@ -1,0 +1,79 @@
+id: LP-para-301
+title: 'PARA 301: Operations'
+description: Master the operational tools and workflows that keep a Paradigm project healthy. From history tracking and fragility analysis to sentinel observability and context management, this course covers the day-to-day operations that separate well-maintained projects from chaotic ones.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+steps:
+  - content: N-para-301-history-system
+    required: true
+  - content: Q-para-301-history-system
+    required: true
+    passRequired: true
+  - content: N-para-301-fragility-tracking
+    required: true
+  - content: Q-para-301-fragility-tracking
+    required: true
+    passRequired: true
+  - content: N-para-301-wisdom-system
+    required: true
+  - content: Q-para-301-wisdom-system
+    required: true
+    passRequired: true
+  - content: N-para-301-ripple-analysis
+    required: true
+  - content: Q-para-301-ripple-analysis
+    required: true
+    passRequired: true
+  - content: N-para-301-doctor-and-validation
+    required: true
+  - content: Q-para-301-doctor-and-validation
+    required: true
+    passRequired: true
+  - content: N-para-301-enforcement-levels
+    required: true
+  - content: Q-para-301-enforcement-levels
+    required: true
+    passRequired: true
+  - content: N-para-301-paradigm-shift
+    required: true
+  - content: Q-para-301-paradigm-shift
+    required: true
+    passRequired: true
+  - content: N-para-301-navigation-system
+    required: true
+  - content: Q-para-301-navigation-system
+    required: true
+    passRequired: true
+  - content: N-para-301-sentinel-observability
+    required: true
+  - content: Q-para-301-sentinel-observability
+    required: true
+    passRequired: true
+  - content: N-para-301-sync-and-maintenance
+    required: true
+  - content: Q-para-301-sync-and-maintenance
+    required: true
+    passRequired: true
+  - content: N-para-301-context-management
+    required: true
+  - content: Q-para-301-context-management
+    required: true
+    passRequired: true
+  - content: N-para-301-protocols
+    required: true
+  - content: Q-para-301-protocols
+    required: true
+    passRequired: true
+  - content: N-para-301-operations-review
+    required: true
+  - content: Q-para-301-operations-review
+    required: true
+    passRequired: true

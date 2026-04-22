@@ -1,0 +1,46 @@
+id: Q-para-501-conductor-workspace
+title: 'PARA 501: Advanced Systems — Conductor: Visual Mission Control'
+description: 'Quiz for lesson: Conductor: Visual Mission Control'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: During orchestration, the security agent sends an approval-request via Symphony asking to modify portal.yaml. Where would you see and respond to this in Conductor?
+    choices:
+      A: In the terminal session where the agent is running
+      B: In the Symphony thread view — approval-request is a task protocol intent that appears as a message you can approve or reject
+      C: In the agent health dashboard under the security agent's metrics
+      D: In the Sentinel event feed as a security incident
+      E: You cannot — approval requests only work via CLI
+    correct: B
+    explanation: Symphony messages, including task protocol intents like approval-request, appear in Conductor's thread view in real time. The task protocol is designed for human-agent coordination — you see the request, read the context, and respond with approval-response directly in the thread view. This is one of Conductor's key advantages over CLI-only workflows.
+  - id: q2
+    question: You want to work on the frontend and backend of a feature simultaneously with two Claude Code sessions. How would you set this up in Conductor?
+    choices:
+      A: Launch two separate Conductor apps
+      B: Use workspace mode with a split-h or split-v layout preset, launching one terminal session per pane
+      C: Conductor only supports one session at a time
+      D: Use the agent health dashboard to assign work to two agents
+      E: Use Symphony to relay messages between two CLI sessions instead
+    correct: B
+    explanation: Conductor's workspace mode is a tiling window manager for Claude Code sessions. Choose a split layout preset (horizontal or vertical), and each pane gets its own terminal session. Both sessions connect to Symphony, so they can coordinate via inter-agent messaging while you watch both in a single window.
+  - id: q3
+    question: Conductor's ML features (gaze tracking, gesture recognition, voice commands) all run locally via CoreML. Why is this significant?
+    choices:
+      A: CoreML is faster than cloud APIs for all tasks
+      B: It means zero cloud cost, zero data leaving your machine, and zero network latency — critical for a developer tool that sees your code and screen
+      C: Apple requires all macOS apps to use CoreML
+      D: Cloud ML services do not support gaze tracking
+      E: It is not significant — it is just an implementation detail
+    correct: B
+    explanation: For a developer tool that has access to your codebase, screen content, and camera feed, privacy is paramount. Local-only ML means your data never leaves your machine — no cloud processing, no storage, no costs. The zero-latency benefit is a bonus, but the privacy guarantee is the real reason this design choice matters.

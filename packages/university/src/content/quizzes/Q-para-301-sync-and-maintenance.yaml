@@ -1,0 +1,46 @@
+id: Q-para-301-sync-and-maintenance
+title: 'PARA 301: Operations — Sync & Maintenance'
+description: 'Quiz for lesson: Sync & Maintenance'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What is the difference between paradigm sync and paradigm scan?
+    choices:
+      A: They are the same command with different aliases
+      B: sync is a light reconciliation; scan is a full rebuild of the index and navigator.yaml
+      C: sync works on portal.yaml; scan works on .purpose files
+      D: sync runs locally; scan runs in the cloud
+      E: sync is for JavaScript projects; scan is for Rust projects
+    correct: B
+    explanation: paradigm sync is a lightweight operation that detects drift between metadata and code. paradigm scan is a heavier full rebuild that re-reads every .purpose file, rebuilds the symbol graph, and regenerates navigator.yaml.
+  - id: q2
+    question: You just added a new POST /api/invoices endpoint that requires authentication. What Paradigm files need updating?
+    choices:
+      A: Only the .purpose file for the invoices module
+      B: Only portal.yaml with the route and gates
+      C: Both the .purpose file (component registration) and portal.yaml (route with ^gates)
+      D: Only navigator.yaml
+      E: No Paradigm files need updating for API endpoints
+    correct: C
+    explanation: 'Adding a protected endpoint requires two updates: registering the component in the nearest .purpose file, and adding the route with its required gates to portal.yaml. The AI Maintenance Protocol requires both.'
+  - id: q3
+    question: Why is stale Paradigm metadata considered worse than no metadata?
+    choices:
+      A: It takes up more disk space
+      B: It causes compilation errors
+      C: It actively misleads AI agents, produces incorrect ripple analysis, and generates false positives in doctor
+      D: It slows down the Paradigm CLI
+      E: It prevents git commits
+    correct: C
+    explanation: Stale metadata is actively harmful because AI agents trust it for navigation, ripple analysis uses it for dependency graphs, and doctor validates against it. If the metadata does not match reality, all of these tools produce wrong results, which is worse than having no metadata at all.

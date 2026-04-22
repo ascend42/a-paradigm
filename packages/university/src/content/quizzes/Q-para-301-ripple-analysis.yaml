@@ -1,0 +1,56 @@
+id: Q-para-301-ripple-analysis
+title: 'PARA 301: Operations — Ripple Analysis'
+description: 'Quiz for lesson: Ripple Analysis'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What is the default depth for paradigm_ripple analysis?
+    choices:
+      A: 1 level
+      B: 2 levels
+      C: 3 levels
+      D: 5 levels
+      E: Unlimited
+    correct: B
+    explanation: The default depth is 2, which shows direct dependents and their dependents. You can increase to 3-5 for large refactors, but higher depths return more results and cost more tokens.
+  - id: q2
+    question: 'You are planning to refactor #auth-middleware. What should you call FIRST?'
+    choices:
+      A: paradigm_history_record to log the planned change
+      B: 'paradigm_ripple to see what depends on #auth-middleware'
+      C: paradigm_wisdom_record to capture the decision
+      D: paradigm_purpose_validate to check file integrity
+      E: paradigm_search to find the symbol
+    correct: B
+    explanation: 'Before modifying any symbol, the first step is paradigm_ripple to understand the full dependency tree. This tells you everything that depends on #auth-middleware, so you know the blast radius of your refactor.'
+  - id: q3
+    question: 'Ripple analysis reveals that your change to #user-service affects a fragile symbol #notification-handler (depth 2). What is the recommended approach?'
+    choices:
+      A: Ignore the fragility since it is an indirect dependency
+      B: Cancel the change entirely
+      C: Add extra safeguards, consider breaking the change into smaller increments, and test thoroughly
+      D: 'Only modify #user-service at depth 1 and skip depth 2'
+      E: Increase the ripple depth to 5 to find more dependencies
+    correct: C
+    explanation: When ripple analysis reveals that your change affects fragile symbols, the recommended approach is to add safeguards, break the change into smaller pieces, and test thoroughly. Fragile indirect dependencies deserve extra caution, not ignoring or canceling.
+  - id: q4
+    question: What types of relationships does paradigm_ripple track?
+    choices:
+      A: Only JavaScript import statements
+      B: Only component references
+      C: Component references, flow steps, gate protections, and signal listeners
+      D: Only file-level dependencies
+      E: Only git blame information
+    correct: C
+    explanation: 'Ripple analysis tracks semantic dependencies across all symbol types: which components reference the symbol, which flows include it as a step, which gates protect endpoints that use it, and which signals it emits that other components listen to.'

@@ -1,0 +1,46 @@
+id: Q-para-401-agent-interop
+title: 'PARA 401: Orchestration — Agent Interoperability'
+description: 'Quiz for lesson: Agent Interoperability'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: A new AI agent is spawned in isolation to implement a feature. What is the most token-efficient orientation sequence?
+    choices:
+      A: Read all .purpose files in the project
+      B: Read AGENTS.md, call paradigm_session_recover, call paradigm_navigate with context intent
+      C: Read package.json, then explore the src/ directory
+      D: Call paradigm_search for every symbol type
+      E: Read CLAUDE.md, then read every file in .paradigm/
+    correct: B
+    explanation: 'The Fresh Context Principle: AGENTS.md provides instructions and conventions, paradigm_session_recover provides previous session context, and paradigm_navigate with context intent provides task-relevant files. Total cost: ~500 tokens. Reading all .purpose files or exploring directories would cost thousands of tokens for the same information.'
+  - id: q2
+    question: What is the key difference between AGENTS.md and llms.txt?
+    choices:
+      A: AGENTS.md is for Claude, llms.txt is for other LLMs
+      B: AGENTS.md contains instructions (how to behave), llms.txt contains facts (what exists)
+      C: llms.txt replaces AGENTS.md in newer projects
+      D: AGENTS.md is human-readable, llms.txt is machine-only
+      E: They contain identical information in different formats
+    correct: B
+    explanation: AGENTS.md is prescriptive — it tells agents what tools to use, what conventions to follow, and what workflow to observe. llms.txt is descriptive — it tells agents what symbols exist, what flows are defined, and how the project is structured. Both serve distinct purposes and can coexist.
+  - id: q3
+    question: Why do enhanced MCP tool descriptions include token cost estimates?
+    choices:
+      A: To bill agents for tool usage
+      B: To enforce budget limits on agents
+      C: So agents can make informed cost/benefit decisions when choosing between tools and file reads
+      D: Token costs are required by the MCP specification
+      E: To discourage agents from using expensive tools
+    correct: C
+    explanation: Token cost estimates enable agents to evaluate tool selection before calling. An agent deciding between paradigm_search (~150 tokens) and reading 5 files (~2500 tokens) can make an informed cost/benefit decision. The goal is efficiency, not restriction.

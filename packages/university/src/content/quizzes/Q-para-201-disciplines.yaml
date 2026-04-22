@@ -1,0 +1,66 @@
+id: Q-para-201-disciplines
+title: 'PARA 201: Architecture — Disciplines'
+description: 'Quiz for lesson: Disciplines'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: In a web discipline project, what symbol type should a frontend hook like `useAuth` be classified as?
+    choices:
+      A: '! signal — hooks fire events'
+      B: ^ gate — hooks check conditions
+      C: '# component — hooks are code units that encapsulate logic'
+      D: $ flow — hooks define sequences
+      E: ~ aspect — hooks are cross-cutting concerns
+    correct: C
+    explanation: 'Hooks are code units, not events. A frontend hook like useAuth encapsulates authentication logic — it is #useAuth, a component. The ! signal prefix is reserved for events that trigger decoupled side effects, which is not what hooks do.'
+  - id: q2
+    question: A project has `src/client/` for frontend and `src/server/` for backend code. Which discipline should be used?
+    choices:
+      A: web — because the client directory is listed first
+      B: backend — because server code is more important
+      C: fullstack — it combines both web and backend mappings based on directory path
+      D: library — because the code is shared between client and server
+      E: cli — because the server might have CLI commands
+    correct: C
+    explanation: 'The fullstack discipline combines web and backend mappings. It uses the directory path to determine which mapping applies: src/client/ uses web discipline rules, src/server/ uses backend rules.'
+  - id: q3
+    question: What three things does the discipline setting affect in Paradigm tooling?
+    choices:
+      A: Build output, test runner, deployment target
+      B: Navigator generation, logging conventions, gate recommendations
+      C: File naming, import paths, type definitions
+      D: Package manager, bundler, linter configuration
+      E: Database schema, API schema, UI schema
+    correct: B
+    explanation: 'The discipline affects: (1) navigator generation — how paradigm scan categorizes directories, (2) logging conventions — which log methods are conventional for each directory, and (3) gate recommendations — what paradigm_gates_for_route suggests.'
+  - id: q4
+    question: Your backend project has a `policies/` directory for authorization policies. You want Paradigm to treat them as gates. How do you configure this?
+    choices:
+      A: Rename the directory to middleware/
+      B: Change the discipline to 'web' since it handles auth differently
+      C: 'Add a custom-mappings entry in config.yaml: "policies/": "^"'
+      D: Create a .purpose file with only gate definitions
+      E: It is not possible — gates can only live in middleware/
+    correct: C
+    explanation: 'Custom mappings in config.yaml extend the discipline defaults. Adding "policies/": "^" tells Paradigm to treat files in the policies/ directory as gates, without changing the overall discipline or renaming directories.'
+  - id: q5
+    question: 'A Next.js project runs `paradigm init`. The output shows `discipline: fullstack` and `stack: nextjs`. What does the stack preset add that the discipline alone does not provide?'
+    choices:
+      A: A completely different set of symbol mappings that replaces the discipline
+      B: Framework-specific scan hints, refined symbol mappings for Next.js patterns like app/ routes, and purpose-required paths
+      C: Automatic code generation for Next.js boilerplate
+      D: A Next.js-specific version of portal.yaml with pre-defined gates
+      E: Nothing — stack presets and disciplines are the same thing
+    correct: B
+    explanation: Stack presets layer framework-specific configuration on top of disciplines. For Next.js, the preset adds knowledge about app/ directory routing, server components, API route handlers, and other Next.js-specific patterns. It refines the generic fullstack discipline with framework-aware scan hints and purpose-required paths. Presets extend disciplines — they do not replace them.

@@ -1,0 +1,64 @@
+id: LP-para-701
+title: 'PARA 701: Agent Mastery'
+description: Master the Paradigm agent system — from the 54-agent roster to orchestration enforcement, learning loops, and the nevr.land marketplace.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+steps:
+  - content: N-para-701-agent-roster
+    required: true
+  - content: Q-para-701-agent-roster
+    required: true
+    passRequired: true
+  - content: N-para-701-agent-profiles
+    required: true
+  - content: Q-para-701-agent-profiles
+    required: true
+    passRequired: true
+  - content: N-para-701-agent-notebooks
+    required: true
+  - content: Q-para-701-agent-notebooks
+    required: true
+    passRequired: true
+  - content: N-para-701-agent-state
+    required: true
+  - content: Q-para-701-agent-state
+    required: true
+    passRequired: true
+  - content: N-para-701-per-project-rosters
+    required: true
+  - content: Q-para-701-per-project-rosters
+    required: true
+    passRequired: true
+  - content: N-para-701-model-tier-resolution
+    required: true
+  - content: Q-para-701-model-tier-resolution
+    required: true
+    passRequired: true
+  - content: N-para-701-orchestration-enforcement
+    required: true
+  - content: Q-para-701-orchestration-enforcement
+    required: true
+    passRequired: true
+  - content: N-para-701-symphony-visibility
+    required: true
+  - content: Q-para-701-symphony-visibility
+    required: true
+    passRequired: true
+  - content: N-para-701-learning-feedback-loop
+    required: true
+  - content: Q-para-701-learning-feedback-loop
+    required: true
+    passRequired: true
+  - content: N-para-701-agent-pods-nevrland
+    required: true
+  - content: Q-para-701-agent-pods-nevrland
+    required: true
+    passRequired: true

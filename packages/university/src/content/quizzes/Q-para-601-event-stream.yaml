@@ -1,0 +1,66 @@
+id: Q-para-601-event-stream
+title: 'PARA 601: Paradigm Ambient — The Event Stream'
+description: 'Quiz for lesson: The Event Stream'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: An agent adds a new POST route to `src/routes/payments.ts` and updates `portal.yaml` with a `^authenticated` gate. How many events are emitted, and of what types?
+    choices:
+      A: 'One event: `file-modified` for the route file'
+      B: 'Two events: `file-modified` for the route file and `file-modified` for portal.yaml'
+      C: 'At minimum two events: `route-created` (or `file-modified`) for the new route, and `gate-added` for the portal.yaml change — exact count depends on which hooks and tools fired'
+      D: No events — events are only emitted by MCP tool calls, not file edits
+      E: 'One event: `gate-added` — only portal.yaml changes produce events'
+    correct: C
+    explanation: Adding a route and a gate are distinct actions that produce distinct events. The route change produces at least a `file-modified` or `route-created` event (depending on whether the post-write hook recognizes it as a route file). The portal.yaml change produces a `gate-added` event. Additional events like `symbol-queried` may fire if the agent used ripple or navigate tools during the process. The exact count depends on the session's tool usage and hook configuration.
+  - id: q2
+    question: The event stream file at `.paradigm/events/stream.jsonl` grows to 600KB. What happens on the next `emitEvent` call?
+    choices:
+      A: The event is rejected — the file is too large
+      B: The file is deleted and a fresh one is started
+      C: The file is read, only the most recent 1000 lines are kept, and it is rewritten — then the new event is appended
+      D: A second file (`stream-2.jsonl`) is created for overflow
+      E: Nothing special — pruning only happens at startup
+    correct: C
+    explanation: The `pruneIfNeeded` function runs after every `emitEvent` call. When the file exceeds ~500KB (512 * 1024 bytes), it reads all lines, keeps only the most recent 1000 (`lines.slice(-DEFAULT_MAX_EVENTS)`), and rewrites the file. The new event has already been appended before pruning runs, so it is included in the kept lines. This bounded pruning ensures the stream never grows unbounded.
+  - id: q3
+    question: You want to see all compliance violations from the last hour. Which `queryEvents` call is correct?
+    choices:
+      A: '`queryEvents(rootDir, { type: ''compliance-violation'', since: oneHourAgo.toISOString() })`'
+      B: '`queryEvents(rootDir, { source: ''compliance'', limit: 100 })`'
+      C: '`queryEvents(rootDir, { symbol: ''compliance-violation'' })`'
+      D: '`queryEvents(rootDir, { type: ''error-encountered'', agent: ''compliance'' })`'
+      E: '`queryEvents(rootDir)` and filter in application code'
+    correct: A
+    explanation: The `type` filter matches the event classification (`'compliance-violation'` is one of the 12 event types), and the `since` filter restricts to events after the given ISO timestamp. Source `'compliance'` does not exist — valid sources are `post-write-hook`, `mcp-tool-call`, `stop-hook`, `conversation`, `agent-action`, and `error`. The `symbol` filter matches against the event's `symbols` array, not the event type.
+  - id: q4
+    question: File I/O fails when `emitEvent` tries to append to the JSONL file. What happens to the event?
+    choices:
+      A: The event is lost — it was not written anywhere
+      B: An exception is thrown and the calling tool fails
+      C: The event is still stored in the in-memory buffer — file write failure is non-fatal
+      D: The event is written to a fallback file at `/tmp/paradigm-events.jsonl`
+      E: The event is queued and retried on the next `emitEvent` call
+    correct: C
+    explanation: Events are always pushed to the memory buffer (`memoryStream`) before attempting file I/O. The file write is wrapped in a try/catch that silently absorbs failures. This design ensures that ambient coordination continues functioning even if the filesystem is temporarily unavailable. The memory buffer is independently bounded to 1000 events, providing the same capacity as the file-based stream.
+  - id: q5
+    question: A project wants ambient coordination but finds `symbol-queried` events too noisy. How should they configure the event stream?
+    choices:
+      A: 'Set `enabled: false` to disable the entire event stream'
+      B: 'Set `max_events: 100` to reduce the buffer size'
+      C: 'Add `suppress: [''symbol-queried'']` to the EventStreamConfig to silence that event type while keeping all others'
+      D: Remove all `paradigm_search` and `paradigm_navigate` tools from the MCP server
+      E: 'Set `storage: ''memory''` so noisy events are not persisted'
+    correct: C
+    explanation: 'The `suppress` array in `EventStreamConfig` blacklists specific event types. Adding `''symbol-queried''` to this list prevents those events from being emitted while preserving all other event types. This is the targeted solution — `enabled: false` would kill the entire ambient system, `max_events: 100` would reduce history but not noise, and `storage: ''memory''` would affect persistence but not which events fire.'

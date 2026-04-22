@@ -1,0 +1,66 @@
+id: Q-para-701-orchestration-enforcement
+title: 'PARA 701: Agent Mastery — Lesson 7: Orchestration Enforcement'
+description: 'Quiz for lesson: Lesson 7: Orchestration Enforcement'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A developer implements a 5-file feature without calling paradigm_orchestrate_inline. What happens?
+    choices:
+      A: The session is blocked and the developer must orchestrate before proceeding
+      B: At preflight, the `orchestration-required` habit emits a warning suggesting orchestration. At postflight, `agent-coverage-validated` advises reviewing paradigm_ambient_nominations for any self-nominated contributions.
+      C: Nothing — orchestration is entirely optional with no enforcement
+      D: The commit is rejected by the pre-commit hook
+      E: All modified files are automatically reverted
+    correct: B
+    explanation: Orchestration enforcement uses `warn` and `advisory` severities, not `block`. The developer receives a warning at preflight ("Consider calling paradigm_orchestrate_inline") and an advisory at postflight ("Check paradigm_ambient_nominations for pending contributions"). The work is not blocked because the severity is `warn`, not `block`. However, the developer is informed that agents may have had relevant contributions, and the security agent may have self-nominated a gate review that was never seen.
+  - id: q2
+    question: Why is orchestration enforcement implemented as habits rather than hardcoded into the orchestrator?
+    choices:
+      A: Habits are faster to evaluate than hardcoded checks
+      B: The orchestrator cannot access the habit system
+      C: Habits are configurable (enable/disable), tunable (warn/block/advisory), extensible (custom habits), and transparent (declared in YAML) — hardcoded enforcement would be rigid and impossible to customize per project
+      D: Hardcoded enforcement would require a database connection
+      E: Habits are only evaluated once per day, reducing overhead
+    correct: C
+    explanation: 'The habit system provides four advantages over hardcoded enforcement: (1) Configurable — a project can disable `orchestration-required` by setting `enabled: false`. (2) Tunable — severity can be changed from `warn` to `block` for strict enforcement or `advisory` for a softer touch. (3) Extensible — teams can add custom habits (e.g., require security review for any `auth/**` changes). (4) Transparent — habits are declared in YAML and evaluated at predictable trigger points. Hardcoded logic would be a black box that every project lives with regardless of their needs.'
+  - id: q3
+    question: Production is down. A developer needs to push a hot fix immediately. How does orchestration enforcement handle this?
+    choices:
+      A: The developer must still orchestrate — there are no exceptions
+      B: The `hot-mode-incident` habit acknowledges incidents by waiving orchestration enforcement and only requiring a post-incident lore entry
+      C: The developer must manually disable all three habits before proceeding
+      D: The system detects production incidents automatically and suspends all enforcement
+      E: Orchestration enforcement does not apply to hot fixes by default because all severities are `warn` or `advisory`
+    correct: B
+    explanation: 'The `hot-mode-incident` habit is designed for this exact scenario. It fires at on-stop (session end) with `advisory` severity and only checks that a lore entry was recorded (`check: { type: ''lore-recorded'' }`). The rationale: during incidents, you fix first and document later. The lore entry requirement ensures the learning loop captures the incident for future prevention. The other two habits (`orchestration-required` at `warn`, `agent-coverage-validated` at `advisory`) do not block, so the hot fix proceeds with only advisories.'
+  - id: q4
+    question: A team wants to strictly require orchestration for all tasks. How do they configure this?
+    choices:
+      A: Edit the orchestrator source code to block unorchestrated tasks
+      B: Change the `orchestration-required` habit's severity from `warn` to `block` in their project's habit overrides
+      C: Add a pre-commit hook that checks for orchestration
+      D: 'Set `orchestration: mandatory` in config.yaml'
+      E: Remove all agents from the roster except the orchestrator
+    correct: B
+    explanation: 'Habit severity is tunable per project. Changing `orchestration-required` from `warn` to `block` in the project''s habits override means the habit will block session completion if `paradigm_orchestrate_inline` was not called. This is the designed customization path: the seed habit provides a sensible default (`warn`), and projects can upgrade to `block` if they need strict enforcement. No source code modification is needed.'
+  - id: q5
+    question: The `agent-coverage-validated` habit checks for which tools in its evaluation?
+    choices:
+      A: paradigm_orchestrate_inline only
+      B: paradigm_ambient_nominations and paradigm_agent_list — it verifies that agent contributions were reviewed, not just that orchestration was invoked
+      C: paradigm_reindex and paradigm_purpose_validate
+      D: paradigm_ripple and paradigm_search
+      E: All MCP tools — it checks that at least one was called
+    correct: B
+    explanation: 'The `agent-coverage-validated` habit''s check is `{ type: ''tool-called'', params: { tools: [''paradigm_ambient_nominations'', ''paradigm_agent_list''] } }`. It verifies that agent contributions were reviewed — either by checking ambient nominations or listing agents. This is distinct from `orchestration-required` which checks for `paradigm_orchestrate_inline`. The two habits complement each other: one ensures orchestration was considered (preflight), the other ensures agent contributions were reviewed (postflight).'

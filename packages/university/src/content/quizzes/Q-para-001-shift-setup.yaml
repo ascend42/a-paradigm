@@ -1,0 +1,46 @@
+id: Q-para-001-shift-setup
+title: 'PARA 001: Quick Start — Your First paradigm shift'
+description: 'Quiz for lesson: Your First paradigm shift'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-001
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-001.json
+questions:
+  - id: q1
+    question: You just ran paradigm shift in a Node.js project. Which of the following was NOT created or configured automatically?
+    choices:
+      A: .paradigm/config.yaml with discipline auto-detected from package.json
+      B: CLAUDE.md with AI instructions derived from your configuration
+      C: A comprehensive test suite for your existing code
+      D: Git hooks for automated compliance checking
+      E: .paradigm/roster.yaml with agents suited for a Node.js project
+    correct: C
+    explanation: paradigm shift sets up Paradigm metadata and tooling — it does not generate tests, modify your source code, or create application logic. It creates configuration, instruction files, hooks, and an agent roster. Testing is handled by the Vigil agent during orchestration, not during initialization.
+  - id: q2
+    question: After running paradigm shift, you edit .paradigm/config.yaml to change your enforcement level. Now CLAUDE.md is out of date. How do you update it?
+    choices:
+      A: Edit CLAUDE.md manually to match your changes
+      B: Run paradigm shift again — it regenerates CLAUDE.md from your updated config
+      C: Delete CLAUDE.md and it will regenerate on the next commit
+      D: Run paradigm sync to rebuild only the instruction files
+      E: Both B and D would work — shift re-runs all steps including sync, while sync targets just the instruction files
+    correct: E
+    explanation: CLAUDE.md is a derived file — always generated from config, never hand-edited. Both paradigm shift (full re-run) and paradigm sync (targeted) will regenerate it. Use sync when you only changed config; use shift when you want the full pipeline (migrate, scan, hooks, etc.).
+  - id: q3
+    question: A teammate says "I ran paradigm shift but it broke my project — hooks are blocking my commits." This should not happen with default settings. What likely went wrong?
+    choices:
+      A: paradigm shift always uses strict enforcement
+      B: The project already had a config.yaml with enforcement level set to strict or balanced from a previous setup
+      C: Hooks always block on the first run to teach discipline
+      D: The teammate's Git version is incompatible with Paradigm hooks
+      E: paradigm shift requires admin privileges to install hooks
+    correct: B
+    explanation: New projects default to minimal enforcement, which warns but never blocks. But paradigm shift is idempotent — if the project already had a .paradigm/config.yaml with a higher enforcement level, shift preserves that setting. The teammate's project was likely previously configured with balanced or strict enforcement. Check config.yaml and adjust enforcement.level if needed.

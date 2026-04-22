@@ -1,0 +1,76 @@
+id: Q-para-401-multi-agent-coordination
+title: 'PARA 401: Orchestration — Multi-Agent Coordination'
+description: 'Quiz for lesson: Multi-Agent Coordination'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: A task involves adding a new API endpoint that handles payment refunds with admin-only access. Which agents should be involved?
+    choices:
+      A: Builder only -- it is just one endpoint
+      B: Architect and builder
+      C: Architect, security, builder, and tester
+      D: Security only -- it involves access control
+      E: Reviewer and tester only
+    correct: C
+    explanation: This task involves architectural design (refund processing flow), security (admin-only access, payment data handling), implementation (the endpoint code), and testing (refund scenarios, gate checks). All four agent types are warranted when a task involves both security and multi-step implementation.
+  - id: q2
+    question: Why does the architect role use the opus model while the builder uses haiku?
+    choices:
+      A: Opus is newer and therefore always better
+      B: Architects need complex reasoning for design decisions; builders need speed for straightforward implementation
+      C: It is arbitrary -- any model works for any role
+      D: Haiku cannot understand architectural concepts
+      E: Opus is required for any task involving more than one file
+    correct: B
+    explanation: Model assignment matches task complexity to capability. Architects need deep reasoning for tradeoff analysis and design decisions (opus). Builders implement already-designed solutions where speed and cost efficiency matter more (haiku). This optimizes both quality and cost. These defaults are configured in .paradigm/agents.yaml and can be changed with paradigm team models.
+  - id: q3-models
+    question: A teammate has just added a new API key for a different model provider. How do they make the new models available for agent roles?
+    choices:
+      A: Delete .paradigm/agents.yaml and re-run paradigm shift
+      B: Run paradigm team models --refresh to re-discover models from the environment
+      C: Manually edit agents.yaml with the new model IDs
+      D: Models are auto-detected on every orchestration call
+      E: Run paradigm scan to rebuild the model index
+    correct: B
+    explanation: paradigm team models --refresh re-discovers available models from your environment (API keys, installed providers). This is the correct way to update the model roster after adding new providers. While you could manually edit agents.yaml (C), the refresh command handles discovery and validation automatically. paradigm shift also sets up models during initial project setup, but --refresh is the targeted command for this scenario.
+  - id: q3
+    question: You have an orchestration plan with 4 stages. Stage 3 (builder) depends on stages 1 and 2. Stage 4 (tester) depends on stage 3. Can stages 1 and 2 run in parallel?
+    choices:
+      A: No -- all stages must run sequentially
+      B: Yes, if they are independent of each other and the plan marks them as canRunParallel
+      C: Only if they use the same model
+      D: Parallel execution is never supported
+      E: Yes, but only if you use Claude Code Teams
+    correct: B
+    explanation: 'Stages that are independent of each other can run in parallel when the orchestration plan marks them as canRunParallel: true. The dependency is what matters -- stages 1 and 2 can run simultaneously if neither depends on the other, and stage 3 waits for both to complete.'
+  - id: q4
+    question: What is the first mode you should call paradigm_orchestrate_inline with, and why?
+    choices:
+      A: mode='execute' to start building immediately
+      B: mode='plan' to see the suggested agents, token estimate, and execution plan before committing
+      C: mode='review' to check existing orchestrations
+      D: mode='plan' is optional and can be skipped
+      E: Either mode works -- the order does not matter
+    correct: B
+    explanation: Always call mode='plan' first. It shows you the suggested agent team, estimated token cost, and stage breakdown. This lets you review and adjust before committing resources. Jumping straight to mode='execute' means you accept the default plan without review.
+  - id: q5
+    question: You want to spawn a single security agent to audit an existing endpoint, not a full multi-agent orchestration. Which tool do you use?
+    choices:
+      A: paradigm_orchestrate_inline with mode='execute' and agents=['security']
+      B: paradigm_agent_prompt with agent='security' and the specific task
+      C: paradigm_wisdom_expert to find a human security expert
+      D: paradigm_sentinel_triage to find security incidents
+      E: paradigm_navigate with intent='find' and target='security'
+    correct: B
+    explanation: paradigm_agent_prompt generates a full prompt for a single agent with the specified task. This is the right tool when you need one focused agent rather than a full orchestration pipeline. You could also use orchestrate_inline with an agents override, but agent_prompt is more direct for single-agent scenarios.

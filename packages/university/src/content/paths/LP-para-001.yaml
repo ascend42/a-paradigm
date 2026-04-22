@@ -1,0 +1,29 @@
+id: LP-para-001
+title: 'PARA 001: Quick Start'
+description: Get productive with Paradigm in 15 minutes. Initialize a project, meet your agent team, and build your first feature with orchestration. Hands-on from the first minute — theory comes later.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-001
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-001.json
+steps:
+  - content: N-para-001-shift-setup
+    required: true
+  - content: Q-para-001-shift-setup
+    required: true
+    passRequired: true
+  - content: N-para-001-meet-the-team
+    required: true
+  - content: Q-para-001-meet-the-team
+    required: true
+    passRequired: true
+  - content: N-para-001-build-something
+    required: true
+  - content: Q-para-001-build-something
+    required: true
+    passRequired: true

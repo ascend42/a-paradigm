@@ -1,0 +1,66 @@
+id: Q-para-301-doctor-and-validation
+title: 'PARA 301: Operations — Doctor & Validation'
+description: 'Quiz for lesson: Doctor & Validation'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: Which of the following is NOT checked by paradigm doctor?
+    choices:
+      A: Purpose file YAML validity
+      B: Aspect anchor existence
+      C: Portal.yaml gate usage
+      D: JavaScript syntax errors in source code
+      E: Orphaned symbol detection
+    correct: D
+    explanation: 'paradigm doctor validates Paradigm metadata: .purpose files, portal.yaml, aspect anchors, and cross-references. It does not check source code syntax -- that is the job of your language''s compiler or linter.'
+  - id: q2
+    question: An aspect ~rate-limited has an anchor pointing to src/middleware/rate-limit.ts:10-25, but that file was recently renamed. What will paradigm doctor report?
+    choices:
+      A: Nothing -- it only checks YAML syntax
+      B: A warning about unused gates
+      C: An error because the anchor points to a file that no longer exists
+      D: It will automatically update the anchor
+      E: A suggestion to create the file
+    correct: C
+    explanation: Paradigm doctor verifies that aspect anchors point to files and line ranges that actually exist. If the file was renamed, the anchor is broken and doctor will report an error, prompting you to update the anchor.
+  - id: q3
+    question: When is the best time to run paradigm doctor?
+    choices:
+      A: Only during initial project setup
+      B: After major changes and before committing
+      C: Only when errors occur in production
+      D: Once per quarter
+      E: Only when adding new .purpose files
+    correct: B
+    explanation: paradigm doctor should be run after major changes (adding features, refactoring, renaming symbols) and before committing. Many teams also integrate it into pre-commit hooks or CI pipelines to catch metadata drift early.
+  - id: q4
+    question: What does paradigm_flow_check check when checkImplementation is set to true?
+    choices:
+      A: Only YAML syntax of the flow definition
+      B: That flow steps reference existing gates, actions are implemented in code, and signals are defined
+      C: Only that the flow has at least three steps
+      D: That the flow has been tested in production
+      E: Only that gate names match portal.yaml
+    correct: B
+    explanation: 'With checkImplementation enabled, paradigm_flow_check performs a deep check: verifying that gates exist in portal.yaml, that actions described in flow steps have corresponding implementations in the codebase, and that emitted signals are properly defined.'
+  - id: q5
+    question: 'A .purpose file contains: `description: "Handles order processing [NEEDS CLARIFICATION: should cancelled orders trigger refunds?]"`. How do `paradigm doctor` and `paradigm_purpose_validate` treat this marker?'
+    choices:
+      A: As an error that blocks validation and must be fixed immediately
+      B: As a warning that surfaces during checks but does not block validation
+      C: They ignore it completely -- it is just text in a description field
+      D: As an info message that only appears in verbose mode
+      E: As a fatal error that prevents the .purpose file from being parsed
+    correct: B
+    explanation: 'Clarification markers (`[NEEDS CLARIFICATION: ...]`) are treated as warnings, not errors. Both `paradigm doctor` and `paradigm_purpose_validate` scan description fields for this exact pattern and report matches as warnings. They surface during health checks to remind the team of unresolved design questions, but they do not block validation or break builds. Resolve them before shipping.'

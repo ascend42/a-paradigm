@@ -2,10 +2,19 @@ version: 2.0.0
 purpose: University CLI commands
 description: >
   CLI command group for per-project university management.
-  Subcommands: serve, list, add, show, quiz, status, validate.
+  Subcommands: serve, list, add, show, quiz, status, validate, init (v6.0),
+  migrate-plsat (v6.0, hidden).
 
 components:
   UniversityCommands:
     description: CLI interface for university content management
     type: command-group
     tags: [university, cli]
+  UniversityInit:
+    description: Scaffold project-pack or discipline sub-pack pack.yaml
+    type: command
+    tags: [university, cli, pack, v6]
+  UniversityMigratePlsat:
+    description: One-shot PLSAT JSON → v6 content-pack migration (hidden)
+    type: command
+    tags: [university, cli, migration, v6]

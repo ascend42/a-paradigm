@@ -1,0 +1,56 @@
+id: Q-para-301-history-system
+title: 'PARA 301: Operations — The History System'
+description: 'Quiz for lesson: The History System'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: Which tool do you use to log an implementation change in Paradigm's history system?
+    choices:
+      A: paradigm_history_context
+      B: paradigm_history_record
+      C: paradigm_wisdom_record
+      D: paradigm_history_fragility
+      E: paradigm_history_validate
+    correct: B
+    explanation: paradigm_history_record is the tool for logging implementation events. paradigm_history_context retrieves existing history, paradigm_wisdom_record captures team learnings, and paradigm_history_fragility checks stability scores.
+  - id: q2
+    question: 'In one session you fixed a race condition in #checkout-flow, updated the $payment-flow to add retry logic, and added a new #refund-handler component. How would you record these three changes in the history system?'
+    choices:
+      A: One history_record call with all three changes combined
+      B: Three separate history_record calls — a "fix" for the race condition, a "change" for the flow update, and an "add" for the new component
+      C: Only record the new component — fixes and changes are tracked by git
+      D: Use paradigm_lore_record instead — history is deprecated
+      E: Record only the fix — it is the most important change
+    correct: B
+    explanation: 'The history system supports three change types: "add" (new symbols), "change" (modifications), and "fix" (bug fixes). Each change should be recorded separately so that future history queries can filter by type. Using the right type matters — when someone asks "what broke recently?" they want fixes, not additions.'
+  - id: q3
+    question: Why is the history log append-only?
+    choices:
+      A: To save disk space by avoiding updates
+      B: To make the log faster to write
+      C: To maintain a complete, trustworthy timeline that supports fragility analysis
+      D: Because the file format does not support editing
+      E: To prevent unauthorized modifications
+    correct: C
+    explanation: The append-only design ensures a complete timeline of every change. Nothing is deleted or overwritten, which makes the log trustworthy for computing fragility scores and understanding how symbols evolved over time.
+  - id: q4
+    question: 'Before modifying #user-service, which tool should you call to understand its recent changes?'
+    choices:
+      A: paradigm_history_record
+      B: paradigm_search
+      C: paradigm_history_context
+      D: paradigm_navigate
+      E: paradigm_ripple
+    correct: C
+    explanation: paradigm_history_context retrieves the implementation history for specified symbols. It tells you what changed recently, who worked on it, and how stable the symbol has been -- essential context before making modifications.

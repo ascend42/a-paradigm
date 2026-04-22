@@ -1,0 +1,66 @@
+id: Q-para-601-knowledge-streams
+title: 'PARA 601: Paradigm Ambient — Knowledge Streams'
+description: 'Quiz for lesson: Knowledge Streams'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: A security agent discovers during a session that JWT refresh tokens must be rotated on every use (not just on expiry). This insight applies to every project that uses JWTs. Where should this be recorded?
+    choices:
+      A: Work log — it is work the agent performed
+      B: Team decisions — the team needs to know about JWT rotation
+      C: 'Learning journal with `transferable: true` — it is an agent-learned insight that applies across projects'
+      D: Lore entry with type `agent-session`
+      E: CLAUDE.md as a permanent instruction
+    correct: C
+    explanation: 'This is a learning moment — the agent discovered a pattern (`pattern_discovered` or `correction_received` trigger) that applies beyond the current project. Recording it in the learning journal with `transferable: true` ensures it travels with the agent to future projects via `~/.paradigm/agents/{id}/journal/`. A work log entry would capture what was done but not the reusable insight. A team decision would capture a project-specific choice but not the cross-project pattern.'
+  - id: q2
+    question: Where are learning journal entries stored, and why?
+    choices:
+      A: '`.paradigm/journal/` — project-scoped because learnings are project-specific'
+      B: '`~/.paradigm/agents/{id}/journal/` — user-scoped because learnings travel with the agent across projects'
+      C: '`.paradigm/lore/entries/` — in the same location as all other lore entries'
+      D: '`~/.paradigm/journal/` — global but not agent-specific'
+      E: In memory only — journal entries are ephemeral
+    correct: B
+    explanation: Journal entries are stored at `~/.paradigm/agents/{id}/journal/` — in the user's home directory, scoped to the specific agent. This location is user-scoped (ring 2) rather than project-locked (ring 1) because learning is not project-specific. An insight about JWT handling discovered in project A should be available when the same agent works on project B.
+  - id: q3
+    question: 'A lore entry of type `incident` is recorded with `stream: ''auto''`. Which knowledge streams receive data?'
+    choices:
+      A: Only the work log — incidents are about what happened
+      B: Only the learning journal — incidents are about what was learned
+      C: Work log, learning journal, and team decisions — incidents split across all three streams
+      D: Only team decisions — incidents result in policy changes
+      E: The entry is rejected — incidents cannot use auto-classification
+    correct: C
+    explanation: 'The `LORE_TYPE_TO_STREAM` mapping routes `incident` to all three streams: the work log captures what happened (the incident timeline), the learning journal captures what was learned (failure analysis), and team decisions capture the prevention strategy. This is because incidents naturally contain all three kinds of knowledge — facts about the event, insights from investigation, and decisions about prevention.'
+  - id: q4
+    question: 'A team decision has two participants: `human/matt` with stance `proposed` and `a-paradigm/security` with stance `dissented`. Six months later, the team revisits this decision. Why is the recorded dissent valuable?'
+    choices:
+      A: It proves the human was wrong and the agent was right
+      B: It provides an audit trail for compliance purposes
+      C: It immediately surfaces the security agent's original concerns, saving time re-analyzing the tradeoffs
+      D: It triggers an automatic alert to the security agent
+      E: It prevents the same decision from being proposed again
+    correct: C
+    explanation: Recording dissent captures the counter-arguments at the time of the decision. When the decision is revisited, the team can immediately see what the security agent objected to rather than re-analyzing from scratch. This is especially valuable when the original participants have moved on or forgotten the context. The `dissented` stance does not imply the decision was wrong — it preserves the full deliberation for future reference.
+  - id: q5
+    question: You want to find all work done by the builder agent this sprint that resulted in a `blocked` outcome. Which tool and parameters do you use?
+    choices:
+      A: '`paradigm_lore_search` with `author: ''builder''` and `type: ''agent-session''`'
+      B: '`paradigm_work_log_search` with `agent: ''builder''`, `outcome: ''blocked''`, and `dateFrom` set to sprint start'
+      C: '`paradigm_journal_search` with `agent: ''builder''` and `trigger: ''failure_analysis''`'
+      D: '`paradigm_decision_search` with `participant: ''builder''`'
+      E: '`paradigm_work_log_search` with `summary: true` only'
+    correct: B
+    explanation: '`paradigm_work_log_search` is purpose-built for answering "what got done" questions. Passing `agent: ''builder''`, `outcome: ''blocked''`, and `dateFrom` set to the sprint start date filters to exactly the entries needed. The journal would show what the agent learned, not what work was blocked. The lore search would work but returns the old unified format rather than the structured work log fields like `outcome`, `blockers`, and `next_steps`.'

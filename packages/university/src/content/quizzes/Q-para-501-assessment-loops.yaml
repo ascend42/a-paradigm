@@ -1,0 +1,46 @@
+id: Q-para-501-assessment-loops
+title: 'PARA 501: Advanced Systems — Lore as Unified Project Memory'
+description: 'Quiz for lesson: Lore as Unified Project Memory'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: You have completed a three-session effort to add rate limiting. You want to record a retrospective grouped with other rate-limiting work. What is the correct approach?
+    choices:
+      A: 'Call `paradigm_lore_record` with `type: "retro"`, a body with your reflection, and `tags: ["arc:rate-limiting"]`'
+      B: 'Call `paradigm_assessment_record` with `arc_id: "arc-rate-limiting"` and `type: "retro"`'
+      C: 'Call `paradigm_lore_record` with `type: "milestone"` — completing features is always a milestone'
+      D: Create a separate `.paradigm/assessments/` directory and write the entry manually
+      E: 'Call `paradigm_lore_record` with `type: "agent-session"` — all lore is session-level'
+    correct: A
+    explanation: 'Reflective entries are recorded via `paradigm_lore_record` with the appropriate type and arc tag. A retro with `tags: ["arc:rate-limiting"]` groups it with other entries in that arc. The body field holds the detailed reflection. The assessment tools (B) are deprecated wrappers. Milestones (C) mark significant project events, not feature completions. Agent-session (E) is for automated session records, not deliberate reflections.'
+  - id: q2
+    question: 'A lore entry has `linked_lore: [L-2026-02-10-003, L-2026-02-12-001]` and `linked_commits: [a1b2c3d]`. What does this cross-referencing enable?'
+    choices:
+      A: It automatically updates the linked entries with backlinks
+      B: It creates traceability — readers can drill from the synthesized insight down to the specific sessions and code changes
+      C: It prevents the referenced lore entries from being deleted
+      D: It triggers Sentinel to check those commits for incidents
+      E: It merges the linked entries into a single combined entry
+    correct: B
+    explanation: Cross-references create a traceability chain. A reader encountering an insight entry can follow `linked_lore` to see the full session context, and `linked_commits` to see the exact code changes. This is the core value of linking — each entry adds interpretation to what it references, with links to drill down for evidence.
+  - id: q3
+    question: You want to find every retrospective in the `arc:auth-hardening` arc that mentions `#payment-service`. Which approach is correct?
+    choices:
+      A: 'Call `paradigm_lore_search` with `tag: "arc:auth-hardening"`, `type: "retro"`, and `symbol: "#payment-service"`'
+      B: 'Call `paradigm_assessment_search` with `symbol: "#payment-service"` — it searches the old assessment system'
+      C: 'Call `paradigm_lore_search` with `tags: ["arc:auth-hardening", "retro"]`'
+      D: 'Call `paradigm_search` with `query: "payment retro auth"` — general search covers lore'
+      E: Read every file in `.paradigm/lore/entries/` and filter manually
+    correct: A
+    explanation: '`paradigm_lore_search` supports combining filters: `tag` for arc prefix matching, `type` for entry type, and `symbol` for symbol references. These filters combine (AND logic), so you get only retro entries in the auth-hardening arc that touch the payment service. The assessment tools (B) are deprecated. Using `tags` array (C) uses OR logic, not AND. General search (D) searches the symbol index, not lore content.'

@@ -1,0 +1,66 @@
+id: Q-para-701-agent-profiles
+title: 'PARA 701: Agent Mastery — Lesson 2: Agent Profiles Deep Dive'
+description: 'Quiz for lesson: Lesson 2: Agent Profiles Deep Dive'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: 'A security agent has `confidence: 0.85` on `#auth-security`. Over the next 5 sessions, its security review contributions are accepted 4 times and dismissed 1 time. What is the approximate new confidence score?'
+    choices:
+      A: 0.85 — confidence does not change automatically
+      B: ~0.95 — 4 accepts at +0.03 each, 1 dismiss at -0.02 = +0.10 net
+      C: 1.0 — confidence maxes out after enough acceptances
+      D: ~0.80 — the single dismissal outweighs the acceptances
+      E: Depends on the reviewer, not the verdicts
+    correct: B
+    explanation: 'Expertise confidence adjusts per verdict: `+0.03` for accepted, `-0.02` for dismissed, `-0.01` for revised. Four acceptances: `4 * 0.03 = +0.12`. One dismissal: `1 * -0.02 = -0.02`. Net delta: `+0.10`. Starting from 0.85, the new confidence is approximately 0.95. In practice, confidence is clamped to `[0.0, 1.0]`, so it would be `min(1.0, 0.95) = 0.95`.'
+  - id: q2
+    question: What is the difference between `collaboration.stance` and `collaboration.with.{agent}.stance`?
+    choices:
+      A: They are the same field with different syntax
+      B: '`collaboration.stance` is the default stance toward all agents; `collaboration.with.{agent}.stance` overrides it for a specific agent'
+      C: '`collaboration.with` is deprecated in favor of `collaboration.stance`'
+      D: '`collaboration.stance` applies to humans; `collaboration.with` applies to agents'
+      E: '`collaboration.stance` only applies during orchestration; `collaboration.with` applies in Symphony'
+    correct: B
+    explanation: 'The top-level `collaboration.stance` (e.g., `advisory`) is the default relationship the agent has with all other agents. The `collaboration.with.{agent}.stance` (e.g., `with.architect.stance: peer`) overrides it for a specific agent. This allows fine-grained relationships: the security agent is `advisory` by default but treats the architect as a `peer` with `can_contradict: true`.'
+  - id: q3
+    question: 'An agent has a transferable pattern with `successRate: 0.5`. How does this affect its inclusion in orchestration prompts?'
+    choices:
+      A: It is included with a warning label
+      B: It is always included — all patterns are injected regardless of success rate
+      C: It is excluded — buildProfileEnrichment() only includes patterns with successRate >= 0.7
+      D: It is included but with reduced priority
+      E: It triggers a notification to the human to update the pattern
+    correct: C
+    explanation: 'The `buildProfileEnrichment()` function filters transferable patterns: `(profile.transferable || []).filter(p => p.successRate >= 0.7)`. Patterns with a success rate below 0.7 are excluded from prompt enrichment. A 0.5 success rate means the pattern works only half the time — injecting it into every orchestration prompt would waste context tokens on unreliable guidance. The agent needs to improve the pattern (or it will naturally improve as the system tracks successes) before it gets promoted to prompt enrichment.'
+  - id: q4
+    question: Why does the security agent's description explicitly state "He flags issues but does NOT implement fixes — that's the Builder's job"?
+    choices:
+      A: It is a style preference with no functional impact
+      B: The description is injected into the agent's prompt during orchestration, so explicit boundaries prevent the security agent from writing implementation code when it should only be reviewing
+      C: It is documentation for the human developer only
+      D: It prevents the security agent from being activated on implementation tasks
+      E: It triggers the orchestrator to always pair security with builder
+    correct: B
+    explanation: The agent's `description` field is injected into the orchestration prompt. When the LLM receives the security agent's prompt, it reads this boundary statement and constrains its behavior accordingly. Without explicit boundaries in the description, the LLM might generate implementation code when it should only flag issues for the builder. Clear description boundaries are how you enforce separation of concerns between agents that share the same underlying LLM.
+  - id: q5
+    question: What happens when the orchestrator calls buildProfileEnrichment() for an agent?
+    choices:
+      A: It writes the agent's profile to disk in a new format
+      B: It compiles the agent's .agent file into a binary prompt template
+      C: It assembles the agent's personality, relevant expertise, transferable patterns, notebook entries, and agent state into a markdown prompt section that makes the base LLM behave as that specific agent
+      D: It validates the agent's profile for schema errors
+      E: It sends the profile to the Conductor UI for display
+    correct: C
+    explanation: buildProfileEnrichment() is the function that transforms a static .agent file into a dynamic prompt enrichment section. It takes the agent's profile, the relevant symbols for the current task, notebook entries matched by concept, ambient context (decisions, journal insights, nominations), and agent state (last session, pending work). It assembles all of this into markdown that includes sections like '## Agent Identity', '## Your Expertise on Relevant Symbols', '## Transferable Patterns', '## Relevant Notebook Entries', and '## Your Recent Work on This Project'. This prompt enrichment is what makes the same base LLM behave differently as each agent.

@@ -1,0 +1,66 @@
+id: Q-para-601-context-composition
+title: 'PARA 601: Paradigm Ambient — Context Composition'
+description: 'Quiz for lesson: Context Composition'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: An agent is working on test coverage and calls `paradigm_context_compose`. Which guidance resources are most likely loaded into the composed context?
+    choices:
+      A: All 12 guidance resources — the compose tool always includes everything
+      B: None — guidance resources are never included in composed context
+      C: Only the guidance resources relevant to the task — likely testing-related topics, not portal or orchestration guidance
+      D: Only `paradigm://guidance/troubleshooting` — it is always included
+      E: Whichever resources the agent loaded in the previous session
+    correct: C
+    explanation: '`paradigm_context_compose` selects guidance resources based on the current task and focus area. An agent working on test coverage would benefit from testing-related guidance but not portal conventions or multi-agent orchestration details. The on-demand model means only relevant guidance consumes context window tokens. The agent can always request additional guidance mid-session via the MCP resource URIs if needed.'
+  - id: q2
+    question: 'A security agent has a high-priority context contribution with inline content and a medium-priority contribution with `content_ref: ''paradigm://guidance/portal''`. Token budget is tight. What gets included?'
+    choices:
+      A: Both are included — priority does not affect inclusion
+      B: Only the high-priority contribution is included — the medium-priority contribution is omitted due to token budget constraints
+      C: Only the medium-priority contribution is included because it references official guidance
+      D: Neither is included — contributions are disabled when budget is tight
+      E: Both are included but the medium-priority content is truncated
+    correct: B
+    explanation: High-priority contributions are always included in composed context regardless of token budget. Medium-priority contributions are included only if the token budget allows. When budget is tight, medium and low priority contributions are omitted. The `content_ref` URI remains available — the agent can fetch `paradigm://guidance/portal` later if it discovers it needs portal guidance. This tiered inclusion ensures the most important context always fits.
+  - id: q3
+    question: 'In Session A, a builder records a journal entry with `transferable: true` and a `LearningPattern`. In Session B (different project), the same builder starts working on related code. How does the Session A insight reach Session B''s context?'
+    choices:
+      A: The human manually copies the journal entry to the new project
+      B: The journal entry is stored at `~/.paradigm/agents/builder/journal/` (user-scoped), and `buildProfileEnrichment` includes transferable insights in the composed context when the builder's profile is loaded
+      C: The insight is stored in `.paradigm/lore/` and shared via Symphony networking
+      D: The pattern is automatically added to CLAUDE.md in the new project
+      E: Cross-project transfer is not supported — insights stay in the originating project
+    correct: B
+    explanation: The journal entry is stored at `~/.paradigm/agents/builder/journal/` — a user-scoped location (trust ring 2) that persists across projects. When `paradigm_context_compose` runs in Session B, it loads the builder's profile and calls `buildProfileEnrichment`. This function includes transferable journal insights and patterns in the "Transferable Insights" section of the composed context. The builder in Session B sees the insight before writing any code. No manual copying or network sharing is needed — the user-scoped storage location is the mechanism.
+  - id: q4
+    question: What does `emitAndProcess` do differently from calling `emitEvent` and `scoreEventForAgent` separately?
+    choices:
+      A: It is faster because it batches file I/O
+      B: It unifies event emission with nomination processing in a single call, ensuring no event is emitted without being evaluated — preventing the race condition where scoring happens too late
+      C: It automatically records work log entries for every event
+      D: It skips the memory buffer and writes directly to disk
+      E: There is no functional difference — it is a convenience wrapper
+    correct: B
+    explanation: '`emitAndProcess` ensures atomicity between event emission and nomination processing. If you call `emitEvent` and `scoreEventForAgent` separately, there is a window where an event exists in the stream but has not been evaluated for nominations. Another process might read the event and miss the nominations. `emitAndProcess` emits the event, immediately scores it against all active agents'' attention patterns, and generates nominations for any agent exceeding its threshold — all in one call. It returns both the event and any generated nominations.'
+  - id: q5
+    question: Before v5.0, CLAUDE.md was ~856 lines. After v5.0, it is ~150 lines plus 12 guidance resources. What is the primary benefit?
+    choices:
+      A: The file is easier to edit because it is shorter
+      B: Agents load faster because there is less to parse
+      C: Context window tokens are spent on task-relevant content rather than a static wall of instructions — agents pay the token cost only for guidance they actually use
+      D: The guidance resources are more accurate because they are generated dynamically
+      E: The slim CLAUDE.md can be committed to version control while the old one could not
+    correct: C
+    explanation: The primary benefit is context window efficiency. A 856-line CLAUDE.md consumes thousands of tokens every session, most of which are irrelevant to the current task. The slim CLAUDE.md (~150 lines) provides universal orientation at minimal token cost, and guidance resources are loaded on demand only when needed. An agent working on test coverage does not pay the token cost for portal conventions, logging rules, or orchestration patterns. This leaves more of the context window available for actual code, tool results, and conversation.

@@ -1,0 +1,56 @@
+id: Q-para-401-provider-cascade
+title: 'PARA 401: Orchestration — Provider Cascade'
+description: 'Quiz for lesson: Provider Cascade'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: You are running in a fresh terminal with only the Claude CLI installed. Which provider will the cascade select?
+    choices:
+      A: claude -- the Anthropic API
+      B: claude-code -- the Task tool
+      C: claude-cli -- spawning CLI processes
+      D: manual -- file-based handoffs
+      E: The cascade will fail with an error
+    correct: C
+    explanation: 'The cascade tries providers in order: claude (needs API key -- not available), claude-code-teams (not available), claude-code (needs Max subscription -- not in this scenario), cursor-cli (not in Cursor -- not available), claude-cli (CLI is installed -- available). It selects claude-cli.'
+  - id: q2
+    question: You set PARADIGM_AGENT_PROVIDER=cursor-cli but you are not running inside Cursor. What happens?
+    choices:
+      A: An error is thrown and orchestration fails
+      B: The cascade falls through to the next available provider
+      C: Cursor is automatically launched
+      D: The manual provider is always used as override
+      E: The setting is ignored entirely
+    correct: B
+    explanation: Setting a preferred provider changes the cascade starting point but does not disable it. If cursor-cli is not available (not in Cursor), the cascade continues to claude-cli, then manual. The fallback chain always works.
+  - id: q3
+    question: Which provider is always available regardless of environment?
+    choices:
+      A: claude (Anthropic API)
+      B: claude-code (Task tool)
+      C: cursor-cli
+      D: manual (file-based handoffs)
+      E: claude-code-teams
+    correct: D
+    explanation: The manual provider writes agent prompts to files for human or tool execution. It requires no API keys, subscriptions, or specific IDE -- just a filesystem. This universal fallback ensures orchestration works in every environment.
+  - id: q4
+    question: You just added a new ANTHROPIC_API_KEY to your environment. What command should you run to update Paradigm's awareness of available models?
+    choices:
+      A: paradigm scan
+      B: paradigm team providers --set claude
+      C: paradigm team models --refresh
+      D: paradigm doctor
+      E: paradigm sync
+    correct: C
+    explanation: paradigm team models --refresh re-discovers available models from all providers. After adding a new API key, this command detects the newly available models and updates the model assignments.

@@ -1,0 +1,46 @@
+id: Q-para-301-enforcement-levels
+title: 'PARA 301: Operations — Enforcement Levels'
+description: 'Quiz for lesson: Enforcement Levels'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: Your team is building a healthcare claims processing system that requires audit trails. A new developer joins and asks which enforcement level to use. What do you recommend?
+    choices:
+      A: Minimal — let the new developer learn without friction first
+      B: Balanced — it catches most issues without being too strict
+      C: Strict — healthcare is a regulated domain where every change must be documented and traceable
+      D: Minimal with lore-required overridden to block — just the audit trail matters
+      E: No enforcement — the team should self-police
+    correct: C
+    explanation: Healthcare is a regulated domain where compliance is not optional. Strict enforcement ensures every change has purpose files, portal gates, lore records, and passing drift checks — exactly the traceability an audit requires. The new developer should work within these constraints from day one rather than building habits that strict mode would later break.
+  - id: q2
+    question: Your project uses balanced enforcement but your team never records lore entries, causing constant warnings. What is the best fix?
+    choices:
+      A: Switch to minimal enforcement to silence all warnings
+      B: Override lore-required to off in config.yaml — your team does not need lore yet
+      C: Override lore-required to block — force the team to comply
+      D: Delete the enforcement section from config.yaml entirely
+      E: Ignore the warnings — they are just advisory
+    correct: B
+    explanation: Per-check overrides exist for exactly this situation. If your team is not ready for lore tracking, override lore-required to off rather than downgrading the entire enforcement level. This keeps all other balanced checks active while silencing the one that does not match your current workflow. You can re-enable it later when the team is ready.
+  - id: q3
+    question: A stop hook blocks your commit with "missing .purpose file for src/payments/". You are on balanced enforcement. What happened?
+    choices:
+      A: purpose-exists check failed — the .purpose file has a syntax error
+      B: purpose-coverage check blocked — you modified files in src/payments/ but that directory has no .purpose file
+      C: portal-gates check failed — src/payments/ has unprotected routes
+      D: purpose-freshness check failed — the .purpose file exists but is stale
+      E: aspect-anchors check failed — aspects in src/payments/ have broken anchors
+    correct: B
+    explanation: 'On balanced enforcement, purpose-coverage is the only check set to block (besides habits-blocking). The error message says "missing .purpose file" which means the directory lacks one entirely — that is purpose-coverage, not purpose-exists (which checks that referenced files exist) or purpose-freshness (which checks staleness). Fix: create a .purpose file in src/payments/ describing its components.'

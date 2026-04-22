@@ -1,0 +1,46 @@
+id: Q-para-001-build-something
+title: 'PARA 001: Quick Start — Build With the Team'
+description: 'Quiz for lesson: Build With the Team'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-001
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-001.json
+questions:
+  - id: q1
+    question: You built a new API endpoint without running quick-check or orchestration. The code works fine. On minimal enforcement, what happens when you commit?
+    choices:
+      A: The commit is blocked — orchestration is always required
+      B: The commit succeeds but the stop hook warns that no orchestration record exists for the changed files
+      C: Nothing — minimal enforcement has no checks
+      D: The commit is reverted automatically
+      E: Git rejects the commit because the pre-commit hook fails
+    correct: B
+    explanation: On minimal enforcement, orchestration-required is set to off, so the stop hook does not block. However, the purpose-coverage check (which is set to warn on minimal) may warn if you did not create a .purpose file for the new endpoint. The commit succeeds either way — minimal enforcement never blocks. But you have no orchestration record, no Rune compliance report, and no structured review.
+  - id: q2
+    question: 'During the build step, Rune creates a symbol plan with #health-check as a component. After the builder writes the code, Rune''s compliance report says "1 component, 0 aspects — blocking." Why is this a problem?'
+    choices:
+      A: Aspects are required for documentation completeness but have no real purpose
+      B: Every component needs at least one aspect (rule, constraint, or configuration) — the 1:1 ratio means you must define what rules govern the health endpoint
+      C: Rune made an error — health endpoints do not need aspects
+      D: The builder should have created the aspect automatically
+      E: This only matters on strict enforcement
+    correct: B
+    explanation: 'Rune enforces a 1:1 component-to-aspect ratio. Even a health endpoint has rules: response format, which checks it runs, timeout behavior, whether it includes dependency status. Defining an aspect like ~health-check-format forces you to document what the endpoint actually guarantees. This is not busywork — it is how Paradigm ensures every component has a documented contract.'
+  - id: q3
+    question: 'The commit message for your feature reads: feat(#health-check): add GET /health endpoint. The Symbols: trailer says Symbols: #health-check. What does the post-commit hook do with this information?'
+    choices:
+      A: Nothing — the Symbols trailer is just for human readability
+      B: 'It parses the Symbols trailer and records the commit in Paradigm''s history system, linking the change to #health-check for traceability'
+      C: 'It validates that #health-check exists in a .purpose file'
+      D: It sends a notification to the agent team
+      E: It automatically creates a changelog entry
+    correct: B
+    explanation: 'The post-commit hook parses the Symbols: trailer and records the commit in Paradigm''s history system. This creates a traceable link: commit → symbols affected. Later, when someone asks "what changed about #health-check?" or runs paradigm_history_context, the answer includes this commit. The pre-commit hook handles index rebuilding; the post-commit hook handles history capture.'

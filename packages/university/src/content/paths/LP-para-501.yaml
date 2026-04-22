@@ -1,0 +1,89 @@
+id: LP-para-501
+title: 'PARA 501: Advanced Systems'
+description: Master Paradigm's advanced operational systems — Lore for project memory, Sentinel for incident intelligence, Habits for behavioral discipline, Session Intelligence for crash recovery, and Hook Enforcement for automated compliance. Ties everything together into the complete Paradigm workflow.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+steps:
+  - content: N-para-501-lore-system
+    required: true
+  - content: Q-para-501-lore-system
+    required: true
+    passRequired: true
+  - content: N-para-501-sentinel-deep-dive
+    required: true
+  - content: Q-para-501-sentinel-deep-dive
+    required: true
+    passRequired: true
+  - content: N-para-501-aspect-graph-internals
+    required: true
+  - content: Q-para-501-aspect-graph-internals
+    required: true
+    passRequired: true
+  - content: N-para-501-habits-practice
+    required: true
+  - content: Q-para-501-habits-practice
+    required: true
+    passRequired: true
+  - content: N-para-501-session-intelligence
+    required: true
+  - content: Q-para-501-session-intelligence
+    required: true
+    passRequired: true
+  - content: N-para-501-hook-enforcement
+    required: true
+  - content: Q-para-501-hook-enforcement
+    required: true
+    passRequired: true
+  - content: N-para-501-advanced-workflows
+    required: true
+  - content: Q-para-501-advanced-workflows
+    required: true
+    passRequired: true
+  - content: N-para-501-aspect-graph-advanced
+    required: true
+  - content: Q-para-501-aspect-graph-advanced
+    required: true
+    passRequired: true
+  - content: N-para-501-task-management
+    required: true
+  - content: Q-para-501-task-management
+    required: true
+    passRequired: true
+  - content: N-para-501-assessment-loops
+    required: true
+  - content: Q-para-501-assessment-loops
+    required: true
+    passRequired: true
+  - content: N-para-501-symphony-a-mail
+    required: true
+  - content: Q-para-501-symphony-a-mail
+    required: true
+    passRequired: true
+  - content: N-para-501-platform-agent-ui
+    required: true
+  - content: Q-para-501-platform-agent-ui
+    required: true
+    passRequired: true
+  - content: N-para-501-conductor-workspace
+    required: true
+  - content: Q-para-501-conductor-workspace
+    required: true
+    passRequired: true
+  - content: N-para-501-symphony-networking
+    required: true
+  - content: Q-para-501-symphony-networking
+    required: true
+    passRequired: true
+  - content: N-para-501-review-compliance
+    required: true
+  - content: Q-para-501-review-compliance
+    required: true
+    passRequired: true

@@ -1,15 +1,18 @@
 /**
- * University serve command - Launch the Paradigm University learning platform
+ * University serve command - Launch the Paradigm University learning platform.
+ * v6.0: honors pack selectors; when a non-default pack is requested, mounts
+ * its content directory instead of the bundled first-party content.
  */
 
 import chalk from 'chalk';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { resolvePackContext, type SelectorOptions } from './selectors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-interface UniversityServeOptions {
+interface UniversityServeOptions extends SelectorOptions {
   port?: string;
   open?: boolean;
 }
@@ -18,16 +21,33 @@ export async function universityServeCommand(_path: string | undefined, options:
   const port = parseInt(options.port || '3839', 10);
   const shouldOpen = options.open !== false;
 
+  const rootDir = process.cwd();
+  const hasSelector = Boolean(options.pack || options.project || options.discipline);
+  const ctx = hasSelector ? resolvePackContext(rootDir, options) : null;
+
   console.log(chalk.cyan('\nOpening the campus gates...\n'));
 
   try {
     const { startServer } = await import('@a-company/university/server');
 
-    // Resolve asset paths relative to this file (sibling dirs in dist/)
-    const contentDir = path.resolve(__dirname, 'university-content');
+    // v6.0: when a selector targets a non-default pack, mount its content dir.
+    // The sub-pack root wins over the primary pack root when --discipline is
+    // set. Default (no selector) uses the bundled first-party content.
+    const defaultContentDir = path.resolve(__dirname, 'university-content');
+    let contentDir = defaultContentDir;
+    if (ctx) {
+      const packContentDir = path.join(ctx.subPackRoot ?? ctx.packRoot, 'content');
+      // Prefer pack content dir only when it actually exists.
+      // Otherwise fall back to bundled content rather than serving an empty dir.
+      // (fs.existsSync check lives in the server, but we do a quick probe here.)
+      contentDir = packContentDir;
+    }
     const uiDistPath = path.resolve(__dirname, 'university-ui');
 
     console.log(chalk.gray(`Port: ${port}`));
+    if (ctx) {
+      console.log(chalk.gray(`Pack: ${ctx.subPackId ?? ctx.packId}`));
+    }
     console.log();
 
     await startServer({

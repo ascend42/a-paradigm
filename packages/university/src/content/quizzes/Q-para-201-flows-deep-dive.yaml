@@ -1,0 +1,66 @@
+id: Q-para-201-flows-deep-dive
+title: 'PARA 201: Architecture — Flows in Depth'
+description: 'Quiz for lesson: Flows in Depth'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: A controller calls a service, which queries a database and returns a result. Should this be a $flow?
+    choices:
+      A: Yes — any multi-step process should be a flow
+      B: Yes — database queries always require flow documentation
+      C: No — this is a two-component interaction with no sequence ambiguity
+      D: No — flows can only be used for user-facing features
+      E: It depends on whether the service emits a signal
+    correct: C
+    explanation: A flow is warranted when logic spans three or more components in a specific order. A controller calling a service (with its database query) is a straightforward two-component interaction that can be documented on the component itself.
+  - id: q2
+    question: Where should a $checkout-flow be defined if the checkout process starts in the cart module?
+    choices:
+      A: In .paradigm/flows/checkout.yaml
+      B: In portal.yaml under a flows section
+      C: In src/cart/.purpose, since the cart module initiates the flow
+      D: In every .purpose file of every component involved in the flow
+      E: In a standalone checkout-flow.purpose file at the project root
+    correct: C
+    explanation: Flows are defined in the .purpose file of the initiating component's directory. Since the checkout flow starts in the cart module, it belongs in src/cart/.purpose. The flow will reference components from other directories.
+  - id: q3
+    question: 'What does `paradigm_flow_check` with `checkImplementation: true` verify?'
+    choices:
+      A: That the flow executes correctly at runtime
+      B: That referenced components exist in .purpose files, actions are implemented, and signals are emitted
+      C: That the flow has fewer than 10 steps
+      D: That all flows use the same naming convention
+      E: That the flow is referenced in portal.yaml
+    correct: B
+    explanation: 'With checkImplementation: true, the validator performs deep checks: it verifies that referenced #components exist in .purpose files, that the named actions are implemented in the actual codebase, and that listed signals are actually emitted. This catches documentation-code drift.'
+  - id: q4
+    question: What is the fundamental nature of a Paradigm flow?
+    choices:
+      A: A workflow engine that orchestrates service calls at runtime
+      B: A saga implementation with rollback support
+      C: Documentation metadata describing what happens in a sequence, not how to execute it
+      D: A state machine that transitions between components
+      E: An event bus configuration defining message routing
+    correct: C
+    explanation: Flows are documentation, not orchestration. They describe the sequence of operations for humans and AI agents to understand. Your code still handles the actual service calls, error handling, and state management however you choose to implement it.
+  - id: q5
+    question: '`$checkout-flow` lists `relatedFlows: [$payment-flow]` and `$payment-flow` lists `relatedFlows: [$checkout-flow]`. What does `paradigm_flow_check` report?'
+    choices:
+      A: No issues — bidirectional references are valid
+      B: 'A circular dependency: $checkout-flow → $payment-flow → $checkout-flow'
+      C: A missing step error — related flows must appear as steps
+      D: A naming violation — flows cannot reference each other
+      E: A warning about duplicate flow definitions
+    correct: B
+    explanation: When flows reference each other in a cycle via relatedFlows, Paradigm detects it as a circular dependency using depth-first search. The resolution is to extract shared logic into a third flow, remove one direction of the dependency, or replace direct flow references with signal-based communication.

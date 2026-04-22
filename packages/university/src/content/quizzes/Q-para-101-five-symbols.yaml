@@ -1,0 +1,66 @@
+id: Q-para-101-five-symbols
+title: 'PARA 101: Foundations — The Five Symbols'
+description: 'Quiz for lesson: The Five Symbols'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: A middleware function that checks whether the current user has admin privileges should be classified as which symbol?
+    choices:
+      A: '# Component'
+      B: $ Flow
+      C: ^ Gate
+      D: '! Signal'
+      E: ~ Aspect
+    correct: C
+    explanation: A middleware function that checks a condition and either allows or blocks access is a gate (^). Gates verify that a required condition is met before proceeding — in this case, admin privileges.
+  - id: q2
+    question: After a refactor, you run paradigm doctor and it reports "3 broken anchors detected." Which symbol type was affected?
+    choices:
+      A: '# Component — components have code anchors that broke during refactoring'
+      B: $ Flow — flow steps reference line numbers that shifted
+      C: ^ Gate — gate definitions include file paths that changed
+      D: '! Signal — signal emitters moved to different files'
+      E: ~ Aspect — aspects are the only symbol with code anchors, and the refactor moved the anchored lines
+    correct: E
+    explanation: Aspects (~) are the only symbol type that requires code anchors — specific file:line references pointing to where the rule is enforced. When code is refactored and lines move, those anchors break. paradigm doctor detects this via SHA-256 hash comparison, and paradigm_aspect_drift can show exactly which anchors drifted.
+  - id: q3
+    question: A payment processing module contains a Stripe API wrapper, a billing calculator, and an in-memory cart. How should these be classified?
+    choices:
+      A: 'Each gets a different symbol type: $ for Stripe, # for calculator, ! for cart'
+      B: 'They are all # components, differentiated by tags like [integration, stripe], [feature], and [state]'
+      C: 'They should all be a single # component since they are in the same module'
+      D: The Stripe wrapper is a ~ aspect since it is a cross-cutting concern
+      E: They should be modeled as steps in a $ flow
+    correct: B
+    explanation: 'All three are documented code units, so they are all # components. The differences are captured by tags: #stripe-service with tags: [integration, stripe], #billing-calculator with tags: [feature], #cart-store with tags: [state]. Tags add nuance without requiring different symbol types.'
+  - id: q4
+    question: When should you create a $flow?
+    choices:
+      A: For every function that takes more than 10 lines of code
+      B: Only for authentication sequences
+      C: When logic spans three or more components in a specific order
+      D: Whenever you emit a signal
+      E: For all API endpoints regardless of complexity
+    correct: C
+    explanation: Flows document multi-step processes that involve three or more components in a defined sequence. A single-component operation or a two-component call does not warrant a flow — it adds documentation overhead without providing navigational value.
+  - id: q5
+    question: Your payment module emits !payment-completed after charging a card. Later, the marketing team adds a "send receipt email" listener, and the analytics team adds a "record conversion" listener. Neither team modified the payment module. How is this possible?
+    choices:
+      A: The payment module was refactored to call both services directly
+      B: Signals promote loose coupling — the emitter fires the event without knowing who listens, so new listeners can be added independently
+      C: The listeners were added to the payment module's .purpose file
+      D: Both teams used the same $flow as the payment module
+      E: The ^payment gate routes events to registered handlers
+    correct: B
+    explanation: 'This is the core value of signals: loose coupling. The payment module emits !payment-completed and has zero knowledge of who listens. The marketing team and analytics team independently subscribe to the signal. No code in the payment module was modified. This is why Paradigm separates signals (!) from flows ($) — flows define explicit steps, while signals enable independent, decoupled reactions.'

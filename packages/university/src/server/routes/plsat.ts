@@ -1,18 +1,26 @@
 /**
- * PLSAT (Paradigm Licensure Standardized Assessment Test) API routes
+ * PLSAT (Paradigm Licensure Standardized Assessment Test) API routes — v6.0.
  *
- * Supports v2.0 (flat questions) and v3.0 (items with variants + passages).
- * The server resolves variants and flattens passage groups so the client
- * always receives the same PLSATQuestion[] shape.
+ * Reads from the v6 pack layout:
+ *   content/quizzes/Q-plsat-v2.yaml
+ *   content/quizzes/Q-plsat-v3.yaml
+ *
+ * API response shape is preserved: the client still receives questions +
+ * optional passages, shuffled on each request. Old JSON files in
+ * content/plsat/ are no longer read here (but remain on disk for the
+ * bridge release).
  */
 
 import { Router, type Request, type Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
-// --- v3.0 source types (JSON shape) ---
+// ────────────────────────────────────────────────────────────────
+// Types
+// ────────────────────────────────────────────────────────────────
 
-interface V3Variant {
+interface PackQuizVariant {
   id: string;
   scenario: string;
   question: string;
@@ -21,46 +29,30 @@ interface V3Variant {
   explanation: string;
 }
 
-interface V3StandaloneItem {
-  type: 'standalone';
-  slot: string;
-  course: string;
-  variants: V3Variant[];
+interface PackQuizQuestion {
+  id: string;
+  scenario?: string;
+  question: string;
+  choices: Record<string, string>;
+  correct: string;
+  explanation?: string;
+  slot?: string;
+  section?: string;
+  passageId?: string;
+  passage?: string;
+  variants?: PackQuizVariant[];
 }
 
-interface V3PassageQuestion {
-  slot: string;
-  variants: V3Variant[];
-}
-
-interface V3PassageItem {
-  type: 'passage';
-  slot: string;
-  course: string;
-  passage: string;
-  questions: V3PassageQuestion[];
-}
-
-interface V3VariantGroupItem {
-  type: 'variant-group';
-  slot: string;
-  course: string;
-  variants: V3Variant[];
-}
-
-type V3Item = V3StandaloneItem | V3PassageItem | V3VariantGroupItem;
-
-interface V3Exam {
-  version: string;
-  frameworkVersion: string;
-  timeLimit: number;
-  passThreshold: number;
+interface PackQuizYaml {
+  id: string;
   title: string;
-  description: string;
-  items: V3Item[];
+  description?: string;
+  passThreshold: number;
+  timeLimit: number;
+  totalSlots?: number;
+  exam?: { kind: string };
+  questions: PackQuizQuestion[];
 }
-
-// --- client-facing types ---
 
 interface ClientQuestion {
   id: string;
@@ -73,14 +65,19 @@ interface ClientQuestion {
   passageId?: string;
 }
 
-// --- helpers ---
+// ────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────
 
-/** Pick a random variant from a variant array */
-function pickVariant(variants: V3Variant[]): V3Variant {
-  return variants[Math.floor(Math.random() * variants.length)];
+function safeLoadYaml<T>(filePath: string): T | null {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    return yaml.load(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
-/** Fisher-Yates shuffle (in-place, returns same array) */
 function fisherYatesShuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -89,96 +86,100 @@ function fisherYatesShuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-/**
- * Resolve variants and flatten v3.0 items into the client question list.
- * Passage groups stay together but group order is shuffled.
- * Returns { questions, passages }.
- */
-function resolveV3(data: V3Exam): { questions: ClientQuestion[]; passages: Record<string, string> } {
+/** Pick a variant: the canonical question itself + any remaining variants. */
+function pickVariant(q: PackQuizQuestion): PackQuizQuestion | PackQuizVariant {
+  if (!q.variants || q.variants.length === 0) return q;
+  const all = [
+    {
+      id: q.id,
+      scenario: q.scenario ?? '',
+      question: q.question,
+      choices: q.choices,
+      correct: q.correct,
+      explanation: q.explanation ?? '',
+    },
+    ...q.variants,
+  ];
+  return all[Math.floor(Math.random() * all.length)];
+}
+
+function countQuestions(quiz: PackQuizYaml): number {
+  return quiz.questions.length;
+}
+
+function resolvePackLayout(quiz: PackQuizYaml): {
+  questions: ClientQuestion[];
+  passages: Record<string, string>;
+} {
   const passages: Record<string, string> = {};
 
-  // Build "blocks" – each block is either a single standalone question
-  // or a group of passage questions that must stay together.
+  // Group questions into blocks so passage questions stay together.
   const blocks: ClientQuestion[][] = [];
+  const passageBlocks: Map<string, ClientQuestion[]> = new Map();
 
-  for (const item of data.items) {
-    if (item.type === 'standalone' || item.type === 'variant-group') {
-      const v = pickVariant(item.variants);
-      blocks.push([{
-        id: v.id,
-        course: item.course,
-        scenario: v.scenario,
-        question: v.question,
-        choices: v.choices,
-        correct: v.correct,
-        explanation: v.explanation,
-      }]);
+  for (const q of quiz.questions) {
+    const variant = pickVariant(q);
+    const client: ClientQuestion = {
+      id: variant.id,
+      course: q.section ?? '',
+      scenario: (variant as PackQuizVariant).scenario ?? q.scenario ?? '',
+      question: variant.question,
+      choices: variant.choices,
+      correct: variant.correct,
+      explanation: (variant as PackQuizVariant).explanation ?? q.explanation ?? '',
+      ...(q.passageId ? { passageId: q.passageId } : {}),
+    };
+
+    if (q.passageId) {
+      if (q.passage) passages[q.passageId] = q.passage;
+      if (!passageBlocks.has(q.passageId)) passageBlocks.set(q.passageId, []);
+      passageBlocks.get(q.passageId)!.push(client);
     } else {
-      // passage group
-      passages[item.slot] = item.passage;
-      const group: ClientQuestion[] = item.questions.map((pq) => {
-        const v = pickVariant(pq.variants);
-        return {
-          id: v.id,
-          course: item.course,
-          scenario: v.scenario,
-          question: v.question,
-          choices: v.choices,
-          correct: v.correct,
-          explanation: v.explanation,
-          passageId: item.slot,
-        };
-      });
-      blocks.push(group);
+      blocks.push([client]);
     }
   }
 
-  // Shuffle blocks (passage groups move as a unit)
+  // Append passage blocks as a whole so they stay together
+  for (const block of passageBlocks.values()) {
+    blocks.push(block);
+  }
+
   fisherYatesShuffle(blocks);
 
   return { questions: blocks.flat(), passages };
 }
 
-/** Count total questions in a v3.0 exam (one per slot, picking first variant) */
-function countV3Questions(data: V3Exam): number {
-  let count = 0;
-  for (const item of data.items) {
-    if (item.type === 'standalone' || item.type === 'variant-group') {
-      count += 1;
-    } else {
-      count += item.questions.length;
-    }
-  }
-  return count;
-}
+// ────────────────────────────────────────────────────────────────
+// Router
+// ────────────────────────────────────────────────────────────────
 
 export function createPlsatRouter(contentDir: string, projectDir?: string): Router {
   const router = Router();
 
+  const quizzesDir = path.join(contentDir, 'quizzes');
+
   // GET /api/plsat - Get available PLSAT versions
   router.get('/', (_req: Request, res: Response) => {
-    const plsatDir = path.join(contentDir, 'plsat');
-    if (!fs.existsSync(plsatDir)) {
+    if (!fs.existsSync(quizzesDir)) {
       return res.json({ versions: [] });
     }
 
-    const files = fs.readdirSync(plsatDir).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(quizzesDir)
+      .filter(f => f.startsWith('Q-plsat-v') && f.endsWith('.yaml'));
+
     const versions = files.map(f => {
-      const data = JSON.parse(fs.readFileSync(path.join(plsatDir, f), 'utf-8'));
-
-      // v3.0+ uses items[], legacy uses questions[]
-      const questionCount = data.items
-        ? countV3Questions(data)
-        : (data.questions?.length || 0);
-
+      const data = safeLoadYaml<PackQuizYaml>(path.join(quizzesDir, f));
+      if (!data) return null;
+      const versionMatch = f.match(/^Q-plsat-v(\d+)\.yaml$/);
+      const version = versionMatch ? `${versionMatch[1]}.0` : '0.0';
       return {
-        version: data.version,
-        frameworkVersion: data.frameworkVersion,
-        questionCount,
+        version,
+        frameworkVersion: '2.0',
+        questionCount: countQuestions(data),
         timeLimit: data.timeLimit,
         passThreshold: data.passThreshold,
       };
-    });
+    }).filter((v): v is NonNullable<typeof v> => v !== null);
 
     versions.sort((a, b) => b.version.localeCompare(a.version));
     return res.json({ versions });
@@ -187,33 +188,27 @@ export function createPlsatRouter(contentDir: string, projectDir?: string): Rout
   // GET /api/plsat/:version - Get full exam for a specific version
   router.get('/:version', (req: Request, res: Response) => {
     try {
-      const examFile = path.join(contentDir, 'plsat', `v${req.params.version}.json`);
+      const versionNum = req.params.version.split('.')[0];
+      const examFile = path.join(quizzesDir, `Q-plsat-v${versionNum}.yaml`);
       if (!fs.existsSync(examFile)) {
         return res.status(404).json({ error: `PLSAT version '${req.params.version}' not found` });
       }
 
-      const data = JSON.parse(fs.readFileSync(examFile, 'utf-8'));
-
-      // v3.0+ path: resolve variants + flatten passages
-      if (data.items) {
-        const { questions, passages } = resolveV3(data as V3Exam);
-        return res.json({
-          version: data.version,
-          frameworkVersion: data.frameworkVersion,
-          timeLimit: data.timeLimit,
-          passThreshold: data.passThreshold,
-          title: data.title,
-          description: data.description,
-          questions,
-          ...(Object.keys(passages).length > 0 ? { passages } : {}),
-        });
+      const data = safeLoadYaml<PackQuizYaml>(examFile);
+      if (!data) {
+        return res.status(500).json({ error: 'Failed to parse PLSAT exam' });
       }
 
-      // Legacy v2.0 path: shuffle questions
-      const shuffled = [...data.questions].sort(() => Math.random() - 0.5);
+      const { questions, passages } = resolvePackLayout(data);
       return res.json({
-        ...data,
-        questions: shuffled,
+        version: req.params.version,
+        frameworkVersion: '2.0',
+        timeLimit: data.timeLimit,
+        passThreshold: data.passThreshold,
+        title: data.title,
+        description: data.description ?? '',
+        questions,
+        ...(Object.keys(passages).length > 0 ? { passages } : {}),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Internal error';
@@ -257,7 +252,6 @@ export function createPlsatRouter(contentDir: string, projectDir?: string): Rout
       };
 
       const filePath = path.join(diplomaDir, `${id}.yaml`);
-      // Simple YAML serialization (avoid importing js-yaml in the university package)
       const yamlLines = Object.entries(diploma).map(([k, v]) => {
         if (typeof v === 'object' && v !== null) {
           const nested = Object.entries(v).map(([nk, nv]) => `  ${nk}: ${JSON.stringify(nv)}`).join('\n');

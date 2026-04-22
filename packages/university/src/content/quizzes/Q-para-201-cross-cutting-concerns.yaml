@@ -1,0 +1,56 @@
+id: Q-para-201-cross-cutting-concerns
+title: 'PARA 201: Architecture — Cross-Cutting Concerns'
+description: 'Quiz for lesson: Cross-Cutting Concerns'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: All API handlers must validate input against a defined schema. Should this be modeled as a gate, signal, or aspect?
+    choices:
+      A: ^ gate — it checks a condition before processing
+      B: '! signal — it fires when validation fails'
+      C: ~ aspect — it is a structural pattern applied across all handlers
+      D: $ flow — it is a step in the request processing flow
+      E: '# component — it is a validation utility'
+    correct: C
+    explanation: Input validation across all handlers is a cross-cutting concern — the same pattern (validate against a schema) applies to every handler. This is an aspect (~validated), not a gate (gates check conditions like authorization, not input format) or a signal (validation is a structural requirement, not an event).
+  - id: q2
+    question: 'An aspect `~cached` has `applies-to: ["#*-query"]`. You create `#user-query` without applying caching. What is the recommended action?'
+    choices:
+      A: Nothing — aspects are just documentation
+      B: Delete the ~cached aspect since it does not apply universally
+      C: 'Apply the caching pattern to #user-query, since it matches the applies-to pattern'
+      D: 'Rename #user-query to #user-fetch to avoid matching the pattern'
+      E: 'Add an exception for #user-query in the aspect definition'
+    correct: C
+    explanation: 'When a new component matches an aspect''s applies-to pattern, the aspect should be applied. If ~cached applies to all #*-query components, then #user-query should use the caching pattern. If there is a genuine reason to exempt it, document that exception rather than working around the naming.'
+  - id: q3
+    question: Why is a rate limiter classified as an aspect (~rate-limited) rather than a gate (^rate-limited)?
+    choices:
+      A: Because rate limiters are implemented in middleware
+      B: Because rate limiters do not return 403 status codes
+      C: Because rate limiting is a structural pattern applied across many endpoints, not a per-resource authorization check
+      D: Because rate limiters do not require authentication
+      E: Because the ~ prefix is alphabetically closer to 'rate'
+    correct: C
+    explanation: Gates check specific conditions per request — 'is this user allowed to access this resource?' or 'is this feature enabled?' Rate limiting is a different concern — it applies the same pattern (request counting and throttling) across many endpoints as a structural rule. This cross-cutting nature makes it an aspect.
+  - id: q4
+    question: After a large refactor that moved files, what is the correct procedure for maintaining aspects?
+    choices:
+      A: Delete all aspects and recreate them from scratch
+      B: Run paradigm_aspect_check to find broken anchors, then update the anchor paths in .purpose files
+      C: Aspects automatically update their anchors when files move
+      D: Ignore broken anchors — they will fix themselves on the next paradigm scan
+      E: Convert all aspects to gates since gates do not have anchors
+    correct: B
+    explanation: After refactoring, run paradigm_aspect_check to identify which anchors now point to moved or renamed files. Then update the anchors in the .purpose files to reflect the new file paths and line numbers. This maintenance is the trade-off for having verifiable enforcement code.

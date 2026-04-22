@@ -1,0 +1,46 @@
+id: Q-para-001-meet-the-team
+title: 'PARA 001: Quick Start — Meet Your Agent Team'
+description: 'Quiz for lesson: Meet Your Agent Team'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-001
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-001.json
+questions:
+  - id: q1
+    question: Your project is a React frontend with no backend. Which of these agents would paradigm shift likely NOT include in your roster?
+    choices:
+      A: Builder — every project needs code implementation
+      B: A database specialist — there is no database in a frontend-only project
+      C: Reviewer — code review is universal
+      D: Rune — symbol compliance applies to all projects
+      E: Sentinel — even frontend apps have security concerns (XSS, CSRF)
+    correct: B
+    explanation: Specialized agents like a database specialist are only rostered when the project type matches. A React frontend with no backend has no database layer, so database agents would not be selected. The 8 core agents (including Sentinel — frontend security matters) appear in every roster. Specialized and ecosystem agents are added based on detection.
+  - id: q2
+    question: 'The Architect uses opus (tier-1) while the Builder uses haiku (tier-3). A junior developer asks: "Does that mean the builder writes worse code?" How do you explain?'
+    choices:
+      A: Yes — tier-3 is lower quality, but it is faster and cheaper
+      B: No — tiers match complexity, not quality. Architecture requires open-ended reasoning (opus). Building is well-defined implementation work where speed matters more (haiku).
+      C: The tiers are just labels with no real difference
+      D: The builder should be upgraded to opus for important features
+      E: All agents should use the same model for consistency
+    correct: B
+    explanation: Model tier assignment is about matching the nature of the work, not ranking quality. Architectural design is open-ended — "how should we structure this?" benefits from deeper reasoning. Implementation is well-defined — "write this function that does X" benefits from speed. A fast model writing clearly specified code often produces better results than an overthinking model.
+  - id: q3
+    question: You want to add a DevOps specialist agent to your web project's roster. What command would you use?
+    choices:
+      A: Edit roster.yaml by hand and add the agent definition
+      B: paradigm agent activate devops — it adds the agent to your project roster
+      C: paradigm shift --add-agent devops
+      D: Re-run paradigm shift and hope it detects the need
+      E: DevOps agents cannot be added to web projects
+    correct: B
+    explanation: paradigm agent activate <id> adds an agent to your project roster. This is the proper way to customize your team — the CLI updates roster.yaml, agents.yaml, and any related configuration atomically. While you could edit roster.yaml by hand, using the CLI ensures all related files stay in sync.

@@ -1,0 +1,46 @@
+id: Q-para-101-component-types
+title: 'PARA 101: Foundations — Component Types & Hierarchy'
+description: 'Quiz for lesson: Component Types & Hierarchy'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: What does the `type` field on a component describe?
+    choices:
+      A: The programming language the component is written in
+      B: The structural role of the component (e.g., service, view, router)
+      C: The business domain the component belongs to
+      D: The test coverage level of the component
+      E: The deployment environment for the component
+    correct: B
+    explanation: The `type` field describes a component's structural role — what the code IS architecturally (service, view, router, filter, etc.). Business domain classification uses tags instead.
+  - id: q2
+    question: Where should the `parent` relationship be declared?
+    choices:
+      A: On the parent component, listing all children
+      B: In a separate relationships.yaml file
+      C: 'On the child component, referencing the parent with a # symbol'
+      D: In portal.yaml alongside gate definitions
+      E: In the config.yaml component_types glossary
+    correct: C
+    explanation: 'Parent is declared on the child component using a `parent: "#parent-name"` field. This keeps .purpose files decentralized — you don''t need to maintain rosters on parent components.'
+  - id: q3
+    question: A `PaymentService` handles payment processing and integrates with Stripe. How should it be documented?
+    choices:
+      A: '`type: integration` with no tags'
+      B: '`type: service` with `tags: [integration, feature]`'
+      C: '`tags: [service, integration]` with no type'
+      D: '`type: feature` with `tags: [service]`'
+      E: '`type: service-integration` combining both concepts'
+    correct: B
+    explanation: 'Type describes what the code IS (a service), while tags describe behavior and domain (it''s an integration and a feature). The correct approach is `type: service` with `tags: [integration, feature]`.'

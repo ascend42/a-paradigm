@@ -1,0 +1,66 @@
+id: Q-para-701-agent-pods-nevrland
+title: 'PARA 701: Agent Mastery — Lesson 10: Agent Pods & nevr.land'
+description: 'Quiz for lesson: Lesson 10: Agent Pods & nevr.land'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A developer activates the Ship Pod and then the Design Pod. How many agents are in the roster?
+    choices:
+      A: 6 — the Design Pod replaces the Ship Pod
+      B: 11 — Ship Pod (6) + Design Pod (5), no overlap
+      C: The union of both pods — pods are additive, agents from both are in the roster with no duplicates
+      D: Only the Design Pod agents — the last activated pod wins
+      E: All 54 agents — activating any pod enables all agents
+    correct: C
+    explanation: 'Pods are additive. Activating a pod adds its agents to the existing roster. The Ship Pod adds architect, builder, reviewer, tester, security, and documentor. The Design Pod adds designer, copywriter, a11y, creative, and presenter. The roster now contains the union of both: 11 unique agents (no overlap between these two pods). If pods had overlapping agents (e.g., both include reviewer), the agent would appear once in the roster.'
+  - id: q2
+    question: What is the difference between a pod and a roster?
+    choices:
+      A: They are the same thing with different names
+      B: A pod is a named preset of agents (a template); a roster is the actual list of active agents on a project. Activating a pod modifies the roster.
+      C: A pod modifies agent behavior; a roster just lists agent names
+      D: A roster can contain pods but not individual agents
+      E: Pods are for production; rosters are for development
+    correct: B
+    explanation: A pod is a template — a named group of agents optimized for a workflow (like "Ship Pod" = architect + builder + reviewer + tester + security + documentor). A roster is the actual configuration file (`.paradigm/roster.yaml`) that lists which agents are active on a project. The command `paradigm agents activate --pod ship-pod` reads the pod template and adds its agents to the roster. The pod is the input; the roster is the output.
+  - id: q3
+    question: A community-published agent from nevr.land is installed. How does it participate in the local Paradigm system?
+    choices:
+      A: It runs in a sandboxed mode with limited capabilities
+      B: 'It is installed to ~/.paradigm/agents/ and participates identically to built-in agents: same orchestration, attention scoring, learning loop, expertise tracking, and notebook system'
+      C: It can only be used manually, not through orchestration
+      D: It requires an API key from the publisher to function
+      E: It is read-only and cannot accumulate expertise or notebook entries
+    correct: B
+    explanation: 'An installed agent follows the standard `.agent` schema and is placed in `~/.paradigm/agents/`. The system treats it identically to a built-in agent: it is included in orchestration planning (if in the roster), scores events against its attention patterns, self-nominates contributions, accumulates expertise through verdicts, and builds notebook entries through the learning loop. Trust level affects installation warnings, not runtime capabilities.'
+  - id: q4
+    question: An agent package on nevr.land includes a `notebooks/` directory with 5 YAML files. Where are these installed?
+    choices:
+      A: In the project's .paradigm/notebooks/{agent-id}/
+      B: In ~/.paradigm/notebooks/{agent-id}/ as global entries that travel across all projects
+      C: They are not installed — notebooks must be created manually
+      D: In the agent's .agent file as inline snippets
+      E: In ~/.paradigm/agents/{agent-id}/notebooks/
+    correct: B
+    explanation: 'Notebook entries from an agent package are installed into `~/.paradigm/notebooks/{agent-id}/` as global entries. This means they are available on every project the agent joins, providing bootstrapping knowledge from day one. This matches the storage pattern: global notebooks at ~/.paradigm/notebooks/ travel with the agent, while project notebooks at .paradigm/notebooks/ are project-specific. Bootstrapping entries should be global because they represent the agent''s foundational knowledge, not project-specific patterns.'
+  - id: q5
+    question: Why does the agent package format use YAML files instead of a compiled binary format?
+    choices:
+      A: YAML is faster to parse than binary formats
+      B: Binary formats are not supported on all platforms
+      C: YAML is human-readable, enabling inspection, forking, and modification before installation — agents are knowledge, not code, and should be as shareable and composable as possible
+      D: YAML is required by the Paradigm schema validator
+      E: Binary formats would require code signing
+    correct: C
+    explanation: The design principle is that agents are knowledge, not compiled code. A human-readable YAML format means you can inspect an agent's personality, expertise, behaviors, and attention patterns before installing it. You can fork a community agent, modify its attention threshold, add a behavior, and republish. You can copy a single transferable pattern from one agent to another. A binary format would make all of this opaque. The package format (agent.yaml + notebooks/ + metadata.yaml) is intentionally the simplest possible structure that captures the complete agent identity.

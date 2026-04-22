@@ -1,0 +1,66 @@
+id: Q-para-501-lore-system
+title: 'PARA 501: Advanced Systems — The Lore System'
+description: 'Quiz for lesson: The Lore System'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: You just finished a 40-minute session where you added caching to the API, modifying 5 files and creating 2 new ones. You also decided to use Redis over in-memory caching. Which lore entry type is most appropriate?
+    choices:
+      A: '`decision` — because you made an architectural choice about Redis'
+      B: '`agent-session` — because this captures the full work session including the decision'
+      C: '`milestone` — because adding caching is a significant achievement'
+      D: '`review` — because you reviewed caching options before choosing'
+      E: '`human-note` — because you want to record the Redis rationale'
+    correct: B
+    explanation: An `agent-session` entry captures the full work session — files modified, symbols touched, decisions made, and learnings. The Redis decision belongs in the entry's `decisions` array. Use `decision` type only when you're recording a standalone architectural decision without associated implementation work.
+  - id: q2
+    question: Where does a lore entry created on February 21, 2026 (the third entry that day) get stored?
+    choices:
+      A: '`.paradigm/lore/L-2026-02-21-003.yaml`'
+      B: '`.paradigm/lore/entries/2026-02-21/L-2026-02-21-003.yaml`'
+      C: '`.paradigm/lore/entries/L-2026-02-21-003.yaml`'
+      D: '`.paradigm/lore/2026/02/21/003.yaml`'
+      E: '`.paradigm/history/lore/2026-02-21-003.yaml`'
+    correct: B
+    explanation: 'Lore uses date-partitioned storage: `.paradigm/lore/entries/{YYYY-MM-DD}/L-{date}-{NNN}.yaml`. The date directory groups entries by day, and the sequence number (003) auto-increments within each day.'
+  - id: q3
+    question: You want to find all lore entries related to the payment system from the last month. Which MCP tool and approach is correct?
+    choices:
+      A: '`paradigm_lore_timeline` with a symbol filter'
+      B: '`paradigm_lore_search` with `symbol: ''#payment-service''` and `dateFrom` set to 30 days ago'
+      C: '`paradigm_search` with `query: ''payment''` and `type: ''lore''`'
+      D: Read all files in `.paradigm/lore/entries/` and grep for 'payment'
+      E: '`paradigm_lore_record` with a search query parameter'
+    correct: B
+    explanation: '`paradigm_lore_search` accepts filters including `symbol` (to match entries that touched a specific symbol) and `dateFrom`/`dateTo` for time ranges. `paradigm_lore_timeline` gives a high-level overview but doesn''t support detailed filtering. `paradigm_search` searches the symbol index, not lore entries.'
+  - id: q4
+    question: An agent modified 2 source files and did not record a lore entry. What happens at session end?
+    choices:
+      A: The stop hook blocks the session — all modifications require lore entries
+      B: Nothing — the 2-file threshold is below the recording trigger
+      C: A warning is issued but the session completes normally
+      D: The system auto-generates a lore entry from the git diff
+      E: The post-write hook retroactively creates a minimal entry
+    correct: B
+    explanation: The lore recording threshold is 3+ modified source files. With only 2 files modified, the session is not considered significant enough to require a lore entry. The stop hook only enforces lore recording when 3 or more source files were modified.
+  - id: q5
+    question: 'A team lead reviews a lore entry and gives it completeness: 3, quality: 5. What does this tell you?'
+    choices:
+      A: The entry is high quality but missing some information about what was done
+      B: The entry is poorly written but covers everything
+      C: The review scores are contradictory and invalid
+      D: The entry should be deleted and re-recorded
+      E: Both scores must be the same for a valid review
+    correct: A
+    explanation: Completeness and quality are independent scores. A completeness of 3 means the entry is missing some details (perhaps decisions weren't documented or files weren't fully listed). A quality of 5 means what IS there is excellent — well-written, accurate, and useful. The review suggests the entry should be enriched with more detail while preserving its good writing.

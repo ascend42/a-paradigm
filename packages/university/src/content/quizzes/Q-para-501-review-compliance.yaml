@@ -1,0 +1,36 @@
+id: Q-para-501-review-compliance
+title: 'PARA 501: Advanced Systems — Automated Review Pipeline & Compliance Checking'
+description: 'Quiz for lesson: Automated Review Pipeline & Compliance Checking'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: Q-501-RC-001
+    question: paradigm review --ci finds 2 blocking and 3 improvement findings. What's the exit code?
+    correct: 1
+    explanation: In CI mode, any blocking findings cause exit code 1. Improvements and notes do not affect the exit code.
+  - id: Q-501-RC-002
+    question: 'A project has no features: section in config.yaml. How many MCP tools are loaded?'
+    correct: 2
+    explanation: No features config + generous auto-detection = all tools loaded, matching pre-4.0 behavior for backward compat.
+  - id: Q-501-RC-003
+    question: 'You call paradigm_search with response_format: ''concise''. What fields are returned?'
+    correct: 1
+    explanation: Concise mode strips results to { symbol, type } per entry and removes fuzzyMatched, fuzzyNote, suggestions, workspace data.
+  - id: Q-501-RC-004
+    question: An agent needs the graph generation tool but it's in the advanced tier. What does it do?
+    correct: 1
+    explanation: paradigm_tool_activate enables advanced-tier modules for the current session. The tools become available immediately.
+  - id: Q-501-RC-005
+    question: What's the relationship between paradigm review Stage 1 and paradigm_pm_postflight?
+    correct: 2
+    explanation: Both use compliance-checker.ts for shared compliance logic — purpose coverage, portal gates, aspect anchors, and broken refs.

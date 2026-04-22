@@ -1,16 +1,19 @@
 /**
- * University status command - Content overview and completion
+ * University status command - Content overview and completion.
+ * v6.0: honors selectors; reports which pack the status reflects.
  */
 
 import chalk from 'chalk';
 import { loadUniversityIndex, loadDiplomas } from '../../core/university/index.js';
+import { resolvePackContext, type SelectorOptions } from './selectors.js';
 
-interface StatusOptions {
+interface StatusOptions extends SelectorOptions {
   json?: boolean;
 }
 
 export async function universityStatusCommand(options: StatusOptions): Promise<void> {
   const rootDir = process.cwd();
+  const ctx = resolvePackContext(rootDir, options);
   const index = loadUniversityIndex(rootDir);
 
   if (!index || index.totalContent === 0) {
@@ -37,11 +40,18 @@ export async function universityStatusCommand(options: StatusOptions): Promise<v
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ totalContent: index.totalContent, typeCounts, difficultyCounts, tagCounts, diplomaCount: diplomas.length }, null, 2));
+    console.log(JSON.stringify({
+      pack: ctx.subPackId ?? ctx.packId,
+      totalContent: index.totalContent,
+      typeCounts,
+      difficultyCounts,
+      tagCounts,
+      diplomaCount: diplomas.length,
+    }, null, 2));
     return;
   }
 
-  console.log(chalk.blue('\n  University Status\n'));
+  console.log(chalk.blue(`\n  University Status — pack: ${ctx.subPackId ?? ctx.packId}\n`));
 
   console.log(chalk.white(`  Total content: ${index.totalContent}`));
   for (const [type, count] of Object.entries(typeCounts).sort()) {

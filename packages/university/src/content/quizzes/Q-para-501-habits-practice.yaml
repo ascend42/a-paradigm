@@ -1,0 +1,56 @@
+id: Q-para-501-habits-practice
+title: 'PARA 501: Advanced Systems — Habits & Practice'
+description: 'Quiz for lesson: Habits & Practice'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: A project wants the `ripple-before-modify` habit to block session completion instead of just advising. How should they configure this?
+    choices:
+      A: 'Delete the seed habit and create a new one with `severity: block`'
+      B: 'Add an override in `.paradigm/habits.yaml` setting `severity: block` for `ripple-before-modify`'
+      C: Edit the seed-habits.json file directly in node_modules
+      D: Create a global override in `~/.paradigm/habits.yaml` — project-level overrides cannot change severity
+      E: Set `PARADIGM_HABIT_SEVERITY=block` environment variable
+    correct: B
+    explanation: Project-level overrides in `.paradigm/habits.yaml` can change any field of a seed habit, including severity. The three-layer merge means project settings override global settings, which override seed defaults. You never edit seed habits directly.
+  - id: q2
+    question: 'An agent''s practice profile shows: discovery compliance 95%, verification 40%, testing 30%. The agent frequently skips `verify-before-done` and `test-new-components`. What does this pattern reveal?'
+    choices:
+      A: The agent is good at exploring but poor at following through — it rushes to finish without validating
+      B: The discovery habits are too easy and should be made harder
+      C: The agent needs more seed habits in the testing category
+      D: This is a healthy pattern — discovery is the most important category
+      E: The verification and testing habits should be disabled since the agent skips them
+    correct: A
+    explanation: High discovery compliance with low verification and testing shows an agent that does good pre-work but doesn't follow through with validation. This is the 'explore well, ship hastily' antipattern. The fix is to upgrade verification and testing habits to `warn` or `block` severity, not to disable them.
+  - id: q3
+    question: The `record-lore-for-significant` habit fires on which trigger and at what threshold?
+    choices:
+      A: '`preflight` — checks if lore was recorded in the previous session'
+      B: '`on-stop` — checks if lore was recorded when 3+ source files were modified'
+      C: '`postflight` — always checks for lore regardless of file count'
+      D: '`on-commit` — requires lore for every commit'
+      E: '`on-stop` — checks if lore was recorded when any files were modified'
+    correct: B
+    explanation: The `record-lore-for-significant` habit triggers `on-stop` (before session end) and uses the `lore-recorded` check type, which fires when 3 or more source files were modified. This threshold captures significant sessions while ignoring trivial edits.
+  - id: q4
+    question: Practice profiles show that skipping `wisdom-before-implement` correlates with a 3x incident rate. What action should the team take?
+    choices:
+      A: Disable the habit since it is not preventing incidents anyway
+      B: Upgrade its severity from `advisory` to `warn` or `block` based on the evidence
+      C: Add more discovery habits to compensate
+      D: The correlation is coincidental — ignore it
+      E: Move the habit from `preflight` to `on-stop` trigger
+    correct: B
+    explanation: Incident correlations provide concrete evidence for severity decisions. A 3x incident rate when skipping wisdom checks is strong evidence that the check prevents real problems. Upgrading to `warn` makes it visible; upgrading to `block` enforces it. This is the feedback loop in action — practice data drives policy changes.

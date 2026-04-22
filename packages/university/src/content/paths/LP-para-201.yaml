@@ -1,0 +1,69 @@
+id: LP-para-201
+title: 'PARA 201: Architecture'
+description: Deepen your Paradigm expertise with advanced patterns for flows, gates, aspects, disciplines, naming conventions, and architectural design. Learn to build complete features end-to-end using the full symbol system.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+steps:
+  - content: N-para-201-flows-deep-dive
+    required: true
+  - content: Q-para-201-flows-deep-dive
+    required: true
+    passRequired: true
+  - content: N-para-201-gates-deep-dive
+    required: true
+  - content: Q-para-201-gates-deep-dive
+    required: true
+    passRequired: true
+  - content: N-para-201-aspects-and-anchors
+    required: true
+  - content: Q-para-201-aspects-and-anchors
+    required: true
+    passRequired: true
+  - content: N-para-201-aspect-graph
+    required: true
+  - content: Q-para-201-aspect-graph
+    required: true
+    passRequired: true
+  - content: N-para-201-portal-protocol
+    required: true
+  - content: Q-para-201-portal-protocol
+    required: true
+    passRequired: true
+  - content: N-para-201-disciplines
+    required: true
+  - content: Q-para-201-disciplines
+    required: true
+    passRequired: true
+  - content: N-para-201-symbol-naming
+    required: true
+  - content: Q-para-201-symbol-naming
+    required: true
+    passRequired: true
+  - content: N-para-201-component-patterns
+    required: true
+  - content: Q-para-201-component-patterns
+    required: true
+    passRequired: true
+  - content: N-para-201-signal-patterns
+    required: true
+  - content: Q-para-201-signal-patterns
+    required: true
+    passRequired: true
+  - content: N-para-201-cross-cutting-concerns
+    required: true
+  - content: Q-para-201-cross-cutting-concerns
+    required: true
+    passRequired: true
+  - content: N-para-201-architecture-review
+    required: true
+  - content: Q-para-201-architecture-review
+    required: true
+    passRequired: true

@@ -1,0 +1,66 @@
+id: Q-para-501-symphony-networking
+title: 'PARA 501: Advanced Systems — Symphony Networking: Cross-Machine Relay'
+description: 'Quiz for lesson: Symphony Networking: Cross-Machine Relay'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: net-q1
+    question: Developer A runs `paradigm symphony serve` and sees pairing code 472831. Developer B runs `paradigm symphony join --remote 192.168.1.42:3939`. What happens next?
+    choices:
+      A: Developer B's agents automatically appear in A's inbox
+      B: Developer B is prompted to enter the 6-digit pairing code from A's terminal
+      C: The connection fails because Developer B didn't specify the --public flag
+      D: Developer B must also run `paradigm symphony serve` to create a peer-to-peer link
+      E: Developer B receives A's full agent list immediately without authentication
+    correct: B
+    explanation: 'When connecting via --remote without an embedded code (no # in the address), the user is prompted to enter the 6-digit pairing code displayed on the hub. The code is used to compute an HMAC proof for authentication. Only after successful verification does the agent list exchange occur.'
+  - id: net-q2
+    question: A spoke machine loses its network connection to the hub. What happens?
+    choices:
+      A: All local messages are deleted and the agent must re-pair from scratch
+      B: The spoke immediately attempts to reconnect using a fixed 5-second interval
+      C: The spoke schedules reconnect with exponential backoff (1s → 2s → 4s → ... → 30s max)
+      D: The spoke shuts down and the user must manually restart `paradigm symphony join`
+      E: The hub removes the spoke's peer record from peers.json
+    correct: C
+    explanation: 'The client-mode relay uses exponential backoff for auto-reconnect: starting at 1 second and doubling each attempt up to a maximum of 30 seconds. On successful reconnect, the delay resets to 1 second. Local messages are unaffected — they remain in the JSONL files.'
+  - id: net-q3
+    question: An attacker tries to brute-force the pairing code. After entering 3 wrong codes from IP 10.0.0.5, what happens on the next attempt?
+    choices:
+      A: The pairing code is rotated and a new code must be obtained from the hub
+      B: The hub blocks all incoming connections permanently until restarted
+      C: The connection is accepted but messages are quarantined for review
+      D: The hub sends `auth_fail` with 'Too many failed attempts' and enforces a 60-second cooldown for that IP
+      E: The hub disconnects but allows immediate retry with the correct code
+    correct: D
+    explanation: After 3 failed auth attempts from the same IP address, the relay enforces a 60-second cooldown. During this period, any connection from that IP receives an immediate auth_fail with the message 'Too many failed attempts — try again later' and is disconnected.
+  - id: net-q4
+    question: How does the relay prevent duplicate message delivery when two peers forward the same message?
+    choices:
+      A: Messages include a TTL counter that decrements on each hop
+      B: A bounded Set of seen message IDs (max 10,000) skips already-processed messages
+      C: Each peer maintains a sequence number and only accepts higher-numbered messages
+      D: The hub assigns unique relay IDs to prevent duplicates
+      E: Messages are only forwarded once per minute, allowing time for dedup
+    correct: B
+    explanation: The relay maintains a bounded Set<string> of message IDs it has already processed. When a message arrives, if its ID is in the set, the relay sends an ack but skips delivery. When the set exceeds 10,000 entries, the oldest half is evicted. This prevents both echo (receiving your own message back) and multi-path duplicates.
+  - id: net-q5
+    question: Developer B wants to connect to Developer A's machine over the internet. Developer A runs `paradigm symphony serve --public`. What is the correct command for Developer B?
+    choices:
+      A: '`paradigm symphony join --remote devA.example.com` and enter the code when prompted'
+      B: '`paradigm symphony join --remote 73.162.44.103:3939#847291` with the embedded code'
+      C: '`paradigm symphony serve --connect 73.162.44.103:3939`'
+      D: '`paradigm symphony peers add 73.162.44.103:3939 --code 847291`'
+      E: '`paradigm symphony join --public 73.162.44.103`'
+    correct: B
+    explanation: 'Internet direct connect uses the connection string format: address:port#code. The --public flag on the hub displays this connection string. The spoke parses the embedded code from after the # character and uses it automatically — no interactive prompt needed. Port 3939 must be reachable from the internet (port forward, VPN, or SSH tunnel).'

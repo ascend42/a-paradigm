@@ -1,0 +1,46 @@
+id: Q-para-301-sentinel-observability
+title: 'PARA 301: Operations — Sentinel & Observability'
+description: 'Quiz for lesson: Sentinel & Observability'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What distinguishes Paradigm Sentinel from a generic error logging system?
+    choices:
+      A: It only logs errors from the Paradigm CLI
+      B: It maps runtime errors to Paradigm symbols and matches them against known failure patterns
+      C: It replaces console.error entirely
+      D: It only works in development environments
+      E: It sends all errors to Anthropic for analysis
+    correct: B
+    explanation: 'Sentinel''s key differentiator is symbol-aware error tracking. It maps errors back to #components, $flows, ^gates, and !signals, and matches incidents against defined failure patterns to suggest resolutions.'
+  - id: q2
+    question: Which of the following is NOT a valid Sentinel resolution strategy?
+    choices:
+      A: rollback
+      B: config-change
+      C: auto-deploy
+      D: investigate
+      E: scale-up
+    correct: C
+    explanation: 'Sentinel supports 10 resolution strategies: retry, fallback, fix-data, fix-code, rollback, config-change, scale-up, investigate, ignore, and escalate. ''auto-deploy'' is not a strategy — Sentinel suggests actions for humans to take, not automated deployments.'
+  - id: q3
+    question: 'You want to see all open incidents affecting #payment-service in production. Which tool and parameters do you use?'
+    choices:
+      A: paradigm_sentinel_show with incidentId
+      B: paradigm_sentinel_triage with symbol=#payment-service, status=open, environment=production
+      C: paradigm_sentinel_stats with symbol=#payment-service
+      D: paradigm_sentinel_patterns with symbol=#payment-service
+      E: paradigm_search with query='payment errors'
+    correct: B
+    explanation: 'paradigm_sentinel_triage is the filtering tool for viewing incidents. You can combine symbol, status, and environment filters to get exactly the incidents you need -- in this case, open incidents for #payment-service in production.'

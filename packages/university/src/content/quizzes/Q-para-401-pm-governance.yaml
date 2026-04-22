@@ -1,0 +1,66 @@
+id: Q-para-401-pm-governance
+title: 'PARA 401: Orchestration — PM Governance'
+description: 'Quiz for lesson: PM Governance'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: An agent implements a new POST /api/refunds endpoint but does not add it to portal.yaml. What does the PM post-flight check report?
+    choices:
+      A: Nothing -- portal.yaml is optional
+      B: A suggestion to consider adding the endpoint
+      C: An error or warning for portal non-compliance -- the endpoint is unprotected
+      D: It automatically adds the endpoint to portal.yaml
+      E: It deletes the endpoint from the code
+    correct: C
+    explanation: The PM post-flight checks portal compliance by verifying all new endpoints are listed in portal.yaml with appropriate gates. An endpoint missing required gate checks is flagged as a compliance issue. The PM reports but does not auto-fix.
+  - id: q2
+    question: What is the purpose of the PM's pre-flight ripple analysis?
+    choices:
+      A: To automatically cancel dangerous changes
+      B: To map the blast radius and flag fragile dependents before agents start implementing
+      C: To generate unit tests for affected symbols
+      D: To choose which AI model to use
+      E: To update the .purpose files automatically
+    correct: B
+    explanation: The pre-flight ripple analysis maps all direct and indirect dependencies before implementation begins. If fragile symbols are in the blast radius, agents are warned and can take extra precautions. This prevents breaking changes by surfacing risk upfront.
+  - id: q3
+    question: 'A PM post-flight check returns: 2 errors, 1 warning, 3 suggestions. What should you address before committing?'
+    choices:
+      A: Only errors -- they are mandatory
+      B: Errors and warnings -- suggestions are optional
+      C: All six items must be resolved
+      D: None -- post-flight checks are informational only
+      E: Only suggestions -- errors and warnings auto-resolve
+    correct: B
+    explanation: Errors must be fixed before proceeding -- they represent compliance failures. Warnings should be fixed -- they represent best practices that are being violated. Suggestions are optional improvements that represent good practice but are not required.
+  - id: q4
+    question: Which flag enables PM governance on CLI orchestration?
+    choices:
+      A: '--validate'
+      B: '--strict'
+      C: '--pm'
+      D: '--governance'
+      E: '--enforce'
+    correct: C
+    explanation: The --pm flag on paradigm team orchestrate enables the PM governance layer, adding pre-flight checks before the first agent and post-flight checks after the last agent.
+  - id: q5
+    question: Why is PM governance especially valuable for teams working with AI agents?
+    choices:
+      A: AI agents cannot write code without PM approval
+      B: The PM layer replaces the need for human code review
+      C: AI agents may not have deep project familiarity and might skip metadata updates, portal compliance, or wisdom capture
+      D: PM governance makes AI agents run faster
+      E: It is required by Anthropic's terms of service
+    correct: C
+    explanation: AI agents, especially in their first interactions with a project, may not know all the conventions, required metadata updates, or portal requirements. The PM layer acts as a safety net ensuring that Paradigm discipline is maintained regardless of the implementer's familiarity level.

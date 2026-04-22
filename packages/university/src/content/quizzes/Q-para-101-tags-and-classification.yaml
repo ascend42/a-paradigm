@@ -1,0 +1,56 @@
+id: Q-para-101-tags-and-classification
+title: 'PARA 101: Foundations — Tags & Classification'
+description: 'Quiz for lesson: Tags & Classification'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: How should a Stripe API wrapper be documented in Paradigm?
+    choices:
+      A: $stripe-service as a flow with Stripe steps
+      B: '#stripe-service with tags: [integration, stripe]'
+      C: ^stripe-service as a gate that checks Stripe credentials
+      D: '!stripe-service as a signal emitted on payment'
+      E: ~stripe-service as an aspect that applies Stripe logic across components
+    correct: B
+    explanation: 'A Stripe API wrapper is a documented code unit, so it is a # component. The integration role is captured by tags: #stripe-service with tags: [integration, stripe]. Tags provide searchable classification without requiring different symbol types.'
+  - id: q2
+    question: Where are project-specific tags defined?
+    choices:
+      A: In each .purpose file's tags section
+      B: In portal.yaml alongside gate definitions
+      C: In .paradigm/tags.yaml under the 'project' section
+      D: In package.json under the 'paradigm' key
+      E: They are not defined anywhere — any string can be a tag
+    correct: C
+    explanation: 'Tags are defined in .paradigm/tags.yaml. The file has three sections: core (universal), project (team-specific), and suggested (AI-proposed). Project-specific tags go in the ''project'' section.'
+  - id: q3
+    question: An AI agent notices that seven components in the codebase handle webhook processing. What should it do?
+    choices:
+      A: Create a new ~webhook aspect with anchors
+      B: Rename all seven components to start with 'webhook-'
+      C: Use paradigm_tags_suggest to propose a 'webhook-handler' tag for human review
+      D: Add a $webhook-flow connecting all seven components
+      E: Ignore the pattern — tags should only be created by humans
+    correct: C
+    explanation: AI agents can propose new tags using paradigm_tags_suggest. The proposed tag goes into the 'suggested' section of tags.yaml, where a human reviews it and decides whether to promote it to the 'project' section.
+  - id: q4
+    question: How many tags should a typical symbol have?
+    choices:
+      A: Exactly one
+      B: Two to four
+      C: At least five for maximum discoverability
+      D: None — tags are optional and rarely used
+      E: As many as possible to cover all search terms
+    correct: B
+    explanation: The guideline is 2-4 tags per symbol. One tag is often too vague to be useful, while five or more creates noise and dilutes searchability. Tags should be chosen for discoverability — the terms you would search for to find the component.

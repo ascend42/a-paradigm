@@ -1,0 +1,35 @@
+# Paradigm University — first-party content pack manifest (v6.0).
+#
+# Discovered by:
+#   1. node_modules/@a-company/university/pack.yaml (first-party source)
+#   2. repo-local reference when the monorepo is the active workspace
+#
+# Identity is stable across version bumps. Bump `version` for content or
+# theme changes; bump `schema_version` only when the manifest shape itself
+# changes (breaking for consumers).
+
+id: paradigm
+name: Paradigm University
+version: 6.0.0
+schema_version: "1"
+
+tenant_kind: first-party
+description: Official Paradigm learning content — PARA 001-701 courses + PLSAT certification.
+
+authors:
+  - Paradigm team
+license: MIT
+origin_hint: authored
+
+content_types:
+  - note
+  - quiz
+  - path
+disciplines:
+  - engineering
+
+branding:
+  tagline: Learn Paradigm
+  institution: a-company
+theme:
+  primary: "#6366f1"

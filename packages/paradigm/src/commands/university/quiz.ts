@@ -1,11 +1,13 @@
 /**
- * University quiz command - Interactive terminal quiz
+ * University quiz command - Interactive terminal quiz.
+ * v6.0: accepts bare or <pack-id>:<entry-id> form on id; honors selectors.
  */
 
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { loadQuiz, saveDiploma } from '../../core/university/index.js';
 import type { Diploma } from '../../core/university/types.js';
+import { resolvePackContext, type SelectorOptions } from './selectors.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
 
@@ -22,9 +24,26 @@ function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise(resolve => rl.question(question, resolve));
 }
 
-export async function universityQuizCommand(id: string): Promise<void> {
+type QuizOptions = SelectorOptions;
+
+function splitAddress(address: string): { packId?: string; entryId: string } {
+  const colonIdx = address.indexOf(':');
+  if (colonIdx === -1) return { entryId: address };
+  return {
+    packId: address.slice(0, colonIdx),
+    entryId: address.slice(colonIdx + 1),
+  };
+}
+
+export async function universityQuizCommand(id: string, options: QuizOptions = {}): Promise<void> {
   const rootDir = process.cwd();
-  const quiz = loadQuiz(rootDir, id);
+  const { packId: addressPackId, entryId } = splitAddress(id);
+
+  const selectorOpts: SelectorOptions = { ...options };
+  if (addressPackId) selectorOpts.pack = addressPackId;
+  resolvePackContext(rootDir, selectorOpts);
+
+  const quiz = loadQuiz(rootDir, entryId);
 
   if (!quiz) {
     console.error(chalk.red(`\n  Quiz "${id}" not found\n`));

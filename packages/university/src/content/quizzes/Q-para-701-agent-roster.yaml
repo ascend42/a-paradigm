@@ -1,0 +1,66 @@
+id: Q-para-701-agent-roster
+title: 'PARA 701: Agent Mastery — Lesson 1: The Agent Roster'
+description: 'Quiz for lesson: Lesson 1: The Agent Roster'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A new SaaS web app project needs to build a payment flow with Stripe integration. The task touches `^authenticated`, `$checkout-flow`, and `#payment-service`. Which agents would the orchestrator most likely include, and why?
+    choices:
+      A: Only the builder — it is a coding task
+      B: The architect (plans the flow), builder (implements), security (gates on ^authenticated), reviewer (quality check), and documentor (.purpose updates) — because their attention patterns match the symbols involved
+      C: All 54 agents — payments are critical and need full coverage
+      D: The designer and copywriter — it is a user-facing payment page
+      E: The devops agent — Stripe is infrastructure
+    correct: B
+    explanation: The orchestrator matches task symbols against agent attention patterns. The architect's `$*` pattern matches `$checkout-flow`. Security's `^*` pattern matches `^authenticated`. The builder's path patterns match source files. The reviewer watches all symbol types. The documentor has the lowest threshold (0.3) and matches symbol patterns. The designer and copywriter might be included if UI work is required, but the core selection is driven by symbol matching against attention patterns.
+  - id: q2
+    question: Why does the security agent have an attention threshold of 0.45 while the builder has 0.75?
+    choices:
+      A: The security agent is more important than the builder
+      B: The builder writes more code and needs to be more selective about when it speaks up
+      C: The cost of missing a security issue (low threshold = more alerts) far outweighs the cost of a false alarm, while the builder should only engage when directly relevant to implementation
+      D: Lower thresholds mean the agent runs faster
+      E: The thresholds are arbitrary defaults with no design rationale
+    correct: C
+    explanation: Threshold values encode the asymmetry of costs. A security agent that stays quiet when a gate is missing creates a vulnerability — the cost of a false negative is high. So it uses a low threshold (0.45) to speak up early and often. The builder speaking up on tasks not directly relevant to implementation just adds noise. The cost of a builder false positive is wasted context tokens. So it uses a higher threshold (0.75) to stay focused.
+  - id: q3
+    question: What is the purpose of the Meta tier agents (forge, trainer, documentor, mediator)?
+    choices:
+      A: They manage the codebase directly, writing and reviewing source files
+      B: They manage other agents — designing new agents, training existing ones, maintaining Paradigm files, and resolving agent disagreements
+      C: They are administrative agents that handle user authentication
+      D: They provide backup for the builder when it is unavailable
+      E: They are deprecated and no longer used in the roster
+    correct: B
+    explanation: Meta agents operate on the agent system itself rather than on the codebase directly. Loid (forge) designs and builds new agents by understanding the full .agent profile schema. Sensei (trainer) reviews agent performance and curates notebook entries to improve them. The documentor maintains .purpose and portal.yaml files after other agents finish. Bridge (mediator) resolves disagreements between agents. They are the agents that make other agents better.
+  - id: q4
+    question: A developer is working on a game project built with Godot. Which of these agents would likely NOT be in the project roster?
+    choices:
+      A: The gamedev agent (Pixel)
+      B: The 3d agent (Neon)
+      C: The audio agent (Echo)
+      D: The SEO agent (Beacon)
+      E: The builder agent
+    correct: D
+    explanation: The SEO agent (Beacon) specializes in search engine optimization — concepts like meta tags, crawlability, structured data, and organic traffic. A Godot game project has no web pages to optimize for search engines. The game project type suggests a roster including architect, builder, reviewer, tester, documentor, gamedev (Pixel), 3d (Neon), audio (Echo), designer, performance, and debugger. SEO is irrelevant to this domain.
+  - id: q5
+    question: What distinguishes Jinx (advocate) from the reviewer in the Reviewers tier?
+    choices:
+      A: Jinx writes code and the reviewer does not
+      B: Jinx is a devil's advocate who stress-tests assumptions and challenges approaches, while the reviewer checks code correctness, quality, and Paradigm compliance
+      C: Jinx is the reviewer's backup — they do the same work
+      D: Jinx only works on security-related code
+      E: Jinx has a higher attention threshold than the reviewer
+    correct: B
+    explanation: 'Jinx and the reviewer serve fundamentally different purposes. The reviewer checks code quality: correctness, naming conventions, .purpose coverage, aspect anchors, test coverage. Jinx''s job is to argue against the current approach entirely — she stress-tests assumptions, finds edge cases nobody considered, and asks uncomfortable questions. Her personality is confrontational and aggressive, while the reviewer is deliberate and conservative. Jinx attacks the design; the reviewer evaluates the implementation.'

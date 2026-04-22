@@ -1,0 +1,66 @@
+id: Q-para-501-hook-enforcement
+title: 'PARA 501: Advanced Systems — Hook Enforcement & Automation'
+description: 'Quiz for lesson: Hook Enforcement & Automation'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: You modified 4 source files and updated one .purpose file but did not record a lore entry. The stop hook runs. What happens?
+    choices:
+      A: It passes — the .purpose update satisfies all requirements
+      B: 'It blocks on two violations: .purpose freshness for the other 3 files, and missing lore entry for a 4-file session'
+      C: It blocks only on the missing lore entry — 4 files exceeds the 3-file threshold
+      D: It passes — .purpose coverage is sufficient, lore is optional
+      E: It blocks only on .purpose freshness — the other 3 files need coverage
+    correct: C
+    explanation: The stop hook checks multiple conditions independently. The '.purpose freshness' check passes because you did update a .purpose file (the '2+ source files with 0 paradigm updates' check fails only when zero paradigm files were touched). However, 4 modified source files exceeds the 3-file lore recording threshold, so the missing lore entry causes a block. Whether the other files need .purpose coverage depends on whether they have covering .purpose files in ancestor directories.
+  - id: q2
+    question: The post-write hook just fired after you edited `src/services/payment.ts`. Which of these files would it skip tracking?
+    choices:
+      A: '`src/services/payment.ts` — it tracks this file'
+      B: '`.paradigm/config.yaml` — it skips paradigm directory files'
+      C: '`src/middleware/auth.ts` — it would track this too'
+      D: '`package.json` — it skips .json files'
+      E: Both B and D are skipped
+    correct: E
+    explanation: The post-write hook skips non-source files (.json, .yaml, .md, .lock, .env, .gitignore) and paradigm directories (.paradigm/, .claude/, .cursor/). Both `.paradigm/config.yaml` (paradigm directory) and `package.json` (.json extension) are skipped. Only actual source code files like .ts, .js, .rs, .py are tracked in .pending-review.
+  - id: q3
+    question: What does the pre-commit hook do, and can it block a commit?
+    choices:
+      A: Runs all habit checks and blocks if any severity=block habits are violated
+      B: Validates portal.yaml and blocks if gates are undefined
+      C: Rebuilds the symbol index and stages the updated files — never blocks
+      D: Checks .purpose freshness and blocks if files are stale
+      E: Records a lore entry for the commit — never blocks
+    correct: C
+    explanation: 'The pre-commit hook has a single job: rebuild the symbol index (`paradigm index --quiet`) and stage the rebuilt files (scan-index.json, navigator.yaml, flow-index.json) so they are included in the commit. It always exits 0 — it never blocks. This ensures every commit has a fresh index without manual intervention.'
+  - id: q4
+    question: The stop hook detects that `src/routes/api.ts` contains Express `.post()` calls but `portal.yaml` does not exist. What happens?
+    choices:
+      A: Advisory warning — portal.yaml is recommended but not required
+      B: The hook blocks — route patterns detected without portal.yaml is a violation
+      C: The hook skips this check — portal.yaml is only required for projects that already have one
+      D: The hook creates a minimal portal.yaml automatically
+      E: The hook blocks only if the route handles user data
+    correct: B
+    explanation: The stop hook scans modified files for route declaration patterns (`.get()`, `.post()`, etc.). If route patterns are found and portal.yaml was neither present in the project nor modified during the session, the hook blocks. This enforces the rule that all protected routes must be declared in portal.yaml.
+  - id: q5
+    question: 'You are blocked by the stop hook. The violations list shows: ''stale aspect anchor: src/old/audit.ts no longer exists''. How do you fix this?'
+    choices:
+      A: Delete the aspect from the .purpose file — aspects with stale anchors are invalid
+      B: Create an empty file at `src/old/audit.ts` to satisfy the anchor check
+      C: Update the anchor path in the .purpose file to point to the new location of the audit code
+      D: Run `paradigm_aspect_check` — it auto-fixes stale anchors
+      E: Ignore it — stale anchors are advisory only
+    correct: C
+    explanation: Aspects require valid code anchors. If the file was moved or renamed, update the anchor path in the .purpose file to point to the new location. If the code was deleted entirely, you may need to remove the aspect or create new enforcement code. Creating an empty file (B) is a hack that defeats the purpose. `paradigm_aspect_check` validates but doesn't auto-fix.

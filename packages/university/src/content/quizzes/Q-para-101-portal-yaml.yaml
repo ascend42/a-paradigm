@@ -1,0 +1,56 @@
+id: Q-para-101-portal-yaml
+title: 'PARA 101: Foundations — Portal.yaml'
+description: 'Quiz for lesson: Portal.yaml'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: You are adding a new action that requires preconditions — only authenticated team admins should be able to invite users. What is the correct gate workflow?
+    choices:
+      A: Write the handler code first, then add authorization if there is time
+      B: Identify the required gates, add them to portal.yaml, implement the checks, test that failing a gate blocks the action
+      C: Add a console.log that prints the user's role for manual verification
+      D: Create a new .purpose file with a ^gate definition — portal.yaml is optional
+      E: Add the route to navigator.yaml so AI agents know about it
+    correct: B
+    explanation: 'The Paradigm gate-first workflow is: (1) identify the required gates (paradigm_gates_for_route can suggest them for web routes), (2) define the gates in portal.yaml, (3) implement the gate checks in code, (4) test that failing a gate blocks the action. Conditions are defined before implementation.'
+  - id: q2
+    question: What does the `requires` field on a gate definition do?
+    choices:
+      A: Lists npm packages the gate depends on
+      B: Specifies other gates that must pass before this gate is checked
+      C: Defines the HTTP status code returned on failure
+      D: Lists the source files that implement the gate
+      E: Specifies environment variables needed for the check
+    correct: B
+    explanation: The requires field creates a gate chain. For example, ^project-admin requires [^authenticated] — the authentication check must pass before the admin role check is evaluated.
+  - id: q3
+    question: When is portal.yaml NOT needed?
+    choices:
+      A: When the project has condition checks that must pass before actions proceed
+      B: When the project has role-based access control
+      C: When the application has no gates — no conditions need to be checked before any action
+      D: When the project only has GET endpoints
+      E: When the project uses a third-party auth service
+    correct: C
+    explanation: portal.yaml is needed whenever your application has gates — conditions that must be checked before actions proceed. If no action in the system requires a precondition check (authentication, feature flags, data readiness, etc.), then portal.yaml is not needed.
+  - id: q4
+    question: What is the `effects` field on a gate definition?
+    choices:
+      A: The HTTP response body returned when the gate passes
+      B: Side effects triggered when the gate is successfully passed
+      C: The list of routes protected by this gate
+      D: The reward given to the developer who implemented the gate
+      E: A list of test cases for the gate
+    correct: B
+    explanation: 'Effects are side effects that trigger when a gate passes. For example, passing ^first-login might award an onboarding badge. If there are no side effects, use an empty array: effects: [].'

@@ -1,0 +1,56 @@
+id: Q-para-201-portal-protocol
+title: 'PARA 201: Architecture — The Portal Protocol'
+description: 'Quiz for lesson: The Portal Protocol'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: You need to add `DELETE /api/teams/:id`. What is the FIRST step in the Portal Protocol?
+    choices:
+      A: Write the delete handler and add authentication middleware
+      B: Add the route to portal.yaml with [^authenticated]
+      C: Call paradigm_gates_for_route to get gate suggestions
+      D: Write a test for the 403 response
+      E: Create a ^team-admin gate in middleware
+    correct: C
+    explanation: The Portal Protocol starts with asking Paradigm. Call paradigm_gates_for_route with the route and method to get suggestions based on existing patterns. This ensures you consider all necessary gates before implementation.
+  - id: q2
+    question: 'Your portal.yaml specifies `"PUT /api/posts/:id": [^authenticated, ^post-author]`. Your middleware only checks ^authenticated. What is the security impact?'
+    choices:
+      A: None — portal.yaml automatically enforces all listed gates
+      B: Any authenticated user can edit any post, because the ^post-author check is missing from the implementation
+      C: The route will return 500 because of the missing gate
+      D: Paradigm will block the request at the framework level
+      E: The post-author gate runs automatically via the requires field
+    correct: B
+    explanation: portal.yaml is a specification, not enforcement. If the middleware does not implement the ^post-author check, any authenticated user can edit any post. This is a security vulnerability caused by the implementation not matching the specification.
+  - id: q3
+    question: In a web API, which HTTP status code should a failed authentication gate return, versus a failed authorization gate?
+    choices:
+      A: Both return 403 Forbidden
+      B: Authentication returns 401 Unauthorized; authorization returns 403 Forbidden
+      C: Authentication returns 403 Forbidden; authorization returns 401 Unauthorized
+      D: Both return 401 Unauthorized
+      E: Authentication returns 400 Bad Request; authorization returns 403 Forbidden
+    correct: B
+    explanation: In the HTTP discipline, the standard distinguishes between authentication (who are you?) and authorization (are you allowed?). A failed auth gate (^authenticated) returns 401 Unauthorized. A failed role/ownership gate (^project-admin) returns 403 Forbidden. Note that this is the web API implementation — other disciplines express gate failure differently (a mobile app might show a login screen or disable a button; a CLI might exit with an error code).
+  - id: q4
+    question: Why does the Portal Protocol require defining gates BEFORE writing handler code?
+    choices:
+      A: Because Paradigm cannot parse handler code that already exists
+      B: Because it creates an auditable specification separate from implementation, preventing conditions as an afterthought
+      C: Because TypeScript requires gate types to be defined before use
+      D: Because AI agents refuse to write code without portal.yaml
+      E: Because gate middleware must be loaded before route handlers in the server stack
+    correct: B
+    explanation: The Portal Protocol's core principle is specification before implementation. By specifying gates in portal.yaml first, you create an auditable specification that is separate from (and checkable against) the implementation. This prevents the common pattern of building features first and bolting on checks later.

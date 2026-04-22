@@ -1,0 +1,66 @@
+id: Q-para-201-symbol-naming
+title: 'PARA 201: Architecture — Symbol Naming Conventions'
+description: 'Quiz for lesson: Symbol Naming Conventions'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: Which of these signal names follows Paradigm naming conventions?
+    choices:
+      A: '!processPayment'
+      B: '!payment-completed'
+      C: '!PaymentSignal'
+      D: '!creating-user'
+      E: '!payment_done'
+    correct: B
+    explanation: 'Signals use kebab-case and past-tense naming: !payment-completed. Option A uses camelCase and imperative mood. C uses PascalCase. D uses progressive tense. E uses underscores instead of hyphens.'
+  - id: q2
+    question: 'A flow that handles user registration from form submission to welcome email should be named:'
+    choices:
+      A: $doRegistration
+      B: $registerUser
+      C: $user-registration-flow
+      D: $REGISTRATION
+      E: $flow_register
+    correct: C
+    explanation: Flows use kebab-case with a noun-flow pattern. $user-registration-flow is descriptive and follows the convention. Imperative names (doRegistration, registerUser), ALL CAPS, and underscores all violate the naming rules.
+  - id: q3
+    question: What is wrong with the gate name `^check1`?
+    choices:
+      A: Nothing — it is valid kebab-case
+      B: Gates must start with a verb
+      C: The number 1 is not allowed in symbol names
+      D: It is non-descriptive — the name should describe what the gate verifies
+      E: Gates must end with '-gate'
+    correct: D
+    explanation: 'Gate names should describe what they verify: ^project-admin, ^email-verified, ^subscription-active. The name ^check1 tells you nothing about what condition is being checked. A developer or AI agent cannot infer the gate''s purpose from its name.'
+  - id: q4
+    question: A component wraps the Stripe API for payment processing. Its class is `StripePaymentClient`. What should its .purpose ID be?
+    choices:
+      A: '#StripePaymentClient'
+      B: '#stripe-payment-client'
+      C: '#stripe_payment_client'
+      D: '#stripePaymentClient'
+      E: '#STRIPE-CLIENT'
+    correct: B
+    explanation: 'All symbol IDs in .purpose files use kebab-case: #stripe-payment-client. The PascalCase class name (StripePaymentClient) is fine in code and descriptions, but the ID must be kebab-case.'
+  - id: q5
+    question: 'Which aspect name reads most naturally in the sentence: ''All financial services are ___''?'
+    choices:
+      A: ~doAudit
+      B: ~auditStuff
+      C: ~audit-required
+      D: ~auditService
+      E: ~the-audit-aspect
+    correct: C
+    explanation: 'Aspect names should read as adjectives or past-participles: ''All financial services are ~audit-required.'' Options A and B are informal/imperative, D sounds like a component name, and E is unnecessarily verbose.'

@@ -1,10 +1,12 @@
 /**
- * University add command - Create new university content
+ * University add command - Create new university content.
+ * v6.0: honors --pack / --project / --discipline selectors.
  */
 
 import chalk from 'chalk';
 import { saveNote, saveQuiz, rebuildUniversityIndex } from '../../core/university/index.js';
 import type { UniversityFrontmatter, UniversityQuiz, Difficulty } from '../../core/university/types.js';
+import { resolvePackContext, type SelectorOptions } from './selectors.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
 
@@ -17,7 +19,7 @@ function resolveAuthor(): string {
   }
 }
 
-interface AddOptions {
+interface AddOptions extends SelectorOptions {
   title?: string;
   body?: string;
   tags?: string;
@@ -28,6 +30,12 @@ interface AddOptions {
 
 export async function universityAddCommand(type: string, options: AddOptions): Promise<void> {
   const rootDir = process.cwd();
+  // Default to project pack when no selector set, matching spec §3.2.
+  const effectiveOptions: SelectorOptions = options.pack || options.project || options.discipline
+    ? options
+    : { ...options, project: true };
+  const ctx = resolvePackContext(rootDir, effectiveOptions);
+  void ctx;  // v5.39.0: resolution surfaces in display/error paths, storage still project-scoped
 
   if (!options.title) {
     console.error(chalk.red('\n  Error: --title is required\n'));

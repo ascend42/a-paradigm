@@ -1,0 +1,66 @@
+id: Q-para-701-symphony-visibility
+title: 'PARA 701: Agent Mastery — Lesson 8: Live Visibility via Symphony'
+description: 'Quiz for lesson: Lesson 8: Live Visibility via Symphony'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: An orchestration plan includes architect, security, builder, and documentor. The human watches the Conductor overlay. In what order do notes typically appear?
+    choices:
+      A: Alphabetically by agent name
+      B: Randomly — agents run in parallel with no ordering
+      C: 'Chronologically based on orchestration stages: architect plans first, builder implements, security reviews, documentor updates last — matching the staged execution order'
+      D: All notes appear simultaneously when orchestration completes
+      E: Fastest agent first, slowest last
+    correct: C
+    explanation: 'The orchestrator executes agents in staged dependency order: the architect plans first (stage 1), the builder implements based on the plan (stage 2), the security agent reviews the implementation (stage 3), and the documentor updates .purpose files last (final stage). Notes are posted chronologically as each stage completes, so the Conductor shows a natural progression of planning, implementation, review, and documentation.'
+  - id: q2
+    question: NoteRelay polls at 5-second intervals and SymphonyThreadWatcher at 3-second intervals. What is the worst-case latency from an agent posting a note to it appearing in the Conductor?
+    choices:
+      A: Exactly 5 seconds — NoteRelay is the bottleneck
+      B: Exactly 3 seconds — ThreadWatcher is the bottleneck
+      C: Up to ~8 seconds in the worst case (5s NoteRelay + 3s ThreadWatcher if both polls just missed the change)
+      D: Instant — filesystem events trigger immediate updates
+      E: 30 seconds — there is a buffer delay
+    correct: C
+    explanation: 'In the worst case, NoteRelay just polled (misses the new file by 1ms) and polls again in 5 seconds. Then SymphonyThreadWatcher just polled (misses the state update by 1ms) and polls again in 3 seconds. Total worst case: ~8 seconds. In practice, the two polls are offset and the average latency is 3-5 seconds. This is acceptable for human observation — you are watching orchestration progress, not debugging a real-time system.'
+  - id: q3
+    question: Why does the orchestrator use the `thr-orch-` prefix on thread names?
+    choices:
+      A: It is a naming convention with no functional purpose
+      B: It allows SymphonyThreadWatcher to distinguish orchestration threads from regular Symphony threads (team chat, notes) using a simple prefix filter
+      C: It enables encryption of orchestration data
+      D: It prevents other agents from reading the thread
+      E: It is required by the Symphony API
+    correct: B
+    explanation: SymphonyThreadWatcher filters threads by the `thr-orch-` prefix to separate orchestration threads from regular communication threads. Without this prefix, the Team view in Conductor would mix orchestration progress with team chat, personal notes, and other thread types. The prefix is a simple, reliable discrimination mechanism that avoids complex content parsing.
+  - id: q4
+    question: Why was polling chosen over filesystem watching (FSEvents) for the NoteRelay architecture?
+    choices:
+      A: Polling is faster than filesystem events
+      B: macOS does not support filesystem watching
+      C: FSEvents is brittle across sandboxed processes and does not work reliably when the MCP server writes files from a different process tree — polling a directory is simpler and more reliable
+      D: Filesystem watching requires root permissions
+      E: Polling uses less memory than filesystem watching
+    correct: C
+    explanation: The MCP server and the Conductor run as separate processes, potentially in different sandbox contexts. FSEvents (macOS filesystem watching) has known reliability issues when watching files written by a different process tree, especially across sandbox boundaries. Polling the `~/.paradigm/score/threads/` directory at a known interval is architecturally simpler, reliably cross-process, and introduces only 3-8 seconds of latency — an acceptable tradeoff for avoiding process-coupling complexity.
+  - id: q5
+    question: The security agent emits a finding note ('Found gate coverage gap on POST /api/payments') during orchestration. How does this note reach the TeamThreadView in Conductor?
+    choices:
+      A: The security agent sends the note directly to the Conductor via a WebSocket connection
+      B: The orchestrator posts the note to the thr-orch-{id} thread file in ~/.paradigm/score/threads/, NoteRelay detects the file change within 5 seconds, SymphonyThreadWatcher filters it as an orchestration thread within 3 seconds, and TeamThreadView renders it with the security agent's colored role badge
+      C: The note is stored in the event stream and Conductor reads events directly
+      D: The note is emailed to the developer and they manually check Conductor
+      E: The note is only visible after orchestration completes, not during execution
+    correct: B
+    explanation: 'The full pipeline is: (1) The orchestrator posts the security agent''s finding as a note in the `thr-orch-{id}` Symphony thread file. (2) NoteRelay polls `~/.paradigm/score/threads/` every 5 seconds and detects the updated thread file. (3) SymphonyThreadWatcher filters the thread by its `thr-orch-` prefix and routes it to the Team view. (4) TeamThreadView renders the note with the security agent''s colored role badge, intent indicator, and nickname. The maximum latency is ~8 seconds (5s + 3s worst case), providing near-real-time visibility during orchestration.'

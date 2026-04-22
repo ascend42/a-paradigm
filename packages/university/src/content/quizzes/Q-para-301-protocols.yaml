@@ -1,0 +1,56 @@
+id: Q-para-301-protocols
+title: 'PARA 301: Operations — Protocols — Repeatable Patterns'
+description: 'Quiz for lesson: Protocols — Repeatable Patterns'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What is the PRIMARY purpose of Paradigm protocols?
+    choices:
+      A: To enforce coding standards through automated linting
+      B: To provide step-by-step implementation patterns that save agents from re-exploring codebases
+      C: To track all changes made to the codebase in a history log
+      D: To generate code automatically from templates
+      E: To replace .purpose files with more detailed documentation
+    correct: B
+    explanation: Protocols are repeatable implementation patterns with exact file references. Their primary value is saving AI agents from spending thousands of tokens exploring a codebase to reverse-engineer patterns that are the same every time. They do not enforce linting (A), track history (C), generate code (D), or replace .purpose files (E).
+  - id: q2
+    question: When should an agent call paradigm_protocol_search?
+    choices:
+      A: After completing a task to verify the work matches a known pattern
+      B: Before implementing a task, to check if a repeatable pattern already exists
+      C: Only when the user explicitly asks for protocol guidance
+      D: During reindex to validate protocol references
+      E: When recording lore to check for protocol suggestions
+    correct: B
+    explanation: paradigm_protocol_search is the agent's first stop before exploring the codebase. When receiving a task like 'add a Settings page,' the agent searches for a matching protocol BEFORE spending tokens on exploration. If a match exists, the steps and exemplar provide everything needed. After completion (A) is when you record or refresh, not search.
+  - id: q3
+    question: When are protocols recorded?
+    choices:
+      A: Before starting work, to plan the implementation steps
+      B: During implementation, as each step is completed
+      C: After completing work, capturing the steps that were actually followed
+      D: During reindex, by analyzing git history
+      E: Only by project maintainers, never by AI agents
+    correct: C
+    explanation: 'Protocols are captured AFTER completing work, not before. This ensures the steps reflect what actually works, not what was planned. Two paths lead to recording: agent-initiated (calling paradigm_protocol_record with the steps followed) and lore-prompted (the lore_record response includes a protocol_suggestion hint when it detects repeatable patterns).'
+  - id: q4
+    question: A protocol's status is 'stale'. What does this mean?
+    choices:
+      A: The protocol has a syntax error in its YAML
+      B: The protocol's exemplar file has been modified since the protocol was last verified
+      C: The protocol has never been used by any agent
+      D: The protocol references files that no longer exist
+      E: The protocol was recorded more than 30 days ago
+    correct: B
+    explanation: A 'stale' status means the protocol's exemplar or referenced files have been modified since last_verified — the protocol's steps might no longer match the actual code patterns. 'Broken' (D) means referenced files are missing entirely. Stale protocols still work but should be reviewed and refreshed after successful use.

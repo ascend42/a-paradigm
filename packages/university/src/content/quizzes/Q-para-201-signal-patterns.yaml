@@ -1,0 +1,56 @@
+id: Q-para-201-signal-patterns
+title: 'PARA 201: Architecture — Signal Patterns'
+description: 'Quiz for lesson: Signal Patterns'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: The order service needs to send a confirmation email after an order is placed. What is the correct architecture?
+    choices:
+      A: The order service directly calls the email service's sendEmail method
+      B: The order service emits !order-placed; the email service listens to that signal
+      C: The email service polls the order service every 5 seconds for new orders
+      D: A $send-email-flow orchestrates the interaction
+      E: The order service includes email logic internally
+    correct: B
+    explanation: Signal-based communication decouples the order service from the email service. The order service emits !order-placed and does not know who listens. The email service independently listens for that signal. This means you can add more listeners (analytics, loyalty points) without touching the order service.
+  - id: q2
+    question: Where are signal listeners documented in Paradigm?
+    choices:
+      A: On the signal definition in the 'listeners' field
+      B: On the listening component in a 'listens' field
+      C: In portal.yaml under a 'listeners' section
+      D: In .paradigm/config.yaml
+      E: They are not documented — only emitters are tracked
+    correct: B
+    explanation: Listeners are documented on the component that listens, using a 'listens' field. This asymmetry is intentional — the emitter declares what it emits (on the signal), and each listener independently declares what it consumes (on the component). This maintains true decoupling.
+  - id: q3
+    question: A failed login attempt from an unknown IP should emit what category of signal?
+    choices:
+      A: business — it affects the user's experience
+      B: system — it is an infrastructure event
+      C: security — it is an authentication event relevant to audit trails
+      D: error — it indicates a system failure
+      E: It should not emit a signal — failed logins are expected
+    correct: C
+    explanation: Failed login attempts are security events. They are critical for audit trails, intrusion detection, and monitoring suspicious activity. The signal (!login-failed) should include data like email, reason, and IP address to support security analysis.
+  - id: q4
+    question: A system currently has !order-placed consumed by 3 listeners. A developer needs to add a Slack notification when orders are placed. What must change?
+    choices:
+      A: The !order-placed signal definition must be updated to list the Slack notifier as an emitter
+      B: The $order-flow must add a Slack notification step
+      C: 'Only the new #slack-notifier component needs a ''listens: ["!order-placed"]'' declaration — nothing else changes'
+      D: 'The #order-service must be modified to call the Slack API'
+      E: portal.yaml must add a ^slack-authorized gate
+    correct: C
+    explanation: This is the power of signal-based decoupling. Adding a new listener requires only defining the new component with its 'listens' field. The signal definition, the emitting component, and all existing listeners remain untouched.

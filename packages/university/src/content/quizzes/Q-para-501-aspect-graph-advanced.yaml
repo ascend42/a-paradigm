@@ -1,0 +1,66 @@
+id: Q-para-501-aspect-graph-advanced
+title: 'PARA 501: Advanced Systems — The Aspect Graph at Scale'
+description: 'Quiz for lesson: The Aspect Graph at Scale'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: How many built-in detectors does paradigm_aspect_suggest_scan use, and which of these is NOT one of them?
+    choices:
+      A: 8 built-in detectors; 'database schema' is not one of them
+      B: 6 built-in detectors; 'magic numbers' is not one of them
+      C: 8 built-in detectors; 'rate limits' IS one of them (trick question)
+      D: 10 built-in detectors; 'feature flags' is not one of them
+      E: 5 built-in detectors; 'environment checks' is not one of them
+    correct: A
+    explanation: 'paradigm_aspect_suggest_scan uses 8 built-in detectors: magic numbers, hardcoded strings, rate limits, time values, environment checks, feature flags, regex patterns, and assertion guards. ''Database schema'' is not among them. Custom detectors can be added via .paradigm/aspect-detectors.yaml to extend the detection system.'
+  - id: q2
+    question: 'You want to find all rules that enforce constraints on #payment-service through the aspect graph. Which query approach is most effective?'
+    choices:
+      A: 'paradigm_aspect_search({ query: ''payment rules'' }) to find them by text'
+      B: 'paradigm_aspect_graph({ symbol: ''#payment-service'', hops: 1 }) filtered by ''enforced-by'' edge relation'
+      C: 'paradigm_aspect_heatmap({ limit: 100 }) and manually scan for payment-related aspects'
+      D: 'paradigm_aspect_drift({ aspectId: ''#payment-service'' }) to find stale rules'
+      E: 'paradigm_ripple({ symbol: ''#payment-service'' }) without any graph filtering'
+    correct: B
+    explanation: An edge-filtered graph query at 1 hop with the 'enforced-by' relation is the most direct approach. It returns exactly the aspects that enforce rules on the target component. Search (A) finds by text, not by graph relationship. Heatmap (C) ranks by usage, not by target. Drift (D) checks anchor freshness, not relationships.
+  - id: q3
+    question: Your CI pipeline should fail when aspect anchors have drifted. Which command configuration achieves this?
+    choices:
+      A: paradigm doctor with no flags — drift is always a blocking error
+      B: paradigm doctor --strict — treats drifted anchors as errors that cause a non-zero exit code
+      C: paradigm scan --fix — automatically fixes drifted anchors
+      D: paradigm_aspect_drift with no arguments — checks all aspects and exits non-zero on drift
+      E: paradigm lint --strict — lint checks include drift detection
+    correct: B
+    explanation: paradigm doctor --strict treats warnings (including drifted anchors) as errors, producing a non-zero exit code that fails the CI step. Without --strict, drifted anchors are warnings that do not block. paradigm scan rebuilds the index but does not check drift. paradigm lint checks .purpose file structure, not anchor content hashes.
+  - id: q4
+    question: A new project's aspect search always falls to Tier 3 (fuzzy matching). How do you warm the learning system so common queries use Tier 1?
+    choices:
+      A: Manually edit the search_weights SQLite table to insert mappings
+      B: Run paradigm_reindex with a --warm-search flag
+      C: Run common queries with paradigm_aspect_search, then confirm the best results with paradigm_aspect_confirm for each query
+      D: Wait for 100+ searches to accumulate — Tier 1 learns automatically without confirmation
+      E: Set limits.searchLearningRate to a higher value in config.yaml
+    correct: C
+    explanation: The learning system requires explicit confirmation via paradigm_aspect_confirm. When you search for a term and confirm the best result, the confirmed aspect gets +1.0 weight for that query. After 3-5 confirmations, the weight exceeds the Tier 1 threshold and future queries return instantly. There is no automatic learning without confirmation — the system relies on user feedback to improve.
+  - id: q5
+    question: During a quarterly governance review, the heatmap shows that 30 aspects out of 120 have zero access across all types (search, ripple, navigate, direct). What does this indicate and what should you do?
+    choices:
+      A: These aspects are well-documented and need no changes — zero access means no issues
+      B: Delete all 30 immediately — unused aspects are always stale
+      C: These aspects may be stale, poorly named, or irrelevant — evaluate each for removal, renaming, or consolidation as part of the governance review
+      D: Increase their severity to 'critical' to force agents to access them
+      E: Move them to a separate 'archive' section in the .purpose files
+    correct: C
+    explanation: Zero-access aspects are candidates for review, not automatic deletion. Some may be legitimate but poorly named (rename to improve discoverability). Some may be truly stale with drifted anchors (remove or update). Some may have been superseded by newer aspects (consolidate with supersedes edges). The governance review evaluates each case individually.

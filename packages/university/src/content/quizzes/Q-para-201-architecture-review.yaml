@@ -1,0 +1,66 @@
+id: Q-para-201-architecture-review
+title: 'PARA 201: Architecture — Putting It All Together'
+description: 'Quiz for lesson: Putting It All Together'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: A team invitation feature uses a token to accept invitations. The token was created by an admin. Should the accept action require the ^team-admin gate?
+    choices:
+      A: Yes — only admins should be able to modify team membership
+      B: No — the invitation token itself serves as proof of authorization, so any authenticated user with a valid token should be able to accept
+      C: Yes — ^team-admin is always required for team-related operations
+      D: No — acceptance actions should be completely public with no gates at all
+      E: It depends on whether the token has expired
+    correct: B
+    explanation: The invitation token itself is the authorization. The admin already approved the invitation by creating it. Any authenticated user who possesses the valid token (received via email) should be able to accept. Requiring ^team-admin would make the feature useless — the invitee is not yet a team member, let alone an admin. The token acts as a delegated authorization from the admin.
+  - id: q2
+    question: The walkthrough creates four components. Put them in the correct order of the $team-invitation-flow steps.
+    choices:
+      A: '#invitation-email → #invitation-token → #invitation-store → #invitation-service'
+      B: '#invitation-service → #invitation-token → #invitation-store → #invitation-email'
+      C: '#invitation-store → #invitation-service → #invitation-email → #invitation-token'
+      D: '#invitation-token → #invitation-email → #invitation-service → #invitation-store'
+      E: '#invitation-service → #invitation-email → #invitation-token → #invitation-store'
+    correct: B
+    explanation: 'The flow is: (1) #invitation-service validates and creates, (2) #invitation-token generates the secure token, (3) #invitation-store persists the invitation, (4) #invitation-email sends the email. The service orchestrates, the token is needed before storage, and the email is sent last.'
+  - id: q3
+    question: The feature building pattern ends with 'validate → implement'. Why does implementation come last?
+    choices:
+      A: Because Paradigm generates the implementation code automatically
+      B: Because implementation is the least important step
+      C: Because documenting architecture first ensures security is defined before code, AI agents can navigate immediately, and the team has a clear map
+      D: Because .purpose files must be committed before any source files
+      E: Because the validator rejects implementations that do not match definitions
+    correct: C
+    explanation: 'Front-loading documentation has three benefits: (1) security gates are defined in portal.yaml before handler code exists, preventing auth as an afterthought, (2) AI agents can navigate the feature structure immediately, and (3) the team has a validated architectural map before writing any implementation.'
+  - id: q4
+    question: 'After defining all components for the invitation feature, you run paradigm_ripple on #invitation-service. What is this checking?'
+    choices:
+      A: Whether the invitation service's code compiles
+      B: Whether the service name follows naming conventions
+      C: 'What existing code and symbols would be affected by changes to #invitation-service'
+      D: Whether the service has enough test coverage
+      E: Whether the service's dependencies are installed
+    correct: C
+    explanation: 'paradigm_ripple analyzes the dependency graph to show what would be impacted if #invitation-service changes. This reveals connections to flows, signals, gates, and other components — helping you understand the blast radius before implementation.'
+  - id: q5
+    question: 'You notice that ~audit-required applies-to ["#*Service"] and your new #invitation-service matches this pattern. What should you do?'
+    choices:
+      A: 'Rename #invitation-service to #invitation-handler to avoid the aspect'
+      B: Delete the ~audit-required aspect since it is too broad
+      C: 'Ensure the audit middleware is applied to #invitation-service and add aspects: ["~audit-required"] to its definition'
+      D: Nothing — aspects are enforced automatically by Paradigm
+      E: Create a new aspect ~invitation-audit specific to this service
+    correct: C
+    explanation: 'When a new component matches an existing aspect''s applies-to pattern, you should apply that aspect. This means ensuring the enforcement code (audit middleware) is used by the new service and documenting the relationship by adding aspects: ["~audit-required"] to the component''s .purpose definition.'

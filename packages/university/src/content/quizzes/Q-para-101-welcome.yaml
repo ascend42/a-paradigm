@@ -1,0 +1,56 @@
+id: Q-para-101-welcome
+title: 'PARA 101: Foundations — Welcome to Paradigm'
+description: 'Quiz for lesson: Welcome to Paradigm'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: What is Paradigm best described as?
+    choices:
+      A: A JavaScript component library for building UIs
+      B: A code generation tool that scaffolds project boilerplate
+      C: A meta-framework that organizes how AI agents understand your codebase
+      D: A testing framework with built-in assertion helpers
+      E: A deployment pipeline tool for CI/CD
+    correct: C
+    explanation: Paradigm is a meta-framework — it does not ship runtime code or components. Its purpose is to give AI agents structured context (symbols, purpose files, specifications) so they can navigate and modify codebases efficiently.
+  - id: q2
+    question: Which of the following is NOT one of Paradigm's three pillars?
+    choices:
+      A: Symbols
+      B: Purpose Files
+      C: Specifications
+      D: Runtime Middleware
+      E: All of the above are pillars
+    correct: D
+    explanation: Paradigm's three pillars are Symbols (the vocabulary), Purpose Files (the directory maps), and Specifications (the project rulebook). Runtime Middleware is not a Paradigm concept — Paradigm is metadata, not runtime code.
+  - id: q3
+    question: What problem does Paradigm primarily solve for AI agents?
+    choices:
+      A: Slow compilation times in large TypeScript projects
+      B: Excessive token usage and missed context when navigating undocumented codebases
+      C: Lack of type safety in JavaScript applications
+      D: Difficulty deploying applications to cloud providers
+      E: Missing test coverage in legacy codebases
+    correct: B
+    explanation: AI agents waste tokens exploring directories, guessing relationships, and re-reading files when a codebase has no structured context. Paradigm provides that structure so agents can find what they need in ~100 tokens instead of 2,000+.
+  - id: q4
+    question: 'You open a .purpose file and see symbols prefixed with #, $, ^, !, and ~. A new team member asks what the ~ symbol means. What do you tell them?'
+    choices:
+      A: ~ marks a component — a documented code unit
+      B: ~ marks a flow — a multi-step process
+      C: ~ marks a gate — a security checkpoint
+      D: ~ marks a signal — an event notification
+      E: ~ marks an aspect — a cross-cutting rule, constraint, or configuration anchored to specific code
+    correct: E
+    explanation: 'The five symbols are: # (Component), $ (Flow), ^ (Gate), ! (Signal), and ~ (Aspect). Aspects represent cross-cutting concerns — rules, constraints, and configuration values that are anchored to specific lines of code. They are the only symbol type that requires code anchors.'

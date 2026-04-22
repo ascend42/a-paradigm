@@ -1,0 +1,66 @@
+id: Q-para-201-gates-deep-dive
+title: 'PARA 201: Architecture — Gates in Depth'
+description: 'Quiz for lesson: Gates in Depth'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: A gate checks whether a user's subscription is active before allowing access to premium content. What type should this gate be?
+    choices:
+      A: auth — it verifies the user's identity
+      B: role — it checks the user's permission level
+      C: ownership — it verifies resource ownership
+      D: state-precondition — it verifies the system is in the right condition
+      E: integration — it checks a third-party service
+    correct: D
+    explanation: This gate verifies system state — whether the subscription is active — rather than identity (auth), permission level (role), or resource ownership. State-precondition gates check conditions about the current state of data.
+  - id: q2
+    question: 'What is wrong with this gate check expression: `check: user is admin`?'
+    choices:
+      A: Nothing — it is clear and concise
+      B: It should use JavaScript syntax, not English
+      C: It is too vague — a developer cannot implement it without more information
+      D: It is missing the req. prefix
+      E: Gate checks must be written in YAML, not pseudo-code
+    correct: C
+    explanation: 'Check expressions should be precise enough to implement from reading the expression. ''user is admin'' does not specify how admin status is determined — is it a boolean field? A role in an array? A separate table? A better expression: project.admins.includes(req.user.id).'
+  - id: q3
+    question: 'A route requires `[^authenticated, ^org-admin, ^billing-enabled]`. The `^org-admin` gate has `requires: [^authenticated]`. What happens at runtime?'
+    choices:
+      A: ^authenticated runs twice — once from the route, once from ^org-admin's requires
+      B: ^authenticated runs once, ^org-admin runs once, ^billing-enabled runs once — in that order
+      C: An error is thrown because ^authenticated is listed both in the route and in requires
+      D: All three gates run in parallel for performance
+      E: Only ^billing-enabled runs because the other two are implicit from requires
+    correct: B
+    explanation: 'Gate chains prevent redundant checks. ^authenticated is required by ^org-admin, but since the route lists ^authenticated first, it runs once and subsequent gates know it already passed. The three gates execute in order: authenticated, org-admin, billing-enabled.'
+  - id: q4
+    question: When should the `effects` field be an empty array `[]`?
+    choices:
+      A: Never — every gate must have at least one prize
+      B: When the gate has no side effects to trigger on pass
+      C: When the gate is of type 'auth'
+      D: When the gate is used on GET routes only
+      E: When the gate has been deprecated
+    correct: B
+    explanation: 'Use effects: [] when the gate has no side effects. Most gates simply allow or deny access without triggering additional actions. Effects are for special cases like gamification badges, onboarding rewards, or analytics events.'
+  - id: q5
+    question: 'portal.yaml says `"DELETE /api/posts/:id": [^authenticated, ^post-author]`, but the route handler only checks authentication, not authorship. What is the consequence?'
+    choices:
+      A: No consequence — portal.yaml is just documentation
+      B: The route will return 403 automatically based on portal.yaml
+      C: Any authenticated user can delete any post — a security vulnerability caused by the implementation not matching the specification
+      D: The paradigm scan command will fix the discrepancy automatically
+      E: The delete will fail silently
+    correct: C
+    explanation: portal.yaml defines what SHOULD happen, but your code must implement it. If the middleware only checks authentication without verifying post authorship, any logged-in user can delete any post. This is a security vulnerability caused by specification-implementation drift.

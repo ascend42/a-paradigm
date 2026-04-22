@@ -1,0 +1,66 @@
+id: Q-para-501-session-intelligence
+title: 'PARA 501: Advanced Systems — Session Intelligence'
+description: 'Quiz for lesson: Session Intelligence'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: You have finished implementing a feature and are about to write tests. Which checkpoint phase should you save?
+    choices:
+      A: '`implementing` — you just finished implementing'
+      B: '`validating` — you are transitioning from implementation to validation'
+      C: '`complete` — the feature code is done'
+      D: '`testing` — you are about to test'
+      E: '`planning` — you need to plan the tests first'
+    correct: B
+    explanation: Checkpoint at the phase you are entering, not the one you are leaving. The `validating` phase captures the state after implementation is complete but before tests/review. If the session crashes now, recovery knows implementation is done and testing is the next step. `complete` is only for when everything (including tests) is finished.
+  - id: q2
+    question: What is the maximum number of breadcrumbs stored, and what happens when the limit is reached?
+    choices:
+      A: 100 breadcrumbs, then the file is archived and a new one starts
+      B: 50 breadcrumbs, then the oldest are dropped as new ones are added
+      C: Unlimited — breadcrumbs grow until the session ends
+      D: 50 breadcrumbs, then tracking stops until the next session
+      E: 25 breadcrumbs per phase, resetting at each checkpoint
+    correct: B
+    explanation: Breadcrumbs have a hard cap of 50 entries with auto-rotation — when the 51st breadcrumb is recorded, the oldest one is dropped. This keeps the file small and focused on recent activity while still providing enough trail for meaningful recovery.
+  - id: q3
+    question: A team discovers that 'always validate JWT expiry before refresh' prevents bugs across 4 different projects. What should they do?
+    choices:
+      A: Add the wisdom to each project's `.paradigm/wisdom/` individually
+      B: Use `paradigm_wisdom_promote` to move it to `~/.paradigm/wisdom/` for global scope
+      C: Create a new seed habit for JWT validation
+      D: Add it to the CLAUDE.md file in each project
+      E: Record it as a lore entry in the most recent project
+    correct: B
+    explanation: When wisdom proves valuable across multiple projects, `paradigm_wisdom_promote` copies it from project scope (`.paradigm/wisdom/`) to global scope (`~/.paradigm/wisdom/`). This makes it available automatically in every future session across all projects. Adding it individually (A) or to CLAUDE.md (D) works but doesn't leverage the Global Brain.
+  - id: q4
+    question: Your session is at 82% context usage. What should you do?
+    choices:
+      A: Continue working — 82% is still plenty of room
+      B: Immediately stop and call `paradigm_handoff_prepare` with summary and next steps
+      C: Call `paradigm_session_health` to confirm, then proactively prepare a handoff while finishing current work
+      D: Delete old messages to free up context space
+      E: Save a checkpoint and keep working until 95%
+    correct: C
+    explanation: At 80-85%, the recommendation is proactive handoff preparation. Call `paradigm_session_health` to confirm the recommendation, then prepare the handoff with `paradigm_handoff_prepare` while completing your current task. Waiting until 95% (E) risks running out of context mid-task. The sweet spot is preparing the handoff while you still have room to finish current work cleanly.
+  - id: q5
+    question: A new session starts and the agent calls `paradigm_status`. What happens with session recovery?
+    choices:
+      A: The agent must explicitly call `paradigm_session_recover` — recovery is never automatic
+      B: Recovery data is automatically surfaced on the first Paradigm tool call
+      C: Recovery only works if the previous session saved a checkpoint
+      D: The agent must read `.paradigm/session-checkpoint.json` manually
+      E: Recovery data is shown only if the previous session crashed
+    correct: B
+    explanation: Auto-recovery is triggered on the first Paradigm MCP tool call in a new session — whether that is `paradigm_status`, `paradigm_navigate`, or any other tool. The system surfaces the last checkpoint and recent breadcrumbs without the agent needing to explicitly request recovery. This ensures continuity even if the agent doesn't know to ask.

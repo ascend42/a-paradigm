@@ -1,0 +1,66 @@
+id: Q-para-501-advanced-workflows
+title: 'PARA 501: Advanced Systems — The Complete Workflow'
+description: 'Quiz for lesson: The Complete Workflow'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: In the complete workflow, why does `paradigm_habits_check(preflight)` run BEFORE `paradigm_ripple` and `paradigm_wisdom_context`?
+    choices:
+      A: To block the session if discovery habits were violated in the previous session
+      B: To verify that the agent intends to call discovery tools — the habit check reminds and tracks, while the actual tools provide the context
+      C: Because habits must always run first regardless of workflow position
+      D: To generate the list of symbols that ripple and wisdom should check
+      E: The order does not matter — they can run in any sequence
+    correct: B
+    explanation: The preflight habits check evaluates whether discovery habits (ripple, navigate, wisdom) are being followed. It runs early to remind and track compliance. The actual MCP tools (ripple, wisdom_context) run after to provide the substantive context. The habit check is about behavioral discipline; the tools are about information gathering.
+  - id: q2
+    question: An agent implements a feature, updates .purpose files, but forgets to record lore before committing. The session modified 5 source files. What sequence of events occurs?
+    choices:
+      A: Pre-commit hook blocks the commit until lore is recorded
+      B: Stop hook blocks, citing missing lore entry → agent records lore → re-attempts commit → stop hook passes
+      C: Commit succeeds but the next session receives a warning about missing lore
+      D: The post-write hook retroactively creates a lore entry from tracked files
+      E: The commit succeeds — lore is enforced by habits, not hooks
+    correct: B
+    explanation: The stop hook checks for lore entries when 3+ source files were modified. With 5 files and no lore entry, it blocks. The agent must then call `paradigm_lore_record` with the session summary, and re-attempt the commit. The pre-commit hook only rebuilds the index — it doesn't check compliance. Lore enforcement lives in the stop hook.
+  - id: q3
+    question: How does Sentinel benefit from the Habits system?
+    choices:
+      A: Sentinel directly calls habit checks during incident recording
+      B: Practice profiles show correlations between skipped habits and incident rates, providing evidence for severity upgrades
+      C: Habits automatically resolve Sentinel incidents when compliance is high
+      D: Sentinel and Habits are independent systems with no interaction
+      E: Habits disable Sentinel checks when compliance is above 90%
+    correct: B
+    explanation: The feedback loop between Habits and Sentinel works through practice profiles. When an agent frequently skips `ripple-before-modify` and the symbols it touches have higher incident rates, the practice profile surfaces this correlation. This provides data-driven evidence to upgrade the habit's severity from advisory to warn or block — closing the loop between behavior and outcomes.
+  - id: q4
+    question: What is the relationship between Lore entries and Session checkpoints?
+    choices:
+      A: They are the same thing — checkpoints are stored as lore entries
+      B: Checkpoints are ephemeral (7-day expiry) for crash recovery; lore entries are permanent for institutional memory
+      C: Lore entries are auto-generated from checkpoints at session end
+      D: Checkpoints replace lore entries in Paradigm v2
+      E: Lore entries expire after 30 days; checkpoints are permanent
+    correct: B
+    explanation: 'Checkpoints and lore serve different purposes with different lifespans. Checkpoints are ephemeral snapshots for crash recovery — they expire after 7 days because their value is immediate continuity. Lore entries are permanent project history — they capture decisions, learnings, and context that remain valuable months or years later. You need both: checkpoints for resilience, lore for memory.'
+  - id: q5
+    question: A team's practice profile shows high compliance across all categories, yet incidents keep occurring in `#payment-service`. What system should they investigate?
+    choices:
+      A: Habits — add more habits targeting the payment service
+      B: Hooks — the stop hook might not be running for payment-related changes
+      C: Sentinel — check `paradigm_sentinel_patterns` and `paradigm_sentinel_stats` for the symbol to identify recurring failure patterns and resolution gaps
+      D: Lore — the payment service lore entries might be inaccurate
+      E: Session Intelligence — breadcrumbs might be losing payment context
+    correct: C
+    explanation: High habit compliance means the behavioral discipline is fine — agents are doing the right things. If incidents persist despite good practices, the issue is likely in the code or architecture, not the process. Sentinel's pattern analysis (`paradigm_sentinel_patterns`) can reveal if the same failure keeps recurring despite resolutions, and `paradigm_sentinel_stats` can show the symbol's incident rate and resolution effectiveness. The answer lives in the incident data, not the compliance data.

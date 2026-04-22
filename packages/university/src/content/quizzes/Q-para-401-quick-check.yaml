@@ -1,0 +1,46 @@
+id: Q-para-401-quick-check
+title: 'PARA 401: Orchestration — Quick-Check: Ask Before You Build'
+description: 'Quiz for lesson: Quick-Check: Ask Before You Build'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: You need to rename a CSS class from .btn-primary to .btn-main across 2 files. Your project uses balanced enforcement with orchestration-required set to warn. What do you do?
+    choices:
+      A: Run full orchestration — any change should go through the full pipeline
+      B: Run quick-check — it is a scoped, low-risk change that will likely get GREENLIGHT
+      C: Skip orchestration entirely — CSS changes do not count as "complex tasks"
+      D: Ask the architect to plan the rename first
+      E: Disable orchestration-required for this one task
+    correct: B
+    explanation: A CSS class rename across 2 files is exactly the kind of scoped, low-risk change quick-check is designed for. It will likely GREENLIGHT. Skipping orchestration entirely would trigger the enforcement warning. Running full orchestration would waste tokens on a trivial change. Quick-check gives you the compliance checkmark at minimal cost.
+  - id: q2
+    question: Quick-check returns ESCALATE for your task "add user deletion endpoint." You are short on time and want to build it anyway. What are the consequences?
+    choices:
+      A: Nothing — ESCALATE is just a suggestion
+      B: The build will fail at compile time
+      C: The stop hook will flag that you bypassed an ESCALATE recommendation, and the verdict is recorded for traceability
+      D: Your code will be automatically reverted
+      E: The orchestrator will refuse to run any further tasks
+    correct: C
+    explanation: ESCALATE is a recorded recommendation, not a hard block (unless orchestration-required is set to block in strict enforcement). However, the stop hook flags the bypass, and the verdict is traceable in the session history. A user deletion endpoint likely needs security review (Sentinel) and architectural planning — skipping that introduces real risk.
+  - id: q3
+    question: 'During quick-check, Jinx asks: "What if the email service is down when sending password reset?" and the reviewer notes "touches auth, new endpoint, email infra — estimated 4+ files." The verdict is ESCALATE. Which agents would full orchestration likely include?'
+    choices:
+      A: Only builder — the task is clearly defined
+      B: Architect (4+ files), Sentinel (auth + password reset), builder, Vigil (tester), Rune (symbols)
+      C: Only Sentinel — it is a security task
+      D: All 54 agents to be thorough
+      E: Jinx and reviewer again, but with more tokens
+    correct: B
+    explanation: 'Full orchestration composes the team from trigger patterns: 4+ files triggers architect for multi-file design, auth/password triggers Sentinel for security review, implementation triggers builder, complexity triggers Vigil for testing, and Rune always runs for symbol planning. This is the value of ESCALATE — it routes you to the right team composition.'

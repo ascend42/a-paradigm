@@ -1,0 +1,56 @@
+id: Q-para-101-first-steps
+title: 'PARA 101: Foundations — Your First Steps'
+description: 'Quiz for lesson: Your First Steps'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: What is the correct order for the AI agent orientation protocol?
+    choices:
+      A: Read source code, write tests, check coverage, deploy
+      B: Call paradigm_status, read config.yaml, check portal.yaml, use paradigm_navigate
+      C: Run paradigm scan, edit navigator.yaml, read .purpose files, commit changes
+      D: Read package.json, install dependencies, run build, check logs
+      E: Create .purpose files, define gates, emit signals, validate flows
+    correct: B
+    explanation: 'The orientation protocol is: (1) paradigm_status for project overview, (2) read config.yaml for conventions, (3) check portal.yaml for security gates, (4) paradigm_navigate to find the relevant code area. This takes ~500 tokens and gives the agent full context.'
+  - id: q2
+    question: After creating new .purpose files, what command should you run?
+    choices:
+      A: paradigm shift
+      B: paradigm validate
+      C: paradigm scan
+      D: paradigm deploy
+      E: paradigm build
+    correct: C
+    explanation: paradigm scan reads all .purpose files and portal.yaml, builds the symbol index, and regenerates navigator.yaml. Without rescanning, AI agents will not find the newly defined symbols through navigation tools.
+  - id: q3
+    question: In portal.yaml, what does an empty gate array on a route mean?
+    choices:
+      A: The route is disabled and will return 404
+      B: The route requires all gates to pass
+      C: The route is intentionally unprotected — documented as public
+      D: The route has not been configured yet and will return 500
+      E: The route inherits gates from its parent path
+    correct: C
+    explanation: An empty gate array [] means the route is intentionally public. Listing it in portal.yaml with no gates documents the decision that this route should be accessible without authentication — it is not an oversight.
+  - id: q4
+    question: Which of these is a common pitfall when starting with Paradigm?
+    choices:
+      A: Creating too many .purpose files on day one instead of starting small
+      B: Using the Paradigm logger instead of console.log
+      C: Running paradigm scan after adding new purpose files
+      D: Putting portal.yaml at the project root
+      E: Using tags to classify components
+    correct: A
+    explanation: A common pitfall is trying to document everything on day one. The recommended approach is to start with the most critical module, create one .purpose file, and expand incrementally as the project grows.

@@ -1,0 +1,66 @@
+id: Q-para-501-symphony-a-mail
+title: 'PARA 501: Advanced Systems — Symphony: Multi-Agent Messaging with The Score'
+description: 'Quiz for lesson: Symphony: Multi-Agent Messaging with The Score'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-501
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-501.json
+questions:
+  - id: q1
+    question: 'You have three Claude Code sessions open on your machine: one working on the core library, one on the backend API, and one on the frontend. You want them to communicate. What is the correct setup sequence?'
+    choices:
+      A: Start a Sentinel hub, then connect each session to the WebSocket endpoint
+      B: Install Conductor, which automatically links all sessions on the machine
+      C: Run `paradigm symphony join` to discover and connect the sessions, then run `/loop 10s paradigm_symphony_poll` in each session
+      D: Create a `.paradigm-workspace` file listing all three projects — workspace linking enables messaging
+      E: Run `paradigm team orchestrate` which automatically sets up inter-agent communication
+    correct: C
+    explanation: The Score is the CLI-only foundation that requires no Conductor, no Sentinel, and no workspace setup. `paradigm symphony join` discovers Claude Code sessions on the machine and creates mailboxes. Then each session needs `/loop 10s paradigm_symphony_poll` to poll for incoming messages. Conductor (B) auto-links sessions but is not required — The Score works standalone.
+  - id: q2
+    question: 'An agent sends a message with `intent: ''decision''` and the text ''Use Redis for session storage instead of in-memory.'' What happens beyond normal message delivery?'
+    choices:
+      A: The message is blocked — only humans can make decisions
+      B: Symphony automatically records a lore entry of type `decision` with the message text, linking it to the conversation thread and referenced symbols
+      C: The message is flagged for human review before delivery
+      D: Nothing special — intent is informational only and has no side effects
+      E: The decision is written to `.paradigm/config.yaml` as a project setting
+    correct: B
+    explanation: 'Messages with `intent: decision` trigger automatic Lore integration. Symphony records a lore entry with the decision text, links it to the conversation thread, and tags it with referenced symbols. This bridges ephemeral conversation to permanent project memory without manual recording.'
+  - id: q3
+    question: Agent A (on your machine) requests `src/types.ts` from Agent B (on a teammate's machine). What must happen before Agent A receives the file?
+    choices:
+      A: Agent B must call `paradigm_symphony_approve_file` — agents can approve their own file requests
+      B: The file is sent automatically since both agents are linked in the same Symphony network
+      C: The teammate (human) must explicitly approve the file transfer — every cross-agent file transfer requires human approval from the file owner's side
+      D: Agent A must have the `^file-access` gate declared in portal.yaml
+      E: The file is sent if it matches the auto-approve glob patterns, but there is no human gate
+    correct: C
+    explanation: The file pipeline's core security constraint is that every file transfer requires explicit human approval from the owner's side. When Agent A requests a file, the teammate sees a prompt (via Conductor or `paradigm symphony requests`) and must approve, deny, or approve with redaction. Even if auto-approve patterns exist in trust.yaml, the initial setup still requires human-configured trust levels.
+  - id: q4
+    question: An agent's `paradigm_symphony_poll` returns 3 new messages in a thread about a failing test. The agent reads them, investigates the code, and finds the bug. How should the agent communicate its findings?
+    choices:
+      A: Call `paradigm_lore_record` with the findings — lore is the communication channel
+      B: 'Call `paradigm_symphony_send` with `intent: ''context''` providing the investigation results, then `intent: ''proposal''` with the fix, writing to `outbox.jsonl` for delivery to the thread'
+      C: Write directly to the other agents' `inbox.jsonl` files for immediate delivery
+      D: Call `paradigm_sentinel_record` to log the bug as an incident
+      E: Call `paradigm symphony send` from the CLI — agents cannot use MCP tools to reply
+    correct: B
+    explanation: Agents communicate via `paradigm_symphony_send`, which writes structured messages to `outbox.jsonl`. Using multiple messages with appropriate intents (context for the investigation, proposal for the fix) gives other agents structured context. Writing directly to inbox files (C) bypasses the routing protocol. Lore (A) and Sentinel (D) are recording systems, not communication channels.
+  - id: q5
+    question: A thread about a serialization bug has been active for 20 minutes across 4 agents. The team agrees on a fix. What should happen next?
+    choices:
+      A: Delete the thread files from `~/.paradigm/score/threads/` to clean up
+      B: Let the thread expire naturally — threads auto-resolve after 1 hour of inactivity
+      C: Run `paradigm symphony resolve <thread-id>` which marks the thread as resolved and automatically creates a lore entry capturing the full conversation, decisions, and actions
+      D: Each agent independently records a lore entry about their contribution
+      E: Run `paradigm_reindex` to incorporate the thread into the project index
+    correct: C
+    explanation: Thread resolution via `paradigm symphony resolve` is the bridge between ephemeral conversation and permanent project memory. It marks the thread as resolved and automatically creates a comprehensive lore entry with the topic, participants, decisions, actions, and referenced symbols. This single action preserves the entire collaborative context for future reference.

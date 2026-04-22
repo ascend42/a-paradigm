@@ -1,0 +1,56 @@
+id: Q-para-401-agent-roles
+title: 'PARA 401: Orchestration — Agent Roles & Facets'
+description: 'Quiz for lesson: Agent Roles & Facets'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: You are about to add a payment refund feature that touches 5 files including auth middleware. The orchestrator composes a team. Which agents would you expect to see, and why?
+    choices:
+      A: Only builder — it is an implementation task
+      B: Architect (5 files = multi-file design), Sentinel (auth middleware = security), builder (implementation), Vigil (testing), Rune (symbol planning)
+      C: Only architect and builder — the others are optional
+      D: All 54+ agents are always activated for every task
+      E: Only Sentinel — payment features are a security concern
+    correct: B
+    explanation: 'The orchestrator uses trigger patterns: 5 files triggers the architect for upfront design, auth middleware triggers Sentinel for security review, implementation triggers builder, the complexity triggers Vigil for testing, and Rune always runs for symbol planning on orchestrated tasks. This is how the "right team for the task" is composed automatically.'
+  - id: q2
+    question: 'After building a new feature, Rune''s compliance report shows: "3 components created, 1 aspect defined. Blocking: 2 components missing aspects (1:1 ratio violated)." What do you do?'
+    choices:
+      A: Ignore the report — aspects are optional metadata
+      B: Delete the 2 components to make the ratio work
+      C: Add aspects to the 2 uncovered components — define what rules, constraints, or configuration each component enforces
+      D: Reduce the aspect count to 0 so the ratio is consistently zero
+      E: Ask the architect to redesign the feature with fewer components
+    correct: C
+    explanation: Rune enforces a 1:1 component-to-aspect ratio because every component should have at least one documented rule, constraint, or configuration. Adding aspects is the correct fix — it forces you to think about what rules govern each component. If a component truly has no rules, it may be too small to be its own component.
+  - id: q3
+    question: 'The reviewer runs Stage 1 (Spec Compliance) and finds that #checkout-form is not registered in any .purpose file. What happens?'
+    choices:
+      A: The reviewer proceeds to Stage 2 and includes the missing registration as a note
+      B: The reviewer stops immediately, reports a blocking finding, and hands back to the builder without Stage 2
+      C: The reviewer auto-creates the .purpose entry and continues
+      D: The reviewer skips both stages and approves with a warning
+      E: The reviewer asks Rune to fix it
+    correct: B
+    explanation: 'The two-stage protocol is a hard gate: Stage 1 failure means immediate stop. There is no point reviewing code quality of spec-noncompliant code. The builder must fix the spec issue first, then resubmit. This ensures Paradigm metadata is always in sync with code before quality review begins.'
+  - id: q4
+    question: Your project is a React web app. After running paradigm shift, the roster includes architect, builder, reviewer, Sage, Jinx, Sentinel, Doc, Rune, Vigil, plus accessibility and performance specialists. A teammate's Python ML project has a different roster. Why?
+    choices:
+      A: paradigm shift uses random selection
+      B: Each project type gets a tailored roster — web apps get accessibility/performance specialists, ML projects get data pipeline/model evaluation specialists
+      C: The Python project is missing agents and needs manual configuration
+      D: All projects get the same roster but with different model assignments
+      E: The difference is because of different Paradigm versions
+    correct: B
+    explanation: paradigm shift auto-detects project type from markers (package.json = web/node, requirements.txt = Python, etc.) and selects specialized agents that match. The 8 core agents appear in every roster, but specialized and ecosystem agents vary. A web app gets accessibility and performance; an ML project gets data pipeline and model evaluation.

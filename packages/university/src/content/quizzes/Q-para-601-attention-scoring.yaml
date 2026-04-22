@@ -1,0 +1,56 @@
+id: Q-para-601-attention-scoring
+title: 'PARA 601: Paradigm Ambient — Attention & Scoring'
+description: 'Quiz for lesson: Attention & Scoring'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: 'A security agent (threshold 0.4) evaluates an event where a new route was created (`type: ''route-created''`). The agent''s attention includes `signals: [{ type: ''route-created'' }]` but the event has no matching symbols, paths, or concepts. What is the overall score and does the agent nominate?'
+    choices:
+      A: Score 0.25 (average of 0, 0, 0, 1) — does not nominate (below 0.4)
+      B: Score 1.0 (max of 0, 0, 0, 1) — nominates (1.0 >= 0.4)
+      C: Score 0.0 — signal matching requires at least one other dimension to also match
+      D: Score 0.4 — signals are weighted at 0.4 for security agents
+      E: Score 1.0 but does not nominate — signal matches are informational only
+    correct: B
+    explanation: The score is `Math.max(0, 0, 0, 1.0) = 1.0`. Signal match is binary — the event type `'route-created'` matches the agent's signal pattern, so `signalMatch = 1.0`. The overall score uses max, not average, so a single dimension scoring 1.0 gives an overall score of 1.0. Since 1.0 >= 0.4 (the security agent's threshold), the agent self-nominates.
+  - id: q2
+    question: 'A reviewer agent watches 4 concepts: `[''code quality'', ''bug'', ''smell'', ''convention'']`. An event has `keywords: [''code'', ''quality'']` and `context: ''Fixed a bug in the validation logic''`. What is the conceptMatch score?'
+    choices:
+      A: 0.25 — only 'bug' matches (1 out of 4)
+      B: 0.50 — 'code quality' and 'bug' both match (2 out of 4)
+      C: 0.75 — 'code quality', 'bug', and partial 'convention' match
+      D: 1.0 — all keywords are present in the combined text
+      E: 0.0 — concepts must be exact matches against the keywords array only
+    correct: B
+    explanation: 'The event''s `context`, `keywords`, and `type` are joined into a lowercased text: `''code quality fixed a bug in the validation logic''` (keywords `[''code'', ''quality'']` become part of the joined text). The concept `''code quality''` appears in this text (substring match). The concept `''bug''` appears. The concepts `''smell''` and `''convention''` do not. So `matched = 2`, `total = 4`, `conceptMatch = 2/4 = 0.5`.'
+  - id: q3
+    question: Why does scoring use `Math.max` rather than an average of the four dimensions?
+    choices:
+      A: Max is faster to compute than average
+      B: Average would require all four dimensions to have non-zero values, which is too restrictive
+      C: Max ensures a single strong match in any domain-specific dimension is sufficient — averaging would dilute a perfect 1.0 match to 0.25
+      D: Max produces higher scores, making agents more talkative which is always desirable
+      E: The four dimensions are redundant so only the best one matters
+    correct: C
+    explanation: Max-based scoring respects domain-specific expertise. A security agent that matches a gate symbol perfectly (`symbolMatch = 1.0`) should absolutely speak up, even if the file path, concepts, and signals do not match. Averaging would reduce that 1.0 to 0.25, likely below the agent's threshold. Max scoring means that expertise in any single dimension is sufficient to trigger attention.
+  - id: q4
+    question: The security agent's default threshold is 0.4 while the builder's is 0.7. What is the practical effect of this difference?
+    choices:
+      A: The security agent's nominations are ranked higher in the UI
+      B: The security agent self-nominates on weaker matches because the cost of missing a security issue outweighs false alarms — the builder stays quiet unless directly relevant
+      C: The builder processes events faster because it rejects more of them
+      D: The security agent receives more events from the stream
+      E: There is no practical difference — thresholds only affect logging verbosity
+    correct: B
+    explanation: 'A lower threshold means the agent speaks up more often — even on partial matches. For security, this is the right tradeoff: a false alarm about a potential security issue costs little, but missing a real vulnerability can be catastrophic. For the builder, a higher threshold (0.7) means it only self-nominates when the event is strongly relevant to implementation work, avoiding noise from events that are merely tangentially related.'

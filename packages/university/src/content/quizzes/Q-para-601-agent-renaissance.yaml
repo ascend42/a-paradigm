@@ -1,0 +1,66 @@
+id: Q-para-601-agent-renaissance
+title: 'PARA 601: Paradigm Ambient — Agent Manifest Renaissance'
+description: 'Quiz for lesson: Agent Manifest Renaissance'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: An agent installed from a marketplace does not define an `intrinsic` learning section but has `platform` learning configured. Is this valid?
+    choices:
+      A: No — all agents must have intrinsic learning configured
+      B: Yes — intrinsic learning is optional (the agent's choice), but platform learning is mandated for marketplace agents
+      C: No — platform learning requires intrinsic learning as a prerequisite
+      D: Yes, but the agent will not be able to participate in ambient coordination
+      E: It depends on whether the agent has attention patterns configured
+    correct: B
+    explanation: 'Intrinsic learning is optional — it represents the agent''s own drive to improve and is a design choice by the agent creator. A marketplace agent might deliberately not implement intrinsic learning if it relies on periodic updates from its creator instead. Platform learning (`feedback_required: true`) is mandated for all marketplace agents to ensure quality signals flow back to creators. The two layers are independent.'
+  - id: q2
+    question: 'A builder agent is in a multi-agent session with an architect. The builder has `collaboration.with.architect.can_contradict: false`. The builder notices the architect''s approach will cause a performance regression. What should happen?'
+    choices:
+      A: The builder stays silent — it cannot contradict the architect
+      B: The builder can still nominate an observation or warning — `can_contradict` affects debate dynamics, not whether the agent can surface concerns
+      C: The builder overrides its collaboration stance because performance is critical
+      D: The builder files a nomination but it is automatically suppressed
+      E: The builder must wait for the reviewer to raise the concern
+    correct: B
+    explanation: 'The `can_contradict` field in collaboration affects debate dynamics — whether the agent will actively argue against the other agent''s position. It does not prevent the agent from surfacing observations or warnings via the nomination system. The builder can still create a nomination with `type: ''warning''` or `type: ''observation''` about the performance regression. The nomination is surfaced to the human, who decides how to proceed. Collaboration stance governs interaction style, not whether an agent can report concerns.'
+  - id: q3
+    question: 'An agent''s context contributions include a section with `priority: ''low''` and `content_ref: ''paradigm://guidance/portal''`. When is this content loaded?'
+    choices:
+      A: Always — all contributions are loaded regardless of priority
+      B: Never — low priority contributions are ignored
+      C: On demand — low priority contributions are loaded only when the agent or human explicitly requests them, not automatically included in composed context
+      D: Only during the first session — subsequent sessions cache it
+      E: Only when the agent's attention score exceeds 0.8
+    correct: C
+    explanation: Context contributions have three priority levels that control inclusion in composed context. High-priority contributions are always included. Medium-priority contributions are included if the token budget allows. Low-priority contributions are loaded only on demand — when the agent requests the resource or the human explicitly asks for it. The `content_ref` URI (`paradigm://guidance/portal`) means the content is fetched from the MCP resource system rather than stored inline, reducing the base context size.
+  - id: q4
+    question: What does `buildProfileEnrichment` produce, and when is it used?
+    choices:
+      A: It produces a YAML file that replaces the agent's `.agent` identity
+      B: It produces structured markdown combining all agent dimensions — identity, expertise, transferable patterns, attention, collaboration, nominations, and ambient context — injected into the agent's prompt during orchestration
+      C: It produces a JSON summary for the Conductor UI dashboard
+      D: It produces a diff between the current agent profile and its defaults
+      E: It produces a compliance report checking all six dimensions
+    correct: B
+    explanation: '`buildProfileEnrichment` takes the agent profile, relevant symbols, optional notebook entries, and optional ambient context (recent decisions, journal insights, pending nominations). It composes a structured markdown string with sections for Agent Identity, Expertise, Transferable Patterns, Notebook Entries, Attention patterns, Collaboration stance, Nomination preferences, and ambient context. This markdown is injected into the agent''s system prompt during orchestration, giving it full self-awareness and situational context.'
+  - id: q5
+    question: 'An agent has `learning.intrinsic.calibration.overconfidence_alert: 0.15` and its estimated confidence for `#auth-middleware` is 0.90 while its actual accuracy (from assessment verdicts) is 0.70. What happens?'
+    choices:
+      A: Nothing — the system does not track actual accuracy
+      B: The confidence is automatically reduced to 0.70
+      C: An overconfidence alert is triggered because the delta (0.90 - 0.70 = 0.20) exceeds the 0.15 threshold
+      D: The agent is prevented from working on `#auth-middleware`
+      E: The EMA alpha is increased to make confidence converge faster
+    correct: C
+    explanation: The `overconfidence_alert` threshold triggers when the gap between estimated confidence and actual accuracy exceeds the configured value. Here, the delta is 0.20 (0.90 - 0.70), which exceeds the 0.15 threshold. This alert signals that the agent is more confident than its track record warrants for this symbol. The agent's confidence will naturally adjust over time via the EMA formula as more assessment verdicts come in, but the alert provides an immediate signal that the agent should be more cautious on `#auth-middleware`.

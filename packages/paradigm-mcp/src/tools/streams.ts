@@ -13,7 +13,7 @@
 import type { ProjectContext } from '../utils/index-loader.js';
 import { recordWorkLog, loadWorkLogEntries, getWorkLogSummary } from '../utils/work-log-loader.js';
 import { recordJournalEntry, loadJournalEntries, getJournalStats, loadAllJournalEntries } from '../utils/journal-loader.js';
-import { recordDecision, loadDecisions, getDecisionSummary } from '../utils/decision-loader.js';
+import { recordDecision, loadDecisions, getDecisionSummary, writeCompanionLoreEntry } from '../utils/decision-loader.js';
 import { loadDataPolicy, filterContent } from '../utils/data-policy-loader.js';
 
 export function getStreamsToolsList() {
@@ -322,8 +322,20 @@ export async function handleStreamsTool(
         status: (args.status as 'active' | 'proposed') || 'active',
         tags: args.tags as string[] | undefined,
       });
+
+      // v6.0 (D3 locked): write a companion lore insight entry that references
+      // the canonical decision. Best-effort — a companion-write failure must
+      // not prevent the decision from being recorded.
+      const companionLoreId = writeCompanionLoreEntry(ctx.rootDir, entry.id);
+
       return {
-        text: json({ recorded: true, id: entry.id, title: entry.title, timestamp: entry.timestamp }),
+        text: json({
+          recorded: true,
+          id: entry.id,
+          title: entry.title,
+          timestamp: entry.timestamp,
+          ...(companionLoreId ? { companion_lore_id: companionLoreId } : {}),
+        }),
         handled: true,
       };
     }

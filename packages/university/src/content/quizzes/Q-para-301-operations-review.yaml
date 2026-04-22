@@ -1,0 +1,66 @@
+id: Q-para-301-operations-review
+title: 'PARA 301: Operations — Operational Excellence'
+description: 'Quiz for lesson: Operational Excellence'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What is the correct order for the Paradigm operational loop?
+    choices:
+      A: Implement, validate, discover, orient
+      B: Orient, discover, assess risk, implement, validate, capture knowledge, monitor context
+      C: Discover, implement, commit, deploy
+      D: Assess risk, implement, test, deploy
+      E: Orient, implement, validate
+    correct: B
+    explanation: 'The full operational loop is: Orient (paradigm_status/session_recover), Discover (wisdom_context/navigate), Assess Risk (ripple/fragility), Implement (code + metadata), Validate (doctor/validate), Capture Knowledge (wisdom_record/history_record), Monitor Context (context_check).'
+  - id: q2
+    question: 'You are starting a new session to add a payment retry feature. #payment-service and $checkout-flow are involved. List the tools you should call in order BEFORE writing any code.'
+    choices:
+      A: paradigm_status, then paradigm_history_record
+      B: paradigm_status, paradigm_wisdom_context for both symbols, paradigm_ripple for both symbols, paradigm_history_fragility for flagged dependents
+      C: paradigm_search for 'payment', then start coding
+      D: paradigm_doctor, then start coding
+      E: paradigm_navigate with find intent, then start coding
+    correct: B
+    explanation: 'Before writing code, you should: (1) orient with paradigm_status, (2) check wisdom for the symbols you will modify, (3) run ripple analysis to see the blast radius, and (4) check fragility of any flagged dependents. This is the orient-discover-assess sequence of the operational loop.'
+  - id: q3
+    question: Which of these is a common operational pitfall in Paradigm projects?
+    choices:
+      A: Running paradigm doctor too frequently
+      B: Recording too much history
+      C: Deferring .purpose file updates to 'later', causing metadata to go stale
+      D: Using paradigm_navigate instead of reading files
+      E: Calling paradigm_session_health every 10 tool calls
+    correct: C
+    explanation: 'Deferring metadata updates is one of the most common pitfalls. When .purpose files go stale, navigation becomes misleading, ripple analysis produces incorrect results, and doctor generates false positives. The rule is: update metadata as you code, not after.'
+  - id: q4
+    question: What are the signs of a well-operated Paradigm project?
+    choices:
+      A: Minimal use of Paradigm tools to keep things simple
+      B: Accurate .purpose files, portal.yaml reflecting all protected routes, wisdom entries, history records, and context handoffs
+      C: A large number of .purpose files regardless of accuracy
+      D: No wisdom entries because the team never makes mistakes
+      E: Running paradigm scan before every commit
+    correct: B
+    explanation: A well-operated project has accurate (not just numerous) .purpose files, a portal.yaml that reflects reality, wisdom entries that prevent repeated mistakes, history records that enable fragility analysis, and context handoffs that allow seamless multi-session work.
+  - id: q5
+    question: You finished implementing a feature and discovered that directly modifying shared state outside of the intended pattern causes subtle bugs. What should you do before moving to your next task?
+    choices:
+      A: Just fix the bug and move on
+      B: Record an antipattern with paradigm_wisdom_record, record the implementation with paradigm_history_record, and run paradigm doctor
+      C: Only run paradigm doctor
+      D: Only call paradigm_history_record
+      E: Add a comment in the code and move on
+    correct: B
+    explanation: The capture phase of the operational loop involves recording both the antipattern (so future sessions avoid the same mistake) and the implementation history (so fragility tracking stays current), followed by validation to ensure metadata is consistent.

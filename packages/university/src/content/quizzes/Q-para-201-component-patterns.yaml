@@ -1,0 +1,56 @@
+id: Q-para-201-component-patterns
+title: 'PARA 201: Architecture — Component Patterns'
+description: 'Quiz for lesson: Component Patterns'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: A Redis caching layer is used by the user service, the product service, and the search service. How should it be tagged?
+    choices:
+      A: 'tags: [feature, redis] — because users interact with cached data'
+      B: 'tags: [integration, redis] — because Redis is a third-party service'
+      C: 'tags: [state, cache, redis] — because it manages data storage'
+      D: 'tags: [infrastructure, redis] — because it is a foundational service'
+      E: Both C and D are acceptable, depending on whether caching is the primary purpose or a supporting capability
+    correct: E
+    explanation: 'If the component''s primary purpose is data caching (storing and retrieving cached data), tags: [state, cache, redis] is appropriate. If it is more of a foundational service that provides caching as infrastructure, tags: [infrastructure, cache, redis] fits. Both are valid interpretations.'
+  - id: q2
+    question: You have a 500-line module that handles payment processing AND sends email receipts. What should you do?
+    choices:
+      A: Keep it as one component — splitting would be premature optimization
+      B: 'Split into #payment-processor and #receipt-emailer — they have distinct responsibilities'
+      C: Create a $payment-receipt-flow instead of splitting
+      D: Add more tags to cover both responsibilities in one component
+      E: Move the email logic into the logger
+    correct: B
+    explanation: Payment processing and email sending are distinct responsibilities that could change independently (e.g., switching email providers without touching payment logic). The module is also large (500 lines). Splitting into two focused components follows the 'split when responsibilities are distinct' guideline.
+  - id: q3
+    question: Why should you check paradigm_history_fragility before modifying infrastructure components?
+    choices:
+      A: Because infrastructure components have more lines of code
+      B: Because many other components depend on them, making changes high-risk
+      C: Because infrastructure components are never tested
+      D: Because the fragility check automatically creates a backup
+      E: Because infrastructure tags prevent direct modification
+    correct: B
+    explanation: 'Infrastructure components (logger, config-loader, database-pool) are foundational — many other components depend on them. A breaking change to #database-pool could cascade across the entire application. Fragility analysis warns you about this risk before you make changes.'
+  - id: q4
+    question: What is wrong with splitting a payment module into `#payment-step-1` and `#payment-step-2`?
+    choices:
+      A: Components cannot have numbers in their names
+      B: There should be three components minimum
+      C: The names are non-descriptive and the split is artificial — neither component has an independent responsibility
+      D: Steps should be defined as a flow, not as components
+      E: The hyphen before the number violates kebab-case
+    correct: C
+    explanation: 'If you cannot describe a component without referencing ''the other half,'' the split is artificial. #payment-step-1 and #payment-step-2 are not independent responsibilities — they are an arbitrary division of a single unit. Keep them as one component with a clear description.'

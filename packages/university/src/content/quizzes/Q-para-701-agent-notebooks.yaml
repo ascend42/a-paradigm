@@ -1,0 +1,66 @@
+id: Q-para-701-agent-notebooks
+title: 'PARA 701: Agent Mastery — Lesson 3: Agent Notebooks'
+description: 'Quiz for lesson: Lesson 3: Agent Notebooks'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A security agent has 30 notebook entries. During orchestration, how many are injected into its prompt?
+    choices:
+      A: All 30 — notebooks are always fully injected
+      B: The top 5 by concept match against the task's relevant symbols, sorted by appliedCount
+      C: The top 10, since 10 high-signal entries is the recommended maximum
+      D: Only entries with appliedCount > 0
+      E: A random selection of 5 entries
+    correct: B
+    explanation: 'buildProfileEnrichment() includes `notebookEntries.slice(0, 5)` — a hard limit of 5 entries. These are pre-filtered by concept match against the task''s relevant symbols and sorted by appliedCount descending (most-used first). The 5-entry budget is a deliberate token constraint: each entry consumes 100-300 tokens, so 5 entries use 500-1,500 tokens, which balances value against context budget.'
+  - id: q2
+    question: The security agent has a global notebook entry `nb-jwt-validation-001` and the current project has a project notebook entry with the same ID. Which one is used?
+    choices:
+      A: The global entry — global always takes precedence
+      B: Both entries are merged into one
+      C: The project entry wins — project overrides global on ID collision
+      D: An error is thrown for duplicate IDs
+      E: The entry with the higher appliedCount is used
+    correct: C
+    explanation: 'The notebook loader reads global entries first, then project entries. Entries are stored in a Map keyed by ID. When a project entry has the same ID as a global entry, the project entry overwrites the global one: `entries.set(entry.id, entry)`. This allows a project to customize an agent''s generic knowledge for project-specific needs — for example, overriding a generic JWT pattern with the project''s specific token rotation strategy.'
+  - id: q3
+    question: 'What is the difference between a notebook entry with `provenance.source: ''lore''` and one with `provenance.source: ''manual''`?'
+    choices:
+      A: Lore entries are read-only; manual entries are editable
+      B: Lore entries were promoted from session experience via promoteFromLore() and link to the original lore entry; manual entries were written directly without a session origin
+      C: Manual entries have higher confidence scores by default
+      D: Lore entries are global; manual entries are project-scoped
+      E: There is no functional difference — provenance is informational only
+    correct: B
+    explanation: 'Provenance tracks the origin of a notebook entry. `source: ''lore''` means the entry was created by `promoteFromLore()` — it links to the original lore entry via `loreEntryId` and was extracted from real session experience. `source: ''manual''` means someone wrote it directly (bootstrapping or direct curation). Lore-promoted entries have a verifiable chain of evidence (the session where the pattern was discovered), while manual entries rely on the author''s judgment. Both are functionally equivalent in how they''re used during enrichment.'
+  - id: q4
+    question: Why is `appliedCount` the primary sorting key for notebook entries rather than `confidence`?
+    choices:
+      A: appliedCount is easier to compute than confidence
+      B: Confidence is deprecated in favor of appliedCount
+      C: appliedCount is an empirical signal — an entry applied 15 times is proven useful in practice, while confidence is an initial estimate that may not reflect actual utility
+      D: appliedCount determines the entry's storage priority on disk
+      E: Confidence only applies to expertise scores, not notebook entries
+    correct: C
+    explanation: appliedCount tracks how many times an entry was actually used in orchestration. An entry with appliedCount of 15 has been surfaced and found useful in 15 sessions — this is empirical evidence of value. Confidence is an initial estimate (0.0-1.0) that may be set optimistically when the entry is created. A newly bootstrapped entry might have confidence 0.8 but appliedCount 0, meaning it looks good on paper but has never been validated. The system trusts what has been proven (appliedCount) over what has been estimated (confidence).
+  - id: q5
+    question: An agent's notebook entry snippet is 800 characters long. How does buildProfileEnrichment() handle this?
+    choices:
+      A: It injects the full 800-character snippet
+      B: It skips the entry entirely
+      C: It truncates the snippet to 300 characters and appends '...'
+      D: It splits the snippet across multiple prompt sections
+      E: It compresses the snippet using summarization
+    correct: C
+    explanation: 'buildProfileEnrichment() truncates long snippets: `nb.snippet.length > 300 ? nb.snippet.slice(0, 300) + ''...'' : nb.snippet`. The 300-character limit prevents a single large entry from consuming the entire notebook token budget. If the agent needs the full snippet, it can use `paradigm_notebook_search` to retrieve the complete entry on demand. This is the context engineering principle at work — inject enough to be useful, provide a retrieval path for more detail.'

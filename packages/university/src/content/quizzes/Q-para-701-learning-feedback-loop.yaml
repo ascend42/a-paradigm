@@ -1,0 +1,66 @@
+id: Q-para-701-learning-feedback-loop
+title: 'PARA 701: Agent Mastery — Lesson 9: The Learning Feedback Loop'
+description: 'Quiz for lesson: Lesson 9: The Learning Feedback Loop'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: The security agent's contribution is revised by the human (partially correct). What happens to its expertise confidence on the relevant symbols?
+    choices:
+      A: No change — revised contributions have no effect
+      B: Confidence decreases by 0.02 (same as dismissed)
+      C: Confidence decreases by 0.01 — the revised verdict means the agent was partially right, so the penalty is smaller than dismissed (-0.02)
+      D: Confidence increases by 0.01 (partially correct is still partially positive)
+      E: Confidence is reset to 0.5 (neutral)
+    correct: C
+    explanation: Revised verdicts trigger a -0.01 adjustment. This is smaller than dismissed (-0.02) because the agent was in the right direction — the human modified the contribution rather than rejecting it entirely. The asymmetric reinforcement scheme (+0.03 accept / -0.02 dismiss / -0.01 revise) is designed so that a mix of mostly-accepted with occasional revisions still trends upward, while consistent dismissals trend downward.
+  - id: q2
+    question: The Teacher Model runs at postflight and reads the session work log. What is it looking for?
+    choices:
+      A: Code syntax errors in agent contributions
+      B: Patterns in user verdicts — which agents were accepted, dismissed, or revised, and what insights can be extracted for journal entries
+      C: Missing .purpose file updates
+      D: Whether the orchestrator was called
+      E: Token usage metrics for cost optimization
+    correct: B
+    explanation: 'The Teacher Model''s postflight learning pass reads agent-contribution and user-verdict entries from the session work log. It looks for patterns: which agents were consistently accepted (confirming their expertise), which were revised (indicating partial knowledge gaps), and what specific corrections the human made (revisionDelta). It synthesizes these patterns into journal entries with extracted LearningPatterns that describe when to apply the corrected approach. The Teacher Model does not check code quality or Paradigm compliance — those are the reviewer''s and stop hook''s jobs.'
+  - id: q3
+    question: 'A journal entry about JWT refresh token rotation has appeared in 4 different sessions with `transferable: true`. Sensei is evaluating whether to promote it to a notebook entry. What criteria does Sensei use?'
+    choices:
+      A: Only the transferable flag — if true, it is automatically promoted
+      B: The number of sessions (4 is enough) — promotion is count-based
+      C: Whether the insight is transferable, actionable, confirmed by multiple sessions, and high enough confidence to be reliable
+      D: Whether the human explicitly requests promotion
+      E: Whether the agent's overall acceptance rate is above 80%
+    correct: C
+    explanation: 'Sensei evaluates multiple criteria: (1) Is it transferable to other projects? (`transferable: true` confirms this). (2) Is it actionable — specific enough to apply, not just a vague observation? (3) Has it appeared across multiple sessions — 4 appearances confirms the pattern. (4) Is the confidence high enough? A pattern discovered through `correction_received` with `confidence_after: 0.9` is more reliable than one from `self_reflection` with `confidence_after: 0.6`. The promotion is a quality gate, not automatic.'
+  - id: q4
+    question: Why is the expertise adjustment +0.03 for accepted but only -0.02 for dismissed (asymmetric rather than symmetric)?
+    choices:
+      A: Positive reinforcement is always stronger than negative in learning theory
+      B: The asymmetry prevents a single bad session from collapsing an otherwise reliable agent's confidence — it takes more dismissals than acceptances to significantly change confidence
+      C: Symmetric adjustments would cause confidence to oscillate unstably
+      D: The specific values are arbitrary and have no design rationale
+      E: Accepted contributions are more common, so they need a larger weight
+    correct: B
+    explanation: The asymmetry is deliberate. If an agent has been consistently good (confidence 0.9) and has one bad session where a contribution is dismissed, symmetric -0.03 would drop it to 0.87. With asymmetric -0.02, it drops to 0.88. This matters because a single bad session should not outweigh multiple good ones. The agent needs more dismissals than acceptances to trend downward, which matches the expectation that occasionally wrong agents are still net-positive contributors.
+  - id: q5
+    question: An agent's nomination was deferred (not accepted, not dismissed). How does this affect the learning loop?
+    choices:
+      A: The expertise confidence decreases slightly
+      B: The nomination is marked for re-evaluation in the next session
+      C: No expertise change occurs — deferred says nothing about correctness, only timing. The journal entry (if written) would use trigger `self_reflection` rather than `human_feedback`.
+      D: The agent is temporarily benched until the deferred item is resolved
+      E: The Teacher Model treats deferred as a weaker form of dismissal
+    correct: C
+    explanation: A deferred verdict means the contribution is not relevant right now, but may be valid. The expertise adjustment for deferred is 0 (no change) because deferral carries no signal about whether the agent was right or wrong. The agent's confidence remains unchanged. If the Teacher Model writes a journal entry about the deferred contribution, it would use `self_reflection` as the trigger rather than `human_feedback`, since the human did not evaluate correctness.

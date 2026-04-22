@@ -1,0 +1,66 @@
+id: Q-para-401-mastery-review
+title: 'PARA 401: Orchestration — Framework Mastery'
+description: 'Quiz for lesson: Framework Mastery'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: A developer consistently updates .purpose files, runs doctor before committing, and records wisdom after debugging -- but does not use orchestration for complex tasks. What is their mastery level?
+    choices:
+      A: Beginner -- they are missing orchestration
+      B: Practitioner -- they follow the operational loop but have not internalized the full framework
+      C: Master -- operational excellence is sufficient
+      D: Expert -- they have surpassed the mastery framework
+      E: Cannot be determined from this description
+    correct: B
+    explanation: A practitioner follows the operational loop consistently (Phase 3) but has not yet internalized Phase 4 (orchestrated complexity). They are effective but have room to grow in multi-agent coordination and automated governance.
+  - id: q2
+    question: You are starting a brand new Paradigm project. What is the correct initialization sequence?
+    choices:
+      A: Write code first, then add .purpose files
+      B: paradigm shift, define symbols in .purpose files, set up portal.yaml, configure agents.yaml
+      C: paradigm scan, then paradigm doctor
+      D: Create portal.yaml first, then .purpose files, then paradigm shift
+      E: Install all MCP tools, then start coding
+    correct: B
+    explanation: 'Project initialization follows a specific sequence: paradigm shift creates the .paradigm directory structure, then you define symbols in .purpose files, set up portal.yaml for gates, and configure agent facets. The foundation must exist before the operational tools have anything to work with.'
+  - id: q3
+    question: 'The ''self-reinforcing flywheel'' means that skipping steps in the Paradigm workflow causes:'
+    choices:
+      A: Immediate build failures
+      B: Gradual degradation of navigation accuracy, fragility analysis, and team wisdom
+      C: No impact -- each step is independent
+      D: Only affects the developer who skipped the step
+      E: The project must be reinitialized
+    correct: B
+    explanation: 'Paradigm''s tools feed each other: .purpose files enable navigation, commit trailers feed history, history enables fragility analysis, wisdom prevents repeated mistakes. Skipping any step degrades downstream tools. The effect is gradual but cumulative -- stale metadata leads to unreliable navigation, missing history leads to inaccurate fragility scores, uncaptured wisdom leads to repeated mistakes.'
+  - id: q4
+    question: 'You face a complex task: ''Add multi-tenant support with per-tenant billing, admin dashboard, and tenant isolation gates.'' In which order should you proceed?'
+    choices:
+      A: Start coding immediately and figure it out as you go
+      B: paradigm_orchestrate_inline (plan) -> review agent team -> paradigm_orchestrate_inline (execute) -> launch agents by stage -> PM post-flight
+      C: paradigm_search for 'tenant' -> read all matching files -> start implementing
+      D: paradigm_wisdom_record a decision -> then implement
+      E: paradigm doctor -> paradigm scan -> start implementing
+    correct: B
+    explanation: 'This is a complex multi-faceted task (5+ files, security + implementation + architecture). The correct approach is: plan the orchestration to get the right agent team, review and adjust, execute to get prompts, launch agents according to the stage plan, and run PM post-flight to verify compliance. This is the full Phase 4 workflow.'
+  - id: q5
+    question: What is the fundamental difference between a Paradigm master and a Paradigm practitioner?
+    choices:
+      A: Masters know more tools
+      B: Masters have used Paradigm for longer
+      C: Masters have internalized the workflows as habits -- the question triggers the tool automatically
+      D: Masters only use the CLI while practitioners use MCP tools
+      E: Masters do not need to update .purpose files
+    correct: C
+    explanation: The distinction is habit, not knowledge. Both masters and practitioners know the tools. The master has internalized the framework so deeply that reaching for paradigm_ripple before a modification is reflexive, not deliberate. The question ('what depends on this?') triggers the tool automatically.

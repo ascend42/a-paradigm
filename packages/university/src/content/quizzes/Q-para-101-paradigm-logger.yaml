@@ -1,0 +1,56 @@
+id: Q-para-101-paradigm-logger
+title: 'PARA 101: Foundations — The Paradigm Logger'
+description: 'Quiz for lesson: The Paradigm Logger'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: What is the correct way to log a successful payment in `#payment-service`?
+    choices:
+      A: 'console.log(''Payment processed'', { amount: 4999 })'
+      B: log.info('#payment-service', 'Payment processed')
+      C: 'log.component(''#payment-service'').info(''Payment processed'', { amount: 4999 })'
+      D: log.signal('!payment-completed').info('Payment processed')
+      E: log.gate('#payment-service').info('Payment processed')
+    correct: C
+    explanation: 'Paradigm''s logging philosophy is that every log entry should be tagged with the symbol it relates to. For a component like #payment-service, the log should identify it as a component-level entry at the info level.'
+  - id: q2
+    question: Code in the `middleware/` directory should typically use which logger method?
+    choices:
+      A: log.component()
+      B: log.flow()
+      C: log.signal()
+      D: log.gate()
+      E: log.aspect()
+    correct: D
+    explanation: By Paradigm's directory-to-symbol convention, middleware/ maps to gates (^). Code in middleware directories typically performs condition checks, which are gate operations — so logs from these files should be tagged as gate-related.
+  - id: q3
+    question: An authentication gate denies access to an unauthenticated user. What log level should be used?
+    choices:
+      A: debug — it is a routine check
+      B: info — the gate worked correctly
+      C: warn — access was denied, which is unexpected but not a failure
+      D: error — someone tried to access a protected resource
+      E: No logging — gate denials should be silent
+    correct: C
+    explanation: A gate denial is unexpected from the user's perspective (they tried to access something they should not) but it is recoverable and the system handled it correctly. This makes it a warn — not an error (the system did not fail) and not info (something unusual happened).
+  - id: q4
+    question: Which of these is a valid reason to use the Paradigm logger instead of console.log?
+    choices:
+      A: console.log is slower in production environments
+      B: The Paradigm logger automatically fixes bugs in the logged code
+      C: Structured symbol-tagged logs enable filtering, tracing, and incident correlation
+      D: console.log does not work in TypeScript projects
+      E: The Paradigm logger compresses log output to save disk space
+    correct: C
+    explanation: The primary advantage of the Paradigm logger is structure. Every log line is tagged with a symbol type and name, enabling you to filter by component, trace entries back to .purpose definitions, and correlate incidents with specific symbols.

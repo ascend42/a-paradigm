@@ -1,0 +1,56 @@
+id: Q-para-301-wisdom-system
+title: 'PARA 301: Operations — Team Wisdom'
+description: 'Quiz for lesson: Team Wisdom'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: What are the three types of team wisdom in Paradigm?
+    choices:
+      A: Patterns, templates, examples
+      B: Preferences, antipatterns, decisions
+      C: Rules, guidelines, standards
+      D: Documentation, comments, readmes
+      E: Tests, benchmarks, audits
+    correct: B
+    explanation: 'Paradigm''s wisdom system has three types: preferences (how we do things), antipatterns (what not to do and what to do instead), and decisions (architectural choices with rationale).'
+  - id: q2
+    question: You just spent an hour debugging an issue caused by calling the Stripe API directly from a component. What should you do?
+    choices:
+      A: Fix the bug and move on
+      B: Record a wisdom antipattern with paradigm_wisdom_record documenting the mistake and the correct approach
+      C: Add a comment in the code
+      D: Send an email to the team
+      E: Record a preference using paradigm_history_record
+    correct: B
+    explanation: When you discover a recurring mistake pattern, you should record it as an antipattern using paradigm_wisdom_record. This captures the description of what went wrong, why it is problematic, and the correct alternative -- making it available to all future sessions and team members.
+  - id: q3
+    question: Which tool tells you who on the team is the expert for a specific symbol?
+    choices:
+      A: paradigm_wisdom_context
+      B: paradigm_history_context
+      C: paradigm_wisdom_expert
+      D: paradigm_search
+      E: paradigm_navigate
+    correct: C
+    explanation: paradigm_wisdom_expert finds the human experts who have the most knowledge about specific symbols or areas. It uses contribution history and ownership data to identify who to consult.
+  - id: q4
+    question: What is the correct timing for calling paradigm_wisdom_context?
+    choices:
+      A: After deploying to production
+      B: Only when you encounter a bug
+      C: Before making changes to symbols, to learn existing conventions and avoid known pitfalls
+      D: Only during code review
+      E: Once per week during sprint planning
+    correct: C
+    explanation: paradigm_wisdom_context should be called before making changes to symbols. It retrieves preferences, antipatterns, and decisions relevant to the symbols you are about to modify, helping you avoid known mistakes and follow established patterns.

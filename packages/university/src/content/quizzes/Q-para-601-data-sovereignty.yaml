@@ -1,0 +1,56 @@
+id: Q-para-601-data-sovereignty
+title: 'PARA 601: Paradigm Ambient — Data Sovereignty'
+description: 'Quiz for lesson: Data Sovereignty'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: An agent's learning journal entry about JWT refresh token rotation in project A should be available when the same agent works on project B. Which trust ring enables this?
+    choices:
+      A: 'Ring 1: project-locked — journal entries stay in the project'
+      B: 'Ring 2: user-scoped — the journal travels with the agent across the user''s projects'
+      C: 'Ring 3: creator-upstream — the agent creator''s infrastructure bridges projects'
+      D: 'Ring 4: network-public — cross-project sharing requires public access'
+      E: No ring — cross-project sharing is not supported
+    correct: B
+    explanation: Learning journal entries are stored at `~/.paradigm/agents/{id}/journal/` (user-scoped, ring 2). This location is in the user's home directory, not the project directory, so it persists across projects. The same agent identity (`id`) is used across projects, giving the agent access to its own journal entries regardless of which project it is currently working in. Ring 2 is the minimum trust level needed for cross-project travel within the same user's scope.
+  - id: q2
+    question: 'A user creates a `data-policy.yaml` with `observation.deny: [''**/logs/**'']` but does NOT include `.env*` in their deny list. Can agents observe `.env` files?'
+    choices:
+      A: Yes — the user's policy replaces the default, and `.env*` is not in the user's deny list
+      B: No — deny lists are additive on merge. The default `.env*` deny is always present, and the user's `**/logs/**` is added to it
+      C: It depends on whether the agent has an override in `agent_overrides`
+      D: Yes, but the content will be redacted before storage
+      E: No — `.env` files are hardcoded as blocked regardless of policy
+    correct: B
+    explanation: The merge rule states that deny lists are additive, never replacing. The default policy denies `.env*`, `**/*.key`, `**/*.pem`, and `**/secrets/**`. The user's policy adds `**/logs/**` to this list. The merged deny list contains all five patterns. This design prevents users from accidentally exposing secret files by omitting them from their custom policy.
+  - id: q3
+    question: 'A work log entry is recorded with `summary: ''Fixed the API_SECRET_KEY rotation logic in auth.ts''`. The work log stream has `deny_content: [code_snippets]` but allows `file_paths` and `symbol_names`. What happens to the summary?'
+    choices:
+      A: The summary is stored as-is — `API_SECRET_KEY` is a symbol name, not a code snippet
+      B: The entire summary is blocked — it contains a reference to a secret
+      C: The summary is stored as-is because content category filtering only applies to structured fields, not free-text summaries
+      D: If the learning journal's redaction patterns are applied to the work log, `API_SECRET_KEY` would match `\b[A-Z_]{2,}_KEY\b` and be replaced with `[REDACTED]`
+      E: The summary is rejected and the work log entry fails to record
+    correct: D
+    explanation: Redaction patterns are regex-based and applied to content before storage. The pattern `\b[A-Z_]{2,}_KEY\b` matches `API_SECRET_KEY`. If this pattern is configured on the work log stream (or if the filtering function applies cross-stream redaction), the summary would become `'Fixed the [REDACTED] rotation logic in auth.ts'`. In the default policy, this specific redaction is configured on `learning_journal`, not `work_log` — but the `filterContent` function applies whatever redaction patterns are configured for the target stream.
+  - id: q4
+    question: What upstream data is allowed by default in the DEFAULT_DATA_POLICY?
+    choices:
+      A: Everything is allowed upstream — creators need full data for improvement
+      B: Only `task_type`, `outcome`, `helpfulness`, `duration_bucket`, and `error_category` — code, file paths, symbol names, conversation content, and user identity are explicitly denied
+      C: Nothing is allowed — upstream sharing is disabled by default
+      D: File paths and symbol names are allowed, but code content is denied
+      E: Only aggregated statistics, no individual session data
+    correct: B
+    explanation: 'The default upstream rules allow five high-level fields: `task_type` (what kind of work), `outcome` (success/failure), `helpfulness` (user rating), `duration_bucket` (how long it took, bucketed), and `error_category` (what went wrong, categorized). Five categories are explicitly denied: `code_of_any_kind`, `file_paths`, `symbol_names`, `conversation_content`, and `user_identity`. This ensures agent creators get enough signal to improve their agents without receiving any sensitive project data.'

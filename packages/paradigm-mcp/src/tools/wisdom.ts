@@ -27,6 +27,12 @@ import {
   loadGlobalDecisions,
 } from '../utils/global-store.js';
 import { invalidateWisdomCache } from '../utils/wisdom-loader.js';
+import { recordDecision as recordTeamDecision, writeCompanionLoreEntry } from '../utils/decision-loader.js';
+import { log } from '../utils/mcp-logger.js';
+
+// Session-scoped flag so the v6.0 deprecation warning fires at most once per
+// MCP session (D3 locked — soft deprecation on wisdom, asymmetric to lore).
+let wisdomDecisionDeprecationEmitted = false;
 
 /**
  * Get list of wisdom tools
@@ -409,25 +415,67 @@ export async function handleWisdomTool(
           };
         }
 
-        const decision: WisdomDecision = {
-          id,
-          title,
-          status: status || 'proposed',
-          date: new Date().toISOString().split('T')[0],
-          symbols,
-          context: reason || '',
-          decision: description,
-          rationale,
-          consequences,
-        };
+        // v6.0 (D3 locked): route wisdom-decisions to the canonical
+        // .paradigm/decisions/ stream store + emit a one-time-per-session
+        // deprecation warning via the Paradigm logger. Keep wisdom write
+        // as a fallback when recordScope === 'global' (global wisdom is
+        // out of scope for the decision-store migration at v5.39.0).
 
-        if (recordScope === 'global') {
-          recordGlobalDecision(decision);
-        } else {
-          await recordDecision(ctx.rootDir, decision);
+        if (!wisdomDecisionDeprecationEmitted) {
+          wisdomDecisionDeprecationEmitted = true;
+          log.component('#wisdom').warn(
+            'paradigm_wisdom_record({type:"decision"}) is deprecated. Use paradigm_decision_record instead.',
+            {
+              deprecation: 'v6.0',
+              canonical_tool: 'paradigm_decision_record',
+            },
+          );
         }
 
-        // Invalidate cache so merged wisdom is refreshed
+        if (recordScope === 'global') {
+          // Global wisdom decisions remain in the wisdom store for v5.39.0.
+          const globalDec: WisdomDecision = {
+            id,
+            title,
+            status: status || 'proposed',
+            date: new Date().toISOString().split('T')[0],
+            symbols,
+            context: reason || '',
+            decision: description,
+            rationale,
+            consequences,
+          };
+          recordGlobalDecision(globalDec);
+          invalidateWisdomCache(ctx.rootDir);
+          return {
+            handled: true,
+            text: JSON.stringify({
+              success: true,
+              type: 'decision',
+              id,
+              scope: 'global',
+              deprecation:
+                'paradigm_wisdom_record({type:"decision"}) is deprecated; use paradigm_decision_record for project-scoped decisions.',
+              message: 'Decision recorded to global scope',
+            }),
+          };
+        }
+
+        // Project scope → route to TD-streams store.
+        const td = recordTeamDecision(ctx.rootDir, {
+          title,
+          decision: description,
+          rationale: { factors: rationale.factors, conclusion: rationale.conclusion },
+          participants: [{ id: 'wisdom-record', role: 'agent', stance: 'proposed' }],
+          symbols_affected: symbols,
+          status: (status === 'accepted' ? 'active' : status === 'proposed' ? 'proposed' : 'active'),
+          context: reason || undefined,
+          consequences,
+          date: new Date().toISOString().split('T')[0],
+          migrated_from: 'wisdom-decision',
+        });
+
+        const companionLoreId = writeCompanionLoreEntry(ctx.rootDir, td.id);
         invalidateWisdomCache(ctx.rootDir);
 
         return {
@@ -435,9 +483,13 @@ export async function handleWisdomTool(
           text: JSON.stringify({
             success: true,
             type: 'decision',
-            id,
-            scope: recordScope,
-            message: `Decision recorded to ${recordScope} scope`,
+            id: td.id,
+            legacy_id: id,
+            scope: 'project',
+            deprecation:
+              'paradigm_wisdom_record({type:"decision"}) is deprecated; use paradigm_decision_record going forward.',
+            message: `Decision recorded (routed to decisions stream as ${td.id})`,
+            ...(companionLoreId ? { companion_lore_id: companionLoreId } : {}),
           }),
         };
       }

@@ -1,0 +1,46 @@
+id: Q-para-301-fragility-tracking
+title: 'PARA 301: Operations — Fragility & Stability'
+description: 'Quiz for lesson: Fragility & Stability'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: Which factors does Paradigm's fragility analysis consider when computing stability scores?
+    choices:
+      A: Only the number of lines of code
+      B: Change frequency, rollback count, fix-to-feature ratio, and recency of changes
+      C: Only how many rollbacks have occurred
+      D: The number of developers who have modified the symbol
+      E: Test coverage percentage
+    correct: B
+    explanation: 'Fragility analysis considers multiple factors: how frequently the symbol changes, how many rollbacks occurred, the ratio of fixes to features (high fix ratio suggests instability), and how recently changes were made.'
+  - id: q2
+    question: 'You are about to modify #billing-engine, which paradigm_history_fragility reports as fragile. What should you do FIRST?'
+    choices:
+      A: Skip the change entirely
+      B: Refactor the symbol to improve stability
+      C: Read its full history and check team wisdom to understand why it is unstable
+      D: Delete the symbol and start fresh
+      E: Increase the stability score manually
+    correct: C
+    explanation: Before modifying a fragile symbol, you should first understand why it is fragile by reading its history (paradigm_history_context) and checking team wisdom (paradigm_wisdom_context). This context helps you avoid repeating past mistakes.
+  - id: q3
+    question: A symbol has a high count of 'refactor' type events in its history. What might this indicate?
+    choices:
+      A: The symbol is well-maintained and actively improved
+      B: The symbol has excellent test coverage
+      C: Unclear requirements, poor initial design, or a component doing too much
+      D: The symbol is ready for production
+      E: The development team is very productive
+    correct: C
+    explanation: Frequent refactors often indicate underlying issues -- unclear requirements that keep changing, a poor initial design that needs constant adjustment, or a component that has grown beyond its original scope. The fragility system surfaces these patterns for root cause analysis.

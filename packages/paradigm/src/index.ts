@@ -315,7 +315,7 @@ probeCmd
   });
 
 // paradigm migrate
-program
+const migrateCmd = program
   .command('migrate')
   .description('Detect and apply migrations to bring project up to date')
   .option('--dry-run', 'Preview changes without applying')
@@ -329,6 +329,17 @@ program
   .action(async (options) => {
     const { migrateCommand } = await import('./commands/migrate/index.js');
     await migrateCommand(options);
+  });
+
+// paradigm migrate decisions — v6.0 decision-store consolidation (hidden)
+migrateCmd
+  .command('decisions', { hidden: true })
+  .description('v6.0: consolidate wisdom-decisions + lore-decisions into .paradigm/decisions/')
+  .option('--dry-run', 'Preview migration without writes')
+  .option('--json', 'Emit JSON summary')
+  .action(async (options) => {
+    const { migrateDecisionsCommand } = await import('./commands/migrate-decisions.js');
+    await migrateDecisionsCommand(options);
   });
 
 // paradigm upgrade (deprecated — use `paradigm migrate`)
@@ -1973,6 +1984,9 @@ universityCmd
   .description('Launch Paradigm University learning platform')
   .option('-p, --port <port>', 'Port to run on', '3839')
   .option('--no-open', "Don't open browser automatically")
+  .option('--pack <id>', 'v6.0: mount a specific content pack by id')
+  .option('--project', 'v6.0: mount the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .action(async (options) => {
     const { universityServeCommand } = await import('./commands/university/serve.js');
     await universityServeCommand(undefined, options);
@@ -1981,11 +1995,14 @@ universityCmd
 universityCmd
   .command('list')
   .alias('ls')
-  .description('List university content')
+  .description('List discovered packs (default) or entries within a pack (with --pack/--project)')
   .option('--type <type>', 'Filter by type: note, policy, guide, runbook, quiz, path')
   .option('--tag <tag>', 'Filter by tag')
   .option('--difficulty <level>', 'Filter by difficulty: beginner, intermediate, advanced')
   .option('--symbol <symbol>', 'Filter by Paradigm symbol')
+  .option('--pack <id>', 'v6.0: target a specific content pack by id')
+  .option('--project', 'v6.0: target the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .option('-l, --limit <number>', 'Number of entries', '20')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -2002,6 +2019,9 @@ universityCmd
   .option('--symbols <symbols>', 'Comma-separated Paradigm symbols')
   .option('--difficulty <level>', 'Difficulty: beginner, intermediate, advanced')
   .option('--minutes <n>', 'Estimated reading time in minutes')
+  .option('--pack <id>', 'v6.0: target a specific content pack by id')
+  .option('--project', 'v6.0: target the local project pack (default)')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .action(async (type, options) => {
     const { universityAddCommand } = await import('./commands/university/add.js');
     await universityAddCommand(type, options);
@@ -2009,8 +2029,11 @@ universityCmd
 
 universityCmd
   .command('show <id>')
-  .description('Show a content item in full')
+  .description('Show a content item in full; id accepts bare or <pack-id>:<entry-id>')
   .option('--json', 'Output as JSON')
+  .option('--pack <id>', 'v6.0: disambiguate bare id against a specific pack')
+  .option('--project', 'v6.0: target the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .action(async (id, options) => {
     const { universityShowCommand } = await import('./commands/university/show.js');
     await universityShowCommand(id, options);
@@ -2019,15 +2042,21 @@ universityCmd
 universityCmd
   .command('quiz <id>')
   .description('Take an interactive quiz in the terminal')
-  .action(async (id) => {
+  .option('--pack <id>', 'v6.0: target a specific content pack by id')
+  .option('--project', 'v6.0: target the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
+  .action(async (id, options) => {
     const { universityQuizCommand } = await import('./commands/university/quiz.js');
-    await universityQuizCommand(id);
+    await universityQuizCommand(id, options);
   });
 
 universityCmd
   .command('status')
   .description('Show university content overview and completion stats')
   .option('--json', 'Output as JSON')
+  .option('--pack <id>', 'v6.0: target a specific content pack by id')
+  .option('--project', 'v6.0: target the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .action(async (options) => {
     const { universityStatusCommand } = await import('./commands/university/status.js');
     await universityStatusCommand(options);
@@ -2039,12 +2068,42 @@ universityCmd
   .option('--deep', 'Enable deep cross-reference checks against scan-index')
   .option('--id <id>', 'Validate a specific content item')
   .option('--json', 'Output as JSON')
+  .option('--pack <id>', 'v6.0: target a specific content pack by id')
+  .option('--project', 'v6.0: target the local project pack')
+  .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
   .action(async (options) => {
     const { universityValidateCommand } = await import('./commands/university/validate.js');
     await universityValidateCommand(options);
   });
 
+// paradigm university init — scaffold .paradigm/university/pack.yaml (v6.0)
+universityCmd
+  .command('init')
+  .description('Scaffold .paradigm/university/pack.yaml (use --discipline for sub-pack)')
+  .option('--discipline <name>', 'Scaffold a discipline sub-pack at .paradigm/university/<name>/')
+  .option('-f, --force', 'Overwrite an existing pack.yaml')
+  .action(async (options) => {
+    const { universityInitCommand } = await import('./commands/university/init.js');
+    await universityInitCommand(options);
+  });
+
+// paradigm university migrate-plsat — hidden one-shot PLSAT migration (v6.0)
+universityCmd
+  .command('migrate-plsat', { hidden: true })
+  .description('Migrate PLSAT JSON content to v6.0 pack layout (internal)')
+  .option('--content-dir <path>', 'Override source content directory')
+  .option('-f, --force', 'Overwrite existing target files')
+  .option('--delete-sources', 'Delete source JSON files after migration (gated per D4)')
+  .option('--json', 'Emit JSON summary')
+  .action(async (options) => {
+    const { universityMigratePlsatCommand } = await import('./commands/university/migrate-plsat.js');
+    await universityMigratePlsatCommand(options);
+  });
+
 // Default university action: launch server (backward compat with bare `paradigm university`)
+// Selectors --pack/--project/--discipline are surfaced on the `serve` subcommand
+// and individual subcommands. Keeping them off the parent avoids Commander
+// intercepting them before the subcommand dispatch.
 universityCmd
   .option('-p, --port <port>', 'Port to run on', '3839')
   .option('--no-open', "Don't open browser automatically")

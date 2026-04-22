@@ -23,8 +23,13 @@ import {
 import { getComplianceRate, getComplianceByCategory } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
 import { detectProtocolSuggestion } from '../utils/protocol-loader.js';
+import { log } from '../utils/mcp-logger.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
+
+// Session-scoped deprecation flag for type:'decision' on paradigm_lore_record.
+// v5.39.0 = soft deprecation; v6.0 = hard error per D3 locked.
+let loreDecisionDeprecationEmitted = false;
 
 /** Resolve the human author for MCP-recorded entries */
 function resolveAuthorForMcp(): string {
@@ -518,6 +523,21 @@ export async function handleLoreTool(
         symbols_touched: string[];
       };
 
+      // v5.39.0 (D3 locked): soft-deprecate type:'decision' on lore_record.
+      // Hard error ships v6.0. Still write the entry at v5.39.0 — just warn.
+      let decisionDeprecationNotice: string | undefined;
+      if (type === 'decision') {
+        decisionDeprecationNotice =
+          "paradigm_lore_record({type:'decision'}) is deprecated and will be rejected in v6.0. Use paradigm_decision_record for canonical decision records; paradigm_lore_record({type:'insight', references: {decision_id}}) for narrative references.";
+        if (!loreDecisionDeprecationEmitted) {
+          loreDecisionDeprecationEmitted = true;
+          log.component('#lore').warn(decisionDeprecationNotice, {
+            deprecation: 'v6.0',
+            canonical_tool: 'paradigm_decision_record',
+          });
+        }
+      }
+
       // Auto-attach habit compliance data
       let habit_compliance: LoreEntry['habit_compliance'];
       try {
@@ -660,6 +680,7 @@ export async function handleLoreTool(
           message: 'Lore entry recorded successfully',
           ...(streamRouted ? { stream: streamRouted } : {}),
           ...(protocol_suggestion ? { protocol_suggestion } : {}),
+          ...(decisionDeprecationNotice ? { deprecation: decisionDeprecationNotice } : {}),
         }),
       };
     }

@@ -1,0 +1,56 @@
+id: Q-para-301-context-management
+title: 'PARA 301: Operations — Context Management'
+description: 'Quiz for lesson: Context Management'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: How often should you call paradigm_session_health during a long session?
+    choices:
+      A: Only at the start of the session
+      B: Every 10-15 tool calls
+      C: Only when the AI starts forgetting things
+      D: Once per hour
+      E: Only before handoff
+    correct: B
+    explanation: The recommended cadence for context checks is every 10-15 tool calls. This proactive monitoring lets you prepare for handoff before context is exhausted, rather than discovering the limit when it is too late.
+  - id: q2
+    question: paradigm_session_health returns 'handoff-soon'. What should you do?
+    choices:
+      A: Ignore it and keep working
+      B: Immediately stop all work
+      C: Finish the current task, then call paradigm_handoff_prepare with summary and next steps
+      D: Delete old messages to free up context
+      E: Switch to a model with a larger context window
+    correct: C
+    explanation: When handoff is recommended, prioritize completing the current task (if close to done), then prepare a handoff summary. paradigm_handoff_prepare captures what was done, files modified, next steps, and open questions so the next session can continue seamlessly.
+  - id: q3
+    question: What is the first thing a new AI agent session should do to continue work from a previous session?
+    choices:
+      A: Read every file that was modified
+      B: Call paradigm_session_recover to load breadcrumbs from the previous session
+      C: Start the task from scratch
+      D: Call paradigm_doctor to validate the project
+      E: Run paradigm scan to rebuild the index
+    correct: B
+    explanation: paradigm_session_recover loads the breadcrumbs and handoff summary from the previous session. This tells the new agent what was done, what files were modified, what remains, and any open questions -- enabling seamless continuity.
+  - id: q4
+    question: At what context usage threshold does Paradigm recommend preparing a handoff?
+    choices:
+      A: 50%
+      B: 65%
+      C: 75%
+      D: 85%
+      E: 95%
+    correct: D
+    explanation: When context usage exceeds 85%, Paradigm recommends preparing a handoff. This leaves enough room to complete the current task and create a proper handoff summary without running out of context.

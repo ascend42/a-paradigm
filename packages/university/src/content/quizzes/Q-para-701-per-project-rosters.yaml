@@ -1,0 +1,66 @@
+id: Q-para-701-per-project-rosters
+title: 'PARA 701: Agent Mastery — Lesson 5: Per-Project Rosters'
+description: 'Quiz for lesson: Lesson 5: Per-Project Rosters'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A developer runs `paradigm agents deactivate gamedev 3d audio` on their SaaS project. What happens to these agents globally?
+    choices:
+      A: Their .agent files are deleted from ~/.paradigm/agents/
+      B: 'Their .agent files get `benched: true` added'
+      C: Nothing — the command only removes them from this project's roster.yaml. They remain fully available globally and on other projects.
+      D: Their expertise scores are reset to 0
+      E: They are moved to a .paradigm/deactivated/ directory
+    correct: C
+    explanation: 'Roster commands modify `.paradigm/roster.yaml` and nothing else. The global .agent files at `~/.paradigm/agents/` are never touched by roster operations. Deactivating gamedev on a SaaS project removes it from that project''s `active` list. The gamedev agent remains fully intact globally and would appear in the roster of a game project. This is the key architectural decision: rosters are project-level filters over global agents.'
+  - id: q2
+    question: A project has no roster.yaml file. A developer runs `paradigm_orchestrate_inline` on a task. How many agents does the orchestrator consider?
+    choices:
+      A: None — a roster is required for orchestration
+      B: 8 — the generic default roster
+      C: All global agents — no roster means no filtering (backward compatibility)
+      D: Only the architect and builder — the minimum required
+      E: The orchestrator prompts for roster creation before proceeding
+    correct: C
+    explanation: '`loadProjectRoster()` returns `null` if no roster.yaml exists. `isAgentActive()` returns `true` for all agents when the roster is null. The orchestrator''s `getActiveAgents()` function falls back to listing all global agents. This is the backward compatibility guarantee: projects that predate the roster feature continue working exactly as before. All 54 agents are considered during planning.'
+  - id: q3
+    question: The project type detection finds both `supabase/` and `next.config.ts` in the project root. What project type is detected and what does the suggested roster include?
+    choices:
+      A: backend-api — Supabase indicates a database-heavy project
+      B: web-app — Next.js indicates a web application
+      C: saas-web-app — the combination of Supabase + Next.js triggers this type, which suggests ~24 agents including designer, dba, seo, sales, and legal
+      D: generic — mixed signals default to generic
+      E: fullstack-app — a dedicated type for Supabase + Next.js
+    correct: C
+    explanation: 'The detection logic checks `signals.hasSupabase && signals.hasNextConfig` early in the chain and returns `saas-web-app`. This type gets the largest suggested roster (~24 agents) because a SaaS web app typically needs the full spectrum: frontend (designer, a11y), backend (dba, devops), content (copywriter, seo), quality (tester, e2e, qa), business (pm, product, sales), and compliance (legal, security). The Supabase + Next.js combination is a strong signal for this project type.'
+  - id: q4
+    question: Why does the `generic` project type suggest only 8 agents instead of 20+?
+    choices:
+      A: Generic projects are considered less important
+      B: 8 agents is the minimum the orchestrator can work with
+      C: When the project type is ambiguous, a minimal roster avoids activating specialists that may be irrelevant — the developer can add more as needed
+      D: Generic projects cannot use more than 8 agents due to a technical limitation
+      E: The 8 agents are free tier; additional agents require a paid plan
+    correct: C
+    explanation: 'The generic roster includes architect, builder, reviewer, tester, security, documentor, debugger, and qa — the universal quality baseline. When the system cannot detect the project type, it avoids false positives: activating a designer on a CLI tool or a DBA on a static site would add noise. The developer knows their project better than the detection heuristic, so a minimal starting point with easy expansion (`paradigm agents activate designer`) is better than an over-eager default.'
+  - id: q5
+    question: A developer activates the designer on a project, does some UI work with Mika, then deactivates the designer. Later, they reactivate the designer. Does Mika remember the previous UI work on this project?
+    choices:
+      A: No — deactivating an agent deletes its state
+      B: Yes — roster changes only affect the active list in roster.yaml. The agent's project state (.paradigm/agent-state/designer.yaml), notebooks, and expertise are untouched by deactivation.
+      C: Partially — state is preserved but expertise resets
+      D: Only if the deactivation was less than 24 hours ago
+      E: The developer must run paradigm_session_recover to restore state
+    correct: B
+    explanation: Roster deactivation removes the agent from the `active` list in roster.yaml — that is all it does. The agent's project state at `.paradigm/agent-state/designer.yaml` remains on disk. Its notebooks at `.paradigm/notebooks/designer/` remain. Its expertise in the `.agent` file remains. When reactivated, `buildProfileEnrichment()` loads the existing project state and the agent sees its last session summary, pending work, and learned patterns. Rosters are a visibility filter, not a state manager.

@@ -1,0 +1,66 @@
+id: Q-para-701-model-tier-resolution
+title: 'PARA 701: Agent Mastery — Lesson 6: Model Tier Resolution'
+description: 'Quiz for lesson: Lesson 6: Model Tier Resolution'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A team wants to reduce costs by running all agents on the same model. What is the simplest configuration change?
+    choices:
+      A: Edit every .agent file to change modelTier to tier-3
+      B: 'Map all three tiers to the same model in the model-resolution config block: `tier-1: claude-sonnet-4-6`, `tier-2: claude-sonnet-4-6`, `tier-3: claude-sonnet-4-6`'
+      C: Remove the model-resolution block entirely
+      D: 'Set a global `maxTier: tier-3` flag in config.yaml'
+      E: Deactivate all tier-1 agents from the roster
+    correct: B
+    explanation: The model-resolution block is the single control point. Mapping all three tiers to `claude-sonnet-4-6` means every agent — regardless of what tier they request — runs on Sonnet. This is a 3-line change in `.paradigm/config.yaml`. The agents still have different personalities, expertise, and behaviors; only the underlying model changes. Option A would work but requires editing dozens of files. Option E would lose important agents like architect and security.
+  - id: q2
+    question: 'An agent profile has `modelTier: tier-1`. The project config maps `tier-1: claude-sonnet-4-6`. The global config maps `tier-1: claude-opus-4-6`. Which model is used?'
+    choices:
+      A: claude-opus-4-6 — global config takes precedence
+      B: claude-sonnet-4-6 — project config overrides global config in the resolution cascade
+      C: The agent's defaultModel field is used instead
+      D: An error is thrown because of conflicting configurations
+      E: The IDE detection result is used
+    correct: B
+    explanation: 'The resolution cascade is: agent profile (determines tier) > project config > global config > IDE detection > fallback. The agent requests tier-1. The project config maps tier-1 to `claude-sonnet-4-6`. The project config has higher priority than global config, so Sonnet is used. This allows a project to override the user''s global preference — useful when a project has a budget constraint that the user''s default does not account for.'
+  - id: q3
+    question: Why does the security agent default to tier-1 (reasoning) while the builder defaults to tier-3 (fast)?
+    choices:
+      A: The security agent costs more to run
+      B: The builder handles more requests and needs to be faster
+      C: Security work requires deep reasoning (vulnerability analysis, threat modeling) that benefits from the most capable model, while builder work is more mechanical (implement a spec, write code to match a design) where speed matters more than reasoning depth
+      D: Tier-1 agents have access to more MCP tools
+      E: It is an arbitrary default with no rationale
+    correct: C
+    explanation: 'Tier assignments reflect the cognitive demands of each role. Security analysis involves complex reasoning: evaluating attack surfaces, identifying subtle vulnerabilities, understanding interaction effects between auth mechanisms. This benefits from a model with stronger reasoning capabilities (tier-1). Builder work is typically more structured: implement this API endpoint per the spec, add this component per the design. The spec defines what to build; the model executes. Speed and cost efficiency (tier-3) matter more than reasoning depth.'
+  - id: q4
+    question: A user is running Paradigm in Cursor (detected via CURSOR_SESSION environment variable). What tier-1 model does auto-detection assign, and why?
+    choices:
+      A: claude-opus-4-6 — always use the best available model
+      B: claude-sonnet-4-6 — because Opus may not be available in Cursor's model selection, so the detection gracefully degrades tier-1 to the best confirmed-available model
+      C: gpt-4o — Cursor defaults to OpenAI
+      D: The user must manually configure it — Cursor is not auto-detected
+      E: claude-haiku-4-5 — Cursor uses cheaper models by default
+    correct: B
+    explanation: 'The `detectEnvironment()` function checks for `process.env.CURSOR_SESSION`. When detected, it assigns `claude-sonnet-4-6` for tier-1 because Cursor may not expose Opus in its model selection. Assigning Opus would cause orchestration failures if the model is unavailable. The detection gracefully degrades: Claude Code gets the full tier spread, Cursor gets Sonnet as the ceiling. The user can override this in their config if they do have Opus access.'
+  - id: q5
+    question: 'An old agent profile has `defaultModel: opus` but no `modelTier` field. How does the system handle this?'
+    choices:
+      A: An error is thrown — modelTier is required
+      B: The agent runs with no model preference (fallback to tier-2)
+      C: 'The system maps defaultModel to a tier: opus maps to tier-1, which is then resolved through the model-resolution config like any other tier request'
+      D: The agent is excluded from orchestration until its profile is updated
+      E: The defaultModel value is passed directly to the API as the model name
+    correct: C
+    explanation: 'Backward compatibility is handled by mapping old model names to tiers: `opus` to `tier-1`, `sonnet` to `tier-2`, `haiku` to `tier-3`. The resolution logic checks `modelTier` first; if absent, it reads `defaultModel` and maps it. The resulting tier is then resolved through the normal cascade (project config > global config > IDE detection > fallback). This means existing agent profiles continue working without any modification.'

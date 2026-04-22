@@ -1,0 +1,59 @@
+id: LP-para-601
+title: 'PARA 601: Paradigm Ambient'
+description: Master Paradigm's ambient coordination system — knowledge streams, event stream, attention scoring, nominations, data sovereignty, agent manifest renaissance, and context composition. The full loop from observation to adaptation.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+steps:
+  - content: N-para-601-learning-loop
+    required: true
+  - content: Q-para-601-learning-loop
+    required: true
+    passRequired: true
+  - content: N-para-601-knowledge-streams
+    required: true
+  - content: Q-para-601-knowledge-streams
+    required: true
+    passRequired: true
+  - content: N-para-601-event-stream
+    required: true
+  - content: Q-para-601-event-stream
+    required: true
+    passRequired: true
+  - content: N-para-601-attention-scoring
+    required: true
+  - content: Q-para-601-attention-scoring
+    required: true
+    passRequired: true
+  - content: N-para-601-nominations-debates
+    required: true
+  - content: Q-para-601-nominations-debates
+    required: true
+    passRequired: true
+  - content: N-para-601-data-sovereignty
+    required: true
+  - content: Q-para-601-data-sovereignty
+    required: true
+    passRequired: true
+  - content: N-para-601-agent-renaissance
+    required: true
+  - content: Q-para-601-agent-renaissance
+    required: true
+    passRequired: true
+  - content: N-para-601-context-composition
+    required: true
+  - content: Q-para-601-context-composition
+    required: true
+    passRequired: true
+  - content: N-para-601-maestro-team-collab
+    required: true
+  - content: Q-para-601-maestro-team-collab
+    required: true
+    passRequired: true

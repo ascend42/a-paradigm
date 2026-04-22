@@ -1,0 +1,59 @@
+id: LP-para-101
+title: 'PARA 101: Foundations'
+description: Master the fundamentals of Paradigm — the meta-framework that gives AI agents structured context to navigate and understand your codebase. Learn the five symbols, purpose files, tags, logging, project structure, and gates.
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+ordered: true
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+steps:
+  - content: N-para-101-welcome
+    required: true
+  - content: Q-para-101-welcome
+    required: true
+    passRequired: true
+  - content: N-para-101-first-steps
+    required: true
+  - content: Q-para-101-first-steps
+    required: true
+    passRequired: true
+  - content: N-para-101-five-symbols
+    required: true
+  - content: Q-para-101-five-symbols
+    required: true
+    passRequired: true
+  - content: N-para-101-purpose-files
+    required: true
+  - content: Q-para-101-purpose-files
+    required: true
+    passRequired: true
+  - content: N-para-101-tags-and-classification
+    required: true
+  - content: Q-para-101-tags-and-classification
+    required: true
+    passRequired: true
+  - content: N-para-101-paradigm-logger
+    required: true
+  - content: Q-para-101-paradigm-logger
+    required: true
+    passRequired: true
+  - content: N-para-101-project-structure
+    required: true
+  - content: Q-para-101-project-structure
+    required: true
+    passRequired: true
+  - content: N-para-101-portal-yaml
+    required: true
+  - content: Q-para-101-portal-yaml
+    required: true
+    passRequired: true
+  - content: N-para-101-component-types
+    required: true
+  - content: Q-para-101-component-types
+    required: true
+    passRequired: true

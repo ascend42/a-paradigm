@@ -1,0 +1,56 @@
+id: Q-para-601-learning-loop
+title: 'PARA 601: Paradigm Ambient — The Learning Loop'
+description: 'Quiz for lesson: The Learning Loop'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: An agent completes a session where it discovers that Express v5 requires explicit async error wrapping. It records this in a lore entry but no journal entry is created. Three weeks later, a different agent makes the same mistake. Which phase of the learning loop failed?
+    choices:
+      A: DO — the first agent should not have made the mistake
+      B: RECORD — the lore entry was insufficient
+      C: LEARN — the insight was captured in lore but never extracted into a journal entry that could feed back into future context
+      D: ADAPT — the context composition tool was broken
+      E: ASSESS — the event stream missed the original correction
+    correct: C
+    explanation: 'The LEARN phase failed. The observation was recorded (RECORD phase worked — there is a lore entry), but the insight was never extracted into a learning journal entry with a transferable pattern. Without a journal entry, the ADAPT phase has nothing to inject into future sessions. The fix is recording a journal entry with `transferable: true` and extracting a `LearningPattern` so it feeds into context composition.'
+  - id: q2
+    question: Why did Paradigm v5.0 reduce CLAUDE.md from ~856 lines to ~150 lines?
+    choices:
+      A: The old content was outdated and no longer relevant
+      B: Smaller files load faster from disk
+      C: Loading all guidance every session wastes tokens on content irrelevant to the current task — on-demand resources let agents load only what they need
+      D: Claude Code has a strict file size limit for CLAUDE.md
+      E: The content was moved to .paradigm/config.yaml instead
+    correct: C
+    explanation: Context engineering is about putting high-signal, task-relevant content in the context window. A 856-line CLAUDE.md loaded every session means hundreds of tokens spent on logging rules when the task is about testing, or portal conventions when the task is about lore. The slim CLAUDE.md provides universal orientation, and 12 `paradigm://guidance/{topic}` resources provide targeted guidance on demand.
+  - id: q3
+    question: Which phases of the learning loop existed before v5.0?
+    choices:
+      A: All six phases existed but were unreliable
+      B: Only DO existed — everything else is new in v5.0
+      C: DO, RECORD, and partial ASSESS (via ripple analysis) — LEARN, ADAPT, and full ASSESS were manual
+      D: DO, RECORD, ASSESS, and LEARN — only ADAPT was missing
+      E: DO and ADAPT — recording and assessment were added in v5.0
+    correct: C
+    explanation: Before v5.0, Paradigm had DO (agents perform work), RECORD (lore entries, .purpose files, portal.yaml), and partial ASSESS (ripple analysis could identify impact, but there was no event stream or attention filtering). The LEARN phase (journal entries, nominations) and ADAPT phase (context composition from learnings) were entirely manual — a human had to read lore and brief the next agent.
+  - id: q4
+    question: A security agent contributes a context section listing recently added gates. Where is this contribution defined?
+    choices:
+      A: In the security agent's `.agent` file under the `context.contributions` field
+      B: In `.paradigm/config.yaml` under a `context_sections` key
+      C: In CLAUDE.md as a static section
+      D: In `portal.yaml` under each gate definition
+      E: In the security agent's learning journal
+    correct: A
+    explanation: Agent context contributions are defined in the `AgentContext.contributions` array on the agent's profile (the `.agent` file). Each contribution specifies a `section` name, inline `content` or a `content_ref` MCP resource URI, and a `priority` (high, medium, low). High-priority contributions are always included; low-priority ones are loaded on demand. This allows each agent to inject task-relevant context without hardcoding it into CLAUDE.md.

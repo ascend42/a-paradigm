@@ -1,0 +1,66 @@
+id: Q-para-401-orchestration-workflow
+title: 'PARA 401: Orchestration — Orchestration Workflow'
+description: 'Quiz for lesson: Orchestration Workflow'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: You call paradigm_orchestrate_inline with mode='plan' and the suggested agents include tester, but you know the project has no test infrastructure yet. What do you do?
+    choices:
+      A: Accept the plan as-is -- the orchestrator knows best
+      B: Override the agents parameter to exclude tester when calling mode='execute'
+      C: Skip the plan step and go straight to mode='execute'
+      D: Cancel the entire orchestration
+      E: Add test infrastructure before proceeding
+    correct: B
+    explanation: The plan is a suggestion, not a mandate. When you disagree with the agent selection (e.g., tester is suggested but there is no test infrastructure), you override the agents parameter in the execute call. The plan step exists precisely to give you this review opportunity.
+  - id: q2
+    question: 'The orchestration plan shows: Stage 1 (architect, no deps), Stage 2 (security, no deps), Stage 3 (builder, depends on 1 and 2). How many total rounds of agent launches do you need?'
+    choices:
+      A: 1 round -- launch all three at once
+      B: 2 rounds -- stages 1 and 2 in parallel, then stage 3
+      C: 3 rounds -- each stage runs separately
+      D: It depends on the provider
+      E: 0 rounds -- the orchestrator launches them automatically
+    correct: B
+    explanation: Stages 1 and 2 have no dependencies, so they can launch in parallel (round 1). Stage 3 depends on both, so it must wait for their results (round 2). This gives 2 rounds total, which is optimal for this dependency graph.
+  - id: q3
+    question: When is the --solo flag appropriate for paradigm team orchestrate?
+    choices:
+      A: When the task involves security review
+      B: When the task affects 5+ files
+      C: When the task is straightforward and does not genuinely need multiple specialized agents
+      D: Always -- solo mode is always better
+      E: Never -- multi-agent is always better
+    correct: C
+    explanation: Solo mode is appropriate for straightforward tasks where orchestration overhead exceeds its value. A simple bug fix or small feature addition often does not benefit from architect-security-builder-tester decomposition. Use --compare to learn which tasks benefit from orchestration.
+  - id: q4
+    question: What happens after all agents complete their stages?
+    choices:
+      A: Changes are automatically merged and committed
+      B: The orchestrator sends a pull request
+      C: You review each agent's output, verify it, and integrate the changes as the final integrator
+      D: The tester agent automatically validates everything
+      E: Results are discarded and you start over
+    correct: C
+    explanation: The orchestrator does not auto-merge. You are the final integrator -- reviewing each agent's output, verifying it makes sense in context, and integrating the changes. This human-in-the-loop step is intentional for quality and safety.
+  - id: q5
+    question: Which task description would produce a better orchestration plan?
+    choices:
+      A: Fix the app
+      B: Make payments work better
+      C: Add Stripe webhook handler for payment.intent.succeeded with idempotency, ^authenticated gate, and !payment-completed signal
+      D: Do something with checkout
+      E: Refactor everything
+    correct: C
+    explanation: Specific task descriptions with clear scope, named symbols, and explicit requirements produce better plans. The orchestrator can identify exact agents needed (security for the gate, builder for implementation) and provide accurate token estimates. Vague descriptions lead to generic, less useful plans.

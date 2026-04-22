@@ -1,0 +1,56 @@
+id: Q-para-101-purpose-files
+title: 'PARA 101: Foundations — Purpose Files'
+description: 'Quiz for lesson: Purpose Files'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-101
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-101.json
+questions:
+  - id: q1
+    question: Where should a .purpose file be placed?
+    choices:
+      A: In the .paradigm/ directory at the project root
+      B: In the source directory it describes, alongside the code files
+      C: In a dedicated /docs directory
+      D: In the project root, one file for the entire project
+      E: In the node_modules directory for package documentation
+    correct: B
+    explanation: Purpose files live in the source directory they describe — right next to the code. The .paradigm/ directory holds project-wide configuration, not directory-level documentation.
+  - id: q2
+    question: What is the `context` field in a .purpose file used for?
+    choices:
+      A: Defining application context providers
+      B: Specifying environment variables required by the module
+      C: Free-text notes aimed at AI agents — conventions, gotchas, assumptions
+      D: Listing the test files associated with the directory
+      E: Declaring the programming language used in the directory
+    correct: C
+    explanation: The context field is an array of free-text strings written specifically for AI agents. It conveys things like 'all amounts are in cents', 'this module is deprecated', or 'uses Stripe signatures for webhook verification'.
+  - id: q3
+    question: How many .purpose files should a single directory contain?
+    choices:
+      A: Exactly one for every file in the directory
+      B: At most one per directory
+      C: One per component defined in the directory
+      D: At least three — one for components, one for flows, one for gates
+      E: None — purpose files are generated automatically
+    correct: B
+    explanation: Each directory should have at most one .purpose file. All symbols in that directory (components, flows, gates, signals, aspects) are defined within that single file.
+  - id: q4
+    question: Which field is REQUIRED on every symbol defined in a .purpose file?
+    choices:
+      A: file
+      B: tags
+      C: description
+      D: version
+      E: anchors
+    correct: C
+    explanation: Every symbol must have a description. Without it, AI agents cannot understand what the symbol represents. The file, tags, and version fields are useful but optional. Anchors are required only for aspects (~).

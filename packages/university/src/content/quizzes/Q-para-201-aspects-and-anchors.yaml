@@ -1,0 +1,56 @@
+id: Q-para-201-aspects-and-anchors
+title: 'PARA 201: Architecture — Aspects & Code Anchors'
+description: 'Quiz for lesson: Aspects & Code Anchors'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: Why do aspects require anchors while other symbols do not?
+    choices:
+      A: Because aspects are more important than other symbols
+      B: Because without anchors, an aspect is an unenforced rule — a wish, not a constraint
+      C: Because YAML requires at least one nested field under aspects
+      D: Because AI agents cannot understand aspects without seeing the code
+      E: Because aspects are always defined in middleware files
+    correct: B
+    explanation: An aspect without anchors is just a statement of intent with no proof of enforcement. Anchors point to the actual code that enforces the rule, making the aspect verifiable by tools, reviewable by developers, and auditable by compliance.
+  - id: q2
+    question: The anchor `src/middleware/auth.ts:42-78` points to what?
+    choices:
+      A: Lines 42 and 78 only (two specific lines)
+      B: The 42nd through 78th characters on line 1
+      C: A range of lines from line 42 to line 78 inclusive
+      D: Column 42 through column 78 on every line in the file
+      E: The 42nd and 78th functions defined in the file
+    correct: C
+    explanation: The range format (file:start-end) points to a block of consecutive lines. src/middleware/auth.ts:42-78 covers lines 42 through 78 inclusive — typically a complete function or middleware definition.
+  - id: q3
+    question: 'You define `~cached` with `applies-to: ["#*-query"]`. You then create `#user-query` without applying the cache aspect. What should happen?'
+    choices:
+      A: Nothing — applies-to is just a suggestion
+      B: 'paradigm_aspect_check reports a coverage gap: #user-query matches the pattern but is not covered'
+      C: The build fails because the aspect is not applied
+      D: The component is automatically cached by Paradigm
+      E: '#user-query is renamed to #user-query-cached'
+    correct: B
+    explanation: 'The applies-to field is declarative — it says ''this aspect should cover all components matching this pattern.'' When paradigm_aspect_check runs, it identifies #user-query as matching #*-query but not having the caching aspect applied, reporting a coverage gap.'
+  - id: q4
+    question: After a major refactor, several source files were renamed and moved. What is the risk to aspects?
+    choices:
+      A: No risk — aspects are tied to symbol names, not file paths
+      B: Anchor references break because they point to file paths and line numbers that may no longer exist
+      C: The aspect definitions are automatically updated by git
+      D: Aspects are deleted when their files move
+      E: The refactor cannot proceed if aspects exist
+    correct: B
+    explanation: Anchors contain file paths and line numbers (e.g., src/middleware/audit.ts:15-35). When files are renamed, moved, or heavily edited, these references break. Running paradigm_aspect_check after refactoring catches this drift.

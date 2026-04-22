@@ -1,0 +1,66 @@
+id: Q-para-701-agent-state
+title: 'PARA 701: Agent Mastery — Lesson 4: Agent State & Continuity'
+description: 'Quiz for lesson: Lesson 4: Agent State & Continuity'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: The security agent reviewed 5 files in session A, deferred 2 items, then in session B completed 1 of those items and deferred 1 new item. How many pending items does the agent see at the start of session C?
+    choices:
+      A: 0 — pending work resets each session
+      B: 1 — only the item deferred in session B
+      C: 2 — the 1 remaining from session A plus the 1 new from session B
+      D: 3 — all items ever deferred
+      E: It depends on the project roster configuration
+    correct: C
+    explanation: 'Pending work accumulates across sessions and persists until explicitly completed via `completePendingWork()`. Session A deferred 2 items. Session B completed 1 (leaving 1 from A) and added 1 new item. At the start of session C, the agent sees 2 pending items: the 1 remaining from session A and the 1 added in session B. This is the key value of pending work tracking — nothing falls through the cracks across session boundaries.'
+  - id: q2
+    question: What is the difference between `recentPatterns` in project state and `transferable` patterns in the .agent file?
+    choices:
+      A: They are the same thing stored in different locations
+      B: recentPatterns are project-specific and do not travel; transferable patterns apply across all projects and are included in prompt enrichment when successRate >= 0.7
+      C: recentPatterns are more important and always override transferable patterns
+      D: transferable patterns are deprecated in favor of recentPatterns
+      E: recentPatterns are automatically promoted to transferable after 10 sessions
+    correct: B
+    explanation: 'recentPatterns live in the project state file and capture knowledge specific to one project (e.g., ''This project uses sliding-window JWT rotation''). They are injected as ''**Project patterns you''ve learned:**'' in the prompt, but only for that project. Transferable patterns live in the .agent file and apply everywhere (e.g., ''always check RLS policies''). They travel across projects and are included in prompt enrichment when successRate >= 0.7. The distinction is scope: project vs universal.'
+  - id: q3
+    question: 'An agent''s global state shows `totalSessions: 47` with 30 sessions on project A and 2 on project B. The agent is now starting work on project B. How does the orchestrator use this information?'
+    choices:
+      A: It rejects the agent — 2 sessions is insufficient expertise
+      B: It ignores global state — only project state matters
+      C: The low session count on project B (relative to the agent's 47 total sessions) may trigger a fresh onboarding pass, and the project state's lastSession age indicates how much context refresh is needed
+      D: It assigns the agent to project A instead, where it has more experience
+      E: Global state is only used for dashboard display, not orchestration decisions
+    correct: C
+    explanation: Global state provides experience context. An agent with 47 total sessions is experienced overall, but only 2 sessions on project B means limited project-specific knowledge. The orchestrator can use this to trigger the agent's `onboarding` procedure (defined in the collaboration block), ensuring the agent re-reads the project's .purpose files, config, and portal.yaml before making recommendations. The project state's `lastSession.date` shows how stale the context is — if the 2 sessions were 3 months ago, a full onboarding is warranted.
+  - id: q4
+    question: Where does project state live and why is it committed to the repository?
+    choices:
+      A: ~/.paradigm/agent-state/ — it is user-scoped, not committed
+      B: .paradigm/agent-state/{id}.yaml — it is committed so that when another team member works on the project, agents remember what was done, not just what one person's agents did
+      C: In memory only — state is ephemeral and reconstructed from lore
+      D: .paradigm/config.yaml — state is a config value
+      E: node_modules/.paradigm/ — it is a build artifact
+    correct: B
+    explanation: 'Project state at `.paradigm/agent-state/{id}.yaml` is committed to the repository. This is important for team continuity: if developer A''s security agent reviews files and defers items, developer B''s security agent should see those deferred items in the next session. The state is project-scoped (different from global state at ~/.paradigm/agents/ which is user-scoped), so it captures the collective agent experience on the project, not just one user''s sessions.'
+  - id: q5
+    question: The recentPatterns array in project state has a maximum of 10 entries. An agent learns an 11th pattern. What happens?
+    choices:
+      A: The 11th pattern is rejected — the agent must manually remove an old one
+      B: All patterns are cleared and replaced with the 11th
+      C: The oldest pattern is dropped and the new one is added — `recentPatterns.slice(-10)` keeps only the most recent 10
+      D: The array expands to 11 — the limit is advisory
+      E: The pattern is added to the agent's transferable array instead
+    correct: C
+    explanation: 'The `addProjectPattern()` function enforces a hard limit of 10 recent patterns: `if (state.recentPatterns.length > 10) { state.recentPatterns = state.recentPatterns.slice(-10); }`. The oldest pattern is dropped and the newest is kept. This bounded window ensures the prompt enrichment section stays within token budgets while always showing the most recent project-specific knowledge. Patterns that prove universally useful should be promoted to the agent''s `transferable` array in the .agent file, which has no such limit.'

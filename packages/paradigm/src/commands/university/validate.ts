@@ -1,5 +1,6 @@
 /**
- * University validate command - Validate content integrity
+ * University validate command - Validate content integrity.
+ * v6.0: honors selectors; reports the validated pack.
  */
 
 import chalk from 'chalk';
@@ -7,8 +8,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { loadUniversityIndex, loadQuiz, loadPath } from '../../core/university/index.js';
+import { resolvePackContext, type SelectorOptions } from './selectors.js';
 
-interface ValidateOptions {
+interface ValidateOptions extends SelectorOptions {
   deep?: boolean;
   id?: string;
   json?: boolean;
@@ -24,6 +26,7 @@ interface Issue {
 
 export async function universityValidateCommand(options: ValidateOptions): Promise<void> {
   const rootDir = process.cwd();
+  const ctx = resolvePackContext(rootDir, options);
   const index = loadUniversityIndex(rootDir);
 
   if (!index || index.totalContent === 0) {
@@ -133,7 +136,7 @@ export async function universityValidateCommand(options: ValidateOptions): Promi
   }
 
   // Display results
-  console.log(chalk.blue(`\n  University Validation (${entriesToCheck.length} items${options.deep ? ', deep mode' : ''})\n`));
+  console.log(chalk.blue(`\n  University Validation — pack: ${ctx.subPackId ?? ctx.packId} (${entriesToCheck.length} items${options.deep ? ', deep mode' : ''})\n`));
 
   if (issues.length === 0) {
     console.log(chalk.green('  All checks passed.\n'));

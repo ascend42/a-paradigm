@@ -1,0 +1,56 @@
+id: Q-para-401-commit-conventions
+title: 'PARA 401: Orchestration — Commit Conventions'
+description: 'Quiz for lesson: Commit Conventions'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: q1
+    question: What is the purpose of the 'Symbols:' trailer in a Paradigm commit message?
+    choices:
+      A: It is purely decorative for human readers
+      B: It is parsed by the post-commit hook to automatically create paradigm_history_record entries
+      C: It triggers a deployment pipeline
+      D: It notifies symbol owners via email
+      E: It is required by git but has no Paradigm-specific purpose
+    correct: B
+    explanation: 'The Symbols: trailer is machine-readable. The post-commit hook parses it to automatically call paradigm_history_record with the commit hash, affected symbols, and description. This bridges git history with Paradigm''s history system.'
+  - id: q2
+    question: 'A commit has type ''fix'' and a Symbols: trailer listing #payment-service. What history record is created?'
+    choices:
+      A: 'type: rollback, intent: fix'
+      B: 'type: implement, intent: fix'
+      C: 'type: refactor, intent: fix'
+      D: 'type: implement, intent: feature'
+      E: No history record -- fix commits are not tracked
+    correct: B
+    explanation: A 'fix' commit type maps to history type 'implement' with intent 'fix'. This is distinct from 'feat' (implement/feature) and 'refactor' (refactor/refactor). The fix intent contributes to the fix-to-feature ratio used in fragility scoring.
+  - id: q3
+    question: Which of the following is a correctly formatted Paradigm commit subject line?
+    choices:
+      A: Added Apple Pay support to payments
+      B: 'feat(#payment-form): add Apple Pay support'
+      C: 'FEAT: payment-form Apple Pay'
+      D: '#payment-form feat: add Apple Pay'
+      E: 'feat(payment-form): add Apple Pay support'
+    correct: B
+    explanation: 'The correct format is type(#symbol): description. Option B follows this exactly: ''feat'' type, ''#payment-form'' symbol with the # prefix, and a concise description. Option E is missing the # prefix on the symbol.'
+  - id: q4
+    question: 'A developer writes a commit with a body referencing ^authenticated and !order-placed but forgets the Symbols: trailer. What is the impact?'
+    choices:
+      A: The commit is rejected by git
+      B: The symbols in the body are automatically parsed instead
+      C: The commit succeeds as a git commit but is NOT automatically tracked in Paradigm's history system
+      D: The post-commit hook will fail with an error
+      E: paradigm doctor will retroactively add the trailer
+    correct: C
+    explanation: 'Without the Symbols: trailer, the post-commit hook has nothing to parse, so no automatic paradigm_history_record entry is created. The commit is valid in git but invisible to Paradigm''s history, fragility, and wisdom systems. The body references are for human readers only.'

@@ -1,0 +1,46 @@
+id: Q-para-301-paradigm-shift
+title: 'PARA 301: Operations — The paradigm shift Command'
+description: 'Quiz for lesson: The paradigm shift Command'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-301.json
+questions:
+  - id: q1
+    question: You just cloned a teammate's Paradigm project and want to start working. The project already has .paradigm/ and .purpose files. What command should you run?
+    choices:
+      A: paradigm init — to create a fresh .paradigm/ directory
+      B: paradigm shift — it detects the existing setup, migrates if needed, and installs hooks for your environment
+      C: paradigm scan — to rebuild the symbol index
+      D: paradigm sync — to generate your IDE files
+      E: No command needed — the project is already set up
+    correct: B
+    explanation: paradigm shift is the right choice even for existing projects. It detects that .paradigm/ exists, auto-migrates if the project uses an older version, installs Git and IDE hooks for YOUR environment, generates YOUR IDE instruction files, and suggests an agent roster. Just scan or sync alone would miss hooks and migration.
+  - id: q2
+    question: Your CI pipeline needs to initialize Paradigm quickly without scanning thousands of files. Which flag do you use?
+    choices:
+      A: paradigm shift --force — it runs faster by overwriting existing config
+      B: paradigm shift --quick — it skips symbol scanning for faster initialization
+      C: paradigm shift --verify — it verifies instead of scanning
+      D: paradigm init --minimal — it only creates the config file
+      E: paradigm shift --no-hooks — it skips the slowest step
+    correct: B
+    explanation: The --quick flag skips Step 3 (scan & index), which is the most time-consuming step because it reads every .purpose file in the codebase. In CI, you typically just need config, hooks, and IDE files — the full index can be built separately if needed.
+  - id: q3
+    question: 'After upgrading Paradigm from v4.x to v5.x, your project''s .purpose files use the old @feature syntax instead of #component. What should you do?'
+    choices:
+      A: 'Manually find-and-replace all @feature with #component across the codebase'
+      B: Run paradigm shift — Step 2 (auto-migrate) detects the version gap and applies breaking-change migrations
+      C: Delete .paradigm/ and start over with paradigm init
+      D: Run paradigm doctor to identify the issues, then fix them one by one
+      E: Ignore it — old syntax still works in v5.x
+    correct: B
+    explanation: paradigm shift's Step 2 (auto-migrate) exists for exactly this scenario. It detects that your project uses older conventions and applies the necessary migrations automatically. Manual find-and-replace risks missing files or misformatting YAML. Deleting .paradigm/ loses custom configuration. The old syntax does NOT work in v5.x — the symbol system changed.

@@ -1,0 +1,36 @@
+id: Q-para-401-notebooks-permissions
+title: 'PARA 401: Orchestration — Agent Notebooks & Permission Scoping'
+description: 'Quiz for lesson: Agent Notebooks & Permission Scoping'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-401
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-401.json
+questions:
+  - id: Q-401-NP-001
+    question: Where are global notebook entries stored for the architect agent?
+    correct: 0
+    explanation: Global notebook entries are stored at ~/.paradigm/notebooks/{agent-id}/ and travel across projects.
+  - id: Q-401-NP-002
+    question: 'An agent has permissions.paths.deny: [".paradigm/agents/*"]. What happens if it tries to write to .paradigm/agents/builder.agent?'
+    correct: 1
+    explanation: Deny patterns always override allow patterns. checkPathPermission() checks deny first.
+  - id: Q-401-NP-003
+    question: You want to extract a reusable pattern from lore entry L-2026-03-10-001 into the architect's notebook. Which MCP tool?
+    correct: 2
+    explanation: paradigm_notebook_promote takes agentId + loreEntryId and creates a distilled notebook entry with provenance link.
+  - id: Q-401-NP-004
+    question: 'An architect agent has 3 notebook entries matching #auth-middleware. How does orchestration use them?'
+    correct: 1
+    explanation: buildProfileEnrichment() appends notebook entries (up to 5) with context + truncated snippet to the orchestration prompt.
+  - id: Q-401-NP-005
+    question: A .agent file's integrityHash doesn't match the computed hash. What does this indicate?
+    correct: 1
+    explanation: verifyIntegrity() returns false when the stored hash doesn't match. The hash covers id+role+permissions, so changes to those fields without saveAgentProfile() indicate tampering.

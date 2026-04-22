@@ -1,0 +1,66 @@
+id: Q-para-601-nominations-debates
+title: 'PARA 601: Paradigm Ambient — Nominations & Debates'
+description: 'Quiz for lesson: Nominations & Debates'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: 'A security agent creates a nomination with `urgency: ''medium''` and `type: ''warning''` about a missing gate. The user has configured the security agent''s `min_urgency` to `''high''`. What happens?'
+    choices:
+      A: The nomination is deleted — it does not meet the urgency threshold
+      B: The nomination is recorded but not surfaced — it falls below the user's configured minimum urgency for that agent
+      C: The nomination is surfaced anyway because warnings always override urgency settings
+      D: The nomination is upgraded to `high` urgency automatically
+      E: The user's setting is ignored because security nominations are always shown
+    correct: B
+    explanation: 'The nomination is still recorded in `.paradigm/events/nominations.jsonl` (all nominations are persisted), but surfacing rules respect the user''s configuration. Since `min_urgency: ''high''` means only `high` and `critical` nominations from the security agent are shown, a `medium` nomination is suppressed. The nomination remains available if the user later queries all nominations or lowers the threshold.'
+  - id: q2
+    question: An architect nominates "Use a message queue for async processing" while a builder nominates "Use direct HTTP calls for simplicity" — both triggered by the same `route-created` event. How does Paradigm classify this?
+    choices:
+      A: Two independent nominations — no debate is detected because different agents created them
+      B: A complementary debate — both are responding to the same event
+      C: A conflicting debate — the nominations share a `triggered_by` event but propose different approaches
+      D: An error — only one agent should nominate per event
+      E: The nomination with the higher relevance score wins automatically
+    correct: C
+    explanation: Debate detection checks for overlapping `triggered_by` event IDs. Both nominations reference the same `route-created` event, so they are grouped. Since they propose different approaches (message queue vs HTTP calls), the debate is classified as `conflicting`. The debate is surfaced as a group so the human sees both perspectives together rather than individual nominations. Resolution requires a human choice or consensus.
+  - id: q3
+    question: 'A nomination has `evidence: [{ symbol: ''^payment-authorized'', file: ''portal.yaml'', lines: { start: 42, end: 45 }, description: ''All /api/payments routes require this gate'' }]`. Why is this better than a nomination without evidence?'
+    choices:
+      A: Evidence makes the nomination sort higher in the UI
+      B: Nominations without evidence are automatically dismissed
+      C: Evidence transforms the nomination from opinion to argument — the human can verify the claim against specific code locations without investigating from scratch
+      D: Evidence is required for all nomination types
+      E: Evidence triggers automatic remediation
+    correct: C
+    explanation: Evidence gives the nomination credibility and actionability. Without evidence, "This route needs a gate" requires the human to verify the claim manually. With evidence pointing to portal.yaml line 42 and the specific gate symbol, the human can quickly confirm the pattern and act. Evidence is optional (the `evidence` field is nullable), but nominations with evidence are more likely to be accepted rather than dismissed.
+  - id: q4
+    question: 'A tester creates a nomination with `type: ''offer''` and `action_offered: ''Write integration tests for the new payment flow''`. The human responds via `paradigm_ambient_engage` with `response: ''accepted''`. What happens next?'
+    choices:
+      A: Paradigm automatically generates the test files
+      B: The nomination's `detail` and `evidence` are returned so the tester agent can proceed with the offered action
+      C: The nomination is moved to a task queue for later execution
+      D: The tester agent is immediately spawned in a new session
+      E: Nothing — acceptance is recorded but has no effect
+    correct: B
+    explanation: When a nomination is accepted via `paradigm_ambient_engage`, the full nomination including `detail` and `evidence` is returned. For `offer` type nominations, this signals that the agent should proceed with the offered action. The actual execution depends on the orchestration context — in a multi-agent session, the tester may act immediately; in a single-agent session, the offer acceptance is recorded for the next session. Paradigm does not auto-generate code; it surfaces the offer for the agent to execute.
+  - id: q5
+    question: Over 30 sessions, a reviewer agent's nominations are dismissed 80% of the time. What does this pattern suggest?
+    choices:
+      A: The reviewer agent should be removed from the project
+      B: The reviewer's attention threshold may be too low — it is nominating on weak matches, and raising the threshold would reduce false positives
+      C: The human is ignoring valid feedback and should be trained
+      D: Dismissed nominations indicate the system is working correctly — not all observations are actionable
+      E: The nomination storage file is corrupted
+    correct: B
+    explanation: An 80% dismissal rate is a strong signal that the agent is speaking up too often on weak matches. The most likely fix is raising the agent's attention threshold (e.g., from 0.6 to 0.75) so it only nominates on stronger matches. The `paradigm_ambient_engage` feedback loop exists precisely for this calibration — over time, the pattern of accepted vs dismissed nominations reveals whether an agent's threshold is well-tuned.

@@ -1,0 +1,46 @@
+id: Q-para-201-aspect-graph
+title: 'PARA 201: Architecture — The Aspect Graph'
+description: 'Quiz for lesson: The Aspect Graph'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-201
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-201.json
+questions:
+  - id: q1
+    question: Your team's rate limiter was recently changed from 100 req/min to 500 req/min, but no one updated the aspect definition. Which tool would catch this?
+    choices:
+      A: paradigm_aspect_search — it would find the stale value in search results
+      B: paradigm_aspect_drift — it compares code hashes at anchor line ranges and detects the change
+      C: paradigm_aspect_heatmap — it shows the aspect is no longer being accessed
+      D: paradigm_aspect_graph — it reveals the broken edge to the rate limiter component
+      E: paradigm_reindex — it automatically updates the aspect value during reindexing
+    correct: B
+    explanation: paradigm_aspect_drift compares SHA-256 hashes of code at anchored line ranges against the hashes from the last scan. When the rate limiter code changed, the hash changed, flagging the anchor as drifted. The other tools don't detect code changes — reindex rebuilds the graph from YAML, which still has the old value.
+  - id: q2
+    question: Which aspect category best fits "JWT access tokens expire after 24 hours"?
+    choices:
+      A: rule — it defines a behavioral pattern that code must follow
+      B: decision — it captures an architectural choice
+      C: constraint — it is a hard limit that cannot be violated
+      D: configuration — it is a value that may differ across environments
+      E: invariant — it is a condition that must always hold true
+    correct: D
+    explanation: A JWT expiry duration is a configuration value — it could reasonably differ between environments (shorter in dev, longer in production). A constraint is a hard limitation (like "maximum 100 items per page"). A rule is a behavioral pattern. Configuration captures what specific value was set and where.
+  - id: q3
+    question: 'An aspect has edges: [{symbol: "^authenticated", relation: "enforced-by"}]. What does this tell you?'
+    choices:
+      A: The aspect enforces the ^authenticated gate
+      B: The ^authenticated gate depends on the aspect existing
+      C: The ^authenticated gate is the mechanism that ensures the aspect holds true
+      D: The aspect and the gate are in conflict
+      E: The aspect will be removed if the gate is deleted
+    correct: C
+    explanation: The enforced-by relation means the target symbol is what ensures the aspect's rule holds. Here, the ^authenticated gate is the checkpoint that enforces whatever the aspect defines. Aspects declare what must be true; gates enforce those truths. The edge makes this relationship explicit and queryable.

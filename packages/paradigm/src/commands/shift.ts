@@ -717,5 +717,15 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     console.log('');
   }
 
+  // v6.0 (D7): seed metrics.remote_consent: pending (idempotent) and capture
+  // a privacy-preserving university metrics snapshot. Non-fatal on any error.
+  try {
+    const { captureSnapshot, seedMetricsConsent } = await import('../core/university/metrics.js');
+    seedMetricsConsent(cwd);
+    captureSnapshot(cwd);
+  } catch (e) {
+    log.operation('shift').debug('metrics snapshot failed', { error: (e as Error).message });
+  }
+
   tracker.success('Paradigm shift complete', { project: projectName });
 }

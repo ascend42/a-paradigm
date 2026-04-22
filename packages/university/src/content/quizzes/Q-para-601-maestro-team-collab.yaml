@@ -1,0 +1,86 @@
+id: Q-para-601-maestro-team-collab
+title: 'PARA 601: Paradigm Ambient — Maestro: Visible Team Orchestration'
+description: 'Quiz for lesson: Maestro: Visible Team Orchestration'
+author: paradigm
+created: '2026-04-22'
+updated: '2026-04-22'
+tags:
+  - course
+  - para-601
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-601.json
+questions:
+  - id: q1
+    question: What is the primary difference between Maestro and traditional multi-agent orchestration?
+    choices:
+      A: Maestro uses more agents per task
+      B: Maestro presents each agent's response as an attributed message rather than synthesizing a single summary
+      C: Maestro runs agents in parallel instead of sequentially
+      D: Maestro eliminates the need for human approval
+      E: Maestro uses persistent background agents
+    correct: B
+    explanation: Maestro's key innovation is visibility. Instead of synthesizing agent responses into a single voice, each agent speaks for itself with an attribution prefix like [architect]. This preserves individual perspectives and lets the human see disagreements, novel approaches, and the reasoning behind each contribution.
+  - id: q2
+    question: When a security agent is consistently dismissed by the user (>60% dismissal rate), what happens at postflight?
+    choices:
+      A: The agent is automatically deleted
+      B: The agent is moved to a different project
+      C: paradigm_ambient_learn raises the agent's attention threshold, making it nominate less
+      D: The agent's expertise scores are reset to zero
+      E: Nothing changes — threshold adjustment is manual
+    correct: C
+    explanation: The learning loop is automatic. When dismissal rate exceeds 60%, paradigm_ambient_learn raises the agent's attention threshold by 0.05, meaning it requires higher relevance scores before nominating. This self-tunes the agent to speak less when it is being noisy. Conversely, >80% acceptance lowers the threshold, encouraging the agent to contribute more.
+  - id: q3
+    question: What ambient context is injected into agent profiles before Maestro spawns them?
+    choices:
+      A: Only the agent's expertise scores
+      B: The full project codebase
+      C: Recent team decisions, transferable journal insights, and pending nominations
+      D: The complete git history
+      E: Nothing — agents start fresh each session
+    correct: C
+    explanation: buildProfileEnrichment() accepts an ambientContext parameter containing recent team decisions (from decision-loader), transferable journal insights (from journal-loader), and pending nominations (from nomination-engine). This gives each agent awareness of what the team has decided, what patterns have been discovered, and what issues are outstanding — creating genuine team intelligence rather than isolated tool execution.
+  - id: q4
+    question: What does the Neverland test health status 'calibrating' indicate?
+    choices:
+      A: No agents have been created yet
+      B: Agents have fewer than 10 total nominations
+      C: Average acceptance rate is between 50% and 70% — agents are learning but haven't reached target
+      D: All agents have been benched
+      E: The system has reached maturity and needs no further adjustment
+    correct: C
+    explanation: 'The Neverland health statuses are: cold-start (<10 nominations), accumulating (<50% accept rate), calibrating (50-70% accept rate), and mature (>70%). ''Calibrating'' means agents are past the initial noise phase and their thresholds are actively being tuned by the learning loop, but haven''t yet reached the 70% target. This typically occurs around sessions 4-7.'
+  - id: q5
+    question: How does benching an agent differ from deleting it?
+    choices:
+      A: There is no difference — bench removes the agent profile
+      B: Benching sets benched=true — the profile stays intact but Maestro and the nomination engine skip it
+      C: Benching only affects CLI commands, not MCP tools
+      D: Benching removes expertise but keeps the profile
+      E: Benching is permanent while deletion can be undone
+    correct: B
+    explanation: Benching is a reversible pause. The agent's .agent file remains with all expertise, journal entries, notebooks, and transferable patterns intact. Both paradigm_orchestrate_inline and processEvent check profile.benched and skip the agent if true. paradigm agent activate restores the agent immediately with all its accumulated learning preserved.
+  - id: q6
+    question: Why does the Teacher Model write journal entries instead of adjusting thresholds directly?
+    choices:
+      A: Journal entries are cheaper in token cost
+      B: Thresholds can only go up, not down
+      C: Journal entries carry semantic knowledge (what to look for, what was wrong) while thresholds are just a single number that says 'speak more' or 'speak less'
+      D: The threshold system is being removed in favor of journals
+      E: Journal entries are visible to the user while thresholds are hidden
+    correct: C
+    explanation: 'Thresholds control volume (speak more/less) but not quality. A threshold can''t teach the security agent to distinguish audit logging from vulnerabilities. A journal entry can: ''When auth files change with logging additions, recognize these as security-positive — don''t flag as violations.'' This knowledge promotes to notebooks and appears in future prompts via buildProfileEnrichment, making the agent genuinely smarter rather than just quieter.'
+  - id: q7
+    question: What is the documentor agent's relationship to the stop hook?
+    choices:
+      A: The documentor replaces the stop hook entirely
+      B: The documentor runs before the stop hook and should prevent it from ever triggering, but the hook remains as a safety net
+      C: The stop hook runs the documentor automatically
+      D: They are unrelated systems
+      E: The documentor disables the stop hook for the session
+    correct: B
+    explanation: The stop hook blocks when .purpose files are missing for modified source directories. The documentor's job is to update these files as the final orchestration stage, so the stop hook should never need to block. However, the stop hook remains as a safety net — if the documentor misses something or orchestration wasn't used, the hook catches it. Defense in depth.
