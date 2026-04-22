@@ -57,14 +57,20 @@ export async function loadProjectContext(rootDir: string): Promise<ProjectContex
   const index = buildSymbolIndex(aggregation);
 
   // Try to load portal.yaml
+  // v5.37.12: parseGateConfig runs its own yaml.load and may throw. We log
+  // a redacted classifier (never the raw error message, which may include
+  // YAML context lines — gate names, route paths) and leave gateConfig null.
+  // Note: the stop hook's portal-compliance path does its own parse via
+  // loadPortalConfig() which fails closed. This MCP path is advisory.
   let gateConfig: ParsedGateConfig | null = null;
   const portalPath = path.join(absoluteRoot, 'portal.yaml');
   if (fs.existsSync(portalPath)) {
     try {
       gateConfig = await parseGateConfig(portalPath);
     } catch (e) {
-      // Gate config is optional
-      log.component('#index-loader').warn('Could not parse portal.yaml', { error: (e as Error).message });
+      // Classify by name only — do not echo the full error message.
+      const name = (e as Error)?.name ?? 'Error';
+      log.component('#index-loader').warn('Could not parse portal.yaml', { errorClass: name });
     }
   }
 

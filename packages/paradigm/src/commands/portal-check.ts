@@ -18,14 +18,16 @@ export async function portalCheckCommand(options: {
   const report = await checkPortalCompliance(rootDir);
 
   if (options.json) {
+    const realUndeclared = report.usedButUndeclared.filter(g => g !== '__portal_unparseable__');
     console.log(JSON.stringify({
       status: report.status,
       declaredButUnusedCount: report.declaredButUnused.length,
-      usedButUndeclaredCount: report.usedButUndeclared.length,
+      usedButUndeclaredCount: realUndeclared.length,
       properlyDeclaredCount: report.properlyDeclared.length,
       declaredButUnused: report.declaredButUnused,
-      usedButUndeclared: report.usedButUndeclared,
+      usedButUndeclared: realUndeclared,
       properlyDeclared: report.properlyDeclared,
+      ...(report.portalError ? { portalError: report.portalError } : {}),
     }));
   } else {
     const formatted = formatComplianceReport(report);

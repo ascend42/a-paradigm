@@ -72,6 +72,17 @@ interface PortalResult {
   declaredButUnused: string[];
   usedButUndeclared: string[];
   properlyDeclared: string[];
+  /**
+   * v5.37.12: surfaced when portal.yaml exists but cannot be parsed. Contains
+   * a redacted classifier only — never raw file contents. Stop hook reads
+   * errorClass to emit a redacted "portal.yaml unparseable (duplicate-key)"
+   * message instead of listing the synthetic sentinel as a gate name.
+   */
+  portalError?: {
+    kind: 'unparseable';
+    errorClass: 'duplicate-key' | 'syntax' | 'other';
+    detail: string;
+  };
 }
 
 interface PostflightResult {
@@ -300,6 +311,7 @@ async function runPortalCheck(rootDir: string): Promise<PortalResult | null> {
       declaredButUnused: report.declaredButUnused,
       usedButUndeclared: report.usedButUndeclared,
       properlyDeclared: report.properlyDeclared,
+      portalError: report.portalError,
     };
   } catch {
     return null;
@@ -380,16 +392,32 @@ export async function complianceCheckCommand(options: {
   }
 
   // Collect violations from portal
-  if (portalResult && portalResult.usedButUndeclaredCount > 0) {
-    const msg = `${portalResult.usedButUndeclaredCount} gate(s) used in code but not declared in portal.yaml: ${portalResult.usedButUndeclared.join(', ')}`;
+  // v5.37.12: handle the portal-unparseable sentinel separately so we emit a
+  // redacted classifier-only message, never the sentinel or raw file contents.
+  if (portalResult && portalResult.portalError?.kind === 'unparseable') {
+    const cls = portalResult.portalError.errorClass;
+    const msg = `portal.yaml unparseable: ${cls} — run 'paradigm doctor' for details`;
     violations.push(msg);
-    for (const gate of portalResult.usedButUndeclared) {
-      structuredViolations.push({
-        message: `Gate ^${gate} used in code but not declared in portal.yaml`,
-        source: 'portal',
-        file: 'portal.yaml',
-        severity: 'blocking',
-      });
+    structuredViolations.push({
+      message: msg,
+      source: 'portal',
+      file: 'portal.yaml',
+      severity: 'blocking',
+    });
+  } else if (portalResult && portalResult.usedButUndeclaredCount > 0) {
+    // Filter the sentinel defensively in case portalError was not propagated.
+    const realGates = portalResult.usedButUndeclared.filter(g => g !== '__portal_unparseable__');
+    if (realGates.length > 0) {
+      const msg = `${realGates.length} gate(s) used in code but not declared in portal.yaml: ${realGates.join(', ')}`;
+      violations.push(msg);
+      for (const gate of realGates) {
+        structuredViolations.push({
+          message: `Gate ^${gate} used in code but not declared in portal.yaml`,
+          source: 'portal',
+          file: 'portal.yaml',
+          severity: 'blocking',
+        });
+      }
     }
   }
 

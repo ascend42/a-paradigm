@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { stripSymbolPrefix } from './purpose-writer.js';
 import { log } from './mcp-logger.js';
+import { safeLoad } from './yaml-validator.js';
 
 // ============================================
 // Types (raw portal.yaml structure)
@@ -49,22 +50,34 @@ export interface RawPortalData {
 
 /**
  * Read portal.yaml as raw data. Creates default structure if file doesn't exist.
+ *
+ * v5.37.12 fail-closed: if the file exists but is unparseable, this throws
+ * (with a redacted classifier, never file contents) rather than silently
+ * returning an empty default — which would let `addGateToPortal` "succeed"
+ * against a freshly-defaulted structure, nuking the user's gates on next
+ * write (Scenario E in the 2026-04-22 security audit).
  */
 export function readPortalFile(rootDir: string): { data: RawPortalData; filePath: string } {
   const filePath = path.join(rootDir, 'portal.yaml');
 
-  if (!fs.existsSync(filePath)) {
+  const result = safeLoad<RawPortalData>(filePath);
+  if (result.status === 'missing') {
     return {
       data: { version: '1.0.0', gates: {} },
       filePath,
     };
   }
-
-  const content = fs.readFileSync(filePath, 'utf8');
-  const data = yaml.load(content) as RawPortalData;
-
+  if (result.status === 'unparseable' || result.status === 'invalid') {
+    log.component('#portal-writer').error('portal.yaml unparseable on read', {
+      errorClass: result.errorClass,
+    });
+    throw new Error(
+      `portal.yaml unparseable (${result.errorClass}). ` +
+        `Refusing to overwrite. Run 'paradigm doctor' for line-specific details.`,
+    );
+  }
   return {
-    data: data || { version: '1.0.0', gates: {} },
+    data: result.data || { version: '1.0.0', gates: {} },
     filePath,
   };
 }

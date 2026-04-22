@@ -28,14 +28,18 @@ export async function portalCheckCommand(options: PortalCheckOptions = {}): Prom
 
   try {
     // Check for portal.yaml first
-    const config = loadPortalConfig(cwd);
+    const loadResult = loadPortalConfig(cwd);
 
     if (!options.json && !options.quiet) {
       console.log(chalk.blue('\n🔐 Portal Compliance Check\n'));
 
-      if (!config) {
+      if (loadResult.status === 'missing') {
         console.log(chalk.gray('No portal.yaml found in project root.'));
         console.log(chalk.gray('Checking for gate references in code...\n'));
+      } else if (loadResult.status === 'unparseable') {
+        // Redacted — classifier only, never file contents.
+        console.log(chalk.red(`portal.yaml unparseable (${loadResult.errorClass}).`));
+        console.log(chalk.gray("Run 'paradigm doctor' locally for line-specific details.\n"));
       }
     }
 
@@ -123,9 +127,9 @@ export async function portalCheckCommand(options: PortalCheckOptions = {}): Prom
  */
 export async function portalListCommand(options: { json?: boolean } = {}): Promise<void> {
   const cwd = process.cwd();
-  const config = loadPortalConfig(cwd);
+  const loadResult = loadPortalConfig(cwd);
 
-  if (!config) {
+  if (loadResult.status === 'missing') {
     if (options.json) {
       console.log(JSON.stringify({ error: 'No portal.yaml found', gates: [] }, null, 2));
     } else {
@@ -134,6 +138,23 @@ export async function portalListCommand(options: { json?: boolean } = {}): Promi
     }
     return;
   }
+
+  if (loadResult.status === 'unparseable') {
+    if (options.json) {
+      console.log(JSON.stringify({
+        error: 'portal.yaml unparseable',
+        errorClass: loadResult.errorClass,
+        gates: [],
+      }, null, 2));
+    } else {
+      // Redacted — classifier only.
+      console.log(chalk.red(`\nportal.yaml unparseable (${loadResult.errorClass}).\n`));
+      console.log(chalk.gray("Run 'paradigm doctor' locally for line-specific details.\n"));
+    }
+    return;
+  }
+
+  const config = loadResult.data;
 
   // Extract gates with their routes
   const gates = new Map<string, { routes: string[]; description?: string }>();

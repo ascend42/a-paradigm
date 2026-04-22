@@ -51,6 +51,17 @@ export interface ComplianceReport {
   suggestions: string[];
   /** Detailed reference information */
   references: GateReference[];
+  /**
+   * Portal load error (v5.37.12+). When portal.yaml exists but is unparseable,
+   * this is populated with a redacted classifier (no file contents).
+   * Consumers MUST treat this as a fail-closed violation.
+   */
+  portalError?: {
+    kind: 'unparseable';
+    errorClass: 'duplicate-key' | 'syntax' | 'other';
+    /** Redacted short detail safe for logs/telemetry */
+    detail: string;
+  };
 }
 
 // ============================================================================
@@ -78,21 +89,95 @@ const SKIP_DIRECTORIES = [
 // ============================================================================
 
 /**
- * Load and parse portal.yaml from project root
+ * Result of attempting to load portal.yaml.
+ *
+ * Three states MUST be distinguished at every call site:
+ *   - `missing`: no portal.yaml exists (legitimate "no portal" state)
+ *   - `unparseable`: portal.yaml exists but js-yaml threw — FAIL CLOSED
+ *   - `ok`: portal.yaml parsed successfully
+ *
+ * Security contract (2026-04-22 audit, v5.37.12):
+ *   - `errorClass` is a short classifier; `detail` is a redacted summary.
+ *     Neither contains raw file contents, gate names, or route paths.
+ *   - Callers that surface errors to users MUST use `errorClass`/`detail`,
+ *     never reformat the YAMLException.toString() (which leaks file context).
  */
-export function loadPortalConfig(rootDir: string): PortalConfig | null {
+export type PortalLoadResult =
+  | { status: 'missing' }
+  | { status: 'unparseable'; errorClass: 'duplicate-key' | 'syntax' | 'other'; detail: string }
+  | { status: 'ok'; data: PortalConfig };
+
+/**
+ * Classify a js-yaml exception into a redacted category.
+ * Mirrors `yaml-validator.ts` in paradigm-mcp; duplicated to avoid a
+ * cross-package dep from paradigm CLI → paradigm-mcp.
+ */
+function classifyYamlError(err: unknown): { errorClass: 'duplicate-key' | 'syntax' | 'other'; detail: string } {
+  if (err instanceof yaml.YAMLException) {
+    const reason = (err.reason || '').toLowerCase();
+    if (reason.includes('duplicated mapping key') || reason.includes('duplicate mapping key')) {
+      return { errorClass: 'duplicate-key', detail: 'duplicate mapping key' };
+    }
+    const syntaxReasons = [
+      'unexpected',
+      'expected',
+      'bad indentation',
+      'mapping values',
+      'cannot read a block mapping entry',
+      'end of the stream',
+      'while scanning',
+      'while parsing',
+    ];
+    if (syntaxReasons.some(r => reason.includes(r))) {
+      return { errorClass: 'syntax', detail: 'yaml syntax error' };
+    }
+    return { errorClass: 'other', detail: 'yaml parse error' };
+  }
+  return { errorClass: 'other', detail: 'yaml parse error' };
+}
+
+/**
+ * Load and parse portal.yaml from the project root.
+ *
+ * Returns a discriminated union so callers cannot conflate "missing file"
+ * with "file broken". See `PortalLoadResult` for the security contract.
+ *
+ * New in v5.37.12 (fail-closed). For one-minor back-compat with external
+ * callers, see `loadPortalConfigLegacy`.
+ */
+export function loadPortalConfig(rootDir: string): PortalLoadResult {
   const portalPath = path.join(rootDir, 'portal.yaml');
 
   if (!fs.existsSync(portalPath)) {
-    return null;
+    return { status: 'missing' };
+  }
+
+  let content: string;
+  try {
+    content = fs.readFileSync(portalPath, 'utf-8');
+  } catch {
+    return { status: 'unparseable', errorClass: 'other', detail: 'file read error' };
   }
 
   try {
-    const content = fs.readFileSync(portalPath, 'utf-8');
-    return yaml.load(content) as PortalConfig;
-  } catch {
-    return null;
+    const parsed = yaml.load(content) as PortalConfig;
+    return { status: 'ok', data: parsed };
+  } catch (err) {
+    const { errorClass, detail } = classifyYamlError(err);
+    return { status: 'unparseable', errorClass, detail };
   }
+}
+
+/**
+ * Legacy shim for callers that haven't migrated to the discriminated union.
+ * Returns `null` on missing OR unparseable, losing the distinction — do not
+ * use for security-relevant paths. Scheduled for removal in v5.39.0 or v6.0.
+ *
+ * @deprecated since v5.37.12. Use `loadPortalConfig` and switch on `status`.
+ */
+export function loadPortalConfigLegacy(rootDir: string): PortalConfig | null {
+  const result = loadPortalConfig(rootDir);
+  return result.status === 'ok' ? result.data : null;
 }
 
 /**
@@ -306,10 +391,43 @@ function extractUniqueGates(references: GateReference[]): string[] {
  * @returns Compliance report
  */
 export async function checkPortalCompliance(rootDir: string): Promise<ComplianceReport> {
-  const config = loadPortalConfig(rootDir);
+  const loadResult = loadPortalConfig(rootDir);
+
+  // FAIL-CLOSED: portal.yaml exists but cannot be parsed.
+  // Per 2026-04-22 security audit, an unparseable portal must surface as
+  // a violation, NEVER as "compliant" / "no portal.yaml". Error details are
+  // redacted to avoid leaking gate names / route paths into LLM context.
+  if (loadResult.status === 'unparseable') {
+    const publicDetail =
+      loadResult.errorClass === 'duplicate-key'
+        ? 'duplicate mapping key detected'
+        : loadResult.errorClass === 'syntax'
+          ? 'YAML syntax error'
+          : 'YAML parse error';
+    return {
+      status: 'violations',
+      declaredButUnused: [],
+      routeAttachedUnused: [],
+      orphanUnused: [],
+      // Sentinel entry so downstream consumers (stop hook) see a non-zero
+      // usedButUndeclaredCount and block. The value is a fixed classifier,
+      // not a real gate name — it will never match a live identifier.
+      usedButUndeclared: ['__portal_unparseable__'],
+      properlyDeclared: [],
+      suggestions: [
+        `portal.yaml unparseable: ${publicDetail} — run 'paradigm doctor' for details`,
+      ],
+      references: [],
+      portalError: {
+        kind: 'unparseable',
+        errorClass: loadResult.errorClass,
+        detail: loadResult.detail,
+      },
+    };
+  }
 
   // If no portal.yaml exists, check if any gate references exist in code
-  if (!config) {
+  if (loadResult.status === 'missing') {
     const references = findGateReferences(rootDir);
     const usedGates = extractUniqueGates(references);
 
@@ -343,6 +461,8 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
       references,
     };
   }
+
+  const config = loadResult.data;
 
   // Extract declared gates and find references
   const declaredGates = extractDeclaredGates(config);
@@ -464,10 +584,18 @@ export function formatComplianceReport(report: ComplianceReport): string {
     lines.push('');
   }
 
-  // Violations
-  if (report.usedButUndeclared.length > 0) {
+  // Portal unparseable — surface the redacted classifier, do not render the sentinel as a gate row
+  if (report.portalError) {
+    lines.push('Portal Unparseable:');
+    lines.push(`  ✗ ${report.portalError.detail} — run 'paradigm doctor' for details`);
+    lines.push('');
+  }
+
+  // Violations — filter out the __portal_unparseable__ sentinel; portalError above already surfaces it
+  const realUndeclared = report.usedButUndeclared.filter(g => g !== '__portal_unparseable__');
+  if (realUndeclared.length > 0) {
     lines.push('Undeclared Gates (used but not in portal.yaml):');
-    for (const gate of report.usedButUndeclared) {
+    for (const gate of realUndeclared) {
       lines.push(`  ✗ ^${gate}`);
 
       // Show where it's used

@@ -5,6 +5,36 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.37.12] — 2026-04-22
+
+### Security
+
+- **Fail-closed portal compliance — closes multiple auth-bypass vectors.** Field report from a downstream project (2026-04-21) plus a dedicated security audit surfaced five scenarios where Paradigm's portal compliance pipeline could silently fail open, letting authorization config vanish without the stop hook blocking. Scenarios resolved in this release:
+  - **Bash wrapper silently masked compliance failures.** `plugins/paradigm/scripts/paradigm-common.sh` wrapped the `paradigm compliance-check` subprocess in `2>/dev/null) || true` — any non-zero exit (including an uncaught `YAMLException` from downstream) silently emptied `COMPLIANCE_RESULT` and let the stop hook pass. Removed the `|| true` mask so non-zero exit propagates and the hook blocks with a clear "compliance-check failed to run" message.
+  - **Duplicate YAML mapping keys silently accepted across all read sites.** js-yaml throws `YAMLException: duplicated mapping key`, but every portal-adjacent read site swallowed the throw with `try { yaml.load(...) } catch { return null }`. With `loadPortalConfig` returning `null` on failure, the compliance check treated the file as "no portal declared" and flagged every gate reference as undeclared, training developers to delete gate references rather than fix duplicates. Real-world impact: a project's second `GET /api/admin` entry with looser gates would silently override the stricter earlier declaration.
+  - **`loadPortalConfig` now returns a discriminated union** — `{ status: 'missing' } | { status: 'unparseable', errorClass, detail } | { status: 'ok', data }`. The `unparseable` state produces a **violations** result (not "compliant"), so any parse error fail-closes. A one-minor deprecation shim `loadPortalConfigLegacy` preserves the old `null`-on-failure signature for downstream consumers.
+  - **`Object.keys(Gate[])` silently produced numeric-index gate names.** `compliance-checker.ts` and `pm.ts` called `Object.keys()` on `ctx.gateConfig.gates`, which is a `Gate[]` Array (not a Record) per `portal/core/src/types.ts`. `Object.keys` on Arrays returns `['0', '1', '2']` — none of which match live gate identifiers, so compliance flagged every gate as undeclared. New `extractDeclaredGateNames` helper handles both `Gate[]` and raw-Record shapes, and **throws loudly** on unrecognized shapes rather than silently degrading. Type annotation at `compliance-checker.ts:52` updated to match runtime shape so TypeScript catches future regressions.
+  - **Error-message redaction.** Every user-visible surface that now reports unparseable-portal errors (stop hook, `paradigm portal check`, structured violations, MCP error envelopes) emits only a short classifier (`"duplicate mapping key"`, `"YAML syntax error"`) — never raw file contents, line excerpts, gate names, or route paths. Gate names could previously reach telemetry and LLM context via `YAMLException.toString()` / `mark.buffer`. The `yaml-validator.ts` test suite includes an explicit security assertion that feeds a portal containing a sentinel gate name and asserts the error `detail` does not contain that string.
+
+### Added
+
+- **`safeLoad<T>()`** — `packages/paradigm-mcp/src/utils/yaml-validator.ts`. Discriminated-union YAML loader (`ok` | `missing` | `unparseable` with `errorClass: 'duplicate-key' | 'syntax' | 'other'`). Applied to portal-adjacent read sites: `portal-writer.ts` (read leg), `index-loader.ts`, and via a duplicated classifier in `portal-compliance.ts` (CLI-side, kept self-contained to avoid cross-package build deps — extraction to `portal-core` deferred to v5.38.0). Broader migration of the ~250 `yaml.load` call sites across 101 files is explicitly deferred; this release covers the security-critical portal paths.
+- **Two new regression suites.**
+  - `packages/paradigm-mcp/tests/yaml-validator.test.ts` — 11 tests covering each `LoadResult` variant, each `errorClass` branch, and the **security assertion** that `detail` strings never contain file contents.
+  - `packages/paradigm/tests/portal-compliance.test.ts` — first test file in the `paradigm` CLI package; 14 tests covering scenarios A–E from the security audit, including a bash-level regression that reads `paradigm-common.sh` and greps for `|| true` near the compliance-check invocation so future edits re-introducing the mask fail CI.
+
+### Changed
+
+- **`paradigm portal check` output now splits "Portal Unparseable" from "Undeclared Gates".** The internal `__portal_unparseable__` sentinel used by the stop hook is filtered from both formatted and JSON output so consumers never see it as a gate name; when present, the JSON output surfaces a `portalError` field instead.
+
+### Notes
+
+- **Scope deliberately narrow per security's bundle order.** Shipping the lenient `^`-prefix parser fix (Bug 1 from the triage doc) before the fail-closed contract would leave fail-open paths live in the wild. Bug 1, the `writeAndConfirm` wrapper, round-trip consistency manifest, `PARADIGM_STRICT` flag, site-doc fixes, and near-match suggestion engine all ship in v5.38.0.
+- `loadPortalConfigLegacy` is deprecated; removal in v5.39.0 or v6.0.
+- Duplicated `classifyYamlError` across paradigm-mcp and paradigm CLI is intentional for this release (avoids a new build dep direction from CLI → MCP) — extraction to `portal-core` tracked for v5.38.0.
+
+Symbols: #portal-compliance, #yaml-validator, #compliance-checker, ^*, #hooks
+
 ## [5.37.11] — 2026-04-20
 
 ### Fixed

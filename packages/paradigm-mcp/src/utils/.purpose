@@ -200,3 +200,11 @@ components:
     description: Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.
     file: packages/paradigm-mcp/src/utils/compliance-health.ts
     type: utility
+  yaml-validator:
+    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit).
+    file: packages/paradigm-mcp/src/utils/yaml-validator.ts
+    type: utility
+    tags:
+      - security
+      - fail-closed
+      - portal

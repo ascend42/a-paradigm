@@ -15,6 +15,7 @@ import {
   searchSymbols,
   getSymbolsByType,
 } from '@a-company/premise-core';
+import type { ParsedGateConfig } from '@a-company/portal-core';
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -48,10 +49,66 @@ export interface ComplianceContext {
   rootDir: string;
   /** Parsed scan index */
   index: unknown;
-  /** Gate config from portal.yaml */
-  gateConfig: Record<string, unknown> | null;
+  /**
+   * Gate config from portal.yaml.
+   *
+   * Runtime shape is `ParsedGateConfig` (produced by `index-loader.ts:60` /
+   * `parseGateConfig`), in which `gates` is `Gate[]` (an Array), not a
+   * record keyed by id. Prior versions typed this as
+   * `Record<string, unknown> | null`, which silently allowed
+   * `Object.keys(gates)` — returning `['0','1','2',…]` for an Array. That
+   * produced false "missing-portal-gate" violations (v5.37.12 security audit
+   * Scenario C) and is fixed here by switching to the accurate type.
+   *
+   * Also accepts the raw-record shape for callers that load portal.yaml
+   * directly via `yaml.load` (e.g. `pm.ts`'s legacy path). Consumers MUST
+   * runtime-check the shape before iterating.
+   */
+  gateConfig:
+    | ParsedGateConfig
+    | { gates?: unknown; routes?: unknown; [k: string]: unknown }
+    | null;
   /** List of purpose file entries */
   purposeFiles: Array<{ filePath: string }>;
+}
+
+/**
+ * Extract declared gate names (bare, no `^` prefix) from a gate config that
+ * may be either `Gate[]` (ParsedGateConfig, canonical runtime shape) or a
+ * `Record<string, ...>` (raw yaml.load shape). Throws if the shape is
+ * unrecognized — we fail loudly rather than silently producing numeric
+ * indices from Object.keys on an Array.
+ */
+export function extractDeclaredGateNames(
+  gateConfig: ComplianceContext['gateConfig'],
+): string[] {
+  if (!gateConfig) return [];
+  const gates = (gateConfig as { gates?: unknown }).gates;
+  if (gates == null) return [];
+
+  if (Array.isArray(gates)) {
+    // Canonical ParsedGateConfig shape — Gate[] with `id` field.
+    return gates
+      .map((g: unknown) => {
+        if (g && typeof g === 'object' && 'id' in g && typeof (g as { id: unknown }).id === 'string') {
+          const id = (g as { id: string }).id;
+          return id.startsWith('^') ? id.slice(1) : id;
+        }
+        return null;
+      })
+      .filter((n): n is string => n !== null);
+  }
+
+  if (typeof gates === 'object') {
+    // Raw record shape: { [id]: GateDef }
+    return Object.keys(gates as Record<string, unknown>).map(g =>
+      g.startsWith('^') ? g.slice(1) : g,
+    );
+  }
+
+  throw new Error(
+    `Invalid gateConfig.gates shape: expected Array or Record, got ${typeof gates}`,
+  );
 }
 
 const ROUTE_FILE_PATTERNS = [
@@ -87,9 +144,14 @@ export function checkSpecCompliance(
   }
 
   // 2. Route coverage
-  const declaredRoutes = ctx.gateConfig?.routes
-    ? Object.keys(ctx.gateConfig.routes as Record<string, unknown>)
-    : [];
+  // `routes` only exists on the raw yaml.load shape (not ParsedGateConfig).
+  // Guard against Array shape too, to avoid the same Object.keys-on-array
+  // pitfall that broke gate lookup.
+  const rawRoutes = (ctx.gateConfig as { routes?: unknown } | null)?.routes;
+  const declaredRoutes =
+    rawRoutes && !Array.isArray(rawRoutes) && typeof rawRoutes === 'object'
+      ? Object.keys(rawRoutes as Record<string, unknown>)
+      : [];
 
   for (const file of filesModified) {
     const absPath = path.isAbsolute(file) ? file : path.join(ctx.rootDir, file);
@@ -128,11 +190,11 @@ export function checkSpecCompliance(
   }
 
   // 3. Gate declarations
-  const declaredGateNames = ctx.gateConfig
-    ? Object.keys((ctx.gateConfig.gates || {}) as Record<string, unknown>).map(g =>
-        g.startsWith('^') ? g.slice(1) : g
-      )
-    : [];
+  // Runtime gateConfig.gates is Gate[] (an Array) when produced by
+  // parseGateConfig (index-loader.ts), not a Record. Use the shape-aware
+  // helper to avoid Object.keys(Array) returning ['0','1','2',…] — the
+  // v5.37.12 Scenario C auth-bypass vector.
+  const declaredGateNames = extractDeclaredGateNames(ctx.gateConfig);
 
   for (const symbol of symbolsTouched) {
     if (symbol.startsWith('^')) {

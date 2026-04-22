@@ -26,6 +26,7 @@ import { getComplianceRate } from '../utils/practice-store.js';
 import { getSessionTracker } from '../utils/session-tracker.js';
 import { execSync } from 'child_process';
 import { narrateAllGaps, type CheckResult as GapCheckResult } from '../utils/gap-narrator.js';
+import { extractDeclaredGateNames } from '../utils/compliance-checker.js';
 
 // ============================================================================
 // Constants
@@ -192,10 +193,17 @@ async function runPreflightCheck(task: string, ctx: ProjectContext) {
   };
 
   if (ctx.gateConfig) {
-    const gates = Object.keys(ctx.gateConfig.gates || {});
-    portalStatus.gateCount = gates.length;
-    portalStatus.gates = gates.map(g => g.startsWith('^') ? g : `^${g}`);
-    portalStatus.routeCount = Object.keys(ctx.gateConfig.routes || {}).length;
+    // gates is Gate[] at runtime (ParsedGateConfig). Use the shape-aware
+    // helper to avoid Scenario C (Object.keys-on-array auth-bypass).
+    const gateNames = extractDeclaredGateNames(ctx.gateConfig);
+    portalStatus.gateCount = gateNames.length;
+    portalStatus.gates = gateNames.map(g => `^${g}`);
+    // routes exists on the raw yaml shape only — ParsedGateConfig omits it.
+    const rawRoutes = (ctx.gateConfig as unknown as { routes?: unknown }).routes;
+    portalStatus.routeCount =
+      rawRoutes && !Array.isArray(rawRoutes) && typeof rawRoutes === 'object'
+        ? Object.keys(rawRoutes as Record<string, unknown>).length
+        : 0;
   }
 
   // 4. Task adds routes?
@@ -334,7 +342,11 @@ function runPostflightCheck(
   const violations: PostflightViolation[] = [];
 
   // 1. Check for new routes without portal.yaml entries
-  const declaredRoutes = ctx.gateConfig?.routes ? Object.keys(ctx.gateConfig.routes) : [];
+  const rawRoutes = (ctx.gateConfig as unknown as { routes?: unknown } | null)?.routes;
+  const declaredRoutes =
+    rawRoutes && !Array.isArray(rawRoutes) && typeof rawRoutes === 'object'
+      ? Object.keys(rawRoutes as Record<string, unknown>)
+      : [];
 
   for (const file of filesModified) {
     const absPath = path.isAbsolute(file) ? file : path.join(ctx.rootDir, file);
@@ -394,9 +406,10 @@ function runPostflightCheck(
   }
 
   // 3. Check gate symbols against portal.yaml
-  const declaredGateNames = ctx.gateConfig
-    ? Object.keys(ctx.gateConfig.gates || {}).map(g => g.startsWith('^') ? g.slice(1) : g)
-    : [];
+  // ctx.gateConfig.gates is Gate[] at runtime (ParsedGateConfig from
+  // index-loader.ts) — Object.keys on an Array would return ['0','1','2',…],
+  // the Scenario C auth-bypass vector fixed in v5.37.12.
+  const declaredGateNames = extractDeclaredGateNames(ctx.gateConfig);
 
   for (const symbol of symbolsTouched) {
     if (symbol.startsWith('^')) {

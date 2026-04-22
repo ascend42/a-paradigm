@@ -1,0 +1,16 @@
+version: 2.0.0
+description: |
+  Integration tests for the paradigm CLI. First tests/ file added in v5.37.12
+  as regression protection for the fail-closed portal.yaml auth-bypass class
+  (see docs/private/plans/portal-yaml-release-split.md).
+components:
+  portal-compliance-tests:
+    description: Regression suite covering the 5 auth-bypass scenarios (A-E) from the 2026-04-22 security audit — prefix mismatch, duplicate-key, Gate[] Array shape, stop-hook exit propagation, valid-portal regression.
+    type: test
+    anchors:
+      - portal-compliance.test.ts:1-400
+    tags:
+      - test
+      - regression
+      - portal
+      - security

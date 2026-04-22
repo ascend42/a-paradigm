@@ -510,11 +510,40 @@ fi
 # --- Checks 8, 10, 11: Unified compliance check (single Node.js process) ---
 # Replaces 3 separate subprocess calls (habits check, drift check, portal check)
 # with a single `paradigm compliance-check` invocation.
+#
+# v5.37.12 fail-closed fix (security audit 2026-04-22, Scenario D):
+# the prior `|| true` swallowed non-zero exits, which masked every upstream
+# failure mode (missing binary, corrupt index, uncaught exception on malformed
+# portal.yaml). On non-zero exit we now record the exit code and block with
+# an explicit "compliance check failed to run" violation — never silently
+# fall through to the habits-only branch.
 COMPLIANCE_RESULT=""
+COMPLIANCE_EXIT=0
 if command -v paradigm >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null) || true
+  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
+  COMPLIANCE_EXIT=$?
 elif command -v npx >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null) || true
+  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
+  COMPLIANCE_EXIT=$?
+else
+  # No binary available at all — mark as unavailable, not as silent success.
+  COMPLIANCE_EXIT=127
+fi
+
+# Fail-closed: non-zero exit MUST block the stop hook. The prior behavior
+# silently dropped this signal via `|| true`.
+_SEV_COMPLIANCE_RUN=$(_check_severity "portal-compliance" "block")
+if [ "$COMPLIANCE_EXIT" -ne 0 ] && [ "$_SEV_COMPLIANCE_RUN" != "off" ]; then
+  if [ "$_SEV_COMPLIANCE_RUN" = "block" ]; then
+    VIOLATIONS="$VIOLATIONS
+  - paradigm compliance-check failed to run (exit $COMPLIANCE_EXIT).
+    Refusing to complete session. Run 'paradigm compliance-check' manually
+    to see the error. If portal.yaml is malformed, run 'paradigm doctor'."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  else
+    ADVISORY="$ADVISORY
+  - (warn) paradigm compliance-check failed to run (exit $COMPLIANCE_EXIT)."
+  fi
 fi
 
 if [ -n "$COMPLIANCE_RESULT" ]; then
@@ -559,17 +588,41 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
   _SEV=$(_check_severity "portal-compliance" "block")
   UNDECLARED=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclaredCount":[0-9]*' | sed 's/.*://')
 
+  # v5.37.12: detect unparseable-portal sentinel (classifier, not a gate name).
+  # checkPortalCompliance emits `__portal_unparseable__` in usedButUndeclared
+  # to force a block when portal.yaml fails to parse. We never render the
+  # sentinel or the raw YAMLException to the user — only a redacted class.
+  PORTAL_ERR_CLASS=$(echo "$COMPLIANCE_RESULT" | grep -o '"errorClass":"[^"]*"' | head -1 | sed 's/.*"errorClass":"\([^"]*\)".*/\1/')
+
   if [ "$_SEV" != "off" ] && [ -n "$UNDECLARED" ] && [ "$UNDECLARED" -gt 0 ] 2>/dev/null; then
     UNDECLARED_LIST=$(echo "$COMPLIANCE_RESULT" | grep -o '"usedButUndeclared":\[[^]]*\]' | sed 's/.*\[//;s/\].*//;s/"//g')
-    if [ "$_SEV" = "block" ]; then
-      VIOLATIONS="$VIOLATIONS
+    # Strip the unparseable-portal sentinel from the user-visible list.
+    CLEAN_LIST=$(echo "$UNDECLARED_LIST" | sed 's/__portal_unparseable__,//g; s/,__portal_unparseable__//g; s/__portal_unparseable__//g')
+
+    if echo "$UNDECLARED_LIST" | grep -q '__portal_unparseable__'; then
+      # Portal unparseable path — redacted message, classifier only.
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
+  - portal.yaml unparseable${PORTAL_ERR_CLASS:+ ($PORTAL_ERR_CLASS)}.
+    Run 'paradigm doctor' locally for line-specific details.
+    Fix the YAML error or run 'paradigm portal check'."
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
+  - (warn) portal.yaml unparseable${PORTAL_ERR_CLASS:+ ($PORTAL_ERR_CLASS)} — run 'paradigm doctor'."
+      fi
+    elif [ -n "$CLEAN_LIST" ]; then
+      # Real undeclared gates — existing behavior.
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
   - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
-    $UNDECLARED_LIST
+    $CLEAN_LIST
     Add them to portal.yaml or use paradigm_portal_add_gate."
-      VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-    else
-      ADVISORY="$ADVISORY
-  - (warn) $UNDECLARED gate(s) used in code but not declared in portal.yaml: $UNDECLARED_LIST"
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
+  - (warn) $UNDECLARED gate(s) used in code but not declared in portal.yaml: $CLEAN_LIST"
+      fi
     fi
   fi
 else

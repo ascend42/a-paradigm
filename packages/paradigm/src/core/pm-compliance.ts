@@ -169,9 +169,10 @@ export function runPreflight(
     });
 
   // 3. Portal status
-  const portalConfig = loadPortalConfig(rootDir);
+  const portalLoad = loadPortalConfig(rootDir);
+  const portalConfig = portalLoad.status === 'ok' ? portalLoad.data : null;
   const portalStatus = {
-    exists: !!portalConfig,
+    exists: portalLoad.status !== 'missing',
     gateCount: portalConfig ? extractDeclaredGates(portalConfig).length : 0,
     gates: portalConfig ? extractDeclaredGates(portalConfig).map(g => `^${g}`) : [],
     routeCount: portalConfig?.routes ? Object.keys(portalConfig.routes).length : 0,
@@ -235,7 +236,8 @@ export function runPostflight(
   const violations: PostflightViolation[] = [];
 
   // 1. Check for new routes without portal.yaml entries
-  const portalConfig = loadPortalConfig(rootDir);
+  const portalLoad = loadPortalConfig(rootDir);
+  const portalConfig = portalLoad.status === 'ok' ? portalLoad.data : null;
   const declaredGates = portalConfig ? extractDeclaredGates(portalConfig) : [];
   const declaredRoutes = portalConfig?.routes ? Object.keys(portalConfig.routes) : [];
 

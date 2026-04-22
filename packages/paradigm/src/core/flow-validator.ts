@@ -330,7 +330,8 @@ export function validateFlow(
   }
 
   // Load portal.yaml for gate validation
-  const portalConfig = loadPortalConfig(rootDir);
+  const portalLoad = loadPortalConfig(rootDir);
+  const portalConfig = portalLoad.status === 'ok' ? portalLoad.data : null;
   const declaredGates = portalConfig ? extractDeclaredGates(portalConfig) : [];
   const declaredGatesSet = new Set(declaredGates);
 

@@ -11,3 +11,13 @@ components:
       - test
       - regression
       - portal
+  yaml-validator-tests:
+    description: Regression suite for safeLoad — missing / unparseable / invalid / ok discriminated union; SECURITY assertion that unparseable detail does NOT contain raw file contents, gate names, or route paths. Added v5.37.12.
+    type: test
+    anchors:
+      - yaml-validator.test.ts:1-200
+    tags:
+      - test
+      - regression
+      - security
+      - fail-closed
