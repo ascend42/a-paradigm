@@ -83,6 +83,12 @@ interface PortalResult {
     errorClass: 'duplicate-key' | 'syntax' | 'other';
     detail: string;
   };
+  /**
+   * v5.38.0: near-match suggestions for undeclared / unused gates. Safe for
+   * local CLI output (user has portal.yaml on disk) but must not leak into
+   * telemetry.
+   */
+  suggestions?: Array<{ gate: string; didYouMean: string; distance: number }>;
 }
 
 interface PostflightResult {
@@ -312,6 +318,16 @@ async function runPortalCheck(rootDir: string): Promise<PortalResult | null> {
       usedButUndeclared: report.usedButUndeclared,
       properlyDeclared: report.properlyDeclared,
       portalError: report.portalError,
+      // v5.38.0: propagate near-match suggestions (redacted-safe for local CLI).
+      ...(report.nearMatches && report.nearMatches.length > 0
+        ? {
+            suggestions: report.nearMatches.map(m => ({
+              gate: m.gate,
+              didYouMean: m.didYouMean,
+              distance: m.distance,
+            })),
+          }
+        : {}),
     };
   } catch {
     return null;

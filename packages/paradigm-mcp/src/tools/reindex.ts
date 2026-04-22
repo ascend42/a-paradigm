@@ -20,6 +20,12 @@ import { rebuildPersonaIndex } from '../utils/personas-loader.js';
 import { rebuildProtocolIndex } from '../utils/protocol-loader.js';
 import { rebuildUniversityIndex } from '../utils/university-loader.js';
 import {
+  ConsistencyTracker,
+  type ConsistencyReport,
+} from '../utils/consistency-tracker.js';
+import { isStrictMode } from '../utils/strict-mode.js';
+import { log } from '../utils/mcp-logger.js';
+import {
   checkIntegrity,
   checkComponentAnchors,
   checkPurposeHealth,
@@ -118,7 +124,7 @@ export async function handleReindexTool(
       + (result.componentAnchorIssues || 0)
       + (result.crossFileIssues || 0);
 
-    const summary = {
+    const summary: Record<string, unknown> = {
       success: true,
       symbolCount: result.symbolCount,
       breakdown: result.breakdown,
@@ -128,6 +134,11 @@ export async function handleReindexTool(
       ...(result.protocolHealth ? { protocols: result.protocolHealth.total, staleProtocols: result.protocolHealth.stale } : {}),
       ...(issues > 0 ? { issues } : {}),
     };
+
+    // v5.38.0: consistency report — transformation CLASSES only, never content.
+    if (result.consistency) {
+      summary.consistency = result.consistency;
+    }
 
     const text = JSON.stringify(summary, null, 2);
     trackToolCall(text.length, name);
@@ -167,6 +178,12 @@ export interface RebuildResult {
   componentAnchorIssues?: number;
   purposeHealth?: PurposeHealthReport;
   crossFileIssues?: number;
+  /**
+   * v5.38.0: round-trip consistency report — transformation classes only,
+   * never gate names / route paths / file contents. See ConsistencyTracker
+   * security guardrails.
+   */
+  consistency?: ConsistencyReport;
 }
 
 export async function rebuildStaticFiles(
@@ -174,6 +191,7 @@ export async function rebuildStaticFiles(
   ctx?: ProjectContext,
 ): Promise<RebuildResult> {
   const filesWritten: string[] = [];
+  const tracker = new ConsistencyTracker();
 
   // 1. Aggregate symbols (reuse context if available, otherwise re-aggregate)
   let aggregation: AggregationResult;
@@ -190,6 +208,11 @@ export async function rebuildStaticFiles(
   if (!fs.existsSync(paradigmDir)) {
     fs.mkdirSync(paradigmDir, { recursive: true });
   }
+
+  // v5.38.0: scan portal.yaml for transformation classes (non-content).
+  auditPortalTransformations(rootDir, tracker);
+  // Scan .purpose files for transformation classes.
+  auditPurposeTransformations(aggregation.purposeFiles, tracker);
 
   // 2. Generate and write scan-index.json
   const scanIndex = generateScanIndex(
@@ -354,6 +377,30 @@ export async function rebuildStaticFiles(
     }
   }
 
+  // v5.38.0: finalize consistency report + write manifest.
+  const consistency = tracker.report();
+
+  // Write the manifest even if empty — downstream consumers (stop hook,
+  // paradigm doctor) rely on its presence as a signal that reindex ran.
+  try {
+    const manifestPath = path.join(paradigmDir, 'manifest.consistency.json');
+    fs.writeFileSync(manifestPath, JSON.stringify(consistency, null, 2), 'utf-8');
+    filesWritten.push('.paradigm/manifest.consistency.json');
+  } catch {
+    // Non-fatal; log only.
+    log.component('#reindex').warn('failed to write consistency manifest', {
+      stage: 'manifest-write',
+    });
+  }
+
+  // Strict-mode gate: any lossy transformation fails the reindex.
+  if (isStrictMode() && tracker.hasLossy()) {
+    throw new Error(
+      `reindex aborted: ${consistency.lossy_count} lossy transformation(s) ` +
+      `detected under PARADIGM_STRICT=1. See .paradigm/manifest.consistency.json.`,
+    );
+  }
+
   return {
     action: 'reindex',
     filesWritten,
@@ -363,6 +410,7 @@ export async function rebuildStaticFiles(
     aspectGraphStats,
     personaCount,
     protocolHealth,
+    consistency,
     ...(Object.keys(componentTypeBreakdown).length > 0 ? { componentTypeBreakdown } : {}),
     ...(universityStats ? { universityStats } : {}),
     ...(integrityReport ? { integrityReport } : {}),
@@ -370,6 +418,156 @@ export async function rebuildStaticFiles(
     ...(purposeHealth ? { purposeHealth } : {}),
     ...(crossFileIssues !== undefined ? { crossFileIssues } : {}),
   };
+}
+
+// ============================================================================
+// v5.38.0: Consistency audit helpers (transformation classes only)
+// ============================================================================
+
+/**
+ * Scan portal.yaml for lenient-parse transformations: prefix-stripped gate
+ * keys, array-shaped gates/routes (auto-coerced to object on write), and
+ * duplicate mapping keys (which js-yaml silently resolves by keeping the last).
+ *
+ * SECURITY: records classifier strings only. No gate names, no route paths,
+ * no file content. The tracker's `surface` is always `'portal.yaml'`.
+ */
+function auditPortalTransformations(
+  rootDir: string,
+  tracker: ConsistencyTracker,
+): void {
+  const portalPath = path.join(rootDir, 'portal.yaml');
+  if (!fs.existsSync(portalPath)) return;
+
+  let content: string;
+  try {
+    content = fs.readFileSync(portalPath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  // Duplicate-key detection: use js-yaml's default (strict) mode — it throws
+  // on duplicate mapping keys. If it throws with that reason, record it.
+  try {
+    yaml.load(content);
+  } catch (err) {
+    const reason = (err as yaml.YAMLException)?.reason?.toLowerCase() || '';
+    if (reason.includes('duplicate')) {
+      tracker.record('duplicate-key-detected', 'portal.yaml');
+    }
+    // Unparseable portal handled by portal-compliance elsewhere; we don't
+    // escalate here because the tracker is advisory at reindex time.
+    return;
+  }
+
+  // Re-parse under FAILSAFE_SCHEMA to walk the document with raw keys intact.
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(content, { schema: yaml.FAILSAFE_SCHEMA });
+  } catch {
+    return;
+  }
+
+  if (!parsed || typeof parsed !== 'object') return;
+  const obj = parsed as Record<string, unknown>;
+
+  // prefix-stripped: count gate keys that start with `^`
+  const gates = obj.gates;
+  if (gates && typeof gates === 'object' && !Array.isArray(gates)) {
+    let prefixCount = 0;
+    for (const key of Object.keys(gates)) {
+      if (key.startsWith('^')) prefixCount++;
+    }
+    if (prefixCount > 0) {
+      tracker.record('prefix-stripped', 'portal.yaml', prefixCount);
+    }
+  } else if (Array.isArray(gates) && gates.length > 0) {
+    // array-coerced: v2 scaffold wrote `gates: []` — the writer coerces to
+    // `gates: {}` on the next mutation.
+    tracker.record('array-coerced', 'portal.yaml');
+  }
+
+  // array-coerced for routes
+  const routes = obj.routes;
+  if (Array.isArray(routes) && routes.length > 0) {
+    tracker.record('array-coerced', 'portal.yaml');
+  }
+
+  // default-applied: portal.yaml missing version but present
+  if (!obj.version) {
+    tracker.record('default-applied', 'portal.yaml');
+  }
+}
+
+/**
+ * Scan .purpose files for transformation classes. Currently detects
+ * duplicate-key (js-yaml throws), array-coerced (sections like `components: []`),
+ * and prefix-stripped on ids (e.g. a gate key written as `^name`).
+ *
+ * SECURITY: records classifier strings + surface='purpose.yaml' only. The
+ * `surface` classifier is identical across all purpose files — we do NOT
+ * include the file path, aggregating counts instead.
+ */
+function auditPurposeTransformations(
+  purposeFiles: string[],
+  tracker: ConsistencyTracker,
+): void {
+  for (const filePath of purposeFiles) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    try {
+      yaml.load(content);
+    } catch (err) {
+      const reason = (err as yaml.YAMLException)?.reason?.toLowerCase() || '';
+      if (reason.includes('duplicate')) {
+        tracker.record('duplicate-key-detected', 'purpose.yaml');
+      }
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = yaml.load(content, { schema: yaml.FAILSAFE_SCHEMA });
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== 'object') continue;
+    const obj = parsed as Record<string, unknown>;
+
+    // array-coerced: any top-level section that is an array (should be record)
+    const arrayCoercedSections = ['components', 'features', 'gates', 'signals', 'aspects', 'states'];
+    let arrayCoercedCount = 0;
+    for (const sec of arrayCoercedSections) {
+      if (Array.isArray(obj[sec])) arrayCoercedCount++;
+    }
+    if (arrayCoercedCount > 0) {
+      tracker.record('array-coerced', 'purpose.yaml', arrayCoercedCount);
+    }
+
+    // prefix-stripped: gate / signal / aspect keys with leading symbols
+    const scanSection = (section: unknown, prefix: string): number => {
+      if (!section || typeof section !== 'object' || Array.isArray(section)) return 0;
+      let n = 0;
+      for (const key of Object.keys(section as Record<string, unknown>)) {
+        if (key.startsWith(prefix)) n++;
+      }
+      return n;
+    };
+    const totalPrefix =
+      scanSection(obj.gates, '^') +
+      scanSection(obj.signals, '!') +
+      scanSection(obj.aspects, '~') +
+      scanSection(obj.components, '#') +
+      scanSection(obj.features, '#');
+    if (totalPrefix > 0) {
+      tracker.record('prefix-stripped', 'purpose.yaml', totalPrefix);
+    }
+  }
 }
 
 // ============================================================================

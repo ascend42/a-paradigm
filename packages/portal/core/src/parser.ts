@@ -49,7 +49,13 @@ export async function parseGateConfig(configPath: string): Promise<ParsedGateCon
   const configAny = config as unknown as { portals?: typeof config.gates };
   const gatesSource = config.gates || configAny.portals;
   if (gatesSource) {
-    for (const [id, gateDef] of Object.entries(gatesSource)) {
+    for (const [rawId, gateDef] of Object.entries(gatesSource)) {
+      // v5.38.0 Bug 1 fix: strip leading `^` from the YAML key. The caret is
+      // the symbol-class marker (rendered when the gate is referenced), not
+      // part of the gate id. Accepting both `^authenticated:` and
+      // `authenticated:` as keys is the lenient migration path for projects
+      // that followed the pre-fix site docs.
+      const id = rawId.startsWith('^') ? rawId.slice(1) : rawId;
       gates.push(normalizeGate(id, gateDef));
     }
   }
@@ -97,13 +103,18 @@ export async function parseGateFile(filePath: string): Promise<Gate[]> {
 
   // Single gate file format
   if (data.id) {
-    return [normalizeGate(data.id as string, data as Partial<Omit<Gate, 'id'>>)];
+    // v5.38.0 Bug 1 fix: strip leading `^` from the declared id if present.
+    const rawId = data.id as string;
+    const id = rawId.startsWith('^') ? rawId.slice(1) : rawId;
+    return [normalizeGate(id, data as Partial<Omit<Gate, 'id'>>)];
   }
 
   // Multiple gates format
   if (data.gates) {
     const gates: Gate[] = [];
-    for (const [id, gateDef] of Object.entries(data.gates as Record<string, unknown>)) {
+    for (const [rawId, gateDef] of Object.entries(data.gates as Record<string, unknown>)) {
+      // v5.38.0 Bug 1 fix: strip leading `^` (symbol-class marker).
+      const id = rawId.startsWith('^') ? rawId.slice(1) : rawId;
       gates.push(normalizeGate(id, gateDef as Partial<Omit<Gate, 'id'>>));
     }
     return gates;

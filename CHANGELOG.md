@@ -5,6 +5,36 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.38.0] — 2026-04-22
+
+### Added
+
+- **`writeAndConfirm()` — atomic-write + verify envelope for schema-mutating tools.** New `packages/paradigm-mcp/src/utils/write-and-confirm.ts`. Writes content atomically (`.tmp` sibling + `fs.renameSync`), reads back, runs a caller-supplied `verify()` callback, and returns an envelope `{ written, path, hashHint, bytes }`. `hashHint` is a truncated HMAC-SHA256 (12 hex chars) keyed with a per-install secret at `~/.paradigm-install-key` (0o600, 32 random bytes) — advisory, not cryptographic, but immune to pre-image attack on tiny YAML files (security concern flagged in the 2026-04-22 audit). `WriteVerificationError` messages are classifier-only — no file paths, gate names, or route paths leak to logs or telemetry. Applied to 5 mutation handlers: `portal_add_gate`, `portal_add_route`, `purpose_add_component`, `purpose_link`, `purpose_remove`. Response envelopes gain `hashHint` + `bytes` additively; existing consumers continue to work.
+- **Round-trip consistency manifest.** New `packages/paradigm-mcp/src/utils/consistency-tracker.ts`. Every `paradigm_reindex` now tracks lossy transformations applied during indexing and emits both a `consistency` field on the response envelope and a durable `.paradigm/manifest.consistency.json` artifact. Shape: transformation **classes** (`prefix-stripped`, `array-coerced`, `default-applied`, `duplicate-key-detected`, `case-normalized`) + fixed **surface** classifiers (`portal.yaml`, `purpose.yaml`) + counts. Never gate names, route paths, or file contents — redaction verified by an integration test that feeds a portal.yaml with distinctive secret names and asserts those strings are absent from the serialized manifest.
+- **`PARADIGM_STRICT=1` environment flag.** New `packages/paradigm-mcp/src/utils/strict-mode.ts`. When set: `safeLoad` throws on any non-`ok`/non-`missing` result (including `other` error classes previously non-fatal); `paradigm_reindex` aborts with a classifier-only error when lossy transformations land; duplicate YAML keys, Array→Object coercions, and prefix-stripping all become hard errors. Default **OFF** in v5.38.0 — intended as opt-in for projects wanting fail-fast CI semantics. Field observation in v5.38.x informs whether to flip default `ON` in v5.39.0 or v6.0.
+- **Near-match suggestion engine in compliance errors.** New `packages/paradigm/src/core/near-match.ts`. When `compliance-check` reports gates used in code but undeclared in portal.yaml (the legitimate case, not the `__portal_unparseable__` sentinel), a Levenshtein-based suggestion appears: `Did you mean: ^authenticated? (declared in portal.yaml)`. Threshold: distance ≤ 2 OR distance/longer ≤ 0.3. Bidirectional — also suggests corrections when a declared gate never appears in code (possible typo on either side). Closes Jinx's "diagnosis failed" complaint from the 2026-04-22 pattern reflection. Output surfaces locally only (CLI stdout, JSON envelope); never flows to telemetry.
+- **4 new regression suites + extended coverage.**
+  - `packages/paradigm-mcp/tests/write-and-confirm.test.ts` — 8 tests (envelope shape, atomic write, verify callback failure, truncated-HMAC uniqueness, SECURITY assertion that thrown errors don't leak paths/content)
+  - `packages/paradigm-mcp/tests/consistency-manifest.test.ts` — 8 tests (reindex with crafted secret gate names asserts manifest redaction)
+  - `packages/paradigm/tests/near-match.test.ts` — 18 tests (threshold behavior, false-positive resistance, bidirectional suggestions)
+  - Extended `packages/paradigm/tests/portal-compliance.test.ts` and `packages/paradigm-mcp/tests/portal-writer.test.ts` for Bug 1 lenient parsing + strict-mode behavior + envelope additions.
+
+### Fixed
+
+- **Bug 1 — Scanner treats `^` prefix as part of gate id.** Field-reported 2026-04-21 (Quakeee-web). `packages/portal/core/src/parser.ts` `normalizeGate` was taking the raw YAML key (`^authenticated`) as `Gate.id`, then `packages/premise/core/src/aggregator.ts:createGateSymbol` produced `symbol: '^^authenticated'` (double caret). Compliance check normalized the "used in code" set to bare ids and every declared gate was reported as undeclared, training developers to *delete gate references* instead of fixing the key form. **Parser now strips leading `^` at every gate-key site; aggregator adds defensive double-strip.** Back-compat: projects still on prefixed form work unchanged; canonical form is bare keys going forward.
+
+### Changed
+
+- **`classifyYamlError` single-source-of-truth.** Extracted to `@a-company/portal-core` at `packages/portal/core/src/classify-yaml-error.ts`. `paradigm-mcp`'s `yaml-validator.ts` and `paradigm` CLI's `portal-compliance.ts` both import from there — the duplicated copies introduced in v5.37.12 (deliberately, to avoid a build-dep direction change during a security patch) are now collapsed. Resolves Finding 4 of the v5.37.12 review. `packages/paradigm/package.json` gains explicit `@a-company/portal-core` dep.
+- **Site docs + MCP guidance resource + landing-page example now teach bare gate-key form.** 8 markdown files updated (portal-and-gates, concepts, purpose-files, migration-prompt, add-gate, symbols × 3) plus 2 TS-string surfaces (MCP `paradigm://guidance/portal` resource teaching example; landing page step-2 code snippet). Key vs reference distinction documented with inline notes: gate **keys** are bare (`authenticated:`), gate **references** are prefixed (`^authenticated` in routes, flow steps, `requires:`/`blocks:` arrays, prose).
+
+### Notes
+
+- **Deferred to v5.38.x or v5.39.0** (per reviewer's 5 non-blocking findings): wiring the remaining purpose handlers (`add_aspect`, `add_signal`, `add_flow`, `add_gate`, `add_state`, `rename`, `init`) to `writeAndConfirm` — they currently use inline verification from v5.37.11 which is sound but not envelope-uniform; adding a portal-core test harness so Bug 1 gets covered in portal-core directly (currently tested via the CLI package); expanding `PARADIGM_STRICT` to additionally escalate `case-normalized` and `default-applied` transformations.
+- **Three live in-repo `.purpose` files** still use `^`-prefixed gate keys (`packages/conductor/.purpose`, `packages/conductor/Sources/Conductor/Symphony/.purpose`, `packages/sentinel/.purpose`). These auto-heal on next `paradigm scan` because Bug 1 is fixed; no urgent action, but a one-shot cleanup pass would demonstrate canonical shape in the monorepo.
+
+Symbols: #portal-core, #paradigm-mcp, #paradigm-cli, #write-and-confirm, #consistency-tracker, #strict-mode, #near-match, ^*
+
 ## [5.37.12] — 2026-04-22
 
 ### Security

@@ -74,9 +74,17 @@ components:
     type: service
     path: flow-validator.ts
   portal-compliance:
-    description: Validate portal.yaml gates are used in routes and routes reference declared gates
+    description: Validate portal.yaml gates are used in routes and routes reference declared gates. v5.37.12 fail-closed (discriminated PortalLoadResult). v5.38.0 imports classifyYamlError from @a-company/portal-core and attaches near-match suggestions to undeclared / unused gates via the #near-match helper.
     type: service
     path: portal-compliance.ts
+  near-match:
+    description: v5.38.0 tiny Levenshtein-based near-match engine for compliance "did you mean" hints. Threshold — distance ≤ 2 OR distance / longer ≤ 0.3. Safe for local user-facing surfaces (user has portal.yaml on disk); not safe for telemetry. Produces ComplianceSuggestion shape for both the formatted report and the JSON envelope.
+    type: utility
+    path: near-match.ts
+    tags:
+      - portal
+      - compliance
+      - ux
   audit-logger:
     description: Log orchestration execution details and costs to .paradigm/orchestrations/
     type: service

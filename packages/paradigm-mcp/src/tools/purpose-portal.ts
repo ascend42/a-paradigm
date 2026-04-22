@@ -14,6 +14,7 @@ import {
   resolvePurposeFilePath,
   readPurposeFile,
   writePurposeFile,
+  writePurposeFileAndConfirm,
   normalizeToRecord,
   normalizeFlowsToRecord,
   stripSymbolPrefix,
@@ -778,15 +779,28 @@ async function handleAddComponent(
   existing[bareId] = item;
   (data as Record<string, unknown>)[sec] = existing;
 
-  writePurposeFile(filePath, data);
+  // v5.38.0: atomic write + read-back verify with WriteEnvelope fields.
+  const envelope = await writePurposeFileAndConfirm(
+    filePath,
+    data,
+    (parsed) => {
+      const postItems = (parsed as Record<string, unknown>)[sec];
+      if (!postItems || typeof postItems !== 'object' || Array.isArray(postItems)) return false;
+      return bareId in (postItems as Record<string, unknown>);
+    },
+    sec,
+  );
   await reloadContext();
 
   return ok({
     action: 'add_component',
-    file: filePath,
+    file: envelope.path,
     section: sec,
     id: bareId,
     symbol: `#${bareId}`,
+    written: envelope.written,
+    hashHint: envelope.hashHint,
+    bytes: envelope.bytes,
   });
 }
 
@@ -1118,7 +1132,17 @@ async function handleLink(
   items[bareId] = item;
   (data as Record<string, unknown>)[targetSection] = items;
 
-  writePurposeFile(filePath, data);
+  // v5.38.0: atomic write + read-back verify with WriteEnvelope fields.
+  const envelope = await writePurposeFileAndConfirm(
+    filePath,
+    data,
+    (parsed) => {
+      const postItems = (parsed as Record<string, unknown>)[targetSection!];
+      if (!postItems || typeof postItems !== 'object' || Array.isArray(postItems)) return false;
+      return bareId in (postItems as Record<string, unknown>);
+    },
+    targetSection,
+  );
   await reloadContext();
 
   const added: string[] = [];
@@ -1130,10 +1154,13 @@ async function handleLink(
 
   return ok({
     action: 'link',
-    file: filePath,
+    file: envelope.path,
     componentId: bareId,
     section: targetSection,
     added,
+    written: envelope.written,
+    hashHint: envelope.hashHint,
+    bytes: envelope.bytes,
   });
 }
 
@@ -1179,14 +1206,36 @@ async function handleRemove(
     delete sectionData[bareId];
   }
 
-  writePurposeFile(filePath, data);
+  // v5.38.0: atomic write + read-back verify. Verify expects the id NOT to
+  // appear in the target section after the write.
+  const envelope = await writePurposeFileAndConfirm(
+    filePath,
+    data,
+    (parsed) => {
+      if (section === 'flows') {
+        const flows = normalizeFlowsToRecord((parsed as PurposeFile).flows);
+        return !(bareId in flows);
+      }
+      const postItems = (parsed as Record<string, unknown>)[section];
+      if (!postItems || typeof postItems !== 'object') return true; // missing = removed
+      if (Array.isArray(postItems)) {
+        // Should have been normalized to record; accept absence
+        return true;
+      }
+      return !(bareId in (postItems as Record<string, unknown>));
+    },
+    section,
+  );
   await reloadContext();
 
   return ok({
     action: 'remove',
-    file: filePath,
+    file: envelope.path,
     section,
     id: bareId,
+    written: envelope.written,
+    hashHint: envelope.hashHint,
+    bytes: envelope.bytes,
   });
 }
 
@@ -1234,7 +1283,7 @@ async function handlePortalAddGate(
     prizes?: Array<{ id: string; oneTime?: boolean; metadata?: Record<string, unknown> }>;
   };
 
-  const filePath = addGateToPortal(ctx.rootDir, {
+  const envelope = await addGateToPortal(ctx.rootDir, {
     id, description, type, location, requires, check, grants, emits, prizes,
   });
 
@@ -1243,9 +1292,13 @@ async function handlePortalAddGate(
   const bareId = stripSymbolPrefix(id);
   return ok({
     action: 'portal_add_gate',
-    file: filePath,
+    file: envelope.path,
     id: bareId,
     symbol: `^${bareId}`,
+    // v5.38.0: additive write-envelope fields for mutation audit trail.
+    written: envelope.written,
+    hashHint: envelope.hashHint,
+    bytes: envelope.bytes,
   });
 }
 
@@ -1260,14 +1313,18 @@ async function handlePortalAddRoute(
     route: string; method: string; gates: string[];
   };
 
-  const filePath = addRouteToPortal(ctx.rootDir, { route, method, gates });
+  const envelope = await addRouteToPortal(ctx.rootDir, { route, method, gates });
   await reloadContext();
 
   return ok({
     action: 'portal_add_route',
-    file: filePath,
+    file: envelope.path,
     route: `${method} ${route}`,
     gates,
+    // v5.38.0: additive write-envelope fields.
+    written: envelope.written,
+    hashHint: envelope.hashHint,
+    bytes: envelope.bytes,
   });
 }
 

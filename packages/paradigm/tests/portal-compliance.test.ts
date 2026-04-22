@@ -329,3 +329,165 @@ describe('Scenario E: valid portal.yaml → compliance passes', () => {
     expect(report.usedButUndeclared).not.toContain('__portal_unparseable__');
   });
 });
+
+// ============================================================================
+// v5.38.0 — Bug 1 lenient prefix parser + near-match suggestions
+// ============================================================================
+
+describe('Bug 1 (v5.38.0): lenient prefix parser accepts both `^gate:` and `gate:` keys', () => {
+  it('strips leading `^` from gate key — bare form still matches', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      [
+        'version: "2.0"',
+        'gates:',
+        '  authenticated:',
+        '    description: bare form',
+        '    prizes: []',
+      ].join('\n') + '\n',
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.purpose'),
+      [
+        'version: 2.0.0',
+        'description: test',
+        'components:',
+        '  foo:',
+        '    description: uses ^authenticated',
+        '    type: handler',
+      ].join('\n') + '\n',
+    );
+
+    const report = await checkPortalCompliance(tmpDir);
+    // Bare form should be recognized — no unparseable sentinel.
+    expect(report.portalError).toBeUndefined();
+    expect(report.usedButUndeclared).not.toContain('authenticated');
+    expect(report.usedButUndeclared).not.toContain('__portal_unparseable__');
+  });
+
+  it('prefixed `^authenticated:` key still resolves to `authenticated` gate name', async () => {
+    // Back-compat: projects that followed the pre-fix site docs have
+    // `^authenticated:` keys. The stop-hook path (portal-compliance.ts)
+    // already stripped `^` in extractDeclaredGates (v5.37.x), and the scan-index
+    // path (portal-core parser.ts — v5.38.0 fix) now also strips it.
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      [
+        'version: "2.0"',
+        'gates:',
+        '  ^authenticated:',
+        '    description: prefixed form',
+        '    prizes: []',
+      ].join('\n') + '\n',
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.purpose'),
+      [
+        'version: 2.0.0',
+        'description: test',
+        'components:',
+        '  foo:',
+        '    description: uses ^authenticated',
+        '    type: handler',
+      ].join('\n') + '\n',
+    );
+
+    const report = await checkPortalCompliance(tmpDir);
+    // Stop-hook path: should not see undeclared because extractDeclaredGates
+    // strips `^`. Bug 1 fix in portal-core parser is what's tested for the
+    // scan-index path; portal-core parser test lives in that package.
+    expect(report.portalError).toBeUndefined();
+    expect(report.usedButUndeclared).not.toContain('authenticated');
+  });
+});
+
+describe('Bug 1 / v5.38.0: portal-core parser strips `^` prefix from gate.id', async () => {
+  // This test runs inline against the imported parser to verify the scan-index
+  // symbol is `^authenticated`, not `^^authenticated`, after parseGateConfig.
+  const { parseGateConfig } = await import('@a-company/portal-core');
+
+  it('prefixed key produces bare id + single-caret symbol downstream', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      [
+        'version: "2.0"',
+        'gates:',
+        '  ^authenticated:',
+        '    description: test',
+        '    prizes: []',
+      ].join('\n') + '\n',
+    );
+    const parsed = await parseGateConfig(path.join(tmpDir, 'portal.yaml'));
+    expect(parsed.gates).toHaveLength(1);
+    // The Bug 1 fix: id is `authenticated`, not `^authenticated`
+    expect(parsed.gates[0].id).toBe('authenticated');
+  });
+
+  it('bare key produces bare id (no regression)', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      [
+        'version: "2.0"',
+        'gates:',
+        '  authenticated:',
+        '    description: test',
+        '    prizes: []',
+      ].join('\n') + '\n',
+    );
+    const parsed = await parseGateConfig(path.join(tmpDir, 'portal.yaml'));
+    expect(parsed.gates[0].id).toBe('authenticated');
+  });
+});
+
+describe('v5.38.0: near-match suggestions on compliance report', () => {
+  it('surfaces a typo hint when code uses `authencated` and portal declares `authenticated`', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      [
+        'version: "2.0"',
+        'gates:',
+        '  authenticated:',
+        '    description: real',
+        '    prizes: []',
+      ].join('\n') + '\n',
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.purpose'),
+      [
+        'version: 2.0.0',
+        'description: test',
+        'components:',
+        '  foo:',
+        '    description: uses ^authencated',
+        '    type: handler',
+      ].join('\n') + '\n',
+    );
+
+    const report = await checkPortalCompliance(tmpDir);
+    expect(report.usedButUndeclared).toContain('authencated');
+    expect(report.nearMatches).toBeDefined();
+    const hint = report.nearMatches!.find(m => m.gate === 'authencated');
+    expect(hint).toBeDefined();
+    expect(hint!.didYouMean).toBe('authenticated');
+  });
+});
+
+describe('v5.38.0: PARADIGM_STRICT=1 flag', () => {
+  const ORIG_STRICT = process.env.PARADIGM_STRICT;
+  afterEach(() => {
+    if (ORIG_STRICT === undefined) delete process.env.PARADIGM_STRICT;
+    else process.env.PARADIGM_STRICT = ORIG_STRICT;
+  });
+
+  it('isStrictMode reflects env var — off by default, on when set', async () => {
+    const { isStrictMode } = await import('../../paradigm-mcp/src/utils/strict-mode.js');
+    delete process.env.PARADIGM_STRICT;
+    expect(isStrictMode()).toBe(false);
+    process.env.PARADIGM_STRICT = '1';
+    expect(isStrictMode()).toBe(true);
+    process.env.PARADIGM_STRICT = 'true';
+    expect(isStrictMode()).toBe(true);
+    process.env.PARADIGM_STRICT = '0';
+    expect(isStrictMode()).toBe(false);
+  });
+});

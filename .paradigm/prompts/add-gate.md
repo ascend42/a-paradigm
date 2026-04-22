@@ -75,7 +75,7 @@ The AI should:
 1. **Add to portal.yaml:**
    ```yaml
    gates:
-     ^premium-only:
+     premium-only:            # bare key — no ^ prefix
        description: Requires active premium subscription
        tags: [security, subscription]
        anchors:  # Link to implementation (recommended)
@@ -137,7 +137,7 @@ The AI should:
 In v2, gates can have optional anchors pointing to their implementation code:
 
 ```yaml
-^premium-only:
+premium-only:
   description: Requires active premium subscription
   anchors:
     - src/middleware/premium.ts:10-35    # Middleware implementation

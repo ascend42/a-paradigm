@@ -40,3 +40,9 @@ export {
   validateGateConfig,
   formatValidationResult,
 } from './validator.js';
+
+// YAML error classifier (v5.38.0 — single source of truth across CLI + MCP)
+export {
+  classifyYamlError,
+} from './classify-yaml-error.js';
+export type { YamlErrorClass } from './classify-yaml-error.js';

@@ -171,17 +171,17 @@ version: "1.0"
 description: Security gates and authorization
 
 gates:
-  ^authenticated:
+  authenticated:
     description: User must be logged in
     check: session.userId != null
     failure: Redirect to login
 
-  ^admin-only:
+  admin-only:
     description: Admin role required
     check: user.role === 'admin'
     failure: 403 Forbidden
 
-  ^{resource}-owner:
+  {resource}-owner:
     description: User must own the resource
     check: resource.ownerId === user.id
     failure: 403 Forbidden
@@ -266,11 +266,11 @@ description: |
   Authentication and authorization layer
 
 gates:
-  ^authenticated:
+  authenticated:
     description: Verifies user session
     implementation: middleware/auth.ts
 
-  ^admin-only:
+  admin-only:
     description: Requires admin role
     implementation: middleware/admin.ts
 

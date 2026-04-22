@@ -100,22 +100,30 @@ Create \`portal.yaml\` in project root when:
 ## portal.yaml Structure
 
 \`\`\`yaml
-version: "1.0"
+# Gate keys are bare ids (no ^ prefix). The ^ prefix is for gate
+# *references* — in routes, flow steps, code, and prose.
+version: "2.0"
 gates:
-  ^authenticated:
+  authenticated:
     description: User must be logged in
     check: req.user != null
-  ^project-admin:
+  project-admin:
     description: User must be admin of the project
     check: project.admins.includes(req.user.id)
-  ^comment-author:
+  comment-author:
     description: User must be the comment author
     check: comment.authorId === req.user.id
 
 routes:
-  "GET /api/projects/:id": [^authenticated, ^project-member]
-  "PUT /api/projects/:id": [^authenticated, ^project-admin]
-  "DELETE /api/comments/:id": [^authenticated, ^comment-author]
+  "GET /api/projects/:id":
+    gates: [^authenticated, ^project-member]
+    prizes: []
+  "PUT /api/projects/:id":
+    gates: [^authenticated, ^project-admin]
+    prizes: []
+  "DELETE /api/comments/:id":
+    gates: [^authenticated, ^comment-author]
+    prizes: []
 \`\`\`
 
 ## When Adding New Endpoints

@@ -19,8 +19,10 @@
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import type { ZodSchema } from 'zod';
+import { classifyYamlError as sharedClassifyYamlError, type YamlErrorClass } from '@a-company/portal-core';
+import { isStrictMode } from './strict-mode.js';
 
-export type YamlErrorClass = 'duplicate-key' | 'syntax' | 'other';
+export type { YamlErrorClass } from '@a-company/portal-core';
 
 export type LoadResult<T> =
   | { status: 'ok'; data: T }
@@ -31,32 +33,12 @@ export type LoadResult<T> =
 /**
  * Classify a js-yaml exception into one of our safe categories.
  *
- * We inspect only `reason` / `name` fields — never `mark.buffer` or the
- * formatted toString(), both of which leak file contents.
+ * v5.38.0: delegates to `@a-company/portal-core` for a single source of truth
+ * across paradigm-mcp (this file) and paradigm CLI (`portal-compliance.ts`).
+ * Re-exported here for backward compatibility with existing imports.
  */
 export function classifyYamlError(err: unknown): { errorClass: YamlErrorClass; detail: string } {
-  if (err instanceof yaml.YAMLException) {
-    const reason = (err.reason || '').toLowerCase();
-    if (reason.includes('duplicated mapping key') || reason.includes('duplicate mapping key')) {
-      return { errorClass: 'duplicate-key', detail: 'duplicate mapping key' };
-    }
-    // Other YAMLException reasons we recognize as syntax errors
-    const syntaxReasons = [
-      'unexpected',
-      'expected',
-      'bad indentation',
-      'mapping values',
-      'cannot read a block mapping entry',
-      'end of the stream',
-      'while scanning',
-      'while parsing',
-    ];
-    if (syntaxReasons.some(r => reason.includes(r))) {
-      return { errorClass: 'syntax', detail: 'yaml syntax error' };
-    }
-    return { errorClass: 'other', detail: 'yaml parse error' };
-  }
-  return { errorClass: 'other', detail: 'yaml parse error' };
+  return sharedClassifyYamlError(err);
 }
 
 /**
@@ -69,7 +51,7 @@ export function classifyYamlError(err: unknown): { errorClass: YamlErrorClass; d
  */
 export function safeLoad<T>(
   filePath: string,
-  opts?: { schema?: ZodSchema<T> },
+  opts?: { schema?: ZodSchema<T>; strict?: boolean },
 ): LoadResult<T> {
   if (!fs.existsSync(filePath)) {
     return { status: 'missing' };
@@ -81,7 +63,8 @@ export function safeLoad<T>(
   } catch {
     // Treat read errors as "other" parse failure. Do not echo error message
     // as it may include the file path plus OS strings.
-    return { status: 'unparseable', errorClass: 'other', detail: 'file read error' };
+    const result: LoadResult<T> = { status: 'unparseable', errorClass: 'other', detail: 'file read error' };
+    return enforceStrict(result, opts);
   }
 
   let parsed: unknown;
@@ -89,7 +72,8 @@ export function safeLoad<T>(
     parsed = yaml.load(content);
   } catch (err) {
     const { errorClass, detail } = classifyYamlError(err);
-    return { status: 'unparseable', errorClass, detail };
+    const result: LoadResult<T> = { status: 'unparseable', errorClass, detail };
+    return enforceStrict(result, opts);
   }
 
   if (opts?.schema) {
@@ -97,16 +81,39 @@ export function safeLoad<T>(
     if (!result.success) {
       // zod error messages may mention field paths — those are schema keys,
       // not gate/route content, so we include a generic count-only message.
-      return {
+      const failure: LoadResult<T> = {
         status: 'invalid',
         errorClass: 'schema',
         detail: `schema validation failed (${result.error.issues.length} issue(s))`,
       };
+      return enforceStrict(failure, opts);
     }
     return { status: 'ok', data: result.data };
   }
 
   return { status: 'ok', data: parsed as T };
+}
+
+/**
+ * In strict mode (PARADIGM_STRICT=1 or `opts.strict === true`), throw on
+ * any non-ok, non-missing status — including the `other` errorClass which
+ * non-strict mode classifies as a parse-failure union variant. Missing
+ * files are NOT fatal (a missing file is a legitimate state).
+ *
+ * Never include file contents, gate names, or route paths in the thrown
+ * message — only classifier strings.
+ */
+function enforceStrict<T>(
+  result: LoadResult<T>,
+  opts?: { strict?: boolean },
+): LoadResult<T> {
+  const strict = opts?.strict ?? isStrictMode();
+  if (!strict) return result;
+  if (result.status === 'ok' || result.status === 'missing') return result;
+  // Classifier-only message
+  throw new Error(
+    `yaml load failed under PARADIGM_STRICT=1 (${result.errorClass}: ${result.detail})`,
+  );
 }
 
 /**

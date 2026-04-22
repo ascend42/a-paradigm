@@ -11,10 +11,10 @@ Portal.yaml is the single source of truth for authorization in your project. It 
 ```yaml
 version: "1.0"
 gates:
-  ^authenticated:
+  authenticated:
     description: User must be logged in
     check: req.user != null
-  ^project-admin:
+  project-admin:
     description: User must be admin of the project
     check: project.admins.includes(req.user.id)
 
@@ -22,6 +22,8 @@ routes:
   "GET /api/projects/:id": [^authenticated]
   "PUT /api/projects/:id": [^authenticated, ^project-admin]
 ```
+
+> **Note on the `^` prefix.** Gate **keys** in `portal.yaml` are bare ids (`authenticated:`, `project-admin:`). The `^` prefix is used only in **references** to gates — in route arrays, flow steps, `.purpose` files, and prose (e.g. `^authenticated`). Paradigm attaches the prefix automatically when emitting references.
 
 ## Gate Anatomy
 
@@ -35,27 +37,27 @@ Every gate has three parts:
 | location | No | Where the gate is enforced (e.g., "middleware", "express-bind") |
 | prizes | No | Empty array `[]` — reserved for future gate reward tracking |
 
-Gates use the `^` prefix: `^authenticated`, `^project-admin`, `^comment-author`.
+Gates are **referenced** with the `^` prefix in routes, flow steps, and prose (`^authenticated`, `^project-admin`, `^comment-author`). Gate **keys** inside `gates:` are bare.
 
 ## Common Gate Patterns
 
 **Authentication** — Is the user logged in?
 ```yaml
-^authenticated:
+authenticated:
   description: User must be logged in
   check: req.user != null
 ```
 
 **Role-based** — Does the user have the right role?
 ```yaml
-^project-admin:
+project-admin:
   description: User must be admin of the project
   check: project.admins.includes(req.user.id)
 ```
 
 **Ownership** — Does the user own the resource?
 ```yaml
-^comment-author:
+comment-author:
   description: User must be the comment author
   check: comment.authorId === req.user.id
 ```

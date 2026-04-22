@@ -36,7 +36,7 @@ flows:
         symbol: "!user-updated"
 
 gates:
-  ^user-owner:
+  user-owner:
     description: User can only modify their own profile
 
 signals:

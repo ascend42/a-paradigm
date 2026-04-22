@@ -45,14 +45,14 @@ describe('addGateToPortal', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('adds a gate when portal.yaml has v2 scaffold with `gates: []` (Array)', () => {
+  it('adds a gate when portal.yaml has v2 scaffold with `gates: []` (Array)', async () => {
     // v2 scaffold emitted by paradigm shift (pre-5.37.11) — this is the bug trigger
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       "version: '2.0'\ngates: []\nroutes: []\n",
     );
 
-    addGateToPortal(tmpDir, {
+    await addGateToPortal(tmpDir, {
       id: 'authenticated',
       description: 'user logged in',
     });
@@ -69,13 +69,13 @@ describe('addGateToPortal', () => {
     expect(gates.authenticated.description).toBe('user logged in');
   });
 
-  it('adds a gate when portal.yaml has `gates: {}` (correct shape)', () => {
+  it('adds a gate when portal.yaml has `gates: {}` (correct shape)', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       "version: '2.0'\ngates: {}\nroutes: {}\n",
     );
 
-    addGateToPortal(tmpDir, {
+    await addGateToPortal(tmpDir, {
       id: 'authenticated',
       description: 'user logged in',
     });
@@ -86,7 +86,7 @@ describe('addGateToPortal', () => {
     expect(gates.authenticated?.description).toBe('user logged in');
   });
 
-  it('preserves existing gates when adding a new one', () => {
+  it('preserves existing gates when adding a new one', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       [
@@ -99,7 +99,7 @@ describe('addGateToPortal', () => {
       ].join('\n') + '\n',
     );
 
-    addGateToPortal(tmpDir, {
+    await addGateToPortal(tmpDir, {
       id: 'authenticated',
       description: 'user logged in',
     });
@@ -110,13 +110,13 @@ describe('addGateToPortal', () => {
     expect(gates.authenticated?.description).toBe('user logged in');
   });
 
-  it('strips symbol prefix from the gate id', () => {
+  it('strips symbol prefix from the gate id', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       "version: '2.0'\ngates: []\n",
     );
 
-    addGateToPortal(tmpDir, {
+    await addGateToPortal(tmpDir, {
       id: '^admin-only',
       description: 'admins only',
     });
@@ -128,21 +128,37 @@ describe('addGateToPortal', () => {
     expect(gates['^admin-only']).toBeUndefined();
   });
 
-  it('throws with a descriptive error when write verification fails', () => {
-    // Trap: symlink portal.yaml to /dev/null. Writes succeed silently (no-op),
-    // but read-back returns empty content — the writer cannot confirm the
-    // mutation and must throw rather than return fake success.
+  it('throws when target path is a directory (rename fails, write cannot land)', async () => {
     if (process.platform === 'win32') {
-      return; // /dev/null trick is POSIX-only
+      return; // symlink / permissions trap is POSIX-focused
     }
-    fs.symlinkSync('/dev/null', path.join(tmpDir, 'portal.yaml'));
+    // Make portal.yaml a directory. The atomic .tmp write succeeds, but
+    // fs.renameSync(tmp, dir) fails with EISDIR — writeAndConfirm surfaces
+    // the failure. The pre-v5.38.0 writer would have swallowed this silently.
+    fs.mkdirSync(path.join(tmpDir, 'portal.yaml'));
 
-    expect(() =>
+    await expect(
       addGateToPortal(tmpDir, {
         id: 'never-lands',
-        description: 'this should fail verification',
+        description: 'this should fail',
       }),
-    ).toThrow(/write verification failed/);
+    ).rejects.toThrow();
+  });
+
+  it('returns a WriteEnvelope with hashHint and bytes (v5.38.0)', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'portal.yaml'),
+      "version: '2.0'\ngates: {}\n",
+    );
+
+    const envelope = await addGateToPortal(tmpDir, {
+      id: 'authenticated',
+      description: 'user logged in',
+    });
+    expect(envelope.written).toBe(true);
+    expect(envelope.hashHint).toMatch(/^[0-9a-f]{12}$/);
+    expect(envelope.bytes).toBeGreaterThan(0);
+    expect(envelope.path).toContain('portal.yaml');
   });
 });
 
@@ -157,13 +173,13 @@ describe('addRouteToPortal', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('adds a route when portal.yaml has v2 scaffold with `routes: []` (Array)', () => {
+  it('adds a route when portal.yaml has v2 scaffold with `routes: []` (Array)', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       "version: '2.0'\ngates: []\nroutes: []\n",
     );
 
-    addRouteToPortal(tmpDir, {
+    await addRouteToPortal(tmpDir, {
       method: 'POST',
       route: '/api/admin',
       gates: ['authenticated', '^admin-only'],
@@ -177,13 +193,13 @@ describe('addRouteToPortal', () => {
     expect(routes['POST /api/admin']).toEqual(['^authenticated', '^admin-only']);
   });
 
-  it('adds a route when portal.yaml has `routes: {}` (correct shape)', () => {
+  it('adds a route when portal.yaml has `routes: {}` (correct shape)', async () => {
     fs.writeFileSync(
       path.join(tmpDir, 'portal.yaml'),
       "version: '2.0'\ngates: {}\nroutes: {}\n",
     );
 
-    addRouteToPortal(tmpDir, {
+    await addRouteToPortal(tmpDir, {
       method: 'GET',
       route: '/api/health',
       gates: [],
@@ -194,19 +210,18 @@ describe('addRouteToPortal', () => {
     expect(routes['GET /api/health']).toEqual([]);
   });
 
-  it('throws when route write verification fails', () => {
+  it('throws when target path is a directory (rename fails)', async () => {
     if (process.platform === 'win32') {
       return;
     }
-    // Same /dev/null symlink trap as the gate test.
-    fs.symlinkSync('/dev/null', path.join(tmpDir, 'portal.yaml'));
+    fs.mkdirSync(path.join(tmpDir, 'portal.yaml'));
 
-    expect(() =>
+    await expect(
       addRouteToPortal(tmpDir, {
         method: 'POST',
         route: '/api/never',
         gates: ['authenticated'],
       }),
-    ).toThrow(/write verification failed/);
+    ).rejects.toThrow();
   });
 });

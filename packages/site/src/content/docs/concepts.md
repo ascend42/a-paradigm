@@ -56,15 +56,17 @@ Gates are authorization checkpoints defined in `portal.yaml`. They enforce acces
 
 ```yaml
 gates:
-  ^authenticated:
+  authenticated:
     description: Requires valid JWT token
     check: req.user != null
 
-  ^project-admin:
+  project-admin:
     description: User must be admin of the project
     requires: [^authenticated]
     check: project.admins.includes(req.user.id)
 ```
+
+Gate **keys** (`authenticated:`, `project-admin:`) are bare. The `^` prefix appears only in **references** — in `requires:` arrays, route arrays, flow steps, and prose.
 
 ## Signals (!)
 

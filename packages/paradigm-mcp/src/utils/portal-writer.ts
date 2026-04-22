@@ -12,6 +12,11 @@ import * as yaml from 'js-yaml';
 import { stripSymbolPrefix } from './purpose-writer.js';
 import { log } from './mcp-logger.js';
 import { safeLoad } from './yaml-validator.js';
+import {
+  writeAndConfirm,
+  WriteVerificationError,
+  type WriteEnvelope,
+} from './write-and-confirm.js';
 
 // ============================================
 // Types (raw portal.yaml structure)
@@ -101,9 +106,11 @@ export function writePortalFile(filePath: string, data: RawPortalData): void {
 
 /**
  * Add or update a gate in portal.yaml.
- * Returns the path to the portal.yaml file.
+ *
+ * v5.38.0: returns a `WriteEnvelope` with atomic-write + read-back verify
+ * semantics. Back-compat callers can still access `.path` on the envelope.
  */
-export function addGateToPortal(
+export async function addGateToPortal(
   rootDir: string,
   params: {
     id: string;
@@ -116,7 +123,7 @@ export function addGateToPortal(
     emits?: string[];
     prizes?: Array<{ id: string; oneTime?: boolean; metadata?: Record<string, unknown> }>;
   }
-): string {
+): Promise<WriteEnvelope> {
   const { data, filePath } = readPortalFile(rootDir);
 
   // Normalize: v2 scaffold writes `gates: []` (empty sequence), which js-yaml
@@ -155,26 +162,36 @@ export function addGateToPortal(
 
   data.gates[gateId] = gate;
 
-  writePortalFile(filePath, data);
+  const content = yaml.dump(data, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
 
-  // Defense-in-depth: re-read the file and confirm the gate persisted.
-  // Converts silent no-op failures into loud, actionable errors.
-  const verify = readPortalFile(rootDir).data;
-  const gatesAfter = verify.gates;
-  if (!gatesAfter || Array.isArray(gatesAfter) || !gatesAfter[gateId]) {
-    const shape = Array.isArray(gatesAfter) ? 'array' : typeof gatesAfter;
-    log.gate(`^${gateId}`).error('portal_add_gate write verification failed', {
-      file: filePath,
-      gateId,
-      shape,
+  try {
+    return await writeAndConfirm(filePath, content, (readBack) => {
+      // Verify gate landed and the gates section is an object (not an array).
+      let parsed: RawPortalData;
+      try {
+        parsed = yaml.load(readBack) as RawPortalData;
+      } catch {
+        return false;
+      }
+      const gatesAfter = parsed?.gates;
+      if (!gatesAfter || Array.isArray(gatesAfter)) return false;
+      return Boolean(gatesAfter[gateId]);
     });
-    throw new Error(
-      `portal_add_gate write verification failed: gate "${gateId}" not found in ` +
-      `${filePath} after write. Read-back gates shape: ${shape}.`
-    );
+  } catch (err) {
+    if (err instanceof WriteVerificationError) {
+      // Redacted: no gate name / file path in the log or rethrown message.
+      log.component('#portal-writer').error('portal_add_gate write verification failed', {
+        stage: 'writeAndConfirm',
+      });
+      throw new Error('portal_add_gate write verification failed');
+    }
+    throw err;
   }
-
-  return filePath;
 }
 
 // ============================================
@@ -184,15 +201,17 @@ export function addGateToPortal(
 /**
  * Add a route with gates to portal.yaml.
  * Format: "METHOD /path": [^gate1, ^gate2]
+ *
+ * v5.38.0: returns a `WriteEnvelope` with atomic-write + read-back verify.
  */
-export function addRouteToPortal(
+export async function addRouteToPortal(
   rootDir: string,
   params: {
     route: string;
     method: string;
     gates: string[];
   }
-): string {
+): Promise<WriteEnvelope> {
   const { data, filePath } = readPortalFile(rootDir);
 
   // Normalize: v2 scaffold writes `routes: []` which js-yaml parses as Array;
@@ -210,23 +229,32 @@ export function addRouteToPortal(
 
   data.routes[routeKey] = gates;
 
-  writePortalFile(filePath, data);
+  const content = yaml.dump(data, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
 
-  // Defense-in-depth: verify the route landed on disk
-  const verify = readPortalFile(rootDir).data;
-  const routesAfter = verify.routes;
-  if (!routesAfter || Array.isArray(routesAfter) || !routesAfter[routeKey]) {
-    const shape = Array.isArray(routesAfter) ? 'array' : typeof routesAfter;
-    log.component('#portal-writer').error('portal_add_route write verification failed', {
-      file: filePath,
-      routeKey,
-      shape,
+  try {
+    return await writeAndConfirm(filePath, content, (readBack) => {
+      let parsed: RawPortalData;
+      try {
+        parsed = yaml.load(readBack) as RawPortalData;
+      } catch {
+        return false;
+      }
+      const routesAfter = parsed?.routes;
+      if (!routesAfter || Array.isArray(routesAfter)) return false;
+      return Boolean(routesAfter[routeKey]);
     });
-    throw new Error(
-      `portal_add_route write verification failed: route "${routeKey}" not found in ` +
-      `${filePath} after write. Read-back routes shape: ${shape}.`
-    );
+  } catch (err) {
+    if (err instanceof WriteVerificationError) {
+      log.component('#portal-writer').error('portal_add_route write verification failed', {
+        stage: 'writeAndConfirm',
+      });
+      throw new Error('portal_add_route write verification failed');
+    }
+    throw err;
   }
-
-  return filePath;
 }

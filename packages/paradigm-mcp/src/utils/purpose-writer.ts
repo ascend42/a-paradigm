@@ -20,6 +20,12 @@ import type {
   FlowWithSteps,
   FlowDefinition,
 } from '@a-company/purpose-core';
+import {
+  writeAndConfirm,
+  WriteVerificationError,
+  type WriteEnvelope,
+} from './write-and-confirm.js';
+import { log } from './mcp-logger.js';
 
 // ============================================
 // Symbol Prefix Utilities
@@ -100,6 +106,55 @@ export function writePurposeFile(filePath: string, data: PurposeFile): void {
 
   const content = serializePurposeFile(data);
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+/**
+ * Write a PurposeFile atomically with read-back verification.
+ *
+ * v5.38.0: closes silent-no-op failures for the high-value mutation handlers
+ * (`purpose_add_component`, `purpose_link`, `purpose_remove`). The `verify`
+ * callback is passed the RAW read-back string AND the parsed data so callers
+ * can assert mutation-specific invariants.
+ *
+ * Returns a WriteEnvelope for downstream consumers (hashHint + bytes).
+ * Throws if the mutation didn't land. Logs are redacted.
+ */
+export async function writePurposeFileAndConfirm(
+  filePath: string,
+  data: PurposeFile,
+  verify: (parsed: PurposeFile) => boolean,
+  surface: string = 'purpose.yaml',
+): Promise<WriteEnvelope> {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const content = serializePurposeFile(data);
+
+  try {
+    return await writeAndConfirm(filePath, content, (_readBack) => {
+      // Parse the read-back file and pass the parsed PurposeFile to the caller's
+      // verifier. If parse fails, treat as verify failure.
+      const result = parsePurposeFileDetailed(filePath);
+      if (!result.data) return false;
+      try {
+        return verify(result.data);
+      } catch {
+        return false;
+      }
+    });
+  } catch (err) {
+    if (err instanceof WriteVerificationError) {
+      // Redacted: log the classifier surface and stage only.
+      log.component('#purpose-writer').error('purpose write verification failed', {
+        surface,
+        stage: 'writeAndConfirm',
+      });
+      throw new Error(`purpose write verification failed (${surface})`);
+    }
+    throw err;
+  }
 }
 
 // ============================================

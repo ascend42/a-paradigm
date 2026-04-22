@@ -118,7 +118,9 @@ Authorization and validation checkpoints. Gates either pass or block.
 ### Definition
 
 ```yaml
-^payment-authorized:
+# Inside portal.yaml under `gates:`, the key is bare (no ^ prefix).
+# The ^ prefix appears only in references (routes, flow steps, `blocks:`).
+payment-authorized:
   description: Verify payment method is valid and has sufficient funds
   tags: [security, payment]
   anchors:
@@ -129,7 +131,7 @@ Authorization and validation checkpoints. Gates either pass or block.
     cart.total <= user.paymentMethod.limit
   blocks:
     - $checkout-flow
-    - #process-refund
+    - "#process-refund"
 ```
 
 ### Gate Patterns

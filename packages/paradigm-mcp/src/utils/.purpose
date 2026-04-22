@@ -201,10 +201,35 @@ components:
     file: packages/paradigm-mcp/src/utils/compliance-health.ts
     type: utility
   yaml-validator:
-    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit).
+    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
     file: packages/paradigm-mcp/src/utils/yaml-validator.ts
     type: utility
     tags:
       - security
       - fail-closed
       - portal
+  write-and-confirm:
+    description: v5.38.0 atomic-write + read-back verify wrapper for mutation handlers. Writes to .tmp sibling then renames; re-reads the file; runs verify callback; throws WriteVerificationError on failure. Returns WriteEnvelope with truncated HMAC (first 12 hex chars of HMAC-SHA256 keyed with per-install secret) and byte count. Applied to portal_add_gate, portal_add_route, purpose_add_component, purpose_link, purpose_remove. Logs redacted — no gate names or file paths in error surfaces.
+    file: packages/paradigm-mcp/src/utils/write-and-confirm.ts
+    type: utility
+    tags:
+      - security
+      - fail-closed
+      - mutation-safety
+  consistency-tracker:
+    description: v5.38.0 round-trip consistency audit log. Records transformation CLASSES (prefix-stripped/array-coerced/default-applied/duplicate-key-detected/case-normalized) with fixed surface classifiers (portal.yaml/purpose.yaml) and counts — never gate names, route paths, or file contents. One injectable singleton per reindex pass; report rendered into paradigm_reindex envelope and .paradigm/manifest.consistency.json. Lossy transformations trigger strict-mode reindex failure.
+    file: packages/paradigm-mcp/src/utils/consistency-tracker.ts
+    type: engine
+    tags:
+      - security
+      - redacted
+      - portal
+      - consistency
+  strict-mode:
+    description: v5.38.0 PARADIGM_STRICT=1 env var gate. Default OFF; flip ON in v5.39.0 after field observation. In strict mode, safeLoad throws on any non-ok/non-missing result, reindex fails on lossy transformations, and writeAndConfirm verify failures are never downgraded.
+    file: packages/paradigm-mcp/src/utils/strict-mode.ts
+    type: utility
+    tags:
+      - security
+      - fail-closed
+      - configuration

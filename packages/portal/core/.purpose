@@ -38,6 +38,14 @@ components:
   topology-checker:
     description: '#topology-checker: Checks for circular dependencies in gates'
     type: utility
+  classify-yaml-error:
+    description: v5.38.0 shared YAML exception classifier — inspects only err.reason / err.name, never err.message or err.mark.buffer. Returns fixed classifier strings safe for logs / telemetry / LLM context. Single source of truth across paradigm-mcp (yaml-validator) and paradigm CLI (portal-compliance); extracted from duplicated copies in v5.37.12.
+    file: src/classify-yaml-error.ts
+    type: utility
+    tags:
+      - security
+      - redacted
+      - portal
 signals:
   parse-success:
     description: '!parse-success: portal.yaml parsed successfully'

@@ -28,7 +28,7 @@ components:
     tags: [security, critical]
 
 gates:
-  ^authenticated:
+  authenticated:
     description: Requires valid JWT token
     check: req.headers.authorization
 

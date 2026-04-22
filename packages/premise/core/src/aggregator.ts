@@ -323,12 +323,18 @@ function createSymbolEntry(partial: Partial<SymbolEntry> & {
 }
 
 /**
- * Create a symbol entry from a Gate
+ * Create a symbol entry from a Gate.
+ *
+ * v5.38.0: defensive strip of any residual `^` prefix on `gate.id`. The portal
+ * parser now strips the prefix at parse time, but legacy consumers that feed
+ * pre-parsed gates into the aggregator get the same back-compat courtesy so
+ * the emitted symbol is always `^<bare>`, never `^^<bare>`.
  */
 function createGateSymbol(gate: Gate, filePath: string): SymbolEntry {
+  const bareId = gate.id.startsWith('^') ? gate.id.slice(1) : gate.id;
   return createSymbolEntry({
-    id: `gate-${gate.id}`,
-    symbol: `^${gate.id}`,
+    id: `gate-${bareId}`,
+    symbol: `^${bareId}`,
     type: 'gate',
     source: 'portal',
     filePath,

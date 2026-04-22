@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { execFileSync } from 'child_process';
+import { classifyYamlError } from '@a-company/portal-core';
+import { suggestForUndeclared, suggestForUnused, type ComplianceSuggestion } from './near-match.js';
 
 // ============================================================================
 // Types
@@ -62,6 +64,16 @@ export interface ComplianceReport {
     /** Redacted short detail safe for logs/telemetry */
     detail: string;
   };
+  /**
+   * v5.38.0: near-match suggestions for undeclared / unused gates. Each
+   * entry pairs an undeclared-or-unused gate with the closest declared-or-used
+   * gate from the opposite side (Levenshtein distance ≤ 2 OR ≤ 0.3 ratio).
+   *
+   * Surfaces ONLY in local user-facing outputs (formatComplianceReport + JSON
+   * envelope). Never flows into telemetry; gate names here are acceptable
+   * because the user already has portal.yaml on disk.
+   */
+  nearMatches?: ComplianceSuggestion[];
 }
 
 // ============================================================================
@@ -108,33 +120,12 @@ export type PortalLoadResult =
   | { status: 'ok'; data: PortalConfig };
 
 /**
- * Classify a js-yaml exception into a redacted category.
- * Mirrors `yaml-validator.ts` in paradigm-mcp; duplicated to avoid a
- * cross-package dep from paradigm CLI → paradigm-mcp.
+ * v5.38.0: `classifyYamlError` now lives in `@a-company/portal-core` — the
+ * duplicated copies in paradigm-mcp's yaml-validator and this file have been
+ * consolidated. Importing from portal-core keeps the MCP and CLI paths in
+ * lock-step so stop-hook and `paradigm portal check` never disagree on how
+ * a YAMLException classifies.
  */
-function classifyYamlError(err: unknown): { errorClass: 'duplicate-key' | 'syntax' | 'other'; detail: string } {
-  if (err instanceof yaml.YAMLException) {
-    const reason = (err.reason || '').toLowerCase();
-    if (reason.includes('duplicated mapping key') || reason.includes('duplicate mapping key')) {
-      return { errorClass: 'duplicate-key', detail: 'duplicate mapping key' };
-    }
-    const syntaxReasons = [
-      'unexpected',
-      'expected',
-      'bad indentation',
-      'mapping values',
-      'cannot read a block mapping entry',
-      'end of the stream',
-      'while scanning',
-      'while parsing',
-    ];
-    if (syntaxReasons.some(r => reason.includes(r))) {
-      return { errorClass: 'syntax', detail: 'yaml syntax error' };
-    }
-    return { errorClass: 'other', detail: 'yaml parse error' };
-  }
-  return { errorClass: 'other', detail: 'yaml parse error' };
-}
 
 /**
  * Load and parse portal.yaml from the project root.
@@ -516,6 +507,18 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
     status = 'warnings';
   }
 
+  // v5.38.0: compute near-match suggestions (typo detection) in both
+  // directions. Filtered against the sentinel so `__portal_unparseable__`
+  // never flows through the suggestion engine.
+  const nearMatches: ComplianceSuggestion[] = [];
+  const undeclaredFiltered = usedButUndeclared.filter(g => g !== '__portal_unparseable__');
+  if (undeclaredFiltered.length > 0) {
+    nearMatches.push(...suggestForUndeclared(undeclaredFiltered, declaredGates));
+  }
+  if (declaredButUnused.length > 0 && undeclaredFiltered.length > 0) {
+    nearMatches.push(...suggestForUnused(declaredButUnused, undeclaredFiltered));
+  }
+
   return {
     status,
     declaredButUnused,
@@ -525,6 +528,7 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
     properlyDeclared,
     suggestions,
     references,
+    ...(nearMatches.length > 0 ? { nearMatches } : {}),
   };
 }
 
@@ -593,16 +597,46 @@ export function formatComplianceReport(report: ComplianceReport): string {
 
   // Violations — filter out the __portal_unparseable__ sentinel; portalError above already surfaces it
   const realUndeclared = report.usedButUndeclared.filter(g => g !== '__portal_unparseable__');
+  // Build a quick lookup from the near-match suggestions for the undeclared
+  // direction so we can inject "Did you mean" hints inline.
+  const undeclaredSuggestions = new Map<string, { didYouMean: string; distance: number }>();
+  const unusedSuggestions = new Map<string, { didYouMean: string; distance: number }>();
+  if (report.nearMatches) {
+    for (const s of report.nearMatches) {
+      // First occurrence wins — suggestForUndeclared runs before suggestForUnused
+      if (realUndeclared.includes(s.gate) && !undeclaredSuggestions.has(s.gate)) {
+        undeclaredSuggestions.set(s.gate, { didYouMean: s.didYouMean, distance: s.distance });
+      } else if (report.declaredButUnused.includes(s.gate) && !unusedSuggestions.has(s.gate)) {
+        unusedSuggestions.set(s.gate, { didYouMean: s.didYouMean, distance: s.distance });
+      }
+    }
+  }
+
   if (realUndeclared.length > 0) {
     lines.push('Undeclared Gates (used but not in portal.yaml):');
     for (const gate of realUndeclared) {
       lines.push(`  ✗ ^${gate}`);
+
+      // v5.38.0: near-match hint
+      const hint = undeclaredSuggestions.get(gate);
+      if (hint) {
+        lines.push(`      Did you mean: ^${hint.didYouMean}? (declared in portal.yaml)`);
+      }
 
       // Show where it's used
       const refs = report.references.filter(r => r.gate === gate).slice(0, 3);
       for (const ref of refs) {
         lines.push(`      at ${ref.file}:${ref.line}`);
       }
+    }
+    lines.push('');
+  }
+
+  // v5.38.0: render typo hints for declared-but-unused gates too
+  if (unusedSuggestions.size > 0) {
+    lines.push('Possible Typos (declared gates may be misspelled references):');
+    for (const [gate, hint] of unusedSuggestions) {
+      lines.push(`  ? ^${gate} — did you mean to reference as ^${hint.didYouMean}?`);
     }
     lines.push('');
   }
