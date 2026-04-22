@@ -45,6 +45,10 @@ packages/**/src/**/*.mjs.map
 .paradigm/session-breadcrumbs.json
 .paradigm/session-checkpoint.json
 .paradigm/aspect-graph.db
+# v6.0 University (pack-loader cache + local-only metrics)
+.paradigm/cache/
+.paradigm/.metrics-salt
+.paradigm/university/.metrics/
 
 # Sentinel runtime data
 .paradigm/sentinel/

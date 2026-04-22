@@ -11,6 +11,17 @@
  *       quizzes/  Q-*.yaml      # Quizzes (YAML)
  *       paths/    LP-*.yaml     # Learning paths (YAML)
  *     diplomas/   D-*.yaml      # Auto-generated diplomas
+ *
+ * v6.0 (sub-phase 1) additions:
+ *   - All CRUD fns accept an optional `packRoot` parameter (absolute path to
+ *     a pack root directory containing `pack.yaml`). When omitted, the
+ *     loader defaults to the project pack at `<rootDir>/.paradigm/university/`
+ *     and preserves v5 behavior when `pack.yaml` is absent (treated as an
+ *     implicit default project pack).
+ *   - Discipline sub-pack discovery: `discoverDisciplineSubPacks()` walks a
+ *     pack root for child dirs containing their own `pack.yaml`.
+ *   - Write operations stamp `pack_id` on frontmatter/entries derived from
+ *     the resolving pack manifest so entries round-trip their source pack.
  */
 
 import * as fs from 'fs';
@@ -31,7 +42,12 @@ import type {
   UniversityValidationIssue,
   UniversityValidationResult,
   Difficulty,
+  PackManifest,
+  PackLocation,
 } from '../types/university.js';
+import { PACK_MANIFEST_FILENAME } from '../types/pack.js';
+import { loadPackManifest, PackLoadError, discoverPacks } from './pack-loader.js';
+import { log } from './mcp-logger.js';
 
 const UNIVERSITY_DIR = '.paradigm/university';
 const CONTENT_DIR = 'content';
@@ -42,6 +58,121 @@ const PATHS_DIR = 'paths';
 const DIPLOMAS_DIR = 'diplomas';
 const INDEX_FILE = 'index.yaml';
 const CONFIG_FILE = 'config.yaml';
+
+// ═══════════════════════════════════════════════════════════════════
+// v6.0 PACK RESOLUTION
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve the default pack root for a project. Preference order:
+ *   1. `<rootDir>/.paradigm/university/` if it exists (implicit project pack,
+ *      regardless of whether `pack.yaml` is present — preserves v5 layouts).
+ *   2. First-party pack from `discoverPacks(rootDir)` if available.
+ *   3. `<rootDir>/.paradigm/university/` (created lazily on write).
+ */
+export function resolveDefaultPackRoot(rootDir: string): string {
+  const localRoot = path.join(rootDir, UNIVERSITY_DIR);
+  if (fs.existsSync(localRoot)) return localRoot;
+
+  try {
+    const packs = discoverPacks(rootDir);
+    const firstParty = packs.find(p => p.manifest.tenant_kind === 'first-party');
+    if (firstParty) return firstParty.rootDir;
+  } catch {
+    // fall through
+  }
+  return localRoot;
+}
+
+/**
+ * Load a pack's manifest, returning a fabricated implicit manifest when
+ * `pack.yaml` is absent. This preserves v5 project-pack behavior — any
+ * existing `.paradigm/university/` layout continues to work unchanged.
+ *
+ * Returns null only if the pack root does not exist.
+ */
+export function loadOrFabricatePackManifest(packRoot: string): PackManifest | null {
+  if (!fs.existsSync(packRoot)) return null;
+
+  const manifestPath = path.join(packRoot, PACK_MANIFEST_FILENAME);
+  if (fs.existsSync(manifestPath)) {
+    try {
+      return loadPackManifest(packRoot);
+    } catch (err) {
+      log.component('#university-loader').warn('pack manifest invalid, using implicit manifest', {
+        errorClass: err instanceof PackLoadError ? err.errorClass : 'other',
+      });
+    }
+  }
+  // Fabricate an implicit manifest for pre-v6.0 layouts.
+  const packId = path.basename(packRoot) || 'project';
+  return {
+    id: packId,
+    name: packId,
+    version: '0.0.0',
+    schema_version: '1',
+    tenant_kind: 'project',
+    description: 'Implicit project pack (pack.yaml not present — v5 layout)',
+    origin_hint: 'authored',
+  };
+}
+
+/**
+ * Walk a pack root for discipline sub-packs (immediate children containing
+ * their own `pack.yaml`). Returns a list of `PackLocation`s with
+ * `parentPackId` set from the parent manifest's id.
+ */
+export function discoverDisciplineSubPacks(packRoot: string): PackLocation[] {
+  if (!fs.existsSync(packRoot) || !fs.statSync(packRoot).isDirectory()) {
+    return [];
+  }
+
+  const parent = loadOrFabricatePackManifest(packRoot);
+  const parentPackId = parent?.id ?? path.basename(packRoot);
+
+  const results: PackLocation[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(packRoot, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    if (ent.name.startsWith('.')) continue;
+    const sub = path.join(packRoot, ent.name);
+    if (!fs.existsSync(path.join(sub, PACK_MANIFEST_FILENAME))) continue;
+
+    try {
+      const manifest = loadPackManifest(sub);
+      results.push({ manifest, rootDir: sub, source: 'local', parentPackId });
+    } catch (err) {
+      log.component('#university-loader').warn('discipline sub-pack manifest invalid', {
+        errorClass: err instanceof PackLoadError ? err.errorClass : 'other',
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Stamp pack context onto a frontmatter record at write time. Optional —
+ * callers pass a resolved manifest and the stamper fills `pack_id` +
+ * `discipline` when missing. Non-destructive when already present.
+ */
+function stampFrontmatterPackContext(
+  fm: UniversityFrontmatter,
+  manifest?: PackManifest | null,
+  discipline?: string,
+): UniversityFrontmatter {
+  if (!manifest) return fm;
+  return {
+    ...fm,
+    ...(fm.pack_id ? {} : { pack_id: manifest.id }),
+    ...(fm.discipline || !discipline ? {} : { discipline }),
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // DEFAULTS
@@ -155,8 +286,8 @@ function serializeFrontmatter(frontmatter: Record<string, unknown>, body: string
 // NOTES / POLICIES
 // ═══════════════════════════════════════════════════════════════════
 
-export function loadNote(rootDir: string, id: string): UniversityNote | null {
-  const filePath = resolveContentFile(rootDir, id, '.md');
+export function loadNote(rootDir: string, id: string, packRoot?: string): UniversityNote | null {
+  const filePath = resolveContentFile(rootDir, id, '.md', packRoot);
   if (!filePath) return null;
 
   try {
@@ -171,13 +302,22 @@ export function loadNote(rootDir: string, id: string): UniversityNote | null {
   }
 }
 
-export function saveNote(rootDir: string, frontmatter: UniversityFrontmatter, body: string): string {
+export function saveNote(
+  rootDir: string,
+  frontmatter: UniversityFrontmatter,
+  body: string,
+  packRoot?: string,
+): string {
   const subdir = frontmatter.type === 'policy' ? POLICIES_DIR : NOTES_DIR;
-  const dir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR, subdir);
+  const effectivePackRoot = packRoot ?? resolveDefaultPackRoot(rootDir);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, subdir);
   fs.mkdirSync(dir, { recursive: true });
 
-  const filePath = path.join(dir, `${frontmatter.id}.md`);
-  const content = serializeFrontmatter(frontmatter as unknown as Record<string, unknown>, body);
+  const manifest = loadOrFabricatePackManifest(effectivePackRoot);
+  const stamped = stampFrontmatterPackContext(frontmatter, manifest);
+
+  const filePath = path.join(dir, `${stamped.id}.md`);
+  const content = serializeFrontmatter(stamped as unknown as Record<string, unknown>, body);
   fs.writeFileSync(filePath, content, 'utf8');
   return filePath;
 }
@@ -186,8 +326,8 @@ export function saveNote(rootDir: string, frontmatter: UniversityFrontmatter, bo
 // QUIZZES
 // ═══════════════════════════════════════════════════════════════════
 
-export function loadQuiz(rootDir: string, id: string): UniversityQuiz | null {
-  const filePath = resolveContentFile(rootDir, id, '.yaml');
+export function loadQuiz(rootDir: string, id: string, packRoot?: string): UniversityQuiz | null {
+  const filePath = resolveContentFile(rootDir, id, '.yaml', packRoot);
   if (!filePath) return null;
 
   try {
@@ -200,12 +340,19 @@ export function loadQuiz(rootDir: string, id: string): UniversityQuiz | null {
   }
 }
 
-export function saveQuiz(rootDir: string, quiz: UniversityQuiz): string {
-  const dir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR, QUIZZES_DIR);
+export function saveQuiz(rootDir: string, quiz: UniversityQuiz, packRoot?: string): string {
+  const effectivePackRoot = packRoot ?? resolveDefaultPackRoot(rootDir);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, QUIZZES_DIR);
   fs.mkdirSync(dir, { recursive: true });
 
-  const filePath = path.join(dir, `${quiz.id}.yaml`);
-  fs.writeFileSync(filePath, yaml.dump(quiz, { lineWidth: -1, noRefs: true }), 'utf8');
+  const manifest = loadOrFabricatePackManifest(effectivePackRoot);
+  const stamped: UniversityQuiz = {
+    ...quiz,
+    ...(quiz.pack_id || !manifest ? {} : { pack_id: manifest.id }),
+  };
+
+  const filePath = path.join(dir, `${stamped.id}.yaml`);
+  fs.writeFileSync(filePath, yaml.dump(stamped, { lineWidth: -1, noRefs: true }), 'utf8');
   return filePath;
 }
 
@@ -213,8 +360,8 @@ export function saveQuiz(rootDir: string, quiz: UniversityQuiz): string {
 // LEARNING PATHS
 // ═══════════════════════════════════════════════════════════════════
 
-export function loadPath(rootDir: string, id: string): LearningPath | null {
-  const filePath = resolveContentFile(rootDir, id, '.yaml');
+export function loadPath(rootDir: string, id: string, packRoot?: string): LearningPath | null {
+  const filePath = resolveContentFile(rootDir, id, '.yaml', packRoot);
   if (!filePath) return null;
 
   try {
@@ -227,8 +374,9 @@ export function loadPath(rootDir: string, id: string): LearningPath | null {
   }
 }
 
-export function savePath(rootDir: string, lp: LearningPath): string {
-  const dir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR, PATHS_DIR);
+export function savePath(rootDir: string, lp: LearningPath, packRoot?: string): string {
+  const effectivePackRoot = packRoot ?? resolveDefaultPackRoot(rootDir);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, PATHS_DIR);
   fs.mkdirSync(dir, { recursive: true });
 
   const filePath = path.join(dir, `${lp.id}.yaml`);
@@ -268,12 +416,22 @@ export function loadDiplomas(rootDir: string, filter?: { student?: string; type?
   return results.sort((a, b) => b.earnedAt.localeCompare(a.earnedAt));
 }
 
-export function saveDiploma(rootDir: string, diploma: Diploma): string {
-  const dir = path.join(rootDir, UNIVERSITY_DIR, DIPLOMAS_DIR);
+export function saveDiploma(rootDir: string, diploma: Diploma, packRoot?: string): string {
+  // Diplomas remain at the project-pack `diplomas/` dir by default (they're
+  // a project-level artifact), but v6.0 allows pack-scoped diplomas when a
+  // packRoot is explicitly provided.
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, DIPLOMAS_DIR);
   fs.mkdirSync(dir, { recursive: true });
 
-  const filePath = path.join(dir, `${diploma.id}.yaml`);
-  fs.writeFileSync(filePath, yaml.dump(diploma, { lineWidth: -1, noRefs: true }), 'utf8');
+  const manifest = loadOrFabricatePackManifest(effectivePackRoot);
+  const stamped: Diploma = {
+    ...diploma,
+    ...(diploma.pack_id || !manifest ? {} : { pack_id: manifest.id }),
+  };
+
+  const filePath = path.join(dir, `${stamped.id}.yaml`);
+  fs.writeFileSync(filePath, yaml.dump(stamped, { lineWidth: -1, noRefs: true }), 'utf8');
   return filePath;
 }
 
@@ -737,8 +895,9 @@ export function getOnboardingSequence(rootDir: string, student?: string): Onboar
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════
 
-function resolveContentFile(rootDir: string, id: string, ext: string): string | null {
-  const contentDir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR);
+function resolveContentFile(rootDir: string, id: string, ext: string, packRoot?: string): string | null {
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const contentDir = path.join(effectivePackRoot, CONTENT_DIR);
 
   // Try each subdirectory
   for (const subdir of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {

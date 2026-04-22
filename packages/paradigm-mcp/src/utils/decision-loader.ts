@@ -4,6 +4,14 @@
  * Storage: .paradigm/decisions/TD-{date}-{counter}.yaml
  * Audience: Everyone — current team, future agents, institutional memory.
  * Lifecycle: Institutional — lasts as long as the decision is relevant.
+ *
+ * v6.0 additions (sub-phase 1):
+ *   - Read/write path accepts absorbed ADR fields on TeamDecision:
+ *     context, consequences, date, migrated_from, supersedes[].
+ *     All optional; existing shape preserved.
+ *   - Exposes `writeCompanionLoreEntry(decisionId, rootDir)` helper for
+ *     the companion-lore-write pattern (D3). Not yet wired into
+ *     recordDecision — sub-phase 2 will wire the consumer.
  */
 
 import * as fs from 'fs';
@@ -14,8 +22,10 @@ import type {
   DecisionFilter,
   DecisionStatus,
 } from '../types/knowledge-streams.js';
+import { log } from './mcp-logger.js';
 
 const DECISIONS_DIR = '.paradigm/decisions';
+const LORE_DIR = '.paradigm/lore';
 
 function generateDecisionId(): string {
   const now = new Date();
@@ -48,10 +58,27 @@ export function recordDecision(
   return full;
 }
 
+/**
+ * Fields that `updateDecision` accepts. Extended in v6.0 to cover the
+ * absorbed ADR fields so callers can mutate them post-record (e.g. the
+ * migration script sets `migrated_from`; supersession may backfill
+ * `supersedes[]`).
+ */
+export type UpdatableDecisionFields = Partial<Pick<TeamDecision,
+  | 'status'
+  | 'superseded_by'
+  | 'tags'
+  | 'context'
+  | 'consequences'
+  | 'date'
+  | 'migrated_from'
+  | 'supersedes'
+>>;
+
 export function updateDecision(
   rootDir: string,
   id: string,
-  updates: Partial<Pick<TeamDecision, 'status' | 'superseded_by' | 'tags'>>
+  updates: UpdatableDecisionFields
 ): TeamDecision | null {
   const existing = loadDecision(rootDir, id);
   if (!existing) return null;
@@ -68,6 +95,9 @@ export function updateDecision(
 /**
  * Supersede an existing decision with a new one.
  * Marks the old decision as 'superseded' and links to the new one.
+ *
+ * v6.0: also backfills `supersedes[]` on the new decision (D2 Loid addendum —
+ * enables bidirectional graph traversal without a separate index).
  */
 export function supersedeDecision(
   rootDir: string,
@@ -77,7 +107,10 @@ export function supersedeDecision(
   const old = loadDecision(rootDir, oldId);
   if (!old) return null;
 
-  const newDecision = recordDecision(rootDir, newEntry);
+  // Ensure the new entry records that it supersedes the old one (D2 addendum)
+  const mergedSupersedes = Array.from(new Set([...(newEntry.supersedes ?? []), oldId]));
+  const newDecision = recordDecision(rootDir, { ...newEntry, supersedes: mergedSupersedes });
+
   const updatedOld = updateDecision(rootDir, oldId, {
     status: 'superseded',
     superseded_by: newDecision.id,
@@ -86,6 +119,60 @@ export function supersedeDecision(
   if (!updatedOld) return null;
 
   return { old: updatedOld, new: newDecision };
+}
+
+/**
+ * Write a companion lore entry for a newly-recorded decision (D3 locked).
+ *
+ * The lore entry has `type: 'insight'` and `references.decision_id` pointing
+ * at the canonical decision. Lore keeps its role as the immutable narrative
+ * timeline; the structured decision lives in .paradigm/decisions/.
+ *
+ * Exposed in sub-phase 1. Not yet wired into `recordDecision` — the consumer
+ * wiring (tools/decision.ts) happens in sub-phase 2 so the companion write
+ * is a single well-defined call site rather than a loader side effect.
+ *
+ * Returns the written lore entry id, or null on any failure (best-effort —
+ * companion writes must never block decision recording).
+ */
+export function writeCompanionLoreEntry(rootDir: string, decisionId: string): string | null {
+  try {
+    const decision = loadDecision(rootDir, decisionId);
+    if (!decision) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const author = process.env.USER || process.env.USERNAME || 'unknown';
+    const counter = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
+    const hhmmss = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+    const loreId = `L-${today}-${author}-${hhmmss}-${counter}`;
+
+    const loreEntry = {
+      id: loreId,
+      type: 'insight',
+      timestamp: new Date().toISOString(),
+      author,
+      title: `Decision ${decision.id} recorded`,
+      summary: `Companion lore entry for decision record ${decision.id}. See .paradigm/decisions/${decision.id}.yaml.`,
+      symbols_touched: decision.symbols_affected || [],
+      references: {
+        decision_id: decision.id,
+      },
+      tags: ['companion-lore', 'decision-reference'],
+    };
+
+    const loreEntriesDir = path.join(rootDir, LORE_DIR, 'entries', today);
+    fs.mkdirSync(loreEntriesDir, { recursive: true });
+    const filePath = path.join(loreEntriesDir, `${loreId}.lore`);
+    fs.writeFileSync(filePath, yaml.dump(loreEntry, { lineWidth: 120, noRefs: true }), 'utf8');
+
+    return loreId;
+  } catch (err) {
+    log.component('#decision-loader').warn('companion lore write failed', {
+      error: (err as Error).message,
+      decisionId,
+    });
+    return null;
+  }
 }
 
 // ── Read Operations ──

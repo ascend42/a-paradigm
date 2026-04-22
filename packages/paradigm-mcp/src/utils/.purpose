@@ -11,11 +11,12 @@ components:
       - feature
       - symphony
   university-loader:
-    description: Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple
+    description: "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes."
     type: loader
     tags:
       - feature
       - university
+      - v6.0
   platform-bridge:
     description: HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command.
     type: loader
@@ -139,12 +140,13 @@ components:
       - knowledge-streams
       - journal
   decision-loader:
-    description: Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/
+    description: "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/. v6.0 sub-phase 1: updateDecision accepts absorbed ADR fields (context/consequences/date/migrated_from/supersedes); supersedeDecision backfills supersedes[] on the new entry (D2 Loid addendum); exposes writeCompanionLoreEntry helper for D3 companion-lore writes (not yet wired — sub-phase 2 wires the tool handler)."
     type: loader
     tags:
       - feature
       - knowledge-streams
       - decisions
+      - v6.0
   nomination-engine:
     description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (pattern_discovered + human_feedback triggers), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.'
     type: engine
@@ -233,3 +235,32 @@ components:
       - security
       - fail-closed
       - configuration
+  pack-loader:
+    description: "v6.0 (v5.39.0 sub-phase 1) multi-tenant content-pack discovery + resolution. loadPackManifest reads pack.yaml via safeLoad (classifier-only errors — never leaks file contents). discoverPacks scans three sources in precedence order: (1) node_modules/@a-company/university, (2) direct-deps with paradigm.universityPack pointer in package.json, (3) local .paradigm/university/ + discipline sub-packs. resolveEntryAddress parses <pack-id>:<entry-id> or bare ids; bare ids throw ambiguity errors when present in multiple active packs. Cache at .paradigm/cache/packs.json keyed by node_modules + local-university mtimes so npm install / local edits invalidate automatically. No consumers wired yet — sub-phase 2."
+    file: packages/paradigm-mcp/src/utils/pack-loader.ts
+    type: loader
+    tags:
+      - feature
+      - university
+      - pack
+      - v6.0
+  university-metrics:
+    description: "v6.0 (v5.39.0 sub-phase 1, D7 locked) local-only metrics snapshot capture. captureSnapshot writes .paradigm/university/.metrics/snapshot-YYYY-MM-DD.json idempotent-per-day with counts + classifiers + hashed project salt only — no entry titles / gate names / file contents. Honors config.metrics.local_snapshots_enabled (no-op when false). loadRecentSnapshots returns newest-first slice. pruneOldSnapshots removes files older than 90 days (default). computeProjectSaltHash creates/reads .paradigm/.metrics-salt with 0o600 perms; salt is 32 bytes of crypto.randomBytes. Feeds v6.3 sunset review per spec §8."
+    file: packages/paradigm-mcp/src/utils/university-metrics.ts
+    type: loader
+    tags:
+      - feature
+      - university
+      - metrics
+      - telemetry
+      - privacy
+      - v6.0
+  wisdom-loader:
+    description: "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise/decisions. 30s TTL cache, invalidated on writes. Global wisdom merged from ~/.paradigm/wisdom/ (local wins on id collision). v5.39.0 sub-phase 1: emits a one-time deprecation warning when .paradigm/wisdom/decisions/ still contains YAML files, pointing at `paradigm migrate decisions` (v6.0). Continues to read the directory — deprecation is additive; breaking removal is v6.0."
+    file: packages/paradigm-mcp/src/utils/wisdom-loader.ts
+    type: loader
+    tags:
+      - feature
+      - knowledge-streams
+      - wisdom
+      - v6.0

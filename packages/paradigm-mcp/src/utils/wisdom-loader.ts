@@ -249,7 +249,19 @@ async function loadExpertise(wisdomPath: string): Promise<WisdomExpertise | null
 }
 
 /**
+ * Track whether the wisdom-decisions deprecation warning has already been
+ * emitted for a given path in this process. Keeps log spam bounded to one
+ * warning per wisdom dir per process lifetime.
+ */
+const DEPRECATION_WARNED_PATHS = new Set<string>();
+
+/**
  * Load all decision files from decisions/
+ *
+ * v5.39.0 (sub-phase 1): emits a one-time deprecation warning when the
+ * legacy `.paradigm/wisdom/decisions/` dir is still populated. The dir
+ * content is still read so v5.x consumers continue working — the actual
+ * migration to TD-streams ships in v6.0 via `paradigm migrate decisions`.
  */
 async function loadDecisions(wisdomPath: string): Promise<WisdomDecision[]> {
   const decisionsPath = path.join(wisdomPath, 'decisions');
@@ -262,6 +274,16 @@ async function loadDecisions(wisdomPath: string): Promise<WisdomDecision[]> {
 
   try {
     const files = fs.readdirSync(decisionsPath);
+
+    // Emit deprecation warning once per process per path, but only if the
+    // dir actually contains at least one .yaml file (empty dir is a no-op)
+    const hasDecisionFiles = files.some(f => f.endsWith('.yaml') || f.endsWith('.yml'));
+    if (hasDecisionFiles && !DEPRECATION_WARNED_PATHS.has(decisionsPath)) {
+      DEPRECATION_WARNED_PATHS.add(decisionsPath);
+      log.component('#wisdom-loader').warn(
+        'wisdom-decisions found; run `paradigm migrate decisions` in v6.0. In v5.39.0 wisdom-decisions are still read but will be migrated to TD-streams in v6.0.',
+      );
+    }
 
     for (const file of files) {
       if (!file.endsWith('.yaml') && !file.endsWith('.yml')) {
