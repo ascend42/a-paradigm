@@ -33,3 +33,11 @@ components:
     description: "Type definitions for Cid (Captain agent) — ContextBrief, DebriefReport, CidSessionMarker, CidBriefedMarker. ContextBrief is the structured pre-task map (territory, symbols, blastRadius, gates, protocol, warnings, coverage, loreRefs, renderedBrief). DebriefReport captures post-task coverage changes and lore recording."
     type: types
     tags: [captain, cid, orchestration, coverage, schema]
+  UniversityMetricsTypes:
+    description: "Type definitions for v6.0 University metrics snapshots — UniversityMetricsSnapshot. Local-only counters (pack counts, per-tenant-kind breakdown, project pack entry counts, disciplines, activity windows). No content bodies, no titles, hashed project salt only. Feeds the v6.3 sunset review."
+    type: types
+    tags: [university, metrics, telemetry, v6.0, schema]
+  PackTypes:
+    description: "Pack manifest constants and convenience re-exports — PACK_MANIFEST_FILENAME ('pack.yaml'), PACK_SCHEMA_VERSION ('1'), PACKAGE_JSON_POINTER_FIELD ('paradigm.universityPack'), FIRST_PARTY_PACK_IDS. Re-exports TenantKind, Origin, PackDependency, PackCompliance, PackManifest, PackLocation from university.ts."
+    type: types
+    tags: [university, pack, manifest, v6.0, schema]

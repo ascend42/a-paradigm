@@ -152,6 +152,28 @@ export interface TeamDecision {
   tags?: string[];
   /** Linked lore entry ID (backward compat) */
   linked_lore?: string;
+
+  // ── v6.0 additions (all optional) ─────────────────────
+  // Absorbed from the legacy wisdom-decision ADR schema so the
+  // TD-* store can be the single canonical decision location.
+
+  /** ADR-style context (situation/forces motivating the decision) */
+  context?: string;
+  /** ADR-style consequences of the decision */
+  consequences?: {
+    positive?: string[];
+    negative?: string[];
+    mitigations?: string[];
+  };
+  /** ADR-style date field (alongside timestamp) */
+  date?: string;
+  /** Provenance flag for entries ported from the legacy stores */
+  migrated_from?: 'wisdom-decision' | 'lore-decision';
+  /**
+   * Inverse of `superseded_by` — enables bidirectional graph traversal of
+   * the decision chain without a separate index. D2 Loid addendum.
+   */
+  supersedes?: string[];
 }
 
 // ────────────────────────────────────────────────────────

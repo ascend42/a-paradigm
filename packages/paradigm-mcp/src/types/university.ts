@@ -11,6 +11,78 @@ export type UniversityContentType = 'note' | 'policy' | 'guide' | 'runbook';
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 export type DiplomaType = 'plsat' | 'quiz' | 'path';
 
+// ── Pack Manifest (v6.0) ─────────────────────────────────
+
+/**
+ * Tenancy of a content pack. Determines default resolution rules, origin
+ * hints, and sunset-review aggregation.
+ */
+export type TenantKind = 'first-party' | 'project' | 'external';
+
+/**
+ * Provenance of a content entry — how it came to exist in this pack.
+ * `authored` is the default for new entries; `promoted` marks entries
+ * lifted from a notebook/journal/work-log; `imported` marks entries
+ * migrated from legacy layouts (e.g. PLSAT migration at v6.0).
+ */
+export type Origin = 'authored' | 'promoted' | 'imported';
+
+export interface PackDependency {
+  pack: string;
+  min_version?: string;
+  kind: 'required' | 'recommended';
+}
+
+export interface PackCompliance {
+  retention_years?: number;
+  revoke_on_policy_change?: boolean;
+}
+
+/**
+ * Shape of `pack.yaml` at a content-pack root. Version 1 at v6.0.
+ * See docs/private/plans/v6.0-university-builder-spec.md §1.2.
+ */
+export interface PackManifest {
+  // Identity
+  id: string;
+  name: string;
+  version: string;
+  schema_version: string;
+
+  // Classification
+  tenant_kind: TenantKind;
+  description: string;
+
+  // Optional metadata
+  authors?: string[];
+  license?: string;
+  origin_hint?: Origin;
+  content_types?: UniversityContentType[];
+  disciplines?: string[];
+
+  // Inline config (absorbs UniversityConfig for project packs)
+  branding?: UniversityBranding;
+  theme?: Partial<UniversityTheme>;
+  categories?: UniversityContentCategory[];
+
+  // Compliance
+  compliance?: PackCompliance;
+
+  // Dependencies
+  dependencies?: PackDependency[];
+}
+
+/**
+ * Resolved pack location on disk. Populated by the pack discoverer
+ * (sub-phase 1); consumed by loaders and the CLI/MCP resolution layer.
+ */
+export interface PackLocation {
+  manifest: PackManifest;
+  rootDir: string;
+  source: 'first-party' | 'npm' | 'local';
+  parentPackId?: string;  // for discipline sub-packs
+}
+
 // ── Frontmatter (shared by notes and policies) ──────────
 
 export interface UniversityFrontmatter {
@@ -26,6 +98,12 @@ export interface UniversityFrontmatter {
   estimatedMinutes?: number;
   prerequisites: string[];  // IDs of prerequisite content
   category?: string;
+
+  // v6.0 pack-manifest additions (all optional; injected by loader or authored)
+  origin?: Origin;          // defaults to 'authored' when absent
+  source?: string;          // provenance hint, e.g. 'courses/para-001.json' for imported
+  pack_id?: string;         // injected by loader; not authored
+  discipline?: string;      // for discipline sub-pack entries
 }
 
 export interface UniversityNote {
@@ -41,6 +119,13 @@ export interface QuizQuestion {
   choices: Record<string, string>;  // { A: "...", B: "...", ... }
   correct: string;                  // Key into choices
   explanation?: string;
+
+  // v6.0 PLSAT additions (all optional; preserve simple-quiz compat)
+  section?: string;          // e.g. 'para-101'
+  slot?: string;             // e.g. 'slot-001'
+  weight?: number;           // default 1
+  scenario?: string;         // PLSAT preamble prose
+  variants?: QuizQuestion[]; // PLSAT alt-variants per slot
 }
 
 export interface UniversityQuiz {
@@ -57,6 +142,20 @@ export interface UniversityQuiz {
   passThreshold: number;    // 0.0 to 1.0
   questions: QuizQuestion[];
   category?: string;
+
+  // v6.0 pack-manifest additions (all optional)
+  origin?: Origin;
+  source?: string;
+  pack_id?: string;
+  discipline?: string;
+
+  // v6.0 PLSAT additions (all optional)
+  timeLimit?: number;        // seconds
+  totalSlots?: number;
+  exam?: {
+    kind: 'practice' | 'proctored';
+    retake_policy?: string;
+  };
 }
 
 // ── Learning Path ────────────────────────────────────────
@@ -94,6 +193,33 @@ export interface Diploma {
   percentage: number;
   passed: boolean;
   details?: Record<string, unknown>;
+
+  // v6.0 compliance additions (all optional)
+  status?: 'active' | 'expired' | 'revoked';
+  revoked_reason?: string;
+  /** entry-address -> policy version at time of earning */
+  policy_versions?: Record<string, string>;
+  /** entry-address -> sha256 at time of earning */
+  content_hashes?: Record<string, string>;
+  /** which pack issued the diploma */
+  pack_id?: string;
+}
+
+// ── Policy compliance (v6.0) ─────────────────────────────
+
+/**
+ * Compliance fields carried in the frontmatter of a `type: 'policy'`
+ * entry. Shipped as optional in v6.0 so enforcement tooling (v6.x) can be
+ * added without another breaking schema change.
+ */
+export interface PolicyComplianceFields {
+  policy_version?: string;
+  policy_hash?: string;
+  compliance?: {
+    retention_years?: number;
+    revoke_on_change?: boolean;
+    severity?: 'advisory' | 'required' | 'enforced';
+  };
 }
 
 // ── Index ────────────────────────────────────────────────

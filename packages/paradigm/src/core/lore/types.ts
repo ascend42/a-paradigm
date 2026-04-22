@@ -119,6 +119,21 @@ export interface LoreEntry {
     branch: string;
     dirty: boolean; // uncommitted changes present
   };
+
+  /**
+   * v6.0 (D3 locked): cross-references to knowledge-store entries. Lore
+   * keeps its role as the immutable narrative timeline while canonical
+   * structured storage lives in the relevant store (decisions, wisdom,
+   * notebooks, protocols). When a decision is recorded via
+   * paradigm_decision_record, a companion lore entry with
+   * type: 'insight' and references.decision_id is written automatically.
+   */
+  references?: {
+    decision_id?: string;
+    wisdom_id?: string;
+    notebook_id?: string;
+    protocol_id?: string;
+  };
 }
 
 export interface LoreFilter {

@@ -40,6 +40,18 @@ export interface ParadigmConfig {
   limits?: LimitsConfig;
   /** Relative path to .paradigm-workspace file for multi-project workspaces */
   workspace?: string;
+  /**
+   * v6.0 (D7 locked): metrics configuration. `remote_consent: 'pending'`
+   * is seeded by paradigm shift at v6.0; v6.1 reads this to prompt for
+   * opt-in remote telemetry. `local_snapshots_enabled` controls whether
+   * .paradigm/university/.metrics/ is written.
+   */
+  metrics?: MetricsConfig;
+}
+
+export interface MetricsConfig {
+  remote_consent?: 'pending' | 'granted' | 'declined';
+  local_snapshots_enabled?: boolean;
 }
 
 export interface LoggingConfig {
