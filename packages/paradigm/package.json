@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "5.38.0",
+  "version": "5.38.1",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -55,7 +55,7 @@
     "@eslint/js": "^9.0.0",
     "@types/js-yaml": "^4.0.9",
     "eslint": "^9.0.0",
-    "@types/node": "^20.10.0",
+    "@types/node": "^22.10.0",
     "@types/prompts": "^2.4.9",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",

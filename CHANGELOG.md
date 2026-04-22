@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.38.1] — 2026-04-22
+
+### Fixed
+
+- **`@a-company/paradigm-logger` exports condition ordering** — `package.json` had `types` last in the exports map; esbuild (and any tool that respects conditional exports ordering) warned that `types` was unreachable because `import` and `require` came first. Reordered so `types` is first. Noticed during v5.38.0 publish warnings.
+- **Stray tsup build artifacts in `packages/paradigm-mcp/src/utils/`** — four files (`tool-cache.{js,d.ts,js.map,d.ts.map}`) had been committed into the `src/` tree alongside the `.ts` sources. Deleted them; confirmed tsup config already outputs to `dist/` (stray artifacts were historical). Added a scoped root `.gitignore` pattern (`packages/**/src/**/*.{js,js.map,d.ts,d.ts.map,mjs,mjs.map}`) with explicit negation for the three intentional hand-authored `sql.js.d.ts` stubs in paradigm, sentinel, and paradigm-mcp so future tsup leakage is caught automatically.
+- **Root `.next/` now gitignored.** `packages/site/.next/` was already scoped-ignored, but a root-level `.next/` appeared in `git status`. Added `/.next/` to the root `.gitignore`.
+- **`@types/node` version aligned to `^22.10.0` across all packages.** Prior mix of `^20` and `^22` caused subtle type-resolution differences. LTS baseline.
+- **5 broken internal doc links removed from README.** The `./docs/guides/{orchestration,sentinel,university,conductor,workspaces}.md` link trailers pointed at files that don't exist yet — stripped the trailers, kept the bullet prose. The University guide ships in v6.0 per the University spec; others ship alongside their respective v6.x bundles.
+
+### Notes
+
+- Logger gets its own patch bump (`3.5.1 → 3.5.2`) because it has an independent cadence from the main CLI. Paradigm CLI and plugin.json follow the standard bump to `5.38.1`.
+- No feature changes. No test changes beyond baseline hygiene.
+- Full audit trail: `reviews/2026-04-22-cleanup-audit-findings.md`, `reviews/2026-04-22-cleanup-audit-triage.md`, `docs/private/plans/cleanup-release-plan.md`.
+
+Symbols: #logger, #paradigm-mcp, #paradigm-cli
+
 ## [5.38.0] — 2026-04-22
 
 ### Added

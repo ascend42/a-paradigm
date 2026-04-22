@@ -14,6 +14,21 @@ build/
 out/
 *.tsbuildinfo
 
+# Stray tsup/tsc artifacts emitted into src/ (must not shadow .ts sources).
+# Scoped to packages/**/src/ so intentional hand-authored stubs like sql.js.d.ts
+# remain tracked. If adding a new intentional .d.ts stub in src/, negate here.
+packages/**/src/**/*.js
+packages/**/src/**/*.js.map
+packages/**/src/**/*.d.ts
+packages/**/src/**/*.d.ts.map
+packages/**/src/**/*.mjs
+packages/**/src/**/*.mjs.map
+# Intentional hand-authored type stubs — keep tracked
+!packages/**/src/**/sql.js.d.ts
+
+# Next.js build output at repo root (packages/site/.next is covered separately)
+/.next/
+
 # Legacy generated files (pre-Paradigm)
 .horizon/scan-index.json
 .horizon/project.md

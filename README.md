@@ -283,7 +283,7 @@ Cursor's stop hook outputs a `followup_message` that auto-retries compliance up 
 
 ### The agent team
 
-Paradigm ships with a core team of 8 specialist agents you can orchestrate through a single command (`paradigm team orchestrate "..."`): **architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid)**. Project detection ("SaaS" vs "game" vs "generic") determines which additional ecosystem agents get rostered on first shift. See [`docs/guides/orchestration.md`](./docs/guides/orchestration.md).
+Paradigm ships with a core team of 8 specialist agents you can orchestrate through a single command (`paradigm team orchestrate "..."`): **architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid)**. Project detection ("SaaS" vs "game" vs "generic") determines which additional ecosystem agents get rostered on first shift.
 
 ---
 
@@ -328,11 +328,11 @@ Still run `paradigm shift` inside each project to create the per-project files.
 
 Companion tools and surfaces. Each is linked out; none is required to use Paradigm.
 
-- **Sentinel** — symbol-correlated incident tracking and failure-pattern matching. `paradigm sentinel`. [Guide →](./docs/guides/sentinel.md)
-- **University (PLSAT)** — interactive courses and a 99-question certification exam. `paradigm university`. [Guide →](./docs/guides/university.md)
-- **Conductor** — native macOS overlay for multi-session orchestration. [Guide →](./docs/guides/conductor.md)
-- **Multi-agent orchestration** — architect/builder/reviewer/tester/security/documentor/ftux/captain. [Guide →](./docs/guides/orchestration.md)
-- **Workspaces** — shared symbols and lore across related repos. [Guide →](./docs/guides/workspaces.md)
+- **Sentinel** — symbol-correlated incident tracking and failure-pattern matching. `paradigm sentinel`.
+- **University (PLSAT)** — interactive courses and a 99-question certification exam. `paradigm university`.
+- **Conductor** — native macOS overlay for multi-session orchestration.
+- **Multi-agent orchestration** — architect/builder/reviewer/tester/security/documentor/ftux/captain.
+- **Workspaces** — shared symbols and lore across related repos.
 
 ---
 
