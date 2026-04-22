@@ -68,10 +68,17 @@ export async function loreMigrateAssessmentsCommand(options: Record<string, unkn
           'migrated-from-assessment',
         ];
 
+        // v6.0: 'decision' is no longer a valid LoreType. Any legacy assessment
+        // tagged type:'decision' is remapped to 'insight' so it survives
+        // migration. The original type is retained in the assessment:* tag.
+        const remappedType: LoreType = (assessment.type as string) === 'decision'
+          ? 'insight'
+          : (assessment.type as LoreType);
+
         // Normalize author using the lore pattern
         const rawEntry: Record<string, unknown> = {
           id: '', // Will be generated
-          type: assessment.type as LoreType,
+          type: remappedType,
           timestamp: assessment.date,
           author: assessment.author, // Will be normalized
           title: assessment.title,

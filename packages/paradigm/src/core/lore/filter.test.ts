@@ -29,12 +29,16 @@ describe('applyLoreFilter', () => {
       tags: ['security', 'phase-1'],
       review: { reviewer: 'ascend', completeness: 5, quality: 4, reviewed_at: '2026-02-21T12:00:00Z' },
     }),
+    // v6.0: 'decision' removed from LoreType. The decision is stored in
+    // .paradigm/decisions/ as TD-2026-02-20-001 and surfaced here as the
+    // companion lore insight (per D3 locked synthesis).
     makeLoreEntry({
       id: 'L-2026-02-20-001',
       timestamp: '2026-02-20T10:00:00Z',
       author: 'ascend',
       agent: undefined, // Human-only entry
-      type: 'decision',
+      type: 'insight',
+      references: { decision_id: 'TD-2026-02-20-001' },
       symbols_touched: ['#payment'],
       tags: ['architecture'],
     }),
@@ -108,9 +112,12 @@ describe('applyLoreFilter', () => {
   });
 
   it('filters by type', () => {
-    const result = applyLoreFilter(entries, { type: 'decision' });
+    // v6.0: filter on 'insight' (the post-decision type). The architecture-
+    // tagged fixture above is the companion lore for TD-2026-02-20-001.
+    const result = applyLoreFilter(entries, { type: 'insight' });
     expect(result.length).toBe(1);
-    expect(result[0].type).toBe('decision');
+    expect(result[0].type).toBe('insight');
+    expect(result[0].references?.decision_id).toBe('TD-2026-02-20-001');
   });
 
   it('filters by tags (OR)', () => {

@@ -85,6 +85,22 @@ components:
       - feature
       - graduation
       - mcp
+  lore-record:
+    description: "paradigm_lore_record: record a lore entry. v6.0 hard-rejects type:'decision' with a structured envelope (code:lore_type_decision_removed, successor_tool:paradigm_decision_record) — shared with assessment-record via utils/lore-rejection.ts."
+    type: tool
+    parent: '#LoreTools'
+    tags:
+      - feature
+      - lore
+      - mcp
+  assessment-record:
+    description: "[DEPRECATED] paradigm_assessment_record: thin wrapper around lore. v6.0 also hard-rejects type:'decision' here (back-door closure) using the same shared rejection envelope as paradigm_lore_record."
+    type: tool
+    parent: '#LoreTools'
+    tags:
+      - deprecated
+      - lore
+      - mcp
   lore-assess:
     description: 'paradigm_lore_assess: record human assessment verdict (correct/partial/incorrect) on a lore entry, auto-compute calibration delta'
     type: tool

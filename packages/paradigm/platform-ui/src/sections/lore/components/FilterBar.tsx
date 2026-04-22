@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLoreStore } from '../store/loreStore';
 
+// v6.0: 'decision' removed from the filter list. Decisions are surfaced via the
+// decision-store UI; lore links them through references.decision_id on insights.
 const ENTRY_TYPES = [
-  '', 'agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight',
+  '', 'agent-session', 'human-note', 'review', 'incident', 'milestone', 'retro', 'insight',
 ];
 
 const AGENT_FILTER_OPTIONS = [

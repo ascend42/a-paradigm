@@ -5,10 +5,10 @@ description: |
 
 components:
   lore-types:
-    description: "Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta, stream), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline, KnowledgeStream"
+    description: "Canonical type definitions — LoreEntry (with confidence, assessment, assessment_delta, stream), LoreDecision, LoreAssessment, LoreFilter, LoreTimeline, KnowledgeStream. v6.0: LoreType drops 'decision' — decisions live in .paradigm/decisions/ via paradigm_decision_record (companion lore insight auto-written)."
     type: model
   lore-storage:
-    description: Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry
+    description: "Date-partitioned YAML read/write — recordLore, loadLoreEntries, addReview, addAssessment, updateLoreEntry, deleteLoreEntry. v1->v2 migration shim remaps legacy type:'decision' to 'insight' and tags the entry with 'v6-migrated:from-decision' for forensic recovery."
     type: service
   lore-filter:
     description: Filter engine — applyLoreFilter with hasConfidence/hasAssessment support, searchLoreEntries

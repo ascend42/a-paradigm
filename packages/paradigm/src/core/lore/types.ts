@@ -27,7 +27,12 @@ export interface LoreError {
   time_to_fix?: string; // "5 minutes"
 }
 
-export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
+// v6.0: 'decision' removed from LoreType. Decisions live in
+// .paradigm/decisions/ (TD-* entries) recorded via paradigm_decision_record.
+// A companion lore entry with type:'insight' + references.decision_id is
+// auto-written by recordDecision so the timeline stays complete. See
+// docs/private/plans/v6.0-decisions-locked.md (D3) for the locked synthesis.
+export type LoreType = 'agent-session' | 'human-note' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
 
 export type KnowledgeStream = 'work-log' | 'journal' | 'decision' | 'auto';
 

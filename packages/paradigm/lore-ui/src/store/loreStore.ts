@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 
-export type LoreType = 'agent-session' | 'human-note' | 'decision' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
+// v6.0: 'decision' removed. Use paradigm_decision_record; companion lore is
+// written as type:'insight' with references.decision_id. Mirror of core LoreType.
+export type LoreType = 'agent-session' | 'human-note' | 'review' | 'incident' | 'milestone' | 'retro' | 'insight';
 
 export interface LoreEntry {
   id: string;

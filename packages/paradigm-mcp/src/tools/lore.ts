@@ -24,12 +24,9 @@ import { getComplianceRate, getComplianceByCategory } from '../utils/practice-st
 import { getSessionTracker } from '../utils/session-tracker.js';
 import { detectProtocolSuggestion } from '../utils/protocol-loader.js';
 import { log } from '../utils/mcp-logger.js';
+import { rejectionErr, DECISION_REMOVED_ENVELOPE } from '../utils/lore-rejection.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
-
-// Session-scoped deprecation flag for type:'decision' on paradigm_lore_record.
-// v5.39.0 = soft deprecation; v6.0 = hard error per D3 locked.
-let loreDecisionDeprecationEmitted = false;
 
 /** Resolve the human author for MCP-recorded entries */
 function resolveAuthorForMcp(): string {
@@ -84,7 +81,7 @@ export function getLoreToolsList() {
           },
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
+            enum: ['agent-session', 'human-note', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'Filter by entry type',
           },
           tag: {
@@ -139,13 +136,13 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_record',
       description:
-        'Record a new lore entry (agent session, decision, milestone, etc.). Call after completing significant work. Returns the created entry ID and file path. ~100 tokens.',
+        'Record a new lore entry (agent session, milestone, retro, insight, etc.). Call after completing significant work. Returns the created entry ID and file path. For decisions, use paradigm_decision_record (a companion lore insight is auto-written). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
+            enum: ['agent-session', 'human-note', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'Entry type',
           },
           title: {
@@ -320,7 +317,7 @@ export function getLoreToolsList() {
           summary: { type: 'string', description: 'New summary' },
           type: {
             type: 'string',
-            enum: ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone', 'retro', 'insight'],
+            enum: ['agent-session', 'human-note', 'review', 'incident', 'milestone', 'retro', 'insight'],
             description: 'New entry type',
           },
           symbols_touched: {
@@ -523,19 +520,20 @@ export async function handleLoreTool(
         symbols_touched: string[];
       };
 
-      // v5.39.0 (D3 locked): soft-deprecate type:'decision' on lore_record.
-      // Hard error ships v6.0. Still write the entry at v5.39.0 — just warn.
-      let decisionDeprecationNotice: string | undefined;
+      // v6.0 (D3 locked): hard-remove type:'decision' on paradigm_lore_record.
+      // Returns a structured rejection envelope (Jinx premortem mitigation #2)
+      // so downstream agents can auto-retry against paradigm_decision_record.
+      // The companion lore insight entry is written automatically by
+      // recordDecision (.paradigm/decisions/...), preserving the timeline.
       if (type === 'decision') {
-        decisionDeprecationNotice =
-          "paradigm_lore_record({type:'decision'}) is deprecated and will be rejected in v6.0. Use paradigm_decision_record for canonical decision records; paradigm_lore_record({type:'insight', references: {decision_id}}) for narrative references.";
-        if (!loreDecisionDeprecationEmitted) {
-          loreDecisionDeprecationEmitted = true;
-          log.component('#lore').warn(decisionDeprecationNotice, {
-            deprecation: 'v6.0',
-            canonical_tool: 'paradigm_decision_record',
-          });
-        }
+        log.component('#lore').warn(
+          "rejected paradigm_lore_record({type:'decision'}) — removed in v6.0",
+          {
+            removed_in: DECISION_REMOVED_ENVELOPE.removed_in,
+            successor_tool: DECISION_REMOVED_ENVELOPE.successor_tool,
+          },
+        );
+        return rejectionErr(DECISION_REMOVED_ENVELOPE);
       }
 
       // Auto-attach habit compliance data
@@ -680,7 +678,6 @@ export async function handleLoreTool(
           message: 'Lore entry recorded successfully',
           ...(streamRouted ? { stream: streamRouted } : {}),
           ...(protocol_suggestion ? { protocol_suggestion } : {}),
-          ...(decisionDeprecationNotice ? { deprecation: decisionDeprecationNotice } : {}),
         }),
       };
     }

@@ -29,6 +29,8 @@ import {
   loadEntry,
   searchEntries,
 } from '../utils/assessment-loader.js';
+import { rejectionErr, DECISION_REMOVED_ENVELOPE } from '../utils/lore-rejection.js';
+import { log } from '../utils/mcp-logger.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
 
@@ -68,7 +70,7 @@ export function getAssessmentToolsList() {
           body: { type: 'string', description: 'Full reflection — what happened, what was learned, what changed' },
           symbols: { type: 'array', items: { type: 'string' }, description: 'Symbols touched in this entry' },
           tags: { type: 'array', items: { type: 'string' } },
-          type: { type: 'string', enum: ['retro', 'insight', 'decision', 'milestone'], description: 'Entry type (default: retro)' },
+          type: { type: 'string', enum: ['retro', 'insight', 'milestone'], description: "Entry type (default: retro). Note: 'decision' was removed in v6.0 — use paradigm_decision_record." },
           linked_lore: { type: 'array', items: { type: 'string' }, description: 'Lore entry IDs' },
           linked_tasks: { type: 'array', items: { type: 'string' }, description: 'Task IDs' },
           linked_commits: { type: 'array', items: { type: 'string' }, description: 'Commit hashes' },
@@ -110,7 +112,7 @@ export function getAssessmentToolsList() {
         properties: {
           symbol: { type: 'string', description: 'Filter by symbol' },
           tag: { type: 'string', description: 'Filter by tag' },
-          type: { type: 'string', enum: ['retro', 'insight', 'decision', 'milestone'] },
+          type: { type: 'string', enum: ['retro', 'insight', 'milestone'], description: "Filter by type. Note: 'decision' was removed in v6.0 — search .paradigm/decisions/ via paradigm_decision_search." },
           dateFrom: { type: 'string', description: 'ISO date string (inclusive)' },
           dateTo: { type: 'string', description: 'ISO date string (inclusive)' },
           limit: { type: 'number', description: 'Max results (default: 20)' },
@@ -161,6 +163,23 @@ export async function handleAssessmentTool(
       // Forward to lore with arc tags
       const arcId = args.arc_id as string;
       const entryType = (args.type as string) || 'retro';
+
+      // v6.0 (D3 locked): hard-remove type:'decision' on the deprecated
+      // assessment-record path too — otherwise it would be a back door past
+      // paradigm_lore_record's rejection envelope (see lore.ts). Returns the
+      // same structured envelope so downstream agents can auto-retry against
+      // paradigm_decision_record without branching on which tool they called.
+      if (entryType === 'decision') {
+        log.component('#lore').warn(
+          "rejected paradigm_assessment_record({type:'decision'}) — removed in v6.0",
+          {
+            removed_in: DECISION_REMOVED_ENVELOPE.removed_in,
+            successor_tool: DECISION_REMOVED_ENVELOPE.successor_tool,
+          },
+        );
+        return rejectionErr(DECISION_REMOVED_ENVELOPE);
+      }
+
       const userTags = (args.tags as string[]) || [];
       const tags = [
         `arc:${arcId}`,

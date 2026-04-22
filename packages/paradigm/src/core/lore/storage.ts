@@ -587,11 +587,20 @@ function migrateLegacyEntries(rootDir: string): number {
       const timestamp = `${dateStr}T00:00:00.000Z`;
       const id = generateLoreId(rootDir, dateStr, author, timestamp);
 
-      // Map old type to v2 type
+      // Map old type to v2 type.
+      // v6.0: 'decision' is no longer a valid LoreType. v1 entries with
+      // type:'decision' are remapped to 'insight' on migration to preserve the
+      // timeline. The canonical decision record lives in .paradigm/decisions/.
+      // Forensic audit trail: when remapped, we add the `v6-migrated:from-decision`
+      // tag so users can recover the original type via paradigm_lore_search
+      // (mirrors migrate-assessments.ts's `assessment:decision` preservation).
       const oldType = String(raw.type || 'agent-session');
-      const v2Type = ['agent-session', 'human-note', 'decision', 'review', 'incident', 'milestone'].includes(oldType)
-        ? oldType
-        : 'agent-session';
+      const wasDecision = oldType === 'decision';
+      const v2Type = wasDecision
+        ? 'insight'
+        : (['agent-session', 'human-note', 'review', 'incident', 'milestone', 'insight'].includes(oldType)
+          ? oldType
+          : 'agent-session');
 
       // Convert test_results to verification
       let verification: LoreEntry['verification'] | undefined;
@@ -602,6 +611,9 @@ function migrateLegacyEntries(rootDir: string): number {
           details: { tests: tr.total === tr.passed ? 'pass' : 'fail' },
         };
       }
+
+      const migrationTags = ['migrated', oldType];
+      if (wasDecision) migrationTags.push('v6-migrated:from-decision');
 
       const v2Entry: LoreEntry = {
         id,
@@ -614,7 +626,7 @@ function migrateLegacyEntries(rootDir: string): number {
         symbols_touched: Array.isArray(raw.symbols_touched) ? raw.symbols_touched : [],
         files_modified: Array.isArray(raw.files_modified) ? raw.files_modified : undefined,
         ...(verification ? { verification } : {}),
-        tags: ['migrated', oldType],
+        tags: migrationTags,
       };
 
       fs.writeFileSync(
