@@ -5,6 +5,64 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.39.0] — 2026-04-22
+
+Multi-tenant University framework lands. This is the **additive bridge** release that sets up v6.0's breaking removal of the legacy content layout. Per the D5 locked decision (`docs/private/plans/v6.0-decisions-locked.md`), `@a-company/university` had 805 downloads/month on npm, so a one-release bridge is required: both old and new content layouts coexist here; v6.0 removes the old paths.
+
+### Added
+
+- **`pack.yaml` multi-tenant content-pack contract.** New manifest format at each pack's root. First-party pack (`@a-company/university`), per-project pack (`.paradigm/university/`), and discipline sub-packs (`.paradigm/university/<discipline>/`) all carry a `pack.yaml` with identity (id, name, version, schema_version), classification (tenant_kind: `first-party | project | external`), content declaration, optional branding/theme/categories, optional compliance fields, and cross-pack dependencies. Full schema in `docs/guides/university.md` §7.
+- **Three-source pack discovery** — `packages/paradigm-mcp/src/utils/pack-loader.ts`. Scans (1) well-known first-party `node_modules/@a-company/university/`, (2) direct-deps with a `paradigm.universityPack` pointer in their package.json, (3) local `.paradigm/university/` + discipline sub-dirs. Precedence: later wins on id collision. Cached at `.paradigm/cache/packs.json` keyed by `node_modules` + local-university mtimes. v5 layouts without `pack.yaml` still work (implicit default project pack fabricated by the loader).
+- **Cross-pack entry addressing** — canonical form `<pack-id>:<entry-id>`. Bare ids resolve to the active pack; ambiguous bare ids (same id in multiple active packs) throw with a candidate list. `paradigm_university_search` results now return ids in this form.
+- **New MCP tool `paradigm_university_pack_list`** — lists discovered packs with manifest metadata. Input filter: optional `tenant_kind`. Output: pack id, name, version, tenant_kind, discipline, entry_count, path. ~200-token response budget.
+- **Pack arg on all six existing `paradigm_university_*` tools** — search, get, create, update, onboard, validate now accept optional `pack?: string`. Defaults preserve current behavior. `create` also accepts optional `origin: 'authored' | 'promoted' | 'imported'`.
+- **New CLI selectors `--pack`, `--project`, `--discipline`** on `paradigm university` subcommands (list, show, quiz, status, validate, serve, add). Selectors live on subcommands only — bare `paradigm university` still launches the Paradigm teaching app unchanged.
+- **New `paradigm university init` subcommand** — scaffolds `.paradigm/university/pack.yaml` with a project-kind manifest (id derived from `.paradigm/config.yaml` project name). With `--discipline <name>`, scaffolds `.paradigm/university/<name>/pack.yaml` as a discipline sub-pack. Idempotent; does not overwrite existing manifests.
+- **New hidden `paradigm university migrate-plsat` subcommand** — one-shot migration from the hand-rolled JSON content layout to the new pack-conformant layout. Idempotent (`--force` to overwrite). `--delete-sources` flag exists but is not used in v5.39.0 — old JSON stays on disk per the bridge contract; v6.0 invokes `--delete-sources` to finalize.
+- **New `paradigm migrate decisions` subcommand** — converts `.paradigm/wisdom/decisions/*.yaml` and `lore.type='decision'` entries to the canonical `.paradigm/decisions/TD-*.yaml` streams store with `migrated_from` provenance. User-invoked, idempotent.
+- **Privacy-preserving University metrics** — `packages/paradigm-mcp/src/utils/university-metrics.ts` + CLI-side mirror at `packages/paradigm/src/core/university/metrics.ts`. Captures snapshots to `.paradigm/university/.metrics/snapshot-YYYY-MM-DD.json` on lifecycle boundaries (`paradigm shift`, `paradigm doctor`). Snapshots contain ONLY counts, fixed classifiers, and a hashed project salt — no content bodies, no entry titles, no gate names, no file paths. 90-day local retention (`pruneOldSnapshots`). **Local-only at v5.39.0** — no remote send. `.paradigm/config.yaml` gains `metrics.remote_consent: pending` seed so v6.1 can add an opt-in prompt without a schema migration.
+- **Compliance schema fields** (all optional) on University entries:
+  - Policies: `policy_version` (semver), `policy_hash` (sha256), `compliance: { retention_years, revoke_on_change, severity: advisory | required | enforced }`
+  - Diplomas: `status: active | expired | revoked`, `revoked_reason`, `policy_versions: Record<address, version>`, `content_hashes: Record<address, sha256>`, `pack_id`
+  - Enforcement tooling (retention workers, revocation workers, policy-version drift invalidation) is **not** shipping at v5.39/v6.0 — schema ships now so v6.x tooling can add without another breaking change.
+- **Sub-pack origin field** on entries: `origin: 'authored' | 'promoted' | 'imported'`. Defaults to `authored`. Stamps automatically on create; for imports, the migration script stamps `'imported'` with `source` provenance.
+- **LoreEntry `references` field** — new optional `{ decision_id?, wisdom_id?, notebook_id?, protocol_id? }`. Lore keeps its role as the immutable narrative timeline; canonical structured storage lives in the referenced store. `paradigm_decision_record` now automatically writes a companion lore insight entry with `references.decision_id` populated (D3 synthesis — preserves lore-as-timeline without re-introducing the three-way fracture).
+- **`TeamDecision.supersedes: string[]`** — new field, inverse of existing `superseded_by`. Enables bidirectional graph traversal without a separate index (D2 Loid addendum).
+- **ADR-style fields on `TeamDecision`** — `context`, `consequences: { positive, negative, mitigations }`, `date`, `migrated_from` (absorbed from the legacy wisdom-decisions schema).
+- **First tests in `packages/university/`** — `packages/university/tests/plsat-migration.test.ts` + `vitest.config.ts`. The PLSAT regression harness (31 tests) is load-bearing: it gates v6.0's `--delete-sources` by asserting byte-normalized equivalence between the old JSON layout and the new pack layout across all 8 courses + 2 PLSAT exam banks + server-route smoke.
+- **48 new tests in `packages/paradigm-mcp/`** across `pack-loader`, `university-multi-tenant`, `decision-migration`, `university-metrics`. Includes SECURITY assertions that pack-loader errors and metrics snapshots never contain sentinel strings planted as entry titles / gate names / route paths.
+- **`docs/guides/university.md`** — the guide the v5.38.1 cleanup cited but couldn't yet link to. 11 sections, 3 audience tracks (project owner adding compliance, first-party pack author, discipline sub-pack creator). Fixes the broken link on README line 332.
+- **Rewrote the `paradigm://guidance/university` MCP resource** to match the new multi-tenant shape and link out to the full guide.
+
+### Changed
+
+- **`paradigm_university_search` result `id` format is now `<pack-id>:<entry-id>`.** Minor-breaking for consumers that parse ids: strip the pack prefix for display if needed. Spec-documented, CLI and MCP examples updated.
+- **`@a-company/university` content layout** — the PLSAT migration ran once and produced the new pack-conformant layout at `packages/university/src/content/{notes,quizzes,paths}/` (82 notes + 82 course quizzes + 2 PLSAT exam quizzes + 8 learning paths) alongside `pack.yaml` at the package root. Server routes (`courses.ts`, `plsat.ts`) now read from the new layout — API response shape preserved. **Old `src/content/{courses,plsat}/*.json` files are retained** for the bridge release; v6.0 removes them.
+- **`wisdom-loader`** emits a one-time-per-path deprecation warning via Paradigm logger when `.paradigm/wisdom/decisions/` contains entries. Content is still read; migration ships in v6.0.
+- **`paradigm_wisdom_record({type:'decision'})`** at project scope now routes to `recordDecision` with a one-time-per-session deprecation warning. Global-scope wisdom decisions still write to the wisdom store (out of scope at v5.39.0).
+- **`paradigm_lore_record({type:'decision'})`** emits a deprecation warning pointing at `paradigm_decision_record`. **Still writes the lore entry at v5.39.0** — hard error ships in v6.0 per D3 asymmetric (lore hard-removes; wisdom soft-deprecates one more release out of respect for doc-followers).
+- **`paradigm shift`** gains two additional steps at the end: `captureSnapshot` (University metrics) + `seedMetricsConsent` (idempotent `metrics.remote_consent: pending` seed in `.paradigm/config.yaml`).
+- **`paradigm doctor`** calls `captureSnapshot` after health checks.
+
+### Fixed
+
+- **`migrate-plsat` dropped answer banks for alternate-schema lessons** (regression caught by the new PLSAT harness). Two course lessons used `options: string[]` + `correct: number` instead of the canonical `choices: {A..E}` + letter-correct shape: `para-401/notebooks-permissions` (5 questions) and `para-501/review-compliance` (5 questions). Migration now handles both shapes via discriminated union with explicit type guards; migrated YAMLs regenerated.
+- **`university-loader.normalizeFrontmatter` dropped v6 additive fields on read** (`origin`, `source`, `pack_id`, `discipline`). Fields stamped correctly on save but didn't round-trip through load. Now preserved via presence-gated pass-through.
+
+### Notes
+
+- **D5 bridge sequencing.** v5.39.0 is additive — both old and new content layouts coexist. v6.0 ships the breaking removals: `loadPortalConfigLegacy` deletion, `LoreType.decision` removal (hard error on `paradigm_lore_record({type:'decision'})`), and deletion of legacy `@a-company/university/src/content/{courses,plsat}/*.json`.
+- **Claude Learning site is NOT a tenant** of Paradigm's University. Per memory `project_claude_learning_site.md`, the user plans a separate free site for Claude/Claude-Code learning materials, independent of Paradigm. Paradigm's University at v5.39.0/v6.0 has exactly two tenants: Paradigm University (first-party content pack) + per-project user content.
+- **v6.3 sunset-review contract (docs-only commitment).** The per-project University primitive is a candidate for consolidation if ALL FOUR hold simultaneously at the review: median project-pack entries < 3; median `last_modified_days_ago` > 45; median `quiz_completions_last_30d` < 1; `adopters_with_project_pack / total_adopters < 0.2`. Thresholds locked via Loid's calibration (D8).
+- **`@a-company/paradigm-mcp`** follows CLI versioning this release (5.38.1 → 5.39.0) because MCP tools changed (new pack arg on 6 tools + new `paradigm_university_pack_list`).
+- **`@a-company/university`** bumps from 5.31.0 to 5.39.0 (University content shipped) — re-aligning this package's version with the main release after a period of independent cadence.
+- Audit trail: `docs/private/plans/v6.0-decisions-locked.md`, `docs/private/plans/v6.0-university-builder-spec.md`, sub-phase WIP commits `d60b319f`, `efe2cb9f`, `94511e0d`, `6696e169`, `c985782c`.
+
+### Baseline test counts
+paradigm-mcp: 10 failed / 205 passed (+48 new tests since v5.38.1). paradigm CLI: 7 failed / 245 passed (unchanged). university: 0 failed / 31 passed (new test suite; PLSAT harness fully green after migration fix).
+
+Symbols: #university, #pack-loader, #university-metrics, #decision-loader, #wisdom-loader, #lore-loader, #university-cli, #paradigm-decision-record, #plsat-migration, #decision-migration, ^*
+
 ## [5.38.1] — 2026-04-22
 
 ### Fixed

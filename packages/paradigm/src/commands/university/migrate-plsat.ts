@@ -26,12 +26,34 @@ import { out, success, warn, error, dim, header } from '../../utils/cli-output.j
 // Source JSON shapes (faithful to v2.0 / v3.0 on disk)
 // ────────────────────────────────────────────────────────────────
 
-interface SourceQuizQuestion {
+// Canonical shape: choices keyed A–E, correct = letter string.
+interface SourceQuizQuestionChoices {
   id: string;
   question: string;
   choices: Record<string, string>;
   correct: string;
   explanation?: string;
+}
+
+// Alternate shape (para-401/notebooks-permissions, para-501/review-compliance):
+// options is an ordered string[] and correct is a 0-based integer index.
+interface SourceQuizQuestionOptions {
+  id: string;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation?: string;
+}
+
+type SourceQuizQuestion = SourceQuizQuestionChoices | SourceQuizQuestionOptions;
+
+function isOptionsQuestion(q: SourceQuizQuestion): q is SourceQuizQuestionOptions {
+  return Array.isArray((q as SourceQuizQuestionOptions).options);
+}
+
+function isChoicesQuestion(q: SourceQuizQuestion): q is SourceQuizQuestionChoices {
+  const c = (q as SourceQuizQuestionChoices).choices;
+  return typeof c === 'object' && c !== null && !Array.isArray(c);
 }
 
 interface SourceLesson {
@@ -327,13 +349,33 @@ function migrateCourse(
           category: 'paradigm-core',
           origin: 'imported',
           source: `courses/${course.id}.json`,
-          questions: lesson.quiz.map(q => ({
-            id: q.id,
-            question: q.question,
-            choices: q.choices,
-            correct: q.correct,
-            ...(q.explanation ? { explanation: q.explanation } : {}),
-          })),
+          questions: lesson.quiz.map(q => {
+            // Two valid source shapes — preserve whichever is authored so
+            // answer-bank fidelity is maintained (v5.39.0 regression: earlier
+            // revisions silently dropped the alternate `options[]` form and
+            // produced unanswerable questions for para-401 + para-501).
+            if (isChoicesQuestion(q)) {
+              return {
+                id: q.id,
+                question: q.question,
+                choices: q.choices,
+                correct: q.correct,
+                ...(q.explanation ? { explanation: q.explanation } : {}),
+              };
+            }
+            if (isOptionsQuestion(q)) {
+              return {
+                id: q.id,
+                question: q.question,
+                options: q.options,
+                correct: q.correct,
+                ...(q.explanation ? { explanation: q.explanation } : {}),
+              };
+            }
+            throw new Error(
+              `lesson ${lesson.id}: quiz question ${(q as { id?: string }).id ?? '<no-id>'} has neither 'choices' (object) nor 'options' (array) — cannot migrate.`,
+            );
+          }),
         };
 
         fs.writeFileSync(quizPath, yaml.dump(quiz, { lineWidth: -1, noRefs: true, sortKeys: false }), 'utf8');

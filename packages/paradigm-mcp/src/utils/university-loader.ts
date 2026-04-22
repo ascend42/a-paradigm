@@ -922,6 +922,14 @@ function normalizeFrontmatter(fm: UniversityFrontmatter): UniversityFrontmatter 
     estimatedMinutes: fm.estimatedMinutes,
     prerequisites: Array.isArray(fm.prerequisites) ? fm.prerequisites : [],
     ...(fm.category ? { category: fm.category as string } : {}),
+    // v6.0 additive pack-manifest fields — pass through untouched so stamps
+    // authored at saveNote() survive a load/normalize round-trip. No
+    // validation at this layer; consumers (pack loader, multi-tenant
+    // resolver) own that.
+    ...(fm.origin ? { origin: fm.origin } : {}),
+    ...(fm.source ? { source: fm.source } : {}),
+    ...(fm.pack_id ? { pack_id: fm.pack_id } : {}),
+    ...(fm.discipline ? { discipline: fm.discipline } : {}),
   };
 }
 
