@@ -329,7 +329,7 @@ Still run `paradigm shift` inside each project to create the per-project files.
 Companion tools and surfaces. Each is linked out; none is required to use Paradigm.
 
 - **Sentinel** — symbol-correlated incident tracking and failure-pattern matching. `paradigm sentinel`.
-- **University (PLSAT)** — interactive courses and a 99-question certification exam. `paradigm university`.
+- **University** — multi-tenant content-pack framework for onboarding &amp; compliance. Run `paradigm university` to start. [Guide →](./docs/guides/university.md)
 - **Conductor** — native macOS overlay for multi-session orchestration.
 - **Multi-agent orchestration** — architect/builder/reviewer/tester/security/documentor/ftux/captain.
 - **Workspaces** — shared symbols and lore across related repos.

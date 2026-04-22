@@ -417,31 +417,105 @@ members:
   },
 
   'university': {
-    description: 'Project university — content types, MCP tools, CLI commands, PLSAT',
-    generate: () => `# Project University
+    description: 'University — multi-tenant content-pack framework (v5.39.0 / v6.0)',
+    generate: () => `# Paradigm University (v5.39.0 / v6.0)
 
-Every project can maintain a university at \`.paradigm/university/\` — a structured knowledge base.
+Multi-tenant content framework for onboarding, policies, quizzes, and
+compliance material. Packs live in one of three places:
 
-## Content Types
+1. **First-party** — \`node_modules/@a-company/university/\` (the default).
+2. **Project** — \`.paradigm/university/\` (your team's content).
+3. **External npm** — any package with \`paradigm.universityPack\` in its package.json.
 
-| Type | Prefix | Format | Purpose |
-|------|--------|--------|---------|
-| Note | \`N-\` | Markdown + YAML frontmatter | Architecture docs, guides |
-| Policy | \`P-\` | Markdown + YAML frontmatter | Code review process, checklists |
-| Quiz | \`Q-\` | YAML | Knowledge checks with grading |
-| Learning Path | \`LP-\` | YAML | Ordered sequences + quizzes |
-| Diploma | \`D-\` | YAML (auto-generated) | Completion records |
+## When to use it
 
-## Key MCP Tools
+- Agent needs to add onboarding content to a project (\`paradigm_university_create\`).
+- User is authoring compliance policies or PLSAT-style quizzes.
+- Agent needs the recommended onboarding sequence for a student
+  (\`paradigm_university_onboard\`).
+- Agent needs to search existing content across packs
+  (\`paradigm_university_search\` / \`paradigm_university_pack_list\`).
 
-| Tool | Description |
-|------|-------------|
-| \`paradigm_university_search\` | Search by type, tag, difficulty, symbol |
-| \`paradigm_university_get\` | Fetch full content by ID |
-| \`paradigm_university_create\` | Create new content (agent-authored) |
-| \`paradigm_university_update\` | Update existing content |
-| \`paradigm_university_onboard\` | Get recommended onboarding sequence |
-| \`paradigm_university_validate\` | Validate content integrity |`,
+Skip for: one-off code docs (use \`.purpose\`), decisions
+(\`paradigm_decision_record\`), session history (\`paradigm_lore_record\`).
+
+## Content types
+
+| Type | Prefix | Format |
+|------|--------|--------|
+| Note | \`N-\` | Markdown + YAML frontmatter |
+| Policy | \`P-\` | Markdown + YAML frontmatter (optional compliance fields) |
+| Quiz | \`Q-\` | YAML (PLSAT-style scenarios supported) |
+| Learning Path | \`LP-\` | YAML — ordered/unordered steps |
+| Diploma | \`D-\` | YAML (auto-generated on quiz completion) |
+
+## MCP tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| \`paradigm_university_search\` | \`{ type?, tag?, difficulty?, symbol?, query?, category?, track?, pack?, discipline?, limit? }\` | \`{ count, pack, results: [{ id: "<pack-id>:<entry-id>", title, type, difficulty, tags, symbols }] }\` |
+| \`paradigm_university_get\` | \`{ id: "<bare>" | "<pack-id>:<entry-id>", pack? }\` | Full entry (frontmatter + body for notes/policies; full quiz/path object) |
+| \`paradigm_university_create\` | \`{ type, title, body?, tags?, symbols?, difficulty?, estimatedMinutes?, prerequisites?, category?, pack?, passThreshold?, questions?, ordered?, steps? }\` | \`{ created, type, file }\` |
+| \`paradigm_university_update\` | \`{ id, pack?, title?, body?, tags?, symbols?, difficulty?, estimatedMinutes?, category? }\` | \`{ updated, type }\` |
+| \`paradigm_university_onboard\` | \`{ student?, pack? }\` | \`{ university, pack, student, recommended, completed, remaining }\` |
+| \`paradigm_university_validate\` | \`{ id?, pack?, deep? }\` | \`{ pack, status, totalContent, checked, issues: [{ contentId, severity, check, message, fix? }] }\` |
+| \`paradigm_university_pack_list\` | \`{ tenant_kind? }\` | \`{ packs: [{ id, name, version, tenant_kind, discipline?, entry_count, path }] }\` |
+
+All tools accept an optional \`pack\` argument. Default resolution: project
+pack if \`.paradigm/university/pack.yaml\` exists, else first-party.
+
+## Pack conventions
+
+A pack is a directory containing \`pack.yaml\` with required fields
+\`id\`, \`name\`, \`version\`, \`schema_version: "1"\`, \`tenant_kind\`
+(\`first-party | project | external\`). Optional fields: \`description\`,
+\`authors\`, \`license\`, \`origin_hint\`, \`content_types\`, \`disciplines\`,
+\`branding\`, \`theme\`, \`categories\`, \`compliance\`, \`dependencies\`.
+
+Entry IDs are pack-scoped. The canonical cross-pack address is
+\`<pack-id>:<entry-id>\` (e.g., \`paradigm:N-symbol-basics\`). Bare entry
+IDs resolve against the current pack context (\`pack\` arg or active
+project pack). Cross-pack references inside entry YAML **must** use the
+qualified form — the validator rejects bare cross-pack refs.
+
+## CLI surface (v5.39.0)
+
+\`\`\`
+paradigm university                                 # default teaching app
+paradigm university init                            # scaffold .paradigm/university/pack.yaml
+paradigm university init --discipline <name>        # scaffold sub-pack
+paradigm university list                            # list discovered packs
+paradigm university list --project                  # list entries in project pack
+paradigm university add <type> --title "..." [--pack | --project | --discipline]
+paradigm university show <id> [--pack | --project | --discipline]
+paradigm university quiz <id>
+paradigm university status
+paradigm university validate [--deep]
+paradigm university serve --pack <id>               # launch specific pack's UI
+\`\`\`
+
+\`--pack\` / \`--project\` / \`--discipline\` selectors live on the
+subcommands (not on bare \`paradigm university\`).
+
+## Metrics (v5.39.0 / v6.0)
+
+Local-only count snapshots at \`.paradigm/university/.metrics/\`. Privacy
+rule: no titles, no bodies, no user identifiers — only counts + a
+\`sha256(projectRootPath + random_salt)\` project hash. Retention 90 days.
+No remote send; \`metrics.remote_consent: pending\` is seeded in
+\`.paradigm/config.yaml\` for v6.1 opt-in.
+
+## Compliance fields (optional, schema-only)
+
+Policies and diplomas accept \`policy_version\`, \`policy_hash\`,
+\`policy_versions[]\`, \`content_hashes[]\`. Schema is stable but **no
+enforcement tooling ships at v5.39.0 / v6.0** — no audit worker, no
+diploma invalidation, no retention enforcement. Enforcement is v6.x.
+
+## Full guide
+
+See \`docs/guides/university.md\` for narrative, examples, audience
+tracks, migration notes, and the v6.3 sunset contract.`,
   },
 
   'calibration': {
