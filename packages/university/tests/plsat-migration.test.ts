@@ -54,6 +54,16 @@ const PATHS_DIR = path.join(CONTENT_DIR, 'paths');
 
 const COURSES = ['para-001', 'para-101', 'para-201', 'para-301', 'para-401', 'para-501', 'para-601', 'para-701'];
 
+// v6.0 — source JSON files were deleted by `paradigm university migrate-plsat
+// --delete-sources`. The byte-equivalence regression leg only runs if the
+// sources are still on disk. When sources are absent (post-v6.0 ship), the
+// harness gracefully skips byte-equivalence and runs only post-migration
+// validity checks. Per builder spec §2.5: "graceful skip — keeps the harness
+// reusable for downstream adopters who ship their own pre-migration content."
+const SOURCES_PRESENT =
+  fs.existsSync(COURSES_DIR) &&
+  fs.existsSync(path.join(COURSES_DIR, 'para-001.json'));
+
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -186,11 +196,11 @@ describe('plsat-migration — course content regression', () => {
     describe(courseId, () => {
       const sourcePath = path.join(COURSES_DIR, `${courseId}.json`);
 
-      it('source JSON file exists', () => {
+      it.skipIf(!SOURCES_PRESENT)('source JSON file exists', () => {
         expect(fs.existsSync(sourcePath)).toBe(true);
       });
 
-      it('all lessons are migrated to notes + quizzes with preserved counts and answer keys', () => {
+      it.skipIf(!SOURCES_PRESENT)('all lessons are migrated to notes + quizzes with preserved counts and answer keys', () => {
         if (!fs.existsSync(sourcePath)) {
           throw new Error(`source missing: ${sourcePath}`);
         }
@@ -300,12 +310,13 @@ describe('plsat-migration — course content regression', () => {
 describe('plsat-migration — PLSAT v2.0 regression', () => {
   const sourcePath = path.join(PLSAT_DIR, 'v2.0.json');
   const migratedPath = path.join(QUIZZES_DIR, 'Q-plsat-v2.yaml');
+  const v2Present = fs.existsSync(sourcePath);
 
-  it('source file exists', () => {
+  it.skipIf(!v2Present)('source file exists', () => {
     expect(fs.existsSync(sourcePath)).toBe(true);
   });
 
-  it('migrated quiz preserves every question 1:1 with answer keys and explanations', () => {
+  it.skipIf(!v2Present)('migrated quiz preserves every question 1:1 with answer keys and explanations', () => {
     const source = loadJson<SourcePlsatV2>(sourcePath);
     const migrated = loadYaml<MigratedQuizYaml>(migratedPath);
 
@@ -346,12 +357,13 @@ describe('plsat-migration — PLSAT v2.0 regression', () => {
 describe('plsat-migration — PLSAT v3.0 regression', () => {
   const sourcePath = path.join(PLSAT_DIR, 'v3.0.json');
   const migratedPath = path.join(QUIZZES_DIR, 'Q-plsat-v3.yaml');
+  const v3Present = fs.existsSync(sourcePath);
 
-  it('source file exists', () => {
+  it.skipIf(!v3Present)('source file exists', () => {
     expect(fs.existsSync(sourcePath)).toBe(true);
   });
 
-  it('migrated quiz preserves every source variant id + answer key', () => {
+  it.skipIf(!v3Present)('migrated quiz preserves every source variant id + answer key', () => {
     const source = loadJson<SourcePlsatV3>(sourcePath);
     const migrated = loadYaml<MigratedQuizYaml>(migratedPath);
 

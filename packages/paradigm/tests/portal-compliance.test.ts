@@ -30,7 +30,6 @@ import * as os from 'os';
 import { execFileSync } from 'child_process';
 import {
   loadPortalConfig,
-  loadPortalConfigLegacy,
   checkPortalCompliance,
 } from '../src/core/portal-compliance.js';
 
@@ -81,30 +80,6 @@ describe('loadPortalConfig (discriminated union)', () => {
       // SECURITY: detail MUST NOT contain the gate name from the file.
       expect(r.detail).not.toContain('my-secret-gate');
     }
-  });
-});
-
-describe('loadPortalConfigLegacy (back-compat shim)', () => {
-  it('returns null on missing', () => {
-    expect(loadPortalConfigLegacy(tmpDir)).toBeNull();
-  });
-
-  it('returns null on unparseable', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'portal.yaml'),
-      'gates:\n  a:\n    description: x\n  a:\n    description: y\n',
-    );
-    expect(loadPortalConfigLegacy(tmpDir)).toBeNull();
-  });
-
-  it('returns the config for valid portal.yaml', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'portal.yaml'),
-      'version: "2.0"\ngates:\n  authenticated:\n    description: x\n    prizes: []\n',
-    );
-    const cfg = loadPortalConfigLegacy(tmpDir);
-    expect(cfg).not.toBeNull();
-    expect(cfg?.gates?.authenticated).toBeDefined();
   });
 });
 

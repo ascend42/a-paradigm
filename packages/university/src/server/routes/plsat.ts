@@ -6,9 +6,8 @@
  *   content/quizzes/Q-plsat-v3.yaml
  *
  * API response shape is preserved: the client still receives questions +
- * optional passages, shuffled on each request. Old JSON files in
- * content/plsat/ are no longer read here (but remain on disk for the
- * bridge release).
+ * optional passages, shuffled on each request. Old JSON layout
+ * (content/plsat/*.json) was removed in v6.0 after the v5.39.0 bridge.
  */
 
 import { Router, type Request, type Response } from 'express';

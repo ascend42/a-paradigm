@@ -155,6 +155,16 @@ export async function recordLore(
   entry: LoreEntry,
   options?: RecordLoreOptions,
 ): Promise<{ validation?: SymbolValidationResult }> {
+  // v6.0: type='decision' is removed. Reject at the storage layer so all
+  // callers (CLI, MCP, future) get uniform rejection — defends against
+  // back-doors via runtime cast or string passing. Companion to the MCP
+  // rejection in lore-rejection.ts; documented in CHANGELOG [6.0.0].
+  if ((entry.type as string) === 'decision') {
+    throw new Error(
+      "lore type 'decision' was removed in v6.0. Use `paradigm decision record` (CLI) or `paradigm_decision_record` (MCP) instead. The decision will be stored in .paradigm/decisions/ and a companion lore insight entry will be written automatically.",
+    );
+  }
+
   // Validate symbols if requested
   let validation: SymbolValidationResult | undefined;
   if (options?.validateSymbols) {

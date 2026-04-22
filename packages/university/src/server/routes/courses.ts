@@ -7,8 +7,8 @@
  *   content/paths/LP-<course>.yaml             (course outline)
  *
  * API shape is preserved so the UI continues to consume the same
- * endpoints. The old JSON files in content/courses/ are retained on
- * disk (bridge release) but are no longer read here.
+ * endpoints. The old JSON layout (content/courses/*.json) was removed
+ * in v6.0 after the v5.39.0 bridge — only the new pack layout is read.
  */
 
 import { Router, type Request, type Response } from 'express';

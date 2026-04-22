@@ -5,6 +5,59 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] — 2026-04-22
+
+**The breaking final.** v5.39.0 shipped the multi-tenant University framework as the additive bridge; v6.0 ships the legacy removals it deferred. Single-day major-version cut following the bridge release earlier today. All v5.39.0 deferred breaking items now landed.
+
+Team triage: architect (final builder spec at `docs/private/plans/v6.0-final-builder-spec.md`), Jinx (pre-mortem at `docs/private/plans/v6.0-final-premortem.md` with 2 must-fix mitigations), security (audit at `reviews/2026-04-22-v6.0-security-audit.md` clearing the `loadPortalConfigLegacy` clean delete; verifying v5.37.11 → v6.0 skip-upgrade still fail-closes correctly). Builder ran four bundles (A/B/C/D) with reviewer pass on Bundle A given lore-criticality.
+
+### BREAKING
+
+- **`LoreType.decision` removed across 4 sites.** `paradigm_lore_record({type:'decision'})` and `paradigm_assessment_record({type:'decision'})` now return a structured rejection envelope: `code: 'lore_type_decision_removed'`, `successor_tool: 'paradigm_decision_record'`, `removed_in: '6.0.0'`, with the migration target named both as a structured field and in the human-readable message body. Storage-layer guard at `recordLore()` rejects from the CLI side too — single point of enforcement defends against runtime-cast back-doors. Per D3 locked: lore is the three-way fracture offender that needed hard removal; wisdom `type='decision'` stays as a soft-deprecation route for one more release per the asymmetric justification.
+- **`loadPortalConfigLegacy` deleted.** The one-minor back-compat shim from v5.37.12 is gone. Callers must use `loadPortalConfig` and switch on `status` (`'missing' | 'unparseable' | 'ok'`). Security audit verified: symbol was never on the public npm surface (`packages/paradigm` has no `exports` map), so external silent breakage is impossible — at worst, a runtime dynamic-import caller would hit a loud `ERR_MODULE_NOT_FOUND`.
+- **Legacy PLSAT/courses JSON content removed** from `@a-company/university`. `packages/university/src/content/courses/*.json` (8 files), `packages/university/src/content/plsat/*.json` (2 files), and the now-empty `courses/`/`plsat/` directories all gone. Server routes (`courses.ts`, `plsat.ts`) read exclusively from the v6 pack layout (`content/notes/`, `content/quizzes/`, `content/paths/`). PLSAT regression harness (31 tests) was load-bearing for this deletion; ran green at v5.39.0 ship.
+- **`@a-company/paradigm-logger@3.5.2`** stays at 3.5.2 — independent cadence; no logger changes in v6.0. CLI / MCP / university / plugin all bump to **6.0.0**.
+
+### Added
+
+- **Shared `lore-rejection.ts` utility** at `packages/paradigm-mcp/src/utils/`. Holds `RejectionEnvelope`, `rejectionErr`, and the `DECISION_REMOVED_ENVELOPE` constant — single source of truth so the lore + assessment rejection surfaces can never drift on the literal code/message/successor_tool/doc/removed_in fields.
+- **Forensic discovery tag for migrated lore.** v1→v2 migration shims at `lore-loader.ts` + `storage.ts` remap any pre-v6 entries with `type='decision'` → `type='insight'` on read AND tag them with `v6-migrated:from-decision`. Users with legacy decisions can find them later via `paradigm_lore_search` filtered on that tag (Jinx mitigation flagged in the v6.0 pre-mortem).
+- **Orphan `.purpose` cleanup in `migrate-plsat --delete-sources`.** `deleteSources()` now also removes `.purpose` files in source directories so the empty-dir cleanup actually empties them — `rmdirSync` was previously silent-on-non-empty, leaving orphans (Jinx mitigation). Both `courses/.purpose` (20029 bytes) and `plsat/.purpose` (6098 bytes) cleaned at finalization.
+- **Graceful-skip mode in PLSAT regression harness.** `packages/university/tests/plsat-migration.test.ts` now skips byte-equivalence assertions when source JSONs are absent (post-v6.0 state). Forward-compatible — downstream adopters running the harness on a clean v6 install get the structural assertions; the source-vs-pack equivalence checks gracefully no-op. Pre-deletion: 31/31 passed. Post-deletion: 11 passed / 20 skipped / 0 failed.
+- **CLI parity rejection tests** (`packages/paradigm-mcp/tests/{lore,assessment}.test.ts`) — 6 new tests verifying both rejection paths return the structured envelope, name `paradigm_decision_record` literally, and write nothing to disk on rejection.
+
+### Changed
+
+- **UI parity for lore type narrowing.** Both `lore-ui` and `platform-ui` `FilterBar` `ENTRY_TYPES` arrays drop `'decision'` so dropdown surfaces match the type narrowing. No surprise dead options.
+- **`.purpose` files updated** at `packages/paradigm-mcp/src/tools/`, `packages/paradigm/src/core/lore/`, and `packages/paradigm/src/commands/university/` to reflect v6.0 rejection and orphan-cleanup behavior.
+- **Server route headers** in `courses.ts` + `plsat.ts` updated from "old JSON files retained on disk (bridge)" to "old JSON layout removed in v6.0."
+
+### Migration paths (each breaking change)
+
+| Removed | Migration |
+|---|---|
+| `paradigm_lore_record({type:'decision'})` | Use `paradigm_decision_record`. Companion lore insight entry with `references.decision_id` written automatically (preserves timeline). |
+| `paradigm_assessment_record({type:'decision'})` | Same — assessment was a back-door to the same code path. |
+| Legacy lore entries with `type:'decision'` | Auto-migrated on read to `type:'insight'` with `v6-migrated:from-decision` tag. Searchable for forensic recovery. |
+| `loadPortalConfigLegacy(rootDir)` returning `null` | Replace with `loadPortalConfig(rootDir)` and switch on `result.status`. The `'unparseable'` branch is fail-closed (returns violations, not compliant). |
+| Direct import of `@a-company/university/src/content/courses/*.json` | Use the pack-loader API (new in v5.39.0). Content layout is now `notes/`, `quizzes/`, `paths/`. |
+| Direct import of `@a-company/university/src/content/plsat/*.json` | Use `quizzes/Q-plsat-v{2,3}.yaml`. Same content, YAML format with `exam: { kind: proctored }` + `timeLimit` + `totalSlots`. |
+| Lore UI filtering on `type: 'decision'` | Filter on the `v6-migrated:from-decision` tag instead. Decisions themselves live in `.paradigm/decisions/TD-*.yaml`. |
+
+### Notes
+
+- **Wisdom `type='decision'` stays soft this release.** Per D3 locked + Jinx + architect agreement: symmetry-for-its-own-sake undoes the asymmetric justification (lore was the three-way-fracture offender; wisdom was the documented ADR path that earned a longer grace). Remove or hard-error in a later release once adopters have migrated.
+- **Skip-upgrade safety verified.** A consumer pinning v5.37.11 and jumping to v6.0 still fail-closes correctly. The contract lives in the v6.0 binary they install, not their TypeScript: parse error → `loadPortalConfig` returns `{status:'unparseable'}` → compliance returns `violations` with `__portal_unparseable__` sentinel → stop hook blocks. They inherit v5.37.12's contract automatically.
+- **Companion-lore pattern unchanged.** `paradigm_decision_record` continues to write a companion lore insight entry with `references.decision_id`. This is how the lore timeline stays complete after `type='decision'` is gone — load-bearing per user feedback that lore is paramount.
+- Audit trail: `docs/private/plans/v6.0-final-builder-spec.md` (architect), `docs/private/plans/v6.0-final-premortem.md` (Jinx), `reviews/2026-04-22-v6.0-security-audit.md` (security), `reviews/2026-04-22-bundle-a-lore-removal-review.md` (reviewer Bundle A pass).
+
+### Baseline test counts
+- paradigm-mcp: 10 failed / 211 passed (baseline + Bundle A's +6 lore/assessment tests)
+- paradigm CLI: 7 failed / 242 passed (baseline; -3 from Bundle B's deleted shim tests)
+- university: 0 failed / 11 passed / 20 skipped (PLSAT harness in graceful-skip mode post-deletion)
+
+Symbols: #lore, #lore-loader, #lore-storage, #lore-rejection-util, #paradigm-lore-record, #paradigm-assessment-record, #portal-compliance, #migrate-plsat, #university-content, #university-server-routes
+
 ## [5.39.0] — 2026-04-22
 
 Multi-tenant University framework lands. This is the **additive bridge** release that sets up v6.0's breaking removal of the legacy content layout. Per the D5 locked decision (`docs/private/plans/v6.0-decisions-locked.md`), `@a-company/university` had 805 downloads/month on npm, so a one-release bridge is required: both old and new content layouts coexist here; v6.0 removes the old paths.

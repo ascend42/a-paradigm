@@ -133,8 +133,8 @@ export type PortalLoadResult =
  * Returns a discriminated union so callers cannot conflate "missing file"
  * with "file broken". See `PortalLoadResult` for the security contract.
  *
- * New in v5.37.12 (fail-closed). For one-minor back-compat with external
- * callers, see `loadPortalConfigLegacy`.
+ * New in v5.37.12 (fail-closed). The v5.37.12 `loadPortalConfigLegacy`
+ * back-compat shim was removed in v6.0.
  */
 export function loadPortalConfig(rootDir: string): PortalLoadResult {
   const portalPath = path.join(rootDir, 'portal.yaml');
@@ -157,18 +157,6 @@ export function loadPortalConfig(rootDir: string): PortalLoadResult {
     const { errorClass, detail } = classifyYamlError(err);
     return { status: 'unparseable', errorClass, detail };
   }
-}
-
-/**
- * Legacy shim for callers that haven't migrated to the discriminated union.
- * Returns `null` on missing OR unparseable, losing the distinction — do not
- * use for security-relevant paths. Scheduled for removal in v5.39.0 or v6.0.
- *
- * @deprecated since v5.37.12. Use `loadPortalConfig` and switch on `status`.
- */
-export function loadPortalConfigLegacy(rootDir: string): PortalConfig | null {
-  const result = loadPortalConfig(rootDir);
-  return result.status === 'ok' ? result.data : null;
 }
 
 /**

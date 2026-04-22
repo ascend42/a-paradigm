@@ -10,7 +10,12 @@
  *
  * Source JSON files are RETAINED by default. Deletion requires an explicit
  * --delete-sources flag (see D4 locked — sources stay until the regression
- * harness certifies byte-normalized equivalence).
+ * harness certifies byte-normalized equivalence). When --delete-sources is
+ * passed, deleteSources() also removes the orphan `.purpose` metadata files
+ * in courses/ and plsat/ (otherwise they would be stranded as stale-purpose
+ * drift; Jinx pre-mortem mitigation #1, v6.0 finalization). If any other
+ * unexpected file is left behind, the directory is preserved and a warning
+ * is logged via the Paradigm logger so the operator can investigate.
  *
  * Idempotent: running twice with identical sources produces identical output.
  * Re-running rejects pre-existing target files unless --force is set.
@@ -21,6 +26,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { out, success, warn, error, dim, header } from '../../utils/cli-output.js';
+import { log } from '../../utils/logger.js';
 
 // ────────────────────────────────────────────────────────────────
 // Source JSON shapes (faithful to v2.0 / v3.0 on disk)
@@ -569,17 +575,38 @@ function writeFirstPartyManifest(targetPath: string): void {
 function deleteSources(contentDir: string, result: MigrationResult): void {
   const coursesDir = path.join(contentDir, 'courses');
   const plsatDir = path.join(contentDir, 'plsat');
+  const migrationLogger = log.component('migrate-plsat');
 
   for (const dir of [coursesDir, plsatDir]) {
     if (!fs.existsSync(dir)) continue;
     try {
-      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
-      for (const f of files) {
+      // Step 1: delete all *.json files (the migrated source content).
+      const jsonFiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+      for (const f of jsonFiles) {
         fs.unlinkSync(path.join(dir, f));
       }
-      // Remove the directory itself if empty
-      if (fs.readdirSync(dir).length === 0) {
+
+      // Step 2: delete any orphan .purpose files. These are Paradigm
+      // metadata for the source dirs; once the JSON content is gone, the
+      // .purpose has nothing to describe and would be flagged as stale by
+      // the stop hook. (Jinx pre-mortem mitigation #1, v6.0.)
+      const purposeFile = path.join(dir, '.purpose');
+      if (fs.existsSync(purposeFile)) {
+        fs.unlinkSync(purposeFile);
+      }
+
+      // Step 3: remove the directory if empty. If something else is left
+      // (a non-JSON, non-.purpose file we didn't anticipate), warn loudly
+      // via the Paradigm logger and leave the dir + leftover in place so
+      // the operator can inspect.
+      const remaining = fs.readdirSync(dir);
+      if (remaining.length === 0) {
         fs.rmdirSync(dir);
+      } else {
+        const leftover = remaining.join(', ');
+        const warnMsg = `not removing ${path.relative(process.cwd(), dir) || dir} — unexpected leftover files: ${leftover}`;
+        migrationLogger.warn(warnMsg);
+        result.warnings.push(warnMsg);
       }
     } catch (err) {
       result.warnings.push(`delete ${dir}: ${(err as Error).message}`);

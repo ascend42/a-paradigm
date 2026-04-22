@@ -15,6 +15,10 @@ components:
     type: command
     tags: [university, cli, pack, v6]
   UniversityMigratePlsat:
-    description: One-shot PLSAT JSON → v6 content-pack migration (hidden)
+    description: >
+      One-shot PLSAT JSON → v6 content-pack migration (hidden).
+      With --delete-sources, also removes orphan .purpose files in courses/
+      and plsat/ source dirs and warns on any unexpected leftovers (Jinx
+      pre-mortem mitigation #1, v6.0 finalization).
     type: command
     tags: [university, cli, migration, v6]
