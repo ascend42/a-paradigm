@@ -21,3 +21,42 @@ components:
       - regression
       - security
       - fail-closed
+  pack-loader-tests:
+    description: Regression suite for v6.0 pack-loader — loadPackManifest / discoverPacks (3 sources + precedence + parentPackId wiring + cache invalidation) / resolveEntryAddress (bare vs prefixed form + ambiguity errors). SECURITY assertion that thrown errors NEVER leak manifest content or plant-sentinel strings. Added v5.39.0 sub-phase 3.
+    type: test
+    anchors:
+      - pack-loader.test.ts:1-400
+    tags:
+      - test
+      - regression
+      - security
+      - university
+  university-multi-tenant-tests:
+    description: Integration suite for multi-tenant University — project pack + discipline sub-pack CRUD, pack-id stamping, cross-pack address resolution, v5-layout fallback via loadOrFabricatePackManifest. Added v5.39.0 sub-phase 3.
+    type: test
+    anchors:
+      - university-multi-tenant.test.ts:1-320
+    tags:
+      - test
+      - regression
+      - university
+  decision-migration-tests:
+    description: Regression suite for v6.0 decision-store migration — wisdom-decisions → TD-streams, lore type=decision rewriting to type=insight with references.decision_id, idempotency on re-run, companion-lore for recordDecision (D3). Added v5.39.0 sub-phase 3.
+    type: test
+    anchors:
+      - decision-migration.test.ts:1-260
+    tags:
+      - test
+      - regression
+      - streams
+  university-metrics-tests:
+    description: Regression suite for v6.0 university-metrics — captureSnapshot shape + same-day idempotence + local_snapshots_enabled gate, pruneOldSnapshots 90-day retention, computeProjectSaltHash stability. SECURITY assertion that planted gate-name / route / title sentinels NEVER appear in serialized snapshot JSON (D7 privacy contract). Added v5.39.0 sub-phase 3.
+    type: test
+    anchors:
+      - university-metrics.test.ts:1-240
+    tags:
+      - test
+      - regression
+      - security
+      - university
+      - privacy

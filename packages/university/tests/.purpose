@@ -1,0 +1,28 @@
+version: 2.0.0
+description: |
+  Regression tests for @a-company/university. First tests/ dir added in
+  v5.39.0 as the v6.0 PLSAT-migration safety harness. The plsat-migration
+  test is LOAD-BEARING per spec §2.5 — it gates whether the v6.0
+  `--delete-sources` flag may safely remove the legacy
+  src/content/{courses,plsat}/*.json files.
+components:
+  plsat-migration-tests:
+    description: |
+      Byte-normalized regression harness for the PLSAT migration. For each
+      of 8 PARA courses + 2 PLSAT exam versions, asserts that the migrated
+      pack-layout content (notes/, quizzes/, paths/) preserves question
+      counts, answer keys, explanation text (whitespace-normalized),
+      pass thresholds, time limits, and totalSlots. Also includes a smoke
+      test that the package pack.yaml parses and that the courses + plsat
+      Express routers return the same { courses[] } / { versions[] }
+      response shape consumed by the v5 UI.
+    type: test
+    anchors:
+      - plsat-migration.test.ts:1-500
+    tags:
+      - test
+      - regression
+      - university
+      - plsat
+      - migration
+      - load-bearing

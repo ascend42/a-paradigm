@@ -27,6 +27,8 @@
     "dev": "tsup src/index.ts src/server/index.ts --format esm --dts --watch",
     "dev:ui": "cd ui && npm run dev",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
