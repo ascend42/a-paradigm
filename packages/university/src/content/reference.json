@@ -200,7 +200,7 @@
         {
           "id": "paradigm-lore-record",
           "name": "paradigm_lore_record",
-          "description": "Record a lore entry — a session, decision, milestone, incident, or review. Creates a date-partitioned YAML file in .paradigm/lore/entries/ with an auto-incremented ID.",
+          "description": "Record a lore entry — a session, milestone, incident, review, retro, insight, or human-note. Creates a date-partitioned YAML file in .paradigm/lore/entries/ with an auto-incremented ID. Note: type:'decision' was removed in v6.0; use paradigm_decision_record for architectural decisions (a companion lore insight is auto-written).",
           "when": "After significant sessions (3+ files modified), architectural decisions, milestones, or incidents. The stop hook enforces this for 3+ file sessions.",
           "example": "paradigm_lore_record({ type: 'agent-session', title: 'Add JWT auth', summary: 'Implemented RS256 JWT middleware...', symbols_touched: ['#auth-middleware', '^authenticated'] })"
         },
@@ -209,7 +209,7 @@
           "name": "paradigm_lore_search",
           "description": "Search lore entries with filters — by symbol, author, type, date range, tags, review status, and minimum completeness score.",
           "when": "When investigating a symbol's history, looking for past decisions, or reviewing recent project activity.",
-          "example": "paradigm_lore_search({ symbol: '#payment-service', dateFrom: '2026-01-01', type: 'decision' })"
+          "example": "paradigm_lore_search({ symbol: '#payment-service', dateFrom: '2026-01-01', type: 'incident' })"
         },
         {
           "id": "paradigm-lore-timeline",

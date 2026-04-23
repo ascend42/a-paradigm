@@ -1,0 +1,76 @@
+id: Q-para-301-decisions
+title: 'PARA 301: Operations — The Decision Store'
+description: 'Quiz for lesson: The Decision Store'
+author: paradigm
+created: '2026-04-18'
+updated: '2026-04-18'
+tags:
+  - course
+  - para-301
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+category: paradigm-core
+origin: authored
+source: v6.0-content-fix
+questions:
+  - id: q1
+    question: In Paradigm v6.0, where do architectural decisions live?
+    choices:
+      A: '`.paradigm/wisdom/decisions.yaml` — written via `paradigm_wisdom_record({ type: ''decision'', ... })`'
+      B: '`.paradigm/lore/entries/{date}/L-*.yaml` — written via `paradigm_lore_record({ type: ''decision'', ... })`'
+      C: '`.paradigm/decisions/TD-*.yaml` — written via `paradigm_decision_record`, with a companion lore `insight` auto-written for timeline coverage'
+      D: '`.paradigm/history/decisions.jsonl` — written via `paradigm_history_record({ type: ''decision'', ... })`'
+      E: They live in commit messages with the `decision:` trailer
+    correct: C
+    explanation: 'In v6.0 decisions moved to a dedicated topic-addressable store at `.paradigm/decisions/`. Each decision is one `TD-*.yaml` file recorded via `paradigm_decision_record`. A companion lore entry of `type: ''insight''` is auto-written so the timeline still surfaces when the decision was made. Both `paradigm_wisdom_record({type:''decision''})` (A) and `paradigm_lore_record({type:''decision''})` (B) reject with a structured envelope pointing at the new tool.'
+  - id: q2
+    question: You call `paradigm_decision_record` and it succeeds. What gets written to disk?
+    choices:
+      A: Only the `TD-*.yaml` decision file
+      B: The `TD-*.yaml` decision file AND a companion lore `insight` entry with `references.decision_id` back-pointing to the TD- id
+      C: Only the companion lore entry — decisions are stored as a special lore type
+      D: Three files — one in decisions, one in wisdom, one in lore (for backward compat)
+      E: Nothing on disk — decisions are kept in memory only
+    correct: B
+    explanation: 'Two artifacts are written. (1) The canonical decision goes to `.paradigm/decisions/TD-*.yaml` — topic-addressable, with full ADR shape. (2) A companion lore entry of `type: ''insight''` goes to `.paradigm/lore/entries/{date}/L-*.yaml` with `references.decision_id` pointing back at the TD- id and the `companion-lore` + `decision-reference` tags. The lore entry keeps the project timeline complete; the TD- entry stays the source of truth. The companion write is best-effort — a failure to write the lore entry never blocks the decision record.'
+  - id: q3
+    question: 'A teammate has a v5 project with old `type: decision` lore entries in `.paradigm/lore/entries/`. They upgrade to v6.0 and run `paradigm_lore_search`. What happens to those old entries?'
+    choices:
+      A: They disappear — decisions are no longer a valid lore type
+      B: 'They are auto-deleted on the first read after upgrade'
+      C: 'They are remapped to `type: insight` on read and tagged `v6-migrated:from-decision`, so they remain searchable via the tag'
+      D: 'They throw errors and block lore-search until the user manually edits each one'
+      E: 'They are auto-converted into `paradigm_decision_record` entries in `.paradigm/decisions/`'
+    correct: C
+    explanation: 'v1/v2 entries with `type: decision` are remapped to `type: insight` on read with the `v6-migrated:from-decision` tag applied for forensic recovery. The old entries remain searchable (`paradigm_lore_search({ tag: ''v6-migrated:from-decision'' })`). There is no automatic conversion to canonical TD- records (E) — the v1/v2 entries lack the structured participant/alternative data the new shape requires, so promotion to the new store is deliberate, one-by-one.'
+  - id: q4
+    question: 'In v6.0, you call `paradigm_lore_record({ type: ''decision'', title: ''Use Redis'', ... })`. What is the response?'
+    choices:
+      A: 'The entry is recorded successfully — `decision` is still a valid lore type'
+      B: 'A structured rejection envelope (code: ''lore_type_decision_removed'', successor_tool: ''paradigm_decision_record'') so a calling agent can auto-retry against the right tool without human intervention'
+      C: A silent no-op — the call returns success but nothing is written
+      D: The entry is written but flagged as deprecated and hidden from search
+      E: The CLI prompts the user interactively to choose a different type
+    correct: B
+    explanation: 'The storage layer (in `packages/paradigm/src/core/lore/storage.ts`) hard-rejects `type: ''decision''` with a structured rejection envelope. The envelope includes `code: ''lore_type_decision_removed''`, `successor_tool: ''paradigm_decision_record''`, `removed_in: ''6.0.0''`, and `doc: ''docs/private/plans/v6.0-decisions-locked.md''`. Same shape applies if you call `paradigm_wisdom_record({type:''decision''})`. The structured shape lets a calling agent (LLM or script) auto-retry against the right tool — no human in the loop required.'
+  - id: q5
+    question: 'You finish a 40-minute work session that modified 5 files and decided to switch from PostgreSQL to CockroachDB. How should you record this in v6.0?'
+    choices:
+      A: 'Just `paradigm_decision_record` — it covers the choice; no lore needed'
+      B: 'Just `paradigm_lore_record({ type: ''agent-session'' })` with the choice in the `decisions` field'
+      C: 'Both: an `agent-session` lore entry covers the work session; if the DB choice also deserves canonical status (search by symbol, status lifecycle), call `paradigm_decision_record` separately. They are not mutually exclusive.'
+      D: 'Use `paradigm_wisdom_record({ type: ''decision'' })` — wisdom captures team choices'
+      E: 'Use `paradigm_history_record` — DB switches are implementation events'
+    correct: C
+    explanation: 'Lore and decisions are not mutually exclusive. The `agent-session` entry captures the work session (5 files modified, what was learned) — and its `decisions` field can hold a brief reference to the DB switch. If the DB choice also deserves canonical status (you want to search "what did we decide about the user-service database?" later), call `paradigm_decision_record` separately. The TD- entry is the canonical source; the agent-session lore covers "what happened that day." D is invalid in v6 (`paradigm_wisdom_record` rejects `type: ''decision''`).'
+  - id: q6
+    question: What does `paradigm_decision_record` give you that `paradigm_wisdom_record({type:''decision''})` (v5 style) did not?
+    choices:
+      A: Nothing — it is just a rename
+      B: Structured participants with stance enum (proposed/supported/dissented/abstained), structured alternatives_considered with rejected_because, status lifecycle (active/superseded/deprecated/rejected), bidirectional supersede tracking, and an automatic companion lore insight for timeline coverage
+      C: Faster writes — TD- files are smaller than wisdom entries
+      D: Encryption — decisions are encrypted at rest, wisdom was not
+      E: Public-key signing — every decision is cryptographically signed
+    correct: B
+    explanation: 'The new tool brings ADR-shape structure that the wisdom path never had: structured participants with a stance enum, structured alternatives_considered with `rejected_because`, a status lifecycle, bidirectional supersede tracking (`superseded_by` + `supersedes`), and the companion-lore pattern for automatic timeline coverage. None of A/C/D/E are real differences — the win is structured-data discipline plus the companion timeline write.'

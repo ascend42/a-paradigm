@@ -17,13 +17,13 @@ questions:
   - id: q1
     question: You just finished a 40-minute session where you added caching to the API, modifying 5 files and creating 2 new ones. You also decided to use Redis over in-memory caching. Which lore entry type is most appropriate?
     choices:
-      A: '`decision` — because you made an architectural choice about Redis'
+      A: '`paradigm_decision_record` for the Redis choice and skip the lore entry — the implementation rides along'
       B: '`agent-session` — because this captures the full work session including the decision'
       C: '`milestone` — because adding caching is a significant achievement'
       D: '`review` — because you reviewed caching options before choosing'
       E: '`human-note` — because you want to record the Redis rationale'
     correct: B
-    explanation: An `agent-session` entry captures the full work session — files modified, symbols touched, decisions made, and learnings. The Redis decision belongs in the entry's `decisions` array. Use `decision` type only when you're recording a standalone architectural decision without associated implementation work.
+    explanation: 'When you have both implementation work AND an architectural choice, record an `agent-session` lore entry whose `decisions` field captures the Redis-vs-in-memory rationale; for a *standalone* decision without implementation, use `paradigm_decision_record` (the v6.0 dedicated decision store — the `decision` lore type was removed). Choice A would be correct for a standalone decision, but here you also have 5 modified files and 2 created — that''s session work that needs an `agent-session` entry.'
   - id: q2
     question: Where does a lore entry created on February 21, 2026 (the third entry that day) get stored?
     choices:

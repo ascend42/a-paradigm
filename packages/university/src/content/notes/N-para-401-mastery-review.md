@@ -47,7 +47,7 @@ Day-to-day development follows the operational loop from PARA 301: orient, disco
 | Assess | `paradigm_ripple`, `paradigm_history_fragility` |
 | Implement | File edits + `.purpose` updates + `portal.yaml` updates |
 | Validate | `paradigm doctor`, `paradigm_purpose_validate`, `paradigm_flow_check` |
-| Capture | `paradigm_wisdom_record`, `paradigm_history_record` |
+| Capture | `paradigm_wisdom_record`, `paradigm_decision_record`, `paradigm_history_record` |
 | Monitor | `paradigm_session_health`, `paradigm_session_stats` |
 
 **Phase 4: Orchestrated Complexity**

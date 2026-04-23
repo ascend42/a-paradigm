@@ -23,7 +23,7 @@ questions:
       D: paradigm_history_fragility
       E: paradigm_history_validate
     correct: B
-    explanation: paradigm_history_record is the tool for logging implementation events. paradigm_history_context retrieves existing history, paradigm_wisdom_record captures team learnings, and paradigm_history_fragility checks stability scores.
+    explanation: paradigm_history_record is the tool for logging implementation events. paradigm_history_context retrieves existing history, paradigm_wisdom_record captures preferences and antipatterns (architectural decisions go through paradigm_decision_record), and paradigm_history_fragility checks stability scores.
   - id: q2
     question: 'In one session you fixed a race condition in #checkout-flow, updated the $payment-flow to add retry logic, and added a new #refund-handler component. How would you record these three changes in the history system?'
     choices:

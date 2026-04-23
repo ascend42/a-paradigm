@@ -4,12 +4,12 @@ title: Meet Your Agent Team
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-04-18'
 tags:
   - course
   - para-001
-  - 8-core-agents
-  - 54-total-agents
+  - core-team
+  - roster
   - model-tiers-match
 symbols: []
 difficulty: beginner
@@ -24,35 +24,37 @@ source: courses/para-001.json
 
 Open `.paradigm/roster.yaml`. You will see a list of agents — your project's AI team. Each agent has a specific role, and the orchestrator assigns them to tasks based on what the task needs.
 
-### The 8 Core Agents
+### The Core Agent Team
 
-Every project gets these eight. They are the backbone of Paradigm's orchestration:
+Every project gets a small team of role-named core agents. They are the backbone of Paradigm's orchestration:
 
-| Agent | Role | What They Do |
-|-------|------|-------------|
-| **Architect** | Design | Plans multi-file changes, defines structure |
-| **Builder** | Implementation | Writes the code |
-| **Reviewer** | Quality | Two-stage review: spec compliance → code quality |
-| **Sage** | Advocacy | Represents the user's perspective, UX implications |
-| **Jinx** | Advocacy | Stress-tests assumptions, finds edge cases |
-| **Sentinel** | Security | Threat analysis, auth review, vulnerability scanning |
-| **Vigil** | Testing | Writes tests, checks coverage, validates edge cases |
-| **Doc** | Documentation | Maintains .purpose files and portal.yaml |
-| **Rune** | Compliance | Plans symbols before building, validates after |
+| Role | Model Tier | What They Do |
+|------|-----------|-------------|
+| **architect** | tier-1 (opus) | Plans multi-file changes, defines structure |
+| **builder** | tier-3 (haiku) | Writes the code |
+| **reviewer** | tier-2 (sonnet) | Two-stage review: spec compliance → code quality |
+| **security** | tier-1 (opus) | Threat analysis, auth review, vulnerability scanning |
+| **tester** | tier-3 (haiku) | Writes tests, checks coverage, validates edge cases |
+| **documentor** | tier-2 (sonnet) | Maintains .purpose files and portal.yaml |
+| **ftux** (Nora) | tier-1 (opus) | First-time-user simulation, friction reports |
+
+These seven roles ship in every project's roster. Additional core-tier specialists like **advocate** (devil's-advocate review, historically nicknamed Jinx), **compliance** (symbol coverage, historically nicknamed Rune), and **debugger** (incident triage) activate based on the project profile detected by `paradigm shift`.
+
+Roles are addressed by their canonical role name (e.g. `architect`). Some roles also have nicknames (the ftux agent is named **Nora**) — nicknames are cosmetic and may evolve; the role name is the stable contract.
 
 ### Model Tiers
 
 Not every agent needs the most powerful (and expensive) model. Paradigm assigns agents to tiers:
 
-- **Tier 1 (opus)** — Architect, Sentinel. Complex reasoning, design decisions, threat analysis.
-- **Tier 2 (sonnet)** — Reviewer, Sage, Jinx, Doc, Rune. Balanced depth and speed.
-- **Tier 3 (haiku)** — Builder, Vigil. Fast, cost-effective for implementation and testing.
+- **Tier 1 (opus)** — architect, security, ftux. Complex reasoning, design decisions, threat analysis, simulation.
+- **Tier 2 (sonnet)** — reviewer, documentor, advocate, compliance. Balanced depth and speed.
+- **Tier 3 (haiku)** — builder, tester. Fast, cost-effective for implementation and testing.
 
 This is not a quality ranking — it is a complexity match. Building code is well-defined work that a fast model handles efficiently. Designing architecture requires deeper reasoning that benefits from a more capable model.
 
 ### Specialized and Ecosystem Agents
 
-Beyond the 8 core agents, Paradigm has **54+ agents** total:
+Beyond the core team, Paradigm ships with **50+ agents** total (the exact count evolves; see PARA 701):
 
 - **Specialized agents** (~20) cover domains like mobile, database, DevOps, accessibility, performance, and internationalization. They are added to your roster when your project type matches.
 
@@ -70,14 +72,14 @@ paradigm agent bench <id>    # Remove an agent
 
 You are **Maestro** — the orchestrator. When you give a task to Paradigm, you are not talking to one AI. You are conducting a team:
 
-1. **Rune** plans the symbols the task needs
-2. **Architect** designs the approach (for complex tasks)
-3. **Sentinel** reviews security implications (when auth or data is involved)
-4. **Builder** writes the code
-5. **Reviewer** checks spec compliance and code quality
-6. **Doc** updates .purpose files and Paradigm metadata
-7. **Rune** validates the symbols match the implementation
+1. **architect** designs the approach (for complex tasks)
+2. **security** reviews security implications (when auth or data is involved)
+3. **builder** writes the code
+4. **reviewer** checks spec compliance and code quality
+5. **ftux** (Nora) simulates a first-time user when the change touches a user-visible surface
+6. **documentor** updates .purpose files and Paradigm metadata
+7. **compliance** validates that planned symbols match the implementation
 
-Not every task uses every agent. A simple CSS fix might only need Builder. A new API endpoint might need Architect → Sentinel → Builder → Reviewer → Doc → Rune. The orchestrator decides based on the task.
+Not every task uses every agent. A simple CSS fix might only need builder. A new API endpoint might need architect → security → builder → reviewer → documentor. The orchestrator decides based on the task.
 
 > **Going deeper:** PARA 401 covers orchestration mechanics (facets, handoffs, trigger patterns). PARA 701 covers the full agent roster, profiles, notebooks, and learning loops.

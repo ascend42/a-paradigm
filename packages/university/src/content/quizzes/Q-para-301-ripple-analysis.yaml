@@ -29,7 +29,7 @@ questions:
     choices:
       A: paradigm_history_record to log the planned change
       B: 'paradigm_ripple to see what depends on #auth-middleware'
-      C: paradigm_wisdom_record to capture the decision
+      C: paradigm_decision_record to capture the decision
       D: paradigm_purpose_validate to check file integrity
       E: paradigm_search to find the symbol
     correct: B

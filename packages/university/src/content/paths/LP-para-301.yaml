@@ -27,6 +27,11 @@ steps:
   - content: Q-para-301-wisdom-system
     required: true
     passRequired: true
+  - content: N-para-301-decisions
+    required: true
+  - content: Q-para-301-decisions
+    required: true
+    passRequired: true
   - content: N-para-301-ripple-analysis
     required: true
   - content: Q-para-301-ripple-analysis

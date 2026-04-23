@@ -20,10 +20,10 @@ questions:
       A: Builder — every project needs code implementation
       B: A database specialist — there is no database in a frontend-only project
       C: Reviewer — code review is universal
-      D: Rune — symbol compliance applies to all projects
-      E: Sentinel — even frontend apps have security concerns (XSS, CSRF)
+      D: compliance — symbol coverage applies to all projects
+      E: security — even frontend apps have security concerns (XSS, CSRF)
     correct: B
-    explanation: Specialized agents like a database specialist are only rostered when the project type matches. A React frontend with no backend has no database layer, so database agents would not be selected. The 8 core agents (including Sentinel — frontend security matters) appear in every roster. Specialized and ecosystem agents are added based on detection.
+    explanation: Specialized agents like a database specialist are only rostered when the project type matches. A React frontend with no backend has no database layer, so database agents would not be selected. The core team (including the security role — frontend security matters too) appears in every roster. Specialized and ecosystem agents are added based on detection.
   - id: q2
     question: 'The Architect uses opus (tier-1) while the Builder uses haiku (tier-3). A junior developer asks: "Does that mean the builder writes worse code?" How do you explain?'
     choices:

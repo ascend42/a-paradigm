@@ -90,6 +90,6 @@ However, if you get an ESCALATE verdict and proceed to build anyway, the stop ho
 
 **Reviewer:** "This touches auth (password reset flow), requires a new API endpoint (/reset-password), involves email sending infrastructure, and needs rate limiting. Estimated: 4+ files."
 
-**Verdict: ESCALATE** — the task looks simple but involves auth, a new endpoint, email, and rate limiting. Full orchestration with Sentinel (security) and architect (multi-file design) is recommended.
+**Verdict: ESCALATE** — the task looks simple but involves auth, a new endpoint, email, and rate limiting. Full orchestration with security and architect (multi-file design) is recommended.
 
 Compare: "Change the login button color from blue to green" → **GREENLIGHT** (single CSS change, no logic, no auth).

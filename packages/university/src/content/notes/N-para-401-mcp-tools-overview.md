@@ -24,7 +24,7 @@ source: courses/para-401.json
 
 Model Context Protocol (MCP) tools are the primary interface between AI agents and the Paradigm framework. Rather than reading raw files to understand project structure, agents call MCP tools that return structured, token-efficient responses. Understanding the full tool inventory and when to use each tool is fundamental to effective Paradigm orchestration.
 
-Paradigm exposes approximately 15 tool modules, organized into four categories:
+Paradigm exposes ~30 tool modules, organized into four categories:
 
 ### Discovery Tools
 These tools help agents understand the codebase without reading files directly.
@@ -37,9 +37,11 @@ These tools help agents understand the codebase without reading files directly.
 ### Knowledge Tools
 These tools access the project's institutional memory.
 
-- **`paradigm_wisdom_context`** -- Retrieves preferences, antipatterns, and decisions for specified symbols.
-- **`paradigm_wisdom_record`** -- Captures new antipatterns or architectural decisions.
+- **`paradigm_wisdom_context`** -- Retrieves preferences and antipatterns for specified symbols. (For decisions affecting those symbols, call `paradigm_decision_search` — see PARA 501.)
+- **`paradigm_wisdom_record`** -- Captures new preferences or antipatterns. (For architectural decisions, use `paradigm_decision_record` — see PARA 501.)
 - **`paradigm_wisdom_expert`** -- Identifies human experts for symbols or areas.
+- **`paradigm_decision_record`** -- Records an architectural decision with rationale, participants, and alternatives. Stored in `.paradigm/decisions/`, auto-emits a companion lore `insight` entry.
+- **`paradigm_decision_search`** -- Searches the decision store by status, participant, symbol, tag, or date range.
 - **`paradigm_history_context`** -- Retrieves implementation history for symbols.
 - **`paradigm_history_record`** -- Logs implementation events.
 - **`paradigm_history_fragility`** -- Checks stability scores.
@@ -86,8 +88,15 @@ These tools manage behavioral discipline and project memory.
 
 **Lore Tools:**
 - **`paradigm_lore_search`** -- Search lore entries by symbol, author, date range, tags, type, and review status.
-- **`paradigm_lore_record`** -- Record new entries (agent sessions, decisions, milestones, incidents, reviews).
+- **`paradigm_lore_record`** -- Record new entries (agent sessions, milestones, incidents, reviews, retros, insights, human-notes). Calling with `type: 'decision'` returns a structured rejection envelope pointing at `paradigm_decision_record` (v6.0 hard-removal).
 - **`paradigm_lore_get`** -- Fetch a single entry by ID with full detail.
 - **`paradigm_lore_update`** -- Update an existing entry's fields (title, summary, type, symbols, tags, learnings).
 - **`paradigm_lore_delete`** -- Delete an entry by ID. Requires `confirm: true` to prevent accidental deletion.
 - **`paradigm_lore_timeline`** -- Timeline overview with recent entries, hot symbols, and active authors.
+- **`paradigm_lore_assess`** -- Score an entry's quality and completeness (1-5 each), with optional notes; feeds the calibration and review filters.
+- **`paradigm_lore_calibration`** -- Surface entries where recorded confidence diverges from observed reality.
+
+**Knowledge Stream Tools (v5.x — Work Log, Journal, Decisions):**
+- **`paradigm_work_log_record`** / **`paradigm_work_log_search`** -- Project-scoped, ephemeral record of "what got done" — for standups and sprint summaries. Stored in `.paradigm/work-log/{date}/`.
+- **`paradigm_journal_record`** / **`paradigm_journal_search`** -- Agent-private, durable record of "what I learned." Stored in `~/.paradigm/agents/{id}/journal/`. Travels across projects.
+- **`paradigm_decision_record`** / **`paradigm_decision_search`** -- Project-scoped, institutional record of "what we decided." Stored in `.paradigm/decisions/`. Each record auto-writes a companion lore `insight` entry for timeline coverage.

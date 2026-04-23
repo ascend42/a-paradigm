@@ -121,11 +121,24 @@ Participant stances capture the human dynamics: `proposed`, `supported`, `dissen
 - `paradigm_decision_record` — Record a decision. Requires `title`, `decision`, `rationale`, and `participants`. Supports optional `alternatives_considered`, `symbols_affected`, `status`, and `tags`.
 - `paradigm_decision_search` — Search decisions by `status`, `participant`, `symbol`, `tag`, `dateFrom`, `dateTo`. Pass `summary: true` for an aggregate view.
 
-## Auto-Classification
+## Auto-Classification and the Companion-Lore Pattern
 
-When recording via the original `paradigm_lore_record` tool, the `stream` parameter routes the entry to the correct knowledge stream. Setting `stream: 'auto'` triggers auto-classification based on the entry type. The `LORE_TYPE_TO_STREAM` mapping defines how existing lore types map to streams:
+When recording via `paradigm_lore_record`, the `stream` parameter routes the entry to the correct knowledge stream. Setting `stream: 'auto'` triggers auto-classification based on the entry type. The `LORE_TYPE_TO_STREAM` mapping (defined in `packages/paradigm-mcp/src/types/knowledge-streams.ts`) defines how lore types map to streams:
 
 - `agent-session` splits into work-log (what was done) and journal (what was learned)
-- `decision` routes to the decisions stream
-- `incident` splits across all three: work-log (what happened), journal (what we learned), decision (prevention strategy)
-- `human-note` routes to decisions (institutional context)
+- `incident` splits across work-log (what happened), journal (what we learned), and decisions (prevention strategy)
+- `review` splits into work-log and journal
+- `human-note` routes to the decisions stream (institutional context)
+- `retro` and `insight` route to journal and decisions (learnings worth preserving)
+- `milestone` routes to the decisions stream
+
+Note that the `decision` lore *type* was removed in v6.0 — see PARA 501 — but the `decision` *stream* persists. The stream is fed by `paradigm_decision_record`, not by typed lore entries. The `LORE_TYPE_TO_STREAM` table still contains a residual `'decision': ['decision']` mapping for backward-compat with v1/v2 entries that get migrated to type `insight` on read; new writes never reach that branch.
+
+### The Companion-Lore Pattern (v6.0)
+
+When you call `paradigm_decision_record`, two things happen:
+
+1. The canonical decision is written to `.paradigm/decisions/TD-*.yaml` (decisions stream).
+2. A companion lore entry of type `insight` is auto-written to the lore timeline (journal stream), with a back-reference (`references.decision_id`) to the TD- ID.
+
+This split lets the decision stay topic-addressable (search by symbol, status, participant) while the timeline still shows the moment it was made. Project newcomers can follow the timeline forward and see the major calls; researchers can query the decisions stream directly. The companion write is best-effort — a failure to write the companion lore never blocks the decision record.

@@ -23,7 +23,7 @@ questions:
       D: Git hooks for automated compliance checking
       E: .paradigm/roster.yaml with agents suited for a Node.js project
     correct: C
-    explanation: paradigm shift sets up Paradigm metadata and tooling — it does not generate tests, modify your source code, or create application logic. It creates configuration, instruction files, hooks, and an agent roster. Testing is handled by the Vigil agent during orchestration, not during initialization.
+    explanation: paradigm shift sets up Paradigm metadata and tooling — it does not generate tests, modify your source code, or create application logic. It creates configuration, instruction files, hooks, and an agent roster. Testing is handled by the tester agent during orchestration, not during initialization.
   - id: q2
     question: After running paradigm shift, you edit .paradigm/config.yaml to change your enforcement level. Now CLAUDE.md is out of date. How do you update it?
     choices:

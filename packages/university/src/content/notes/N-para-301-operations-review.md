@@ -38,7 +38,7 @@ Every development session follows a predictable pattern:
 
 **5. Validate** -- Run `paradigm doctor` or `paradigm_purpose_validate` to catch any drift. Use `paradigm_flow_check` if you modified flows. Record the implementation with `paradigm_history_record`.
 
-**6. Capture Knowledge** -- Did you discover an antipattern? Record it with `paradigm_wisdom_record`. Did you make an architectural decision? Record that too. Did the implementation follow a repeatable pattern? Record a protocol with `paradigm_protocol_record`. Did the implementation reveal a fragile area? Note it for the team.
+**6. Capture Knowledge** -- Did you discover an antipattern? Record it with `paradigm_wisdom_record`. Did you make an architectural decision? Record it with `paradigm_decision_record` (which auto-writes a companion lore `insight` for timeline coverage). Did the implementation follow a repeatable pattern? Record a protocol with `paradigm_protocol_record`. Did the implementation reveal a fragile area? Note it for the team.
 
 **7. Monitor Context** -- Check `paradigm_session_health` periodically. If approaching limits, prepare a handoff.
 

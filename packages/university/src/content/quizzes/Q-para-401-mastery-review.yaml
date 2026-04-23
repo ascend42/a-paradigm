@@ -50,7 +50,7 @@ questions:
       A: Start coding immediately and figure it out as you go
       B: paradigm_orchestrate_inline (plan) -> review agent team -> paradigm_orchestrate_inline (execute) -> launch agents by stage -> PM post-flight
       C: paradigm_search for 'tenant' -> read all matching files -> start implementing
-      D: paradigm_wisdom_record a decision -> then implement
+      D: paradigm_decision_record the architecture choice -> then implement
       E: paradigm doctor -> paradigm scan -> start implementing
     correct: B
     explanation: 'This is a complex multi-faceted task (5+ files, security + implementation + architecture). The correct approach is: plan the orchestration to get the right agent team, review and adjust, execute to get prompts, launch agents according to the stage plan, and run PM post-flight to verify compliance. This is the full Phase 4 workflow.'

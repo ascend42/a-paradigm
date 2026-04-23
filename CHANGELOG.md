@@ -5,6 +5,46 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.1] — 2026-04-23
+
+University content patch. v6.0.0 shipped the multi-tenant framework + breaking removals (LoreType.decision, loadPortalConfigLegacy, legacy PLSAT JSON paths) but the course content itself wasn't refreshed in the same cut — Sheila (educator) audit + Jinx (advocate) pre-mortem caught material staleness across PARA 001/301/501/601/401 + the PLSAT v2/v3 certification exams. **PLSAT exam integrity was broken** (multiple slots marked `decision` as a valid lore type, which v6.0.0 hard-removed). Fixing in place is safe — no v3 PLSAT diplomas exist anywhere, so the silent answer-key swap doesn't invalidate any past credentials.
+
+### Fixed (content)
+
+- **PLSAT v3 + v2 exam integrity restored.**
+  - `Q-plsat-v3.yaml` slot-051 fully replaced (not key-swap — would have been pedagogically degenerate per Jinx's pre-mortem; replacement tests the actual decision-recording workflow).
+  - `Q-plsat-v3.yaml` slot-033 + slot-044 + slot-115 distractor refresh; slot-027 + slot-033 explanation prose updated to reflect v6 hard-removal of `wisdom_record(type:decision)`.
+  - `Q-plsat-v2.yaml` mirror fixes at lines 541, 611, 776 (line 870 was a false positive in the original audit — "unresolved decisions" there is colloquial English, not the lore type).
+- **N-para-501-lore-system structurally rewritten.** Was teaching "six lore types" with `decision` as one of them; v6 has 7 types (`agent-session, human-note, review, incident, milestone, retro, insight`). Also fixed: pre-v6 entry ID format (line 34), nested-object `author` shape (lines 38-50; v6 uses string author + separate `agent: { provider, model }`).
+- **N-para-301-wisdom-system structurally rewritten.** Was structured around "three wisdom types" with decision as ~40% of body content; v6 wisdom has two types and decisions live in `.paradigm/decisions/`. New "Where Decisions Went" section with full `paradigm_decision_record` example + companion-lore pattern explanation.
+- **N-para-001-meet-the-team team rewrite.** Was listing "8 Core Agents" with stale names (Sage, Jinx, Sentinel, Vigil, Doc, Rune as personal names) — current canonical roles are 6+1 (architect, builder, reviewer, security, tester, documentor + ftux/Nora). Cleaned to canonical role names; ftux/Nora introduction added.
+- **N-para-401-mcp-tools-overview lore tools section expanded.** Was listing ~15 tool modules (significant understatement) and missing 6+ lore-adjacent tools. Now includes `paradigm_decision_record`, `paradigm_decision_search`, `paradigm_journal_*`, `paradigm_work_log_*`, `paradigm_lore_assess`, `paradigm_lore_calibration`. New "Knowledge Streams Tools" subsection.
+- **N-para-601-knowledge-streams Auto-Classification section rewritten.** Reframed `LORE_TYPE_TO_STREAM` reference (which DOES exist at `knowledge-streams.ts:205` with a residual `'decision': ['decision']` mapping for backward compat with v1/v2 migrated entries) to explain the v6 stream/type distinction and the companion-lore pattern.
+- **8 sibling quizzes corrected** for stale agent-name and lore-type references — `Q-para-001-meet-the-team`, `Q-para-001-shift-setup`, `Q-para-301-history-system`, `Q-para-301-ripple-analysis`, `Q-para-401-agent-roles`, `Q-para-401-mastery-review`, `Q-para-401-quick-check`, `Q-para-501-lore-system`.
+- **`reference.json`** — `paradigm_lore_record` description in `tools.lore-tools[2].usage` was still listing `'decision'` as a valid type; updated to v6 reality. Lore-search example also updated.
+- **`N-para-301-operations-review`, `N-para-401-agent-roles`, `N-para-401-mastery-review`, `N-para-401-quick-check`** — surgical edits to remove residual stale agent-name (Sentinel/Vigil/Rune) and `decision`-type references.
+
+### Added (content)
+
+- **New note `N-para-301-decisions.md`** — canonical "what changed and why" lesson explaining the D3 synthesis (lore hard-remove + companion-lore pattern + asymmetric wisdom soft-deprecation). Full `paradigm_decision_record` example. Migration discoverability via the `v6-migrated:from-decision` tag covered.
+- **New paired quiz `Q-para-301-decisions.yaml`** — 6 questions on the v6 decision-store consolidation. Wired into `LP-para-301` learning path.
+
+### Notes
+
+- **No PLSAT version bump.** User confirmed no v3 PLSAT diplomas exist anywhere — silent answer-key swap is safe; no retroactive credential invalidation. If PLSAT diplomas existed, this would have been v3.1 with v3 frozen as archived (per Jinx pre-mortem). Recorded as a pattern for future content patches.
+- **Two Jinx pre-mortem claims verified WRONG by builder during fix:** `LORE_TYPE_TO_STREAM` does exist (in knowledge-streams.ts); slot-053's "0.6 similarity threshold" is fact-correct (matches `sentinel/src/grouper.ts:15`). Both kept as-is. Honesty in the content fix process — pre-mortems are pressure tests, not gospels.
+- **Builder caught additional stale agent-name references** in `Q-para-401-quick-check`, `Q-para-401-agent-roles`, `Q-para-001-shift-setup`, `Q-para-001-meet-the-team`, `N-para-401-quick-check`, `reference.json` beyond what either Sheila's audit or Jinx's pre-mortem listed. Sibling sweep widened to 25 files.
+- **PARA 801 (multi-tenant University framework course)** deferred to v6.1 per Sheila's tier C — not stale-fact-removal, requires new curriculum work.
+- **Process learning: release-time content review should become a habit.** Several v5.x→v6.0 stale facts compounded silently because no release gate prompted "did you update University?" Considering a CI drift detector for v6.x: when `LoreType` enum or `paradigm_*` tool signatures change, fail build if removed values appear in `packages/university/src/content/`.
+- Audit trail: `docs/private/plans/v6.0-university-content-audit.md`, `docs/private/plans/v6.0-content-fix-plan.md`, `docs/private/plans/v6.0-content-fix-premortem.md`.
+
+### Baselines preserved
+University tests: 11 passed / 20 skipped / 0 failed (graceful-skip mode unchanged). `paradigm university validate`: all checks pass. Grep audit: `type: 'decision'` only appears in explanatory prose contexts (the new decision-store note + distractor explanations). Zero teaching content presents `type:'decision'` as a valid path.
+
+Versions: `@a-company/paradigm` → 6.0.1 (always-bumps rule), `@a-company/university` → 6.0.1 (content changes), `plugins/paradigm` → 6.0.1. `@a-company/paradigm-mcp` stays at 6.0.0 (no MCP/CLI tool changes).
+
+Symbols: #university-content, #plsat-exam, #lore-system, #wisdom-system, #meet-the-team, #mcp-tools-overview, #decision-store-note, #knowledge-streams
+
 ## [6.0.0] — 2026-04-22
 
 **The breaking final.** v5.39.0 shipped the multi-tenant University framework as the additive bridge; v6.0 ships the legacy removals it deferred. Single-day major-version cut following the bridge release earlier today. All v5.39.0 deferred breaking items now landed.
