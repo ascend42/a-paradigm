@@ -367,7 +367,6 @@ const MCP_SERVED_CONTENT = {
     'docs/commands.md',
     'docs/queries.md',
     'specs/disciplines.md',
-    'specs/scan.md',
     'specs/context-tracking.md',
   ],
 };

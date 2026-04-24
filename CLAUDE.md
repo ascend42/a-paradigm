@@ -145,6 +145,19 @@ Detailed guidance is available via MCP resources — load only what you need:
 | Component types & hierarchy | `paradigm://guidance/component-types` |
 | Troubleshooting | `paradigm://guidance/troubleshooting` |
 
+**User-facing guides** (in `docs/guides/`):
+
+| Guide | When to read |
+|-------|--------------|
+| [`quick-start.md`](./docs/guides/quick-start.md) | First-time install + setup |
+| [`mcp-setup.md`](./docs/guides/mcp-setup.md) | MCP server configuration per IDE |
+| [`agents.md`](./docs/guides/agents.md) | Roster, onboard, bench/activate, install agents |
+| [`decisions.md`](./docs/guides/decisions.md) | `paradigm_decision_record` + the post-v6.0 decision store |
+| [`v6-migration.md`](./docs/guides/v6-migration.md) | Upgrading from v5.x; the six breaking changes |
+| [`university.md`](./docs/guides/university.md) | Multi-tenant content packs + PLSAT |
+| [`sentinel-upgrade.md`](./docs/guides/sentinel-upgrade.md) | Sentinel incident-tracking upgrade |
+| [`symphony-quickstart.md`](./docs/guides/symphony-quickstart.md) | Symphony multi-agent relay |
+
 ## Directory Structure
 
 `.purpose` files exist in:

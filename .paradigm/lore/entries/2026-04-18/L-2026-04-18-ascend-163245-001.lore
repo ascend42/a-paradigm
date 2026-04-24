@@ -1,0 +1,43 @@
+id: L-2026-04-18-ascend-163245-001
+type: incident
+timestamp: '2026-04-18T16:32:45.499Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.37.9 — paradigm-navigate-remind.sh execute bit, actually committed
+summary: 'Fixed an incomplete fix. v5.37.8 claimed to chmod +x paradigm-navigate-remind.sh but only bumped versions; the file''s mode in the git tree remained 100644, so the Claude Code plugin cache at ~/.claude/plugins/cache/a-paradigm/paradigm/5.37.8/ still produced ''Permission denied'' when the PreToolUse hook fired. Root cause: author ran local chmod +x but the mode was never staged (likely core.filemode off or the chmod was never actually run). Fix used `git update-index --chmod=+x` explicitly, verified 100755 in `git ls-files --stage` before commit.'
+symbols_touched:
+  - '#hooks'
+  - '#navigate'
+files_modified:
+  - plugins/paradigm/scripts/paradigm-navigate-remind.sh
+  - packages/paradigm/package.json
+  - packages/paradigm-mcp/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Use `git update-index --chmod=+x` rather than chmod + add
+    rationale: Explicit index mode change, immune to core.filemode settings and doesn't depend on the working-copy permission state
+learnings:
+  - Running `chmod +x` locally is insufficient if core.filemode=false or if you forget — git won't see the mode change. Use `git update-index --chmod=+x <path>` to stage the mode change explicitly, independent of local filesystem state.
+  - Verify filemode fixes by inspecting `git ls-files --stage` (index) or `git ls-tree HEAD` (tree) before trusting the commit — the textual diff doesn't show mode-only changes in a way that's easy to spot.
+  - Plugin cache at ~/.claude/plugins/cache/... mirrors git tree, not local working copy. A mode-only fix that lives only in the working tree will never reach users.
+verification:
+  status: pass
+  details:
+    index_mode: '100755'
+    commit_shows_mode_change: 'true'
+    paradigm_mcp_build: pass
+    paradigm_cli_build_link: pass
+tags:
+  - hooks
+  - git-filemode
+  - plugin-cache
+  - incomplete-fix
+confidence: 0.95
+git_context:
+  ref: 50bf92844bf40817ef76e55c3443d120338dca7e
+  branch: main
+  dirty: true

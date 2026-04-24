@@ -1,0 +1,99 @@
+id: L-2026-04-22-ascend-232008-001
+type: milestone
+timestamp: '2026-04-22T23:20:08.974Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.0 — breaking final cut (multi-tenant University + lore consolidation + legacy removal)
+summary: v6.0.0 shipped. Same-day major-version follow-up to v5.39.0's additive bridge — all deferred breaking items landed cleanly. LoreType.decision hard-removed across 4 sites with structured rejection envelope (lore + assessment + storage layer), v1→v2 migration shim with `v6-migrated:from-decision` tag for forensic discovery, loadPortalConfigLegacy clean delete (security-cleared as never-on-public-API), PLSAT finalization via migrate-plsat --delete-sources with orphan .purpose cleanup (Jinx mitigation), regression harness shifted to graceful-skip mode for forward compatibility, server route headers refreshed. Wisdom type='decision' deliberately stays soft per D3 locked asymmetric justification + unanimous team agreement. Skip-upgrade safety verified (v5.37.11 → v6.0 still fail-closes). Lore criticality treated with extra rigor per user feedback — Bundle A got dedicated reviewer pass before chaining bundles B/C/D/E.
+symbols_touched:
+  - '#lore'
+  - '#lore-loader'
+  - '#lore-storage'
+  - '#lore-rejection-util'
+  - '#paradigm-lore-record'
+  - '#paradigm-assessment-record'
+  - '#portal-compliance'
+  - '#migrate-plsat'
+  - '#university-content'
+  - '#university-server-routes'
+files_created:
+  - packages/paradigm-mcp/src/utils/lore-rejection.ts
+  - packages/paradigm-mcp/tests/lore.test.ts
+  - packages/paradigm-mcp/tests/assessment.test.ts
+files_modified:
+  - packages/paradigm-mcp/src/utils/lore-loader.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/tools/assessment.ts
+  - packages/paradigm-mcp/src/tools/.purpose
+  - packages/paradigm/src/core/lore/types.ts
+  - packages/paradigm/src/core/lore/storage.ts
+  - packages/paradigm/src/core/lore/.purpose
+  - packages/paradigm/src/core/lore/filter.test.ts
+  - packages/paradigm/src/core/portal-compliance.ts
+  - packages/paradigm/tests/portal-compliance.test.ts
+  - packages/paradigm/src/commands/lore/migrate-assessments.ts
+  - packages/paradigm/src/commands/university/migrate-plsat.ts
+  - packages/paradigm/src/commands/university/.purpose
+  - packages/paradigm/lore-ui/src/store/loreStore.ts
+  - packages/paradigm/lore-ui/src/components/FilterBar.tsx
+  - packages/paradigm/platform-ui/src/sections/lore/store/loreStore.ts
+  - packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx
+  - packages/university/tests/plsat-migration.test.ts
+  - packages/university/src/server/routes/courses.ts
+  - packages/university/src/server/routes/plsat.ts
+  - packages/paradigm/package.json
+  - packages/paradigm-mcp/package.json
+  - packages/university/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Bundle A (lore type removal) shipped as a standalone commit (622cdaeb) BEFORE bundles B+C+D+E so a dedicated reviewer pass could validate the most lore-critical change in isolation
+    rationale: User explicitly flagged lore as paramount infrastructure; narrow-scope-with-dedicated-review per the lore-criticality memory. The reviewer caught the F-1 assessment back-door; if Bundle A had been bundled with the others, that defect would have shipped to main.
+  - id: d2
+    decision: Storage-layer recordLore() rejection at write boundary, not just MCP handler rejection
+    rationale: Bundle A's MCP rejection only defended the MCP surface. Builder flagged 3 CLI back-doors during Bundle A review. Storage-layer rejection defends ALL callers (CLI, MCP, future) uniformly — single point of enforcement is the right architecture for lore-critical code.
+  - id: d3
+    decision: Migration shim adds `v6-migrated:from-decision` tag instead of silent remap
+    rationale: 'Jinx F-2 finding: lore is paramount; silent transformation of user data violates that principle. Tag provides forensic recovery path — users can find their pre-v6 decisions later via paradigm_lore_search.'
+  - id: d4
+    decision: PLSAT regression harness shifted to graceful-skip mode rather than removed
+    rationale: Forward-compatible. Downstream adopters running the harness on a clean v6 install get the structural assertions (manifest validation, schema integrity, server route smoke). Source-vs-pack equivalence assertions gracefully no-op when sources absent. Harness becomes permanent regression infrastructure, not a one-shot v6.0 hack.
+  - id: d5
+    decision: loadPortalConfigLegacy = clean delete, not throw-stub
+    rationale: Security audit verified the symbol was never on the public npm surface (no exports map). Throw-stub would imply a public API contract that never existed. Clean delete is honest and correct; security cleared Jinx's stub-fallback concern.
+  - id: d6
+    decision: Wisdom type='decision' stays soft this release
+    rationale: D3 locked + unanimous team. Lore was the three-way-fracture offender that needed hard removal. Wisdom was the documented ADR path that earned a longer grace period. Symmetry-for-its-own-sake undoes the asymmetric justification.
+learnings:
+  - 'Lore-critical work pattern: narrow-scope-with-dedicated-reviewer (Bundle A alone before chaining) catches defects that bundled-pass-through would miss. Bundle A''s reviewer pass surfaced the F-1 assessment back-door that would have shipped to main otherwise.'
+  - Single-point-of-enforcement at storage layer is the right architecture for type-narrowing rejections. MCP-only rejection defends only the MCP surface; storage-layer rejection defends every caller uniformly. Pattern reusable for any future type drop.
+  - Forensic discovery tags on auto-migrations preserve user trust. The `v6-migrated:from-decision` tag means users can recover their pre-v6 decision-typed lore entries via tag filter even after the type itself is gone. Silent migration would have lost this affordance.
+  - Same-day v5.39 → v6.0 cut works when the bridge is genuinely additive. v5.39.0 (additive framework) shipped 12:37; v6.0.0 (breaking final) shipped 16:48 same day. Bridge-then-finalize sequencing keeps each commit narrow and provides a calendar marker for downstream consumers to synchronize against.
+  - 'Test harness as regression infrastructure beats test harness as one-shot gate. PLSAT harness''s graceful-skip mode means it stays useful indefinitely — every fresh adopter benefits from the structural validation, and the source-equivalence checks gracefully degrade post-cleanup. Pattern: design test infra to outlive the migration it validates.'
+verification:
+  status: pass
+  details:
+    paradigm_mcp_build: pass
+    paradigm_cli_build_and_link: pass
+    university_build: pass
+    paradigm_mcp_tests: 10 failed (pre-existing, unrelated) / 211 passed (+6 new lore+assessment rejection tests)
+    paradigm_cli_tests: 7 failed (pre-existing, unrelated) / 242 passed (-3 from Bundle B deleted shim tests)
+    university_tests: 0 failed / 11 passed / 20 gracefully skipped (post-source-deletion mode)
+    git_push: pass
+    bundle_count: 5 (A separate commit 622cdaeb; B+C+D+E in release commit 85bbe2b8)
+    skip_upgrade_safety: verified by security audit (v5.37.11 → v6.0 fail-closes)
+tags:
+  - v6.0
+  - major-version
+  - breaking
+  - lore-critical
+  - university-finalize
+  - milestone
+confidence: 0.95
+git_context:
+  ref: 85bbe2b86e3ef7fa0f3bf6b85c0059ace980013f
+  branch: main
+  dirty: true

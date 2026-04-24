@@ -1,16 +1,27 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { createTempProject } from '../../test-utils.js';
 
 let cleanup: (() => void) | undefined;
 let rootDir: string;
+let homeDir: string;
+let originalHome: string | undefined;
 
 beforeEach(() => {
   const project = createTempProject({ withGit: true });
   rootDir = project.rootDir;
   cleanup = project.cleanup;
   vi.spyOn(process, 'cwd').mockReturnValue(rootDir);
+  // Isolate from the developer's real ~/.claude — otherwise installClaudeCodeHooks
+  // detects an active paradigm plugin and skips project-level installation.
+  // os.homedir() honors $HOME on macOS/Linux, so re-pointing it gives a clean
+  // home for the duration of each test. (vi.spyOn on os.homedir does not work
+  // under ESM because the namespace is non-configurable.)
+  homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-test-home-'));
+  originalHome = process.env.HOME;
+  process.env.HOME = homeDir;
   // Suppress console output
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -18,6 +29,14 @@ beforeEach(() => {
 afterEach(() => {
   cleanup?.();
   cleanup = undefined;
+  if (homeDir && fs.existsSync(homeDir)) {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+  }
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
   vi.restoreAllMocks();
 });
 
@@ -198,17 +217,27 @@ describe('hooksUninstallCommand - Cursor', () => {
 });
 
 describe('Check 7 — Lore enforcement', () => {
+  // Check 7 (lore enforcement) lives in the shared paradigm-common.sh library
+  // which both stop hooks source. We assert (a) the stop hook sources the
+  // library and (b) the library actually contains the check.
   it('Claude Code stop hook contains lore check', async () => {
     const { hooksInstallCommand } = await importHooks();
     await hooksInstallCommand({ claudeCode: true });
 
-    const hookPath = path.join(rootDir, '.claude', 'hooks', 'paradigm-stop.sh');
-    expect(fs.existsSync(hookPath)).toBe(true);
+    const hooksDir = path.join(rootDir, '.claude', 'hooks');
+    const hookPath = path.join(hooksDir, 'paradigm-stop.sh');
+    const commonPath = path.join(hooksDir, 'paradigm-common.sh');
 
-    const content = fs.readFileSync(hookPath, 'utf8');
-    expect(content).toContain('Check 7');
-    expect(content).toContain('LORE_RECORDED');
-    expect(content).toContain('paradigm_lore_record');
+    expect(fs.existsSync(hookPath)).toBe(true);
+    expect(fs.existsSync(commonPath)).toBe(true);
+
+    const stopContent = fs.readFileSync(hookPath, 'utf8');
+    expect(stopContent).toContain('paradigm-common.sh');
+
+    const commonContent = fs.readFileSync(commonPath, 'utf8');
+    expect(commonContent).toContain('Check 7');
+    expect(commonContent).toContain('LORE_RECORDED');
+    expect(commonContent).toContain('paradigm_lore_record');
   });
 
   it('Cursor stop hook contains lore check', async () => {
@@ -216,13 +245,20 @@ describe('Check 7 — Lore enforcement', () => {
     fs.mkdirSync(path.join(rootDir, '.cursor'), { recursive: true });
     await hooksInstallCommand({ cursor: true });
 
-    const hookPath = path.join(rootDir, '.cursor', 'hooks', 'paradigm-stop.sh');
-    expect(fs.existsSync(hookPath)).toBe(true);
+    const hooksDir = path.join(rootDir, '.cursor', 'hooks');
+    const hookPath = path.join(hooksDir, 'paradigm-stop.sh');
+    const commonPath = path.join(hooksDir, 'paradigm-common.sh');
 
-    const content = fs.readFileSync(hookPath, 'utf8');
-    expect(content).toContain('Check 7');
-    expect(content).toContain('LORE_RECORDED');
-    expect(content).toContain('paradigm_lore_record');
+    expect(fs.existsSync(hookPath)).toBe(true);
+    expect(fs.existsSync(commonPath)).toBe(true);
+
+    const stopContent = fs.readFileSync(hookPath, 'utf8');
+    expect(stopContent).toContain('paradigm-common.sh');
+
+    const commonContent = fs.readFileSync(commonPath, 'utf8');
+    expect(commonContent).toContain('Check 7');
+    expect(commonContent).toContain('LORE_RECORDED');
+    expect(commonContent).toContain('paradigm_lore_record');
   });
 });
 

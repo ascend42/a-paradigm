@@ -1,0 +1,130 @@
+id: L-2026-04-22-ascend-194050-001
+type: milestone
+timestamp: '2026-04-22T19:40:50.719Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.39.0 — multi-tenant University framework bridge release
+summary: 'Multi-tenant University framework shipped as the additive bridge release. Per D5 locked decision (805 downloads/month on @a-company/university), v5.39.0 lands pack.yaml manifest + three-source discovery + cross-pack <pack-id>:<entry-id> addressing + CLI selectors + new paradigm_university_pack_list MCP tool + PLSAT content migration (ran once, old JSON retained for bridge) + compliance schema fields + LoreEntry.references + TeamDecision.supersedes[] + privacy-preserving local metrics + docs guide. 48 new paradigm-mcp tests + 31 university regression tests with SECURITY sentinel assertions. Two real bugs caught by the load-bearing PLSAT harness (migration dropped answer banks for alternate-schema lessons; normalizeFrontmatter dropped v6 fields on read) — both fixed before release. v6.0 follows with breaking removals: LoreType.decision hard-remove, loadPortalConfigLegacy deletion, --delete-sources finalization, legacy content layout removal.'
+symbols_touched:
+  - '#university'
+  - '#pack-loader'
+  - '#university-metrics'
+  - '#decision-loader'
+  - '#wisdom-loader'
+  - '#lore-loader'
+  - '#university-cli'
+  - '#paradigm-decision-record'
+  - '#plsat-migration'
+  - '#decision-migration'
+files_created:
+  - packages/paradigm-mcp/src/types/university-metrics.ts
+  - packages/paradigm-mcp/src/types/pack.ts
+  - packages/paradigm-mcp/src/utils/pack-loader.ts
+  - packages/paradigm-mcp/src/utils/university-metrics.ts
+  - packages/paradigm-mcp/tests/pack-loader.test.ts
+  - packages/paradigm-mcp/tests/university-multi-tenant.test.ts
+  - packages/paradigm-mcp/tests/decision-migration.test.ts
+  - packages/paradigm-mcp/tests/university-metrics.test.ts
+  - packages/paradigm/src/commands/university/init.ts
+  - packages/paradigm/src/commands/university/migrate-plsat.ts
+  - packages/paradigm/src/commands/university/selectors.ts
+  - packages/paradigm/src/commands/migrate-decisions.ts
+  - packages/paradigm/src/core/university/metrics.ts
+  - packages/university/pack.yaml
+  - packages/university/src/content/notes/ (82 files)
+  - packages/university/src/content/quizzes/ (84 files incl 2 PLSAT)
+  - packages/university/src/content/paths/ (8 files)
+  - packages/university/tests/plsat-migration.test.ts
+  - packages/university/tests/.purpose
+  - packages/university/vitest.config.ts
+  - docs/guides/university.md
+files_modified:
+  - packages/paradigm-mcp/src/types/university.ts
+  - packages/paradigm-mcp/src/types/knowledge-streams.ts
+  - packages/paradigm-mcp/src/types/.purpose
+  - packages/paradigm-mcp/src/utils/university-loader.ts
+  - packages/paradigm-mcp/src/utils/decision-loader.ts
+  - packages/paradigm-mcp/src/utils/wisdom-loader.ts
+  - packages/paradigm-mcp/src/utils/lore-loader.ts
+  - packages/paradigm-mcp/src/utils/.purpose
+  - packages/paradigm-mcp/src/tools/university.ts
+  - packages/paradigm-mcp/src/tools/lore.ts
+  - packages/paradigm-mcp/src/tools/streams.ts
+  - packages/paradigm-mcp/src/tools/wisdom.ts
+  - packages/paradigm-mcp/src/resources/guidance.ts
+  - packages/paradigm-mcp/tests/.purpose
+  - packages/paradigm-mcp/package.json
+  - packages/paradigm/src/core/lore/types.ts
+  - packages/paradigm/src/core/paradigm-config.ts
+  - packages/paradigm/src/commands/shift.ts
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/commands/university/add.ts
+  - packages/paradigm/src/commands/university/list.ts
+  - packages/paradigm/src/commands/university/quiz.ts
+  - packages/paradigm/src/commands/university/serve.ts
+  - packages/paradigm/src/commands/university/show.ts
+  - packages/paradigm/src/commands/university/status.ts
+  - packages/paradigm/src/commands/university/validate.ts
+  - packages/paradigm/src/commands/university/.purpose
+  - packages/paradigm/src/commands/.purpose
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/package.json
+  - packages/university/package.json
+  - packages/university/src/server/routes/courses.ts
+  - packages/university/src/server/routes/plsat.ts
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - CHANGELOG.md
+  - README.md
+  - CLAUDE.md
+  - .gitignore
+decisions:
+  - id: d1
+    decision: v5.39.0 bridge + v6.0 breaking finalization, not a single v6 Medium+ cut
+    rationale: D5 npm check returned 805 downloads/month, far above the 10/month threshold. One-release bridge preserves downstream consumers who may import legacy content paths while moving the framework forward.
+  - id: d2
+    decision: 'Alternate-schema quizzes emit `options[]` + integer-correct verbatim, not normalized to `choices: {A..E}`'
+    rationale: 'Builder B2 fix: pass-through is zero-info-loss and keeps migrated YAML faithful to authored source. Normalizing would synthesize A/B/C/D keys with no semantic value.'
+  - id: d3
+    decision: Regression harness stays red until implementation fixed — did NOT modify the test to pass lossy state
+    rationale: The PLSAT harness is load-bearing for v6.0 `--delete-sources`. Letting it pass on lossy content defeats the gate's entire purpose.
+  - id: d4
+    decision: '@a-company/university re-aligned to 5.39.0 from 5.31.0'
+    rationale: Independent cadence made sense while university was internal content only. With v5.39.0 shipping real framework contract changes (pack.yaml at root, new content layout, public API stability concerns), aligning with main versioning makes the dependency story legible.
+  - id: d5
+    decision: Bare `paradigm university` does NOT accept pack selectors; selectors live on subcommands only
+    rationale: Commander intercept issue (documented in code). Guide describes shipped reality; spec document should be patched in a follow-up.
+  - id: d6
+    decision: Committed WIP sub-phase commits to main rather than accumulating one giant release commit
+    rationale: Git checkpoints across 5 sub-phases + hotfix; each sub-phase built cleanly on the prior. Makes bisect viable if anything breaks downstream. Final release commit carries only the version bumps + CHANGELOG + last-minute hotfix.
+learnings:
+  - 'Load-bearing regression harnesses work exactly as designed: the PLSAT migration harness caught real data loss (10 questions across 2 lessons with an alternate quiz schema the migration didn''t recognize). Shipping the v5.39.0 content without that fix would have meant silently lossy content in the bridge release and persistent test failure blocking v6.0 --delete-sources. Pattern: write regression harnesses that gate breaking transitions BEFORE the breaking transition is viable to ship.'
+  - Multi-stage builder runs with tight P1/P2/P3 tiering + clean-boundary-stop scoped an 18h sub-phase 2 into a single successful pass. Builder delivered all 13 items plus caught an implementation-wide spec-vs-shipped divergence (CLI selector placement) proactively. Tiering makes large sub-phases survivable without partial-ship risk.
+  - Decision-store consolidation is a class of "fracture" fix distinct from silent-failure fixes. v5.37.12/v5.38.0 addressed silent data loss. v5.39.0 addresses redundant-storage-proliferation (3 places to record a decision reduced to 1 via streams canonical + companion-lore pattern). Different failure class, different antidote.
+  - When committing mid-release WIP, structure commits by sub-phase rather than by file group. Bisect across `d60b319f` (types) → `efe2cb9f` (utilities) → `94511e0d` (consumers) → `6696e169` (tests) → `c985782c` (docs) → `1f5ef51b` (release) maps cleanly to the architect's file plan.
+verification:
+  status: pass
+  details:
+    paradigm_mcp_build: pass
+    paradigm_cli_build_and_link: pass
+    university_build: pass
+    plsat_regression_harness: 31/31 green after hotfix
+    paradigm_mcp_tests: 10 failed (pre-existing, unrelated) / 205 passed (+48 new)
+    paradigm_cli_tests: 7 failed (pre-existing, unrelated) / 245 passed
+    university_tests: 0 failed / 31 passed (new suite)
+    git_push: pass
+    sub_phase_commits: 6 (d60b319f, efe2cb9f, 94511e0d, 6696e169, c985782c, 1f5ef51b)
+tags:
+  - university
+  - multi-tenant
+  - content-pack
+  - pack-yaml
+  - bridge-release
+  - v5.39
+  - milestone
+confidence: 0.95
+git_context:
+  ref: 1f5ef51b255089982e5bb2c7f547f9b8be6d9406
+  branch: main
+  dirty: true

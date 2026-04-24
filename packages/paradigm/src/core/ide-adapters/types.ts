@@ -10,7 +10,7 @@ import type { ParadigmConfig } from '../paradigm-config.js';
  */
 export interface SpecFiles {
   logger?: string;
-  scan?: string;
+  probe?: string;
   symbols?: string;
   [key: string]: string | undefined;
 }

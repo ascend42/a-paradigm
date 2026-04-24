@@ -11,7 +11,7 @@ import {
   generateOverview,
   generateSymbolSystem,
   generateLoggingRules,
-  generateScanProtocol,
+  generateProbeProtocol,
   generateConventions,
   generateUpdateRules,
   generateCommandsReference,
@@ -57,10 +57,10 @@ export class WindsurfAdapter implements IDEAdapter {
       sections.push(loggingSection);
     }
 
-    // Scan protocol
-    const scanSection = generateScanProtocol(config);
-    if (scanSection) {
-      sections.push(scanSection);
+    // Probe protocol (canonical key in v2+ templates; was `scan` pre-rename)
+    const probeSection = generateProbeProtocol(config);
+    if (probeSection) {
+      sections.push(probeSection);
     }
 
     // Update rules

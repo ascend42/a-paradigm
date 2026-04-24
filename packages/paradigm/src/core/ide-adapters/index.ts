@@ -157,7 +157,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
   // Load specs
   const specs: SpecFiles = {};
   if (specsDir && fs.existsSync(specsDir)) {
-    const specFiles = ['logger.md', 'scan.md', 'symbols.md'];
+    const specFiles = ['logger.md', 'probe.md', 'symbols.md'];
     for (const file of specFiles) {
       const filePath = path.join(specsDir, file);
       if (fs.existsSync(filePath)) {

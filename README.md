@@ -331,8 +331,10 @@ Companion tools and surfaces. Each is linked out; none is required to use Paradi
 - **Sentinel** — symbol-correlated incident tracking and failure-pattern matching. `paradigm sentinel`.
 - **University** — multi-tenant content-pack framework for onboarding &amp; compliance. Run `paradigm university` to start. [Guide →](./docs/guides/university.md)
 - **Conductor** — native macOS overlay for multi-session orchestration.
-- **Multi-agent orchestration** — architect/builder/reviewer/tester/security/documentor/ftux/captain.
+- **Multi-agent orchestration** — architect/builder/reviewer/tester/security/documentor/ftux/captain. [Guide →](./docs/guides/agents.md)
+- **Decisions** — canonical "what we decided and why" store at `.paradigm/decisions/` post-v6.0. [Guide →](./docs/guides/decisions.md)
 - **Workspaces** — shared symbols and lore across related repos.
+- **Upgrading from v5.x?** [v6 Migration Guide →](./docs/guides/v6-migration.md)
 
 ---
 

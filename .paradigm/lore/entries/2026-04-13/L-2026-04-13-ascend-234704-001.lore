@@ -1,0 +1,85 @@
+id: L-2026-04-13-ascend-234704-001
+type: milestone
+timestamp: '2026-04-13T23:47:04.350Z'
+duration_minutes: 120
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Neverland v1 — Unified Agents + Skills Platform Design (Apr 13)
+summary: 'Completed full design and handoff spec for Neverland v1 — a unified public registry for AI Agents and Skills targeting May 1 launch. Key pivot: Neverland is an open standard platform for any AI tool, not a Paradigm-specific feature. Paradigm is the reference implementation. Spec written and handed off to implementation team.'
+symbols_created:
+  - '#neverland-registry'
+  - '#skill-manifest'
+  - '#agent-manifest'
+  - $install-flow
+  - $publish-flow
+  - ^authenticated-publisher
+  - ^org-member
+  - '!agent-installed'
+  - '!skill-installed'
+files_created:
+  - docs/private/plans/neverland-v1-spec.md
+decisions:
+  - id: neverland-open-standard
+    decision: Neverland is an open registry for any AI tool — not Paradigm-specific. skill.yaml is a public open standard.
+    rationale: 'User confirmed: true goal is agents + skills for anyone in the world / for organizations. Paradigm is reference implementation.'
+  - id: no-auto-bundle-v1
+    decision: Bundle auto-install cut from v1. Skills installed separately via CLI after agent install.
+    rationale: Dependency graph resolution, partial failure handling, and conflict state management are too risky to ship in 18 days. User experience cost (4 extra commands) is acceptable. v1.1 target.
+  - id: signing-optional-v1
+    decision: Ed25519 signature field present in skill.yaml format but enforcement optional at v1. Key management UX must be fully specced before enforcement.
+    rationale: Contradicted existing architectural decision to defer key management UX. Field present now avoids breaking change when enforcement ships.
+  - id: cf-workers-r2-stack
+    decision: Infrastructure stack is Cloudflare Workers + R2 + KV. Must be confirmed Day 1.
+    rationale: 18-day schedule is only valid on this stack. Traditional server stack (Express + PostgreSQL + S3) invalidates the sequencing.
+  - id: semver-behavioral-definitions
+    decision: Major version = fundamentally different behavioral contract. Minor = additive. Patch = prose improvement. Must be documented before conflict detection is implemented.
+    rationale: Semver compatibility semantics for prompt bodies are undefined without this. Conflict detection logic is semantically empty without the definition.
+tags:
+  - neverland
+  - skills
+  - agents
+  - open-standard
+  - may-1-launch
+  - registry
+  - handoff
+body: |
+  ## What Was Decided
+
+  The user confirmed Neverland's true goal: an open registry for AI Agents AND Skills for anyone in the world and for organizations. Not Paradigm-specific. Any tool can publish and consume.
+
+  ## Key Design Decisions
+
+  **Agents and skills are siblings, not hierarchy.** Neither contains the other — they share a namespace and reference each other. An agent declares `skills: [id, id]`. A skill can have `owned_by: agent-id` (semantic + functional for install ceremony display).
+
+  **skill.yaml is an open standard.** 8 required fields. Tool-agnostic. Paradigm-specific fields live in a `paradigm:` extension block that non-Paradigm consumers ignore. Body format declared in manifest (`markdown | cursorrules | plaintext | jsonl`) — the standard doesn't care what format the body is.
+
+  **No auto-bundle in v1.** Bundle auto-install (agent install brings skills automatically) is cut from v1. The install ceremony surfaces declared skills and tells the user to install them separately. Implementation risk of dependency graph resolution exceeded user experience cost (four extra commands). Ships v1.1 ~2 weeks post-launch.
+
+  **Ed25519 signing field present but optional in v1.** Key management UX (generation, storage, rotation, recovery) must be fully specced before signing is enforced. v1.1 enforcement target.
+
+  **Infrastructure stack must be decided Day 1.** The 18-day schedule is only valid for Cloudflare Workers + R2 + KV. Any other stack invalidates the sequencing.
+
+  **Org model via GitHub.** Org namespaces claimed through GitHub org membership. No separate org creation flow. No billing entity at v1. Membership checked via GitHub API at publish time.
+
+  **Trust tiers:** verified (manual application) / community (>10 installs + >30 days) / unverified (default). Unverified is acceptable at launch — standard state for all registries. At least one second verified publisher needed before May 1 so the tier feels real.
+
+  **Semver for skills needs behavioral definitions.** Major = different behavioral contract. Minor = additive. Patch = prose improvement. Must document before conflict detection is implemented.
+
+  ## What Ships May 1
+
+  Formats (skill.yaml, manifest.yaml with skills[]), registry API (4 domains, CF Workers + R2), GitHub OAuth + org membership, trust tiers, public/private visibility, CLI (install/publish/search/list/show), web (publisher pages, search, trust badges), @paradigm catalog (4 agents + 6 skills seeded at launch).
+
+  ## What Doesn't Ship
+
+  Credits/billing, auto-bundling, signing enforcement, feedback gates, encrypted state, org billing, semantic search, revenue dashboard.
+
+  ## Handoff Document
+
+  `docs/private/plans/neverland-v1-spec.md` — 554 lines, complete standalone spec for implementation team.
+confidence: 0.95
+git_context:
+  ref: b19257af92560890adc5267f484a65ecd745f32b
+  branch: main
+  dirty: true

@@ -1,0 +1,58 @@
+id: L-2026-04-18-ascend-224816-001
+type: milestone
+timestamp: '2026-04-18T22:48:16.787Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.37.10 — README restructured around `paradigm shift` as single entry point
+summary: 'Team audit + restructure. Author''s friend got confused setting up Paradigm because the README buried `paradigm shift` at line 218, pushed a 6-command Quick Start chain, dead-ended readers at `.purpose` with no example, and threw 20+ jargon terms before the first runnable command. Nora (ftux) simulated first-time user and produced friction report. Architect wrote restructure proposal with full `shift` overload catalog. Reviewer resolved open question (shift IS a legitimate first-install entry — shift.ts:147-178 invokes initCommand when no .paradigm/ exists). Builder rewrote README. Nora re-audit: ship-with-minor-edits, then ship-it after 3 polish edits.'
+symbols_touched:
+  - '#readme'
+  - '#paradigm-shift'
+files_created:
+  - .paradigm/ftux/reports/2026-04-18-readme-audit.md
+  - .paradigm/ftux/reports/2026-04-18-readme-reaudit.md
+  - reviews/2026-04-18-readme-audit-review.md
+  - docs/private/plans/readme-restructure.md
+files_modified:
+  - README.md
+  - CHANGELOG.md
+  - packages/paradigm/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+decisions:
+  - id: d1
+    decision: '`paradigm shift` frames as THE single entry point in the README'
+    rationale: Reviewer verified shift handles fresh-install via initCommand call when .paradigm/ is absent — no rename or command change needed
+  - id: d2
+    decision: Alternative install paths (script, manual, Claude Code plugin) collapsed into <details> blocks under primary npm install
+    rationale: Nora flagged three-install-path paralysis as high-severity friction; npm is canonical default
+  - id: d3
+    decision: Audit artifacts (ftux reports, reviews) committed to git
+    rationale: Preserves team audit trail; future README audits can compare against this baseline
+learnings:
+  - The memory note `paradigm shift guarantees 31 files/directories` is outdated — actual count is 36 (verified by grep on shift-files.ts manifest). Proposal initially claimed 37. Will update memory.
+  - 'Nora''s simulation-integrity rule (user-facing surfaces only, never source code) is load-bearing: her confusion IS the data. Letting her peek at source would have corrupted the audit.'
+  - When an orchestrator defaults to the wrong team (it suggested `security` for a README audit), explicitly override with the agents list. Triggers matched 'audit' but semantic context was docs UX.
+  - Two-pass Nora loop (audit → builder implements → re-audit) caught 3 partial-fixes (signals/gates undefined at first use, `.purpose` lacking a narrative payoff, MCP acronym unexpanded) that would have shipped if we trusted stage 1 findings alone.
+verification:
+  status: pass
+  details:
+    nora_pass_1_verdict: needs-work
+    nora_pass_2_verdict: ship-it
+    reviewer_verdict: approved-with-changes
+    paradigm_build: pass
+    paradigm_link: pass
+    git_push: pass
+tags:
+  - readme
+  - ftux
+  - nora
+  - team-audit
+  - progressive-disclosure
+  - paradigm-shift
+confidence: 0.9
+git_context:
+  ref: a6af952e6d00672fbef8188a0956062e122141cd
+  branch: main
+  dirty: true

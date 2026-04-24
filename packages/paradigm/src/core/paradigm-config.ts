@@ -35,6 +35,15 @@ export interface ParadigmConfig {
   states?: StateDefinitions;
   'purpose-required': PurposeRequirement[];
   conventions: string[];
+  /**
+   * Visual-discovery configuration (canonical key in v2+ templates and the
+   * Zod schema). The Horizon→Paradigm migration renamed `scan` → `probe`
+   * (see `commands/upgrade.ts` content rewriter). New code MUST read `probe`;
+   * `scan?` is retained below only for legacy in-memory configs that have
+   * not yet been re-serialized.
+   */
+  probe?: ProbeSettings;
+  /** @deprecated Renamed to `probe` in v2+. Kept for legacy in-memory reads. */
   scan?: ScanSettings;
   logging?: LoggingConfig;
   limits?: LimitsConfig;
@@ -76,6 +85,18 @@ export interface LimitsConfig {
   checkpointMaxAgeMs?: number;
 }
 
+/**
+ * Canonical visual-discovery settings. Mirrors `probeSchema` in
+ * `core/config-schema.ts` (kebab-case `auto-include` matches the YAML key).
+ */
+export interface ProbeSettings {
+  /** Enable probe protocol in IDE rules (cursorrules, .windsurfrules, etc.) */
+  enabled?: boolean;
+  /** Auto-include probe protocol when probe-index.json exists */
+  'auto-include'?: boolean;
+}
+
+/** @deprecated Renamed to `ProbeSettings` in v2+. Retained for legacy reads. */
 export interface ScanSettings {
   /** Enable scan protocol in cursorrules */
   enabled: boolean;
@@ -186,10 +207,24 @@ export const DEFAULT_CONVENTIONS: string[] = [
 
 /**
  * Default Paradigm config
+ *
+ * Returns a config object that validates cleanly against `paradigmConfigSchema`
+ * (see `core/config-schema.ts`). Two notes for future maintainers:
+ *
+ *   - `project` is required by the schema (Zod `z.string()`), so the
+ *     `projectName` argument is wired into the returned object — not just
+ *     embedded in the overview text. Without this, a freshly written config
+ *     fails its own validator.
+ *   - The visual-discovery section is canonical-named `probe` (see
+ *     `templates/paradigm/config.yaml` and `KNOWN_TOP_LEVEL_KEYS`). The
+ *     legacy `scan: { enabled, autoInclude }` shape is no longer emitted
+ *     here because it is not a recognized top-level key and would trigger
+ *     an "Unrecognized config key" warning on every fresh init.
  */
 export function getDefaultParadigmConfig(projectName: string): ParadigmConfig {
   return {
     version: '1.0',
+    project: projectName,
     'agent-guidelines': {
       overview: `${projectName} uses Paradigm for structured planning and context management.`,
       'how-to-use': [
@@ -220,11 +255,7 @@ export function getDefaultParadigmConfig(projectName: string): ParadigmConfig {
       { pattern: 'src/features/*', depth: 1 },
       { pattern: 'src/components/*', depth: 1 }
     ],
-    conventions: DEFAULT_CONVENTIONS,
-    scan: {
-      enabled: true,
-      autoInclude: true
-    }
+    conventions: DEFAULT_CONVENTIONS
   };
 }
 

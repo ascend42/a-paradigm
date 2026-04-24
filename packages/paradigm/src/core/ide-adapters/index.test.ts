@@ -135,7 +135,7 @@ describe('loadParadigmFiles', () => {
     const files = loadParadigmFiles(rootDir);
     expect(files).not.toBeNull();
     expect(files!.specs.logger).toBeDefined();
-    expect(files!.specs.scan).toBeDefined();
+    expect(files!.specs.probe).toBeDefined();
     expect(files!.specs.symbols).toBeDefined();
     expect(files!.docs.commands).toBeDefined();
     expect(files!.docs.patterns).toBeDefined();

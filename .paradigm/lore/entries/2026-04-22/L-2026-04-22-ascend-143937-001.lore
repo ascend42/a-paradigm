@@ -1,0 +1,103 @@
+id: L-2026-04-22-ascend-143937-001
+type: milestone
+timestamp: '2026-04-22T14:39:37.738Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.38.0 — architectural bundle closes silent round-trip failure class
+summary: 'Architectural follow-up to v5.37.12''s security patch. Closes the full silent-round-trip-failure class Jinx identified in her 2026-04-22 pattern reflection (v5.37.11''s prevention framing was too narrow — "silent no-op" missed read-side and diagnosis-side failures). Seven deliverables: Bug 1 lenient parser (strips ^ from gate keys, back-compat); writeAndConfirm atomic-write-and-verify envelope applied to 5 mutation handlers with truncated HMAC hashHint; round-trip consistency manifest (transformation classes only, no content); PARADIGM_STRICT=1 flag (default OFF v5.38.0, field observation informs v5.39.0 flip); near-match suggestion engine in compliance errors (closes "diagnosis failed" complaint); classifyYamlError extraction to portal-core (resolves v5.37.12 Finding 4); 10 doc surfaces updated to canonical bare-key form (site docs + MCP guidance resource + landing page). +35 regression tests across 4 new suites. Team: architect, builder, documentor parallel, reviewer APPROVED zero blocking.'
+symbols_touched:
+  - '#portal-core'
+  - '#paradigm-mcp'
+  - '#paradigm-cli'
+  - '#write-and-confirm'
+  - '#consistency-tracker'
+  - '#strict-mode'
+  - '#near-match'
+  - '#classify-yaml-error'
+files_created:
+  - packages/portal/core/src/classify-yaml-error.ts
+  - packages/paradigm-mcp/src/utils/write-and-confirm.ts
+  - packages/paradigm-mcp/src/utils/consistency-tracker.ts
+  - packages/paradigm-mcp/src/utils/strict-mode.ts
+  - packages/paradigm-mcp/tests/write-and-confirm.test.ts
+  - packages/paradigm-mcp/tests/consistency-manifest.test.ts
+  - packages/paradigm/src/core/near-match.ts
+  - packages/paradigm/tests/near-match.test.ts
+  - reviews/2026-04-22-v5.38.0-review.md
+files_modified:
+  - packages/portal/core/src/parser.ts
+  - packages/portal/core/src/index.ts
+  - packages/premise/core/src/aggregator.ts
+  - packages/paradigm-mcp/src/utils/yaml-validator.ts
+  - packages/paradigm-mcp/src/utils/portal-writer.ts
+  - packages/paradigm-mcp/src/utils/purpose-writer.ts
+  - packages/paradigm-mcp/src/tools/purpose-portal.ts
+  - packages/paradigm-mcp/src/tools/reindex.ts
+  - packages/paradigm-mcp/src/resources/guidance.ts
+  - packages/paradigm/src/core/portal-compliance.ts
+  - packages/paradigm/src/commands/compliance.ts
+  - packages/paradigm/package.json
+  - packages/site/src/app/sections/HowItWorksSection.tsx
+  - packages/site/src/content/docs/portal-and-gates.md
+  - packages/site/src/content/docs/concepts.md
+  - packages/site/src/content/docs/purpose-files.md
+  - .paradigm/docs/migration-prompt.md
+  - .paradigm/prompts/add-gate.md
+  - .paradigm/specs/symbols.md
+  - .paradigm/specs/symbols-v2.md
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Bug 1 fixed via parser strip AND defensive aggregator double-strip (belt-and-suspenders)
+    rationale: Either fix alone would work; together they guarantee no code path produces ^^ even if future aggregator refactors move the symbol construction. Cheap defense for a class of bug that auto-heals downstream symbols on every reindex.
+  - id: d2
+    decision: writeAndConfirm truncated HMAC-SHA256 (12 hex) with per-install secret key, not raw content hash
+    rationale: Security audit flagged pre-image attack on small YAML files. HMAC with per-install key eliminates the attack; truncation to 12 chars keeps envelopes compact. hashHint is documented advisory, not cryptographic — it answers "did the write land identically" not "prove integrity".
+  - id: d3
+    decision: Consistency manifest transformation classes only, never gate/route content
+    rationale: Security audit required this guardrail. Integration test feeds crafted secret gate names and asserts manifest JSON doesn't contain them. ConsistencyTracker has a basename sanitizer as belt-and-suspenders. Safe for telemetry pipeline.
+  - id: d4
+    decision: PARADIGM_STRICT default OFF in v5.38.0, flip ON in v5.39.0 based on field observation
+    rationale: Strict mode turns previously-lenient transformations (duplicate keys, Array coercion) into hard errors. Enabling by default in a minor would break existing projects without warning. One release of field observation is the safe path; v5.39.0 flip with deprecation notice in v5.38.x CHANGELOG.
+  - id: d5
+    decision: writeAndConfirm applied to only 5 handlers in v5.38.0, remaining 7 purpose handlers deferred
+    rationale: 5-handler scope matches architect's plan and keeps the release testable. Remaining handlers (add_aspect, add_signal, add_flow, add_gate, add_state, rename, init) use v5.37.11 inline verification which is sound but not envelope-uniform. Uniformity ships in v5.38.x or v6.0.
+  - id: d6
+    decision: classifyYamlError lives in portal-core, both paradigm-mcp and paradigm CLI import from there
+    rationale: Resolves v5.37.12 Finding 4 drift risk. Single source of truth eliminates the risk that MCP and CLI classify a given YAMLException differently — which would have confused the stop hook vs. paradigm portal check disagreement scenarios.
+  - id: d7
+    decision: Documentor + builder ran in parallel; Claude manually applied 2 TS-string surface polish fixes after documentor handoff
+    rationale: Documentor's scope is docs-only; two string-in-TS surfaces (MCP guidance.ts + HowItWorksSection.tsx) were flagged as high-impact (every MCP agent reads guidance.ts; landing page is public) but technically TypeScript. Inline fix preserved velocity without breaching agent scope contract.
+learnings:
+  - 'Pattern reflection caught a framing error: Jinx''s v5.37.11 prevention plan was too narrow ("silent no-op") when the actual class is "silent round-trip failure". The right framing is any lossy transformation in the read-write-reindex pipeline where the indexer fails closed. v5.38.0''s consistency manifest makes every lossy transform visible; that''s the architectural fix for the class, not just the instances.'
+  - HMAC with per-install key is the right primitive for small-file write verification. Raw hash is pre-image-attackable on tiny YAML files (many gate-name combinations produce the same hash prefix). Truncated HMAC eliminates the attack with minimal envelope bloat. Pattern worth reusing for any write-verify in Paradigm where the file is sensitive config.
+  - 'Parallel builder + documentor worked cleanly when the scope boundary was explicit. Documentor stayed out of TS; builder stayed out of markdown. Two TS-string surfaces flagged by documentor (guidance.ts + HowItWorksSection.tsx) needed a third-party (me) to bridge the gap. Rule: when a TS string literal IS content, not structure, flag explicitly at task kickoff so the right agent owns it.'
+  - Belt-and-suspenders on Bug 1 (parser strip + aggregator defensive strip) costs almost nothing and guarantees no ^^ symbol survives even if future refactors move symbol construction. Cheap defense for a class of bug that would re-emerge otherwise.
+  - PARADIGM_STRICT default OFF in the intro release + ON in the next minor with CHANGELOG deprecation is the disciplined path for fail-fast flags. Prevents surprise breakage while creating a forcing function for the strict-by-default future.
+verification:
+  status: pass
+  details:
+    reviewer_verdict: approved-zero-blocking
+    new_regression_tests: 35 (8 write-and-confirm + 8 consistency-manifest + 18 near-match + portal-compliance extended)
+    pre_existing_test_failures: 17 unchanged (10 paradigm-mcp + 7 paradigm CLI)
+    portal_core_build: pass
+    paradigm_mcp_build: pass
+    paradigm_cli_build_and_link: pass
+    git_push: pass
+    bundle_order_respected: v5.37.12 security patch shipped first; v5.38.0 architectural follow-up per security's non-negotiable sequencing
+tags:
+  - architecture
+  - silent-failure-class
+  - write-verify
+  - consistency-manifest
+  - strict-mode
+  - near-match
+  - portal-core
+  - milestone
+confidence: 0.9
+git_context:
+  ref: b906eae9deaadb6d451953773fc2a281027fcb83
+  branch: main
+  dirty: true

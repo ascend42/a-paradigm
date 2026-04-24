@@ -1,0 +1,77 @@
+id: L-2026-04-22-ascend-180253-001
+type: milestone
+timestamp: '2026-04-22T18:02:53.979Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.38.1 — publish hygiene cleanup + v6 architect spec drafted
+summary: 'Shipped v5.38.1 as the last release before v6.0. Cleanup bundle from the 2026-04-22 post-publish audit: logger exports-condition ordering fix (types now first — esbuild was warning), 4 stray tsup artifacts removed from paradigm-mcp/src/utils/ with scoped root .gitignore preventing future leakage, root .next/ gitignored, @types/node aligned to ^22 across 10 packages, 5 broken README doc link trailers removed. Logger gets independent patch bump (3.5.1 → 3.5.2). Separately: architect drafted v6.0 Medium+ builder-ready spec (700 lines, ~65h / 8 working days, fits May 1 with 1-day margin, escape hatch defers PLSAT migration to v6.0.1 if needed). Multi-tenant University with pack.yaml manifest + CLI selectors + PLSAT migration + decision-store consolidation + loadPortalConfigLegacy removal + privacy-preserving local metrics. 8 user decisions gate builder start on sub-phase 2.'
+symbols_touched:
+  - '#logger'
+  - '#paradigm-mcp'
+  - '#paradigm-cli'
+  - '#university'
+  - '#pack-loader'
+files_created:
+  - docs/private/plans/v6.0-university-builder-spec.md
+files_modified:
+  - packages/logger/package.json
+  - packages/paradigm/package.json
+  - packages/paradigm-mcp/package.json
+  - packages/paradigm-vscode/package.json
+  - packages/sentinel/package.json
+  - packages/university/package.json
+  - packages/portal/core/package.json
+  - packages/portal/sdk/package.json
+  - packages/portal/manager/package.json
+  - packages/portal/viewer/package.json
+  - packages/premise/core/package.json
+  - packages/purpose/core/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - CHANGELOG.md
+  - README.md
+  - .gitignore
+decisions:
+  - id: d1
+    decision: Logger gets independent patch bump (3.5.1 → 3.5.2) instead of jumping to 5.38.1
+    rationale: Logger has its own cadence (3.x). Jumping version numbers arbitrarily to match paradigm CLI would be misleading. Per semver, patch bump for exports-metadata-only fix is correct.
+  - id: d2
+    decision: Scoped .gitignore pattern with explicit sql.js.d.ts negation instead of blanket .d.ts block in src/
+    rationale: Three intentional hand-authored sql.js.d.ts stubs exist in paradigm / sentinel / paradigm-mcp (typed shim for a library without native types). Blanket ignore would stop tracking them; explicit negation preserves intent while catching future tsup output leakage.
+  - id: d3
+    decision: v6.0 pack manifest = pack.yaml at pack root, not a package.json field
+    rationale: Manifests exceed 40 lines (branding, theme, compliance). Consistent with Paradigm house style (portal.yaml, .paradigm/config.yaml, roster.yaml).
+  - id: d4
+    decision: v6.0 decision-store canonical = .paradigm/decisions/TD-*.yaml (streams), absorbing ADR fields from wisdom-decisions
+    rationale: Richer participant-stance schema, already integrated with paradigm_decision_* tools, higher on-disk cardinality. Cleaner than retaining parallel ADR store.
+  - id: d5
+    decision: v6.0 lore.type='decision' becomes HARD error, wisdom.type='decision' stays as soft deprecation
+    rationale: Asymmetry is deliberate. lore's decision type was the three-way fracture offender Loid flagged. wisdom's is the cleaner legacy path; can soft-deprecate for one minor. Flagged to user for symmetry preference.
+learnings:
+  - 'Cleanup audits produce false positives at ~20% rate. 5 of 26 findings from this audit were false positives (sentinel-web exports already correct, README didn''t contain ''v2.0'', umbrella dirs are thin by design, VSCode doesn''t need engines.node, .next/ already scoped-ignored). Reviewer triage caught them in ~1h. Lesson: always triage audits before acting; don''t trust raw audit output as work items.'
+  - Build artifacts in src/ directories are a pattern worth policing with .gitignore preemptively, not just cleanup. The 4 stray tool-cache.* files had been committed at an unknown prior date and silently grew. Scoped pattern catches all future occurrences across all packages.
+  - Version bump rules need carving out for packages with independent cadence. Memory had explicit rules for paradigm / paradigm-mcp / sentinel / university but not logger. Logger is a published package with its own version lineage; bumping to 5.38.1 would have broken its semver narrative. Patch bump on the logger package itself is the correct call.
+  - 'Architect-as-subagent (paradigm:architect) doesn''t have Write tool access. Large specs must be returned as final-message text and written by the parent agent. Architect''s 700-line spec returned in a persisted-output file; parent had to extract and write. Future: when dispatching architect for spec writing, either grant Write or plan for the text-return bridge.'
+verification:
+  status: pass
+  details:
+    logger_build: pass
+    paradigm_mcp_build: pass
+    paradigm_cli_build_link: pass
+    publish_warnings: zero exports-condition warnings after logger fix
+    baseline_tests: unchanged (10 paradigm-mcp / 7 paradigm CLI pre-existing failures still present, none new)
+    git_push: pass
+tags:
+  - cleanup
+  - hygiene
+  - publish
+  - logger
+  - gitignore
+  - v6-spec
+  - milestone
+confidence: 0.92
+git_context:
+  ref: 9ea941507553dbf9b4daca570cffa0bcfc30e9e9
+  branch: main
+  dirty: true

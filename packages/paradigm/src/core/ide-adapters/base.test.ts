@@ -16,6 +16,7 @@ import {
   generateHabitsSection,
   generateLoreSection,
   generateLlmsTxtSection,
+  generateProbeProtocol,
 } from './base.js';
 import { getDefaultParadigmConfig, type ParadigmConfig } from '../paradigm-config.js';
 
@@ -230,5 +231,51 @@ describe('generateLlmsTxtSection', () => {
     expect(result).toContain('## llms.txt');
     expect(result).toContain('llms.txt');
     expect(result).toContain('paradigm sync-llms');
+  });
+});
+
+describe('generateProbeProtocol', () => {
+  // Regression: this used to be `generateScanProtocol` and read the legacy
+  // `config.scan?.enabled` key. The Horizon→Paradigm migration renamed
+  // `scan` → `probe` (templates, schema, upgrade.ts content rewriter), so
+  // the section silently never rendered for any project on a current-template
+  // config. The reader must now match the canonical `probe` key.
+
+  it('renders when `probe.enabled` is true', () => {
+    const withProbe: ParadigmConfig = {
+      ...defaultConfig,
+      probe: { enabled: true },
+    };
+    const result = generateProbeProtocol(withProbe);
+    expect(result).toContain('## Paradigm Probe');
+    expect(result).toContain('paradigm probe');
+    expect(result).toContain('probe-index.json');
+    expect(result).toContain('specs/probe.md');
+  });
+
+  it('returns empty when `probe` block is missing', () => {
+    const result = generateProbeProtocol(defaultConfig);
+    expect(result).toBe('');
+  });
+
+  it('returns empty when `probe.enabled` is false', () => {
+    const probeOff: ParadigmConfig = {
+      ...defaultConfig,
+      probe: { enabled: false },
+    };
+    const result = generateProbeProtocol(probeOff);
+    expect(result).toBe('');
+  });
+
+  it('does NOT render based on the legacy `scan` key', () => {
+    // Guards against accidental revert to `config.scan?.enabled`. A config
+    // with only the legacy `scan` block and no `probe` should produce no
+    // section, since `scan` is no longer the canonical reader.
+    const legacyOnly: ParadigmConfig = {
+      ...defaultConfig,
+      scan: { enabled: true, autoInclude: true },
+    };
+    const result = generateProbeProtocol(legacyOnly);
+    expect(result).toBe('');
   });
 });

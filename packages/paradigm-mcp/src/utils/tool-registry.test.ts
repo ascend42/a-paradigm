@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ToolRegistry, FEATURE_DETECTORS, type ToolModule, type ToolDefinition } from './tool-registry.js';
+import { ToolRegistry, FEATURE_DETECTORS, invalidateFeatureCache, type ToolModule, type ToolDefinition } from './tool-registry.js';
 
 // ────────────────────────────────────────────────────────
 // Helpers
@@ -35,6 +35,8 @@ let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-registry-test-'));
+  // Reset module-level feature cache so each test sees its own registry state.
+  invalidateFeatureCache();
 });
 
 afterEach(() => {

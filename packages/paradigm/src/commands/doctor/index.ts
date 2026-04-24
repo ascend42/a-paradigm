@@ -99,7 +99,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         }
 
         // Check specs
-        const specs = ['logger.md', 'scan.md', 'symbols.md'];
+        const specs = ['logger.md', 'probe.md', 'symbols.md'];
         const specsDir = path.join(paradigmDir, 'specs');
 
         if (fs.existsSync(specsDir)) {

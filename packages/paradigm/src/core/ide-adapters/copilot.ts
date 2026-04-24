@@ -161,7 +161,7 @@ For detailed specifications, reference these files:
 
 - \`.paradigm/specs/symbols.md\` - Complete symbol reference
 - \`.paradigm/specs/logger.md\` - Logging specification
-- \`.paradigm/specs/scan.md\` - Visual discovery protocol
+- \`.paradigm/specs/probe.md\` - Visual discovery protocol
 - \`.paradigm/docs/\` - Documentation and troubleshooting
 - \`.paradigm/prompts/\` - Pre-written task prompts
 

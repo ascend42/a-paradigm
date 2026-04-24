@@ -391,8 +391,9 @@ describe('addNotebookEntry', () => {
       projectDir,
     );
 
-    // ID should start with nb-jwt-tokens- (slugified first concept)
-    expect(entry.id).toMatch(/^nb-jwt-tokens-[a-z0-9]+$/);
+    // ID format: nb-{agentSlug}-{conceptSlug} — stable, deterministic, no random suffix.
+    // Required by the nevr.land merge-by-id algorithm.
+    expect(entry.id).toBe('nb-test-agent-jwt-tokens');
   });
 
   it('falls back to "entry" slug when concepts are empty', () => {
@@ -410,7 +411,8 @@ describe('addNotebookEntry', () => {
       projectDir,
     );
 
-    expect(entry.id).toMatch(/^nb-entry-[a-z0-9]+$/);
+    // Falls back to first 4 words of context (slugified) when concepts are empty.
+    expect(entry.id).toBe('nb-test-agent-test');
   });
 
   it('sets correct defaults for appliedCount, created, and updated', () => {

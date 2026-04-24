@@ -1,0 +1,93 @@
+id: L-2026-04-23-ascend-212046-001
+type: milestone
+timestamp: '2026-04-23T21:20:46.881Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.1 — University content refreshed for v6.0 reality
+summary: University content patch addressing material staleness surfaced by Sheila's audit + Jinx's pre-mortem after v6.0.0 shipped. PLSAT exam integrity restored (multiple slots previously marked the now-removed `type:'decision'` as a valid lore type). PARA 501 lore-system + PARA 301 wisdom-system structurally rewritten (not surgical). PARA 001 meet-the-team, PARA 401 mcp-tools-overview, PARA 601 knowledge-streams refreshed for v6 reality. 8 sibling quizzes + reference.json cleaned. New canonical N-para-301-decisions.md + paired quiz wired into LP-para-301. 25 files total. Builder verified two of Jinx's claims wrong (`LORE_TYPE_TO_STREAM` exists; slot-053's 0.6 threshold is correct) and caught 4-5 additional stale files neither plan listed. Safe to ship in place — no v3 PLSAT diplomas exist.
+symbols_touched:
+  - '#university-content'
+  - '#plsat-exam'
+  - '#lore-system'
+  - '#wisdom-system'
+  - '#meet-the-team'
+  - '#mcp-tools-overview'
+  - '#decision-store-note'
+  - '#knowledge-streams'
+files_created:
+  - packages/university/src/content/notes/N-para-301-decisions.md
+  - packages/university/src/content/quizzes/Q-para-301-decisions.yaml
+files_modified:
+  - packages/university/src/content/notes/N-para-001-meet-the-team.md
+  - packages/university/src/content/notes/N-para-301-operations-review.md
+  - packages/university/src/content/notes/N-para-301-wisdom-system.md
+  - packages/university/src/content/notes/N-para-401-agent-roles.md
+  - packages/university/src/content/notes/N-para-401-mastery-review.md
+  - packages/university/src/content/notes/N-para-401-mcp-tools-overview.md
+  - packages/university/src/content/notes/N-para-401-quick-check.md
+  - packages/university/src/content/notes/N-para-501-lore-system.md
+  - packages/university/src/content/notes/N-para-601-knowledge-streams.md
+  - packages/university/src/content/paths/LP-para-301.yaml
+  - packages/university/src/content/quizzes/Q-para-001-meet-the-team.yaml
+  - packages/university/src/content/quizzes/Q-para-001-shift-setup.yaml
+  - packages/university/src/content/quizzes/Q-para-301-history-system.yaml
+  - packages/university/src/content/quizzes/Q-para-301-ripple-analysis.yaml
+  - packages/university/src/content/quizzes/Q-para-401-agent-roles.yaml
+  - packages/university/src/content/quizzes/Q-para-401-mastery-review.yaml
+  - packages/university/src/content/quizzes/Q-para-401-quick-check.yaml
+  - packages/university/src/content/quizzes/Q-para-501-lore-system.yaml
+  - packages/university/src/content/quizzes/Q-plsat-v2.yaml
+  - packages/university/src/content/quizzes/Q-plsat-v3.yaml
+  - packages/university/src/content/reference.json
+  - packages/university/package.json
+  - packages/paradigm/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Silent answer-key swap for PLSAT (no v3.1 mint) — user confirmed no diplomas exist
+    rationale: v3.1 ceremony would be overkill since no credentials to invalidate. Jinx flagged the integrity concern but it was theoretical given adoption state. Pattern recorded for future content patches where diplomas DO exist.
+  - id: d2
+    decision: N-para-301-wisdom-system structurally rewritten, not surgically patched
+    rationale: Jinx caught that original body was ~40% decision-type content. A surgical patch would have left an internally-inconsistent note. Rewrite captured v6 reality accurately with new 'Where Decisions Went' section pointing to paradigm_decision_record.
+  - id: d3
+    decision: Slot-051 fully replaced, not key-swapped
+    rationale: Key-swap would have made the question test enum recall instead of the decision-recording workflow (the pedagogical point). Replacement question tests the same concept with current-v6 facts.
+  - id: d4
+    decision: Builder verified Jinx's claims before applying; reversed 2 that were wrong
+    rationale: LORE_TYPE_TO_STREAM does exist (knowledge-streams.ts:205); slot-053's 0.6 threshold matches grouper.ts:15. Pre-mortems are pressure tests, not gospel. Honest verification saved unnecessary rework and preserved correct content.
+  - id: d5
+    decision: 'Process commitment: release-time content review should become a habit'
+    rationale: Multiple v5.x→v6.0 stale facts compounded silently because no release gate prompted 'did you update University?' Considering v6.x CI drift detector. For now, documenting pattern in CHANGELOG as a learning.
+  - id: d6
+    decision: PARA 801 (multi-tenant University framework course) deferred to v6.1
+    rationale: Not stale-fact cleanup — new curriculum work (~8-10h). v6.0.1 patch stayed scoped to correctness-restoration. PARA 801 ships when multi-tenant authoring has enough user signal to write meaningful examples.
+learnings:
+  - 'Content regression needs explicit gating like code regression does. v6.0.0 shipped breaking changes correctly but the course content referencing those APIs wasn''t in the gate. Result: content taught obsolete facts for hours until Sheila''s audit. Rule: when CHANGELOG contains a BREAKING entry, a University content audit must gate the release (or at minimum ship in the immediate follow-up patch).'
+  - 'Pre-mortems are pressure tests, not gospels. Builder verified two of Jinx''s pre-mortem claims against actual source and found them wrong (LORE_TYPE_TO_STREAM exists; 0.6 threshold is correct). The verification saved rework time AND preserved correct content that would have been incorrectly ''fixed''. Process: always verify a pre-mortem finding against live source before acting on it.'
+  - 'Sibling sweep often needs to go wider than the primary finding. Sheila + Jinx together flagged ~15 items; builder widened to 25 by running an independent grep pass on the related concepts (agent names, lore types, wisdom.type=''decision'' signatures). Pattern: every content fix should end with an independent grep audit to catch what planner-level review misses.'
+  - 'Structural rewrites beat surgical edits when the body is conceptually organized around the removed concept. N-para-301-wisdom-system''s ''three types'' framing couldn''t survive a surgical patch — needed a rewrite. Rule: if removing a concept leaves the surrounding prose structurally incoherent, rewrite the section; don''t patch it.'
+  - Content without diplomas is freely editable; content with diplomas requires versioning ceremony. Future content patches should check diploma-store state first to determine scope (silent swap vs. freeze-and-mint). Rule encoded for future content work.
+verification:
+  status: pass
+  details:
+    paradigm_university_validate: all checks pass
+    vitest_baseline: 11 passed / 20 skipped / 0 failed (unchanged)
+    grep_type_decision_in_content: only explanatory prose contexts (new decision-store note + distractor explanations); zero teaching content presents it as valid
+    grep_stale_agent_names: zero hits for '8 Core Agents' / Vigil-as-agent / Sentinel-as-agent
+    paradigm_cli_build_link: pass
+    university_build: pass
+    git_push: pass
+tags:
+  - v6.0.1
+  - university-content
+  - plsat-fix
+  - content-patch
+  - milestone
+confidence: 0.93
+git_context:
+  ref: ca5be1da1c7ca93faf3657a4a0cdd33431889505
+  branch: main
+  dirty: true

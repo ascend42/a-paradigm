@@ -71,6 +71,14 @@ const probeSchema = z.object({
   'auto-include': z.boolean().optional(),
 }).passthrough();
 
+// v6.0 (D7): metrics — local snapshots opt-in seed + remote consent state.
+// Mirrors `MetricsConfig` in `core/paradigm-config.ts` and the shape written
+// by `seedMetricsConsent()` in `core/university/metrics.ts`.
+const metricsSchema = z.object({
+  remote_consent: z.enum(['pending', 'granted', 'declined']).optional(),
+  local_snapshots_enabled: z.boolean().optional(),
+}).passthrough();
+
 export const paradigmConfigSchema = z.object({
   version: z.string(),
   project: z.string(),
@@ -88,6 +96,7 @@ export const paradigmConfigSchema = z.object({
   'ai-agent': aiAgentSchema.optional(),
   context: contextSchema.optional(),
   probe: probeSchema.optional(),
+  metrics: metricsSchema.optional(),
   states: z.record(z.string(), z.unknown()).optional(),
   'custom-symbols': z.record(z.string(), symbolDefinitionSchema).optional(),
 }).passthrough(); // Allow unknown top-level keys (warn, don't error)
@@ -101,7 +110,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'agent-guidelines', 'symbol-system', 'tag-bank',
   'component_types', 'logging', 'purpose-required',
   'conventions', 'workspace', 'limits', 'ai-agent',
-  'context', 'probe', 'states', 'custom-symbols',
+  'context', 'probe', 'metrics', 'states', 'custom-symbols',
   'docs', 'features', 'enforcement', 'model-resolution',
 ]);
 

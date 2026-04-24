@@ -1,0 +1,91 @@
+id: L-2026-04-22-ascend-055519-001
+type: incident
+timestamp: '2026-04-22T05:55:19.140Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.37.12 — fail-closed portal compliance security patch
+summary: 'Five fail-open auth-bypass scenarios closed in Paradigm''s portal compliance pipeline. Field report from downstream project (Quakeee-web, 2026-04-21) identified 3 bugs; security audit surfaced a 5th scenario (bash `|| true` masking all compliance failures) rated CRITICAL. Team orchestration: reviewer (per-bug root cause), Explore (blast radius), Jinx (systemic reflection — admitted v5.37.11 prevention plan was insufficient), security (auth-bypass audit + non-negotiable bundle order), architect (comprehensive plan), builder (implementation), reviewer validation pass. Scope: fail-closed semantics + Object.keys(Gate[]) fix + safeLoad<T>() wrapper with error-message redaction + discriminated-union loadPortalConfig + first tests/ in paradigm CLI package. Two regression suites (25 new tests). Deliberately excluded from this release (defers to v5.38.0): Bug 1 prefix parser, writeAndConfirm wrapper, round-trip consistency manifest, PARADIGM_STRICT flag, site-doc fixes, near-match suggestion engine.'
+symbols_touched:
+  - '#portal-compliance'
+  - '#yaml-validator'
+  - '#compliance-checker'
+  - '#hooks'
+  - '#paradigm-common'
+files_created:
+  - packages/paradigm-mcp/src/utils/yaml-validator.ts
+  - packages/paradigm-mcp/tests/yaml-validator.test.ts
+  - packages/paradigm/tests/portal-compliance.test.ts
+  - packages/paradigm/tests/.purpose
+  - reviews/2026-04-22-portal-yaml-triage.md
+  - reviews/2026-04-22-portal-yaml-security-audit.md
+  - reviews/2026-04-22-v5.37.12-hotfix-review.md
+files_modified:
+  - packages/paradigm/src/core/portal-compliance.ts
+  - packages/paradigm/src/core/pm-compliance.ts
+  - packages/paradigm/src/core/flow-validator.ts
+  - packages/paradigm/src/commands/portal-check.ts
+  - packages/paradigm/src/commands/portal/check.ts
+  - packages/paradigm/src/commands/compliance.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts
+  - packages/paradigm/vitest.config.ts
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/utils/portal-writer.ts
+  - packages/paradigm-mcp/src/utils/index-loader.ts
+  - packages/paradigm-mcp/src/utils/compliance-checker.ts
+  - plugins/paradigm/scripts/paradigm-common.sh
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Ship v5.37.12 as security patch first, v5.38.0 architectural follow-up within the week
+    rationale: 'Security''s non-negotiable bundle order: shipping Bug 1''s lenient parser before fail-closed semantics leaves fail-open paths live in the wild. Security auth-bypass concerns override scope-consolidation preferences.'
+  - id: d2
+    decision: loadPortalConfig returns discriminated union, unparseable fail-closes as violations
+    rationale: The null-on-failure behavior was the root of every silent-drop scenario. Discriminated union forces callers to handle unparseable explicitly; unparseable → violations is the fail-closed contract.
+  - id: d3
+    decision: Error-message redaction — classifier strings only, never file contents
+    rationale: Security audit flagged YAMLException.toString() and mark.buffer as data-exposure vectors that leak gate names / route paths into telemetry and LLM context. detail is a fixed English classifier, not derived from raw exception output.
+  - id: d4
+    decision: extractDeclaredGateNames throws on unrecognized gateConfig.gates shape, not silently degrades
+    rationale: Silent degradation produced the numeric-index 'gate names' scenario. Loud throw propagates to MCP envelope so agents can see the failure. Matches the 'fail-closed contract' security required.
+  - id: d5
+    decision: __portal_unparseable__ sentinel value in usedButUndeclared, filtered from user-visible output in all four consumers (stop hook, compliance.ts, portal/check.ts, portal-check.ts)
+    rationale: Reuses existing usedButUndeclaredCount>0 gatekeeper without new grep patterns in stop hook. Sentinel is detected and stripped at every user-visible surface — never rendered as a gate name.
+  - id: d6
+    decision: Duplicated classifyYamlError across paradigm-mcp and paradigm CLI for this release, extraction to portal-core deferred to v5.38.0
+    rationale: Keeps the security-critical path self-contained; avoids introducing a new build-time dep direction from CLI → MCP during a hotfix. Drift risk tracked explicitly.
+learnings:
+  - Silent data loss is a security concern, not a reliability concern. When the data that's dropped is auth config, every swallowed exception is potentially an auth-bypass. The v5.37.11 prevention plan framing (silent no-op) was too narrow; the actual class is 'silent round-trip failure' — Jinx admitted this plainly in her reflection doc.
+  - 'The bash || true wrapper at plugins/paradigm/scripts/paradigm-common.sh:515 was the widest fail-open hole in the system and invisible until security auditor explicitly traced subprocess exit code propagation. Lesson: wherever shell glues TypeScript error handling to user-facing effects, audit every silencing operator (|| true, 2>/dev/null, exit mask).'
+  - When an audit adds a new scenario (Scenario D in this case) the architect's plan may need re-cutting before builder starts. The security-required bundle order reshaped a single v5.38.0 release into v5.37.12 + v5.38.0. Re-cutting inline (as I did) worked because all three specialists had already weighed in; in general, send re-cuts back to architect if scope changes materially.
+  - 'Error-message redaction is an ongoing discipline, not a one-time fix. The security audit specifically called out that YAMLException.toString() embeds mark.buffer context lines containing raw file content. Rule: derive error strings from fixed English classifiers keyed on error properties (kind, reason, code), never from the exception''s stringified form.'
+  - Duplicate-type fields across packages create drift risk. classifyYamlError now lives twice (paradigm-mcp + paradigm CLI). Short-term justified to avoid new build deps during a hotfix; long-term needs extraction to portal-core. Tracked explicitly in CHANGELOG and decisions.
+verification:
+  status: pass
+  details:
+    reviewer_verdict: approved-with-changes (0 blocking, 5 non-blocking, 1 resolved inline)
+    new_regression_tests: 25 (11 yaml-validator + 14 portal-compliance)
+    pre_existing_test_failures: 17 (unrelated, confirmed via git stash rerun)
+    paradigm_mcp_build: pass
+    paradigm_cli_build: pass
+    paradigm_cli_link: pass
+    security_audit_severity: CRITICAL
+    bundle_order: fail-closed shipped before Bug 1 parser lenience per security requirement
+    git_push: pass
+tags:
+  - security-patch
+  - fail-closed
+  - auth-bypass
+  - silent-no-op
+  - yaml-parsing
+  - hotfix
+  - field-reported
+  - regression-tests
+confidence: 0.9
+git_context:
+  ref: 8683e4040aac408f7825121191830c65776b38c8
+  branch: main
+  dirty: true

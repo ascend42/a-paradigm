@@ -321,7 +321,7 @@ async function upgradeScan(
 ): Promise<UpgradeResult> {
   const paradigmDir = path.join(rootDir, '.paradigm');
   const scanIndexPath = path.join(paradigmDir, 'scan-index.json');
-  const scanSpecPath = path.join(paradigmDir, 'specs', 'scan.md');
+  const scanSpecPath = path.join(paradigmDir, 'specs', 'probe.md');
   const templatesDir = getTemplatesDir();
 
   // Check if scan is already set up
@@ -347,8 +347,8 @@ async function upgradeScan(
     // Ensure directories exist
     fs.mkdirSync(path.join(paradigmDir, 'specs'), { recursive: true });
 
-    // Copy scan spec from templates
-    const templateScanSpec = path.join(templatesDir, 'specs', 'scan.md');
+    // Copy probe spec from templates
+    const templateScanSpec = path.join(templatesDir, 'specs', 'probe.md');
     if (fs.existsSync(templateScanSpec)) {
       fs.copyFileSync(templateScanSpec, scanSpecPath);
     }

@@ -98,7 +98,7 @@ export function createTempProject(options: TempProjectOptions = {}): TempProject
     const specsDir = path.join(paradigmDir, 'specs');
     fs.mkdirSync(specsDir, { recursive: true });
     fs.writeFileSync(path.join(specsDir, 'logger.md'), '# Logger Spec', 'utf8');
-    fs.writeFileSync(path.join(specsDir, 'scan.md'), '# Scan Spec', 'utf8');
+    fs.writeFileSync(path.join(specsDir, 'probe.md'), '# Probe Spec', 'utf8');
     fs.writeFileSync(path.join(specsDir, 'symbols.md'), '# Symbols Spec', 'utf8');
   }
 

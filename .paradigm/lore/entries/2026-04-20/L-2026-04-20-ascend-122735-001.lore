@@ -1,0 +1,66 @@
+id: L-2026-04-20-ascend-122735-001
+type: incident
+timestamp: '2026-04-20T12:27:35.856Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v5.37.11 — paradigm_portal_add_gate silent-no-op hotfix
+summary: 'Field-reported bug: paradigm_portal_add_gate returned perfect-looking success JSON for 11 calls in another project, but gates: [] stayed empty. Root cause: portal-writer.ts guard `if (!data.gates) data.gates = {}` fails when gates is `[]` (truthy Array); subsequent property assignment on the Array is silently dropped by js-yaml.dump; handler constructs success response from input id without reading back. Compounded by v2 scaffold emitting gates: [] / routes: [] by default. Team triaged (reviewer found root cause, Explore mapped blast radius across 6 sibling handlers, Jinx designed prevention strategy). Builder shipped 3-part hotfix + first tests/ directory in paradigm-mcp with 8 regression tests. Reviewer approved-with-changes (none blocking). Residual silent-no-op risk in handleAddComponent/Link/Remove/Rename tracked as follow-up.'
+symbols_touched:
+  - '#portal-writer'
+  - '#purpose-portal'
+  - '#shift-files'
+files_created:
+  - packages/paradigm-mcp/tests/portal-writer.test.ts
+  - packages/paradigm-mcp/tests/.purpose
+  - reviews/2026-04-20-portal-add-gate-bug.md
+  - reviews/2026-04-20-hotfix-review.md
+  - docs/private/plans/silent-no-op-prevention.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/portal-writer.ts
+  - packages/paradigm-mcp/src/tools/purpose-portal.ts
+  - packages/paradigm-mcp/vitest.config.ts
+  - packages/paradigm/src/commands/shift-files.ts
+  - CHANGELOG.md
+decisions:
+  - id: d1
+    decision: Fix the guard pattern in-place rather than introduce writeAndConfirm wrapper
+    rationale: Hotfix scope discipline — wrapper is systemic refactor that deserves its own release. Point patch + read-back verification gets shipping users unblocked today.
+  - id: d2
+    decision: Apply Array→{} defense to purpose-portal handlers too, not just portal-writer
+    rationale: Reviewer's blast-radius mapping showed the same guard pattern in handleAddGate/Signal/State/Aspect/Flow. Symmetric fix is ~65 LOC and eliminates the entire family of the bug, not just the reported instance.
+  - id: d3
+    decision: 'Scaffold emits gates: {} / routes: {} going forward; existing projects self-heal on first mutation'
+    rationale: Writer normalizes Array→{} on read, so no explicit migration needed. Avoids writing a migration script for a trivially idempotent fix.
+  - id: d4
+    decision: Committed team audit trail (reviews/2026-04-20-*.md) alongside the code
+    rationale: Preserves the triage record so future bug hunts can compare against this baseline, same pattern as the README audit commit.
+learnings:
+  - 'Fake success is worse than any explicit error — field agent ran 11 calls trusting the response, only caught by the stop hook noticing drift at session end. Rule: when designing any schema-mutating MCP tool, the success response must be derived from the post-write file read, not from the input payload.'
+  - 'The Array vs. Object shape ambiguity in YAML scaffolds bites hard when guards use truthy checks. `if (!x)` is wrong when x can be a truthy empty container. Paradigm convention going forward: use type-aware normalization (`if (!x || Array.isArray(x)) x = {}`) whenever mutating a v2 schema field.'
+  - paradigm-mcp had zero tests in packages/paradigm-mcp/tests/ before this bug. Systemic gap — the tool-registry.test.ts and notebook-loader.test.ts are under src/ but the mutation tool family had nothing. First test file now exists as precedent.
+  - js-yaml silently drops named properties on Array instances during dump. Not our code's fault — but our code shouldn't assign to Arrays as if they were Objects. Future shared writer helpers must normalize shape before mutation.
+verification:
+  status: pass
+  details:
+    reviewer_verdict: approved-with-changes-non-blocking
+    regression_tests_added: '8'
+    pre_existing_test_failures: 10 (unrelated, verified on main)
+    paradigm_mcp_build: pass
+    paradigm_cli_build: pass
+    paradigm_cli_link: pass
+    git_push: pass
+tags:
+  - bugfix
+  - silent-no-op
+  - portal-yaml
+  - js-yaml
+  - regression-tests
+  - hotfix
+  - field-reported
+confidence: 0.9
+git_context:
+  ref: e687dbb12245b9163d213add8a4cc555c8391732
+  branch: main
+  dirty: true

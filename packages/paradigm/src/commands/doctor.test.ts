@@ -98,6 +98,26 @@ describe('doctorCommand', () => {
     expect(result).toBe(false);
   });
 
+  it('spec-presence check looks for probe.md (not legacy scan.md)', async () => {
+    // Regression guard for the scan→probe rename. The template ships
+    // `specs/probe.md`; doctor must check for that filename, not the legacy
+    // `specs/scan.md`. A mismatch caused fresh projects to report
+    // "Spec file not found" warnings for scan.md.
+    const { rootDir, cleanup: c } = createTempProject({ withSpecs: true });
+    cleanup = c;
+    // createTempProject({ withSpecs: true }) writes logger.md, probe.md, symbols.md
+    // (post-rename). Confirm the probe spec exists on disk.
+    expect(fs.existsSync(path.join(rootDir, '.paradigm', 'specs', 'probe.md'))).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, '.paradigm', 'specs', 'scan.md'))).toBe(false);
+
+    // Capture doctor output to verify no "Spec file not found" for either name.
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await doctorCommand({ rootDir });
+    const allOutput = consoleSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(allOutput).not.toMatch(/specs\/scan\.md.*not found/i);
+    expect(allOutput).not.toMatch(/specs\/probe\.md.*not found/i);
+  });
+
   it('quiet mode suppresses doctor console output', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const { rootDir, cleanup: c } = createTempProject();

@@ -131,33 +131,41 @@ function getLogMethodForSymbol(symbol: string): string {
 }
 
 /**
- * Generate scan protocol section
+ * Generate probe protocol section.
+ *
+ * Reads the canonical `probe` key (see `templates/paradigm/config.yaml` and
+ * `KNOWN_TOP_LEVEL_KEYS` in `core/config-schema.ts`). The legacy `scan`
+ * shape was renamed during the Horizon→Paradigm migration (see
+ * `commands/upgrade.ts` content rewriter, which rewrites `scan→probe` and
+ * `scan-index.json→probe-index.json`). Keeping the old `config.scan?.enabled`
+ * read here meant the windsurf adapter's protocol section silently never
+ * rendered for any project on a current-template config.
  */
-export function generateScanProtocol(config: ParadigmConfig): string {
-  if (!config.scan?.enabled) {
+export function generateProbeProtocol(config: ParadigmConfig): string {
+  if (!config.probe?.enabled) {
     return '';
   }
-  
+
   const lines: string[] = [];
-  
-  lines.push('## Paradigm Scan');
+
+  lines.push('## Paradigm Probe');
   lines.push('');
-  lines.push('When the user says "**paradigm scan**" with an image:');
+  lines.push('When the user says "**paradigm probe**" with an image:');
   lines.push('');
   lines.push('1. Analyze the image for UI elements');
-  lines.push('2. Cross-reference with `.paradigm/scan-index.json`');
+  lines.push('2. Cross-reference with `.paradigm/probe-index.json`');
   lines.push('3. Return structured mapping of visual elements to code');
   lines.push('');
   lines.push('| Mode | Use Case |');
   lines.push('|------|----------|');
-  lines.push('| `paradigm scan` | Map any image to code |');
-  lines.push('| `paradigm scan ui` | Screenshot of running app |');
-  lines.push('| `paradigm scan design` | Mockup - gap analysis |');
-  lines.push('| `paradigm scan error` | Error screenshot |');
+  lines.push('| `paradigm probe` | Map any image to code |');
+  lines.push('| `paradigm probe ui` | Screenshot of running app |');
+  lines.push('| `paradigm probe design` | Mockup - gap analysis |');
+  lines.push('| `paradigm probe error` | Error screenshot |');
   lines.push('');
-  lines.push('See `.paradigm/specs/scan.md` for full protocol.');
+  lines.push('See `.paradigm/specs/probe.md` for full protocol.');
   lines.push('');
-  
+
   return lines.join('\n');
 }
 
@@ -649,7 +657,7 @@ export function generateFooter(): string {
   lines.push('');
   lines.push('- `.paradigm/specs/symbols.md` - Symbol system reference');
   lines.push('- `.paradigm/specs/logger.md` - Logging specification');
-  lines.push('- `.paradigm/specs/scan.md` - Scan protocol');
+  lines.push('- `.paradigm/specs/probe.md` - Probe protocol');
   lines.push('- `.paradigm/docs/commands.md` - CLI reference');
   lines.push('- `.paradigm/docs/patterns.md` - Coding patterns');
   lines.push('- `.paradigm/docs/troubleshooting.md` - Common issues');

@@ -73,7 +73,7 @@ export async function summaryCommand() {
   }
   
   // Specs
-  const specsExist = ['logger.md', 'scan.md', 'symbols.md'].every(
+  const specsExist = ['logger.md', 'probe.md', 'symbols.md'].every(
     f => fs.existsSync(path.join(paradigmDir, 'specs', f))
   );
   health.push({ check: 'Specs', status: specsExist ? 'ok' : 'warn' });

@@ -6,6 +6,7 @@ import {
   DEFAULT_SYMBOL_SYSTEM,
   DEFAULT_CONVENTIONS,
 } from './paradigm-config.js';
+import { validateConfig } from './config-schema.js';
 
 describe('parseParadigmConfig', () => {
   it('parses valid v2 YAML', () => {
@@ -106,6 +107,89 @@ describe('getDefaultParadigmConfig', () => {
   it('embeds project name in overview', () => {
     const config = getDefaultParadigmConfig('awesome-app');
     expect(config['agent-guidelines'].overview).toContain('awesome-app');
+  });
+
+  it('sets the project field from the projectName argument', () => {
+    // Regression: getDefaultParadigmConfig used to drop `project` entirely,
+    // producing a config that failed its own Zod schema (which requires
+    // `project: z.string()`). Wire the argument through.
+    const config = getDefaultParadigmConfig('my-project');
+    expect(config.project).toBe('my-project');
+  });
+
+  it('produces a config that validates cleanly against the schema (no errors, no warnings)', () => {
+    // Regression: a fresh `paradigm init` previously produced two issues —
+    //   1. missing `project` (schema error)
+    //   2. unrecognized top-level `scan` key (schema warning)
+    // Both should now be absent. The default factory is the source of truth
+    // for `paradigm cursorrules --init`, so its output must be schema-clean.
+    const config = getDefaultParadigmConfig('regression-project');
+    const yamlContent = serializeParadigmConfig(config);
+    const result = validateConfig(yamlContent);
+
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe('config-schema metrics field (v6.0 D7)', () => {
+  it('accepts a `metrics` block without warnings or errors', () => {
+    // Regression: `metrics` is in the ParadigmConfig interface, written by
+    // `seedMetricsConsent()` during `paradigm shift`, and emitted on every
+    // fresh project — but `KNOWN_TOP_LEVEL_KEYS` in config-schema.ts did not
+    // list it, so `paradigm doctor` warned "Unrecognized config key: metrics"
+    // on every fresh project. Both the key allowlist and the Zod schema
+    // entry must now accept this field.
+    const yaml = `
+version: "1.0"
+project: metrics-test
+agent-guidelines:
+  overview: "Metrics regression test"
+  how-to-use: []
+  update-rules: []
+symbol-system:
+  "#":
+    name: Component
+    description: Code unit
+    owner: purpose
+    examples: []
+purpose-required: []
+conventions: []
+metrics:
+  remote_consent: pending
+  local_snapshots_enabled: true
+`;
+    const result = validateConfig(yaml);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects an invalid `metrics.remote_consent` value', () => {
+    // The enum guard is meaningful, not just decorative — a typo like
+    // `granted-with-conditions` should fail validation, not silently pass.
+    const yaml = `
+version: "1.0"
+project: metrics-test
+agent-guidelines:
+  overview: "Metrics regression test"
+  how-to-use: []
+  update-rules: []
+symbol-system:
+  "#":
+    name: Component
+    description: Code unit
+    owner: purpose
+    examples: []
+purpose-required: []
+conventions: []
+metrics:
+  remote_consent: maybe
+`;
+    const result = validateConfig(yaml);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('metrics.remote_consent'))).toBe(true);
   });
 });
 

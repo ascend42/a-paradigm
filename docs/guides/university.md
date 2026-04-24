@@ -1,7 +1,9 @@
 # Paradigm University Guide
 
-> v5.39.0 — first release of the multi-tenant content-pack framework.
-> v6.0 will remove the v5 legacy content paths; this guide stays current through both.
+> Multi-tenant content-pack framework. Shipped in v5.39.0 (additive bridge);
+> v6.0 removed the v5 legacy content paths; v6.0.1 refreshed the course content
+> for v6 reality (LoreType taxonomy, agent roster, decision-store consolidation).
+> This guide stays current through subsequent v6.x patches.
 
 ## 1. What it is
 

@@ -1,0 +1,120 @@
+id: L-2026-04-13-ascend-222650-001
+type: insight
+timestamp: '2026-04-13T22:26:50.222Z'
+duration_minutes: 180
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills System Design — Ideation Session (Apr 12-13)
+summary: Multi-session design exploration of a new skills system for Paradigm + Neverland co-launch on May 1. Moved from "skills as static prompt templates" to "skills as managed, versioned, goal-anchored units" with a clear north star model, identity fields, and a registry-backed management layer. No implementation yet — all ideation and design decisions.
+symbols_touched:
+  - '#skill'
+  - '#skill-registry'
+  - '#skill-north-star'
+  - '#skill-identity'
+  - '#paradigm-skill-call'
+  - $skill-upgrade-flow
+  - $skill-distribution-flow
+symbols_created:
+  - '#skill-north-star'
+  - '#skill-registry'
+  - '#skill-identity'
+  - '#paradigm-skill-call'
+decisions:
+  - id: skills-north-star-model
+    decision: 'North star is a plain-language goal: field plus review: auto|manual|off. Not an assertion framework.'
+    rationale: 'User clarified: the point is a blurb to remember the purpose, not a test runner. The user+agent combo evaluates at review time. Simpler, more honest about what automated evaluation can and can''t do.'
+  - id: skills-not-lore
+    decision: Skills are instructions (closer to protocols) not events (lore). Version history tracks body+goal changes, not an append-only event stream.
+    rationale: 'Reviewer blocking finding from round 2: append-only instruction history is redundant with git and inverts the protocol/lore distinction without justification.'
+  - id: skill-call-is-assembler
+    decision: 'paradigm_skill_call is a prompt assembler: validates inputs, substitutes $ARGUMENTS, returns assembled prompt string. It does not replicate context:fork or agent: routing.'
+    rationale: 'Reviewer correctly identified: Claude Code runtime features are not text substitutions. The tool is useful but limited. Document the constraint rather than overpromise.'
+  - id: review-mode-field
+    decision: 'Skills get a review: auto|manual|off field controlling classification behavior per skill.'
+    rationale: 'User explicitly flagged: not all skills should allow agent auto-classification. High-stakes skills (deploys, migrations) need human review on every invocation regardless of how obvious the outcome appears.'
+  - id: skills-neverland-colaunch
+    decision: Skills system ships with Neverland on May 1 — co-designed, not sequenced after.
+    rationale: User stated May 1 hard deadline for true Paradigm + Neverland launch. The architect's wait-for-Neverland argument was immediately invalid.
+learnings:
+  - The north star framing shifted from an assertion framework to a plain-language goal field — much simpler, more honest, and lets the agent infer clarity naturally from skill type
+  - The auto/manual/off review mode respects that different skills carry different stakes — don't assume agent judgment is always appropriate
+  - Skills as managed units needs a registry but the registry should be gitignored runtime state — not a new committed artifact
+  - The content/creative skill category (format, tone, reference) is genuinely different from the 22 existing dev-tooling orchestration flows — needs separate treatment
+  - paradigm_skill_call being a prompt assembler is a constraint to document honestly, not a gap to fill — it still provides value for input validation and discoverability
+tags:
+  - skills
+  - neverland
+  - may-1-launch
+  - ideation
+  - north-star
+  - managed-units
+  - versioning
+body: |
+  ## What Was Explored
+
+  Started from first principles: what IS a skill? Moved through several increasingly refined models over two days.
+
+  ### Round 1 — Cross-environment abstraction + leveling
+  Initial framing: skills as a uniform abstraction across Claude Code, Cursor, Windsurf, Copilot (like how Paradigm unified agents and habits). Plus RPG-style leveling with unlock conditions and context gates.
+
+  Reviewer rejected this: agent sessions don't persist memory, so "agent expertise" accumulating via applied_count isn't meaningful. The leveling model was solving a compelling analogy, not a real user problem. The real value reduced to: skills as versioned quality-tracked artifacts.
+
+  ### Round 2 — Skills as versioned living artifacts
+  Explored: append-only version history, feedback.jsonl, pending-upgrade.yaml, active_version pointer, agent-proposed diffs.
+
+  Reviewer blocked on three structural issues:
+  1. Why is this not a protocol (in-place edits) + git rollback? Skills are instructions, not events.
+  2. Documentor scope extension for proposing skill patches was undeclared.
+  3. Migration contract (plugins/paradigm/skills/ vs .paradigm/skills/) was underspecified.
+
+  ### Round 3 — Skills as parameterized mini-APIs
+  User raised: should skills be more like agent capability APIs (typed inputs/outputs, defined signatures) given the Neverland agent manifest model?
+
+  Architect found: the API model changes behavior meaningfully only for machine-to-machine invocation. For human-invoked skills it's metadata overhead. Most existing 22 skills are orchestration flows (preflight is 260 lines calling 6-10 MCP tools), not parameterized templates.
+
+  Reviewer found: the real question underneath was whether skills should expand to a content-work category (format: text/video/both, tone, reference material) — a genuinely different class not in the current corpus. That's a product scope question, not a parameterization question.
+
+  ### Round 4 — May 1 constraint changes everything
+  User revealed: Paradigm + Neverland ship together on May 1. 19 days. The architect's "wait for Neverland" argument was immediately invalid.
+
+  Architect redesigned for co-launch:
+  - SKILL.md gets optional `inputs:` block (typed named params) — absent = orchestration mode, present = parameterized mode
+  - Neverland agent manifest gets `skills.exposes` and `skills.invokes`
+  - New MCP tool: `paradigm_skill_call`
+
+  Reviewer blocked again on: `paradigm_skill_call` is a prompt assembler not an executor (can't replicate context:fork or agent: routing — Claude Code runtime features, not text substitutions). And `skills.invokes` namespace is unresolvable at install time.
+
+  ### Round 5 — North star, managed units, execution model
+  User's three ideas synthesized into a coherent design:
+
+  **Skills need a north star** — a plain-language `goal:` field stating the point of the skill. Not an assertion framework, not a criteria array. One blurb. At review time, the user + agent look at an input/output pair and ask: "did this hit the goal?" The goal itself is refinable — that refinement IS the leveling up.
+
+  **Skills as managed units with identity** — SKILL.md gets identity fields: `version`, `owner` (paradigm-core | agent-scoped | user-scoped), `publisher`, `trust`, `channel`. Runtime state (invocation-count, last-invoked, satisfaction-rate, upgrade-available) lives in `.paradigm/skills/registry.yaml` — machine-written, gitignored, rebuilt by `paradigm skills sync`. CLI: `paradigm skills list` and `paradigm skills show`.
+
+  **Execution model: hybrid** — SKILL.md owns body + identity (human-authored, never system-modified except on user-approved upgrades). Registry owns runtime state. `paradigm skills sync` rebuilds registry from frontmatter. `paradigm_skill_call` is honestly a prompt assembler — validates inputs, assembles prompt string, returns to caller. Documented constraint: loses context:fork and agent: routing when called via MCP.
+
+  **Auto-classification is configurable** — `review: auto | manual | off` field per skill. Auto = agent classifies what it can, flags ambiguous. Manual = every invocation goes to human review queue regardless. Off = no tracking. Respects that some skills are high-stakes (deploys, migrations) where the user wants eyes on every run. The clarity of auto-classification depends on skill type — outcome-clear skills (commit, generate) are self-evident; judgment-required skills surface for review.
+
+  ## Key Decisions Settled
+
+  1. North star = `goal:` field (plain language) + `review: auto | manual | off` field. Not an assertion framework.
+  2. Skills are instructions, structurally closer to protocols than lore. Version history = body changes + goal changes, not append-only event log.
+  3. `paradigm_skill_call` is a prompt assembler. Documented constraint, not a gap to fill.
+  4. `inputs:` block = optional, typed named params. Absent = orchestration, present = parameterized.
+  5. Registry.yaml = gitignored runtime state. SKILL.md = human-authored source of truth.
+  6. Skills co-launch with Neverland on May 1 — not sequenced after.
+
+  ## What Is NOT Settled
+
+  - The actual v1 scope for May 1. Reviewer's minimum: identity fields on 18 SKILL.md files + `paradigm skills list` + `paradigm skills show`. Architect's v1: broader (registry, north star sidecars, upgrade stubs). Needs a decision.
+  - How `skills.invokes` resolves — advisory doc field vs. actual dependency resolver.
+  - Where the content/creative skill category fits (the new class the user mentioned: format, tone, reference material). Not in the current corpus of 22 dev-tooling skills.
+  - Distribution model: do skills ship with the plugin only, or become independently installable from Neverland?
+  - The upgrade loop mechanics (collect → measure → gap → diff → apply) — designed but not validated.
+confidence: 0.9
+git_context:
+  ref: b19257af92560890adc5267f484a65ecd745f32b
+  branch: main
+  dirty: true
