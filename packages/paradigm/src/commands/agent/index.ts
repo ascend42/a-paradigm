@@ -26,6 +26,12 @@ interface AgentPermissions {
   dangerous_actions?: string[];
 }
 
+interface PartnerRef {
+  id: string;
+  relation?: string;
+  share_notebooks?: 'off' | 'read' | 'read-write';
+}
+
 interface AgentProfile {
   id: string;
   role: string;
@@ -39,6 +45,7 @@ interface AgentProfile {
   updated: string;
   permissions?: AgentPermissions;
   integrityHash?: string;
+  partners?: PartnerRef[];
 }
 
 const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.paradigm', 'agents');
@@ -144,6 +151,9 @@ export async function agentListCommand(options: AgentListOptions = {}) {
     return;
   }
 
+  const installedIds = new Set(profiles.map(p => p.id));
+  let anyMissing = false;
+
   for (const p of profiles) {
     const expertise = (p.expertise || []).sort((a, b) => b.confidence - a.confidence);
     const topSymbols = expertise.slice(0, 3).map(e =>
@@ -153,7 +163,22 @@ export async function agentListCommand(options: AgentListOptions = {}) {
     console.log(`  ${chalk.white.bold(p.id)} — ${chalk.gray(p.role)}`);
     console.log(`    Style: ${p.personality?.style || '?'} | Risk: ${p.personality?.risk || '?'} | Verbosity: ${p.personality?.verbosity || '?'}`);
     console.log(`    Top expertise: ${topSymbols}`);
+    if (p.partners && p.partners.length > 0) {
+      const rendered = p.partners.map(part => {
+        if (!installedIds.has(part.id)) {
+          anyMissing = true;
+          return `${part.id}${chalk.yellow('*')}`;
+        }
+        return part.id;
+      });
+      console.log(`    Partners: ${rendered.join(', ')}`);
+    }
     console.log(`    Projects: ${Object.keys(p.contexts || {}).join(', ') || chalk.gray('none')}`);
+    console.log('');
+  }
+
+  if (anyMissing) {
+    console.log(chalk.dim('  * not installed — run: paradigm agent install <id>'));
     console.log('');
   }
 
@@ -203,6 +228,27 @@ export async function agentShowCommand(id: string, options: AgentShowOptions = {
     const p = profile.personality;
     console.log(`  ${chalk.white.bold('Personality')}`);
     console.log(`    Style: ${p.style}  |  Risk: ${p.risk}  |  Verbosity: ${p.verbosity}`);
+    console.log('');
+  }
+
+  // Partners — Full B (a) v6.0.3
+  if (profile.partners && profile.partners.length > 0) {
+    const allProfiles = loadAllProfiles(cwd);
+    const installed = new Set(allProfiles.map(p => p.id));
+    console.log(`  ${chalk.white.bold('Partners')} (${profile.partners.length})`);
+    for (const part of profile.partners) {
+      if (!installed.has(part.id)) {
+        console.log(`    ${part.id}  ${chalk.yellow('(not installed)')} ${chalk.dim('— paradigm agent install ' + part.id)}`);
+        continue;
+      }
+      const partnerProfile = allProfiles.find(a => a.id === part.id);
+      const reciprocal = partnerProfile?.partners?.some(p => p.id === profile.id) ?? false;
+      if (reciprocal) {
+        console.log(`    ${part.id}  ${chalk.green('✓ reciprocal')}${part.relation ? chalk.dim(`  — ${part.relation}`) : ''}`);
+      } else {
+        console.log(`    ${part.id}  ${chalk.yellow('⚠ pending')} ${chalk.dim(`(${part.id} does not list ${profile.id})`)}`);
+      }
+    }
     console.log('');
   }
 
@@ -627,6 +673,40 @@ function loadProfile(rootDir: string, id: string): AgentProfile | null {
   }
 
   return null;
+}
+
+function loadAllProfiles(rootDir: string): AgentProfile[] {
+  const profiles: AgentProfile[] = [];
+  const seen = new Set<string>();
+
+  if (fs.existsSync(GLOBAL_AGENTS_DIR)) {
+    try {
+      for (const file of fs.readdirSync(GLOBAL_AGENTS_DIR).filter(f => f.endsWith(AGENT_EXT))) {
+        try {
+          const p = yaml.load(fs.readFileSync(path.join(GLOBAL_AGENTS_DIR, file), 'utf-8')) as AgentProfile;
+          if (p?.id && !seen.has(p.id)) { profiles.push(p); seen.add(p.id); }
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+
+  const projectDir = path.join(rootDir, PROJECT_AGENTS_DIR);
+  if (fs.existsSync(projectDir)) {
+    try {
+      for (const file of fs.readdirSync(projectDir).filter(f => f.endsWith(AGENT_EXT))) {
+        try {
+          const p = yaml.load(fs.readFileSync(path.join(projectDir, file), 'utf-8')) as AgentProfile;
+          if (p?.id) {
+            const idx = profiles.findIndex(e => e.id === p.id);
+            if (idx >= 0) profiles[idx] = p;
+            else { profiles.push(p); seen.add(p.id); }
+          }
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+
+  return profiles;
 }
 
 function summarize(p: AgentProfile) {

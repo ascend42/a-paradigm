@@ -5,6 +5,44 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.3] — 2026-04-25
+
+Partners primitive — Full B (a) contracts-only. Agents can declare reciprocal pairings (e.g., scholar↔sheila); marketplace SKU shapes are typed for forward-compat with nevr.land but have no live consumer at v6.0.3. Design pass orchestrated with architect / Jinx (advocate) / Helix (DX) / Loid (intelligence officer) per always-use-team protocol; user picked Full B over team-recommended B-lite synthesis after weighing the migration-risk trade-off.
+
+### Added
+
+- **`partners: PartnerRef[]`** field on `AgentDefinition` (`packages/paradigm/src/commands/team/types.ts`) and `AgentProfile` (`packages/paradigm-mcp/src/types/agents.ts`). Object-array shape (not `string[]`) per Loid — `{ id, relation?, share_notebooks?: 'off'|'read'|'read-write' }` — durable for v6.1+ pair-learning knob without forcing a string→object migration. **Excluded from `AgentProfile.integrityHash`** (existing `computeIntegrityHash` only stringifies `{id, role, permissions}` so existing `.agent` files are not invalidated).
+- **`packages/paradigm/src/commands/agent/registry-types.ts`** — new file with three typed marketplace primitives: `PartnerBundle` (groups partnered agents into single SKU), `ReciprocalInstallMeta` (typed install-prompt metadata), `PartnerCoverage` (registry-index indicator marking paired agents). Contracts only — no live wiring at v6.0.3.
+- **`packages/paradigm/src/commands/agent/partners.ts`** — new pure-helpers module: `validateReciprocity()`, `findMissingPartners()`, `pairLabel()` (alphabetically canonical), `pairNotebookPath()` (returns `_pairs/{a-b}/`), `getPartnerStatus()` returning `'reciprocal' | 'pending' | 'not-installed'`. Pair notebook namespace is reserved for v6.1+ pair-learning; nothing writes there at v6.0.3.
+- **`loadAgentsManifestWithReciprocity()`** in `packages/paradigm/src/commands/team/loader.ts` — wraps `loadAgentsManifest` and runs `O(n)` Map-based reciprocity detection over the full roster. Returns `{ manifest, pending: [{ id, pendingPartners[] }] }`. Single-agent flows (`loadAgentsManifest`, `getAgent`) intentionally do NOT run the check — avoids false-positive storms when partial roster is loaded.
+- **`Nomination.partner_id?: string`** annotation in `packages/paradigm-mcp/src/types/ambient.ts` — written-but-unused at v6.0.3. Loid uses it in v6.1+ for cross-pair analytics; reserving the field now means nomination event consumers don't break when emission begins.
+- **CLI rendering** in `packages/paradigm/src/commands/agent/index.ts`:
+  - `paradigm agent get <id>` — Partners block (only when `partners.length > 0`) with three variants per partner: `✓ reciprocal` (green), `⚠ pending (X does not list Y)` (yellow), `(not installed) — paradigm agent install <id>` (yellow + dim command). Loads all profiles to compute reciprocity status.
+  - `paradigm agent list` — `Partners: a, b*` line per agent (only when partners non-empty); yellow `*` suffix for partners not installed locally; single dim footer `* not installed — run: paradigm agent install <id>` after the loop only if any agent had a `*`.
+- **`paradigm agent search`** registry rendering surfaces `PartnerCoverage` from registry response when present (`paired: ↔ name1, name2` line; green ↔ for fully reciprocal, yellow for partial). Type-cast on registry response — no `@a-company/registry-client` dependency bump.
+- **`saveAgentsManifest` partners-hygiene** — strips empty/undefined `partners` arrays before YAML emit. Never writes `partners: null` (would corrupt older clients).
+- **20 unit tests** added across `partners.test.ts` (13 — reciprocity, missing partners, pair label canonicalization, pair notebook path, partner status) and `loader.test.ts` (7 — reciprocity wrapper, partners YAML round-trip, hygiene).
+- **`docs/guides/agents.md` §11 — Partners** — field shape, reciprocal vs pending semantics, pair notebook namespace, marketplace primitives note.
+
+### Activated
+
+- **Loid (forge)** activated on the project roster — paired with Captain (Cid) as the intelligence officer in core team. Was benched; brought forward for the partners-design orchestration since the partners primitive shapes the v6.1+ learning loop she owns.
+
+### Notes
+
+- **Marketplace primitives are contracts only.** `PartnerBundle`/`ReciprocalInstallMeta`/`PartnerCoverage` exist as typed shapes; no install behavior, no bundle resolution, no registry-side enforcement. nevr.land MVP will plug in as the live consumer; the local code surface is graceful-default when registry response lacks the field. User-acknowledged trade-off: chose "completeness" framing over team-recommended "B-lite + Loid enrichment" cut. Migration risk noted and accepted.
+- **Failure Ledger primitive PUNTED to v6.1.** Was on the v6.0.3 candidate list as Sage's expansion idea #1; user opted to ship lore-rejection telemetry first and design the ledger from real data.
+- **Nora/ftux activation deferred.** `paradigm_agent_activate ftux` returned "not found" despite memory note indicating publish at v5.37.4. Surface flagged; not blocking v6.0.3.
+- **Conductor full 16-bug triage planning** still pending — separate session.
+- **Partners-graph `paradigm doctor` integration** noted as v6.0.4 follow-up — not in this scope.
+
+### Verification
+
+- paradigm-mcp build clean; paradigm CLI build clean.
+- Test suite: paradigm CLI 277 passed (was 257 + 20 new); paradigm-mcp 221 passed (unchanged).
+
+---
+
 ## [6.0.2] — 2026-04-18
 
 Launch-readiness patch. Three streams of work landed in one coherent ship: pre-existing test failures triaged + fixed, missing user-facing guides authored, and two same-class schema-drift bugs the test work surfaced (which then chained into a third — the cross-cutting `specs/scan.md` → `specs/probe.md` rename that had been left half-done). Per user direction "no rush, just proper fixes" — each fix is at the source, not patched at call sites; regression tests added for every config-shape change so future drift fails CI.

@@ -126,6 +126,8 @@ export interface Nomination {
   response?: 'accepted' | 'dismissed' | 'deferred';
   /** Reason for the response — stored for learning feedback, especially valuable for dismissals */
   reason?: string;
+  /** Partner agent id when the nomination references a partner's symbol/aspect — written-but-unused at v6.0.3, used by Loid in v6.1+ for cross-pair analytics */
+  partner_id?: string;
 }
 
 export interface NominationEvidence {

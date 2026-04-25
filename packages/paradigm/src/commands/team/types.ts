@@ -80,6 +80,12 @@ export interface AgentTrigger {
   cron?: string;      // For schedule triggers
 }
 
+export interface PartnerRef {
+  id: string;
+  relation?: string;
+  share_notebooks?: 'off' | 'read' | 'read-write';
+}
+
 export interface AgentDefinition {
   name: string;
   role: string;       // Multi-line description of agent's role
@@ -99,6 +105,8 @@ export interface AgentDefinition {
     include?: string[];
     exclude?: string[];
   };
+  /** Reciprocal partner agents — see docs/guides/agents.md#partners */
+  partners?: PartnerRef[];
 }
 
 export interface FacetLimits {

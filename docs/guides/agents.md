@@ -324,12 +324,63 @@ Registry-installed agents also carry `scope`, `registry`, `distribution`, `insta
 
 ---
 
+## 11. Partners (v6.0.3)
+
+Agents can declare reciprocal **partners** — other agents they pair with for a body of work. Scholar (research) pairs with Sheila (educator). Builder might pair with Tester. The field is structural metadata: it shapes how agents appear next to each other in `agent get`/`agent list` and reserves the surface for future learning-loop coupling.
+
+### Field shape
+
+```yaml
+# in agents.yaml or .agent file
+partners:
+  - id: sheila
+    relation: educator-pair          # optional, free-form label
+    share_notebooks: off             # off (default) | read | read-write
+```
+
+`relation` is human-readable context shown in `agent get`. `share_notebooks` is reserved — at v6.0.3 it has no runtime effect; v6.1+ pair-learning will read it.
+
+### Reciprocal vs pending
+
+When A lists B and B lists A, the pairing is **reciprocal** — shown with a green ✓ in `agent get`. When A lists B but B doesn't list A back, the pairing is **pending** (yellow ⚠) — legal, mirrors how nevr.land trust contracts will work. One-way is intentional in mentor/lead patterns, accidental in typos; the surface lets you tell at a glance.
+
+```
+$ paradigm agent get scholar
+
+  Partners (1)
+    sheila  ✓ reciprocal  — educator-pair
+```
+
+If a declared partner isn't installed locally:
+
+```
+  Partners (1)
+    sheila  (not installed) — paradigm agent install sheila
+```
+
+### Pair notebook namespace (reserved)
+
+Each reciprocal pair has a canonical notebook path: `.paradigm/notebooks/_pairs/{a-b}/` (alphabetically sorted ids, regardless of who declared the pair). The directory is reserved at v6.0.3 — no learning entries are written there yet. v6.1+ pair-learning will use it so partner state lives next to the pair, not inside either agent's profile.
+
+### Marketplace primitives (contracts-only)
+
+Three typed shapes are defined in `packages/paradigm/src/commands/agent/registry-types.ts` for the eventual nevr.land marketplace:
+
+- **`PartnerBundle`** — groups partnered agents into a single SKU
+- **`ReciprocalInstallMeta`** — metadata that an agent's install should prompt-install partners
+- **`PartnerCoverage`** — registry-index indicator marking paired agents and showing pairs
+
+These are **contracts only** at v6.0.3. No live consumer wiring; they exist so registry response shapes stay forward-compat when nevr.land lands. Local code surfaces `PartnerCoverage` from registry response when present (graceful default when absent).
+
+---
+
 ## Audience track map
 
 - **First-time on a project:** §1, §2, §3, §9 ("First time on a project")
 - **Customizing the team:** §3, §4 ("Roster management"), §9 ("Adding a specialty agent", "When an agent stops being useful")
 - **Building agent permissions:** §6, §10
 - **Understanding the learning loop:** §7, §8
+- **Pairing agents:** §11
 
 ---
 

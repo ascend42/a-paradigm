@@ -79,6 +79,17 @@ export interface AgentProfile {
     description: string;
     values?: string[];
   }>;
+
+  // ── Partners (v6.0.3) ──
+
+  /** Reciprocal partner agents — excluded from integrityHash. See docs/guides/agents.md#partners */
+  partners?: PartnerRef[];
+}
+
+export interface PartnerRef {
+  id: string;
+  relation?: string;
+  share_notebooks?: 'off' | 'read' | 'read-write';
 }
 
 export interface AgentNetwork {

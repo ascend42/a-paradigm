@@ -80,18 +80,64 @@ export function loadAgentsManifest(rootDir: string): AgentsManifest | null {
 export function saveAgentsManifest(rootDir: string, manifest: AgentsManifest): void {
   const agentsPath = getAgentsPath(rootDir);
   const paradigmDir = getParadigmDir(rootDir);
-  
+
   if (!fs.existsSync(paradigmDir)) {
     fs.mkdirSync(paradigmDir, { recursive: true });
   }
-  
-  const content = yaml.dump(manifest, {
+
+  // Strip empty/undefined `partners` per agent so YAML stays clean — never write `partners: null`.
+  const cleaned: AgentsManifest = {
+    ...manifest,
+    agents: Object.fromEntries(
+      Object.entries(manifest.agents).map(([name, agent]) => {
+        const { partners, ...rest } = agent;
+        return [
+          name,
+          partners && partners.length > 0 ? { ...rest, partners } : rest,
+        ];
+      })
+    ),
+  };
+
+  const content = yaml.dump(cleaned, {
     lineWidth: -1,
     noRefs: true,
     quotingType: '"',
   });
-  
+
   fs.writeFileSync(agentsPath, content);
+}
+
+/**
+ * Load agents.yaml and run reciprocity detection across the full roster.
+ * Returns the manifest plus a list of agents that have one-way partner declarations
+ * ("pending" pairings — legal, surfaced in `agent get` rendering).
+ *
+ * Single-agent flows MUST use loadAgentsManifest/getAgent directly so a partial
+ * roster doesn't trigger false-positive pending detections.
+ */
+export function loadAgentsManifestWithReciprocity(
+  rootDir: string
+): { manifest: AgentsManifest; pending: Array<{ id: string; pendingPartners: string[] }> } | null {
+  const manifest = loadAgentsManifest(rootDir);
+  if (!manifest) return null;
+
+  const partnerMap = new Map<string, Set<string>>();
+  for (const [name, agent] of Object.entries(manifest.agents)) {
+    partnerMap.set(name, new Set((agent.partners ?? []).map(p => p.id)));
+  }
+
+  const pending: Array<{ id: string; pendingPartners: string[] }> = [];
+  for (const [name, declared] of partnerMap) {
+    const oneWay: string[] = [];
+    for (const partnerId of declared) {
+      const reverse = partnerMap.get(partnerId);
+      if (reverse && !reverse.has(name)) oneWay.push(partnerId);
+    }
+    if (oneWay.length > 0) pending.push({ id: name, pendingPartners: oneWay });
+  }
+
+  return { manifest, pending };
 }
 
 /**

@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
 import { addAdoption } from './adoption.js';
+import type { PartnerCoverage } from './registry-types.js';
 
 const REGISTRY_URL = process.env.NEVR_REGISTRY_URL || 'https://nevr-api.onrender.com';
 const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.paradigm', 'agents');
@@ -56,6 +57,11 @@ export async function agentSearchCommand(query: string, options: { limit?: strin
       }
       if (agent.tags?.length) {
         console.log(`  ${chalk.dim('tags:')} ${agent.tags.join(', ')}`);
+      }
+      const coverage = (agent as { partnerCoverage?: PartnerCoverage }).partnerCoverage;
+      if (coverage?.hasPartners && coverage.partnerIds.length > 0) {
+        const reciprocalMark = coverage.fullyReciprocal ? chalk.green('↔') : chalk.yellow('↔');
+        console.log(`  ${chalk.dim('paired:')} ${reciprocalMark} ${coverage.partnerIds.join(', ')}`);
       }
       console.log();
     }
