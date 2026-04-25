@@ -1,0 +1,95 @@
+id: TD-2026-04-25-417
+timestamp: '2026-04-25T22:22:12.676Z'
+title: Paradigm enforcement model pivot — agent-owned, not framework-owned
+decision: >-
+  Paradigm framework stops enforcing symbol/aspect discipline at the framework level. The framework provides ENABLING
+  PRIMITIVES (signals, metrics, soft-block tool, authority registry); active agents on the project roster determine
+  POLICY (whether/how to enforce). When a compliance-archetype agent (Rune) is rostered, HE owns the entire
+  symbol/aspect ecosystem with three authority modes (advise/auto-author/guard, default advise). When no compliance
+  archetype is rostered, the framework computes coverage data as visible metrics but emits NO warnings, NO nominations,
+  NO blocks — silence respects user agency. v6.0.4 ships emergency cuts (drop framework-level aspect-coverage block when
+  no claimant; nominate Rune via paradigm shift; rename compliance-check → aspect-report data-only). v6.1 ships the
+  load-bearing soft-block primitive plus authority claim registry plus hook orchestrator plus tier-1/tier-2 notebook
+  split. v6.2 ships polish (archetype defaults, opt-out registry, JSONLogic unblock predicates, override-cluster
+  auto-coaching).
+rationale: >-
+  User reframe: 'It's not technically paradigm that needs to enforce this. If Rune is in the project he NEEDS to manage
+  the entire eco space. People that use paradigm are within their own right to not use the symbols.' Framework currently
+  conflates 'Paradigm thinks symbols matter' with 'this project's team thinks symbols matter' — those are different
+  claims. Dogfooding failure proves the descriptive-enforcement model fails: 704 components / 219 aspects (0.31:1 vs
+  documented ≥1:1 floor); 316 missing aspect anchors; cross-project pattern reported across multiple of user's projects.
+  Loid's framing crystallized the design contract: 'The user's reframe is a contract that Rune must be powerful enough
+  to honor. If the framework stops enforcing and Rune can't pick up the slack, drift wins by default.' Soft-block
+  primitive (paradigm_propose_block — agent-initiated, framework-honored, user-keystroke-overridable) is the
+  load-bearing piece both Architect and Loid converge on. Without it, agent-owned enforcement is rhetoric. Notebook
+  tier-1/tier-2 split (transferable rules vs project-local exceptions) is the missing primitive that lets Rune compound
+  across projects — currently all his notebook content is tier-2 which is why he's helpless on new-project
+  onboarding.</rationale>
+
+  <parameter name="rationale">User reframe: 'It is not technically paradigm that needs to enforce this. If Rune is in
+  the project he NEEDS to manage the entire eco space. People that use paradigm are within their own right to not use
+  the symbols.' Framework currently conflates 'Paradigm thinks symbols matter' with 'this project team thinks symbols
+  matter' — those are different claims. Dogfooding failure proves the descriptive-enforcement model fails: 704
+  components / 219 aspects (0.31:1 vs documented 1:1 minimum floor); 316 missing aspect anchors; cross-project pattern
+  reported across multiple of user projects. Loid framing crystallized the design contract: 'The user reframe is a
+  contract that Rune must be powerful enough to honor. If the framework stops enforcing and Rune cannot pick up the
+  slack, drift wins by default.' Soft-block primitive (paradigm_propose_block — agent-initiated, framework-honored,
+  user-keystroke-overridable) is the load-bearing piece both Architect and Loid converge on. Without it, agent-owned
+  enforcement is rhetoric. Notebook tier-1/tier-2 split (transferable rules vs project-local exceptions) is the missing
+  primitive that lets Rune compound across projects — currently all his notebook content is tier-2 which is why he is
+  helpless on new-project onboarding.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: compliance
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Strengthen framework-level enforcement (add 1:1 component-to-aspect ratio check to Stop hook with severity=block)
+    rejected_because: >-
+      Violates user reframe that paradigm should not coerce symbol discipline. Would freeze every user project on Monday
+      morning with massive backlogs. Treats users without their consent as needing the same discipline as Paradigm
+      itself.
+  - option: Pure-advisory model (warnings only, no agent ownership)
+    rejected_because: >-
+      What we have today. Producing 0.31:1 ratios on Paradigm itself even when the user agrees with the rule.
+      Pure-advisory does not work even when the user agrees.
+  - option: CI-only enforcement (move all checks to GitHub Actions, drop hooks)
+    rejected_because: >-
+      Same coercion problem at a different layer. Also breaks projects that do not use GitHub Actions. CI is downstream
+      of where the work happens.
+  - option: Hard block when Rune rostered (write-tool refusal on missing aspect)
+    rejected_because: >-
+      Re-introduces parent-framework that user reject. Rune-as-CI is just hooks wearing a costume. Loid: 'Both extremes
+      fail. Block deploys reintroduces the parent-framework that the reframe just rejected.'
+  - option: Pull soft-block primitive forward to v6.0.4 alongside the emergency cuts
+    rejected_because: >-
+      Pending user decision (open call 3). Rune effective sooner but harder release. Default plan: hold soft-block for
+      v6.1 with rest of authority work; v6.0.4 ships emergency cuts only.
+symbols_affected:
+  - '#compliance-rune'
+  - '#paradigm-enforcement-model'
+  - '#authority-claim'
+  - '#propose-block'
+  - '#aspect-coverage'
+  - '#soft-block-primitive'
+  - '#notebook-tier-1-tier-2'
+  - '#hook-orchestrator'
+  - '#aspect-report-rename'
+  - '#opt-out-registry'
+status: active
+tags:
+  - v6.0.4
+  - v6.1
+  - v6.2
+  - agent-empowerment
+  - framework-philosophy
+  - compliance
+  - design-pivot
