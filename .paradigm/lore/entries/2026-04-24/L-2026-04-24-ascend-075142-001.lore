@@ -1,0 +1,40 @@
+id: L-2026-04-24-ascend-075142-001
+type: milestone
+timestamp: '2026-04-24T07:51:42.455Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.2 — launch-readiness patch shipped
+summary: 'Three-stream patch: 17 pre-existing test failures resolved (test-scaffold drift only), 3 user-facing guides authored (agents/decisions/v6-migration), 3 same-class schema-drift bugs fixed at source with regression tests preventing recurrence. specs/scan.md → specs/probe.md cross-cutting rename completed across 9 sites. Build green across all packages.'
+symbols_touched:
+  - '#paradigm-config'
+  - '#ide-adapters'
+  - '#config-schema'
+  - '#specs-probe'
+  - '#docs-guides'
+  - '#test-fixes'
+commit: aab4a59f
+learnings:
+  - Schema-vs-factory drift is a real class — surfaced 3 instances in one cycle (factory missing project field, factory emitting legacy scan key, adapter reading legacy config key). Round-trip regression test (factory → validateConfig assert zero warnings AND zero errors) catches all three at CI time.
+  - Cross-cutting rename leaves silent dead code — base.ts:660 generateFooter() was telling every synced IDE to read a nonexistent specs/scan.md. The rename intent existed in CHANGELOG line 4200 + upgrade.ts migration code, but the half-done execution made the bugs harder to find than if the rename had never started.
+  - Pre-existing test failures compound silently — 17 failures had been ignored across 5 releases. Fixing them surfaced 3 production bugs the tests would have caught originally.
+verification:
+  status: pass
+  details:
+    build: pass
+    paradigm-mcp-tests: 221 pass
+    paradigm-cli-tests: 257 pass + 1 skipped
+    university-tests: 11 pass / 20 skipped
+    manual-smoke: 'fresh /tmp project: doctor clean, zero warnings'
+tags:
+  - v6.0.2
+  - release
+  - launch-readiness
+  - schema-drift
+  - test-fixes
+confidence: 0.9
+git_context:
+  ref: aab4a59f0e25af0335139bbcaaef4397aff0a604
+  branch: main
+  dirty: true

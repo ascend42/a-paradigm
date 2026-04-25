@@ -1,0 +1,107 @@
+id: L-2026-04-25-ascend-204214-001
+type: milestone
+timestamp: '2026-04-25T20:42:14.572Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.3 partners primitive + Scholar/Swift roster moves + Conductor triage
+summary: Single session shipped Full B (a) contracts-only partners primitive (object-shape `[{id, relation?, share_notebooks?}]`, marketplace SKU types, reserved pair-notebook namespace), added Scholar (core, paired with Sheila) and Swift (ecosystem) agents, fixed Nora's broken v5.37.4 registration, and produced two planning artifacts (v6.0.3 phased plan + Conductor 16-bug Trace triage). Three commits, 22 files, +1166/-10 across schema/CLI/tests/docs/agents.
+symbols_touched:
+  - '#agent-partners'
+  - '#agent-definition'
+  - '#agent-profile'
+  - '#partner-bundle'
+  - '#reciprocal-install-meta'
+  - '#partner-coverage'
+  - '#pair-notebook-namespace'
+  - '#nomination-event'
+  - '#scholar'
+  - '#swift'
+  - '#nora-ftux'
+  - '#sheila-educator'
+  - '#conductor'
+  - '#v6-0-3-plan'
+symbols_created:
+  - '#agent-partners'
+  - '#partner-bundle'
+  - '#reciprocal-install-meta'
+  - '#partner-coverage'
+  - '#pair-notebook-namespace'
+  - '#scholar'
+  - '#swift'
+files_created:
+  - packages/paradigm/src/commands/agent/registry-types.ts
+  - packages/paradigm/src/commands/agent/partners.ts
+  - packages/paradigm/src/commands/agent/partners.test.ts
+  - packages/paradigm/src/commands/team/loader.test.ts
+  - /Users/ascend/.paradigm/agents/scholar.agent
+  - /Users/ascend/.paradigm/agents/swift.agent
+  - /Users/ascend/.paradigm/agents/ftux.agent
+  - .paradigm/research/v6.0.3-implementation-plan.md
+  - .paradigm/research/conductor-16-bugs-triage.md
+files_modified:
+  - packages/paradigm/src/commands/team/types.ts
+  - packages/paradigm/src/commands/team/loader.ts
+  - packages/paradigm/src/commands/agent/index.ts
+  - packages/paradigm/src/commands/agent/registry.ts
+  - packages/paradigm-mcp/src/types/agents.ts
+  - packages/paradigm-mcp/src/types/ambient.ts
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm/package.json
+  - packages/paradigm-mcp/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+  - docs/guides/agents.md
+  - CHANGELOG.md
+  - .paradigm/agents.yaml
+  - .paradigm/roster.yaml
+  - .paradigm/adoptions.yaml
+  - /Users/ascend/.paradigm/agents/educator.agent
+decisions:
+  - id: d-1
+    decision: Full B (a) contracts-only over team-recommended B-lite synthesis
+    rationale: User picked completeness framing after team (architect/Jinx/Helix/Loid) recommended cutting marketplace primitives; user override accepted with documented migration risk on bundle metadata.
+  - id: d-2
+    decision: Object-shape partners (Loid) over string[] (Architect)
+    rationale: Object array `[{id, relation?, share_notebooks?}]` is durable for v6.1 learning-loop knob; string[] would force migration.
+  - id: d-3
+    decision: Asymmetric pairings as `pending` status, not warn
+    rationale: Loid's framing — one-way is legal and mirrors nevr.land trust contract semantics; warn-only would train users to ignore.
+  - id: d-4
+    decision: Pair notebook namespace reserved at `_pairs/{a-b}/`, not wired to learning yet
+    rationale: Path helper only at v6.0.3; reserves the surface so v6.1+ pair-learning doesn't force a schema migration.
+  - id: d-5
+    decision: Failure Ledger primitive PUNTED to v6.1
+    rationale: User chose to ship lore-rejection telemetry first and design the ledger from real data.
+  - id: d-6
+    decision: Nora's broken v5.37.4 registration fixed by manually constructing `~/.paradigm/agents/ftux.agent`
+    rationale: agents.yaml/adoptions/roster entries existed but global .agent profile was never published; reconstructed from the agents.yaml entry.
+learnings:
+  - 'Builder agent hit Edit/Write permission denial mid-session; recovery was straightforward when I executed the builder''s full plan myself (had the orientation captured in their report). Future: for substantive multi-file builds, verify builder has write permissions before delegating.'
+  - Orchestrate_inline auto-planner ignored explicit `agents` override (kept architect, dropped advocate/dx/forge); workaround was launching the 4 design agents directly via Task tool with parallel run_in_background. Auto-planner's agent selection appears keyword-triggered, not override-respecting.
+  - 'ftux/Nora was a partial-registration: agents.yaml + adoptions + roster entries existed but no global .agent profile file. `paradigm_agent_activate` requires the .agent profile, not just registration entries. Ship-completion check should verify the .agent file exists for any new core agent.'
+  - Per-pair notebook namespace pattern (`_pairs/{alphabetically-canonical-id-pair}/`) is the right shape for partner state — stays out of either agent's profile, canonical regardless of who declares the pair, leaves room for v6.1 learning without schema changes.
+  - Architect's plan correctly flagged that AgentProfile is duplicated in `agent/index.ts` (deliberate to avoid cross-package import); editing the schema requires updating BOTH the canonical paradigm-mcp type AND the local CLI duplicate.
+verification:
+  status: pass
+  details:
+    build: pass (paradigm + paradigm-mcp clean)
+    tests: 'pass (498 total: 277 paradigm + 221 paradigm-mcp; 20 new tests added — 13 partners + 7 loader)'
+    roster: pass (21 active agents verified post-moves)
+tags:
+  - v6.0.3
+  - partners-primitive
+  - agent-roster
+  - scholar
+  - swift
+  - nora-fix
+  - conductor-planning
+linked_commits:
+  - '49778437'
+  - c5a7739e
+  - f621f3bf
+confidence: 0.9
+git_context:
+  ref: f621f3bf51c5956bd5c1545931c472bffcdba658
+  branch: main
+  dirty: true
