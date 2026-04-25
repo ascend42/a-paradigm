@@ -1,0 +1,88 @@
+id: TD-2026-04-25-704
+timestamp: '2026-04-25T22:00:00.383Z'
+title: v6.1 = Sovereign Notebooks + Cross-References (replaces share_notebooks runtime activation)
+decision: >-
+  v6.1 ships disjointed-notebooks-with-cross-references as the partners-learning primitive instead of activating
+  v6.0.3's reserved `share_notebooks` content-injection runtime. Each agent's notebook stays sovereign; entries
+  reference partner entries via structured `refs: [{target, kind, note}]` field with 5-kind taxonomy
+  (agrees/diverges/supersedes/builds_on/see_also). No content crosses notebook boundaries at runtime — labels only in
+  prompts. share_notebooks field schema preserved but restricted to 'off' only at v6.1; 'read'/'read-write' values
+  deprecated with warnings.
+rationale: >-
+  User reframe surfaced a fundamentally better primitive than what v6.0.3 reserved. Loid (who designed share_notebooks)
+  explicitly reversed her position during the critique pass: "I was wrong to settle for [from: X] — sovereignty by
+  construction beats attribution by annotation." Cross-refs solves the same pair-learning problem without the costs
+  share_notebooks would have introduced: no token-budget injection, no namespace-collision rules, no
+  calibration-coupling hazard, no attribution blur, naturally accommodates asymmetric pairings (A→B without B→A is
+  legal). Loid confirmed the learning loop is preserved and SHARPENED — bidirectional_promotion_rate becomes a measure
+  of genuine convergence rather than echo, and ref-creation is itself the acceptance signal. Jinx's N=1 prematurity
+  concern partially mitigated by smaller surface area (pointer semantics simpler than content-merge semantics) plus
+  schema marked v0-experimental for explicit migration path. User chose Architect's 5-kind taxonomy over Loid's 4-kind
+  and Jinx's 0-kind; tradeoff accepted: kinds designed under N=1 condition, v6.2 may migrate based on observed usage.
+  All three discovery affordances ship (search tool, session-start digest, debrief candidate-refs) — Jinx flagged
+  "library with no card catalog" as fatal flaw if discovery missing.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: >-
+      Slim — Soak Release: Failure Ledger + CI drift + observability-only partner_id emission, no share_notebooks
+      activation, no cross-refs
+    rejected_because: >-
+      Jinx's framing — but cross-refs converts soak-time into signal-generating time without baking content-merge
+      semantics, so the soak benefit is preserved with more value.
+  - option: >-
+      Mid — Loid synthesis: activate share_notebooks runtime with strict caps (top-K=5, 2000-token budget, [from: X]
+      tags), pair-coherence metrics observability-only, pair_evidence_boost opt-in flag
+    rejected_because: >-
+      Loid herself reversed: '[from: X] tags were a band-aid. The content still landed in agent A's prompt as if A had
+      thought it.' Sovereignty by construction beats attribution by annotation. Cross-refs is the better primitive AND
+      smaller surface area.
+  - option: >-
+      Full — activate share_notebooks runtime + pair-namespace writer + cross-pair analytics consumer +
+      threshold-coupling foundations
+    rejected_because: >-
+      All three agents flagged threshold coupling as hazardous with N=1 data — risks wisdom-spam from coupled
+      calibration. Cross-pair analytics with N=1 (Scholar↔Sheila is one pairing shape; peer↔peer /
+      supervisor↔subordinate are different) overfits to research↔educator dynamic.
+  - option: '0-kind taxonomy (Jinx): just target + free-text note'
+    rejected_because: >-
+      User picked structured kinds for semantic queryability (paradigm_notebook_diverges_from etc) and to give Loid's
+      learning loop typed signal for corroboration vs contradiction. Tradeoff acknowledged: kinds designed under N=1 may
+      need migration in v6.2.
+  - option: '4-kind taxonomy (Loid): grounds-in / corroborates / contradicts / extends'
+    rejected_because: >-
+      User picked Architect's 5-kind taxonomy (agrees/diverges/supersedes/builds_on/see_also). Both work for Loid's
+      learning loop; Architect's covers semantic-relationship space slightly more granularly.
+  - option: Coexist share_notebooks + cross-refs
+    rejected_because: >-
+      Architect: 'pick one — both can't coexist or injection wins by default.' Agents follow path of least resistance.
+      Loid agreed — deprecate share_notebooks 'read'/'read-write' values to 'off'-only, schema preserved for possible
+      v6.2+ revival if cross-refs prove insufficient.
+symbols_affected:
+  - '#cross-refs'
+  - '#sovereign-notebooks'
+  - '#share-notebooks-deprecated'
+  - '#agent-partners'
+  - '#pair-coherence'
+  - '#partner-discovery'
+  - '#failure-ledger'
+  - '#ci-drift-detector'
+  - '#v6-1-thesis'
+status: active
+tags:
+  - v6.1
+  - design-pivot
+  - partners-primitive
+  - sovereignty
+  - schema-v0-experimental
