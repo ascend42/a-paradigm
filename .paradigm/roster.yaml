@@ -1,20 +1,23 @@
 version: '1.0'
 active:
-  - cid
   - advocate
   - architect
   - builder
+  - cid
   - compliance
   - debugger
   - designer
   - documentor
   - dx
   - educator
+  - forge
   - ftux
   - performance
   - qa
   - release
   - researcher
   - reviewer
+  - scholar
   - security
+  - swift
   - tester

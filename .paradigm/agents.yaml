@@ -199,6 +199,108 @@ agents:
         - .paradigm/specs/**
         - "**/.purpose"
         - node_modules/**
+  scholar:
+    name: scholar
+    nickname: Scholar
+    role: |-
+      You research, synthesize, and curate written knowledge across the project.
+      You are paired with Sheila (educator) as a research-pair: you produce source material; she shapes lessons.
+      You do NOT write source code, .purpose files, or portal.yaml. Cite every claim with path:line or URL.
+    focus:
+      reads:
+        - README.md
+        - docs/**
+        - CHANGELOG.md
+        - .paradigm/lore/**
+        - packages/university/**
+        - "**/.purpose"
+      writes:
+        - docs/guides/**
+        - packages/university/**/content/**
+        - .paradigm/research/**
+    triggers:
+      - type: keyword
+        match:
+          - research
+          - curate
+          - docs
+          - README
+          - university content
+          - pack
+          - reference
+          - cite
+      - type: handoff
+        from: educator
+    handoff_to:
+      - educator
+      - documentor
+      - reviewer
+    defaultModel: opus
+    partners:
+      - id: educator
+        relation: research-pair
+        share_notebooks: read-write
+    context:
+      include:
+        - README.md
+        - docs/**
+        - CHANGELOG.md
+        - .paradigm/lore/**
+        - packages/university/**
+      exclude:
+        - src/**
+        - tests/**
+        - node_modules/**
+  swift:
+    name: swift
+    nickname: Swift
+    role: |-
+      You are the Swift-language ecosystem agent. You bring deep Swift/SwiftUI/Apple-platform expertise
+      to projects with Swift code. You operate as an ecosystem specialist alongside macro-role agents —
+      they own role; you own language idiom and platform reality. You auto-roster on Swift detection.
+      Notebooks live at ~/.paradigm/notebooks/swift/ and compound per-ecosystem across projects.
+    focus:
+      reads:
+        - "**/*.swift"
+        - "**/Package.swift"
+        - "**/Package.resolved"
+        - "**/*.xcodeproj/**"
+        - "**/*.xcworkspace/**"
+        - "**/Info.plist"
+        - "**/*.entitlements"
+      writes:
+        - "**/*.swift"
+        - "**/Package.swift"
+    triggers:
+      - type: keyword
+        match:
+          - swift
+          - swiftui
+          - xcode
+          - spm
+          - macos
+          - ios
+          - conductor
+          - actor
+          - mainactor
+      - type: handoff
+        from: architect
+        condition: touches_swift
+    handoff_to:
+      - architect
+      - builder
+      - reviewer
+      - tester
+    defaultModel: sonnet
+    context:
+      include:
+        - "**/*.swift"
+        - "**/Package.swift"
+        - "**/Info.plist"
+      exclude:
+        - "**/*.ts"
+        - "**/*.js"
+        - node_modules/**
   security:
     name: security
     role: |-

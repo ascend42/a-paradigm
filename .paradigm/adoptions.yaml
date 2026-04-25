@@ -14,3 +14,15 @@ agents:
     nickname: Nora
     defaults-accepted: true
     version: 0.1.0
+  scholar:
+    adopted: "2026-04-25T00:00:00.000Z"
+    source: core
+    nickname: Scholar
+    defaults-accepted: true
+    version: 0.1.0
+  swift:
+    adopted: "2026-04-25T00:00:00.000Z"
+    source: ecosystem
+    nickname: Swift
+    defaults-accepted: true
+    version: 0.1.0

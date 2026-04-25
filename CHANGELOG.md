@@ -24,9 +24,13 @@ Partners primitive — Full B (a) contracts-only. Agents can declare reciprocal 
 - **20 unit tests** added across `partners.test.ts` (13 — reciprocity, missing partners, pair label canonicalization, pair notebook path, partner status) and `loader.test.ts` (7 — reciprocity wrapper, partners YAML round-trip, hygiene).
 - **`docs/guides/agents.md` §11 — Partners** — field shape, reciprocal vs pending semantics, pair notebook namespace, marketplace primitives note.
 
-### Activated
+### Activated / new agents
 
+- **Scholar (tier-1, core)** — research-and-curation specialist, paired with Sheila (educator) via reciprocal `partners` field with `relation: 'research-pair'` and `share_notebooks: 'read-write'`. Owns research briefs + curated University content + docs/guides accuracy + citations; never writes code. First test of the partners primitive in production. Registered in `AGENT_TIERS`, `ROLE_PROMPTS`, `paradigm_agent_prompt` enum, `roster.yaml`, `agents.yaml`, `adoptions.yaml`, and `~/.paradigm/agents/scholar.agent`.
+- **Swift (tier-2, ecosystem)** — Swift/SwiftUI/Apple-platform specialist with global cross-project notebook compounding. Auto-rosters on `*.swift` / `Package.swift` / `*.xcodeproj` detection. No partners (ecosystem agents stay decoupled from project-local agents per Loid's design input). Initial transferable patterns: `mainactor-on-protocols` (from Conductor v6 work) + `read-platform-version-first`. Same registration sites as Scholar.
 - **Loid (forge)** activated on the project roster — paired with Captain (Cid) as the intelligence officer in core team. Was benched; brought forward for the partners-design orchestration since the partners primitive shapes the v6.1+ learning loop she owns.
+- **Nora (ftux)** activated — was registered in agents.yaml/adoptions/roster but missing global `~/.paradigm/agents/ftux.agent` profile (registration was incomplete at v5.37.4 publish). Created the profile from the existing agents.yaml entry; activate now succeeds. Filed under "investigate Nora missing-from-roster" task during this session.
+- **Sheila (educator)** updated globally with reciprocal `partners: [{id: 'scholar', relation: 'research-pair', share_notebooks: 'read-write'}]`. Version bumped 1.0.0 → 1.1.0.
 
 ### Notes
 
