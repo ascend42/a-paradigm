@@ -25,9 +25,17 @@ components:
     type: command-group
     tags: [feature, agent-identity, scopes, cli]
   RegistryCommands:
-    description: "CLI: paradigm agent install, search, publish — wires Paradigm to nevr.land registry via @a-company/registry-client. Lazy-loads the client, writes .agent profiles, records adoption."
+    description: "CLI: paradigm agent install, search, publish — wires Paradigm to nevr.land registry via @a-company/registry-client. Lazy-loads the client, writes .agent profiles, records adoption. v6.0.3+ surfaces PartnerCoverage indicator from registry response when present."
     type: command-group
     tags: [feature, agent-registry, nevr, cli]
+  Partners:
+    description: "Pure-helper module for the v6.0.3 partners primitive. Exports validateReciprocity, findMissingPartners, pairLabel (alphabetically canonical), pairNotebookPath (returns _pairs/{a-b}/), getPartnerStatus returning 'reciprocal'|'pending'|'not-installed'. No I/O — agents passed in by caller."
+    type: module
+    tags: [feature, agent-partners, partners-primitive]
+  RegistryTypes:
+    description: "v6.0.3 marketplace SKU primitives — typed-only contracts, no live consumer. Exports PartnerBundle (groups partnered agents into single SKU), ReciprocalInstallMeta (typed install-prompt metadata), PartnerCoverage (registry-index indicator). Forward-compat for nevr.land MVP."
+    type: module
+    tags: [feature, agent-partners, marketplace-primitive, contracts-only]
 
 signals:
   agent-created:
@@ -62,3 +70,6 @@ flows:
   $agent-install-flow:
     description: "User runs install → registry queried → package downloaded (or metadata fallback) → .agent profile written → adoption recorded"
     tags: [agent-registry, nevr, adoption]
+  $partners-rendering-flow:
+    description: "agent get/list rendering → loadAllProfiles → reciprocity computed via getPartnerStatus → Partners block renders with reciprocal (✓ green) / pending (⚠ yellow) / not-installed (yellow + install hint) variants"
+    tags: [agent-partners, cli]

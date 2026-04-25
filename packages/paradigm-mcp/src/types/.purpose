@@ -10,17 +10,17 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination"
+    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash)."
     type: types
-    tags: [agent-identity, schema, permissions, attention, learning, collaboration, maestro]
+    tags: [agent-identity, schema, permissions, attention, learning, collaboration, maestro, partners]
   NotebookTypes:
     description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
     type: types
     tags: [notebooks, schema]
   AmbientTypes:
-    description: "Type definitions for ambient coordination — StreamEvent, AttentionScore, Nomination, Debate, SurfacingConfig"
+    description: "Type definitions for ambient coordination — StreamEvent, AttentionScore, Nomination, Debate, SurfacingConfig. v6.0.3+ Nomination gains optional partner_id?: string annotation (written-but-unused at v6.0.3, consumed by Loid in v6.1+ for cross-pair analytics)."
     type: types
-    tags: [ambient, coordination, event-stream, schema]
+    tags: [ambient, coordination, event-stream, schema, partners]
   KnowledgeStreamTypes:
     description: "Type definitions for three knowledge streams — WorkLogEntry, JournalEntry, TeamDecision, KnowledgeStream"
     type: types

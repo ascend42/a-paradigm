@@ -195,13 +195,14 @@ components:
       - '!coverage-stub-created'
       - '!session-insights-ready'
   OrchestrationTools:
-    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection). Nora (ftux) is a core tier-1 agent in the roster — runs after Builder on user-visible surfaces, before Documentor.
+    description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection). Nora (ftux) is a core tier-1 agent in the roster — runs after Builder on user-visible surfaces, before Documentor. v6.0.3+ adds Scholar (tier-1 core, paired with Sheila/educator via partners primitive — research/curation specialist) and Swift (tier-2 ecosystem, auto-rosters on *.swift detection — Swift/SwiftUI/Apple-platform expertise with global cross-project notebook compounding).
     type: tool-group
     tags:
       - feature
       - orchestration
       - maestro
       - agents
+      - partners
       - symphony
       - documentor
       - ftux

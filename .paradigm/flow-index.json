@@ -1,34 +1,7 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-04-09T17:22:18.528Z",
+  "generatedAt": "2026-04-25T22:04:41.522Z",
   "flows": {
-    "$event-ingestion": {
-      "id": "$event-ingestion",
-      "description": "emit() → buffer → periodic flush → POST /api/events",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "emit() call from application code",
-          "symbol": "#sentinel-web-client"
-        },
-        {
-          "id": "step-2",
-          "action": "push event into circular buffer",
-          "symbol": "#ring-buffer"
-        },
-        {
-          "id": "step-3",
-          "action": "setInterval flush to server",
-          "symbol": "#sentinel-web-client"
-        },
-        {
-          "id": "step-4",
-          "action": "POST /api/events",
-          "symbol": "#sentinel-web-client"
-        }
-      ],
-      "definedIn": "packages/sentinel-web/.purpose"
-    },
     "$plsat-exam-flow": {
       "id": "$plsat-exam-flow",
       "description": "Full PLSAT exam lifecycle from intro through certification",
@@ -65,6 +38,33 @@
         }
       ],
       "definedIn": "packages/university/.purpose"
+    },
+    "$event-ingestion": {
+      "id": "$event-ingestion",
+      "description": "emit() → buffer → periodic flush → POST /api/events",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "emit() call from application code",
+          "symbol": "#sentinel-web-client"
+        },
+        {
+          "id": "step-2",
+          "action": "push event into circular buffer",
+          "symbol": "#ring-buffer"
+        },
+        {
+          "id": "step-3",
+          "action": "setInterval flush to server",
+          "symbol": "#sentinel-web-client"
+        },
+        {
+          "id": "step-4",
+          "action": "POST /api/events",
+          "symbol": "#sentinel-web-client"
+        }
+      ],
+      "definedIn": "packages/sentinel-web/.purpose"
     },
     "$ide-sync-flow": {
       "id": "$ide-sync-flow",
@@ -152,6 +152,38 @@
       ],
       "definedIn": "packages/purpose/core/.purpose"
     },
+    "$portal-validation-flow": {
+      "id": "$portal-validation-flow",
+      "description": "Validate portal.yaml gate configuration and route compliance",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Find and parse portal.yaml via glob",
+          "symbol": "#yaml-parser"
+        },
+        {
+          "id": "step-2",
+          "action": "Validate gate definitions against Zod schemas",
+          "symbol": "#gate-schemas"
+        },
+        {
+          "id": "step-3",
+          "action": "Check for circular dependencies in gate requires",
+          "symbol": "#topology-checker"
+        },
+        {
+          "id": "step-4",
+          "action": "Validate routes reference declared gates",
+          "symbol": "#validator"
+        },
+        {
+          "id": "step-5",
+          "action": "Report issues and compliance status",
+          "symbol": "#validator"
+        }
+      ],
+      "definedIn": "packages/portal/core/.purpose"
+    },
     "$symbol-aggregation": {
       "id": "$symbol-aggregation",
       "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
@@ -188,47 +220,9 @@
         }
       ],
       "definedIn": "packages/premise/core/.purpose"
-    },
-    "$portal-validation-flow": {
-      "id": "$portal-validation-flow",
-      "description": "Validate portal.yaml gate configuration and route compliance",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Find and parse portal.yaml via glob",
-          "symbol": "#yaml-parser"
-        },
-        {
-          "id": "step-2",
-          "action": "Validate gate definitions against Zod schemas",
-          "symbol": "#gate-schemas"
-        },
-        {
-          "id": "step-3",
-          "action": "Check for circular dependencies in gate requires",
-          "symbol": "#topology-checker"
-        },
-        {
-          "id": "step-4",
-          "action": "Validate routes reference declared gates",
-          "symbol": "#validator"
-        },
-        {
-          "id": "step-5",
-          "action": "Report issues and compliance status",
-          "symbol": "#validator"
-        }
-      ],
-      "definedIn": "packages/portal/core/.purpose"
     }
   },
   "symbolToFlows": {
-    "#sentinel-web-client": [
-      "$event-ingestion"
-    ],
-    "#ring-buffer": [
-      "$event-ingestion"
-    ],
     "#plsat-view": [
       "$plsat-exam-flow"
     ],
@@ -243,6 +237,12 @@
     ],
     "#certificate-view": [
       "$plsat-exam-flow"
+    ],
+    "#sentinel-web-client": [
+      "$event-ingestion"
+    ],
+    "#ring-buffer": [
+      "$event-ingestion"
     ],
     "#detection-engine": [
       "$ide-sync-flow"
@@ -285,6 +285,12 @@
       "$purpose-parsing",
       "$portal-validation-flow"
     ],
+    "#gate-schemas": [
+      "$portal-validation-flow"
+    ],
+    "#topology-checker": [
+      "$portal-validation-flow"
+    ],
     "#aggregator": [
       "$symbol-aggregation"
     ],
@@ -299,12 +305,6 @@
     ],
     "#graph-builder": [
       "$symbol-aggregation"
-    ],
-    "#gate-schemas": [
-      "$portal-validation-flow"
-    ],
-    "#topology-checker": [
-      "$portal-validation-flow"
     ],
     "#task-classifier": [
       "$agent-orchestration-flow"
