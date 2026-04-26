@@ -1,0 +1,16 @@
+id: L-2026-04-26-ascend-172934-445
+type: insight
+timestamp: '2026-04-26T17:29:34.583Z'
+author: ascend
+title: Decision TD-2026-04-26-546 recorded
+summary: Companion lore entry for decision record TD-2026-04-26-546. See .paradigm/decisions/TD-2026-04-26-546.yaml.
+symbols_touched:
+  - '#paradigm-cli-version'
+  - '#paradigm-mcp-version'
+  - '#authority-yaml'
+  - '#migration-notice'
+references:
+  decision_id: TD-2026-04-26-546
+tags:
+  - companion-lore
+  - decision-reference

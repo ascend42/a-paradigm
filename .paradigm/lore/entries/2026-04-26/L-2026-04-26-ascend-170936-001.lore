@@ -1,0 +1,54 @@
+id: L-2026-04-26-ascend-170936-001
+type: milestone
+timestamp: '2026-04-26T17:09:36.216Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Kickoff: 3 parallel tracks (v6.0.4 patch + tier-split design + agents course Phase A)'
+summary: 'Session kickoff for 3 parallel design/analysis tracks following TD-2026-04-26-284 (4 enforcement open-calls resolved). User identified Paradigm University gap: 176 entries, 0 on agents — must close before v6.1 if we expect users to leverage the agent system. Three teams firing in parallel via orchestrate_inline; Loid present in all three per always-loop-Loid memory.'
+symbols_touched:
+  - '#paradigm-enforcement-model'
+  - '#compliance-rune'
+  - '#notebook-tier-1-tier-2'
+  - '#agents-course'
+  - '#paradigm-university'
+  - '#sheila-educator'
+  - '#scholar'
+tags:
+  - kickoff
+  - parallel-tracks
+  - v6.0.4
+  - v6.1
+  - agents-course
+body: |-
+  ## Tracks
+
+  **Track 1 — v6.0.4 emergency patch team analysis**
+  - Team: Architect + Builder + Helix + Jinx + Loid
+  - Goal: produce implementation plan for v6.0.4 (drop framework aspect-coverage block when no claimant; paradigm doctor surfaces metrics; paradigm shift nominates Rune; CLAUDE.md reframe)
+  - Constraints from TD-2026-04-26-284: Advise-default, archetype-default claims (write the schema even though full claims work ships v6.1), soft-block held for v6.1, tier split deferred to track 2
+
+  **Track 2 — Tier-1/Tier-2 notebook split design pass**
+  - Lead: Loid (notebook architecture owner)
+  - Goal: schema for `tier: transferable | project-local`, migration plan, promotion criteria, interaction with archetype-default authority
+  - Must complete before v6.1 phase 13
+
+  **Track 3 — Paradigm University agents course (Phase A only)**
+  - Team: Sheila (educator, lead) + Scholar (paired via partners primitive) + Loid
+  - Phase A scope (safe, won't mutate at v6.1): archetype model, identity (id/nickname/archetype), 21-agent roster + roles, partners primitive (Scholar+Sheila as canonical), how to roster/bench/activate, paradigm shift auto-rostering, orchestration modes (faceted vs sequential)
+  - Phase B (Rune authority modes, soft-block usage, tier semantics, cross-project compounding) HELD until v6.1 lock
+  - Forcing function noted: shipping U content before v6.1 stability = stale curriculum risk (per Lore-is-critical-infrastructure feedback)
+
+  ## Tracking convention this session
+  - Each track records its findings as a lore entry (insight type) with `tags: [v6.0.4-track, v6.1-tier-split, agents-course-phase-a]` respectively
+  - Decisions go through paradigm_decision_record (auto-companion lore)
+  - Final synthesis lore at session close linking all three tracks
+linked_tasks:
+  - '1'
+  - '2'
+  - '3'
+git_context:
+  ref: 827be91e12ceeee75ae7a90a61f3a17a0470664d
+  branch: main
+  dirty: true

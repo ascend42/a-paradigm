@@ -1,0 +1,68 @@
+id: L-2026-04-26-ascend-172048-001
+type: insight
+timestamp: '2026-04-26T17:20:48.110Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Track 2 finding: Tier-split substrate already exists — v6.1 is wiring, not new schema'
+summary: 'Loid''s design pass discovered that the tier-1/tier-2 substrate is already shipped: notebook-loader.ts merges ~/.paradigm/notebooks/agent/ (global) + project/.paradigm/notebooks/agent/ (project), and the scope enum already has three values (generalizable | project-specific | platform-specific). v6.1 work is wiring + naming + Loid''s calibration loop, not new infrastructure. Likely fits in a single sprint, not a phase. 8 open calls surfaced, biggest is tool-name collision with existing paradigm_notebook_promote (lore→notebook).'
+symbols_touched:
+  - '#notebook-tier-1-tier-2'
+  - '#sovereign-notebooks'
+  - '#compliance-rune'
+  - '#paradigm-notebook-add'
+  - '#paradigm-notebook-promote'
+  - '#loid-calibration'
+files_modified:
+  - .paradigm/research/tier-split-design.md
+learnings:
+  - Notebook substrate (storage + scope enum) already shipped — v6.1 tier work is wiring not new schema
+  - scope parameter on paradigm_notebook_add conflates storage-location and publish-scope — must reconcile
+  - 'Tool-name collision: paradigm_notebook_promote already used for lore→notebook promotion'
+  - Hostile-project poisoning blocked by ≥2 distinct originProject requirement
+  - Pre-seeding Rune's transferable patterns at confidence 0.5-0.7 with loid-seed provenance keeps trust model intact
+tags:
+  - v6.1-tier-split
+  - track-2-finding
+  - loid
+  - design-pass
+body: |-
+  ## Key insight (surprise)
+
+  The "Project B can't see Project A entries" gap is NOT a load gap — the loader already merges global+project on read. It's an AUTHORING gap (entries default to project-scope, never escape) and a DISCOVERY/CALIBRATION gap (no promotion path, no audit surface).
+
+  ## Recommendations (locked unless reversed)
+
+  - **Schema:** alias `tier` over existing `scope` field. NO new disk field. Derived TS getter: `tierOf(entry)`. MCP tools accept `tier:` as input vocabulary, translate to `scope:` on write.
+  - **Storage:** Option A — `~/.paradigm/notebooks/<agent>/` for tier-1 (already implemented).
+  - **Promotion model:** Hybrid — Loid auto-suggests, manual confirm. Trigger: ≥2 distinct originProject + content-generality (`classifyNotebookScope`) + applied ≥3 across ≥2 sessions + confidence ≥0.75. No silent auto-promote at v6.1.
+  - **Demotion:** Lower bar than promotion (fail-closed). Owning agent OR user can demote. Hard revoke is user-only.
+  - **Auth interaction (TD-2026-04-26-284):** Yes auto-pull tier-1 notebook on archetype-default rostering. Trust model: tier-1 lives in user's home, user's trust boundary. Hostile-project poisoning blocked by ≥2 distinct originProject requirement.
+  - **Sovereign notebooks interaction (TD-2026-04-25-704):** Tier orthogonal to sovereignty. Hidden-ref-with-sentinel for unresolved cross-refs (Loid digest counts surface refactor candidates).
+  - **Migration:** No script. Default missing scope: → project-specific. Phase B audit pass post-v6.1 surfaces promotion candidates.
+  - **Rune's six patterns:** Pre-seed at confidence 0.5–0.7, `provenance.createdBy: 'loid-seed'`. Auditable and bulk-revocable.
+
+  ## 8 open calls (need user/architect input before v6.1 implementation)
+
+  1. Naming: `tier-1`/`tier-2` user-facing, `scope` preserved as publish-contract — confirm
+  2. `platform-specific` as tier-1 subtype vs own tier
+  3. Promotion threshold — recommended (≥2 projects, applied ≥3, confidence ≥0.75) vs looser
+  4. Rune's 6 patterns pre-seeding — confirm
+  5. **Tool-name collision** — `paradigm_notebook_promote` already taken. Rename existing to `_promote_lore` (breaking) or use `_set_tier` (loses symmetry). Loid leans `_set_tier`.
+  6. Hidden-ref policy alignment with v6.1 cross-refs primitive
+  7. Revocation gate — user-only confirm
+  8. Audit log per-agent vs global
+
+  ## Implication for v6.1 scope
+
+  Tier-split was scoped as one phase; this design says it's likely a single sprint. Frees Loid for other v6.1 work (Failure Ledger, calibration loop expansion).
+linked_lore:
+  - L-2026-04-26-ascend-170936-001
+linked_tasks:
+  - '2'
+confidence: 0.85
+git_context:
+  ref: 827be91e12ceeee75ae7a90a61f3a17a0470664d
+  branch: main
+  dirty: true

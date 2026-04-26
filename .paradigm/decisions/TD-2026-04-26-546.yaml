@@ -1,0 +1,35 @@
+id: TD-2026-04-26-546
+timestamp: '2026-04-26T17:29:34.582Z'
+title: v6.0.4 Group 2 calls — locked
+decision: >-
+  (1) `@a-company/paradigm-mcp` stays at 6.0.3 for v6.0.4 release — no MCP surface change. Only `@a-company/paradigm`
+  and the plugin manifest bump to 6.0.4. (2) Ship migration-notice copy as drafted in v6.0.4-implementation-plan §3 —
+  direct, names the change, gives one action. (3) `paradigm compliance-check` source location to be discovered by
+  Builder during Wave 2 (not a user-judgment call; was a Read failure during design pass). (4) `authority.yaml` lives at
+  `.paradigm/authority.yaml` top-level alongside `roster.yaml` and `adoptions.yaml`, NOT nested under
+  `.paradigm/agents/`.
+rationale: >-
+  paradigm-mcp version: keeps version semantics honest. Memory rule "bumps when CLI or MCP tools change" — CLI changed,
+  MCP tools did not. Synchronized bumps are nice-to-have, not load-bearing. Migration notice: behavior-change signal
+  should be direct, not warm. authority.yaml top-level: matches the plan as drafted; conceptually project-policy belongs
+  alongside other project-policy files (roster, adoptions), not inside the agent-definitions directory.
+participants:
+  - id: user
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: helix
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#paradigm-cli-version'
+  - '#paradigm-mcp-version'
+  - '#authority-yaml'
+  - '#migration-notice'
+status: active
+tags:
+  - v6.0.4
+  - release
+  - versioning

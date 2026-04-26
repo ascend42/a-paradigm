@@ -1,0 +1,44 @@
+id: TD-2026-04-26-284
+timestamp: '2026-04-26T17:02:50.967Z'
+title: v6.0.4/v6.1 enforcement-model open calls — resolutions
+decision: >-
+  Resolved 4 open calls blocking v6.0.4 emergency-patch kickoff per agent-owned-enforcement-plan.md: (1) Default
+  authority mode for Rune = Advise (user can promote to Auto-author or Guard per project). (2) Authority claim model =
+  Archetype-default — rostering any compliance archetype auto-writes default claims (zero-config, Rune-on-A behaves like
+  Rune-on-B). (3) Soft-block primitive (paradigm_propose_block) holds for v6.1 — v6.0.4 stays scoped as emergency-patch
+  (drop framework aspect-coverage block when no claimant + paradigm doctor surfaces metrics + paradigm shift nominates
+  Rune + CLAUDE.md reframe). v6.1 ships authority + soft-block as cohesive package. (4) Tier-1/Tier-2 notebook split
+  (transferable vs project-local) gets its own design pass with Loid before v6.1 implementation — affects ALL agents,
+  not just Rune; risk of shipping half-baked tier model is too high to treat as one bullet.
+rationale: >-
+  Recommendations chosen for: (1) Advise respects the user-agency reframe — user opts into stricter modes per project.
+  (2) Archetype-default makes onboarding zero-config; explicit claims add a step with no transparency benefit since the
+  registry is inspectable. (3) v6.0.4 stays an emergency patch because mixing authority/soft-block primitives in the
+  same release defeats the "stop the bleeding" purpose; clean release boundaries matter more than Rune's day-1
+  effectiveness. (4) Tier system is foundational notebook architecture; a single design pass with Loid (notebook owner)
+  protects against a tier model that doesn't generalize beyond Rune.
+participants:
+  - id: user
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: rune
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#paradigm-enforcement-model'
+  - '#compliance-rune'
+  - '#authority-claim'
+  - '#soft-block-primitive'
+  - '#notebook-tier-1-tier-2'
+status: active
+tags:
+  - v6.0.4
+  - v6.1
+  - enforcement
+  - agent-owned

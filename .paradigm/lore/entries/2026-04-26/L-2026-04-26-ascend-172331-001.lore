@@ -1,0 +1,68 @@
+id: L-2026-04-26-ascend-172331-001
+type: milestone
+timestamp: '2026-04-26T17:23:31.904Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Track 1 finding: v6.0.4 emergency-patch implementation plan ready'
+summary: 'Architect (with Loid+Helix+Jinx perspectives) produced surgical plan: 8 source files + 2 generated mirrors, 6-wave critical path, 1-2 week estimate. Key technical risk: Check 10 gate placement must wrap EMISSION not INVOCATION to preserve v5.37.12 fail-closed audit fix. Cohort C migration risk (projects with ~aspects but no compliance archetype lose drift-blocking) mitigated by one-time migration notice + shift nomination. authority.yaml schema locked at v6.0.4 even though MCP tools ship v6.1 — no future migration. 4 open questions need user judgment.'
+symbols_touched:
+  - '#paradigm-enforcement-model'
+  - '#stop-hook'
+  - '#paradigm-doctor'
+  - '#paradigm-shift'
+  - '#authority-yaml'
+  - '#compliance-rune'
+  - '#migration-notice'
+files_modified:
+  - .paradigm/research/v6.0.4-implementation-plan.md
+learnings:
+  - Compliance-history.jsonl lines 873-886 must stay UNCONDITIONAL — primary Loid observability surface for absent-Rune
+  - Check 10 emission guard placement is load-bearing — wrap at line 575+ not 523, or break v5.37.12 fail-closed audit fix
+  - Generated mirrors must be regenerated via scripts/generate-hooks.mjs — direct edits caused 3 prior reverts per memory
+  - Cohort C (no compliance + has ~aspects) is the only real migration risk — needs one-time notice
+  - authority.yaml schema lockable at v6.0.4 even with no readers, so v6.1 ships without migration
+tags:
+  - v6.0.4
+  - track-1-finding
+  - architect
+  - design-pass
+  - implementation-plan
+body: |-
+  ## Plan output
+  - Schema-locked authority.yaml ships at v6.0.4 (no read tools, just write). Three trigger paths: shift-nominate, shift-adopt-default, migration-on-upgrade.
+  - Stop-hook surgical wraps: roster-detection helper after line 68; Check 6 (lines 405-435) wrap emission; Check 10 (lines 566-585) wrap emission ABOVE line 575 only. Lines 873-886 (compliance-history.jsonl) stay UNCONDITIONAL — Loid's data continuity surface.
+  - Doctor adds `'info'` CheckResult status with `⠂` icon, dim suffix `(no claimant active)`. Slot after Portal compliance, before flows.yaml.
+  - shift.ts adds Step 2c-nominate-compliance for cohort C only (existing project + no compliance + ~aspect lines exist). Default Y, --no-prompt for CI.
+  - CLAUDE.md reframe — "Rune owns symbol enforcement when rostered" + clarify framework still blocks on missing .purpose / portal gates / lore-required (general hygiene, not symbol policy).
+
+  ## Cohort analysis (Jinx)
+  - A: compliance rostered → zero risk
+  - B: no compliance + no aspects → zero risk (short-circuits)
+  - C: no compliance + has aspects → REAL RISK, silent enforcement loss. Migration notice mitigates.
+
+  ## Test cases
+  10 regression cases enumerated, covering both compliance-rostered and absent paths, edge cases (zero aspects, zero components), CI behavior.
+
+  ## Sequence
+  Wave 1 foundation (parallel) → Wave 2 de-enforcement (critical path) → Wave 3 surfacing → Wave 4 docs → Wave 5 tests → Wave 6 release.
+
+  ## 4 open user questions
+  1. paradigm-mcp version bump: 6.0.4 (synchronized) or stay 6.0.3 (no MCP change)?
+  2. Migration-notice copy tone — direct enough?
+  3. Locate `paradigm compliance-check` source file (Architect couldn't verify path)
+  4. authority.yaml location: `.paradigm/authority.yaml` or nested under `.paradigm/agents/`?
+
+  ## Out of scope (16 items pushed to v6.1/v6.2)
+  Soft-block primitive, authority MCP tools, hook-orchestrator, compliance-check→aspect-report rename, new Rune MCP tools, session-start ambient pass for Rune, notebook tier split, Rune's 6 transferable patterns, optout/severity registries, JSONLogic predicates, override-cluster coaching, per-component snapshots, Auto-author/Guard behaviors, 316-anchor drift remediation.
+linked_lore:
+  - L-2026-04-26-ascend-170936-001
+  - L-2026-04-26-ascend-172048-001
+linked_tasks:
+  - '1'
+confidence: 0.85
+git_context:
+  ref: 827be91e12ceeee75ae7a90a61f3a17a0470664d
+  branch: main
+  dirty: true

@@ -1,0 +1,69 @@
+id: L-2026-04-26-ascend-172539-001
+type: milestone
+timestamp: '2026-04-26T17:25:39.199Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Track 3 finding: Agents course Phase A — PARA 451 (18 entries, single path)'
+summary: 'Sheila + Scholar + Loid produced design for new PARA 451: Agents Foundations course (18 entries: 9 notes + 7 quizzes + 1 path + 1 roster reference). Premise correction: Paradigm U does have 6 agent-adjacent entries, but they''re stale (pre-v6.0.3, talk about Rune''s walked-back enforcement role) and locked in advanced PARA 401 where beginners never reach. Phase A introduces a new beginner-accessible course; stale 401 entries become v6.1 retirement candidates. Pack location: first-party `paradigm` pack. Single ordered path (not multi-course); Phase B becomes separate PARA 551 when v6.1 lands. Roster reference is ONE consolidated entry (table format), not 21 per-agent entries. Biggest blocker: PARA 451 numbering vs alternatives (050 or 150 for early curriculum, or in-place 401 replacement).'
+symbols_touched:
+  - '#agents-course'
+  - '#para-451-agents-foundations'
+  - '#para-401-agent-entries-stale'
+  - '#para-551-future'
+  - '#sheila-educator'
+  - '#scholar'
+  - '#paradigm-university'
+files_modified:
+  - .paradigm/research/agents-course-phase-a-design.md
+learnings:
+  - 'Premise correction: Paradigm U does have 6 agent entries but they''re stale + locked in advanced PARA 401 where beginners never reach'
+  - Roster reference works better as one consolidated table entry than 21 per-agent entries (budget + scannability)
+  - 'Phase B isolation strategy: own course (PARA 551) prerequisites Phase A (PARA 451) — keeps stable content separable from evolving content'
+  - Course numbering decision is load-bearing because entry ids bake into every file (N-para-451-* vs alternatives)
+tags:
+  - agents-course-phase-a
+  - track-3-finding
+  - sheila
+  - scholar
+  - loid
+  - paradigm-university
+body: |-
+  ## 6 open calls (1 blocking authoring)
+
+  1. **PARA 451 numbering [BLOCKING]** — entry ids baked into every file:
+     - (A) Recommended: ship at PARA 451 sibling-to-401, mark 401 agent entries as v6.1 retirement candidates
+     - (B) Number 050 or 150 — agents become early-curriculum topic
+     - (C) Replace 401 in-place — risky (restructures 401 path)
+
+  2. Rune framing for Phase A — describe at v6.0.3 surface (advisory planner/reporter, no authority claims yet). v6.1 PARA 551 covers authority modes. Confirm.
+
+  3. Scholar+Sheila self-attribution in `N-para-451-partners-primitive` — recommended yes, teach the partners pattern by being one.
+
+  4. `N-para-451-tiers` scoping — strictly about MODEL tier (opus/sonnet/haiku); single forward-compat callout for v6.1 NOTEBOOK tier (avoid concept collision).
+
+  5. Pack version bump cadence — single bump or split into foundation + partners/auto-rostering chunks?
+
+  6. Identity model entry depth — teach archetype concept even though no first-class `archetype` field in AgentProfile yet (forward-compat callout) OR ship the field first?
+
+  ## Course structure
+  - Title: PARA 451: Agents Foundations
+  - Tagline: Meet the team. Learn what each agent does and when to call them.
+  - Difficulty: Beginner (one intermediate sub-track entry on partners deep-dive)
+  - Time: 35min skim, 75-90min full mastery
+  - Single ordered path LP-para-451; Phase B = separate PARA 551 course
+
+  ## Surprise to flag up
+  The premise "ZERO entries on agents" was inaccurate. The real problem is "agents are taught wrong, in the wrong place" — stale content locked in an advanced course beginners never reach. Phase A fixes both by replacing the locked-stale path with a beginner-accessible foundation; v6.1 archives the 401 stales.
+linked_lore:
+  - L-2026-04-26-ascend-170936-001
+  - L-2026-04-26-ascend-172048-001
+  - L-2026-04-26-ascend-172331-001
+linked_tasks:
+  - '3'
+confidence: 0.85
+git_context:
+  ref: 827be91e12ceeee75ae7a90a61f3a17a0470664d
+  branch: main
+  dirty: true

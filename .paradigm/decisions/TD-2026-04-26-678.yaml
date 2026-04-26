@@ -1,0 +1,42 @@
+id: TD-2026-04-26-678
+timestamp: '2026-04-26T17:28:24.475Z'
+title: Group 1 unblockers — PARA 451 numbering + tier tool naming
+decision: >-
+  (1) Agents course ships as PARA 451 (sibling to PARA 401), per resolution A from agents-course-phase-a-design §10. The
+  6 stale agent entries in PARA 401 are marked as v6.1 retirement candidates; PARA 451's welcome entry points learners
+  forward. (2) Notebook tier MCP tool is named `paradigm_notebook_set_tier` (new tool), per Loid's recommendation in
+  tier-split-design §9 open call 5. Existing `paradigm_notebook_promote` (lore→notebook) keeps its name unchanged. No
+  breaking MCP rename.
+rationale: >-
+  PARA 451: keeping it in the 400 band acknowledges agents are not first-day-101 material but ARE earlier than the
+  advanced 401 deep-dive. Sibling-numbering preserves PARA 401's existing learning path — replacement-in-place would
+  have forced a course restructure for marginal benefit. Marking 401's stale agent entries as v6.1 retirement candidates
+  is honest and avoids parallel-truth risk. set_tier: avoids breaking MCP rename of an existing tool that has callers
+  across the ecosystem. Cost is loss of promote/demote symmetry — acceptable per Loid's analysis. Both tools are
+  properly scoped: `_promote` is for lore→notebook elevation, `_set_tier` is for tier-1↔tier-2 movement within
+  notebooks.
+participants:
+  - id: user
+    role: human
+    stance: proposed
+  - id: sheila
+    role: agent
+    stance: supported
+  - id: scholar
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#para-451-agents-foundations'
+  - '#para-401-agent-entries-stale'
+  - '#paradigm-notebook-set-tier'
+  - '#paradigm-notebook-promote'
+  - '#notebook-tier-1-tier-2'
+status: active
+tags:
+  - v6.1
+  - agents-course
+  - tier-split
+  - naming
