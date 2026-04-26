@@ -105,9 +105,11 @@ The stop hook **BLOCKS** if source files were modified without .purpose updates.
 
 | Hook | Behavior |
 |------|----------|
-| **Stop** | Blocks on: missing .purpose, missing portal.yaml gates, aspect drift, stale purposes |
+| **Stop** | Blocks on: missing .purpose, missing portal.yaml gates, stale purposes |
 | **Pre-commit** | Auto-rebuilds index — never blocks |
 | **Post-write** | Advisory reminder for .purpose coverage |
+
+**Symbol/aspect enforcement is agent-owned.** When the `compliance` archetype agent (Rune) is on the roster, he owns symbol/aspect enforcement; the framework surfaces metrics via `paradigm doctor` but does not block in his absence. Run `paradigm shift` to add Rune to the roster.
 
 **If blocked:** Update .purpose files → update portal.yaml if needed → `paradigm_reindex` → finish
 

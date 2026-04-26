@@ -25,6 +25,19 @@ program
   .version(VERSION)
   .addHelpText('before', banner);
 
+// v6.0.4 — one-time migration notice for cohort C (projects with ~aspects
+// but no compliance archetype on the roster). preAction fires before any
+// subcommand action; commander short-circuits before this for --version /
+// --help, so those invocations stay quiet.
+program.hook('preAction', async () => {
+  try {
+    const { checkAndEmitMigrationNotices } = await import('./core/migration-notices.js');
+    await checkAndEmitMigrationNotices(process.cwd());
+  } catch {
+    // Never let migration-notice machinery interfere with command execution.
+  }
+});
+
 // paradigm init
 program
   .command('init')
@@ -53,6 +66,7 @@ program
   .option('--stack <stack>', 'Stack preset (e.g., nextjs, fastapi, swift-ios). Auto-detected if omitted.')
   .option('--workspace <name>', 'Create or join a multi-project workspace with this name (creates ../.paradigm-workspace)')
   .option('--workspace-path <path>', 'Custom workspace file location (default: ../.paradigm-workspace)')
+  .option('--no-prompt', 'Skip interactive prompts (e.g., compliance-archetype nomination)')
   .action(async (options) => {
     const { shiftCommand } = await import('./commands/shift.js');
     await shiftCommand(options);

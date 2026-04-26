@@ -1,0 +1,75 @@
+id: L-2026-04-26-ascend-175947-001
+type: milestone
+timestamp: '2026-04-26T17:59:47.539Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.4 Waves 3+4 shipped — surfacing + docs complete
+summary: 'Recovery Builder closed the Wave 3+4 gap left by the first agent''s mid-stream termination. runComplianceNominationStep helper defined at shift.ts lines 125-264 (uses existing ShiftOptions.prompt and force fields, reuses isCohortC from migration-notices.ts to avoid duplicating .purpose walk). CLAUDE.md updated: ''aspect drift'' removed from Stop block list, new agent-owned-enforcement paragraph added at line 112. CHANGELOG.md [6.0.4] section inserted above [6.0.3] with Changed/Added/Migration sections per Keep-a-Changelog. Migration-notices already wired via program.hook(''preAction'', ...) at index.ts lines 32-39 (commander short-circuits --version/--help before preAction fires). Build clean, 290 vitest tests pass + 1 skipped.'
+symbols_touched:
+  - '#aspect-coverage-line'
+  - '#nominate-compliance-step'
+  - '#migration-notices'
+  - '#claude-md-reframe'
+  - '#changelog-6-0-4'
+files_created:
+  - packages/paradigm/src/core/migration-notices.ts
+  - packages/paradigm/src/core/migration-notices.test.ts
+files_modified:
+  - packages/paradigm/src/commands/shift.ts
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/index.ts
+  - CLAUDE.md
+  - CHANGELOG.md
+learnings:
+  - Mid-stream agent termination is recoverable when the call site is in place and the helper signature is inferable from the call — a focused recovery prompt with explicit 'completed/missing' diff lets the next agent close the gap quickly
+  - tsup/esbuild does NOT catch undefined function references at build time — a successful build is not proof that runtime won't ReferenceError. Always grep for definitions when the call site was scaffolded but the helper was the next-up todo.
+  - preAction hook on commander program is the right place to gate cross-cutting CLI behavior (migration notices) — short-circuited by --version/--help automatically
+verification:
+  status: pass
+  details:
+    build: pass
+    vitest: 290 pass / 1 skip
+    link: pass
+tags:
+  - v6.0.4
+  - wave-3
+  - wave-4
+  - builder
+  - recovery
+body: |-
+  ## Wave 3 wiring confirmed
+  - Doctor aspect-coverage line: shipped by first agent ✓
+  - Shift Step 2c-nominate-compliance: call site ✓ + helper now defined ✓
+  - Shift Step 2c-adopt authority defaults wiring: shipped by first agent ✓
+  - Migration-notice module: shipped by first agent ✓
+  - Migration-notice CLI invocation: ✓ via preAction hook
+
+  ## Wave 4 ✓
+  - CLAUDE.md: `aspect drift` removed from Stop hook table; new "Symbol/aspect enforcement is agent-owned" paragraph added at line 112 with `paradigm shift` pointer
+  - CHANGELOG.md: `## [6.0.4] — 2026-04-26` above [6.0.3], Keep-a-Changelog format
+
+  ## Two intentional deviations
+  1. Helper uses `options.prompt === false` (commander idiom for `--no-prompt`) rather than spec's `options.noPrompt` — matches existing ShiftOptions interface and CLI option declaration
+  2. Helper clears skip marker on Y choice (in case user previously selected N then re-ran with --force and now opts in) — consistent with upstream --force-clearing behavior at shift.ts lines 374-386
+
+  ## Tests
+  - 290 passed / 1 skipped across 23 files
+  - src/core/authority.test.ts: 5 new tests pass
+  - src/core/migration-notices.test.ts: already-present from first agent's run
+  - No new shift.test.ts created — Wave 5 territory
+
+  ## Wave 5 prerequisites identified
+  - Hook regression tests: spawn bash against fixture-project temp dirs per src/commands/hooks/index.test.ts precedent
+  - Shift nomination tests: new file at src/commands/shift.test.ts (none currently)
+  - All 10 cases per plan §4 (cohort A/B/C/D/E/F/G + edge cases H/I/J)
+linked_lore:
+  - L-2026-04-26-ascend-174105-001
+linked_tasks:
+  - '7'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

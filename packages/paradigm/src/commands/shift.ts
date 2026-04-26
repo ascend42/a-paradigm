@@ -122,6 +122,147 @@ function buildAgentSummaries(
   return summaries;
 }
 
+/**
+ * v6.0.4 — Step 2c-nominate-compliance.
+ *
+ * For existing-project upgrades that match cohort C (project defines
+ * `~aspects` in any `.purpose` file but the `compliance` archetype is NOT
+ * on the roster), prompt the user to add Rune (compliance) to the roster.
+ * Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage —
+ * this nomination step is the recovery path.
+ *
+ * No-ops silently when:
+ * - Predicate fails (cohort A or B)
+ * - `.compliance-nomination-skipped` marker exists and not `--force`
+ * - Non-TTY environment, or `--no-prompt` set (commander `prompt === false`)
+ *
+ * On Y: append `compliance` to roster.active, write authority.yaml defaults.
+ * On N: write skip marker so we never re-prompt (clear with `--force`).
+ *
+ * Symbol: #compliance-nomination-step
+ */
+export async function runComplianceNominationStep(
+  cwd: string,
+  rosterPath: string,
+  options: ShiftOptions,
+): Promise<void> {
+  // Predicate 1: roster.yaml must exist (existing-project upgrade case)
+  if (!fs.existsSync(rosterPath)) return;
+
+  // Predicate 2: roster.active must NOT include 'compliance'
+  let rosterData: { active?: string[] } & Record<string, unknown>;
+  try {
+    rosterData = (yaml.load(fs.readFileSync(rosterPath, 'utf8')) as
+      | ({ active?: string[] } & Record<string, unknown>)
+      | null) ?? { active: [] };
+  } catch {
+    return;
+  }
+  const active = Array.isArray(rosterData.active) ? rosterData.active : [];
+  if (active.includes('compliance')) return;
+
+  // Predicate 3: at least one .purpose file with an aspect declaration.
+  // Reuse the cohort-C predicate from migration-notices to avoid duplicating
+  // the .purpose walk. isCohortC also checks roster, but we've already
+  // confirmed compliance is absent so it reduces to the aspects-defined check.
+  const { isCohortC } = await import('../core/migration-notices.js');
+  if (!isCohortC(cwd)) return;
+
+  // Skip-marker handling. `--force` clears the marker upstream (lines 374-386)
+  // so the prompt re-fires; here we only need to honor the marker if present.
+  const skipMarker = path.join(cwd, '.paradigm', '.compliance-nomination-skipped');
+  if (fs.existsSync(skipMarker) && !options.force) return;
+
+  // Non-TTY / --no-prompt: skip silently, write marker so subsequent runs
+  // do not keep re-checking. Never auto-Y in CI.
+  // commander maps `--no-prompt` to `options.prompt === false`.
+  if (!process.stdin.isTTY || options.prompt === false) {
+    try {
+      fs.writeFileSync(skipMarker, '', 'utf8');
+    } catch {
+      // best effort
+    }
+    return;
+  }
+
+  // Interactive prompt — copy is verbatim from v6.0.4 plan §6.
+  console.log('');
+  console.log(chalk.cyan('Step 2c-nominate/6: Symbol enforcement'));
+  console.log('');
+  console.log('  This project defines ~aspects but no compliance-archetype agent');
+  console.log('  (Rune) is on the roster.');
+  console.log('');
+  console.log('  Without a claimant, paradigm 6.0.4 no longer enforces aspect');
+  console.log('  coverage. You can:');
+  console.log('');
+  console.log(`    ${chalk.green('[Y]')} Add Rune (compliance) to the roster — recommended`);
+  console.log('        Authority defaults will be written to .paradigm/authority.yaml.');
+  console.log('        Default mode: advise (Rune surfaces findings, never blocks).');
+  console.log('');
+  console.log(`    ${chalk.yellow('[N]')} Skip — opt out of aspect enforcement for this project`);
+  console.log('        This decision is remembered. Re-run with --force to revisit.');
+  console.log('');
+
+  const readline = await import('node:readline/promises');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let answer = '';
+  try {
+    answer = (await rl.question('  Add Rune to roster? [Y/n]: ')).trim().toLowerCase();
+  } catch {
+    answer = '';
+  } finally {
+    rl.close();
+  }
+
+  // Default key Y — Enter (empty) accepts.
+  const accepted = answer === '' || answer === 'y' || answer === 'yes';
+
+  if (accepted) {
+    // Append 'compliance' to roster.active and rewrite roster.yaml.
+    rosterData.active = [...active, 'compliance'].sort();
+    try {
+      fs.writeFileSync(
+        rosterPath,
+        yaml.dump(rosterData, { lineWidth: -1, noRefs: true }),
+        'utf8',
+      );
+      console.log(chalk.green('  ✓ Rune (compliance) added to roster'));
+    } catch (e) {
+      log.operation('shift').debug('Roster update failed', { error: (e as Error).message });
+      return;
+    }
+
+    // Write archetype-default authority.yaml claims (idempotent).
+    try {
+      const { writeArchetypeDefaults } = await import('../core/authority.js');
+      await writeArchetypeDefaults(cwd, 'archetype-default');
+      console.log(chalk.gray('  ✓ Authority defaults written to .paradigm/authority.yaml'));
+    } catch (e) {
+      log.operation('shift').debug('Authority defaults write failed', {
+        error: (e as Error).message,
+      });
+    }
+
+    // If a skip marker existed (e.g., user ran --force after previous N),
+    // clear it now that they have opted in.
+    if (fs.existsSync(skipMarker)) {
+      try {
+        fs.unlinkSync(skipMarker);
+      } catch {
+        // best effort
+      }
+    }
+  } else {
+    // N — write skip marker so we never re-prompt without --force.
+    try {
+      fs.writeFileSync(skipMarker, '', 'utf8');
+    } catch {
+      // best effort
+    }
+    console.log(chalk.gray('  Skipped — opt out of aspect enforcement for this project'));
+  }
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -139,6 +280,11 @@ export interface ShiftOptions {
   workspacePath?: string;
   /** Explicit stack preset (e.g., 'nextjs', 'fastapi', 'swift-ios') */
   stack?: string;
+  /**
+   * v6.0.4 — when false (set by `--no-prompt`), skip interactive prompts
+   * (e.g., Step 2c-nominate-compliance) silently. Defaults to true.
+   */
+  prompt?: boolean;
 }
 
 export async function shiftCommand(options: ShiftOptions = {}) {
@@ -366,6 +512,20 @@ export async function shiftCommand(options: ShiftOptions = {}) {
     spinner.succeed(chalk.gray('Step 2/6: Team already configured (use --force to reinit)'));
   }
 
+  // v6.0.4 — `--force` clears the compliance-nomination skip marker so the
+  // Step 2c-nominate-compliance prompt re-fires. Mirrors existing
+  // re-initialization convention (lines 164, 352).
+  if (options.force) {
+    const skipMarker = path.join(cwd, '.paradigm', '.compliance-nomination-skipped');
+    if (fs.existsSync(skipMarker)) {
+      try {
+        fs.unlinkSync(skipMarker);
+      } catch {
+        // best effort
+      }
+    }
+  }
+
   // Step 2c: Agent roster setup
   const rosterPath = path.join(cwd, '.paradigm', 'roster.yaml');
   if (!fs.existsSync(rosterPath) || options.force) {
@@ -387,6 +547,13 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       console.log(chalk.gray('  ✓ Agent roster exists'));
     }
   }
+
+  // v6.0.4 — Step 2c-nominate-compliance.
+  // For existing-project upgrades where the project defines ~aspects but the
+  // compliance archetype (Rune) is NOT on the roster, prompt to add him.
+  // Without a claimant, paradigm 6.0.4 no longer enforces aspect coverage.
+  // Predicate matches the cohort-C definition in migration-notices.ts.
+  await runComplianceNominationStep(cwd, rosterPath, options);
 
   // Step 2c-adopt: Adoption ceremony
   {
@@ -434,6 +601,28 @@ export async function shiftCommand(options: ShiftOptions = {}) {
         const summary = renderBatchSummary(agentSummaries, projectType);
         console.log(summary);
         console.log(chalk.green(`  ✓ ${Object.keys(adoptions.agents).length} agents adopted`));
+      }
+
+      // v6.0.4 — when the compliance archetype was adopted in this run AND
+      // .paradigm/authority.yaml does not yet exist, write the
+      // archetype-default claims so v6.1's authority MCP tools have a
+      // consistent shape to read. Idempotent: writeArchetypeDefaults no-ops
+      // when the file already exists.
+      if (adoptions && adoptions.agents['compliance']) {
+        const authorityPath = path.join(cwd, '.paradigm', 'authority.yaml');
+        if (!fs.existsSync(authorityPath)) {
+          try {
+            const { writeArchetypeDefaults } = await import('../core/authority.js');
+            await writeArchetypeDefaults(cwd, 'archetype-default');
+            log.operation('shift').debug('Wrote archetype-default authority.yaml', {
+              source: 'default-adoption',
+            });
+          } catch (e) {
+            log.operation('shift').debug('Authority defaults write failed', {
+              error: (e as Error).message,
+            });
+          }
+        }
       }
     } catch (e) {
       log.operation('shift').debug('Adoption ceremony failed', { error: (e as Error).message });

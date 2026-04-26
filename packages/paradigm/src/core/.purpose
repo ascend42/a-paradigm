@@ -99,6 +99,22 @@ components:
     flows:
       - $roster-setup
     type: utility
+  authority-yaml-writer:
+    description: |
+      v6.0.4 writer for `.paradigm/authority.yaml`. Exports
+      writeArchetypeDefaults(projectRoot, source) which idempotently writes
+      archetype-default claims for the compliance archetype (Rune):
+      aspect-coverage, aspect-drift, anchor-staleness, all at severity
+      'advise' per TD-2026-04-26-284. Schema locked at v0-experimental for
+      v6.1's paradigm_authority_claim MCP tool to consume without migration.
+      No reader exists at v6.0.4 — caller decides when to invoke (Wave 3
+      wires `paradigm shift`).
+    type: utility
+    file: authority.ts
+    tags:
+      - authority
+      - claims
+      - compliance
 signals:
   orchestration-started:
     description: Multi-agent orchestration has begun

@@ -6,6 +6,20 @@ components:
     signals:
       - '!compliance-violation'
       - '!hook-installed'
+  has-compliance-claimant:
+    description: |
+      v6.0.4 POSIX sh helper in paradigm-common.sh that reads
+      .paradigm/roster.yaml and sets HAS_COMPLIANCE_CLAIMANT=true iff the
+      'active:' list contains 'compliance' (block-list or inline-array form).
+      Falls back to false on missing/unparseable. Wave 1 introduces the
+      helper only — no callers yet (Wave 2 wires Check 6 and Check 10 to
+      consume it).
+    type: utility
+    file: scripts/paradigm-common.sh
+    tags:
+      - hooks
+      - roster
+      - v6.0.4
 
 aspects:
   ~stop-hook-8-compliance-checks:

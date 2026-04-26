@@ -1,0 +1,69 @@
+id: L-2026-04-26-ascend-180732-001
+type: milestone
+timestamp: '2026-04-26T18:07:32.372Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.4 Wave 5 shipped — 22 regression tests added, 312 total green
+summary: Tester delivered all 10 plan §4 cases across 4 new test files. tests/hooks-stop.test.ts (7 cases A-G, bash-fixture-spawn pattern, 1990ms — covers cohort A drift-block, B clean, C/D Check 4 unconditional, E data-continuity verify, F Check 1/2 unconditional, G Check 7 unconditional). tests/doctor-aspect-coverage.test.ts (5 cases for H sub-scenarios — claimant-rostered ok, no-claimant info, zero-aspects, zero-components suppress). src/commands/shift.test.ts (8 cases for I — predicate matrix + Y/N/skip-marker/--force/--no-prompt). tests/authority-triggers.test.ts (2 cases for J — triple-trigger schema parity). Tester also reported "now let me write case J" but the file already existed with passing tests — agent ran longer than its self-perception suggested. 312 tests pass, 1 skipped (was 290 before Wave 5). Release-ready pending Wave 6 version bumps + commit + publish.
+symbols_touched:
+  - '#stop-hook-tests'
+  - '#doctor-aspect-coverage-tests'
+  - '#shift-nominate-tests'
+  - '#authority-trigger-tests'
+files_created:
+  - packages/paradigm/tests/hooks-stop.test.ts
+  - packages/paradigm/tests/doctor-aspect-coverage.test.ts
+  - packages/paradigm/tests/authority-triggers.test.ts
+  - packages/paradigm/src/commands/shift.test.ts
+learnings:
+  - Agent self-perception of completion can lag actual file state — always verify by reading the file or running the tests, not by trusting the agent's last self-narration ('now let me write case J' fired AFTER case J file was actually written and passing)
+  - 'Test layout convention in packages/paradigm: src/**/*.test.ts for unit, tests/*.test.ts for integration (bash-spawn, fixture tmpdirs)'
+  - Bash-fixture-spawn tests run in ~2s for 7 cases — viable for CI without separate slow-test marker
+verification:
+  status: pass
+  details:
+    vitest: 312 pass / 1 skip across 27 files
+    build: pass
+    wave_5_delta: +22 tests
+tags:
+  - v6.0.4
+  - wave-5
+  - tester
+  - regression-tests
+body: |-
+  ## Test files
+  - tests/hooks-stop.test.ts (435 lines, 7 tests, cases A-G — bash spawn against tmpdir fixtures)
+  - tests/doctor-aspect-coverage.test.ts (141 lines, 5 tests, case H + sub-scenarios)
+  - src/commands/shift.test.ts (241 lines, 8 tests, case I + predicate matrix + skip marker + --force/--no-prompt)
+  - tests/authority-triggers.test.ts (163 lines, 2 tests, case J — 3-trigger schema parity)
+
+  ## Test results
+  - 27 files, 312 pass, 1 skip
+  - Wave 5 contribution: +22 tests
+  - All hook fixture tests run in ~2s — acceptable for CI
+
+  ## Pre-existing test layout discovery
+  - src/**/*.test.ts (in-tree co-located) for unit tests
+  - tests/*.test.ts (separate root) for integration / fixture-spawn tests
+  - Tester correctly placed shift.test.ts in src/commands/ (unit) but hooks-stop/doctor-aspect-coverage/authority-triggers in tests/ (integration)
+
+  ## Release readiness checklist
+  ✓ All 6 implementation waves complete (1-5)
+  ✓ Build clean both packages
+  ✓ All tests green (312 + 1 skipped)
+  ✓ CLAUDE.md + CHANGELOG updated
+  ☐ Version bumps (Wave 6 — user trigger)
+  ☐ Commit (Wave 6)
+  ☐ Publish to npm (Wave 6 — user trigger)
+  ☐ Push (Wave 6 — automatic per push-before-publish memory once we publish)
+linked_lore:
+  - L-2026-04-26-ascend-175947-001
+linked_tasks:
+  - '8'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

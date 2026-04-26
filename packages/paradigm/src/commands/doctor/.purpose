@@ -9,11 +9,23 @@ features:
       - '#context-audit'
 components:
   doctor-handler:
-    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits
+    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).
     type: handler
     file: index.ts
     components:
       - '#gap-narrator'
+  info-status:
+    description: |
+      v6.0.4 CheckResult status added to the existing ok/warn/error/missing
+      union. Renders as a dim '⠂' icon in chalk.gray. Surfaces metrics
+      without affecting exit code or summary counters — used by line items
+      that report data when no claimant is active.
+    type: model
+    file: index.ts
+    tags:
+      - doctor
+      - status
+      - v6.0.4
   context-audit:
     description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
     type: utility

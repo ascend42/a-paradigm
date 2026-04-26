@@ -73,6 +73,22 @@ if [ -n "$ENFORCEMENT_MAP" ]; then
   [ -n "$_ot" ] && ORCH_THRESHOLD="$_ot"
 fi
 
+# --- Detect compliance archetype on roster (v6.0.4) ---
+# Sets HAS_COMPLIANCE_CLAIMANT=true iff .paradigm/roster.yaml has 'compliance'
+# under its 'active:' list (block- or inline-array form). Falls back to false on
+# missing/unparseable. Wave 1: helper only — no callers yet (Wave 2 wires Check
+# 6 and Check 10 to consume this gate).
+HAS_COMPLIANCE_CLAIMANT=false
+_ROSTER_FILE=".paradigm/roster.yaml"
+if [ -f "$_ROSTER_FILE" ]; then
+  # Extract the 'active:' section: from 'active:' line until the next non-indented
+  # top-level key, then look for 'compliance' as a list item or array entry.
+  _ACTIVE_BLOCK=$(awk '/^active:/{flag=1; print; next} /^[A-Za-z]/{flag=0} flag' "$_ROSTER_FILE" 2>/dev/null)
+  if echo "$_ACTIVE_BLOCK" | grep -Eq '(^[[:space:]]*-[[:space:]]*compliance[[:space:]]*$|[[\\,[:space:]]compliance[\\],[:space:]])'; then
+    HAS_COMPLIANCE_CLAIMANT=true
+  fi
+fi
+
 # --- Cache .purpose file paths (avoid repeated find scans) ---
 PURPOSE_CACHE=".paradigm/.purpose-paths"
 if [ -f "$PURPOSE_CACHE" ]; then
@@ -433,7 +449,10 @@ if [ "$_SEV" != "off" ]; then
       esac
     done
 
-    if [ "$ASPECT_UPDATED" = false ]; then
+    # v6.0.4: emit only when a compliance archetype is rostered (Rune owns aspect
+    # advisories). Detection above runs unconditionally for data-continuity
+    # symmetry with Check 10; only the user-facing emission is gated.
+    if [ "$ASPECT_UPDATED" = false ] && [ "$HAS_COMPLIANCE_CLAIMANT" = "true" ]; then
       ADVISORY="  This project defines ~aspects with code anchors. Check if existing
   ~aspects need updated anchors or applies-to patterns."
     fi
@@ -578,7 +597,13 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
     echo "[paradigm] Auto-healed $HEALED_COUNT shifted anchor(s)." >&2
   fi
 
-  if [ "$_SEV" != "off" ] && [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
+  # v6.0.4: drift emission gated on compliance archetype being rostered (Rune
+  # owns aspect-drift policy). DRIFTED_COUNT compute above stays unconditional
+  # so it still flows to compliance-history.jsonl for Loid's data continuity.
+  # NOTE: gate placement matters — invocation (lines ~538-547) and the
+  # v5.37.12 fail-closed audit fix (lines ~549-563) MUST stay outside this
+  # guard. Only the user-facing emission is gated.
+  if [ "$HAS_COMPLIANCE_CLAIMANT" = "true" ] && [ "$_SEV" != "off" ] && [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
     if [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).

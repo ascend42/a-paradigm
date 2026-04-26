@@ -15,7 +15,7 @@ import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 
 interface CheckResult {
   name: string;
-  status: 'ok' | 'warn' | 'error' | 'missing';
+  status: 'ok' | 'warn' | 'error' | 'missing' | 'info';
   message: string;
   fix?: string;
 }
@@ -447,6 +447,67 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
+    // v6.0.4: Aspect coverage line — surfaces components/aspects ratio.
+    // Status depends on whether the compliance archetype (Rune) is on the
+    // roster. Rune-rostered → ok. No claimant → info (non-blocking metric).
+    // Suppressed entirely when no components scanned (fresh init).
+    {
+      const scanIndexPath = path.join(cwd, '.paradigm', 'scan-index.json');
+      const rosterPath = path.join(cwd, '.paradigm', 'roster.yaml');
+      try {
+        if (fs.existsSync(scanIndexPath)) {
+          const scanRaw = fs.readFileSync(scanIndexPath, 'utf8');
+          const scanIndex = JSON.parse(scanRaw) as {
+            components?: Record<string, unknown>;
+            aspects?: Record<string, unknown>;
+          };
+          const componentCount = Object.keys(scanIndex.components ?? {}).length;
+          const aspectCount = Object.keys(scanIndex.aspects ?? {}).length;
+
+          // Suppress entirely on a fresh-init project (no components scanned).
+          if (componentCount > 0) {
+            let complianceRostered = false;
+            if (fs.existsSync(rosterPath)) {
+              try {
+                const rosterParsed = yaml.load(fs.readFileSync(rosterPath, 'utf8')) as {
+                  active?: string[];
+                } | null;
+                complianceRostered =
+                  Array.isArray(rosterParsed?.active) &&
+                  rosterParsed!.active!.includes('compliance');
+              } catch {
+                // Treat unreadable roster as no-claimant.
+              }
+            }
+
+            const ratio = `${componentCount}:${aspectCount} components:aspects`;
+            if (complianceRostered) {
+              results.push({
+                name: 'Aspect coverage',
+                status: 'ok',
+                message: `${ratio} (claimant: rune)`,
+              });
+            } else if (aspectCount === 0) {
+              results.push({
+                name: 'Aspect coverage',
+                status: 'info',
+                message: `${ratio} ${chalk.dim('(no aspects defined)')}`,
+              });
+            } else {
+              results.push({
+                name: 'Aspect coverage',
+                status: 'info',
+                message: `${ratio} ${chalk.dim('(no claimant active)')}`,
+              });
+            }
+          }
+        }
+      } catch {
+        // Defensive: if scan-index is corrupt or unreadable, skip the line
+        // entirely rather than emitting an error — this is an advisory metric.
+      }
+    }
+
     // Check flows.yaml validation
     const flowsPath = path.join(cwd, '.paradigm', 'flows.yaml');
     if (fs.existsSync(flowsPath)) {
@@ -737,6 +798,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         icon = '○';
         color = chalk.gray;
         missingCount++;
+        break;
+      case 'info':
+        // v6.0.4: 'info' is a non-status indicator — surfaces metrics when
+        // no claimant is active. Does not increment any counter and never
+        // affects the healthy/exit-code calculation.
+        icon = '⠂';
+        color = chalk.gray;
         break;
     }
 

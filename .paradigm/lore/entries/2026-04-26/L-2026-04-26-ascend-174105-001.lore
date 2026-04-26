@@ -1,0 +1,66 @@
+id: L-2026-04-26-ascend-174105-001
+type: milestone
+timestamp: '2026-04-26T17:41:05.961Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.4 Wave 2 shipped — de-enforcement gating in place
+summary: 'Builder wrapped Check 6 emission (line 446, detection at 425-444 unwrapped) and Check 10 emission (line 600, compute at 587-588 + auto-heal at 590-592 unwrapped) in HAS_COMPLIANCE_CLAIMANT guard. Critical: fail-closed audit fix at lines 552-566 confirmed UNWRAPPED. Compliance snapshot writer at lines 889-901 also UNWRAPPED (Loid data continuity preserved). Build clean, mirrors regenerated. Cohort A (compliance rostered) verified emits as before; Cohort C (no compliance) short-circuits emission while drift compute + snapshot still run. Wave 3 prerequisite resolved: compliance.ts located at packages/paradigm/src/commands/compliance.ts.'
+symbols_touched:
+  - '#has-compliance-claimant'
+  - '#stop-hook'
+  - '#compliance-check'
+  - '#aspect-coverage-gating'
+  - '#aspect-drift-gating'
+files_modified:
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - plugins/paradigm/scripts/paradigm-common.sh
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts
+learnings:
+  - 'Gate-placement pattern: prefix the emission predicate with `[ "$HAS_COMPLIANCE_CLAIMANT" = "true" ] &&` rather than wrapping the whole emission block in if/fi — single-line edit, easier to audit in code review'
+  - Detection (Check 6 lines 425-444) and compute (Check 10 lines 587-588) intentionally left unwrapped — cost is cheap and gives Loid data continuity for absent-Rune learning loop
+verification:
+  status: pass
+  details:
+    build: pass
+    smoke_test_cohort_a: pass (drift still emits)
+    smoke_test_cohort_c: pass (no emission, snapshot preserved)
+    fail_closed_fix_unwrapped: verified at lines 552-566
+tags:
+  - v6.0.4
+  - wave-2
+  - builder
+  - de-enforcement
+  - gating
+body: |-
+  ## Gate placement (load-bearing — verified by direct read)
+  - Check 6: emission predicate at line 446 prefixed with `[ "$HAS_COMPLIANCE_CLAIMANT" = "true" ] &&`. Detection (425-444) unconditional for symmetry.
+  - Check 10: emission predicate at line 600 prefixed similarly. Compute (587-588), auto-heal stderr (590-592), fail-closed audit non-zero-exit block (552-566), and `paradigm compliance-check` invocation (541-550) ALL UNWRAPPED.
+
+  ## Mirror propagation
+  - plugins/paradigm/scripts/paradigm-common.sh lines 449, 600
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts lines 455, 606
+  - plugin-cursor mirror also updated
+
+  ## Cohort verification
+  - A (compliance rostered, current repo): helper returns true → Check 6/10 emission semantics unchanged → drift still violates with _SEV=block + DRIFTED_COUNT>0
+  - C (no compliance): helper returns false → Check 6/10 emission short-circuits → no violations/advisory. Drift compute + compliance-history.jsonl still run.
+
+  ## Build
+  - npm run build: clean (1073ms ESM + 2033ms DTS)
+  - npm link: succeeded
+  - No TS errors
+
+  ## Wave 3 prerequisite resolved
+  `paradigm compliance-check` source: packages/paradigm/src/commands/compliance.ts. Available for Wave 3 if short-circuit optimization (don't compute drift when no claimant) is desired. Per design, optimization not correctness — drift compute is cheap and Loid wants the data continuity.
+linked_lore:
+  - L-2026-04-26-ascend-173731-001
+linked_tasks:
+  - '6'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

@@ -1,0 +1,70 @@
+id: L-2026-04-26-ascend-173731-001
+type: milestone
+timestamp: '2026-04-26T17:37:31.184Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.4 Wave 1 shipped — foundation in place, no behavior change yet
+summary: 'Builder completed v6.0.4 Wave 1 cleanly: roster-detection helper added to paradigm-common.sh source (regen mirrors propagated), ''info'' status added to doctor CheckResult enum with ⠂ gray render, NEW packages/paradigm/src/core/authority.ts (100 lines) with idempotent writeArchetypeDefaults() + 5/5 vitest unit tests. Build passes both packages. .purpose files updated for new symbols (#authority-yaml-writer, #info-status, #has-compliance-claimant). No callers wired yet — Waves 2-3 do that. Wave 2 has no blockers; gate placement issue (Check 10 emission above line 575, NOT invocation at 523) preserved for Wave 2 implementation.'
+symbols_touched:
+  - '#authority-yaml-writer'
+  - '#has-compliance-claimant'
+  - '#info-status'
+  - '#stop-hook'
+  - '#paradigm-doctor'
+symbols_created:
+  - '#authority-yaml-writer'
+  - '#has-compliance-claimant'
+  - '#info-status'
+files_created:
+  - packages/paradigm/src/core/authority.ts
+  - packages/paradigm/src/core/authority.test.ts
+files_modified:
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/doctor/index.ts
+  - plugins/paradigm/scripts/paradigm-common.sh
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts
+learnings:
+  - Wave 1 additive-only pattern works — introduce primitives without callers, verify build, hand off to Wave 2 for wiring. Zero risk of behavior change during foundation step.
+  - 'Compliance-claimant regex must match all yaml array forms (block, inline with/without trailing comma) — pattern: [[\,[:space:]]compliance[\],[:space:]]'
+verification:
+  status: pass
+  details:
+    build: pass
+    unit_tests: 5/5 pass
+    regen: mirrors propagated
+tags:
+  - v6.0.4
+  - wave-1
+  - builder
+  - foundation
+body: |-
+  ## Files changed
+  1. `packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh` (+15 lines, after line 68)
+  2. `packages/paradigm/src/commands/doctor/index.ts` (+8 lines, info status)
+  3. `packages/paradigm/src/core/authority.ts` (NEW, 100 lines)
+  4. `packages/paradigm/src/core/authority.test.ts` (NEW, 70 lines, 5 cases all pass)
+  5. Generated mirrors via scripts/generate-hooks.mjs: plugins/paradigm/scripts/paradigm-common.sh, plugins/paradigm-cursor/scripts/paradigm-common.sh, packages/paradigm/src/commands/hooks/generated-hooks.ts
+  6. .purpose: core/.purpose, commands/doctor/.purpose, commands/hooks/.purpose
+
+  ## Build status
+  - paradigm-mcp build: clean
+  - paradigm build + link: clean
+  - authority.ts unit tests: 5/5 pass
+
+  ## Helper regex worth noting for Wave 2
+  HAS_COMPLIANCE_CLAIMANT regex `[[\,[:space:]]compliance[\],[:space:]]` handles all roster.yaml `active:` array forms (block style, inline `[a, b, c]`, with/without trailing comma).
+
+  ## Wave 2 prerequisite (open)
+  Builder did NOT search for `paradigm compliance-check` source path (per spec, "Wave 2 prerequisite"). Wave 2 only needs it if short-circuiting Node-side drift compute when no claimant is desired (optimization, not correctness). Wave 2 builder should grep for it OR skip the optimization.
+linked_lore:
+  - L-2026-04-26-ascend-172331-001
+linked_tasks:
+  - '4'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

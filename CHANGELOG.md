@@ -5,6 +5,28 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.4] — 2026-04-26
+
+Agent-owned enforcement pivot. Symbol/aspect enforcement (aspect drift, aspect coverage) is now claimed by the `compliance` archetype agent (Rune); when no compliance archetype is on the roster, the Stop hook no longer blocks on aspect drift / aspect coverage. The framework continues to surface metrics via `paradigm doctor` and writes `compliance-history.jsonl` unconditionally so observability/learning loops stay intact. Anchor existence (Check 4) and lore-required (Check 7) remain framework-level — they are syntax/hygiene, not policy.
+
+### Changed
+
+- **Stop hook no longer blocks aspect drift when no compliance archetype is rostered.** Check 6 (aspect coverage advisory) and Check 10 (aspect drift block) emissions are guarded by `HAS_COMPLIANCE_CLAIMANT`. Drift is still computed and flows to `compliance-history.jsonl` for data continuity. v5.37.12 fail-closed audit fix (`paradigm-common.sh:533-547`) preserved — guard wraps emission, not invocation.
+- **`CLAUDE.md`** updated to reflect agent-owned enforcement: aspect drift removed from Stop-hook block list; new paragraph clarifying that Rune (compliance archetype) owns symbol/aspect enforcement when rostered.
+
+### Added
+
+- **`paradigm doctor`** — new `Aspect coverage` line item in the coverage/compliance cluster (slotted between Portal compliance and `.paradigm/flows.yaml`). Renders `components:aspects` ratio with claimant indicator: `(no claimant active)` when compliance is benched, `(claimant: rune)` when rostered. New `'info'` status enum value with gray `⠂` icon for the no-claimant case (per TD-2026-04-25-417 — surface state without implying action required).
+- **`paradigm shift` — Step 2c-nominate-compliance prompt** for cohort-C upgraders (existing project defines `~aspects` but no compliance archetype on roster). On Y: appends `compliance` to `roster.active` and writes `.paradigm/authority.yaml` archetype-defaults. On N: writes `.paradigm/.compliance-nomination-skipped` marker so the prompt never re-fires without `--force`. Non-TTY and `--no-prompt` skip silently and write the marker — never auto-Y in CI.
+- **`.paradigm/authority.yaml` schema** (writers only, no readers in v6.0.4). New module `packages/paradigm/src/core/authority.ts` exposes `writeArchetypeDefaults()` — writes `aspect-coverage` / `aspect-drift` / `anchor-staleness` claims for the compliance archetype at severity `advise` (per TD-2026-04-26-284 default). Schema locked at `v0-experimental` so v6.1's `paradigm_authority_claim` MCP tool ships without migration. Idempotent: never overwrites an existing file. Three triggers write at v6.0.4: shift Step 2c-nominate-compliance (on Y), shift default-adoption (when fresh project's roster includes `compliance`), and existing-project upgrade where roster already includes `compliance` but `authority.yaml` does not yet exist.
+- **One-time migration notice** for cohort C — `packages/paradigm/src/core/migration-notices.ts` exposes `checkAndEmitMigrationNotices()`, wired via `program.hook('preAction', ...)` in `src/index.ts` so `--version` / `--help` short-circuit before emission. Writes `.paradigm/.v6-0-4-migration-acknowledged` marker after first emission so the message never repeats. Failures are silent — never blocks CLI startup.
+
+### Migration
+
+Cohort-C upgraders (projects with `~aspects` defined but no compliance archetype on the roster) see a one-time notice on first paradigm CLI invocation and silently lose Stop-hook aspect-drift blocking. Run `paradigm shift` to nominate Rune (compliance) and restore aspect enforcement, or ignore the notice to opt out for this project.
+
+---
+
 ## [6.0.3] — 2026-04-25
 
 Partners primitive — Full B (a) contracts-only. Agents can declare reciprocal pairings (e.g., scholar↔sheila); marketplace SKU shapes are typed for forward-compat with nevr.land but have no live consumer at v6.0.3. Design pass orchestrated with architect / Jinx (advocate) / Helix (DX) / Loid (intelligence officer) per always-use-team protocol; user picked Full B over team-recommended B-lite synthesis after weighing the migration-risk trade-off.
