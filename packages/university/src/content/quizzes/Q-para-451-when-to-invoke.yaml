@@ -1,0 +1,182 @@
+id: Q-para-451-when-to-invoke
+title: 'PARA 451: Agents Foundations — When to Invoke Quiz'
+description: >-
+  Highest-leverage routing quiz of PARA 451. Five scenario questions covering
+  builder-vs-documentor differentiation, reviewer activation timing, scholar
+  deep-dive triggering, ftux first-time UX simulation, and designer for visual
+  work. Tests the decision-tree material from N-para-451-agent-routing.
+  Architect-routing scenario is intentionally omitted (already covered in
+  Q-para-451-foundations q4).
+type: quiz
+author: paradigm
+created: '2026-04-26'
+updated: '2026-04-26'
+tags:
+  - course
+  - para-451
+  - agents
+  - routing
+  - when-to-invoke
+  - quiz
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+prerequisites:
+  - N-para-451-agent-routing
+category: paradigm-core
+origin: authored
+source: agents-course-phase-a-design.md
+questions:
+  - id: q1
+    question: >-
+      Builder has just shipped a feature. The diff modifies source files and
+      adds three new exported functions, but does not touch any `.purpose`
+      files, `portal.yaml`, or lore. Two agents are clearly relevant: one to
+      verify the implementation, and one to keep framework metadata in sync.
+      Which agent owns which job, and in what order do they run?
+    choices:
+      A: documentor reviews the code, then builder updates .purpose files
+      B: >-
+        reviewer reviews the code (spec compliance, then code quality), then
+        documentor updates `.purpose` files, `portal.yaml`, and lore as the
+        final orchestration stage. documentor never touches source.
+      C: >-
+        documentor reviews the code AND updates .purpose files in one pass —
+        reviewer is unnecessary for small changes
+      D: >-
+        reviewer reviews the code AND updates .purpose files in one pass —
+        documentor is for user-facing docs only
+      E: >-
+        builder updates `.purpose` files itself; neither reviewer nor
+        documentor needs to run
+    correct: B
+    explanation: >-
+      reviewer and documentor own non-overlapping jobs. reviewer runs the
+      two-stage review (spec compliance, then code quality) and hands back
+      without fixing — its job is verifying the code. documentor is **always
+      the final orchestration stage** and updates `.purpose` files,
+      `portal.yaml`, and lore — never source. The two agents differentiate
+      cleanly: reviewer touches code (read-only), documentor touches
+      framework metadata (write). Conflating them is the most common routing
+      mistake; that is why this quiz tests the difference explicitly.
+  - id: q2
+    question: >-
+      You are halfway through implementing a feature in builder when you
+      realise the spec is ambiguous about an edge case. What is the right
+      escalation move?
+    choices:
+      A: >-
+        Push through with a best-guess interpretation; reviewer will catch it
+        later
+      B: Bench builder and switch to architect to redesign the whole feature
+      C: >-
+        Have builder push back on the ambiguity (this is one of builder's
+        documented behaviours) and route the clarifying question to architect
+        — the agent that produced the spec — before continuing
+      D: >-
+        Ask documentor to clarify the spec, since documentor owns
+        framework-text consistency
+      E: Invoke jinx (advocate) to pick the safer interpretation
+    correct: C
+    explanation: >-
+      builder's profile explicitly says "follows specs exactly. Pushes back
+      when unclear." Pushing back on ambiguity is the documented behaviour,
+      not a failure mode. The clarifying question routes to architect because
+      architect owns the spec — that is exactly what architect was invoked
+      for. reviewer runs after implementation, not as a clarification surface
+      mid-implementation. documentor never touches spec content. jinx is for
+      stress-testing assumptions before high-risk decisions, not for
+      arbitrating ambiguous spec text.
+  - id: q3
+    question: >-
+      You are about to add a new technical research entry to the project's
+      learning materials — citations, file references, careful sourcing — and
+      then shape it into a sequenced quiz. Which agent (or pair) picks this
+      up?
+    choices:
+      A: educator alone — pedagogical sequencing covers all of it
+      B: scholar alone — research includes the shaping step
+      C: researcher alone — all research is researcher's job
+      D: >-
+        scholar and educator as a reciprocal pair — scholar produces the
+        source material with citation discipline; educator shapes it
+        pedagogically into the quiz. This is the canonical use of the
+        partners primitive.
+      E: documentor — University content is framework-text, so documentor owns it
+    correct: D
+    explanation: >-
+      scholar and educator (Sheila) are the canonical partners pair in
+      Paradigm. scholar produces source material with citation discipline;
+      educator shapes it into pedagogical form (sequenced quizzes, paths,
+      PLSAT modules). Routing to one alone leaves half the work undone.
+      researcher is the **business / market** research agent, not technical
+      research — different archetype entirely. documentor handles framework
+      metadata (`.purpose`, `portal.yaml`, lore), not University content.
+      This routing is the same partnership that authored PARA 451 itself.
+  - id: q4
+    question: >-
+      Builder has just shipped a CLI command improvement. The change updates
+      the `--help` output, the printed error messages, and the README's
+      install section. After reviewer signs off but before documentor runs,
+      which additional agent should be in the pipeline, and what is the rule
+      for when to include it?
+    choices:
+      A: >-
+        scholar — to research how other CLIs handle the same command shape
+      B: >-
+        ftux — Nora simulates a first-time user and reads ONLY user-facing
+        surfaces (README, --help, docs, error messages). Include ftux after
+        builder when the task touches a user-visible surface; skip when the
+        change is purely internal.
+      C: >-
+        designer — Mika reviews any text change for visual hierarchy
+      D: >-
+        ftux always runs after every builder pass, regardless of whether the
+        change is user-facing
+      E: >-
+        jinx — to stress-test the new error messages for failure modes
+    correct: B
+    explanation: >-
+      ftux (Nora) is the framework's first-time-user-experience guard. Its
+      simulation integrity rule is strict — it reads ONLY user-facing surfaces
+      (README, --help, docs, changelogs, error strings). It never reads
+      source code; confusion observed in user-facing surfaces **is** data.
+      The trigger condition is "the task touches a user-visible surface" —
+      a CLI `--help` change, a README update, or new error messages all
+      qualify. Internal-only refactors do not. ftux running after every
+      builder pass would be wasted invocation; ftux skipping a CLI surface
+      change would miss the friction it exists to catch.
+  - id: q5
+    question: >-
+      You are about to redesign the visual layout of a settings panel — UI
+      hierarchy, spacing, motion, accessibility. Which agent owns this work,
+      and what is the relationship to builder?
+    choices:
+      A: >-
+        builder owns it — visual work is just code, and builder writes the
+        code
+      B: >-
+        designer (Mika) owns the visual surface; builder owns the wiring.
+        Invoke designer for the visual decisions, builder for the
+        implementation, often in parallel for visual / UI / design-system
+        work.
+      C: >-
+        forge owns it — visual changes are agent work
+      D: >-
+        documentor owns it, since visual changes are user-facing
+      E: >-
+        Only mika can ever touch UI code; builder must be benched on UI
+        projects entirely
+    correct: B
+    explanation: >-
+      designer (Mika) is the design engineer — UI/UX, design systems, motion,
+      accessibility. designer owns the **surface** (the visual decisions, the
+      hierarchy, the spacing, the motion); builder owns the **wiring** (the
+      implementation that makes the surface real). On UI work the two run
+      together — often in parallel — with designer producing the surface
+      decisions and builder shipping the implementation. forge is the
+      intelligence-officer archetype (Loid) and has nothing to do with
+      visual work. documentor only touches framework metadata. Benching
+      builder on UI projects entirely would be incorrect — builder is
+      always part of the implementation pipeline; designer is the
+      *additional* agent that owns the visual decisions builder implements.

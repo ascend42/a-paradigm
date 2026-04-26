@@ -1,0 +1,72 @@
+id: L-2026-04-26-ascend-180904-001
+type: milestone
+timestamp: '2026-04-26T18:09:04.698Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PARA 451 batch 3 shipped — 14 entries in path, when-to-invoke quiz live
+summary: 'Sheila + Scholar authored 4 notes + 1 quiz: archetypes-vs-instances (foundation backfill), paradigm-shift (auto-rostering high-level only), agent-routing (decision tree reference card), the-team-pattern (capstone close), Q-when-to-invoke (5 questions, scenario-routing). LP path at 14 entries. Q5 sample showcases Scholar+Sheila partners primitive — same partnership that authored the course (recursive teaching). Validation healthy. 191 entries pack-wide source-only.'
+symbols_touched:
+  - '#para-451-archetypes-vs-instances'
+  - '#para-451-paradigm-shift'
+  - '#para-451-agent-routing'
+  - '#para-451-the-team-pattern'
+  - '#para-451-when-to-invoke-quiz'
+files_created:
+  - packages/university/src/content/notes/N-para-451-archetypes-vs-instances.md
+  - packages/university/src/content/notes/N-para-451-paradigm-shift.md
+  - packages/university/src/content/notes/N-para-451-agent-routing.md
+  - packages/university/src/content/notes/N-para-451-the-team-pattern.md
+  - packages/university/src/content/quizzes/Q-para-451-when-to-invoke.yaml
+files_modified:
+  - packages/university/src/content/paths/LP-para-451.yaml
+learnings:
+  - Self-attributing the partners primitive in Q3 reinforces the canonical example by recursion — same Scholar+Sheila pair that authored the course is the answer to a quiz about which pair handles research+pedagogy work
+  - Agent-routing as a decision-tree note + when-to-invoke as scenario quiz cover the same conceptual ground from two angles (reference card vs assessment) — stronger learning architecture than either alone
+  - Always verify agent identity ('forge' is Loid not visual; 'designer' is Mika) before writing into prompts — prompt typos propagate as misinformation through agent role-play
+verification:
+  status: pass
+  details:
+    validate: healthy 0 issues
+    pack_list: 191 entries source-only
+    path_steps: 14 in dep order
+tags:
+  - agents-course-phase-a
+  - para-451
+  - batch-3
+  - sheila
+  - scholar
+body: |-
+  ## Path order (14 entries)
+  welcome → what-is-an-agent → identity-layers → archetypes-vs-instances → tiers → roster-reference → roster-management → paradigm-shift → orchestration-modes → partners-primitive → agent-routing → the-team-pattern → Q-when-to-invoke → Q-foundations
+
+  ## Quiz Q3 sample (the canonical partners pattern teaching by example)
+  "You are about to add a new technical research entry to the project's learning materials — citations, file references, careful sourcing — and then shape it into a sequenced quiz. Which agent (or pair) picks this up?" → answer: scholar+educator reciprocal pair (the same partnership authoring PARA 451 itself).
+
+  ## Deviations + corrections worth flagging
+  1. **Main session prompt typo**: I wrote "forge for visual work" — forge = Loid (intelligence-officer), NOT visual. Designer/Mika is the visual archetype. Agent self-corrected Q5 to designer. Mea culpa.
+  2. **Naming**: design §2 had `auto-rostering`; task used `paradigm-shift`. Agent used `paradigm-shift` per task. Design doc references old id — non-blocking, but worth a note for any future cross-ref.
+  3. **Q-when-to-invoke prerequisite**: agent set to `agent-routing` (natural lead-in) not `roster-reference` per design — pedagogically better.
+  4. **Two entries beyond design §2**: `agent-routing` and `the-team-pattern` added per task scope. `the-team-pattern` partially fills design entry #18 `mastery-review` capstone role.
+
+  ## Phase A status
+  - Design target: 18 entries
+  - Current: 14 (12 notes + 2 quizzes + 1 path = 15 files)
+  - Remaining 4 to reach 18: 6 possible per-topic mini-quizzes + 1 mastery-review note
+  - Per user batch-2 lock (mini-quizzes deferred to polish pass), Phase A is effectively complete at 14 if `the-team-pattern` serves as close
+
+  ## 4 open calls for batch 4 / launch
+  1. Mastery-review: separate entry or treat the-team-pattern as the close?
+  2. Q-foundations vs Q-when-to-invoke ordering (current: when-to-invoke before foundations)
+  3. Mini-quiz polish pass: pre-launch pacing or post-launch telemetry-driven?
+  4. PARA 401 stale-agent-entries retirement: coordinate with v6.1 release plan
+linked_lore:
+  - L-2026-04-26-ascend-175403-001
+linked_tasks:
+  - '10'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

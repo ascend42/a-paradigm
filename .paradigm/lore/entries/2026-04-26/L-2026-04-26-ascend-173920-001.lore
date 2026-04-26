@@ -1,0 +1,78 @@
+id: L-2026-04-26-ascend-173920-001
+type: milestone
+timestamp: '2026-04-26T17:39:20.382Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PARA 451 first batch shipped — 5 entries authored, course shell live
+summary: 'Sheila + Scholar authored 5 entries: LP-para-451 path, N-para-451-welcome, N-para-451-identity-layers, N-para-451-tiers (model tier strict + v6.1 notebook-tier callout), N-para-451-roster-reference (consolidated table). Direct file authoring used (matches PARA 401 import convention; origin: authored marks these as first natively-authored PARA entries). Pack source at packages/university/, published artifact at node_modules/ (will diverge until next pack publish). Forward-compat callout format locked: blockquote `> **Coming in v6.1:** ...`. LP-para-451.steps lists only implemented entries to satisfy validatePathContent.'
+symbols_touched:
+  - '#para-451-agents-foundations'
+  - '#para-451-welcome'
+  - '#para-451-identity-layers'
+  - '#para-451-tiers'
+  - '#para-451-roster-reference'
+  - '#paradigm-university'
+symbols_created:
+  - '#para-451-agents-foundations'
+files_created:
+  - packages/university/src/content/paths/LP-para-451.yaml
+  - packages/university/src/content/notes/N-para-451-welcome.md
+  - packages/university/src/content/notes/N-para-451-identity-layers.md
+  - packages/university/src/content/notes/N-para-451-tiers.md
+  - packages/university/src/content/notes/N-para-451-roster-reference.md
+learnings:
+  - Pack source vs published artifact diverge between publish cycles — source authoring lives at packages/university/src/content/, published copy at node_modules/@a-company/university/
+  - LP path steps must only reference implemented entries (validatePathContent enforces) — plan future entries in YAML comments not in steps array
+  - 'PARA 401 entries were imported (origin: imported, source: courses/para-NNN.json); PARA 451 is the first natively-authored set (origin: authored, source: agents-course-phase-a-design.md)'
+  - 'Forward-compat callout pattern: blockquote with bold prefix — the only forward-looking visual signal in the curriculum'
+verification:
+  status: partial
+  details:
+    build: n/a (content only)
+    pack_load: pass
+    validate: pending main-session re-run
+tags:
+  - agents-course-phase-a
+  - para-451
+  - first-batch
+  - sheila
+  - scholar
+body: |-
+  ## Files created
+  - packages/university/src/content/paths/LP-para-451.yaml
+  - packages/university/src/content/notes/N-para-451-welcome.md
+  - packages/university/src/content/notes/N-para-451-identity-layers.md
+  - packages/university/src/content/notes/N-para-451-tiers.md
+  - packages/university/src/content/notes/N-para-451-roster-reference.md
+
+  ## Convention discoveries
+  - Pack source: packages/university/src/content/{notes,paths,quizzes}/
+  - Published copy: node_modules/@a-company/university/ (181 entries, paradigm pack)
+  - Direct file authoring matches PARA 401 import pattern; paradigm_university_create more for project-scoped packs
+  - New `origin: authored` marker distinguishes natively-authored from imported `courses/para-NNN.json`
+
+  ## Forward-compat callout format (LOCKED)
+  ```markdown
+  > **Coming in v6.1:** <one-line description>. See `agent-owned-enforcement-plan.md`.
+  ```
+  Used in 3 of 5 entries. No bare "todo/later/future" language elsewhere — blockquote is only forward-looking signal.
+
+  ## Open questions for next batch
+  1. Entry id `roster-reference` (used) vs `roster` (user's first-batch spec) — design §2 entry 9 used `roster-reference`
+  2. Quiz scenarios: nicknames vs ids — recommend ids (matches `paradigm agent list` output)
+  3. Sequencing: `N-para-451-what-is-an-agent` (entry 2 in dep graph, skipped this batch) — author next or after partners deep-dive?
+
+  ## Constraints honored
+  - Phase A only — no Rune authority modes, no soft-blocks, no notebook tier semantics
+  - Pack version not bumped (source-only state until next publish)
+linked_lore:
+  - L-2026-04-26-ascend-172539-001
+linked_tasks:
+  - '5'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true

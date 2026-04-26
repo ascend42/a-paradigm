@@ -1,0 +1,154 @@
+id: Q-para-451-foundations
+title: 'PARA 451: Agents Foundations — Foundations Quiz'
+description: >-
+  First quiz of PARA 451. Covers what an agent is, the three identity layers
+  (id / nickname / archetype), model tiers, the faceted vs sequential
+  orchestration modes, when to invoke the always-on backbone agents, and the
+  `paradigm shift` auto-rosterer. Six questions.
+author: paradigm
+created: '2026-04-26'
+updated: '2026-04-26'
+tags:
+  - course
+  - para-451
+  - agents
+  - foundations
+  - quiz
+symbols: []
+difficulty: beginner
+passThreshold: 0.7
+prerequisites:
+  - N-para-451-roster-management
+category: paradigm-core
+origin: authored
+source: agents-course-phase-a-design.md
+questions:
+  - id: q1
+    question: >-
+      You rename `forge` to "Lola" on your project, while leaving the agent's
+      machine-stable handle and role pattern untouched. Which of the three
+      identity layers did you change?
+    choices:
+      A: id
+      B: nickname
+      C: archetype
+      D: tier
+      E: All three — they always change together
+    correct: B
+    explanation: >-
+      The nickname is the user-customisable display layer. Renaming `forge` to
+      "Lola" changes only the nickname; the id (`forge`) stays stable so CLI,
+      MCP, and registry references keep resolving, and the archetype
+      (`intelligence-officer`) stays fixed because that is what the agent *is*,
+      not what it is *called*. Tier is an orthogonal axis (which model the
+      agent runs on) and is not part of the identity model.
+  - id: q2
+    question: >-
+      A teammate says "let's bump documentor up to opus on this project for
+      the next week." Which Paradigm concept are they actually changing?
+    choices:
+      A: The documentor's archetype
+      B: The documentor's notebook tier
+      C: The documentor's model tier (its default Claude model)
+      D: The documentor's roster status
+      E: The documentor's partners declaration
+    correct: C
+    explanation: >-
+      Model tier maps an agent to a default Claude model — tier-1 (opus),
+      tier-2 (sonnet), tier-3 (haiku). Bumping `documentor` from its tier-2
+      default up to opus is a model-tier override, configured per-project in
+      `.paradigm/config.yaml` under `model-resolution`. This is **not** the
+      v6.1 notebook-tier concept (scope/ownership of learned patterns), which
+      is a separate axis with the same unfortunate name — PARA 451 keeps the
+      two strictly separate.
+  - id: q3
+    question: >-
+      You are working in Cursor on a small task. You notice that when the
+      orchestrator switches from `architect` to `builder`, builder seems to
+      "remember" things architect just discussed. In Claude Code with the
+      default settings, this would not happen. What is the difference?
+    choices:
+      A: Cursor uses faceted mode and Claude Code uses sequential mode
+      B: >-
+        Cursor uses sequential mode (single shared context, agents take turns
+        in the same conversation), while Claude Code defaults to faceted mode
+        (each agent runs in an isolated Task subagent with its own memory)
+      C: Cursor disables agent profiles entirely
+      D: Claude Code shares notebooks across agents while Cursor does not
+      E: The two IDEs use entirely different agent rosters
+    correct: B
+    explanation: >-
+      Faceted mode (the Claude Code default) launches each agent as an
+      isolated Task subagent — separate context, separate memory, separate
+      tool access. Sequential mode (Cursor and other IDEs without Task tool
+      support) runs each agent as a persona switch in the same conversation,
+      so they share memory. Both modes use the same agent profiles and the
+      same identity layers; the difference is the runtime plumbing. The mode
+      is configured by `orchestration.default_mode` in `agents.yaml`.
+  - id: q4
+    question: >-
+      You are about to start a feature that will touch eight files across
+      three packages and you do not yet have a written plan. Which agent
+      should pick this up first?
+    choices:
+      A: builder — start implementing and figure it out as you go
+      B: reviewer — review what you already have before planning
+      C: architect — design the multi-file change and produce a spec
+      D: tester — write tests first and let the design fall out
+      E: documentor — update `.purpose` files first
+    correct: C
+    explanation: >-
+      `architect` is the design agent — system design, specs, multi-file
+      planning. Anything that spans three or more files in a non-trivial way
+      is architect's territory. `builder` follows the spec architect produces;
+      invoking builder first on an unscoped change is exactly the trap
+      architect exists to prevent. `reviewer` runs after implementation, not
+      before. `documentor` runs as the final orchestration stage on
+      `.purpose` files and `portal.yaml`, not as the entry point for
+      multi-file design work.
+  - id: q5
+    question: >-
+      `builder` has just finished implementing a feature and the diff is in
+      front of you. The change touches the README. Which agents should run
+      next, and in what order?
+    choices:
+      A: documentor first, then reviewer
+      B: reviewer first, then documentor (the final orchestration stage)
+      C: ftux first, then reviewer, then documentor
+      D: reviewer first, then ftux (because the README is a user-visible
+        surface), then documentor as the final stage
+      E: Only documentor — reviewer is unnecessary on small features
+    correct: D
+    explanation: >-
+      The canonical post-implementation sequence: `reviewer` does the
+      two-stage review (spec compliance, then code quality) and hands back
+      without fixing. `ftux` (Nora) runs after Builder when the task touches
+      a user-visible surface — README qualifies, and ftux reads ONLY
+      user-facing surfaces to simulate first-time-user friction. `documentor`
+      is **always the final orchestration stage** — it updates `.purpose`
+      files, `portal.yaml`, and lore, never source. Reviewer-only or
+      documentor-only sequences skip the friction signal that Nora exists to
+      capture.
+  - id: q6
+    question: >-
+      You have just cloned a fresh Swift project and the repo has no
+      `.paradigm/roster.yaml` yet. Which command bootstraps an initial roster
+      that includes both the always-on backbone *and* the matching ecosystem
+      agent?
+    choices:
+      A: paradigm agent list
+      B: paradigm agent activate swift
+      C: paradigm shift
+      D: paradigm agent get architect
+      E: paradigm agent bench --all
+    correct: C
+    explanation: >-
+      `paradigm shift` is the auto-rosterer. It detects the project's
+      language and platform (Swift in this case), selects the always-on
+      backbone (architect, builder, reviewer, security, tester, documentor,
+      cid), and adds matching ecosystem agents (`swift` for a Swift project).
+      `paradigm agent list` only displays the current roster; `paradigm agent
+      activate swift` would only add the ecosystem agent and would not seed
+      the backbone; the other options do unrelated things. `paradigm shift`
+      is the single command that gets a fresh project from "no roster" to "a
+      sensible default roster".

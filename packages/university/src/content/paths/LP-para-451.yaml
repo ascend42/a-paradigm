@@ -1,0 +1,69 @@
+id: LP-para-451
+title: 'PARA 451: Agents Foundations'
+description: >-
+  Meet the team. Learn what each agent does and when to call them. PARA 451 is the
+  beginner-accessible introduction to Paradigm's most differentiated feature — its
+  agent system. The course covers the three-layer identity model (id / nickname /
+  archetype), the archetype-vs-instance distinction, the model-tier taxonomy, the
+  canonical 21-agent roster, roster management, the `paradigm shift` auto-rosterer,
+  the orchestration modes (faceted vs sequential roleplay), the partners
+  primitive, an agent-routing decision tree, and a capstone on why the team
+  pattern wins. Approximately 18 entries when complete (~35 minutes skim,
+  75-90 minutes full mastery). This course is the canonical introduction to
+  agents; the older agent entries inside PARA 401 are flagged as v6.1 retirement
+  candidates. Subsequent course PARA 551 (Agents in Practice) covers the v6.1
+  enforcement model, authority modes, soft-blocks, and notebook tier-1/tier-2
+  split.
+author: paradigm
+created: '2026-04-26'
+updated: '2026-04-26'
+tags:
+  - course
+  - para-451
+  - agents
+  - path
+ordered: true
+category: paradigm-core
+origin: authored
+source: agents-course-phase-a-design.md
+prerequisites:
+  - LP-para-101
+# Batches 1-3 (14 of ~18 planned entries) are implemented below. The remaining
+# planned entries (per .paradigm/research/agents-course-phase-a-design.md §2)
+# are the per-topic mini-quizzes (Q-para-451-identity-layers,
+# Q-para-451-archetypes-vs-instances, Q-para-451-tiers,
+# Q-para-451-roster-management, Q-para-451-orchestration-modes,
+# Q-para-451-partners) and the N-para-451-mastery-review note. Per the
+# batch-2/3 user locks, mini-quizzes are deferred to a polish pass after
+# launch — bigger when-to-invoke is the highest-leverage routing test, and the
+# capstone N-para-451-the-team-pattern serves as the conceptual close until
+# mastery-review lands.
+steps:
+  - content: N-para-451-welcome
+    required: true
+  - content: N-para-451-what-is-an-agent
+    required: true
+  - content: N-para-451-identity-layers
+    required: true
+  - content: N-para-451-archetypes-vs-instances
+    required: true
+  - content: N-para-451-tiers
+    required: true
+  - content: N-para-451-roster-reference
+    required: true
+  - content: N-para-451-roster-management
+    required: true
+  - content: N-para-451-paradigm-shift
+    required: true
+  - content: N-para-451-orchestration-modes
+    required: true
+  - content: N-para-451-partners-primitive
+    required: true
+  - content: N-para-451-agent-routing
+    required: true
+  - content: N-para-451-the-team-pattern
+    required: true
+  - content: Q-para-451-when-to-invoke
+    required: true
+  - content: Q-para-451-foundations
+    required: true

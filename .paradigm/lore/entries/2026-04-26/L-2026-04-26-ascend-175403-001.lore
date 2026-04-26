@@ -1,0 +1,71 @@
+id: L-2026-04-26-ascend-175403-001
+type: milestone
+timestamp: '2026-04-26T17:54:03.660Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PARA 451 batch 2 shipped — 9 entries total in path, first quiz live
+summary: 'Sheila + Scholar authored 5 more entries: N-para-451-what-is-an-agent (conceptual gateway, slotted second after welcome), N-para-451-partners-primitive (Scholar+Sheila canonical with explicit self-attribution callout), N-para-451-orchestration-modes (faceted vs sequential), N-para-451-roster-management (CLI commands + skill), Q-para-451-foundations (6 questions, agent ids per user lock). LP-para-451 path now lists 9 entries in dep order. Validation healthy, pack loads clean. No rework needed.'
+symbols_touched:
+  - '#para-451-agents-foundations'
+  - '#para-451-what-is-an-agent'
+  - '#para-451-partners-primitive'
+  - '#para-451-orchestration-modes'
+  - '#para-451-roster-management'
+  - '#para-451-foundations-quiz'
+files_created:
+  - packages/university/src/content/notes/N-para-451-what-is-an-agent.md
+  - packages/university/src/content/notes/N-para-451-partners-primitive.md
+  - packages/university/src/content/notes/N-para-451-orchestration-modes.md
+  - packages/university/src/content/notes/N-para-451-roster-management.md
+  - packages/university/src/content/quizzes/Q-para-451-foundations.yaml
+files_modified:
+  - packages/university/src/content/paths/LP-para-451.yaml
+learnings:
+  - Self-attributing the partners-primitive entry as a Scholar+Sheila collaboration teaches the partners pattern by being one — pedagogically tight
+  - Quiz q4 (architect routing) overlaps with the planned when-to-invoke quiz — batch 3 should trim or differentiate
+  - Pack version stays unbumped during source-only authoring — published artifact at node_modules/ won't see new entries until next pack publish
+verification:
+  status: pass
+  details:
+    validate: healthy 0 issues
+    pack_list: 186 entries source-only
+    format: all 4 forward-compat callouts use locked format
+tags:
+  - agents-course-phase-a
+  - para-451
+  - batch-2
+  - sheila
+  - scholar
+body: |-
+  ## Files created
+  - packages/university/src/content/notes/N-para-451-what-is-an-agent.md (5min beginner)
+  - packages/university/src/content/notes/N-para-451-partners-primitive.md (8min intermediate, Scholar+Sheila self-attribution per §10 lock)
+  - packages/university/src/content/notes/N-para-451-orchestration-modes.md (5min beginner)
+  - packages/university/src/content/notes/N-para-451-roster-management.md (5min beginner)
+  - packages/university/src/content/quizzes/Q-para-451-foundations.yaml (6 questions, passThreshold 0.7)
+
+  ## Quiz design (Sheila pedagogical)
+  Sample q4: "You are about to start a feature that will touch eight files across three packages and you do not yet have a written plan. Which agent should pick this up first?" → answer: `architect`. Uses agent ids verbatim (architect, builder, reviewer, documentor, ftux, forge) per user lock from TD-2026-04-26-678.
+
+  ## Path order
+  9 entries listed: welcome → what-is-an-agent → identity-layers → tiers → roster-reference → roster-management → orchestration-modes → partners-primitive → Q-foundations. Future entries in YAML comment per locked convention.
+
+  ## 4 open calls for batch 3
+  1. when-to-invoke quiz: 5 fresh questions or trim to avoid q4/q5 overlap?
+  2. N-para-451-archetypes-vs-instances: slot back into path or defer to polish?
+  3. Auto-rostering depth: high-level only (PARA 551 has Swift notebook compounding) — confirm
+  4. Per-topic mini-quizzes (Q-identity-layers, Q-tiers, Q-orchestration, Q-partners) batch — include or focus on bigger ones?
+
+  ## Surprise
+  No advisor call needed — design doc was unambiguous and batch 1 locked conventions cleanly. Batch 2 was a one-pass authoring run.
+linked_lore:
+  - L-2026-04-26-ascend-173920-001
+linked_tasks:
+  - '10'
+confidence: 0.9
+git_context:
+  ref: f0bc3e05f25567244ca44dbf66204b0707ebd091
+  branch: main
+  dirty: true
