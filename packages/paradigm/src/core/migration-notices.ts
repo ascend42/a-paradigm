@@ -36,8 +36,10 @@ const SKIPPED_DIRS = new Set([
 
 /**
  * Walk a project root looking for any `.purpose` file containing an aspect
- * declaration line (`^\s*~`). Walk is bounded — skips heavy/irrelevant
- * directories and exits early on first match.
+ * declaration. Matches both YAML mapping-key form (`  ~aspect:`) and
+ * YAML list-item form (`  - ~aspect`) — the latter is the most common
+ * shape in .purpose files (`aspects:\n  - ~name`). Walk is bounded —
+ * skips heavy/irrelevant directories and exits early on first match.
  */
 function projectHasAspectsDefined(projectRoot: string): boolean {
   function walk(dir: string, depth: number): boolean {
@@ -57,7 +59,7 @@ function projectHasAspectsDefined(projectRoot: string): boolean {
       } else if (entry.isFile() && entry.name === '.purpose') {
         try {
           const content = fs.readFileSync(path.join(dir, entry.name), 'utf8');
-          if (/^\s*~/m.test(content)) return true;
+          if (/^\s*-?\s*~/m.test(content)) return true;
         } catch {
           // ignore unreadable files
         }

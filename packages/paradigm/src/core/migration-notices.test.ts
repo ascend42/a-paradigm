@@ -63,6 +63,24 @@ describe('isCohortC', () => {
     );
     expect(isCohortC(tmpDir)).toBe(false);
   });
+
+  it('detects YAML-list aspect form (- ~name) — the standard .purpose shape', () => {
+    // Regression: original regex /^\s*~/ missed `      - ~aspect-name`
+    // which is the canonical YAML-list form used across this repo's .purpose
+    // files (`aspects:\n      - ~rate-limited`). Smoke test caught this
+    // before v6.0.4 publish.
+    fs.writeFileSync(
+      path.join(tmpDir, '.purpose'),
+      'component: api-handler\naspects:\n      - ~rate-limited\n      - ~auth-required\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.paradigm', 'roster.yaml'),
+      'version: 1.0\nactive:\n  - architect\n  - builder\n',
+      'utf8'
+    );
+    expect(isCohortC(tmpDir)).toBe(true);
+  });
 });
 
 describe('checkAndEmitMigrationNotices', () => {

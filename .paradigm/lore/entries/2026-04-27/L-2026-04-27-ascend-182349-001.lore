@@ -1,0 +1,71 @@
+id: L-2026-04-27-ascend-182349-001
+type: incident
+timestamp: '2026-04-27T18:23:49.994Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.0.4 e2e smoke test caught regex bug — saved a v5.21.1-style cascade
+summary: 'Pre-publish e2e cohort-C smoke test caught a real publish-blocker bug in the migration-notice cohort-C predicate. Regex `/^\s*~/m` missed the standard YAML-list aspect format (`      - ~aspect-name`) — only matched mapping-key form (`  ~aspect:`). This repo wasn''t affected (compliance IS rostered, predicate short-circuits before .purpose walk), but ANY project authored with the canonical YAML-list .purpose format and without compliance rostered would have silently lost the migration notice + paradigm shift nomination. Fix was one-line: `/^\s*-?\s*~/m` (optional dash). Regression test added (9 isCohortC tests now). 313 tests pass / 1 skip (was 312). All 8 TCs in the smoke test now verified clean.'
+symbols_touched:
+  - '#migration-notices'
+  - '#cohort-c-predicate'
+  - '#aspect-detection-regex'
+files_modified:
+  - packages/paradigm/src/core/migration-notices.ts
+  - packages/paradigm/src/core/migration-notices.test.ts
+errors_encountered:
+  - description: isCohortC regex /^\s*~/m missed YAML-list aspect format (- ~name) which is the standard .purpose convention; would have silently broken migration notice for most cohort-C projects on publish
+    resolution: Changed regex to /^\s*-?\s*~/m (optional dash) + added regression test for YAML-list form
+    time_to_fix: 5min
+learnings:
+  - E2E smoke tests catch bugs that unit tests can miss when the unit-test fixtures don't mirror real-world data shapes. Always seed fixtures from the actual repo conventions, not idealized minimal examples.
+  - When a regex is the gating predicate for a behavior change, ALWAYS test against multiple representative content shapes (mapping-key form AND list-item form for YAML structures).
+  - Pre-publish e2e walks pay for themselves on the first save. v5.21.1-v5.21.4 was 3 patches because we shipped without this gate; v6.0.4 caught its cascade-prevention here.
+verification:
+  status: pass
+  details:
+    tests: 313 pass / 1 skip (+1 regression test)
+    smoke_tcs: TC1,TC2,TC5,TC6,TC7,TC8 PASS; TC3 spec-correct suppression; TC4 unit-tested
+    build: pass
+    link: pass
+tags:
+  - v6.0.4
+  - smoke-test
+  - bug-caught
+  - regex
+  - publish-blocker
+body: |-
+  ## TCs verified
+  - TC1 PASS: migration notice fires for cohort C (with YAML-list aspect format)
+  - TC2 PASS: marker file honored, no re-fire on second invocation
+  - TC3 (correctly suppressed): 0 components edge case suppresses aspect-coverage line per spec
+  - TC5 PASS: shift --no-prompt writes skip marker, does NOT add compliance to roster
+  - TC6 PASS: --force clears skip marker (--no-prompt order question minor)
+  - TC7 PASS: writeArchetypeDefaults schema matches spec §2 byte-exact (3 claims, severity advise, source archetype-default)
+  - TC8 PASS: cohort A (compliance rostered) — no notice, no marker file
+
+  ## Bug detail
+  - File: packages/paradigm/src/core/migration-notices.ts:60
+  - Original: `if (/^\s*~/m.test(content)) return true;`
+  - Fixed:    `if (/^\s*-?\s*~/m.test(content)) return true;`
+  - New regex matches both `~aspect:` (mapping key) AND `- ~aspect` (YAML list item)
+  - Test file: src/core/migration-notices.test.ts +1 test ("detects YAML-list aspect form (- ~name) — the standard .purpose shape")
+
+  ## Why unit tests missed it
+  Existing isCohortC tests used `~something:` and `~thing:` (mapping-key form) — the only form the original regex matched. The standard .purpose shape across this repo's 100+ .purpose files is the YAML-list form (`aspects:\n      - ~name`), but the unit tests never exercised that form.
+
+  ## Why the smoke test caught it
+  Used a realistic .purpose seed format mirroring this repo's actual conventions. Doctor's first invocation showed no migration notice → marker file missing → predicate failure → debug pointed to regex.
+
+  ## Cost / save
+  Smoke test cost ~10 min wall clock + 1 round-trip on the regex fix + re-test. Caught a bug that would have shipped to npm and silently broken cohort-C migration for users of the canonical YAML-list .purpose format. v5.21.1-v5.21.4 history shows what happens without this gate (3 patches for what should have been 1).
+linked_lore:
+  - L-2026-04-26-ascend-180732-001
+linked_tasks:
+  - '21'
+confidence: 0.95
+git_context:
+  ref: 187099b8ee4244b014d542bbd194557d947e4787
+  branch: main
+  dirty: true
