@@ -1,0 +1,65 @@
+id: L-2026-04-27-ascend-200805-001
+type: milestone
+timestamp: '2026-04-27T20:08:05.153Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.1 implementation plan ready — 3 sprints, soft-block trunk, 5 open user calls
+summary: 'Architect-led v6.1 plan delivered: 3 sprints over 6-8 weeks, soft-block primitive is the load-bearing trunk, tier-split + cross-refs run parallel from day one but merge before Sprint 2 close. 5 user-judgment open calls (3 needed before Sprint 1, 2 deferrable to Sprint 2 kickoff). Architect-decided 6 calls inline (naming reconciliation, platform-specific subtype, hidden-ref policy, audit log per-agent, override mechanism both-CLI-and-env, expires_at field optional, hook-orchestrator feature-flag for one minor, failure-ledger any-agent writes). Surfaced PARA 551 vs PARA 451 Phase B naming question — TD-770 locks course as PARA 451 but earlier ad-hoc references mentioned PARA 551 as future distinct course; Architect treats as Phase B unless user says otherwise.'
+symbols_touched:
+  - '#paradigm-propose-block'
+  - '#paradigm-authority-claim'
+  - '#paradigm-hook-dispatch'
+  - '#paradigm-notebook-set-tier'
+  - '#sovereign-notebooks'
+  - '#cross-refs'
+  - '#failure-ledger'
+  - '#aspect-report-rename'
+  - '#para-451-phase-b'
+files_modified:
+  - .paradigm/research/v6.1-implementation-plan.md
+learnings:
+  - 'v6.1 cohort impact analysis surfaces 4 distinct upgrade paths (A: v6.0.4 with Rune; B: v6.0.4 cohort C; C: pre-v6.0.4 with share_notebooks; D: multi-project users with Loid candidates). Migration should explicitly address each.'
+  - 'Sprint 2 has highest scope-creep risk (auto-promote tier-1 feels easy to add but is locked v6.2). Sprint kickoff ritual: re-read §9 deferral list.'
+  - PARA 551 vs PARA 451 Phase B naming question — the agents-course-phase-a-design.md mentioned 'PARA 551' as future distinct course, but TD-770 locks 'PARA 451' as THE agents course. Need user reconciliation before Sprint 1 ends.
+verification:
+  status: pass
+  details:
+    plan_file: persisted
+    open_calls_consolidated: 8 architect-decided + 5 user-judgment + 1 surfaced reconciliation
+tags:
+  - v6.1
+  - implementation-plan
+  - architect
+  - design-pass
+  - sprints
+body: |-
+  ## Sprint structure
+  - Sprint 1 (~10 days): soft-block primitive + authority MCP tools — Builder + Architect + Jinx + Loid + Documentor + Rune
+  - Sprint 2 (~12 days): tier-split + sovereign notebooks + cross-refs (one PR set, notebook MCP surface lockstep) — Loid leads + Builder + Architect + Documentor + Jinx
+  - Sprint 3 (~10 days): hook-orchestrator + 4 new Rune MCP tools + compliance-check→aspect-report rename + session-start ambient pass + Failure Ledger — Builder + Rune + Loid + Documentor + Jinx
+  - Plus 2 soak weeks between sprints for telemetry collection and parity validation
+
+  ## Critical path
+  Soft-block trunk → all authority work depends on it. Tier-split + cross-refs parallel-safe but MUST merge before Sprint 2 closes (notebook MCP surface gains both `tier:` and `refs:` parameters in lockstep).
+
+  ## 5 user-judgment open calls
+  - #3 promotion threshold (recommended: ≥2 distinct originProject + content-generality + applied ≥3 + confidence ≥0.75)
+  - #4 pre-seed Rune's 6 patterns at confidence 0.5-0.7 with loid-seed provenance
+  - #7 revoke gate user-only
+  - #11 aspect-report-history rename: parallel writes vs hard rename + alias-reader
+  - **#14 PARA 451 Phase B vs PARA 551** — must resolve before Sprint 1 ends (Phase B design kickoff)
+
+  ## What's NOT in v6.1 (v6.2+)
+  8 items confirmed deferred: paradigm_optout_register, paradigm_severity_emit, JSONLogic unblock predicates, override-cluster auto-coaching, per-component metric snapshot to lore, auto-promote tier-1, Auto-author/Guard beyond Advise, drift remediation of this repo's 316 anchors.
+linked_lore:
+  - L-2026-04-26-ascend-172048-001
+  - L-2026-04-26-ascend-172331-001
+linked_tasks:
+  - '22'
+confidence: 0.85
+git_context:
+  ref: 5ab71acbe6d2fca38c5cf053c69220aea247f2ea
+  branch: main
+  dirty: true

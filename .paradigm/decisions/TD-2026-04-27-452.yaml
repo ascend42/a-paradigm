@@ -1,0 +1,45 @@
+id: TD-2026-04-27-452
+timestamp: '2026-04-27T20:20:13.998Z'
+title: v6.1 plan — 5 user-judgment open calls locked
+decision: >-
+  All 5 user-judgment open calls from .paradigm/research/v6.1-implementation-plan.md §4 resolved per Architect
+  recommendations: (#14) PARA 451 Phase B is the agents course Phase B — extends PARA 451, NOT a separate PARA 551. (#3)
+  Promotion threshold for tier-1 notebooks: ≥2 distinct originProject + content-generality (passes
+  classifyNotebookScope) + applied ≥3 across ≥2 sessions + confidence ≥0.75. (#4) Pre-seed Rune's 6 transferable
+  patterns at ~/.paradigm/notebooks/rune/ with confidence 0.5-0.7 and provenance.createdBy: 'loid-seed'
+  (bulk-revocable). (#7) `paradigm notebook revoke` is user-only (agents cannot silence their own evidence trail). (#11)
+  `compliance-history.jsonl` → `aspect-report-history.jsonl` is hard rename + alias-reader (single source of truth
+  post-rename, alias maintained one minor for backward compat).
+rationale: >-
+  PARA 451 Phase B preserves course-identity coherence — learners progress 451 → 451 Phase B, not 451 → 551. The "PARA
+  551" speculation in earlier session prompts was ad-hoc, never locked. Promotion threshold stricter-is-safer at v6.1
+  launch — can loosen post-launch on Loid's calibration telemetry. Rune pre-seed at mid-confidence is the
+  trust-model-honoring midpoint per tier-split-design.md §8 (high-confidence violates trust, zero is invisible). Revoke
+  user-only matches the sovereign-notebook principle that the framework provides primitives but agents don't get to
+  silence themselves. Hard rename + alias-reader for the compliance-history rename keeps the post-rename writes clean
+  while honoring data continuity for Loid's reads.
+participants:
+  - id: user
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+  - id: rune
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#para-451-phase-b'
+  - '#paradigm-notebook-set-tier'
+  - '#paradigm-notebook-revoke'
+  - '#aspect-report-rename'
+  - '#tier-1-promotion-threshold'
+  - '#rune-tier-1-preseed'
+status: active
+tags:
+  - v6.1
+  - open-calls-resolved
+  - sprint-1-ready
