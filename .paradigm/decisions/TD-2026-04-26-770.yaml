@@ -1,0 +1,39 @@
+id: TD-2026-04-26-770
+timestamp: '2026-04-26T18:15:44.381Z'
+title: PARA 451 Phase A — closure at 14 entries (4 batch-4 calls resolved)
+decision: >-
+  PARA 451 Phase A is COMPLETE at 14 entries (12 notes + 2 quizzes + 1 path). Four batch-4 calls resolved: (1) No
+  separate mastery-review entry — `the-team-pattern` serves as conceptual capstone, avoids redundancy. (2) Quiz ordering
+  kept as-is — `Q-when-to-invoke` before `Q-foundations` (broader synthesis last is pedagogically right). (3) Per-topic
+  mini-quizzes (6 possible) deferred to post-launch polish pass driven by telemetry. (4) PARA 401 stale-agent-entries
+  retirement is tracked as a v6.1-coordinated task — happens when v6.1 ships and PARA 451 is republished into
+  node_modules pack.
+rationale: >-
+  14 entries cover the design's foundation goals (archetype model, identity layers, roster, partners primitive,
+  orchestration modes, decision-tree routing, capstone). The original 18-entry target included 6 per-topic mini-quizzes;
+  user batch-2 lock deferred those, and `the-team-pattern` makes a separate mastery-review redundant. Telemetry-driven
+  mini-quiz polish is better than speculative authoring — let real learner data identify gaps. PARA 401 retirement
+  coordinates with v6.1 because that's when republishing happens and learners need a clean handoff.
+participants:
+  - id: user
+    role: human
+    stance: proposed
+  - id: sheila
+    role: agent
+    stance: supported
+  - id: scholar
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#para-451-agents-foundations'
+  - '#para-451-the-team-pattern'
+  - '#para-401-agent-entries-stale'
+status: active
+tags:
+  - agents-course-phase-a
+  - para-451
+  - closure
+  - v6.1-coordination
