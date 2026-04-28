@@ -128,6 +128,35 @@ The stop hook **BLOCKS** if source files were modified without .purpose updates.
 
 **Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.
 
+## Framework-Bug Protocol
+
+If an MCP tool gives unexpected output and you can identify the cause is in framework code (not project state), surface it via the framework-bug protocol — do NOT hand-edit project files to work around the bug.
+
+**When to file:**
+- An MCP write tool succeeds but the corresponding read tool reports the data as missing/wrong
+- An MCP tool's behavior contradicts its documented contract
+- You can name TWO code locations: a writer file:line and a reader file:line that demonstrate the divergence
+
+**How to file (Option α, current):**
+```
+paradigm_task_create({
+  blurb: "FRAMEWORK BUG: <one-line summary>. Writer at <file:line>; reader at <file:line>; symptom: <what user/agent sees>",
+  priority: "high",
+  tags: ["framework-bug", "<#affected-tool>", "<archetype-domain>"]
+})
+```
+
+**Coming in v6.1:** soft-block primitive (`paradigm_propose_block` with `claimant: 'framework'`) will let agents surface framework bugs as soft-blocks that persist across sessions until upstream fixes. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` §3.
+
+**Domain ownership** (per agent-owned enforcement, TD-2026-04-25-417):
+- Compliance tool bugs (`paradigm_aspect_check`, `paradigm_drift_*`) → Rune triages
+- Security tool bugs (`paradigm_portal_*`) → Aegis triages
+- Learning tool bugs (`paradigm_notebook_*`) → Scholar/Loid co-triage
+- Navigation tool bugs (`paradigm_status`, `paradigm_navigate`) → Cid triages
+- Other → first archetype to surface owns triage
+
+**Calibration gate:** without writer file:line + reader file:line evidence, downgrade the report to a plain task (no `framework-bug` tag). Same evidentiary bar a human bug report would clear.
+
 ## On-Demand Guidance
 
 Detailed guidance is available via MCP resources — load only what you need:

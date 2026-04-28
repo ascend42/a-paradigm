@@ -1,0 +1,115 @@
+id: P-framework-bug-surface
+name: Surface a framework bug detected by an agent
+description: When an MCP tool misbehaves and the cause is in framework code (not project state), file a tagged framework-bug task with two-location evidence instead of hand-editing project files
+trigger:
+  - framework bug
+  - mcp tool wrong
+  - tool returns missing
+  - writer reader mismatch
+  - tool contract violated
+  - aspect check missing anchor
+  - portal gate not persisted
+tags:
+  - framework
+  - mcp
+  - bug
+  - agent-protocol
+  - calibration
+symbols: []
+exemplar: .paradigm/research/path-bug-and-agent-protocol-analysis.md
+steps:
+  - action: detect
+    notes: |
+      Trigger conditions — file a framework-bug task when ANY of the following hold:
+      - An MCP write tool reported success but the corresponding read tool reports the
+        data as missing or wrong on the next call (canonical case: paradigm_purpose_add_aspect
+        ↔ paradigm_aspect_check, the v6.0.4 path-resolution bug).
+      - An MCP tool's behavior contradicts its documented contract (.paradigm/specs or
+        the tool description in packages/paradigm-mcp/src/tools/*).
+      - You can name TWO code locations — a writer file:line and a reader file:line —
+        that demonstrate the divergence in convention.
+  - action: gather-evidence
+    notes: |
+      Calibration gate (non-negotiable):
+      The report MUST attach two file:line citations:
+        - writer file:line — where the data is produced/persisted
+        - reader file:line — where the data is consumed and disagrees
+      Without both citations, downgrade to a plain task (no `framework-bug` tag).
+      This is the same evidentiary bar a human bug report would clear. Without it,
+      signal-to-noise collapses as every agent surprise becomes a "framework bug."
+  - action: identify-domain
+    notes: |
+      Domain ownership map (per Rune, agent-owned enforcement TD-2026-04-25-417):
+      Ownership follows the broken tool's domain. Reject the meta-archetype option —
+      every archetype already knows the semantics of its own tools well enough to
+      spot a framework defect; the protocol just gives them a place to file it.
+
+        Compliance tools (paradigm_aspect_check, paradigm_drift_*)        → Rune
+        Security tools (paradigm_portal_*, gate verification)             → Aegis
+        Learning tools (paradigm_notebook_*, nomination)                  → Scholar + Loid
+        Navigation tools (paradigm_status, paradigm_navigate)             → Cid
+        Other / cross-cutting                                             → first archetype to surface owns triage
+
+      When the tool's domain crosses archetypes, the first archetype to surface owns
+      triage and adds the second as reviewer (same partner pattern as Scholar+Sheila).
+  - action: file-task
+    target: 'paradigm_task_create'
+    notes: |
+      Option α (current, v6.0.5+):
+        paradigm_task_create({
+          blurb: "FRAMEWORK BUG: <one-line summary>. Writer at <file:line>; reader at <file:line>; symptom: <what user/agent sees>",
+          priority: "high",
+          tags: ["framework-bug", "<#affected-tool>", "<archetype-domain>"]
+        })
+
+      Notes:
+      - The blurb's "Writer at … reader at …" phrasing satisfies the calibration gate
+        in machine-readable form — triagers can grep for it.
+      - Tag the affected tool symbol (e.g., `paradigm_aspect_check`) so the task
+        threads onto Rune's coverage view.
+      - Tag the archetype domain (`compliance`, `security`, `learning`, `navigation`)
+        so the right triage owner is paged.
+  - action: continue-session
+    notes: |
+      Filing the task does NOT block the session. The agent continues its current
+      task, working around the framework bug without modifying .purpose, portal.yaml,
+      or other Paradigm-owned files. The framework-bug task is a signal to the user
+      and triage owners, not a halt instruction.
+  - action: forbidden
+    notes: |
+      What NOT to do — antipatterns the protocol exists to prevent:
+      - Hand-edit the affected `.purpose` file to make the broken read "look right".
+      - Hand-edit `portal.yaml` to work around a portal-tool bug.
+      - Acknowledge the bug only in your own session lore ("this exists in this project too")
+        without filing upstream — converts a framework defect into a project-state
+        acknowledgment, killing upstream signal. The blast radius of a framework bug
+        is every adopter; the agent's blast radius is one project. Telemetry mismatch.
+      - File without two-location evidence — the calibration gate exists for a reason.
+  - action: v6-1-escalation
+    notes: |
+      Coming in v6.1 Sprint 1 (Option γ — soft-block primitive):
+        paradigm_propose_block({
+          claimant: 'framework',
+          reason: '<framework-bug task id> blocks correctness',
+          evidence: { writer: '<file:line>', reader: '<file:line>' }
+        })
+
+      The block persists across session resumes until upstream fixes (or the user
+      overrides it locally). Use γ on top of α only when the framework bug actively
+      misleads current decisions, not for inconvenience-only cases.
+
+      Option β (`paradigm_framework_issue` dedicated tool) stays deferred until
+      α + γ field data shows existing primitives are insufficient.
+  - action: verify
+    notes: |
+      Self-check before declaring the report filed:
+      - Both file:line citations present in the blurb? (writer:line + reader:line)
+      - Tag set includes `framework-bug` and the archetype-domain tag?
+      - You did NOT modify .purpose, portal.yaml, or other Paradigm-owned files?
+      - Session continued past the report (not blocked on the bug)?
+      If any answer is "no", revise before submitting.
+recorded_from: L-2026-04-28-ascend-135357-001
+recorded_at: '2026-04-28T00:00:00Z'
+last_verified: '2026-04-28T00:00:00Z'
+verified_by: documentor
+status: current

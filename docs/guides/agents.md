@@ -374,6 +374,48 @@ These are **contracts only** at v6.0.3. No live consumer wiring; they exist so r
 
 ---
 
+## 12. Framework-Bug Protocol (v6.0.5+)
+
+When an agent encounters an MCP tool that misbehaves — write tool reports success but the read tool can't find the data, behavior contradicts the documented contract, etc. — and the cause is in framework code (not your project), the framework-bug protocol gives the agent a sanctioned place to surface it instead of silently hand-editing files to work around the bug.
+
+### What it is
+
+A convention layered on the existing `paradigm_task_create` primitive. Agents file a high-priority task tagged `framework-bug` with two pieces of code-location evidence: a writer file:line and a reader file:line that demonstrate the divergent contract. Without that evidence, the report is downgraded to a plain task (no `framework-bug` tag). This is the same evidentiary bar a human bug report would clear.
+
+### When agents file these
+
+- A write tool succeeds but the corresponding read tool reports the data as missing or wrong (the v6.0.4 aspect-anchor path-resolution bug is the canonical example — see `.paradigm/research/path-bug-and-agent-protocol-analysis.md` §1).
+- A tool's behavior contradicts its documented contract.
+- Two locations in framework code can be cited demonstrating where writer and reader disagree on a convention.
+
+The agent should continue the session, not block on the framework bug. The task is a signal to you (and to triage-owning archetypes), not a halt instruction.
+
+### Triaging one in your task list
+
+When `paradigm_task_create` lands one of these in your local list, ownership follows the broken tool's domain:
+
+| Tool domain | Triage owner |
+|-------------|--------------|
+| Compliance (`paradigm_aspect_check`, `paradigm_drift_*`) | Rune |
+| Security (`paradigm_portal_*`, gate verification) | Aegis |
+| Learning (`paradigm_notebook_*`, nomination) | Scholar / Loid (paired) |
+| Navigation / coverage (`paradigm_status`, `paradigm_navigate`) | Cid |
+| Other | First archetype to surface owns triage |
+
+If the tool's domain crosses archetypes (e.g., a path-resolution helper used by both compliance and security), the first archetype to surface the bug owns triage and adds the second as reviewer — same partner pattern Scholar+Sheila use.
+
+### What NOT to do
+
+Hand-editing the affected `.purpose`, `portal.yaml`, or other Paradigm-owned files to work around the framework bug. That converts a framework defect into project-state drift; the bug ships unfixed for every other adopter, and your project accumulates a hand-edit that the next MCP write will overwrite or invalidate.
+
+### v6.1 escalation path
+
+When the soft-block primitive ships in v6.1 Sprint 1, framework bugs that actively mislead session decisions can additionally be surfaced via `paradigm_propose_block(claimant: 'framework', ...)`. The block persists across session resumes until upstream fixes (or the user overrides it locally). At that point the protocol becomes: file the framework-bug task (now) AND propose a soft-block (v6.1) when the bug blocks correctness, not just convenience.
+
+For the full team analysis behind this protocol — including the rejected-for-now tool-surface option (`paradigm_framework_issue`) and the calibration rationale — see `.paradigm/research/path-bug-and-agent-protocol-analysis.md`.
+
+---
+
 ## Audience track map
 
 - **First-time on a project:** §1, §2, §3, §9 ("First time on a project")
@@ -381,6 +423,7 @@ These are **contracts only** at v6.0.3. No live consumer wiring; they exist so r
 - **Building agent permissions:** §6, §10
 - **Understanding the learning loop:** §7, §8
 - **Pairing agents:** §11
+- **Framework bugs surfaced by agents:** §12
 
 ---
 

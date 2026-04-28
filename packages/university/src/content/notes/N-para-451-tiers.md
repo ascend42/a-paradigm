@@ -76,6 +76,8 @@ Tier is exactly one thing: the default model the agent calls. Keep it that simpl
 
 > **Coming in v6.1:** Paradigm introduces a separate concept also named "tier" for **notebooks** — tier-1 (transferable across projects, owned by the agent) versus tier-2 (project-local, owned by the project). The two "tier" concepts are orthogonal: an agent's *model tier* (this entry) is about cost and capability; a *notebook tier* (v6.1) is about scope and ownership of learned patterns. The naming collision is unfortunate; we keep them strictly separate in PARA 451 and 551 to avoid conflation. See `agent-owned-enforcement-plan.md`.
 
+> **Updated in v6.0.5:** Tier discussion sometimes raises the related question of *path-resolution semantics* across MCP writer/reader pairs (since aspects, anchors, and other tier-aware tools must agree on a base directory). In v6.0.5 the framework standardised on a shared `resolveAnchorPath()` helper imported by both `paradigm_aspect_check` and `paradigm_aspect_drift`; anchors are resolved with both-bases fallback (project-root first, then `.purpose`-dir). This is a framework-internal convention — it doesn't change tier semantics — but if you came here from a v6.0.4 lesson that referenced single-base anchor resolution, that detail is now historical. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` for the team analysis.
+
 ## Up next
 
 The next entry — **N-para-451-roster-reference** — is where everything you have learned so far comes together: the canonical roster, with each agent's id, nickname, archetype, *and* tier all in a single scannable table.

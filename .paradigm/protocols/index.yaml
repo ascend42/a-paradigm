@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-04-06T22:24:14.950Z'
+generated: '2026-04-25T22:04:41.587Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -17,7 +17,7 @@ protocols:
       - agent
   - id: P-add-aspect-with-anchors
     name: Add an aspect with code anchors
-    status: current
+    status: stale
     last_verified: '2026-03-17T14:24:58.587Z'
     trigger:
       - add aspect
@@ -183,7 +183,7 @@ protocols:
       - typescript
   - id: P-add-plsat-question
     name: Add a PLSAT exam question
-    status: stale
+    status: broken
     last_verified: '2026-03-17T14:25:26.865Z'
     trigger:
       - plsat question
@@ -364,7 +364,7 @@ protocols:
       - unit
   - id: P-add-university-course
     name: Add a University course
-    status: stale
+    status: broken
     last_verified: '2026-03-17T14:25:36.187Z'
     trigger:
       - add course
@@ -377,7 +377,7 @@ protocols:
       - learning
   - id: P-add-university-quiz
     name: Add a University quiz
-    status: stale
+    status: broken
     last_verified: '2026-03-17T14:25:39.931Z'
     trigger:
       - add quiz
@@ -440,6 +440,24 @@ protocols:
       - strategy
       - competitive-analysis
       - private
+  - id: P-framework-bug-surface
+    name: Surface a framework bug detected by an agent
+    status: current
+    last_verified: '2026-04-28T00:00:00Z'
+    trigger:
+      - framework bug
+      - mcp tool wrong
+      - tool returns missing
+      - writer reader mismatch
+      - tool contract violated
+      - aspect check missing anchor
+      - portal gate not persisted
+    tags:
+      - framework
+      - mcp
+      - bug
+      - agent-protocol
+      - calibration
   - id: P-record-lore
     name: Record a lore entry
     status: current
@@ -469,7 +487,7 @@ protocols:
       - versioning
   - id: P-update-university-content
     name: Update University content
-    status: stale
+    status: broken
     last_verified: '2026-03-08T06:07:50.959Z'
     trigger:
       - update university
@@ -486,6 +504,6 @@ protocols:
       - content
 health:
   total: 37
-  current: 23
-  stale: 14
-  broken: 0
+  current: 22
+  stale: 11
+  broken: 4
