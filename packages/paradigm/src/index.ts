@@ -2732,6 +2732,20 @@ program
     await complianceCheckCommand(options);
   });
 
+// paradigm internal — hidden command namespace for hook-side helpers (v6.1)
+const internalCmd = program
+  .command('internal', { hidden: true })
+  .description('Internal helpers for hook integration (not for direct use)');
+
+internalCmd
+  .command('active-remediations', { hidden: true })
+  .description('Emit JSON array of currently-active remediations (consumed by Stop hook Check 14)')
+  .option('--json', 'Emit JSON (default and only supported mode)')
+  .action(async (options) => {
+    const { activeRemediationsCommand } = await import('./commands/internal/active-remediations.js');
+    await activeRemediationsCommand(options);
+  });
+
 // paradigm util — utility command namespace (canonical home for beacon, constellation, echo, sync-llms, thread, probe)
 registerUtilCommands(program);
 

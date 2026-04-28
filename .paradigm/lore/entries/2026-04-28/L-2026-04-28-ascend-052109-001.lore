@@ -1,0 +1,82 @@
+id: L-2026-04-28-ascend-052109-001
+type: milestone
+timestamp: '2026-04-28T05:21:09.064Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.1 Sprint 1 Wave 2 shipped — Check 14 (remediation-gate) live
+summary: 'Builder shipped Wave 2 cleanly with one prerequisite pull-forward: registered the hidden `internal` command group + `active-remediations` subcommand in paradigm/src/index.ts (was Wave 3 territory but blocking Wave 2''s bash invocation). Then added _REMEDIATIONS_JSON cache (lines 87-94) and Check 14 (lines 908-960) to paradigm-common.sh. Critical placement decision: Check 14 placed BEFORE _compliance_snapshot at line 962 so guard violations roll into the snapshot''s VIOLATION_COUNT — preserves Loid data continuity for absent-Rune learning. Mirrors regenerated to all three locations. Build clean, 320 tests pass / 1 skip (no regression). Manual smoke test verified field extraction (id, severity, claimant, reason) + comma-bounded id matching for PARADIGM_OVERRIDE.'
+symbols_touched:
+  - '#check-14-remediation-gate'
+  - '#active-remediations'
+  - '#stop-hook'
+  - '#paradigm-internal-command-group'
+symbols_created:
+  - '#check-14-remediation-gate'
+  - '#paradigm-internal-command-group'
+files_modified:
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/.purpose
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts
+  - plugins/paradigm/scripts/paradigm-common.sh
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh
+learnings:
+  - Wave 3 prerequisite (registering hidden internal command) was load-bearing for Wave 2 — bash hook can't shell out to a command that doesn't exist. Builder did the right thing pulling it forward rather than blocking on it.
+  - Check 14 placement BEFORE _compliance_snapshot is the right pattern — guard violations need to increment VIOLATION_COUNT before snapshot serialization so absent-Rune Loid sees the right data continuity.
+  - 'Bash field extraction via grep+sed against producer-controlled JSON works for shape-stable data — no jq dependency needed for the simple case. Tradeoff: brittle if helper output shape changes.'
+verification:
+  status: pass
+  details:
+    build: pass
+    vitest: 320 pass / 1 skip (no regression)
+    mirrors_propagated: all 3
+    smoke_test: field extraction + comma-bounded id matching verified
+tags:
+  - v6.1
+  - sprint-1
+  - wave-2
+  - builder
+  - check-14
+  - de-enforcement
+body: |-
+  ## Files modified
+  - packages/paradigm/src/index.ts (registered hidden `internal` command group + `active-remediations` subcommand near line 2735, mirrors `migrate decisions` pattern)
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh (header doc line 34, _REMEDIATIONS_JSON cache lines 87-94, Check 14 block lines 908-960)
+  - packages/paradigm/src/commands/hooks/.purpose (added #check-14-remediation-gate symbol)
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts (regenerated)
+  - plugins/paradigm/scripts/paradigm-common.sh (regenerated)
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh (regenerated)
+
+  ## Critical positioning decision
+  Check 14 placed BEFORE _compliance_snapshot writer (line 962) so guard violations increment VIOLATION_COUNT before snapshot serialization — preserves Loid's data continuity surface for absent-Rune learning per v6.0.4 plan §7.
+
+  ## Build + tests
+  - paradigm-mcp + paradigm both build clean
+  - npm link OK
+  - vitest 320 pass / 1 skip (no regression vs Wave 1 baseline)
+
+  ## Manual smoke verification
+  Fixture rmd-test123.yaml (severity: guard) confirmed:
+  - Helper output: `[{"id":"rmd-test123","claimant":"compliance","severity":"guard",...}]`
+  - Field extraction via grep+sed works for id, severity, claimant, reason
+  - Multi-record JSON splitting verified with synthetic 2-record array
+  - Comma-bounded id matching verified for PARADIGM_OVERRIDE (left/right/middle)
+  - Fixture deleted; helper returns to `[]`
+
+  ## Wave 3 prerequisites surfaced
+  - paradigm override CLI: 3 subcommands (`<id>`, `list`, `clear-all --force`)
+  - Public command (not hidden like internal)
+  - mkdir -p .paradigm/events before JSONL append
+  - Archive flow: stamp `archived_at`, move to .paradigm/remediations/.archived/
+  - CLI-side override events: same JSONL shape as bash, but `mechanism: cli`
+linked_lore:
+  - L-2026-04-28-ascend-050712-001
+linked_tasks:
+  - '26'
+confidence: 0.9
+git_context:
+  ref: 6eca8f3a17b73ffc6593e969ec57fab892e16d50
+  branch: main
+  dirty: true

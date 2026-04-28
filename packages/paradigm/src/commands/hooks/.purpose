@@ -20,6 +20,24 @@ components:
       - hooks
       - roster
       - v6.0.4
+  check-14-remediation-gate:
+    description: |
+      v6.1 Sprint 1 Wave 2 — Stop hook Check 14. Iterates the cached
+      _REMEDIATIONS_JSON (sourced from `paradigm internal active-remediations
+      --json`). severity=guard adds to VIOLATIONS (blocks); advise/auto-author
+      route to ADVISORY. Honors PARADIGM_OVERRIDE comma-list to skip ids and
+      append an audit row to .paradigm/events/overrides.jsonl with mechanism=env.
+      Iteration uses temp-file + redirect (NOT pipe) for POSIX subshell-safe
+      VIOLATION_COUNT propagation.
+    type: utility
+    file: scripts/paradigm-common.sh
+    signals:
+      - '!override-event'
+    tags:
+      - hooks
+      - remediation
+      - soft-block
+      - v6.1
 
 aspects:
   ~stop-hook-8-compliance-checks:

@@ -37,6 +37,7 @@ export const COMMON_HOOK = `#!/bin/sh
 #  11. Portal gate implementation compliance (from unified compliance-check)
 #  12. Graduation failure tracking (auto-demotion)
 #  13. Orchestration required for complex tasks
+#  14. Active remediations from agent-authored .paradigm/remediations/ (v6.1)
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
@@ -87,6 +88,15 @@ if [ -f "$_ROSTER_FILE" ]; then
   if echo "$_ACTIVE_BLOCK" | grep -Eq '(^[[:space:]]*-[[:space:]]*compliance[[:space:]]*$|[[\\,[:space:]]compliance[\\],[:space:]])'; then
     HAS_COMPLIANCE_CLAIMANT=true
   fi
+fi
+
+# --- Cache active remediations JSON (v6.1, consumed by Check 14) ---
+# Single shell-out per stop-hook run. Helper outputs \`[]\` on every error path
+# (missing dir, parse failure, missing binary) so this never breaks the hook.
+_REMEDIATIONS_JSON="[]"
+if command -v paradigm >/dev/null 2>&1; then
+  _REMEDIATIONS_JSON=$(paradigm internal active-remediations --json 2>/dev/null) || _REMEDIATIONS_JSON="[]"
+  [ -z "$_REMEDIATIONS_JSON" ] && _REMEDIATIONS_JSON="[]"
 fi
 
 # --- Cache .purpose file paths (avoid repeated find scans) ---
@@ -899,6 +909,59 @@ if [ "$_SEV" != "off" ]; then
       fi
     fi
   fi
+fi
+
+# --- Check 14: Active remediations (v6.1 soft-block primitive) ---
+# Iterates the cached _REMEDIATIONS_JSON array. severity=guard adds to
+# VIOLATIONS (block); advise|auto-author goes to ADVISORY. PARADIGM_OVERRIDE
+# (comma-separated id list) skips matching remediations and writes an
+# override audit row to .paradigm/events/overrides.jsonl.
+#
+# Iteration uses a temp file + redirect (NOT pipe) so VIOLATION_COUNT
+# increments propagate out of the loop (POSIX subshell-safe — spec §12 #4).
+if [ "$_REMEDIATIONS_JSON" != "[]" ] && [ -n "$_REMEDIATIONS_JSON" ]; then
+  _RMD_TMP="/tmp/.paradigm-rmds-$$"
+  # Split JSON array into one record per line: strip outer brackets, split on \`},{\`.
+  echo "$_REMEDIATIONS_JSON" | sed 's/^\\[//; s/\\]$//; s/},{/}\\n{/g' > "$_RMD_TMP"
+  _OVERRIDE_LIST=",\${PARADIGM_OVERRIDE:-},"
+  while IFS= read -r _line; do
+    [ -z "$_line" ] && continue
+    case "$_line" in
+      *'"id":"'*) ;;
+      *) continue ;;
+    esac
+    _RID=$(echo "$_line" | grep -o '"id":"[^"]*"' | head -1 | sed 's/^"id":"//; s/"$//')
+    _RSEV=$(echo "$_line" | grep -o '"severity":"[^"]*"' | head -1 | sed 's/^"severity":"//; s/"$//')
+    _RCLAIM=$(echo "$_line" | grep -o '"claimant":"[^"]*"' | head -1 | sed 's/^"claimant":"//; s/"$//')
+    _RREASON=$(echo "$_line" | grep -o '"reason":"[^"]*"' | head -1 | sed 's/^"reason":"//; s/"$//')
+    [ -z "$_RID" ] && continue
+
+    # PARADIGM_OVERRIDE check — comma-separated list, exact id match.
+    case "$_OVERRIDE_LIST" in
+      *",$_RID,"*)
+        # Write override audit event (mirror compliance-snapshot pattern, line 906).
+        _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
+        mkdir -p ".paradigm/events" 2>/dev/null || true
+        printf '{"timestamp":"%s","remediation_id":"%s","claimant":"%s","mechanism":"env","unblock_predicate_matched":false}\\n' \\
+          "$_ts" "$_RID" "$_RCLAIM" >> ".paradigm/events/overrides.jsonl" 2>/dev/null || true
+        continue
+        ;;
+    esac
+
+    case "$_RSEV" in
+      guard)
+        VIOLATIONS="$VIOLATIONS
+  - [$_RID] ($_RCLAIM) $_RREASON
+    Override: paradigm override $_RID  (or PARADIGM_OVERRIDE=$_RID <cmd>)"
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+        ;;
+      advise|auto-author)
+        ADVISORY="$ADVISORY
+  - (remediation:$_RSEV) [$_RID] ($_RCLAIM) $_RREASON"
+        ;;
+    esac
+  done < "$_RMD_TMP"
+  rm -f "$_RMD_TMP"
 fi
 
 # --- Compliance snapshot (non-fatal, fire-and-forget) ---
