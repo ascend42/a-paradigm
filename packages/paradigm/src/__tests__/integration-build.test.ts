@@ -28,5 +28,5 @@ describe('Build Verification', () => {
         timeout: 60000,
       });
     }).not.toThrow();
-  });
+  }, 60000); // vitest test budget must match execSync timeout — bundle grew with v6.1 Wave 1 (now ~5s, was ~4s)
 });

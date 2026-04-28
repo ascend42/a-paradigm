@@ -1,0 +1,89 @@
+id: L-2026-04-28-ascend-050712-001
+type: milestone
+timestamp: '2026-04-28T05:07:12.877Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.1 Sprint 1 Wave 1 shipped — foundation in place, 320 tests green
+summary: Wave 1 partially completed by background Builder before org rate-limit (authority readers + active-remediations helper landed); main session finished it (created propose-block.ts + authority.ts MCP tools, registered both in tools/index.ts, fixed integration-build.test.ts vitest timeout that exceeded 5s after bundle growth). 320 tests pass / 1 skip (was 313 + 1 pre-Wave-1, +7 tests). Build clean both packages. paradigm-mcp made self-contained on YAML I/O for authority tools (paradigm-mcp does NOT depend on @a-company/paradigm; cross-package import would create dep cycle).
+symbols_touched:
+  - '#paradigm-propose-block'
+  - '#paradigm-authority-claim'
+  - '#paradigm-authority-release'
+  - '#authority-readers'
+  - '#active-remediations'
+symbols_created:
+  - '#paradigm-propose-block'
+  - '#paradigm-authority-claim'
+  - '#paradigm-authority-release'
+  - '#active-remediations'
+files_created:
+  - packages/paradigm-mcp/src/tools/propose-block.ts
+  - packages/paradigm-mcp/src/tools/authority.ts
+  - packages/paradigm/src/commands/internal/active-remediations.ts
+  - packages/paradigm/src/commands/internal/.purpose
+  - .paradigm/remediations/.gitkeep
+  - .paradigm/remediations/.archived/.gitkeep
+files_modified:
+  - packages/paradigm/src/core/authority.ts
+  - packages/paradigm/src/core/authority.test.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/.purpose
+  - packages/paradigm/src/__tests__/integration-build.test.ts
+learnings:
+  - paradigm-mcp does NOT depend on @a-company/paradigm — cross-package imports for shared utilities require either workspace-style imports (added complexity) or duplication. For small, stable schema (authority.yaml ~30 lines of I/O), duplication is the right call.
+  - vitest test timeout default is 5s — doesn't inherit from execSync timeouts. When build duration grows past 5s, the integration-build test needs explicit per-test timeout (3rd arg to it()).
+  - Mid-stream agent termination is recoverable when partial state is on disk + the spec is detailed enough — main session can finish without re-firing the agent. v6.0.4 Wave 3+4 had the same recovery pattern.
+verification:
+  status: pass
+  details:
+    build: pass
+    vitest: 320 pass / 1 skip
+    delta_tests: '+7'
+tags:
+  - v6.1
+  - sprint-1
+  - wave-1
+  - builder
+  - rate-limit-recovery
+body: |-
+  ## Files created
+  - packages/paradigm-mcp/src/tools/propose-block.ts (paradigm_propose_block tool)
+  - packages/paradigm-mcp/src/tools/authority.ts (paradigm_authority_claim + paradigm_authority_release tools, self-contained YAML I/O)
+  - packages/paradigm/src/commands/internal/active-remediations.ts (helper backing `paradigm internal active-remediations --json`)
+  - packages/paradigm/src/commands/internal/.purpose
+  - .paradigm/remediations/.gitkeep + .paradigm/remediations/.archived/.gitkeep
+
+  ## Files modified
+  - packages/paradigm/src/core/authority.ts (+85 lines, 4 reader/mutator functions)
+  - packages/paradigm/src/core/authority.test.ts (+ tests for readers)
+  - packages/paradigm-mcp/src/tools/index.ts (registered authority + propose-block as feature tier)
+  - packages/paradigm-mcp/src/tools/.purpose (3 new symbols)
+  - packages/paradigm/src/__tests__/integration-build.test.ts (vitest timeout 5s → 60s; bundle grew with v6.1 Wave 1)
+
+  ## Build status
+  - paradigm-mcp build: clean
+  - paradigm build + link: clean
+  - vitest: 320 pass / 1 skip (delta +7 from 313 baseline)
+
+  ## Wave 2 prerequisites
+  - HAS_ACTIVE_REMEDIATION helper near line 85 of paradigm-common.sh (see spec §1.7)
+  - Check 14 (remediation-gate) appended after Check 13
+  - PARADIGM_OVERRIDE env var branch with overrides.jsonl writer
+  - Regenerate mirrors via node scripts/generate-hooks.mjs
+
+  ## Key design choice: self-contained YAML I/O in authority MCP tool
+  paradigm-mcp does NOT depend on @a-company/paradigm directly (no entry in package.json deps). Spec §7 said "consume reader/writer from core/authority.ts" but that would require a cross-package dep that creates a cycle. Pragmatic call: authority MCP tool re-implements minimal read/write (~30 lines) using js-yaml. paradigm/src/core/authority.ts readers are still authoritative for the CLI side (paradigm shift, Wave 3 paradigm override).
+
+  ## Rate-limit recovery note
+  Background Builder hit org monthly usage limit at ~20 tool uses. Main session resumed: read partial state via git status, completed remaining files manually. No data loss. Faster than re-firing.
+linked_lore:
+  - L-2026-04-27-ascend-200805-001
+linked_tasks:
+  - '25'
+confidence: 0.9
+git_context:
+  ref: a0a9d03594813f64e33e54e15fcf2133c8a6598c
+  branch: main
+  dirty: true

@@ -1,0 +1,15 @@
+version: 2.0.0
+description: |
+  Hidden internal CLI commands — utility helpers used by hooks and other
+  framework infrastructure. Not user-facing; commands here surface under
+  `paradigm internal <name>`.
+components:
+  active-remediations:
+    description: Reads .paradigm/remediations/*.yaml, filters expired, outputs JSON array. Backs Stop hook Check 14 to avoid YAML parsing in bash.
+    type: tool
+    parent: '#InternalCommands'
+    tags:
+      - feature
+      - v6.1
+      - internal
+      - hooks

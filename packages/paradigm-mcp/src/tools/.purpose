@@ -3,6 +3,33 @@ description: |
   MCP tool handlers — dispatch layer for all paradigm_* tool calls.
   Each tool file exports getXToolsList() + handleXTool() functions.
 components:
+  paradigm-propose-block:
+    description: v6.1 soft-block primitive — agent-initiated remediation that the Stop hook honors
+    type: tool
+    parent: '#ToolHandlers'
+    tags:
+      - feature
+      - v6.1
+      - mcp
+      - enforcement
+  paradigm-authority-claim:
+    description: v6.1 authority MCP tool — claim authority over a scope in .paradigm/authority.yaml
+    type: tool
+    parent: '#ToolHandlers'
+    tags:
+      - feature
+      - v6.1
+      - mcp
+      - authority
+  paradigm-authority-release:
+    description: v6.1 authority MCP tool — release authority over a scope (removes claim entry)
+    type: tool
+    parent: '#ToolHandlers'
+    tags:
+      - feature
+      - v6.1
+      - mcp
+      - authority
   symphony-peek:
     description: Ultra-cheap inbox check — fs.stat only, no parsing. Returns hasNew true/false for near-free /loop monitoring
     type: tool

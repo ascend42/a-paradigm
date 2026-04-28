@@ -54,6 +54,8 @@ import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getUniversityToolsList, handleUniversityTool } from './university.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
+import { getAuthorityToolsList, handleAuthorityTool } from './authority.js';
+import { getProposeBlockToolsList, handleProposeBlockTool } from './propose-block.js';
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getRippleToolsList, handleRippleTool } from './ripple.js';
@@ -258,6 +260,18 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'feature',
       getToolsList: getAgentToolsList,
       handleTool: wrap(handleAgentTool),
+    },
+    {
+      key: 'authority',
+      tier: 'feature',
+      getToolsList: getAuthorityToolsList,
+      handleTool: wrap(handleAuthorityTool),
+    },
+    {
+      key: 'propose-block',
+      tier: 'feature',
+      getToolsList: getProposeBlockToolsList,
+      handleTool: wrap(handleProposeBlockTool),
     },
     {
       key: 'notebooks',

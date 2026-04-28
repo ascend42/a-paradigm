@@ -28,14 +28,14 @@ import * as yaml from 'js-yaml';
  */
 export type AuthoritySource = 'archetype-default' | 'explicit' | 'user';
 
-interface AuthorityClaim {
+export interface AuthorityClaim {
   claimant: string;
   severity: 'advise' | 'warn' | 'block';
   since: string;
   source: AuthoritySource;
 }
 
-interface AuthorityFile {
+export interface AuthorityFile {
   version: string;
   schema: string;
   claims: Record<string, AuthorityClaim>;
@@ -97,4 +97,90 @@ export async function writeArchetypeDefaults(
 
   const serialized = yaml.dump(data, { lineWidth: 100, sortKeys: false });
   await fs.writeFile(authorityPath, serialized, 'utf8');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v6.1 Reader / mutator API for the paradigm_authority_claim and
+// paradigm_authority_release MCP tools (and any future caller).
+//
+// Symbol: #authority-readers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Read `.paradigm/authority.yaml` from disk and return the parsed file.
+ * Returns `null` if the file does not exist.
+ *
+ * Throws on parse errors (caller surfaces those — the file is user-managed).
+ */
+export async function readAuthority(projectRoot: string): Promise<AuthorityFile | null> {
+  const authorityPath = path.join(projectRoot, AUTHORITY_RELATIVE_PATH);
+  let content: string;
+  try {
+    content = await fs.readFile(authorityPath, 'utf8');
+  } catch (err) {
+    const errno = (err as NodeJS.ErrnoException).code;
+    if (errno === 'ENOENT') return null;
+    throw err;
+  }
+
+  const parsed = yaml.load(content) as AuthorityFile | null | undefined;
+  if (parsed == null || typeof parsed !== 'object') {
+    // Defensive: empty or malformed file → treat as empty claims map
+    return { version: '1.0', schema: 'v0-experimental', claims: {} };
+  }
+  // Tolerate files missing the claims map (treat as empty)
+  if (!parsed.claims || typeof parsed.claims !== 'object') {
+    parsed.claims = {};
+  }
+  return parsed;
+}
+
+/**
+ * Get the active claims map. Returns `{}` if the file is missing or empty.
+ */
+export async function getActiveClaims(projectRoot: string): Promise<Record<string, AuthorityClaim>> {
+  const file = await readAuthority(projectRoot);
+  return file?.claims ?? {};
+}
+
+/**
+ * Internal helper: write the authority file with stable serialization.
+ */
+async function writeAuthorityFile(projectRoot: string, file: AuthorityFile): Promise<void> {
+  const authorityPath = path.join(projectRoot, AUTHORITY_RELATIVE_PATH);
+  await fs.mkdir(path.dirname(authorityPath), { recursive: true });
+  const serialized = yaml.dump(file, { lineWidth: 100, sortKeys: false });
+  await fs.writeFile(authorityPath, serialized, 'utf8');
+}
+
+/**
+ * Idempotent upsert of a single claim. If `.paradigm/authority.yaml` does not
+ * exist, a fresh file is created with just this claim. Re-claiming a scope
+ * overwrites the prior entry (single-claimant-per-scope at v6.1, per spec §7).
+ */
+export async function upsertClaim(
+  projectRoot: string,
+  scope: string,
+  claim: AuthorityClaim
+): Promise<void> {
+  const existing = (await readAuthority(projectRoot)) ?? {
+    version: '1.0',
+    schema: 'v0-experimental',
+    claims: {},
+  };
+  existing.claims[scope] = claim;
+  await writeAuthorityFile(projectRoot, existing);
+}
+
+/**
+ * Remove a claim by scope. No-op if the file or scope is absent.
+ * Returns `true` when a claim was removed, `false` otherwise.
+ */
+export async function removeClaim(projectRoot: string, scope: string): Promise<boolean> {
+  const existing = await readAuthority(projectRoot);
+  if (!existing) return false;
+  if (!(scope in existing.claims)) return false;
+  delete existing.claims[scope];
+  await writeAuthorityFile(projectRoot, existing);
+  return true;
 }
