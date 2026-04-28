@@ -5,6 +5,37 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.5] — 2026-04-28
+
+Path-bug fix + early v6.1 Sprint 1 work. Headline: writer/reader path-resolution mismatch in `paradigm_purpose_add_aspect` ↔ `paradigm_aspect_check` is fixed. Anchors with `..` prefix (crossing directories) now resolve correctly. Includes Sprint 1 Waves 1-2 of v6.1's agent-owned soft-block primitive — additive, no breaking changes.
+
+### Fixed
+
+- **`paradigm_aspect_check` and `paradigm_aspect_drift` path-resolution.** Writer (`paradigm_purpose_add_aspect`) stores anchors as `.purpose-dir-relative` (e.g., `../component.ts`); both readers previously resolved as project-root-relative, marking valid anchors as "missing." Affects v6.0.0–v6.0.4. Fix: shared `resolveAnchorPath()` helper at `packages/paradigm-mcp/src/utils/anchor-path.ts` tries absolute → project-root → purpose-dir; first to `fs.existsSync` wins. No data migration required. Both `aspect_check` and `aspect_drift` (Jinx audit caught the second tool had identical bug) now share the helper. Roundtrip integration test (`aspect-roundtrip.test.ts`) is the first writer→reader test in the codebase — now a category requirement going forward. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` for full team analysis.
+- **`paradigm_aspect_check` returns `resolution_hint`** when a base mismatch is detected (Helix DX scaffolding) — surfaces the framework-bug protocol entry point so future writer/reader drifts of this class don't nudge agents toward hand-editing.
+
+### Added
+
+- **`paradigm_propose_block` MCP tool** (v6.1 Sprint 1 Wave 1). Agent-initiated remediation: writes `.paradigm/remediations/<id>.yaml` with `severity: advise | auto-author | guard`. Stop hook honors at next run. User overrides via `paradigm override <id>` (CLI coming in Sprint 1 Wave 3) or `PARADIGM_OVERRIDE=<id>` env var.
+- **`paradigm_authority_claim` / `paradigm_authority_release` MCP tools** (v6.1 Sprint 1 Wave 1). Read/write `.paradigm/authority.yaml` schema shipped at v6.0.4. Idempotent on `scope` key — single-claimant-per-scope at v6.1.
+- **Stop hook Check 14 — remediation gate** (v6.1 Sprint 1 Wave 2). Reads `.paradigm/remediations/` via new `paradigm internal active-remediations --json` helper (avoids YAML parsing in bash). Honors `PARADIGM_OVERRIDE` env var with comma-separated id list. Override events written to `.paradigm/events/overrides.jsonl` for Loid calibration.
+- **Framework-bug protocol** (`.paradigm/protocols/framework-bug-surface.protocol`). Decision tree for agents: when an MCP tool gives unexpected output and the cause is in framework code (writer file:line + reader file:line evidence), file `paradigm_task_create` with tag `framework-bug`. Domain ownership follows the broken tool (Rune for compliance tools, Aegis for security, Scholar/Loid for learning, Cid for navigation). v6.1 will add soft-block escalation via `paradigm_propose_block(claimant: 'framework')`. CLAUDE.md and `docs/guides/agents.md` updated with the protocol.
+- **Migration notice append** for projects with `~aspects` defined: notes that v6.0.5+ fixes the reader path-resolution bug, no data migration required. Folded into existing v6.0.4 cohort-C notice text — no new marker file.
+
+### Changed
+
+- **`packages/paradigm/src/core/authority.ts`** extended with reader/mutator API (`readAuthority`, `getActiveClaims`, `upsertClaim`, `removeClaim`) consumed by the new authority MCP tools. v6.0.4 shipped only the writer.
+- **PARA 451 `N-para-451-tiers`** appended "Updated in v6.0.5" callout pointing at the shared `resolveAnchorPath()` helper for learners curious about path-resolution semantics.
+
+### Internal
+
+- New `paradigm internal active-remediations --json` hidden CLI command (mirrors `migrate decisions` pattern). Backs Stop hook Check 14 — bash never parses YAML directly.
+- 12 new tests in paradigm-mcp (10 anchor-path unit tests + 2 aspect-roundtrip integration tests). 233 paradigm-mcp tests pass.
+- 320 paradigm tests pass / 1 skip (no regression from v6.0.4).
+- `paradigm-mcp` package version bumped 6.0.3 → 6.0.5 (was held at 6.0.4 release per TD-2026-04-26-546; bumped now because new MCP tools shipped).
+
+---
+
 ## [6.0.4] — 2026-04-26
 
 Agent-owned enforcement pivot. Symbol/aspect enforcement (aspect drift, aspect coverage) is now claimed by the `compliance` archetype agent (Rune); when no compliance archetype is on the roster, the Stop hook no longer blocks on aspect drift / aspect coverage. The framework continues to surface metrics via `paradigm doctor` and writes `compliance-history.jsonl` unconditionally so observability/learning loops stay intact. Anchor existence (Check 4) and lore-required (Check 7) remain framework-level — they are syntax/hygiene, not policy.
