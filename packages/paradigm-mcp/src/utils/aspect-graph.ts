@@ -26,6 +26,7 @@ import type {
   HeatmapAccessType,
   DriftResult,
 } from '../types/aspect-graph.js';
+import { resolveAnchorPath } from './anchor-path.js';
 
 export type { Database };
 
@@ -709,11 +710,24 @@ export function checkDrift(
   const results: DriftResult[] = [];
 
   for (const anchor of anchorRows) {
-    const absolutePath = path.isAbsolute(anchor.file_path)
-      ? anchor.file_path
-      : path.join(rootDir, anchor.file_path);
+    // Look up the .purpose file the aspect was defined in so we can
+    // resolve purpose-dir-relative anchors (writer-rewrite convention)
+    // alongside project-root-relative ones. Shared with reader via
+    // utils/anchor-path.ts — see Option B fix in v6.0.5.
+    const aspectRow = queryRows<{ defined_in: string }>(
+      db,
+      'SELECT defined_in FROM aspects WHERE id = ?',
+      [anchor.aspect_id],
+    );
+    const definedIn = aspectRow[0]?.defined_in;
+    const purposeDir = definedIn
+      ? path.dirname(path.isAbsolute(definedIn) ? definedIn : path.resolve(rootDir, definedIn))
+      : rootDir;
 
-    if (!fs.existsSync(absolutePath)) {
+    const resolution = resolveAnchorPath(anchor.file_path, purposeDir, rootDir);
+    const absolutePath = resolution.resolvedPath;
+
+    if (!resolution.exists) {
       results.push({
         aspectId: anchor.aspect_id,
         path: anchor.file_path,
@@ -1191,15 +1205,24 @@ function normalizeForHash(content: string): string {
 /**
  * Compute SHA-256 hashes of an anchor's content for drift detection.
  * Returns both exact and normalized hashes, or null if the file cannot be read.
+ *
+ * Resolves anchor paths via the shared `resolveAnchorPath` helper so the
+ * writer (materialize) and reader (checkDrift) agree on which file an
+ * anchor points to. `purposeDir` defaults to `rootDir` when not provided —
+ * callers that know the .purpose file's directory should pass it so
+ * `..`-prefixed (purpose-dir-relative) anchors resolve correctly.
  */
-function computeAnchorHash(anchor: CodeAnchor, rootDir: string | null): { exact: string | null; normalized: string | null; normalizedContent: string | null } {
+function computeAnchorHash(
+  anchor: CodeAnchor,
+  rootDir: string | null,
+  purposeDir?: string,
+): { exact: string | null; normalized: string | null; normalizedContent: string | null } {
   if (!rootDir) return { exact: null, normalized: null, normalizedContent: null };
 
-  const absolutePath = path.isAbsolute(anchor.path)
-    ? anchor.path
-    : path.join(rootDir, anchor.path);
+  const resolution = resolveAnchorPath(anchor.path, purposeDir ?? rootDir, rootDir);
+  const absolutePath = resolution.resolvedPath;
 
-  if (!fs.existsSync(absolutePath)) return { exact: null, normalized: null, normalizedContent: null };
+  if (!resolution.exists) return { exact: null, normalized: null, normalizedContent: null };
 
   try {
     const fileContent = fs.readFileSync(absolutePath, 'utf8');

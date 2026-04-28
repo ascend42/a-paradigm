@@ -1,0 +1,91 @@
+id: L-2026-04-28-ascend-135357-001
+type: milestone
+timestamp: '2026-04-28T13:53:57.096Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Path-bug fix shipped — Option B + shared helper + Helix DX hint + aspect_drift fixed too
+summary: 'Team-recommended fix landed cleanly. Shared `resolveAnchorPath()` + `detectAnchorBaseMismatch()` helpers extracted to packages/paradigm-mcp/src/utils/anchor-path.ts. Reader at tags.ts:484-489 replaced with helper call (now line 496). Helix DX hint at tags.ts:522-536 surfaces resolution_hint when mismatch detected. Critically: aspect_drift in aspect-graph.ts:727 ALSO updated to use the shared helper — Jinx''s audit flagged it at-risk, and it WAS broken in the same way (now fixed by the same shared helper). Tests: paradigm-mcp now 233 (was 221, +12: 10 anchor-path unit tests + 2 aspect-roundtrip integration tests). paradigm package: 320 / 1 skip (no regression). Build clean both packages.'
+symbols_touched:
+  - '#paradigm-aspect-check'
+  - '#paradigm-aspect-drift'
+  - '#anchor-path-resolver'
+  - '#paradigm-purpose-add-aspect'
+symbols_created:
+  - '#anchor-path-resolver'
+files_created:
+  - packages/paradigm-mcp/src/utils/anchor-path.ts
+  - packages/paradigm-mcp/src/utils/anchor-path.test.ts
+  - packages/paradigm-mcp/src/tools/aspect-roundtrip.test.ts
+files_modified:
+  - packages/paradigm-mcp/src/tools/tags.ts
+  - packages/paradigm-mcp/src/utils/aspect-graph.ts
+errors_encountered:
+  - description: 'Builder agent terminated mid-thought (third such termination this session) before final report — last words: ''Let me verify:'''
+    resolution: Verified completion via direct git status + grep + test runs. All four spec items + Jinx audit fix landed correctly.
+    time_to_fix: 5min
+  - description: paradigm-mcp's vitest doesn't have 'basic' reporter (different version than paradigm package). Initial test run failed with Startup Error.
+    resolution: Ran without --reporter flag; default reporter showed 233 tests pass.
+    time_to_fix: 1min
+learnings:
+  - Team-led fixes catch related bugs the original report misses. Jinx's audit found aspect_drift had same bug; shared helper closed both in one PR. Solo-Claude likely would have shipped Option B for aspect_check only.
+  - Shared resolver helpers are architectural insurance against writer/reader drift in MCP tool pairs. Without one, every tool implementing path resolution is a future drift opportunity.
+  - The MISSING roundtrip integration test was the process gap that let this bug ship. Writer self-verification only checks YAML write, not reader resolvability. Roundtrip tests for every writer/reader MCP pair should be a category requirement going forward.
+verification:
+  status: pass
+  details:
+    paradigm_mcp_tests: 233 pass
+    paradigm_tests: 320 pass / 1 skip
+    build: clean both packages
+    spec_items_verified: 4 of 4
+    jinx_audit_finding_addressed: aspect_drift fix confirmed
+tags:
+  - framework-bug-fix
+  - path-resolution
+  - aspect-check
+  - aspect-drift
+  - shared-helper
+body: |-
+  ## Files created
+  - packages/paradigm-mcp/src/utils/anchor-path.ts — exports `resolveAnchorPath()` and `detectAnchorBaseMismatch()`. The shared helper is the architectural fix that prevents future writer/reader drift.
+  - packages/paradigm-mcp/src/utils/anchor-path.test.ts — 10 unit tests
+  - packages/paradigm-mcp/src/tools/aspect-roundtrip.test.ts — 2 integration tests (the missing roundtrip test that would have caught the original bug)
+
+  ## Files modified
+  - packages/paradigm-mcp/src/tools/tags.ts (lines 17, 492-536): import + reader uses helper + Helix DX hint emits resolution_hint when mismatch detected
+  - packages/paradigm-mcp/src/utils/aspect-graph.ts (lines 29, 727): aspect_drift audited per Jinx §2 — was broken in same way, now fixed by sharing helper
+
+  ## Test counts
+  - paradigm-mcp: 233 (was 221, +12)
+  - paradigm: 320 / 1 skip (no regression)
+  - Build clean both packages
+  - npm link OK
+
+  ## Validation of Jinx's audit
+  Jinx flagged paradigm_aspect_drift as "at-risk" — predicted same bug class. Confirmed: drift had identical single-base resolution. Fix by sharing helper closed both bugs in one PR. The shared-helper architecture is doing its job.
+
+  ## Reflects team analysis Sections
+  - §1 Architect Option B: implemented
+  - §2 Jinx audit: aspect_drift confirmed broken, fixed by shared helper
+  - §4 Helix DX hint: resolution_hint surfaces when mismatch detected
+  - §6 Builder cost ranking: matched estimate (~1 day with helper extraction)
+  - §8 Synthesis: shipped per spec
+
+  ## What's next per team plan
+  - Documentor surfaces (7) — task #29
+  - v6.1 Sprint 1 γ claimant variant — task #30 (folds into Sprint 1 Wave 4-5)
+  - Deferred Option C, Option β, broader audit — task #31
+  - Framework-bug task T-2026-04-28-001 stays open until release lands
+
+  ## Meta-observation
+  Team-led fixes hit the architectural root cause (shared helper extraction) AND caught a related bug (aspect_drift) the original report didn't mention. Solo-Claude fix would likely have been just Option B without helper extraction, leaving aspect_drift broken. Team analysis paid for itself.
+linked_lore: []
+linked_tasks:
+  - '28'
+  - T-2026-04-28-001
+confidence: 0.92
+git_context:
+  ref: 5dbb406d58dd32cf3d8f6fe7c4b2fdbbb95d697b
+  branch: main
+  dirty: true

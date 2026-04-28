@@ -14,6 +14,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { getSymbol, getAllSymbols } from '@a-company/premise-core';
+import { resolveAnchorPath, detectAnchorBaseMismatch } from '../utils/anchor-path.js';
 
 /**
  * Tag definition from tags.yaml
@@ -472,21 +473,29 @@ export async function handleTagsTool(
         };
       }
 
-      // Check anchors
+      // Check anchors. Anchor paths are resolved by the shared helper
+      // (utils/anchor-path.ts) which tries absolute → project-root →
+      // purpose-dir bases in order. This closes the v6.0.0–v6.0.4
+      // writer/reader mismatch where add_aspect rewrote inputs to
+      // .purpose-dir-relative but aspect_check resolved against root only.
       const anchors = entry.anchors || [];
+      const purposeFilePath = entry.filePath
+        ? (path.isAbsolute(entry.filePath) ? entry.filePath : path.resolve(ctx.rootDir, entry.filePath))
+        : ctx.rootDir;
+      const purposeDir = entry.filePath ? path.dirname(purposeFilePath) : ctx.rootDir;
+
       const anchorResults: Array<{
         path: string;
         lines: string;
         exists: boolean;
         lineCount?: number;
+        resolution_hint?: string;
       }> = [];
 
       for (const anchor of anchors) {
-        const filePath = path.isAbsolute(anchor.path)
-          ? anchor.path
-          : path.join(ctx.rootDir, anchor.path);
-
-        const exists = fs.existsSync(filePath);
+        const resolution = resolveAnchorPath(anchor.path, purposeDir, ctx.rootDir);
+        const filePath = resolution.resolvedPath;
+        const exists = resolution.exists;
         let lineCount: number | undefined;
 
         if (exists) {
@@ -506,11 +515,25 @@ export async function handleTagsTool(
           }
         }
 
+        // Helix DX hint: when an anchor reports missing, check whether the
+        // path resolves under the OTHER base. If so, this is a framework
+        // path-resolution drift class — surface a structured hint so the
+        // agent doesn't hand-edit the .purpose file.
+        let resolution_hint: string | undefined;
+        if (!exists) {
+          const mismatch = detectAnchorBaseMismatch(anchor.path, purposeDir, ctx.rootDir);
+          if (mismatch.mismatch) {
+            resolution_hint =
+              'Anchor resolves under .purpose-dir base but not project-root base (or vice versa). This indicates a framework path-resolution bug; do NOT hand-edit. Run `paradigm_aspect_drift` for full audit, or file framework-bug task per protocol.';
+          }
+        }
+
         anchorResults.push({
           path: anchor.path,
           lines: anchor.raw.split(':')[1] || 'full file',
           exists,
           lineCount,
+          ...(resolution_hint ? { resolution_hint } : {}),
         });
       }
 
