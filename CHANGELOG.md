@@ -5,6 +5,26 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] — 2026-04-28
+
+Sprint 1 of v6.1 closes the agent-owned soft-block primitive arc. Building on v6.0.5 (which shipped Sprint 1 Waves 1-2 + path-bug fix), this release adds the user-facing CLI (`paradigm override`), full regression test coverage, and agent-prompt teaching docs.
+
+### Added
+
+- **`paradigm override` CLI command** (Wave 3). Three subcommands:
+  - `paradigm override <id>` — clears single remediation, archives YAML to `.paradigm/remediations/.archived/<id>.yaml` with `archived_at` stamp, appends override event to `.paradigm/events/overrides.jsonl` with `mechanism: cli`
+  - `paradigm override list` — table of active remediations (or JSON in non-TTY)
+  - `paradigm override clear-all --force` — bulk clear, one event row per cleared remediation
+- **CLAUDE.md "Agent-Owned Soft-Blocks (v6.1)" section** teaching agents when to call `paradigm_propose_block`, severity guidance, override mechanics, and v6.2 forward-compat notes.
+- **Regression test suite** (Wave 5) covering all 10 spec §9 cases (cohorts A-J).
+
+### Internal
+
+- Refactored `packages/paradigm/src/commands/internal/active-remediations.ts` to expose pure `getActiveRemediations()` helper + `RemediationOutput` type — direct-imported by `paradigm override list` (no subprocess), Stop hook still uses the helper command output unchanged.
+- Atomic `fs.rename` for archive moves (crash-safe).
+
+---
+
 ## [6.0.5] — 2026-04-28
 
 Path-bug fix + early v6.1 Sprint 1 work. Headline: writer/reader path-resolution mismatch in `paradigm_purpose_add_aspect` ↔ `paradigm_aspect_check` is fixed. Anchors with `..` prefix (crossing directories) now resolve correctly. Includes Sprint 1 Waves 1-2 of v6.1's agent-owned soft-block primitive — additive, no breaking changes.

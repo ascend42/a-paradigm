@@ -63,6 +63,23 @@ interface FixtureOptions {
   modified: string[];
   /** Pre-seed `.paradigm/lore/entries/<today>/` with a stub entry. */
   withTodayLore?: boolean;
+  /**
+   * v6.1: stub response for `paradigm internal active-remediations --json`
+   * (consumed by Check 14). Default `'[]'` (no active remediations). The
+   * shape MUST match `RemediationOutput[]` — bash uses literal grep on
+   * `"id":"…"`, `"severity":"…"`, `"claimant":"…"`, `"reason":"…"` keys.
+   */
+  remediationsJson?: string;
+  /** v6.1: PARADIGM_OVERRIDE comma-separated id list (Check 14 env-var path). */
+  paradigmOverride?: string;
+  /**
+   * v6.1: seed remediation YAML files under `.paradigm/remediations/`.
+   * Map of `<id>` → YAML body. Used by Case J (presence-vs-absence) and as
+   * realistic on-disk audit trail; the bash script never reads these
+   * directly (it goes through the helper) but the directory existence
+   * check + override-event writer need real fs state.
+   */
+  remediationYamls?: Record<string, string>;
 }
 
 interface FixtureResult {
@@ -122,12 +139,27 @@ function seedFixture(opts: FixtureOptions): FixtureResult {
     );
   }
 
+  // v6.1: seed remediation YAMLs (Wave 5 cases B/C/D/H/J). Note the helper
+  // (`paradigm internal active-remediations --json`) is *stubbed* below —
+  // the on-disk YAMLs are written for realism + Case J (dir presence) but
+  // bash goes through the helper, never reads the YAMLs directly.
+  if (opts.remediationYamls) {
+    const rmdDir = path.join(rootDir, '.paradigm', 'remediations');
+    fs.mkdirSync(rmdDir, { recursive: true });
+    for (const [id, body] of Object.entries(opts.remediationYamls)) {
+      fs.writeFileSync(path.join(rmdDir, `${id}.yaml`), body, 'utf8');
+    }
+  }
+
   // Stub `paradigm` binary in binDir. The script invokes it with various
-  // arguments; we only care about `compliance-check --json`. Default is a
-  // clean response (drift=0). Any other invocation (e.g., `enforcement
-  // resolve --json` for ENFORCEMENT_MAP) returns an empty string + exit 0.
+  // arguments; we care about `compliance-check --json` and (v6.1) the
+  // hidden `internal active-remediations --json`. Default is a clean
+  // response (drift=0, no active remediations). Any other invocation
+  // (e.g., `enforcement resolve --json` for ENFORCEMENT_MAP) returns
+  // an empty string + exit 0.
   if (!opts.noParadigmStub) {
     const json = opts.complianceJson ?? '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}';
+    const remediationsJson = opts.remediationsJson ?? '[]';
     const stubPath = path.join(binDir, 'paradigm');
     fs.writeFileSync(
       stubPath,
@@ -141,6 +173,15 @@ JSON
     ;;
   enforcement)
     # Empty enforcement map → all checks fall back to defaults
+    exit 0
+    ;;
+  internal)
+    if [ "$2" = "active-remediations" ]; then
+      cat <<'JSON'
+${remediationsJson}
+JSON
+      exit 0
+    fi
     exit 0
     ;;
   *)

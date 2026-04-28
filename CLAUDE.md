@@ -157,6 +157,45 @@ paradigm_task_create({
 
 **Calibration gate:** without writer file:line + reader file:line evidence, downgrade the report to a plain task (no `framework-bug` tag). Same evidentiary bar a human bug report would clear.
 
+## Agent-Owned Soft-Blocks (v6.1)
+
+When you (an archetype agent — Rune, Aegis, Jinx, etc.) detect a condition the user should resolve before continuing, call `paradigm_propose_block`. The Stop hook reads `.paradigm/remediations/` and will refuse-with-override on your next run if `severity: guard`.
+
+**When to call:**
+- Coverage drop on a tracked aspect (Rune)
+- Missing portal gate on a new endpoint (Aegis)
+- Symbol drift you cannot auto-heal (Rune)
+- Edge case the user agreed to handle but hasn't (Jinx)
+
+**Do NOT call for:**
+- Things you can fix yourself (do that instead)
+- Things only the user can decide and that don't block correctness (use a wisdom note)
+- Nag-loops on the same scope (cap at one active remediation per concern)
+
+**Severity guidance:**
+- `advise` — informational stderr line, no block. FYI-class findings.
+- `auto-author` — same as advise at v6.1; signals you intend to author the fix.
+- `guard` — hard block. Use sparingly. User must `paradigm override <id>` to proceed.
+
+**Example invocation** — Rune detects #payment-form imports stripe but lacks an aspect:
+```
+paradigm_propose_block({
+  claimant: 'compliance',
+  severity: 'guard',
+  reason: '#payment-form imports stripe → suggested ~payment-pii aspect',
+  unblock_hint: 'Add ~payment-pii to packages/web/src/components/payment-form/.purpose, OR run `paradigm aspect stub-create rmd-<id>`'
+})
+```
+
+The user can:
+- `paradigm override <id>` — interactive escape hatch (clears the remediation, archives YAML, writes event)
+- `PARADIGM_OVERRIDE=<id> <cmd>` — one-shot scripted escape (no archive, just session-scoped skip)
+- Resolve the underlying issue and re-run
+
+Override events written to `.paradigm/events/overrides.jsonl` for Loid's calibration pass — if you generate too many overrides, Loid will surface your block as noise. **Self-regulate.**
+
+**Coming in v6.2:** JSONLogic predicates for `unblock_hint` (auto-clears when condition met), per-archetype override-cluster auto-coaching, durable scope opt-out via `paradigm_optout_register`. v6.1 ships plain-string hints + manual override only.
+
 ## On-Demand Guidance
 
 Detailed guidance is available via MCP resources — load only what you need:
