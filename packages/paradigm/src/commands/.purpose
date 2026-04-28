@@ -69,3 +69,12 @@ components:
     tags:
       - feature
       - util
+  paradigm-override-cli:
+    description: 'paradigm override [id] | list | clear-all --force — public CLI to clear active soft-block remediations authored by archetype agents (v6.1 Sprint 1 Wave 3). Symmetric to PARADIGM_OVERRIDE env-var path; both writers append to .paradigm/events/overrides.jsonl with mechanism cli|env. Archives cleared remediations to .paradigm/remediations/.archived/ with archived_at stamp.'
+    file: packages/paradigm/src/commands/override.ts
+    type: command-group
+    tags:
+      - feature
+      - v6.1
+      - soft-block
+      - override

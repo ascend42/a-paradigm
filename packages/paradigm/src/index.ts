@@ -2746,6 +2746,37 @@ internalCmd
     await activeRemediationsCommand(options);
   });
 
+// paradigm override — public CLI to clear active soft-block remediations (v6.1 Wave 3)
+const overrideCmd = program
+  .command('override [id]')
+  .description('Clear active soft-block remediations authored by archetype agents')
+  .action(async (id: string | undefined) => {
+    if (!id) {
+      // No id and no subcommand → show help
+      overrideCmd.help();
+      return;
+    }
+    const { overrideClearOne } = await import('./commands/override.js');
+    await overrideClearOne(id);
+  });
+
+overrideCmd
+  .command('list')
+  .description('List all currently-active remediations')
+  .action(async () => {
+    const { overrideList } = await import('./commands/override.js');
+    await overrideList();
+  });
+
+overrideCmd
+  .command('clear-all')
+  .description('Bulk-clear ALL active remediations (requires --force)')
+  .option('--force', 'Required to confirm destructive bulk clear')
+  .action(async (options) => {
+    const { overrideClearAll } = await import('./commands/override.js');
+    await overrideClearAll(options);
+  });
+
 // paradigm util — utility command namespace (canonical home for beacon, constellation, echo, sync-llms, thread, probe)
 registerUtilCommands(program);
 

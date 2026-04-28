@@ -28,7 +28,7 @@ interface RemediationFile {
   // ...other fields tolerated and ignored for the helper output
 }
 
-interface RemediationOutput {
+export interface RemediationOutput {
   id: string;
   claimant: string;
   severity: string;
@@ -37,10 +37,15 @@ interface RemediationOutput {
   created?: string;
 }
 
-export async function activeRemediationsCommand(
-  options: ActiveRemediationsOptions = {}
-): Promise<void> {
-  const cwd = process.cwd();
+/**
+ * Pure helper — walks `.paradigm/remediations/`, parses each YAML, filters
+ * expired/malformed entries. Used by both the hidden CLI helper command
+ * and the public `paradigm override list` command (Wave 3) so they share
+ * one source of truth and avoid subprocess overhead.
+ */
+export async function getActiveRemediations(
+  cwd: string = process.cwd()
+): Promise<RemediationOutput[]> {
   const remediationsDir = path.join(cwd, '.paradigm', 'remediations');
 
   const records: RemediationOutput[] = [];
@@ -50,8 +55,7 @@ export async function activeRemediationsCommand(
     entries = await fs.readdir(remediationsDir);
   } catch {
     // Missing dir → empty list (graceful per spec §12 #10, §4)
-    process.stdout.write(JSON.stringify(records) + '\n');
-    return;
+    return records;
   }
 
   const nowIso = new Date().toISOString();
@@ -102,6 +106,13 @@ export async function activeRemediationsCommand(
     });
   }
 
+  return records;
+}
+
+export async function activeRemediationsCommand(
+  options: ActiveRemediationsOptions = {}
+): Promise<void> {
+  const records = await getActiveRemediations();
   // --json is the only documented mode; default to JSON for safety.
   void options;
   process.stdout.write(JSON.stringify(records) + '\n');

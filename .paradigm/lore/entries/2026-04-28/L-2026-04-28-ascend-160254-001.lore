@@ -1,0 +1,78 @@
+id: L-2026-04-28-ascend-160254-001
+type: milestone
+timestamp: '2026-04-28T16:02:54.079Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.1 Sprint 1 Wave 3 shipped — paradigm override CLI live
+summary: 'Wave 3 added `paradigm override` public command with three subcommands (clear-by-id, list, clear-all --force). Builder used direct-import pattern (overrideList calls getActiveRemediations() in-process from internal/active-remediations.ts) — no subprocess overhead. Refactored Wave 2''s helper to extract pure getActiveRemediations() function; existing activeRemediationsCommand wraps it. Hook output bytes unchanged. CLI-side overrides.jsonl format matches bash-side exactly (only differs on mechanism: cli vs env). Three advisor-flagged fixes: double-checkmark stripped from output, explicit process.exit(1) after errors, atomic fs.rename for archive. 320 paradigm tests / 1 skip + 233 paradigm-mcp tests (no regression).'
+symbols_touched:
+  - '#paradigm-override-cli'
+  - '#active-remediations'
+  - '#paradigm-propose-block'
+symbols_created:
+  - '#paradigm-override-cli'
+files_created:
+  - packages/paradigm/src/commands/override.ts
+files_modified:
+  - packages/paradigm/src/commands/internal/active-remediations.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/.purpose
+learnings:
+  - Direct in-process import beats subprocess for CLI tools that consume internal helpers — single source of truth, faster, no error-surface duplication. Pattern applies to all future Stop hook helper / CLI command pairs.
+  - 'Atomic fs.rename for archive moves matters: a copy+unlink sequence has a window where the file exists in both locations or neither. fs.rename is atomic at the filesystem level. Important for state files like remediations.'
+  - cli-output.ts success() helper already prepends ✓ — don't double it. Read the helper before adding decoration.
+  - error() helper writes to stderr but does NOT terminate — explicit process.exit(1) needed after each error() call when the intent is to fail.
+verification:
+  status: pass
+  details:
+    build: clean
+    vitest: 320 pass / 1 skip (no regression)
+    smoke_test: 5 scenarios verified
+    advisor_fixes_applied: '3'
+tags:
+  - v6.1
+  - sprint-1
+  - wave-3
+  - builder
+  - override-cli
+body: |-
+  ## Files created
+  - packages/paradigm/src/commands/override.ts — three subcommand handlers (overrideClearOne, overrideList, overrideClearAll) + shared archiveRemediation + appendOverrideEvent helpers
+
+  ## Files modified
+  - packages/paradigm/src/commands/internal/active-remediations.ts (lines 30-60, 95-115) — non-behavioral refactor: extracted pure getActiveRemediations(cwd) helper + exported RemediationOutput type. Existing activeRemediationsCommand consumes the helper. Hook output bytes unchanged.
+  - packages/paradigm/src/index.ts (lines 2749-2778) — registered public `override [id]` command with `list` and `clear-all --force` subcommands via lazy dynamic imports
+  - packages/paradigm/src/commands/.purpose — added paradigm-override-cli symbol
+
+  ## Subcommand pattern
+  **Direct import** (recommended path from spec §12). overrideList calls getActiveRemediations() in-process — no subprocess overhead, no subprocess error surface, single source of truth for the parsing logic shared between Stop hook helper command and the override CLI.
+
+  ## Manual smoke verification
+  - `override list` (empty) → JSON `[]`
+  - `override list` (1 fixture) → JSON array with expected fields
+  - `override rmd-test123` → exit 0, archived_at stamp added, file moved to .archived/, JSONL row written with mechanism: cli
+  - `override rmd-doesnotexist` → exit 1, error message
+  - `override clear-all` → exit 1, requires --force
+  - `override clear-all --force` → cleared all, one event row per
+
+  ## Advisor catches
+  1. Double-checkmark in success output stripped (success() helper already prepends ✓)
+  2. Explicit process.exit(1) after error() calls (error() doesn't terminate)
+  3. Atomic fs.rename for archive (not copy+unlink — matters for crash safety)
+
+  ## Wave 4 prerequisites
+  - CLAUDE.md "Agent-Owned Soft-Blocks (v6.1)" subsection insertion (spec §8)
+  - CHANGELOG.md placeholder for next version
+  - Note that archived_at audit trail is now visible on cleared YAML
+  - paradigm override is public — listed in `paradigm --help`
+linked_lore:
+  - L-2026-04-28-ascend-052109-001
+linked_tasks:
+  - '33'
+confidence: 0.92
+git_context:
+  ref: a495413be7c6412ac3d92fdf7a17635cb61cb08a
+  branch: main
+  dirty: true
