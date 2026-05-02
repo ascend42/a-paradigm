@@ -1,0 +1,198 @@
+version: "1"
+tiers:
+  - id: core-libs
+    label: Core Libraries
+    responsibility: Symbol indexing, portal validation, purpose parsing, shared runtime primitives
+    tech:
+      framework: TypeScript/Node ESM
+      libraries:
+        - "@a-company/premise-core"
+        - "@a-company/portal"
+        - "@a-company/purpose"
+        - "@a-company/runtime"
+        - "@a-company/logger"
+    components:
+      - "#portal-validator"
+      - "#premise-aggregator"
+      - "#premise-snapshotter"
+      - "#index-service"
+      - "#detection-engine"
+
+  - id: mcp-server
+    label: MCP Server
+    responsibility: Exposes 50+ Paradigm tools to AI assistants via the Model Context Protocol
+    tech:
+      framework: TypeScript/Node ESM
+      libraries:
+        - "@modelcontextprotocol/sdk"
+        - "js-yaml"
+        - "@a-company/premise-core"
+    components:
+      - "#MCPServer"
+      - "#CoreTools"
+      - "#SymphonyTools"
+      - "#PurposePortalTools"
+      - "#WisdomTools"
+      - "#HistoryTools"
+      - "#NavigateTools"
+      - "#SentinelTools"
+      - "#TagsTools"
+      - "#ReindexTools"
+      - "#GraphTools"
+      - "#ConductorTools"
+      - "#LoreTools"
+      - "#HabitsTools"
+      - "#AspectGraphTools"
+      - "#ContextTools"
+      - "#GraduationTools"
+      - "#ArchTools"
+      - "#orchestrator"
+      - "#nomination-engine"
+      - "#background-orchestrator"
+      - "#context-enricher"
+      - "#agent-spawner"
+      - "#session-tracker"
+
+  - id: cli
+    label: CLI
+    responsibility: User-facing command-line interface for all Paradigm operations
+    tech:
+      framework: TypeScript/Node ESM
+      libraries:
+        - Commander.js
+        - js-yaml
+        - chalk
+    components:
+      - "#init-command"
+      - "#shift-command"
+      - "#setup-command"
+      - "#doctor-command"
+      - "#team-orchestrate-command"
+      - "#portal-validate-command"
+      - "#sentinel-command"
+      - "#university-command"
+      - "#paradigm-arch-cli"
+
+  - id: conductor
+    label: Conductor
+    responsibility: Native macOS mission control — gaze, gesture, voice, agent orchestration, task dashboard
+    tech:
+      framework: Swift/SwiftUI
+      libraries:
+        - macOS 14+
+        - AVFoundation
+        - Vision
+        - WhisperKit
+        - CoreML
+    components:
+      - "#main-overlay"
+      - "#gesture-hud"
+      - "#gaze-cursor"
+      - "#voice-control-hud"
+      - "#agent-network-view"
+      - "#session-manager-view"
+      - "#workspace-view"
+      - "#settings-panel"
+      - "#paradigm-mcp-client"
+      - "#input-orchestrator"
+      - "#task-store"
+      - "#agent-group-store"
+      - "#hotkey-binding-registry"
+      - "#eyebrow-detector"
+      - "#gesture-classifier"
+      - "#gaze-calibration"
+
+  - id: sentinel
+    label: Sentinel
+    responsibility: Incident tracking — WebSocket event server, journey recording, real-time UI, Rust variant
+    tech:
+      framework: TypeScript/Node + TypeScript/React + Rust
+      libraries:
+        - ws
+        - React
+        - Vite
+        - tokio
+    components:
+      - "#websocket-server"
+      - "#journey-recorder"
+      - "#SentinelLogsStore"
+      - "#SentinelIncidentsStore"
+      - "#SentinelEventsStore"
+      - "#SentinelSchemasStore"
+
+  - id: university
+    label: University
+    responsibility: Learning platform UI — courses, quizzes, PLSAT exam, progress tracking
+    tech:
+      framework: TypeScript/React
+      libraries:
+        - Vite
+        - React
+    components:
+      - "#home-view"
+      - "#course-view"
+      - "#quiz-view"
+      - "#plsat-view"
+      - "#certificate-view"
+      - "#progress-store"
+      - "#plsat-store"
+      - "#courses-store"
+
+  - id: site
+    label: Docs Site
+    responsibility: Documentation and marketing site with symbol graph visualization
+    tech:
+      framework: Astro
+      libraries:
+        - TypeScript
+        - MDX
+    components:
+      - "#SiteHeader"
+      - "#SiteFooter"
+      - "#NodeGraph"
+      - "#SymbolBadge"
+      - "#DocsSidebar"
+
+  - id: ide
+    label: IDE Extension
+    responsibility: VS Code extension providing hover, definition, diagnostics, codelens, and completion for Paradigm symbols
+    tech:
+      framework: TypeScript
+      libraries:
+        - VS Code Extension API
+        - "@a-company/premise-core"
+    components:
+      - "#hover-provider"
+      - "#definition-provider"
+      - "#diagnostics-provider"
+      - "#codelens-provider"
+      - "#completion-provider"
+
+links:
+  - from: cli
+    to: mcp-server
+    via: consumes
+  - from: mcp-server
+    to: core-libs
+    via: consumes
+  - from: cli
+    to: core-libs
+    via: consumes
+  - from: conductor
+    to: mcp-server
+    via: consumes
+  - from: ide
+    to: core-libs
+    via: consumes
+  - from: cli
+    to: sentinel
+    via: embeds
+  - from: cli
+    to: university
+    via: embeds
+  - from: cli
+    to: site
+    via: provides
+  - from: mcp-server
+    to: sentinel
+    via: provides

@@ -1,11 +1,11 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-05-02T17:38:34.202Z'
-  sessionId: orch-mooml6jc-rp7m
-  summary: '[Kit (builder)]: builder: Implement: Implement Atlas (agent #67, cartographe...'
+  date: '2026-05-02T19:32:59.837Z'
+  sessionId: orch-mooqoc3g-awov
+  summary: '[Kit (builder)]: builder: Implement: Create .paradigm/arch.yaml — the first ...'
   symbolsTouched:
     - '#67'
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 7
+sessionsOnProject: 8
