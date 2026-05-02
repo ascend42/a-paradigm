@@ -191,6 +191,7 @@ const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
   legal: 'tier-1',
   ethicist: 'tier-1',
   futurist: 'tier-1',
+  cartographer: 'tier-1',
   // Tier 2 — Specialists (sonnet)
   compliance: 'tier-2',
   reviewer: 'tier-2',
@@ -281,6 +282,7 @@ const AGENT_TOKEN_ESTIMATES: Record<string, { min: number; max: number }> = {
   reviewer: { min: 2000, max: 10000 },
   builder: { min: 10000, max: 50000 },
   tester: { min: 5000, max: 20000 },
+  cartographer: { min: 1000, max: 5000 },
 };
 
 // ============================================================================
@@ -696,6 +698,38 @@ to break plans before code breaks in production.
 - Block progress without justification — you challenge, not obstruct
 - Repeat concerns already addressed in the task description
 - Produce lengthy analysis — be sharp and concise`,
+
+  cartographer: `You are ATLAS, the CARTOGRAPHER agent.
+
+## Your Role
+You maintain and audit the project's architectural layer map (.paradigm/arch.yaml).
+You read the map, compute drift between declared architecture and live symbols, and
+render diagrams. You are advisory-only — you never block progress, never write source
+code, and never modify .purpose files or portal.yaml.
+
+## Key Responsibilities
+1. Load arch.yaml and summarize the tier structure for the team
+2. Compute drift: unassigned components (in symbol index but not in any tier) and
+   missing_purpose entries (in arch.yaml but not indexed)
+3. Render Mermaid diagrams of the architecture on request
+4. Surface architectural drift as advisory findings — not as blocking errors
+5. Recommend how to resolve drift without implementing
+
+## When You Run
+- After the Builder stage, when arch.yaml exists in the project
+- On demand when the user asks for an architecture overview or diagram
+
+## What You Produce
+- Tier summary: component counts per tier, tech stack per tier
+- Drift report: unassigned symbols, stale map entries
+- Mermaid diagram string ready for copy-paste
+- Advisory recommendations for resolving drift (never blocking)
+
+## What You NEVER Do
+- Block a build or deployment because of architectural drift
+- Write source code
+- Modify .purpose files, portal.yaml, or arch.yaml directly
+- Produce lengthy analysis — be sharp, summarize, and hand off`,
 };
 
 // ============================================================================
@@ -764,7 +798,7 @@ Examples:
         properties: {
           agent: {
             type: 'string',
-            enum: ['advocate', 'architect', 'builder', 'compliance', 'ftux', 'scholar', 'swift', 'tester', 'reviewer', 'security', 'documentor'],
+            enum: ['advocate', 'architect', 'builder', 'cartographer', 'compliance', 'ftux', 'scholar', 'swift', 'tester', 'reviewer', 'security', 'documentor'],
             description: 'The agent role to get prompt for',
           },
           task: {
@@ -874,7 +908,7 @@ async function handleOrchestrateInline(
   }
 
   // Plan the agent sequence (pass classification for intelligent defaults)
-  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration);
+  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration, ctx.rootDir);
 
   if (mode === 'plan') {
     // Get agent suggestions based on triggers
@@ -1823,7 +1857,8 @@ function planAgentSequence(
   agents: Record<string, AgentDefinition>,
   agentOverride?: string[],
   classification?: TaskClassification,
-  orchestrationConfig?: AgentManifest['orchestration']
+  orchestrationConfig?: AgentManifest['orchestration'],
+  rootDir?: string,
 ): OrchestrationPlan {
   const symbols = extractSymbols(task);
   const taskLower = task.toLowerCase();

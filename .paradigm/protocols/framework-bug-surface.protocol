@@ -53,7 +53,7 @@ steps:
       When the tool's domain crosses archetypes, the first archetype to surface owns
       triage and adds the second as reviewer (same partner pattern as Scholar+Sheila).
   - action: file-task
-    target: 'paradigm_task_create'
+    target: paradigm_task_create
     notes: |
       Option α (current, v6.0.5+):
         paradigm_task_create({
@@ -112,4 +112,4 @@ recorded_from: L-2026-04-28-ascend-135357-001
 recorded_at: '2026-04-28T00:00:00Z'
 last_verified: '2026-04-28T00:00:00Z'
 verified_by: documentor
-status: current
+status: stale

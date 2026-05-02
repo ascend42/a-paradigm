@@ -1,0 +1,99 @@
+id: L-2026-04-28-ascend-225148-001
+type: milestone
+timestamp: '2026-04-28T22:51:48.540Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Systems concept design — .paradigm/systems/ as first-class framework primitive
+summary: 'Ideation session establishing the "systems" concept for Paradigm: a flat YAML manifest in .paradigm/systems/ that gives a named collection of symbols an identity, steward, version, principles, and required aspects. One new MCP tool (paradigm_system_status), agent training via Mika''s notebook (not University), steward-owned lore on version bumps, project-scoped at v1. No new symbol prefix — fits naturally alongside protocols/ and notebooks/ in the .paradigm/ directory idiom.'
+symbols_touched:
+  - '#paradigm-systems'
+  - '#system-manifest'
+  - '#system-status'
+  - ~design-token
+  - ~a11y-checked
+symbols_created:
+  - '#paradigm-systems'
+  - '#system-manifest'
+  - '#system-status'
+learnings:
+  - Systems gap is agent training + framework convention, not infrastructure
+  - Mika needs a trained concept of stewardship, not just symbol access
+  - University is wrong venue for agent workflow training — notebooks compound better
+  - Project-only scope at v1 avoids cross-repo symbol resolution complexity
+  - One new tool (paradigm_system_status) covers the only real toolchain gap
+tags:
+  - systems
+  - design-systems
+  - agent-training
+  - mika
+  - ideation
+  - v6-future
+body: |
+  ## Context
+
+  User initiated a strategic ideation session on how "system information" — design systems, architecture docs, shared values, cross-referenced documents — should be handled natively in Paradigm, tied to symbols, and usable by design agents (Mika and team) via MCP/CLI.
+
+  The key framing shift: this is not about cross-project Canon or new primitives. It's about Paradigm having no in-framework concept of a "system" that agents are trained to recognize, steward, and evolve. Mika can touch individual symbols but has no trained understanding of "I am working within a system."
+
+  ## Settled Shape
+
+  ### Manifest: `.paradigm/systems/<id>.yaml`
+
+  ```yaml
+  id: design-system
+  version: 1.2.0
+  steward: mika
+  principles:
+    - "Tokens before components"
+    - "Accessibility is non-negotiable"
+  members:
+    - "#button"
+    - "#input-field"
+    - "#color-token"
+    - "$onboarding-flow"
+  requires-aspects:
+    - "~design-token"
+    - "~a11y-checked"
+  ```
+
+  Five fields. Lighter than a .purpose file. Membership is authoritative in the manifest. `.purpose` files may carry an advisory `systems:` hint but it is not the source of truth.
+
+  ### Tool gap: `paradigm_system_status`
+  The only missing tool. Shows all members, their aspect coverage, and drift in one view. Everything else Mika needs already exists (paradigm_ripple, paradigm_navigate, paradigm_aspect_check, paradigm_lore_record).
+
+  ### Hard boundaries
+  - No sixth symbol prefix
+  - No token values in Paradigm (Canvas/Pencil own values; Paradigm owns symbol identity and governance)
+  - System is NOT a university course — agent training belongs in Mika's notebook (global scope, two entries)
+
+  ## Agent Training Shape
+
+  **Two global notebook entries for Mika:**
+  1. System Orientation — before touching any member symbol: list .paradigm/systems/ → navigate → run paradigm_system_status
+  2. Version Bump Decision Rules — binary discriminator: "does this change affect what another agent needs to read before touching a member?" PATCH (no lore), MINOR (lore required), MAJOR (lore required, write lore first then bump version)
+
+  **One protocol:** P-bump-system-version — five concrete steps with verification checkpoints
+
+  **Cross-repo pattern (v1 project-scoped):** Each adopting repo declares its own local manifest citing upstream principles verbatim. No cross-repo symbol references. Divergence from upstream triggers a lore entry.
+
+  ## Scope Decision
+
+  Project-only at v1. Cross-project tool dependencies (ripple, aspect_check) cannot resolve foreign symbols. Global scope deferred — would require a global symbol index merger, cross-repo resolution, and access control.
+
+  ## Key Decisions
+
+  1. `.paradigm/systems/` directory is the home — idiomatic alongside protocols/ and notebooks/
+  2. Membership authoritative in manifest; .purpose advisory field is a hint only
+  3. Aspects and systems are orthogonal — systems declare required aspects, they do not become aspects
+  4. Exactly one new MCP tool: paradigm_system_status
+  5. Steward-owned lore on MINOR/MAJOR version bumps — no auto-recording (prevents noise)
+  6. University is wrong venue — training belongs in Mika's notebook
+  7. Project-only scope at v1; cross-repo via local manifests + cited upstream principles
+  8. Minimum >=3 members with shared principles recommended (not a hard schema constraint)
+confidence: 0.9
+git_context:
+  ref: 0aa6960bd46f9199ee5a594382852e45f5f7915b
+  branch: main
+  dirty: true

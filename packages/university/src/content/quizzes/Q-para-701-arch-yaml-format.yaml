@@ -1,0 +1,66 @@
+id: Q-para-701-arch-yaml-format
+title: 'PARA 701: Agent Mastery — Lesson 11: The arch.yaml Format'
+description: 'Quiz for lesson: Lesson 11: The arch.yaml Format'
+author: paradigm
+created: '2026-04-28'
+updated: '2026-04-28'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A team adds a new component `#notification-service` to the backend. Their `.paradigm/arch.yaml` was last updated six months ago and does not list this component in any tier. When Atlas runs, how will this component appear in the drift report?
+    choices:
+      A: As a "missing_purpose" entry — the component is listed in arch.yaml but not in the index
+      B: As an "unassigned" entry — the component exists in the symbol index but is not assigned to any tier
+      C: Atlas will not report it because arch.yaml does not need to be updated
+      D: Atlas will automatically add it to the backend tier
+      E: The drift report only includes gate symbols, not components
+    correct: B
+    explanation: "Unassigned drift means: component exists in the symbol index but is not listed in any tier's components array. The component was indexed (via .purpose coverage) but arch.yaml was not updated to include it. Missing_purpose is the inverse: declared in arch.yaml but not found in the index. Atlas never auto-assigns components — it reports drift as advisory findings for the team to resolve."
+  - id: q2
+    question: Which of the following arch.yaml configurations is valid?
+    choices:
+      A: A tier with no `id` field but a `label` field
+      B: A `links` array with an entry that has `from` and `to` pointing to tier IDs, and an optional `via` label
+      C: A `components` array containing `$checkout-flow` (a flow symbol)
+      D: Omitting the `links` key entirely from the file
+      E: Using camelCase for tier IDs (e.g., `id: frontEnd`)
+    correct: B
+    explanation: "Links require `from` and `to` (both referencing tier IDs) and accept an optional `via` label for edge labeling in Mermaid diagrams. Tier `id` is required — a label alone is not sufficient. The `components` array holds `#component` symbols only, not `$flows`. The `links` key is required (though it can be an empty array `[]`). Tier IDs should use kebab-case per Paradigm conventions."
+  - id: q3
+    question: A startup is three months into development. They have 40 components, 6 flows, and 12 gates indexed by Paradigm. Should they create `.paradigm/arch.yaml`?
+    choices:
+      A: Yes — arch.yaml is required for gate checking to work
+      B: Yes — without it, the symbol index will not build
+      C: No — arch.yaml is required only for projects with more than 100 components
+      D: It depends — arch.yaml is optional additive metadata. They should create it if they want tier-level architecture documentation, drift detection, or diagrams. It is not required for any core Paradigm feature.
+      E: No — arch.yaml is only for enterprise projects
+    correct: D
+    explanation: "arch.yaml is entirely optional. All core Paradigm features — orchestration, symbol indexing, gate checking, notebook learning, lore recording — work without it. The file is additive metadata that enables tier-level documentation, drift detection via Atlas, and Mermaid diagram rendering. A three-month project with 40 components may benefit from declaring their tier structure, but there is no requirement to do so."
+  - id: q4
+    question: A project's arch.yaml declares `#legacy-payment-gateway` in the backend tier. Six months later, the team deprecated and deleted that component. What drift will Atlas report?
+    choices:
+      A: Unassigned — the component was removed from the index
+      B: Missing Purpose — the component is listed in arch.yaml but no longer exists in the symbol index
+      C: No drift — deleted components are automatically removed from arch.yaml
+      D: Critical error — Atlas will block the build
+      E: Unassigned and Missing Purpose simultaneously
+    correct: B
+    explanation: "Missing Purpose drift means: a component is declared in a tier's components array in arch.yaml, but it cannot be found in the live symbol index. When a component is deleted (its .purpose entry removed and paradigm scan run), it disappears from the index. The arch.yaml entry remains until manually updated. Atlas reports this as missing_purpose so the team knows the map is stale. Atlas never blocks — it is advisory-only."
+  - id: q5
+    question: What does the `via` field on a link do?
+    choices:
+      A: It declares which gate must be satisfied when crossing from one tier to another
+      B: It specifies the network protocol (HTTP, gRPC, WebSocket) for rate-limiting purposes
+      C: It provides a human-readable edge label that appears in the Mermaid diagram output
+      D: It is required for all links — omitting it causes a parse error
+      E: It declares the intermediate tier a message passes through before reaching the destination
+    correct: C
+    explanation: "The `via` field is an optional human-readable label placed on the edge between two tiers in the generated Mermaid diagram. For example, `via: REST API` renders as `frontend -->|\"REST API\"| backend` in Mermaid syntax. It has no functional effect on orchestration, gate checking, or drift detection — it is purely for diagram readability. Omitting it is valid; the edge renders without a label."

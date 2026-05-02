@@ -1,0 +1,83 @@
+id: L-2026-05-02-ascend-173500-001
+type: milestone
+timestamp: '2026-05-02T17:35:00.882Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Atlas the Cartographer — agent #67 design approved'
+summary: 'User approved Atlas (archetype: cartographer, tier-1/opus) as agent #67. Atlas owns the project architecture map (.paradigm/arch.yaml) — tiers, frameworks, libraries, responsibilities, and symbol membership. Key behavioral detail confirmed: Atlas fires as an orchestration stage whenever the team makes coding changes and determines if those changes constitute architecture-level updates requiring arch.yaml and symbol updates. Two new MCP tools: paradigm_arch_status and paradigm_arch_diagram (Mermaid). Four small code changes needed, no new dependencies.'
+symbols_touched:
+  - '#paradigm-arch'
+  - '#arch-yaml'
+  - '#atlas-agent'
+  - '#cartographer'
+symbols_created:
+  - '#atlas-agent'
+  - '#arch-yaml'
+  - '#cartographer'
+learnings:
+  - Atlas fires as an orchestration stage on coding changes, not just on-demand — this is a meaningful behavioral distinction
+  - Architecture map belongs at .paradigm/arch.yaml top-level, not nested
+  - Mermaid is generated from manifest, never authored in it
+  - 4 small isolated code changes — no new dependencies
+tags:
+  - atlas
+  - cartographer
+  - architecture-map
+  - agent-67
+  - new-agent
+  - ideation
+  - v6-future
+body: |
+  ## Atlas — The Cartographer (Agent #67)
+
+  ### Role
+  Atlas owns and maintains the project architecture map. He answers "how is this project structured" — what tiers exist, what frameworks/libraries each uses, how they link, what their responsibilities are — through Paradigm's MCP and symbol system.
+
+  ### Artifact: `.paradigm/arch.yaml`
+  Top-level file alongside portal.yaml and roster.yaml. Schema:
+  ```yaml
+  tiers:
+    - id: frontend
+      label: Frontend
+      responsibility: "User-facing React application"
+      tech:
+        framework: react
+        libraries: [tailwind, zustand]
+      components:
+        - "#auth-form"
+        - "#dashboard"
+  links:
+    - from: frontend
+      to: backend
+      via: "$auth-flow"
+  ```
+  Mermaid is generated on demand, never authored in the file.
+
+  ### Invocation model (KEY — confirmed by user)
+  Atlas fires as an **orchestration stage** whenever the team is orchestrated to make coding changes. He determines whether those changes constitute architecture-level updates and, if so, updates arch.yaml and the relevant symbols. This is not just a CLI/ad-hoc tool — he participates in the orchestration pipeline.
+
+  ### Tooling
+  - `paradigm_arch_status` — tier summary + drift (components in map with no .purpose)
+  - `paradigm_arch_diagram` — returns Mermaid diagram
+  - CLI: `paradigm arch status`, `paradigm arch diagram`
+  - Reuses: paradigm_navigate, paradigm_ripple, paradigm_captain_brief
+
+  ### Implementation: 4 code changes
+  1. Optional `tierContext?` field on ContextBrief in types/captain.ts (non-breaking)
+  2. `cartographer: 'tier-1'` in AGENT_TIERS in orchestration.ts
+  3. `paradigm arch` CLI registration in packages/paradigm/src/index.ts (override.ts pattern)
+  4. `arch` ToolModule in packages/paradigm-mcp/src/tools/index.ts (auto-activates when arch.yaml exists)
+
+  ### Agent boundaries
+  - Cid: "what do I read to do this task" — Atlas: "how is this project structured"
+  - Rune: enforces aspect/symbol compliance inside components — Atlas: enforces that all components are assigned to a tier and no tier references a ghost component
+  - Atlas feeds into Cid's brief as optional tierContext block when arch.yaml is present
+
+  ### No new symbol prefix. Cartographer is an archetype ID, not a symbol type.
+confidence: 0.92
+git_context:
+  ref: 0aa6960bd46f9199ee5a594382852e45f5f7915b
+  branch: main
+  dirty: true

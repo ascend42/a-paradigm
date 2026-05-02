@@ -2777,6 +2777,28 @@ overrideCmd
     await overrideClearAll(options);
   });
 
+// paradigm arch — query the architectural layer map (.paradigm/arch.yaml)
+const archCmd = program
+  .command('arch')
+  .description('Query the architectural layer map (.paradigm/arch.yaml)');
+
+archCmd
+  .command('status', { isDefault: true })
+  .description('Show tier summary and drift report')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { archStatusCommand } = await import('./commands/arch.js');
+    await archStatusCommand(options);
+  });
+
+archCmd
+  .command('diagram')
+  .description('Print Mermaid diagram to stdout')
+  .action(async () => {
+    const { archDiagramCommand } = await import('./commands/arch.js');
+    await archDiagramCommand({});
+  });
+
 // paradigm util — utility command namespace (canonical home for beacon, constellation, echo, sync-llms, thread, probe)
 registerUtilCommands(program);
 

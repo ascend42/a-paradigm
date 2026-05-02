@@ -5,6 +5,40 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] — 2026-04-28
+
+Atlas the Cartographer — Agent #67, architecture map agent. Introduces `.paradigm/arch.yaml` as the canonical project architecture manifest (tiers, stacks, links), two new MCP tools for status and Mermaid diagram generation, a `paradigm arch` CLI, and the `cartographer` archetype registered in the orchestration tier system.
+
+### Added
+
+- **Atlas (`#atlas-agent`, archetype: `cartographer`, tier-1/opus)** — Agent #67. Fires during orchestration after Builder to detect architectural changes and keep `.paradigm/arch.yaml` current. Advisory-only: reads arch.yaml, .purpose files, and symbols; no write permissions beyond the arch manifest itself.
+- **`.paradigm/arch.yaml` artifact** — canonical architecture manifest. Fields: `tiers` (list of named tiers each with `label`, `tech`, `components`), `links` (directed tier relationships with `type`). Supports any project structure (monolith, monorepo, microservices).
+- **`paradigm_arch_status` MCP tool** — returns tier summary + drift report (unassigned symbols, components missing .purpose). Read-only.
+- **`paradigm_arch_diagram` MCP tool** — generates a Mermaid `graph TD` flowchart from arch.yaml. Optional `format` param (`mermaid` default, `json`).
+- **`paradigm arch` CLI command** with two subcommands:
+  - `paradigm arch status` (default) — prints tier table + drift summary
+  - `paradigm arch diagram` — prints Mermaid flowchart to stdout
+- **`arch-loader.ts` utility** (`packages/paradigm-mcp/src/utils/arch-loader.ts`) — shared `loadArchMap`, `saveArchMap`, `getArchDrift`, `generateMermaid` helpers.
+- **Feature-tier registration** for `arch` — activates only when `.paradigm/arch.yaml` exists (no-op on projects that haven't adopted it).
+- **`archMap?` on `ContextBrief`** — captain brief includes arch map when present so orchestration agents have architectural context.
+- **University PARA 701, Lessons 11–13** — three new notes + three paired quizzes covering arch.yaml schema, Atlas agent behavior, and MCP tool usage.
+- **PLSAT slots 129–133** — five new exam items for arch/cartographer concepts.
+
+### Changed
+
+- `AGENT_TIERS` — `cartographer: 'tier-1'` registered alongside all other archetypes.
+- `AGENT_TOKEN_ESTIMATES` — `cartographer: { min: 1000, max: 5000 }`.
+- `LP-para-701.yaml` learning path extended with 6 steps (lessons 11–13).
+
+### Versions
+
+- `@a-company/paradigm`: 6.1.0 → **6.2.0**
+- `@a-company/paradigm-mcp`: 6.1.0 → **6.2.0**
+- `@a-company/university`: 6.0.2 → **6.0.3**
+- Plugin `plugin.json`: 6.1.0 → **6.2.0**
+
+---
+
 ## [6.1.0] — 2026-04-28
 
 Sprint 1 of v6.1 closes the agent-owned soft-block primitive arc. Building on v6.0.5 (which shipped Sprint 1 Waves 1-2 + path-bug fix), this release adds the user-facing CLI (`paradigm override`), full regression test coverage, and agent-prompt teaching docs.

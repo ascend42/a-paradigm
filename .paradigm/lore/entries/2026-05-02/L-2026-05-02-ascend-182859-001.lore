@@ -1,0 +1,78 @@
+id: L-2026-05-02-ascend-182859-001
+type: milestone
+timestamp: '2026-05-02T18:28:59.168Z'
+duration_minutes: 120
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Atlas the Cartographer — Agent #67 shipped (v6.2.0)'
+summary: 'Designed and implemented Atlas (archetype: cartographer, tier-1/opus), Agent #67 in the Paradigm roster. Atlas fires during orchestration after Builder to detect architectural changes and keep .paradigm/arch.yaml current. Ships with two MCP tools (paradigm_arch_status, paradigm_arch_diagram), a paradigm arch CLI, arch-loader utility, feature-tier registration, ContextBrief archMap field, and three PARA 701 lessons with quizzes + 5 PLSAT slots.'
+symbols_touched:
+  - '#atlas-agent'
+  - '#arch-loader'
+  - '#paradigm-arch-status'
+  - '#paradigm-arch-diagram'
+  - '#paradigm-arch-cli'
+  - '#orchestration-tools'
+  - '#captain-tools'
+  - '#university-para-701'
+symbols_created:
+  - '#atlas-agent'
+  - '#arch-loader'
+  - '#paradigm-arch-status'
+  - '#paradigm-arch-diagram'
+  - '#paradigm-arch-cli'
+files_created:
+  - packages/paradigm-mcp/src/utils/arch-loader.ts
+  - packages/paradigm-mcp/src/tools/arch.ts
+  - packages/paradigm/src/commands/arch.ts
+  - .paradigm/agents/cartographer.agent
+  - packages/university/src/content/notes/N-para-701-arch-yaml-format.md
+  - packages/university/src/content/notes/N-para-701-atlas-agent.md
+  - packages/university/src/content/notes/N-para-701-arch-mcp-tools.md
+  - packages/university/src/content/quizzes/Q-para-701-arch-yaml-format.yaml
+  - packages/university/src/content/quizzes/Q-para-701-atlas-agent.yaml
+  - packages/university/src/content/quizzes/Q-para-701-arch-mcp-tools.yaml
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/paradigm-mcp/src/tools/captain.ts
+  - packages/paradigm-mcp/src/types/captain.ts
+  - packages/paradigm/src/index.ts
+  - packages/university/src/content/paths/LP-para-701.yaml
+  - packages/university/src/content/quizzes/Q-plsat-v3.yaml
+  - packages/paradigm-mcp/src/utils/.purpose
+  - packages/paradigm-mcp/src/tools/.purpose
+  - packages/paradigm/src/commands/.purpose
+  - .paradigm/agents/.purpose
+decisions:
+  - id: TD-2026-04-28-atlas-scope
+    decision: Atlas is advisory-only (no write permissions except arch.yaml itself)
+    rationale: Architectural drift detection is high-value read-only analysis; write authority limited to the arch manifest prevents Atlas from accidentally mutating code or .purpose files during audit passes
+  - id: TD-2026-04-28-arch-yaml-feature-tier
+    decision: arch feature-tier activates only when .paradigm/arch.yaml exists
+    rationale: Zero-cost for projects that haven't adopted arch.yaml; no tool noise until user opts in by creating the manifest
+learnings:
+  - arch.yaml maps tiers (front-end, back-end, aux services) with tech stacks and component membership — fills the gap between paradigm symbols (what exists) and architecture understanding (how layers relate)
+  - cartographer archetype fires after Builder in orchestration so architectural changes are detected in the same session they're made
+  - Feature-tier detect gate pattern (fs.existsSync) is the cleanest way to add opt-in MCP tools without polluting the tool list on every project
+verification:
+  status: pass
+  details:
+    build_paradigm_mcp: pass
+    build_paradigm: pass
+    stop_hook: pass
+    symbol_count: '1179'
+tags:
+  - atlas
+  - cartographer
+  - arch-yaml
+  - agent-67
+  - v6.2.0
+  - milestone
+confidence: 0.97
+git_context:
+  ref: 0aa6960bd46f9199ee5a594382852e45f5f7915b
+  branch: main
+  dirty: true

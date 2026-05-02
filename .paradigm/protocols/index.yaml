@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-04-25T22:04:41.587Z'
+generated: '2026-05-02T18:21:36.990Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -442,7 +442,7 @@ protocols:
       - private
   - id: P-framework-bug-surface
     name: Surface a framework bug detected by an agent
-    status: current
+    status: stale
     last_verified: '2026-04-28T00:00:00Z'
     trigger:
       - framework bug
@@ -503,7 +503,7 @@ protocols:
       - plsat
       - content
 health:
-  total: 37
+  total: 38
   current: 22
-  stale: 11
+  stale: 12
   broken: 4

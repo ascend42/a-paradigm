@@ -11,7 +11,7 @@ symbols: []
 difficulty: advanced
 passThreshold: 0.9
 timeLimit: 5400
-totalSlots: 128
+totalSlots: 133
 exam:
   kind: proctored
 category: paradigm-core
@@ -2907,3 +2907,128 @@ questions:
           E: Score = 1.0 — all four dimensions fire because admin is security-related
         correct: C
         explanation: 'The scoring uses max() across four dimensions, not an average. symbolMatch: ''#admin-routes'' does not end with ''-auth'' or ''-middleware'' and does not start with ''^'', so 0. pathMatch: ''src/routes/admin.ts'' does not match ''auth/**'' or ''middleware/**'', so 0. conceptMatch: keywords [''new endpoint'', ''admin panel'', ''user management''] do not contain ''permission'', ''JWT'', ''RBAC'', ''XSS'', or ''injection'', so 0. signalMatch: the event type ''route-created'' matches the signal { type: ''route-created'' }, so 1.0. Final score: max(0, 0, 0, 1.0) = 1.0. The security agent self-nominates — new route creation is exactly the kind of event that warrants security review.'
+  - id: plsat-129
+    scenario: A project has `.paradigm/arch.yaml` with three tiers (frontend, backend, database). After a two-week sprint, Atlas reports drift.unassigned contains 7 symbols and drift.missing_purpose contains 3 symbols. The team asks what the correct resolution steps are.
+    question: What should the team do to resolve both drift categories?
+    choices:
+      A: Delete arch.yaml and re-run paradigm scan to regenerate it automatically
+      B: For unassigned (7 symbols in index but not in tiers), add them to the correct tier's components array in arch.yaml. For missing_purpose (3 symbols declared in arch.yaml but not in the index), either re-create the missing components or remove the stale entries from arch.yaml.
+      C: Run paradigm_reindex — it will automatically assign unassigned components to the nearest tier
+      D: Call paradigm_arch_status --fix to apply automatic drift resolution
+      E: Unassigned drift can only be resolved by the architect agent running in the background
+    correct: B
+    explanation: Drift resolution is a manual, human-driven process. For drift.unassigned (7 components indexed but not in any tier), the team adds each component to the appropriate tier's components array in arch.yaml. For drift.missing_purpose (3 components declared in arch.yaml tiers but absent from the index), the team either creates the missing components (if they were planned but not built) or removes the stale entries from arch.yaml (if the components were renamed or deleted). There is no auto-fix flag — Atlas reports drift, humans resolve it.
+    slot: slot-129
+    section: para-701
+    variants:
+      - id: plsat-129b
+        scenario: A team has 4 items in drift.missing_purpose after running paradigm_arch_status. They confirm that all 4 components were renamed as part of a refactor two months ago. The new names are indexed and assigned to tiers. What is the minimal correct resolution?
+        question: How should the team resolve the 4 stale missing_purpose entries?
+        choices:
+          A: Run paradigm_reindex — it automatically removes stale arch.yaml entries
+          B: Remove the 4 old component IDs from their tier's components array in arch.yaml and optionally add the new component IDs if they are not already assigned
+          C: Create stub components with the old names to make them appear in the index again
+          D: Delete and recreate arch.yaml from scratch
+          E: The entries are harmless and can be left indefinitely without action
+        correct: B
+        explanation: The minimal resolution is to remove the 4 stale component IDs from the tier's components array in arch.yaml. This eliminates the missing_purpose drift. If the renamed components are already assigned to tiers (because someone added them after the rename), no further action is needed. If they are unassigned, adding them to the correct tier's components array in the same edit is efficient. Creating stub components would be the wrong approach — it papering over stale map entries rather than updating the map.
+  - id: plsat-130
+    scenario: A project uses `paradigm_orchestrate_inline` with mode="plan". The task is "review the current architectural layer structure and identify components that need tier reassignment." Atlas is on the project roster. At what point in the orchestration pipeline does Atlas fire?
+    question: When does Atlas (cartographer) run in a standard post-build orchestration pipeline?
+    choices:
+      A: Atlas runs in stage 1, before the architect, to map the territory before planning begins
+      B: Atlas runs in parallel with the builder during implementation
+      C: Atlas runs after the Builder stage completes and before or alongside the Documentor — he checks whether newly built components have been assigned to architectural tiers
+      D: Atlas always runs last, after the Documentor completes .purpose updates
+      E: Atlas only fires when the user explicitly adds "cartographer" to the agent list in paradigm_orchestrate_inline
+    correct: C
+    explanation: In the standard orchestration pipeline, Atlas fires after the Builder stage. The Builder produces new components; Atlas checks whether those components are assigned to tiers in arch.yaml. The Documentor runs to update .purpose files. Atlas and the Documentor are both post-Builder agents — Atlas focuses on tier-level architectural drift while the Documentor handles symbol-level coverage. Atlas does not run before the architect (he has no planning role) and does not require explicit invocation when he is on the roster and arch.yaml exists.
+    slot: slot-130
+    section: para-701
+    variants:
+      - id: plsat-130b
+        scenario: A developer is building a small utility library. There is no .paradigm/arch.yaml. They call paradigm_orchestrate_inline with mode="plan". Will Atlas appear in the orchestration plan?
+        question: Does Atlas participate in orchestration when arch.yaml does not exist?
+        choices:
+          A: Yes — Atlas always participates because architectural oversight is always valuable
+          B: Yes — Atlas participates and creates arch.yaml as its first action
+          C: No — Atlas's attention patterns include .paradigm/arch.yaml as a path pattern. Without the file, his attention scoring for this task is near-zero and he will not be nominated
+          D: No — Atlas is a tier-1 agent and tier-1 agents are excluded from small library projects
+          E: Yes — Atlas participates but produces an empty drift report when arch.yaml is missing
+        correct: C
+        explanation: Atlas's attention configuration includes `.paradigm/arch.yaml` as a path pattern and architectural concepts as concept triggers. When arch.yaml does not exist, the path match contributes zero to his attention score. For a small utility library task with no architectural keywords in the task description, his conceptMatch is also likely below threshold. His attention threshold is 0.35 — low enough to catch architectural tasks, but the complete absence of arch.yaml means the task has no architectural mapping signals. He will not self-nominate and will not appear in the plan.
+  - id: plsat-131
+    scenario: A developer generates a Mermaid diagram using `paradigm_arch_diagram` and notices that some tier edges show no label, while others show labels like "REST API" and "message queue." They want to add labels to the unlabeled edges.
+    question: How do Mermaid edge labels get added to arch.yaml links, and what field controls them?
+    choices:
+      A: Edge labels are automatically inferred from the framework names in each tier's tech field
+      B: Edge labels require a separate `labels.yaml` file in .paradigm/
+      C: The `via` field on each link in the links array provides the edge label. Links without a `via` field render without a label. To add a label, add `via: "label text"` to the link entry in arch.yaml.
+      D: Edge labels can only be set via the paradigm_arch_diagram tool's input parameters
+      E: Edge labels are set in the tier's `tech.libraries` array using the format "label:target-tier"
+    correct: C
+    explanation: "The `via` field on a link entry is the only mechanism for edge labels. When `via` is present, generateMermaid() renders the edge as `from -->|\"via text\"| to`. When `via` is absent, the edge renders as `from --> to` with no label. To add labels to currently unlabeled edges, the developer edits arch.yaml and adds `via: \"label text\"` to each link entry they want labeled. The tool's input has no label parameter — labels are part of the arch.yaml data, not the tool call."
+    slot: slot-131
+    section: para-701
+    variants:
+      - id: plsat-131b
+        scenario: A team's arch.yaml has this link entry -- `from: api-gateway, to: user-service, via: gRPC`. The same team has another link -- `from: api-gateway, to: notification-service` with no via field. What will the generated Mermaid diagram show for each edge?
+        question: What does the Mermaid output look like for these two links?
+        choices:
+          A: Both edges render with no label — via is ignored in diagram generation
+          B: The first edge renders as `api-gateway -->|"gRPC"| user-service` and the second renders as `api-gateway --> notification-service` with no label
+          C: The second edge renders as `api-gateway -->|"undefined"| notification-service`
+          D: Both edges require via — the second link causes a parse error
+          E: The first edge renders as `api-gateway -- gRPC --> user-service` using Mermaid's alternate edge syntax
+        correct: B
+        explanation: 'generateMermaid() branches on the presence of link.via. When via is set, it produces `from -->|"via text"| to`. When via is absent (undefined or not provided), it produces `from --> to` with no label. The first link produces `api-gateway -->|"gRPC"| user-service`. The second produces `api-gateway --> notification-service`. There is no "undefined" label for missing via — the code explicitly checks `if (link.via)` and omits the label syntax entirely when false.'
+  - id: plsat-132
+    scenario: An agent needs to get both the architectural summary data (tier names, component counts, drift) AND a Mermaid diagram string in one session. The developer asks whether they should call one tool or two.
+    question: What is the correct tool call strategy to get both tier summary data and the Mermaid diagram?
+    choices:
+      A: Call paradigm_arch_status with format="mermaid" to get both in one response
+      B: Call paradigm_arch_diagram — it includes the full tier summary along with the diagram
+      C: Call both paradigm_arch_status (for tier metadata and drift) and paradigm_arch_diagram (for the diagram string) — they serve distinct purposes and neither includes the other's output
+      D: Call paradigm_arch_status and extract the diagram from the `tiers` array
+      E: There is a single paradigm_arch_full tool that returns both
+    correct: C
+    explanation: paradigm_arch_status and paradigm_arch_diagram are complementary tools with distinct outputs. paradigm_arch_status returns tier metadata (id, label, responsibility, framework, componentCount, components list) and the drift object (unassigned, missing_purpose, clean flag). It does not include a Mermaid diagram. paradigm_arch_diagram returns a JSON object with format and diagram fields — a Mermaid graph string. It does not include tier metadata or drift. To get both, call both tools. Combined token cost is approximately 350 tokens — well within typical budgets.
+    slot: slot-132
+    section: para-701
+    variants:
+      - id: plsat-132b
+        scenario: A developer is writing a CI script that checks whether the architectural map is clean after each build. They want a JSON output they can parse. They are using the Paradigm CLI.
+        question: Which CLI command produces JSON output suitable for programmatic parsing of drift status?
+        choices:
+          A: paradigm arch diagram --json
+          B: paradigm arch status | jq .drift
+          C: paradigm arch status --json
+          D: paradigm status --arch
+          E: paradigm arch --output json
+        correct: C
+        explanation: '`paradigm arch status --json` outputs the full arch.yaml summary as a JSON object, including the drift field with unassigned and missing_purpose arrays and the clean boolean. This is directly parseable by jq, Python json.loads(), or any JSON parser. `paradigm arch status` without --json outputs human-friendly formatted text with headers and key-value pairs — not JSON. The --json flag on the status subcommand is the explicit programmatic interface for CI integration.'
+  - id: plsat-133
+    scenario: A startup is three weeks into development. They have a monorepo with 2 services and a React frontend. They have 22 indexed components but no arch.yaml. A senior engineer asks when the team should create arch.yaml.
+    question: At what point should a project create `.paradigm/arch.yaml`?
+    choices:
+      A: Immediately — arch.yaml must be created before running paradigm init
+      B: Only when the project has more than 100 components — smaller projects do not benefit
+      C: arch.yaml is optional and created when the team wants tier-level documentation, drift detection, or diagrams. A reasonable trigger is when cross-tier architectural decisions are being discussed or when onboarding new team members who need a system map.
+      D: arch.yaml should be created only by the architect agent, never by a human
+      E: arch.yaml is created automatically by `paradigm shift` and should not be edited manually
+    correct: C
+    explanation: arch.yaml is entirely optional — it is additive metadata, not required for any core Paradigm feature. The right time to create it is when it adds value that justifies the maintenance cost. Common triggers include (1) cross-tier architectural planning where tier structure needs to be explicit, (2) onboarding where new engineers need a visual map of the system, (3) architectural review where stakeholders want diagrams, or (4) large refactors where the target architecture should be declared before work begins so drift is detectable. A three-week project with 22 components and an active senior engineer discussing cross-tier work is a reasonable point to create it. The 100-component rule is a myth — value comes from clarity, not scale.
+    slot: slot-133
+    section: para-701
+    variants:
+      - id: plsat-133b
+        scenario: A team created arch.yaml at project inception. Now, 8 months later, the file shows 15 unassigned components and 8 missing_purpose entries. They are debating whether to delete arch.yaml and start fresh or update it incrementally.
+        question: What is the better approach for a heavily drifted arch.yaml?
+        choices:
+          A: Delete arch.yaml — a file with this much drift is actively misleading and should be removed
+          B: Update it incrementally — assign the 15 unassigned components to their correct tiers, remove the 8 stale missing_purpose entries. The architectural context (tier labels, responsibilities, links) is still valuable even if component lists are stale.
+          C: Archive arch.yaml and regenerate it from scratch using the symbol index
+          D: Leave it as-is — drift is cosmetic and does not affect any Paradigm functionality
+          E: Ask Atlas to auto-resolve the drift by analyzing component names
+        correct: B
+        explanation: Incremental update is almost always preferable to deletion or regeneration. The tier structure (ids, labels, responsibilities, tech stacks, links) likely still reflects the actual architecture — only the component lists have drifted. Updating the component lists (15 additions, 8 removals) is a focused edit that preserves architectural context. Deleting and regenerating loses tier metadata that was manually authored. Atlas never auto-resolves drift. Leaving heavy drift signals uncleaned creates confusion about which components belong where. The incremental update path gives the highest value-to-effort ratio.

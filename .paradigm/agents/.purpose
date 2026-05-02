@@ -1,0 +1,9 @@
+version: 2.0.0
+description: Archetype agent definition files (.agent) for the Paradigm roster — identity, role, expertise, and permission scopes.
+components:
+  atlas-agent:
+    description: Cartographer archetype agent (Atlas) — maps project symbol architecture using paradigm_arch_status and paradigm_arch_diagram. Produces structured architecture snapshots and Mermaid diagrams; surfaces structural gaps and orphan symbols.
+    file: .paradigm/agents/cartographer.agent
+    components:
+      - '#arch-tools'
+    type: agent

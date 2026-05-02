@@ -1,0 +1,14 @@
+# Auto-generated .purpose stub — created by Cid (captain debrief)
+# Delegate to Scribe (Documentor) for rich documentation
+name: quizzes
+description: "TODO: describe what this directory/module does"
+context:
+  - "Stub created by Cid during coverage audit — update with real context"
+# Key files touched:
+# - Q-para-701-arch-yaml-format.yaml
+# - Q-para-701-atlas-agent.yaml
+# - Q-para-701-arch-mcp-tools.yaml
+components:
+  quizzes:
+    description: "TODO: describe this component"
+    tags: []

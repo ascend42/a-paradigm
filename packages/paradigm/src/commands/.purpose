@@ -26,12 +26,12 @@ components:
     type: command
   MigrateDecisionsCommand:
     description: 'paradigm migrate decisions — v6.0 decision-store consolidation: wisdom/decisions + lore(type=decision) → .paradigm/decisions/TD-*'
-    file: packages/paradigm/src/commands/migrate-decisions.ts
     type: command
     tags:
       - v6
       - migration
       - decisions
+    file: packages/paradigm/src/commands/migrate-decisions.ts
   DocsServeCommand:
     description: paradigm docs serve — launches the Platform with docs section enabled
     type: command
@@ -60,21 +60,27 @@ components:
       - testing
   conductor-install:
     description: 'Global binary install for Conductor. --install copies native binary to ~/.paradigm/conductor/bin/. Three-tier resolution: installed → monorepo dev → error.'
-    file: packages/paradigm/src/commands/conductor.ts
     type: command
+    file: packages/paradigm/src/commands/conductor.ts
   UtilNamespace:
-    description: 'paradigm util — utility command namespace grouping beacon, constellation, echo, sync-llms, thread, and probe under a single namespace. Top-level registrations of those commands emit a deprecation notice to stderr.'
-    file: packages/paradigm/src/commands/util/index.ts
+    description: paradigm util — utility command namespace grouping beacon, constellation, echo, sync-llms, thread, and probe under a single namespace. Top-level registrations of those commands emit a deprecation notice to stderr.
     type: command-group
     tags:
       - feature
       - util
+    file: packages/paradigm/src/commands/util/index.ts
   paradigm-override-cli:
-    description: 'paradigm override [id] | list | clear-all --force — public CLI to clear active soft-block remediations authored by archetype agents (v6.1 Sprint 1 Wave 3). Symmetric to PARADIGM_OVERRIDE env-var path; both writers append to .paradigm/events/overrides.jsonl with mechanism cli|env. Archives cleared remediations to .paradigm/remediations/.archived/ with archived_at stamp.'
-    file: packages/paradigm/src/commands/override.ts
+    description: paradigm override [id] | list | clear-all --force — public CLI to clear active soft-block remediations authored by archetype agents (v6.1 Sprint 1 Wave 3). Symmetric to PARADIGM_OVERRIDE env-var path; both writers append to .paradigm/events/overrides.jsonl with mechanism cli|env. Archives cleared remediations to .paradigm/remediations/.archived/ with archived_at stamp.
     type: command-group
     tags:
       - feature
       - v6.1
       - soft-block
       - override
+    file: packages/paradigm/src/commands/override.ts
+  paradigm-arch-cli:
+    description: paradigm arch — CLI command for symbol architecture inspection. Delegates to arch MCP tools; surfaces project component graph, flows, and gates as human-readable output.
+    file: packages/paradigm/src/commands/arch.ts
+    components:
+      - '#arch-tools'
+    type: command

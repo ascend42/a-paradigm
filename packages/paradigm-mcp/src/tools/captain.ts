@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { searchSymbols, getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
+import { loadArchMap } from '../utils/arch-loader.js';
 import { trackToolCall } from './context.js';
 import { handleNavigateTool } from './navigate.js';
 import { handleRippleTool } from './ripple.js';
@@ -463,6 +464,7 @@ async function handleCaptainBrief(
       note: coverageNote,
     },
     loreRefs,
+    archMap: loadArchMap(ctx.rootDir),
     renderedBrief: '',
   };
 

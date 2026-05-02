@@ -62,3 +62,18 @@ steps:
   - content: Q-para-701-agent-pods-nevrland
     required: true
     passRequired: true
+  - content: N-para-701-arch-yaml-format
+    required: true
+  - content: Q-para-701-arch-yaml-format
+    required: true
+    passRequired: true
+  - content: N-para-701-atlas-agent
+    required: true
+  - content: Q-para-701-atlas-agent
+    required: true
+    passRequired: true
+  - content: N-para-701-arch-mcp-tools
+    required: true
+  - content: Q-para-701-arch-mcp-tools
+    required: true
+    passRequired: true

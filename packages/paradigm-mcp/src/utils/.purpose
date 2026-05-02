@@ -11,7 +11,7 @@ components:
       - feature
       - symphony
   university-loader:
-    description: "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes."
+    description: 'Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes.'
     type: loader
     tags:
       - feature
@@ -140,7 +140,7 @@ components:
       - knowledge-streams
       - journal
   decision-loader:
-    description: "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/. v6.0 sub-phase 1: updateDecision accepts absorbed ADR fields (context/consequences/date/migrated_from/supersedes); supersedeDecision backfills supersedes[] on the new entry (D2 Loid addendum); exposes writeCompanionLoreEntry helper for D3 companion-lore writes (not yet wired — sub-phase 2 wires the tool handler)."
+    description: 'Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/. v6.0 sub-phase 1: updateDecision accepts absorbed ADR fields (context/consequences/date/migrated_from/supersedes); supersedeDecision backfills supersedes[] on the new entry (D2 Loid addendum); exposes writeCompanionLoreEntry helper for D3 companion-lore writes (not yet wired — sub-phase 2 wires the tool handler).'
     type: loader
     tags:
       - feature
@@ -200,53 +200,52 @@ components:
     file: packages/paradigm-mcp/src/utils/session-work-log.ts
   compliance-health:
     description: Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.
-    file: packages/paradigm-mcp/src/utils/compliance-health.ts
     type: utility
+    file: packages/paradigm-mcp/src/utils/compliance-health.ts
   yaml-validator:
     description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
-    file: packages/paradigm-mcp/src/utils/yaml-validator.ts
     type: utility
     tags:
       - security
       - fail-closed
       - portal
+    file: packages/paradigm-mcp/src/utils/yaml-validator.ts
   write-and-confirm:
     description: v5.38.0 atomic-write + read-back verify wrapper for mutation handlers. Writes to .tmp sibling then renames; re-reads the file; runs verify callback; throws WriteVerificationError on failure. Returns WriteEnvelope with truncated HMAC (first 12 hex chars of HMAC-SHA256 keyed with per-install secret) and byte count. Applied to portal_add_gate, portal_add_route, purpose_add_component, purpose_link, purpose_remove. Logs redacted — no gate names or file paths in error surfaces.
-    file: packages/paradigm-mcp/src/utils/write-and-confirm.ts
     type: utility
     tags:
       - security
       - fail-closed
       - mutation-safety
+    file: packages/paradigm-mcp/src/utils/write-and-confirm.ts
   consistency-tracker:
     description: v5.38.0 round-trip consistency audit log. Records transformation CLASSES (prefix-stripped/array-coerced/default-applied/duplicate-key-detected/case-normalized) with fixed surface classifiers (portal.yaml/purpose.yaml) and counts — never gate names, route paths, or file contents. One injectable singleton per reindex pass; report rendered into paradigm_reindex envelope and .paradigm/manifest.consistency.json. Lossy transformations trigger strict-mode reindex failure.
-    file: packages/paradigm-mcp/src/utils/consistency-tracker.ts
     type: engine
     tags:
       - security
       - redacted
       - portal
       - consistency
+    file: packages/paradigm-mcp/src/utils/consistency-tracker.ts
   strict-mode:
     description: v5.38.0 PARADIGM_STRICT=1 env var gate. Default OFF; flip ON in v5.39.0 after field observation. In strict mode, safeLoad throws on any non-ok/non-missing result, reindex fails on lossy transformations, and writeAndConfirm verify failures are never downgraded.
-    file: packages/paradigm-mcp/src/utils/strict-mode.ts
     type: utility
     tags:
       - security
       - fail-closed
       - configuration
+    file: packages/paradigm-mcp/src/utils/strict-mode.ts
   pack-loader:
-    description: "v6.0 (v5.39.0 sub-phase 1) multi-tenant content-pack discovery + resolution. loadPackManifest reads pack.yaml via safeLoad (classifier-only errors — never leaks file contents). discoverPacks scans three sources in precedence order: (1) node_modules/@a-company/university, (2) direct-deps with paradigm.universityPack pointer in package.json, (3) local .paradigm/university/ + discipline sub-packs. resolveEntryAddress parses <pack-id>:<entry-id> or bare ids; bare ids throw ambiguity errors when present in multiple active packs. Cache at .paradigm/cache/packs.json keyed by node_modules + local-university mtimes so npm install / local edits invalidate automatically. No consumers wired yet — sub-phase 2."
-    file: packages/paradigm-mcp/src/utils/pack-loader.ts
+    description: 'v6.0 (v5.39.0 sub-phase 1) multi-tenant content-pack discovery + resolution. loadPackManifest reads pack.yaml via safeLoad (classifier-only errors — never leaks file contents). discoverPacks scans three sources in precedence order: (1) node_modules/@a-company/university, (2) direct-deps with paradigm.universityPack pointer in package.json, (3) local .paradigm/university/ + discipline sub-packs. resolveEntryAddress parses <pack-id>:<entry-id> or bare ids; bare ids throw ambiguity errors when present in multiple active packs. Cache at .paradigm/cache/packs.json keyed by node_modules + local-university mtimes so npm install / local edits invalidate automatically. No consumers wired yet — sub-phase 2.'
     type: loader
     tags:
       - feature
       - university
       - pack
       - v6.0
+    file: packages/paradigm-mcp/src/utils/pack-loader.ts
   university-metrics:
-    description: "v6.0 (v5.39.0 sub-phase 1, D7 locked) local-only metrics snapshot capture. captureSnapshot writes .paradigm/university/.metrics/snapshot-YYYY-MM-DD.json idempotent-per-day with counts + classifiers + hashed project salt only — no entry titles / gate names / file contents. Honors config.metrics.local_snapshots_enabled (no-op when false). loadRecentSnapshots returns newest-first slice. pruneOldSnapshots removes files older than 90 days (default). computeProjectSaltHash creates/reads .paradigm/.metrics-salt with 0o600 perms; salt is 32 bytes of crypto.randomBytes. Feeds v6.3 sunset review per spec §8."
-    file: packages/paradigm-mcp/src/utils/university-metrics.ts
+    description: v6.0 (v5.39.0 sub-phase 1, D7 locked) local-only metrics snapshot capture. captureSnapshot writes .paradigm/university/.metrics/snapshot-YYYY-MM-DD.json idempotent-per-day with counts + classifiers + hashed project salt only — no entry titles / gate names / file contents. Honors config.metrics.local_snapshots_enabled (no-op when false). loadRecentSnapshots returns newest-first slice. pruneOldSnapshots removes files older than 90 days (default). computeProjectSaltHash creates/reads .paradigm/.metrics-salt with 0o600 perms; salt is 32 bytes of crypto.randomBytes. Feeds v6.3 sunset review per spec §8.
     type: loader
     tags:
       - feature
@@ -255,12 +254,17 @@ components:
       - telemetry
       - privacy
       - v6.0
+    file: packages/paradigm-mcp/src/utils/university-metrics.ts
   wisdom-loader:
-    description: "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise/decisions. 30s TTL cache, invalidated on writes. Global wisdom merged from ~/.paradigm/wisdom/ (local wins on id collision). v5.39.0 sub-phase 1: emits a one-time deprecation warning when .paradigm/wisdom/decisions/ still contains YAML files, pointing at `paradigm migrate decisions` (v6.0). Continues to read the directory — deprecation is additive; breaking removal is v6.0."
-    file: packages/paradigm-mcp/src/utils/wisdom-loader.ts
+    description: 'Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise/decisions. 30s TTL cache, invalidated on writes. Global wisdom merged from ~/.paradigm/wisdom/ (local wins on id collision). v5.39.0 sub-phase 1: emits a one-time deprecation warning when .paradigm/wisdom/decisions/ still contains YAML files, pointing at `paradigm migrate decisions` (v6.0). Continues to read the directory — deprecation is additive; breaking removal is v6.0.'
     type: loader
     tags:
       - feature
       - knowledge-streams
       - wisdom
       - v6.0
+    file: packages/paradigm-mcp/src/utils/wisdom-loader.ts
+  arch-loader:
+    description: Symbol architecture loader — reads and resolves project symbol graph for arch tools. Provides structured access to component hierarchy, flows, gates, and signals for the Atlas cartographer agent.
+    file: packages/paradigm-mcp/src/utils/arch-loader.ts
+    type: loader

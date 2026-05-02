@@ -113,7 +113,7 @@ components:
       - graduation
       - mcp
   lore-record:
-    description: "paradigm_lore_record: record a lore entry. v6.0 hard-rejects type:'decision' with a structured envelope (code:lore_type_decision_removed, successor_tool:paradigm_decision_record) — shared with assessment-record via utils/lore-rejection.ts."
+    description: 'paradigm_lore_record: record a lore entry. v6.0 hard-rejects type:''decision'' with a structured envelope (code:lore_type_decision_removed, successor_tool:paradigm_decision_record) — shared with assessment-record via utils/lore-rejection.ts.'
     type: tool
     parent: '#LoreTools'
     tags:
@@ -121,7 +121,7 @@ components:
       - lore
       - mcp
   assessment-record:
-    description: "[DEPRECATED] paradigm_assessment_record: thin wrapper around lore. v6.0 also hard-rejects type:'decision' here (back-door closure) using the same shared rejection envelope as paradigm_lore_record."
+    description: '[DEPRECATED] paradigm_assessment_record: thin wrapper around lore. v6.0 also hard-rejects type:''decision'' here (back-door closure) using the same shared rejection envelope as paradigm_lore_record.'
     type: tool
     parent: '#LoreTools'
     tags:
@@ -206,7 +206,7 @@ components:
       - neverland
       - mcp
   CaptainTools:
-    description: 2 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt) and paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid for the learning pass). Core-tier always loaded. Cid closes navigation; Loid closes learning.
+    description: '2 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt) and paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid for the learning pass). Core-tier always loaded. Cid closes navigation; Loid closes learning.'
     type: tool-group
     tags:
       - core
@@ -236,5 +236,22 @@ components:
       - mcp
   tool-aliases:
     description: Alternate names and intent phrases on tool definitions for better LLM tool matching. Simple string arrays, not semantic embeddings.
-    file: packages/paradigm-mcp/src/tools/tool-registry.ts
     type: utility
+    file: packages/paradigm-mcp/src/tools/tool-registry.ts
+  paradigm-arch-status:
+    description: 'paradigm_arch_status MCP tool — returns a structured snapshot of the project symbol graph: component counts, flow coverage, gate coverage, and orphan detection. Consumed by the Atlas cartographer agent.'
+    type: tool
+    parent: '#arch-tools'
+    file: packages/paradigm-mcp/src/tools/arch.ts
+  paradigm-arch-diagram:
+    description: paradigm_arch_diagram MCP tool — generates a text or Mermaid diagram of the project symbol graph (components, flows, gates). Consumed by the Atlas cartographer agent and the paradigm arch CLI.
+    type: tool
+    parent: '#arch-tools'
+    file: packages/paradigm-mcp/src/tools/arch.ts
+  arch-tools:
+    description: MCP tool group for symbol architecture inspection — paradigm_arch_status and paradigm_arch_diagram. Backed by arch-loader; used by the Atlas cartographer agent to surface project structure.
+    file: packages/paradigm-mcp/src/tools/arch.ts
+    components:
+      - '#paradigm-arch-status'
+      - '#paradigm-arch-diagram'
+    type: tool-group

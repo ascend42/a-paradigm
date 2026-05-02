@@ -1,0 +1,66 @@
+id: Q-para-701-arch-mcp-tools
+title: 'PARA 701: Agent Mastery — Lesson 13: The arch MCP Tools'
+description: 'Quiz for lesson: Lesson 13: The arch MCP Tools'
+author: paradigm
+created: '2026-04-28'
+updated: '2026-04-28'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A developer wants to know which newly-added components are not yet assigned to any architectural tier. Which tool should they call, and which field in the response answers the question?
+    choices:
+      A: paradigm_arch_diagram — the diagram visually shows unassigned nodes
+      B: paradigm_arch_status — check drift.unassigned for component symbols that exist in the index but are not in any tier
+      C: paradigm_status — it includes drift information in the main status response
+      D: paradigm_arch_status — check drift.missing_purpose for components not in any tier
+      E: paradigm_search — search for components with type "unassigned"
+    correct: B
+    explanation: paradigm_arch_status returns a drift object with two arrays. drift.unassigned contains component symbols that are indexed (documented) but not listed in any tier's components array — these are the newly-added components with no tier assignment. drift.missing_purpose is the inverse: components declared in arch.yaml that do not appear in the index. paradigm_arch_diagram renders the declared tiers but does not show drift; paradigm_status does not include arch.yaml drift.
+  - id: q2
+    question: A project does not have a `.paradigm/arch.yaml` file. A developer calls `paradigm_arch_status`. What happens?
+    choices:
+      A: The tool throws an error and the MCP session crashes
+      B: The tool returns a JSON object with exists=false and a message explaining that arch.yaml was not found, with guidance on how to create it
+      C: The tool is not listed in the tool registry at all — it cannot be called on projects without arch.yaml
+      D: The tool returns an empty tier list with zero drift
+      E: The tool automatically creates a minimal arch.yaml and returns its contents
+    correct: B
+    explanation: "The tool handles the missing-file case gracefully: it returns {\"exists\": false, \"message\": \"No arch.yaml found. Create .paradigm/arch.yaml to start mapping your architecture.\"}. However, the tool detection note adds nuance: the arch module registers with a `detect` function that checks for arch.yaml. If the file doesn't exist, the tools are not included in the tool list. A developer who calls the tool directly (knowing its name) after the file was deleted would get the graceful JSON response. The session does not crash either way."
+  - id: q3
+    question: An engineer wants to generate a Mermaid diagram to paste into a pull request description. Which of the following is the correct approach?
+    choices:
+      A: Call paradigm_arch_status and extract the diagram field from the response
+      B: Call paradigm_arch_diagram — it returns a JSON object with a `diagram` field containing the Mermaid graph string, or use `paradigm arch diagram` from the CLI
+      C: Call paradigm_arch_status with format="mermaid" to get the diagram
+      D: Manually write the Mermaid diagram by reading arch.yaml — the tools do not generate diagrams
+      E: Call paradigm_arch_diagram with output="clipboard" to copy it automatically
+    correct: B
+    explanation: "paradigm_arch_diagram is the dedicated diagram tool. It returns {\"format\": \"mermaid\", \"diagram\": \"graph TD\\n  ...\"} where the diagram field is the Mermaid string ready for copy-paste. The CLI equivalent is `paradigm arch diagram` — on macOS, piping to `pbcopy` copies it to the clipboard. paradigm_arch_status does not include a diagram field; it focuses on tier metadata and drift. There is no `format` parameter on paradigm_arch_status."
+  - id: q4
+    question: A project has `.paradigm/arch.yaml`. An agent calls `paradigm_arch_status` and receives `drift.clean: false` with `drift.unassigned` containing 5 symbols and `drift.missing_purpose` containing 2 symbols. What is the correct interpretation?
+    choices:
+      A: The build is blocked — drift.clean must be true before deployment
+      B: 5 components are in the index but not assigned to any tier; 2 components are declared in arch.yaml tiers but do not appear in the index. Neither condition blocks anything — this is advisory information.
+      C: 5 components have no .purpose files; 2 components have missing portal.yaml gate declarations
+      D: The arch.yaml file has 5 syntax errors and 2 missing required fields
+      E: drift.clean: false means the previous build introduced breaking changes
+    correct: B
+    explanation: "drift.clean: false means at least one drift category is non-empty. drift.unassigned (5 items) means 5 component symbols exist in the symbol index but have no tier assignment in arch.yaml — likely new components added after arch.yaml was last updated. drift.missing_purpose (2 items) means 2 component IDs in arch.yaml tiers cannot be found in the index — likely renamed or deleted components. Neither is a blocker. Atlas reports this information so the team can decide whether to update arch.yaml."
+  - id: q5
+    question: Why are the arch tools registered in the `feature` tier of the MCP registry rather than the `core` tier?
+    choices:
+      A: Feature-tier tools cost fewer tokens to list than core-tier tools
+      B: Feature-tier tools are auto-detected — the arch module uses a `detect` function that checks for arch.yaml. If the file doesn't exist, the tools are not listed, saving token budget for projects that don't use architectural mapping
+      C: Feature-tier tools require manual activation via paradigm_tool_activate before they can be called
+      D: Core-tier tools are reserved for Anthropic-approved tools only
+      E: The arch tools are in the feature tier because they were added after the core tier was finalized
+    correct: B
+    explanation: The feature tier supports auto-detection via a `detect` function. For arch tools, detect checks whether `.paradigm/arch.yaml` exists. If it does, both arch tools are included in the tool list. If not, they are omitted entirely. This keeps the tool list lean for projects that have not declared an architectural map. Advanced-tier tools require manual `paradigm_tool_activate` to load; feature-tier tools are automatic based on detection. Core-tier tools are always loaded regardless of project state.

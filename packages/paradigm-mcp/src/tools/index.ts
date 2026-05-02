@@ -63,6 +63,8 @@ import { getCaptainToolsList, handleCaptainTool } from './captain.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
+import { getArchToolsList, handleArchTool } from './arch.js';
+import { ARCH_FILE } from '../utils/arch-loader.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
 import { findFuzzyMatches } from './fuzzy-match.js';
@@ -298,6 +300,13 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       getToolsList: getGraphToolsList,
       handleTool: wrap(handleGraphTool),
       detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
+    },
+    {
+      key: 'arch',
+      tier: 'feature',
+      getToolsList: getArchToolsList,
+      handleTool: wrap(handleArchTool),
+      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, ARCH_FILE)),
     },
   ]);
 

@@ -1,0 +1,66 @@
+id: Q-para-701-atlas-agent
+title: 'PARA 701: Agent Mastery — Lesson 12: Atlas — The Cartographer Agent'
+description: 'Quiz for lesson: Lesson 12: Atlas — The Cartographer Agent'
+author: paradigm
+created: '2026-04-28'
+updated: '2026-04-28'
+tags:
+  - course
+  - para-701
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+origin: imported
+source: courses/para-701.json
+questions:
+  - id: q1
+    question: A Builder agent has just completed implementing a new `#analytics-service` component. The project has a `.paradigm/arch.yaml` with three declared tiers. In the standard orchestration pipeline, when does Atlas run relative to the Documentor?
+    choices:
+      A: Atlas runs before the Builder, to predict what components will be created
+      B: Atlas and the Documentor run simultaneously in parallel
+      C: Atlas runs after the Builder stage and before (or alongside) the Documentor — he surfaces unassigned components from the new build before the Documentor writes .purpose updates
+      D: Atlas only runs when explicitly called by the user — he never fires automatically in orchestration
+      E: Atlas runs after the Documentor, so he can use the updated .purpose files as input
+    correct: C
+    explanation: Atlas fires after the Builder completes and before (or alongside) the Documentor in the post-build review pipeline. When arch.yaml exists, Atlas checks whether the newly built components have been assigned to tiers. The Documentor focuses on .purpose coverage. Both are post-Builder agents, but Atlas surfaces tier-level drift while the Documentor handles symbol-level gaps. Running Atlas before the Documentor ensures architectural drift is visible before .purpose work begins.
+  - id: q2
+    question: Why is Atlas a tier-1 (opus) agent rather than a tier-3 (haiku) agent?
+    choices:
+      A: Tier-1 means Atlas runs first in every orchestration, not that he uses a more capable model
+      B: Atlas is tier-1 because architectural reasoning — explaining what drift means and how to resolve it in context — requires deep understanding of symbol relationships, which benefits from a more capable model
+      C: All agents that deal with YAML files are tier-1 by convention
+      D: Atlas was assigned tier-1 because cartography is a premium feature
+      E: Atlas is tier-1 because he has write access to source files
+    correct: B
+    explanation: Tier assignment reflects the cognitive complexity of the agent's work. Tier-1 (opus) is for decision-makers and agents whose reasoning depth directly affects output quality. Atlas earns tier-1 because his value is not in parsing YAML (any model can do that), but in explaining what architectural drift means in the context of a specific project — why certain components ended up unassigned, what that implies for the team, and how to prioritize resolution. Shallow analysis here produces misleading or useless drift reports.
+  - id: q3
+    question: A project's arch.yaml has 5 tiers. Atlas reports 12 unassigned components after a large feature build. What should the team do?
+    choices:
+      A: Immediately fix the build — Atlas's report means the deployment pipeline is blocked
+      B: Ignore the report permanently — Atlas only reports cosmetic information
+      C: Evaluate the drift at their own pace — they can update arch.yaml to assign components to tiers, leave genuinely cross-cutting utilities unassigned, or declare a new tier if the build introduced a distinct new layer
+      D: Ask Atlas to automatically assign the components to the most likely tier
+      E: Delete arch.yaml to stop Atlas from running
+    correct: C
+    explanation: "Atlas is advisory-only — he never blocks. The team has three valid paths: (1) update arch.yaml to assign components to the correct tiers, (2) intentionally leave cross-cutting utilities unassigned if they genuinely don't belong to one tier, or (3) declare a new tier if the 12 new components represent a distinct architectural layer. The architect typically drives this decision. Atlas surfaces the information; humans make the call."
+  - id: q4
+    question: What is the key distinction between what Atlas reports and what the Documentor reports?
+    choices:
+      A: Atlas reports security drift; the Documentor reports performance drift
+      B: Atlas reports tier-level architectural drift (which components are unassigned to tiers or stale in the map), while the Documentor reports symbol-level coverage gaps (missing .purpose files, undocumented components)
+      C: Atlas and the Documentor report the same information from different perspectives
+      D: Atlas reports drift in portal.yaml; the Documentor reports drift in arch.yaml
+      E: Atlas reports on test coverage; the Documentor reports on code comments
+    correct: B
+    explanation: "Atlas and the Documentor operate at different granularities. Atlas works at tier granularity: given the architectural map, which components lack a tier assignment? Which declared components no longer exist? The Documentor works at symbol granularity: which directories lack a .purpose file? Which components have no description? They complement each other — the Documentor ensures symbols are documented, Atlas ensures documented symbols are architecturally located."
+  - id: q5
+    question: A developer asks Atlas to update `.paradigm/arch.yaml` to add the three new components he just built. What will Atlas do?
+    choices:
+      A: Atlas will update arch.yaml immediately — this is his primary function
+      B: Atlas will ask for confirmation before writing to arch.yaml
+      C: Atlas will decline — he is read-only on arch.yaml. He reports drift but never modifies the map. The developer or architect must update arch.yaml manually.
+      D: Atlas will delegate the update to the Documentor
+      E: Atlas will update arch.yaml only if the developer has the `^architect` gate
+    correct: C
+    explanation: Atlas never modifies arch.yaml. His agent profile restricts write access on all source files, .purpose files, portal.yaml, and arch.yaml itself. He is read-only. The design is intentional — an advisory agent that modifies files would create side effects that undermine trust. The developer or architect updates arch.yaml; Atlas reports on what he finds.

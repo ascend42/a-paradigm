@@ -62,6 +62,8 @@ export interface ContextBrief {
   warnings: string[];
   coverage: ContextBriefCoverage;
   loreRefs: ContextBriefLoreRef[];
+  /** Arch map loaded from .paradigm/arch.yaml; undefined if no arch.yaml present */
+  archMap?: import('../utils/arch-loader.js').ArchMap | null;
   /** Rendered text block for injection into agent prompts */
   renderedBrief: string;
 }
