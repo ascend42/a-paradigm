@@ -5,6 +5,30 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.1] — 2026-05-02
+
+Capability discovery and orientation — new users asking "what can Paradigm do?" in an active Claude session now get a purpose-built answer. Adds North (product strategist, agent #68) to the agent roster.
+
+### Added
+
+- **Capability preamble in `paradigm://context/agent-protocol`** — "What Paradigm Is" section prepended to the agent-protocol resource: what it does, 50+ tool surface organized by category, setup command. Replaces the previous 7-tool stub table.
+- **`capabilities` pointer in `paradigm_status` output** — every status call now includes `"capabilities": "paradigm://context/agent-protocol"` so agents route to the capability guide without needing to enumerate resources separately.
+- **Atlas auto-activation signal** — `paradigm_status` includes `"arch": { "present": true, "tiers": N, "links": N }` when `.paradigm/arch.yaml` is detected. Atlas (cartographer) reads this at session start and activates automatically to explain and diagram the project architecture.
+- **North (`product`, agent #68)** — product strategist agent. Evaluates features and direction against the core value proposition. Tier-1/opus, advisory-only. Added to roster and `.paradigm/agents/product.agent`.
+
+### Fixed
+
+- **`paradigm_status` description drift** — removed false "available features" claim from tool description.
+- **F-03 doc drift** — `docs/guides/quick-start.md` (6 locations) and `docs/guides/mcp-setup.md` (1 location) updated to use `paradigm shift` instead of the legacy `paradigm init --quick` sequence. First-session path now matches README and installs enforcement hooks correctly.
+
+### Versions
+
+- `@a-company/paradigm`: 6.2.0 → **6.2.1**
+- `@a-company/paradigm-mcp`: 6.2.0 → **6.2.1**
+- Plugin `plugin.json`: 6.2.0 → **6.2.1**
+
+---
+
 ## [6.2.0] — 2026-04-28
 
 Atlas the Cartographer — Agent #67, architecture map agent. Introduces `.paradigm/arch.yaml` as the canonical project architecture manifest (tiers, stacks, links), two new MCP tools for status and Mermaid diagram generation, a `paradigm arch` CLI, and the `cartographer` archetype registered in the orchestration tier system.
