@@ -460,7 +460,7 @@ function getInlineToolDefinitions() {
     },
     {
       name: 'paradigm_status',
-      description: 'Get project overview - call this at session start for orientation. Shows symbol counts, project health, and available features. Returns symbol counts by type, project health score, and feature flags. ~100 tokens.',
+      description: 'Get project overview — call this at session start for orientation. Shows symbol counts, project health, and a pointer to the full capability guide. ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -852,6 +852,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               ...(protocols ? { protocols } : {}),
               ...(notebookReferences !== undefined ? { notebookReferences } : {}),
               ...(complianceHealth ? { complianceHealth } : {}),
+              capabilities: 'paradigm://context/agent-protocol',
+              ...(await (async () => {
+                try {
+                  const { loadArchMap } = await import('../utils/arch-loader.js');
+                  const archMap = loadArchMap(ctx.rootDir);
+                  if (archMap) {
+                    return { arch: { present: true, tiers: archMap.tiers.length, links: archMap.links.length } };
+                  }
+                } catch { /* non-fatal */ }
+                return {};
+              })()),
               note: 'Symbol System v2: Use tags [feature], [state], [integration], [idea] for classification. Use type field for structural role (view, service, tool, etc.)',
               environment: {
                 os: platform,

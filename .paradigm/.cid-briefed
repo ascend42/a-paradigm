@@ -1,8 +1,10 @@
 {
-  "timestamp": "2026-05-02T19:38:33.900Z",
-  "sessionId": "orch-mooqoc3g-awov",
+  "timestamp": "2026-05-02T20:38:05.896Z",
+  "sessionId": "orch-moosjz01-2akf",
   "touchedFiles": [
-    ".paradigm/arch.yaml"
+    ".paradigm/ftux/reports/2026-05-02.md",
+    ".paradigm/research/new-user-capability-gap-2026-05-02.md",
+    ".paradigm/specs/capability-discovery-spec.md"
   ],
   "coverageScore": 1
 }

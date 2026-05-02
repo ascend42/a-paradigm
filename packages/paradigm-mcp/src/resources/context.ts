@@ -48,6 +48,29 @@ export async function handleContextResource(
       handled: true,
       text: `# Agent Protocol for Paradigm MCP Tools
 
+## What Paradigm Is
+
+Paradigm adds a metadata layer (\`.purpose\` files + \`portal.yaml\`) to any codebase so AI agents can query architecture context via MCP instead of reading source files directly.
+
+**What it does**
+- Tracks codebase symbols: \`#components\`, \`$flows\`, \`^gates\`, \`!signals\`, \`~aspects\`
+- Answers queries about structure, dependencies, authorization, and history without file reads
+- Enforces coverage: hooks block sessions that modify code without updating \`.purpose\` files
+
+**Tool surface (50+ tools)**
+- Navigation: \`paradigm_status\`, \`paradigm_search\`, \`paradigm_navigate\`, \`paradigm_related\`
+- Impact: \`paradigm_ripple\`, \`paradigm_flows_affected\`
+- Authorization: \`paradigm_gates_for_route\`, \`paradigm_portal_add_gate\`
+- History: \`paradigm_history_context\`, \`paradigm_lore_record\`, \`paradigm_lore_search\`
+- Agents: \`paradigm_agent_list\`, \`paradigm_orchestrate_inline\`, \`paradigm_ambient_events\`
+- Compliance: \`paradigm_aspect_check\`, \`paradigm_protocol_search\`
+- Session: \`paradigm_session_health\`, \`paradigm_handoff_prepare\`
+
+**Setup** (if not already initialized)
+Run \`paradigm shift\` — auto-detects language/framework, creates \`.paradigm/\` config, scaffolds \`.purpose\` and \`portal.yaml\`, installs hooks.
+
+---
+
 ## Query Before Modify
 
 **Always query before making changes** - this ensures you understand impact and dependencies.
@@ -80,17 +103,18 @@ Call \`paradigm_session_health\` periodically to monitor session health:
 - **70-85%**: Prepare handoff soon
 - **>85%**: Handoff after current task
 
-## Available Tools Summary
+## Tool Surface by Category
 
-| Tool | Purpose |
-|------|---------|
-| \`paradigm_status\` | Project overview and health |
-| \`paradigm_search\` | Find symbols by name/description |
-| \`paradigm_ripple\` | Impact analysis before changes |
-| \`paradigm_related\` | Symbol dependencies |
-| \`paradigm_navigate\` | Codebase exploration |
-| \`paradigm_session_health\` | Session health monitoring |
-| \`paradigm_handoff_prepare\` | Prepare context handoff |
+| Category | Tools |
+|----------|-------|
+| Navigation | \`paradigm_status\`, \`paradigm_search\`, \`paradigm_navigate\`, \`paradigm_related\` |
+| Impact analysis | \`paradigm_ripple\`, \`paradigm_flows_affected\` |
+| Authorization | \`paradigm_gates_for_route\`, \`paradigm_portal_add_gate\` |
+| History & lore | \`paradigm_history_context\`, \`paradigm_lore_record\`, \`paradigm_lore_search\` |
+| Agent team | \`paradigm_agent_list\`, \`paradigm_orchestrate_inline\`, \`paradigm_captain_brief\` |
+| Compliance | \`paradigm_aspect_check\`, \`paradigm_protocol_search\`, \`paradigm_aspect_drift\` |
+| Session | \`paradigm_session_health\`, \`paradigm_handoff_prepare\`, \`paradigm_session_recover\` |
+| Architecture | \`paradigm_arch_status\`, \`paradigm_arch_diagram\` |
 
 ---
 

@@ -25,7 +25,7 @@ paradigm --version
 **Super Quick Setup (one command, after install):**
 
 ```bash
-paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
+paradigm shift && paradigm mcp setup --client all && paradigm constellation && paradigm beacon
 ```
 
 **Or step-by-step:**
@@ -35,7 +35,7 @@ paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all 
 cd /path/to/your/project
 
 # 2. Initialize Paradigm (non-interactive, uses auto-detected defaults)
-paradigm init --quick
+paradigm shift --quick
 
 # 3. Generate IDE instruction files
 paradigm sync --all
@@ -50,7 +50,7 @@ paradigm constellation && paradigm beacon
 paradigm doctor
 ```
 
-> **`--quick` vs interactive:** `paradigm init --quick` skips the interactive prompt and uses auto-detected defaults (language, framework, discipline). Run `paradigm init` without `--quick` for a guided setup where you can review and customize each option before config files are written.
+> **`--quick` vs interactive:** `paradigm shift --quick` skips slow operations (scan). Run `paradigm shift` without `--quick` for the full setup pass.
 
 ### Option 2: Install from Source
 
@@ -107,7 +107,7 @@ your-project/
 
 | Command | What It Does |
 |---------|--------------|
-| `paradigm init --quick` | Initialize .paradigm/ directory (non-interactive, uses auto-detected defaults) |
+| `paradigm shift` | Initialize and configure your project for AI-assisted development |
 | `paradigm sync --all` | Generate IDE instruction files for all IDEs |
 | `paradigm mcp setup --client all` | Configure MCP for all detected AI clients |
 | `paradigm constellation` | Generate symbol relationship graph |
@@ -138,7 +138,7 @@ your-project/
 ## Full Setup (After CLI is Installed)
 
 ```bash
-paradigm init --quick && paradigm sync --all && paradigm mcp setup --client all && paradigm constellation && paradigm beacon && paradigm doctor
+paradigm shift && paradigm mcp setup --client all && paradigm constellation && paradigm beacon
 ```
 
 **What this does:**
@@ -240,7 +240,7 @@ paradigm mcp status
 
 ```bash
 # Re-run init
-paradigm init --quick --force
+paradigm shift --quick --force
 ```
 
 ---

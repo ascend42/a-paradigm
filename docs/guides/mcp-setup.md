@@ -67,7 +67,7 @@ Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Conti
 
 Before setting up MCP, ensure you have:
 
-1. **A Paradigm project** — Run `paradigm init` if you haven't already
+1. **A Paradigm project** — Run `paradigm shift` if you haven't already
 2. **Node.js 18+** — Required for the MCP server
 3. **A supported AI client** — Claude Code, Cursor, Claude Desktop, Continue, or Cline
 

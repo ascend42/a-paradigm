@@ -1,0 +1,12 @@
+# Auto-generated .purpose stub — created by Cid (captain debrief)
+# Delegate to Scribe (Documentor) for rich documentation
+name: research
+description: "TODO: describe what this directory/module does"
+context:
+  - "Stub created by Cid during coverage audit — update with real context"
+# Key files touched:
+# - new-user-capability-gap-2026-05-02.md
+components:
+  research:
+    description: "TODO: describe this component"
+    tags: []
