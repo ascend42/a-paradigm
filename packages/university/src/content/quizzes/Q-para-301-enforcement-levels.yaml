@@ -3,7 +3,7 @@ title: 'PARA 301: Operations — Enforcement Levels'
 description: 'Quiz for lesson: Enforcement Levels'
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-301
@@ -44,3 +44,23 @@ questions:
       E: aspect-anchors check failed — aspects in src/payments/ have broken anchors
     correct: B
     explanation: 'On balanced enforcement, purpose-coverage is the only check set to block (besides habits-blocking). The error message says "missing .purpose file" which means the directory lacks one entirely — that is purpose-coverage, not purpose-exists (which checks that referenced files exist) or purpose-freshness (which checks staleness). Fix: create a .purpose file in src/payments/ describing its components.'
+  - id: q4
+    question: A developer runs `paradigm shift` on a brand-new project. What enforcement level is active by default?
+    choices:
+      A: Minimal — warn-only enforcement so the developer can learn without getting blocked
+      B: Balanced — the practical default for most development teams
+      C: None — all 13 checks are off; hooks install but never trigger compliance violations
+      D: Strict — the safest default for new projects
+      E: No enforcement section is created — the developer must configure it manually
+    correct: C
+    explanation: "Since the `none` preset was introduced, fresh `paradigm shift` produces `enforcement.level: none`. All 13 checks start at off. This means teams adopting Paradigm for agent orchestration, Sentinel, or Conductor never see compliance warnings unless they explicitly enable them."
+  - id: q5
+    question: A developer at `none` enforcement starts referencing symbol syntax in their prompts and asks about authentication gates. What happens next?
+    choices:
+      A: Nothing — `none` is permanent until the developer edits config.yaml manually
+      B: The stop hook automatically upgrades enforcement to minimal
+      C: Rune detects these readiness signals and proactively invites the developer to enable `minimal` or `balanced` enforcement
+      D: Paradigm blocks the session until the developer chooses an enforcement level
+      E: The developer must run `paradigm doctor` to trigger enforcement selection
+    correct: C
+    explanation: "Rune's promotion model monitors behavioral signals — using symbol syntax, asking about auth or dependencies, touching 3+ files. When these appear, Rune invites (never forces) the developer to step up to `minimal` or `balanced`. The developer chooses whether to accept."

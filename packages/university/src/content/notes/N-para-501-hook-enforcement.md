@@ -4,7 +4,7 @@ title: Hook Enforcement & Automation
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-501
@@ -25,6 +25,8 @@ source: courses/para-501.json
 Paradigm's value depends on discipline. Purpose files must be updated when code changes. Portal.yaml must reflect route additions. Lore must be recorded for significant sessions. Aspect anchors must point to real code. Without enforcement, these requirements become suggestions that erode over time.
 
 Hooks close this gap. They are automated checks that run at specific points in the development workflow, catching violations before they become technical debt. Paradigm uses three hooks, each with a distinct role and severity.
+
+One important nuance: the stop hook's compliance checks are gated by your project's enforcement level. On the default level (`none`), all 13 checks are `off` — the hook runs but nothing fires. Compliance checking only begins when you move to `minimal` or higher. If you are at `none` and want to see what the stop hook would catch, run `paradigm doctor` — it runs all checks regardless of enforcement level.
 
 ## The Stop Hook
 

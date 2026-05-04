@@ -4,7 +4,7 @@ title: The paradigm shift Command
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-301
@@ -80,7 +80,7 @@ After `paradigm shift`, your project has:
 
 ```
 .paradigm/
-  config.yaml       # Project configuration
+  config.yaml       # Project configuration (enforcement.level: none by default)
   tags.yaml         # Tag taxonomy
   roster.yaml       # Agent team roster
   agents.yaml       # Agent tier assignments

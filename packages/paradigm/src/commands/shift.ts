@@ -667,7 +667,8 @@ export async function shiftCommand(options: ShiftOptions = {}) {
       const { ensureEnforcementDefaults } = await import('../core/enforcement/index.js');
       const wrote = ensureEnforcementDefaults(cwd);
       if (wrote) {
-        console.log(chalk.green(`  ✓ Enforcement config initialized (${chalk.cyan('balanced')} preset)`));
+        console.log(chalk.green(`  ✓ Enforcement config initialized (${chalk.cyan('none')} preset)`));
+        console.log(chalk.dim('  Enforcement: none — symbol tracking available when you\'re ready. Rune will guide you.'));
       }
     } catch (e) {
       log.operation('shift').debug('Enforcement config setup failed', { error: (e as Error).message });

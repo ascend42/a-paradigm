@@ -3,7 +3,7 @@ title: 'PARA 701: Agent Mastery — Lesson 7: Orchestration Enforcement'
 description: 'Quiz for lesson: Lesson 7: Orchestration Enforcement'
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-701
@@ -54,6 +54,16 @@ questions:
       E: Remove all agents from the roster except the orchestrator
     correct: B
     explanation: 'Habit severity is tunable per project. Changing `orchestration-required` from `warn` to `block` in the project''s habits override means the habit will block session completion if `paradigm_orchestrate_inline` was not called. This is the designed customization path: the seed habit provides a sensible default (`warn`), and projects can upgrade to `block` if they need strict enforcement. No source code modification is needed.'
+  - id: q6
+    question: A developer's project is at `none` enforcement. They add a 5-file feature. Does the `orchestration-required` habit fire a preflight warning?
+    choices:
+      A: Yes — the habit always fires regardless of enforcement level because it is a seed habit
+      B: No — on `none` enforcement, the `orchestration-required` check is off, so no warning appears
+      C: Yes — but only if the task description mentions security or auth
+      D: No — but only because `none` enforcement disables all habit evaluation entirely
+      E: Yes — but the warning is demoted to an informational note instead of a `warn`
+    correct: B
+    explanation: "The `orchestration-required` habit corresponds to the enforcement check of the same name. On `none` enforcement, that check is off. Teams at `none` can override just that check to `warn` to get orchestration nudges without enabling the rest of the enforcement suite."
   - id: q5
     question: The `agent-coverage-validated` habit checks for which tools in its evaluation?
     choices:

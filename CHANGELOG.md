@@ -5,6 +5,38 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] — 2026-05-02
+
+`none` enforcement preset — the new global default. Adds Rune's promotion state machine so teams that want symbol tracking can opt in when they're ready, not before.
+
+### Added
+
+- **`none` enforcement preset** — fourth preset level, all 13 checks set to `off`. Fresh `paradigm shift` now produces `enforcement.level: none`. Teams adopting Paradigm for agents, Sentinel, or Conductor are never interrupted by compliance warnings they didn't ask for.
+- **Rune promotion state machine** (`packages/paradigm-mcp/src/utils/rune-promotion.ts`) — detects readiness signals (symbol syntax usage, auth/dependency questions, 3+ file sessions) and invites users to enable symbol tracking via `minimal` or `balanced`. State persisted in `rune.promotion` section of `.paradigm/config.yaml`. Snooze defers 7 days; `never` suppresses permanently.
+- **`paradigm_compliance_promote` MCP tool** — records user's response to Rune's promotion offer. `minimal`/`balanced` both write the enforcement level and promotion state; `snooze` and `never` record preference without changing enforcement. Used by Rune and callable directly.
+- **Rune Promotion Protocol in orchestration ROLE_PROMPTS** — Rune (compliance agent) now checks for the `none` default and presents the symbol-tracking invitation when readiness signals appear. Self-regulates to one invitation per session.
+- **`paradigm shift` awareness line** — `paradigm shift` success output now surfaces `Enforcement: none — symbol tracking available when you're ready. Rune will guide you.`
+- **University: N-para-301-rune-promotion.md** — new note covering Rune's promotion model, readiness signals, and the "enforcement you earn, not endure" philosophy.
+- **University: Q-para-301-enforcement-levels.yaml q4–q5** — two new quiz questions covering `none` as default and Rune's promotion flow.
+- **University: Q-para-701-orchestration-enforcement.yaml q6** — new question covering `none` enforcement gating off the `orchestration-required` check.
+
+### Changed
+
+- **Global default enforcement level**: `minimal` → `none`. Existing projects with an explicit `level:` in their config are unaffected.
+- **University N-para-301-enforcement-levels.md** — updated to "Four Enforcement Levels", `none` section added, progression strategy rewritten to opt-in model, `minimal` description corrected (no longer described as the default).
+- **University N-para-001-shift-setup.md** — updated "Hooks Are Installed" paragraph to reflect `none` default.
+- **University N-para-501-hook-enforcement.md** — clarifying paragraph added: stop hook checks are gated by enforcement level; at `none` they are all off.
+- **University N-para-301-paradigm-shift.md** — `config.yaml` entry annotated with `enforcement.level: none by default`.
+- **University N-para-701-orchestration-enforcement.md** — clarifying note added under `orchestration-required`: off at `none`, can be overridden individually.
+
+### Versions
+
+- `@a-company/paradigm`: 6.2.1 → **6.3.0**
+- `@a-company/paradigm-mcp`: 6.2.1 → **6.3.0**
+- Plugin `plugin.json`: 6.2.1 → **6.3.0**
+
+---
+
 ## [6.2.1] — 2026-05-02
 
 Capability discovery and orientation — new users asking "what can Paradigm do?" in an active Claude session now get a purpose-built answer. Adds North (product strategist, agent #68) to the agent roster.

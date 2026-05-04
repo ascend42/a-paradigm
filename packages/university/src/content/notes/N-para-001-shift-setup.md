@@ -4,7 +4,7 @@ title: Your First paradigm shift
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-001
@@ -59,7 +59,7 @@ Each file has a specific job:
 
 `paradigm shift` also installed Git hooks and Claude Code hooks. These run automatically when you commit or finish a task, checking that your Paradigm metadata stays in sync with your code.
 
-By default, hooks use **minimal enforcement** — they warn but never block. You will not lose work or get stuck. As you get comfortable, you can upgrade to balanced or strict enforcement (covered in PARA 301).
+By default, hooks use **none enforcement** — all 13 compliance checks are off, so you will never see a blocking warning simply from working. Hooks are there and ready; they only activate if you choose a higher enforcement level. As you get comfortable with Paradigm's symbol system, you can enable compliance guidance — starting with `minimal` (warn-only) and working up from there. The compliance agent Rune will invite you when you seem ready.
 
 ### Try It: Explore What Was Created
 

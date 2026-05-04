@@ -64,6 +64,22 @@ const MINIMAL: Record<CheckId, CheckSeverity> = {
   'orchestration-required':    'off',
 };
 
+const NONE: Record<CheckId, CheckSeverity> = {
+  'purpose-coverage':          'off',
+  'purpose-exists':            'off',
+  'portal-gates':              'off',
+  'aspect-anchors':            'off',
+  'purpose-freshness':         'off',
+  'aspect-advisory':           'off',
+  'lore-required':             'off',
+  'habits-blocking':           'off',
+  'purpose-required-patterns': 'off',
+  'drift-detection':           'off',
+  'portal-compliance':         'off',
+  'graduation-tracking':       'off',
+  'orchestration-required':    'off',
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // LOOKUP
 // ═══════════════════════════════════════════════════════════════════
@@ -72,6 +88,7 @@ const PRESETS: Record<EnforcementLevel, Record<CheckId, CheckSeverity>> = {
   strict: STRICT,
   balanced: BALANCED,
   minimal: MINIMAL,
+  none: NONE,
 };
 
 /**
@@ -106,5 +123,5 @@ export function isValidSeverity(s: string): s is CheckSeverity {
  * Validate that a level value is known.
  */
 export function isValidLevel(l: string): l is EnforcementLevel {
-  return l === 'strict' || l === 'balanced' || l === 'minimal';
+  return l === 'strict' || l === 'balanced' || l === 'minimal' || l === 'none';
 }

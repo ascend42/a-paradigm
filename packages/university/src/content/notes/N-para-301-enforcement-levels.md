@@ -4,12 +4,12 @@ title: Enforcement Levels
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-301
-  - three-enforcement-levels
-  - minimal-is-the
+  - four-enforcement-levels
+  - none-is-the
   - 13-checks-control
 symbols: []
 difficulty: beginner
@@ -20,13 +20,19 @@ origin: imported
 source: courses/para-301.json
 ---
 
-## The Three Enforcement Levels
+## The Four Enforcement Levels
 
 Paradigm enforcement is configurable. Not every project needs the same rigor — a weekend prototype has different needs than a healthcare platform. Enforcement levels control which compliance checks **block** (stop you), **warn** (notify but continue), or are **off** (silent).
 
+### None — The Default
+
+`none` is the default for all new projects created by `paradigm shift`. All 13 checks are set to `off`. Hooks install but never trigger compliance violations. You can build freely with agents, Sentinel, or Conductor without seeing a compliance warning.
+
+This is intentional. Many teams adopt Paradigm for agent orchestration, session memory, or ambient intelligence — not for symbol compliance. When you are ready to add symbol tracking, the compliance agent Rune will invite you. See [Rune's Promotion Model](N-para-301-rune-promotion.md).
+
 ### Minimal — For Learning and Prototyping
 
-Minimal enforcement is the default for new projects created by `paradigm shift`. Only two checks are active, both as warnings:
+Minimal enforcement is not the default — you opt into it when you are ready to start symbol tracking. Only two checks are active, both as warnings:
 
 - `purpose-coverage` — warns if source directories lack `.purpose` files
 - `habits-blocking` — warns if defined habits are being violated
@@ -58,7 +64,7 @@ Set the level in `.paradigm/config.yaml`:
 
 ```yaml
 enforcement:
-  level: balanced   # minimal | balanced | strict
+  level: balanced   # none | minimal | balanced | strict
 ```
 
 Override individual checks when a preset does not quite fit:
@@ -93,10 +99,11 @@ Per-check overrides take precedence over the preset. This lets you start with a 
 
 ## Progression Strategy
 
-Most teams follow this path:
+The default progression is opt-in, not imposed:
 
-1. **Start minimal** — learn Paradigm, build habits, no blocking
-2. **Move to balanced** after 1-2 weeks — catch issues early, still flexible
-3. **Upgrade to strict** for production-critical or regulated codebases
+1. **Start at none** — Build freely. Agents, Sentinel, and Conductor all work without compliance warnings.
+2. **Rune invites you to minimal** — When you show readiness signals (referencing symbol syntax, asking about auth gates, touching 3+ files), Rune invites you to enable `minimal` enforcement. You are not forced — you choose when you want guidance.
+3. **Move to balanced** after you have adopted symbol-writing habits — catch issues early, still flexible.
+4. **Upgrade to strict** for production-critical or regulated codebases.
 
-You can change levels at any time. The switch is immediate — no migration needed.
+You can change levels at any time. Teams adopting Paradigm purely for agents or Sentinel can stay at `none` indefinitely.

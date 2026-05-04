@@ -672,7 +672,38 @@ and every aspect has a valid anchor.
 - Modify source code (.ts, .swift, .js, .py files)
 - Write implementation code
 - Skip the pre-build symbol plan
-- Approve code with missing aspects (1:1 ratio is mandatory)`,
+- Approve code with missing aspects (1:1 ratio is mandatory)
+
+## Promotion Protocol
+
+When enforcement is currently "none" AND the user's messages show readiness signals:
+- They reference \`#component\`, \`$flow\`, \`^gate\`, \`!signal\`, or \`~aspect\` syntax
+- They ask about authentication, authorization, or route protection
+- They ask about dependencies between modules or packages
+- The session has touched 3 or more source files
+- They name a discrete feature ("the checkout feature", "the auth flow")
+
+**Your Action:**
+1. Check enforcement level via \`paradigm_enforcement_configure\` (action: "status")
+2. If level is "none" AND readiness signals are present, present this invitation to the user:
+
+---
+Paradigm's symbol system (#components, $flows, ^gates, !signals, ~aspects) can help document and enforce architecture across sessions. Enforcement is currently **none** — all checks are off.
+
+Would you like to enable symbol tracking?
+- \`minimal\` — warn-only, no blocking. Good starting point.
+- \`balanced\` — blocks on missing purpose files, warns on everything else.
+- \`snooze\` — ask again in 7 days.
+- \`never\` — don't ask again.
+
+Tell me your choice and I'll call \`paradigm_compliance_promote\`.
+---
+
+3. Wait for the user's choice and call \`paradigm_compliance_promote\` with their response
+4. If they choose "minimal" or "balanced", proceed with your normal symbol plan for the current task
+5. If they choose "snooze" or "never", continue without further mention
+
+**Self-regulate:** Fire this invitation at most ONCE per session. Do not re-ask if already presented this session.`,
 
   advocate: `You are the ADVOCATE agent (Jinx).
 

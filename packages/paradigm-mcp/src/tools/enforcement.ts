@@ -10,6 +10,8 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { trackToolCall } from './context.js';
 
+const enforcementConfiguredThisSession = new Set<string>();
+
 interface ToolContext {
   rootDir: string;
 }
@@ -18,7 +20,7 @@ interface ToolContext {
 // TYPES (mirroring packages/paradigm/src/core/enforcement/types.ts)
 // ═══════════════════════════════════════════════════════════════════
 
-type EnforcementLevel = 'strict' | 'balanced' | 'minimal';
+type EnforcementLevel = 'strict' | 'balanced' | 'minimal' | 'none';
 type CheckSeverity = 'block' | 'warn' | 'off';
 
 const CHECK_IDS = [
@@ -89,6 +91,21 @@ const PRESETS: Record<EnforcementLevel, Record<CheckId, CheckSeverity>> = {
     'graduation-tracking':       'off',
     'orchestration-required':    'off',
   },
+  none: {
+    'purpose-coverage':          'off',
+    'purpose-exists':            'off',
+    'portal-gates':              'off',
+    'aspect-anchors':            'off',
+    'purpose-freshness':         'off',
+    'aspect-advisory':           'off',
+    'lore-required':             'off',
+    'habits-blocking':           'off',
+    'purpose-required-patterns': 'off',
+    'drift-detection':           'off',
+    'portal-compliance':         'off',
+    'graduation-tracking':       'off',
+    'orchestration-required':    'off',
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -124,8 +141,8 @@ function saveConfig(rootDir: string, config: ConfigYaml): void {
 }
 
 function resolveEffective(config: ConfigYaml): Record<CheckId, CheckSeverity> & { orchestrationThreshold: number } {
-  const level = (config.enforcement?.level || 'minimal') as EnforcementLevel;
-  const preset = PRESETS[level] || PRESETS.minimal;
+  const level = (config.enforcement?.level || 'none') as EnforcementLevel;
+  const preset = PRESETS[level] || PRESETS.none;
   const overrides = (config.enforcement?.checks || {}) as Partial<Record<CheckId, CheckSeverity>>;
   const threshold = config.enforcement?.orchestration?.threshold ?? 3;
 
@@ -145,7 +162,7 @@ function isValidSeverity(s: string): s is CheckSeverity {
 }
 
 function isValidLevel(l: string): l is EnforcementLevel {
-  return l === 'strict' || l === 'balanced' || l === 'minimal';
+  return l === 'strict' || l === 'balanced' || l === 'minimal' || l === 'none';
 }
 
 function isValidCheckId(id: string): id is CheckId {
@@ -157,6 +174,21 @@ function isValidCheckId(id: string): id is CheckId {
 // ═══════════════════════════════════════════════════════════════════
 
 export const enforcementToolDefinitions = [
+  {
+    name: 'paradigm_compliance_promote',
+    description: "Record a user's response to Rune's enforcement-level promotion offer. Call this after presenting the symbol-tracking invitation. Response 'minimal' or 'balanced' enables enforcement at that level and records the promotion state; 'snooze' defers for 7 days; 'never' suppresses the offer permanently.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        response: {
+          type: 'string',
+          enum: ['minimal', 'balanced', 'snooze', 'never'],
+          description: "User's chosen response to the promotion offer",
+        },
+      },
+      required: ['response'],
+    },
+  },
   {
     name: 'paradigm_enforcement_configure',
     description: 'View or modify stop hook enforcement levels. Actions: status (view current), set-level (change preset), override (set per-check severity), reset (clear overrides). ~250 tokens.',
@@ -170,7 +202,7 @@ export const enforcementToolDefinitions = [
         },
         level: {
           type: 'string',
-          enum: ['strict', 'balanced', 'minimal'],
+          enum: ['strict', 'balanced', 'minimal', 'none'],
           description: 'Enforcement preset level (for set-level action).',
         },
         checkId: {
@@ -202,7 +234,7 @@ async function handleEnforcementConfigure(
     case 'status': {
       const config = loadConfig(ctx.rootDir);
       const effective = resolveEffective(config);
-      const activeLevel = (config.enforcement?.level || 'minimal') as string;
+      const activeLevel = (config.enforcement?.level || 'none') as string;
       const overrides = config.enforcement?.checks || {};
       const threshold = config.enforcement?.orchestration?.threshold ?? 3;
 
@@ -213,14 +245,14 @@ async function handleEnforcementConfigure(
         overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
         effective,
         checkIds: [...CHECK_IDS],
-        presetLevels: ['strict', 'balanced', 'minimal'],
+        presetLevels: ['strict', 'balanced', 'minimal', 'none'],
       }, null, 2);
     }
 
     case 'set-level': {
       if (!level || !isValidLevel(level)) {
         return JSON.stringify({
-          error: `Invalid level "${level}". Must be one of: strict, balanced, minimal`,
+          error: `Invalid level "${level}". Must be one of: strict, balanced, minimal, none`,
         });
       }
 
@@ -276,7 +308,7 @@ async function handleEnforcementConfigure(
       saveConfig(ctx.rootDir, config);
 
       const effective = resolveEffective(config);
-      const activeLevel = (config.enforcement?.level || 'minimal') as string;
+      const activeLevel = (config.enforcement?.level || 'none') as string;
       return JSON.stringify({
         success: true,
         message: `All per-check overrides cleared. Preset "${activeLevel}" is now fully in effect.`,
@@ -314,5 +346,36 @@ export async function handleEnforcementTool(
     trackToolCall(text.length, 'paradigm_enforcement_configure');
     return { handled: true, text };
   }
+
+  if (name === 'paradigm_compliance_promote') {
+    const response = args.response as string;
+    const { recordPromotion } = await import('../utils/rune-promotion.js');
+    recordPromotion(ctx.rootDir, response as import('../utils/rune-promotion.js').PromotionResponse);
+
+    let text: string;
+    if (response === 'minimal' || response === 'balanced') {
+      // Apply the enforcement level
+      const configPath = path.join(ctx.rootDir, '.paradigm', 'config.yaml');
+      if (fs.existsSync(configPath)) {
+        const raw = yaml.load(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+        if (raw && typeof raw === 'object') {
+          if (!raw.enforcement || typeof raw.enforcement !== 'object') {
+            raw.enforcement = {};
+          }
+          (raw.enforcement as Record<string, unknown>).level = response;
+          fs.writeFileSync(configPath, yaml.dump(raw, { lineWidth: -1, noRefs: true, sortKeys: false }), 'utf8');
+        }
+      }
+      text = JSON.stringify({ ok: true, message: `Symbol tracking enabled at "${response}". Rune is now active.`, level: response });
+    } else if (response === 'snooze') {
+      text = JSON.stringify({ ok: true, message: "Got it — I'll ask again in 7 days.", state: 'snoozed' });
+    } else {
+      text = JSON.stringify({ ok: true, message: "Understood. I won't bring this up again.", state: 'never' });
+    }
+
+    trackToolCall(text.length, 'paradigm_compliance_promote');
+    return { handled: true, text };
+  }
+
   return { handled: false, text: '' };
 }

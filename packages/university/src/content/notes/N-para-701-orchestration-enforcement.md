@@ -4,7 +4,7 @@ title: 'Lesson 7: Orchestration Enforcement'
 type: note
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-04'
 tags:
   - course
   - para-701
@@ -53,6 +53,15 @@ Paradigm seeds three habits specifically for orchestration enforcement:
 This habit fires at **preflight** (session start). It checks whether `paradigm_orchestrate_inline` was called. If not, and the task description suggests complexity (3+ files, security symbols), it emits a `warn` severity message: "This task may benefit from orchestration. Call paradigm_orchestrate_inline mode='plan' to see which agents are needed."
 
 The severity is `warn`, not `block`. This is deliberate. Blocking on orchestration would prevent quick fixes, hot patches, and simple tasks that genuinely do not need multi-agent coordination. The warning surfaces the recommendation; the human decides whether to follow it.
+
+Note: on the default enforcement level (`none`), this check is `off` — no warning fires. It activates at `minimal` or higher. To get orchestration nudges on a `none` project without enabling all checks, override just this one:
+
+```yaml
+enforcement:
+  level: none
+  checks:
+    orchestration-required: warn
+```
 
 ### 2. agent-coverage-validated (postflight, advisory)
 

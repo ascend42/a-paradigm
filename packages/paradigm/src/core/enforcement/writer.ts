@@ -50,7 +50,7 @@ function writeConfig(rootDir: string, config: Record<string, unknown>): void {
  */
 function ensureEnforcement(config: Record<string, unknown>): Record<string, unknown> {
   if (!config.enforcement || typeof config.enforcement !== 'object') {
-    config.enforcement = { level: 'minimal', checks: {} };
+    config.enforcement = { level: 'none', checks: {} };
   }
   return config.enforcement as Record<string, unknown>;
 }
@@ -128,7 +128,7 @@ export function ensureEnforcementDefaults(rootDir: string): boolean {
     }
 
     config.enforcement = {
-      level: 'balanced',
+      level: 'none',
       checks: {},
       orchestration: {
         threshold: 3,

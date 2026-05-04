@@ -9,7 +9,7 @@
 // ENFORCEMENT LEVELS & SEVERITY
 // ═══════════════════════════════════════════════════════════════════
 
-export type EnforcementLevel = 'strict' | 'balanced' | 'minimal';
+export type EnforcementLevel = 'strict' | 'balanced' | 'minimal' | 'none';
 
 export type CheckSeverity = 'block' | 'warn' | 'off';
 
