@@ -31,7 +31,7 @@ questions:
       B: A `links` array with an entry that has `from` and `to` pointing to tier IDs, and an optional `via` label
       C: A `components` array containing `$checkout-flow` (a flow symbol)
       D: Omitting the `links` key entirely from the file
-      E: Using camelCase for tier IDs (e.g., `id: frontEnd`)
+      E: "Using camelCase for tier IDs (e.g., `id: frontEnd`)"
     correct: B
     explanation: "Links require `from` and `to` (both referencing tier IDs) and accept an optional `via` label for edge labeling in Mermaid diagrams. Tier `id` is required — a label alone is not sufficient. The `components` array holds `#component` symbols only, not `$flows`. The `links` key is required (though it can be an empty array `[]`). Tier IDs should use kebab-case per Paradigm conventions."
   - id: q3

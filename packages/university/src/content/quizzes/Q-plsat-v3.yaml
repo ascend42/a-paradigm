@@ -2963,7 +2963,7 @@ questions:
     choices:
       A: Edge labels are automatically inferred from the framework names in each tier's tech field
       B: Edge labels require a separate `labels.yaml` file in .paradigm/
-      C: The `via` field on each link in the links array provides the edge label. Links without a `via` field render without a label. To add a label, add `via: "label text"` to the link entry in arch.yaml.
+      C: 'The `via` field on each link in the links array provides the edge label. Links without a `via` field render without a label. To add a label, add `via: "label text"` to the link entry in arch.yaml.'
       D: Edge labels can only be set via the paradigm_arch_diagram tool's input parameters
       E: Edge labels are set in the tier's `tech.libraries` array using the format "label:target-tier"
     correct: C
@@ -2972,7 +2972,7 @@ questions:
     section: para-701
     variants:
       - id: plsat-131b
-        scenario: A team's arch.yaml has this link entry -- `from: api-gateway, to: user-service, via: gRPC`. The same team has another link -- `from: api-gateway, to: notification-service` with no via field. What will the generated Mermaid diagram show for each edge?
+        scenario: "A team's arch.yaml has this link entry -- `from: api-gateway, to: user-service, via: gRPC`. The same team has another link -- `from: api-gateway, to: notification-service` with no via field. What will the generated Mermaid diagram show for each edge?"
         question: What does the Mermaid output look like for these two links?
         choices:
           A: Both edges render with no label — via is ignored in diagram generation

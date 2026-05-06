@@ -5,6 +5,27 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.1] — 2026-05-06
+
+University bug fix release — crash on course load, PLSAT inaccessible, five broken quiz files.
+
+### Fixed
+
+- **`CourseView.tsx` crash on course load** — `activeLesson.keyConcepts` and `activeLesson.quiz` were both accessed without null guards. Any lesson without quiz data threw `TypeError: Cannot read properties of undefined (reading 'length')`. Both guarded with optional chaining.
+- **Server never set `keyConcepts` or `quiz` on lessons** — `courses.ts` now initializes both fields to `[]` on every lesson, consistent with the `ClientLesson` type.
+- **PLSAT completely inaccessible** — `PLSATView.tsx` hardcoded `fetch('/api/plsat/3.0')`. PLSAT v3 YAML had a parse error, causing the server to return 500 and the UI to silently dead-end on "PLSAT Unavailable". Fixed by dynamically fetching available versions via `/api/plsat` and loading the highest available.
+- **PLSAT v3 YAML parse errors** (`Q-plsat-v3.yaml`) — two unquoted YAML scalars containing `: ` caused `js-yaml` to throw on load. Both quoted.
+- **PARA 701 quiz YAML parse errors** — `Q-para-701-arch-mcp-tools.yaml` had three unquoted colon-space patterns; `Q-para-701-arch-yaml-format.yaml` had one. All four fixed.
+- **Wrong quiz schema** — `Q-para-401-notebooks-permissions.yaml` and `Q-para-501-review-compliance.yaml` used `options: []` + integer `correct` (legacy format) instead of `choices: {A:…}` + letter `correct`. Both rewritten to current schema; UI was silently rendering blank choice lists.
+
+### Versions
+
+- `@a-company/paradigm`: 6.3.0 → **6.3.1**
+- `@a-company/university`: 6.0.3 → **6.0.4**
+- Plugin `plugin.json`: 6.3.0 → **6.3.1**
+
+---
+
 ## [6.3.0] — 2026-05-02
 
 `none` enforcement preset — the new global default. Adds Rune's promotion state machine so teams that want symbol tracking can opt in when they're ready, not before.

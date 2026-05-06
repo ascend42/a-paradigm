@@ -23,7 +23,7 @@ questions:
       D: paradigm_arch_status — check drift.missing_purpose for components not in any tier
       E: paradigm_search — search for components with type "unassigned"
     correct: B
-    explanation: paradigm_arch_status returns a drift object with two arrays. drift.unassigned contains component symbols that are indexed (documented) but not listed in any tier's components array — these are the newly-added components with no tier assignment. drift.missing_purpose is the inverse: components declared in arch.yaml that do not appear in the index. paradigm_arch_diagram renders the declared tiers but does not show drift; paradigm_status does not include arch.yaml drift.
+    explanation: "paradigm_arch_status returns a drift object with two arrays. drift.unassigned contains component symbols that are indexed (documented) but not listed in any tier's components array — these are the newly-added components with no tier assignment. drift.missing_purpose is the inverse: components declared in arch.yaml that do not appear in the index. paradigm_arch_diagram renders the declared tiers but does not show drift; paradigm_status does not include arch.yaml drift."
   - id: q2
     question: A project does not have a `.paradigm/arch.yaml` file. A developer calls `paradigm_arch_status`. What happens?
     choices:
@@ -45,13 +45,13 @@ questions:
     correct: B
     explanation: "paradigm_arch_diagram is the dedicated diagram tool. It returns {\"format\": \"mermaid\", \"diagram\": \"graph TD\\n  ...\"} where the diagram field is the Mermaid string ready for copy-paste. The CLI equivalent is `paradigm arch diagram` — on macOS, piping to `pbcopy` copies it to the clipboard. paradigm_arch_status does not include a diagram field; it focuses on tier metadata and drift. There is no `format` parameter on paradigm_arch_status."
   - id: q4
-    question: A project has `.paradigm/arch.yaml`. An agent calls `paradigm_arch_status` and receives `drift.clean: false` with `drift.unassigned` containing 5 symbols and `drift.missing_purpose` containing 2 symbols. What is the correct interpretation?
+    question: "A project has `.paradigm/arch.yaml`. An agent calls `paradigm_arch_status` and receives `drift.clean: false` with `drift.unassigned` containing 5 symbols and `drift.missing_purpose` containing 2 symbols. What is the correct interpretation?"
     choices:
       A: The build is blocked — drift.clean must be true before deployment
       B: 5 components are in the index but not assigned to any tier; 2 components are declared in arch.yaml tiers but do not appear in the index. Neither condition blocks anything — this is advisory information.
       C: 5 components have no .purpose files; 2 components have missing portal.yaml gate declarations
       D: The arch.yaml file has 5 syntax errors and 2 missing required fields
-      E: drift.clean: false means the previous build introduced breaking changes
+      E: "drift.clean: false means the previous build introduced breaking changes"
     correct: B
     explanation: "drift.clean: false means at least one drift category is non-empty. drift.unassigned (5 items) means 5 component symbols exist in the symbol index but have no tier assignment in arch.yaml — likely new components added after arch.yaml was last updated. drift.missing_purpose (2 items) means 2 component IDs in arch.yaml tiers cannot be found in the index — likely renamed or deleted components. Neither is a blocker. Atlas reports this information so the team can decide whether to update arch.yaml."
   - id: q5

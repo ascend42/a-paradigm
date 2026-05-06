@@ -111,7 +111,7 @@ export function CourseView() {
           <>
             <h1>{activeLesson.title}</h1>
 
-            {activeLesson.keyConcepts.length > 0 && (
+            {(activeLesson.keyConcepts?.length ?? 0) > 0 && (
               <div className="key-concepts">
                 {activeLesson.keyConcepts.map((concept) => (
                   <span key={concept} className="concept-tag">{concept}</span>
@@ -140,7 +140,7 @@ export function CourseView() {
                   </button>
                 )}
 
-                {activeLesson.quiz.length > 0 && courseId && (
+                {(activeLesson.quiz?.length ?? 0) > 0 && courseId && (
                   <Link
                     to={`/course/${courseId}/quiz/${activeLesson.id}`}
                     className="btn btn-gold"

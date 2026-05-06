@@ -3,7 +3,7 @@ title: 'PARA 501: Advanced Systems — Automated Review Pipeline & Compliance Ch
 description: 'Quiz for lesson: Automated Review Pipeline & Compliance Checking'
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-06'
 tags:
   - course
   - para-501
@@ -16,46 +16,46 @@ source: courses/para-501.json
 questions:
   - id: Q-501-RC-001
     question: paradigm review --ci finds 2 blocking and 3 improvement findings. What's the exit code?
-    options:
-      - Exit code 0 — improvements are non-blocking
-      - Exit code 1 — any blocking findings cause non-zero exit in CI mode
-      - Exit code 2 — one per blocking finding
-      - Exit code 5 — total findings count
-    correct: 1
+    choices:
+      A: Exit code 0 — improvements are non-blocking
+      B: Exit code 1 — any blocking findings cause non-zero exit in CI mode
+      C: Exit code 2 — one per blocking finding
+      D: Exit code 5 — total findings count
+    correct: B
     explanation: In CI mode, any blocking findings cause exit code 1. Improvements and notes do not affect the exit code.
   - id: Q-501-RC-002
     question: 'A project has no features: section in config.yaml. How many MCP tools are loaded?'
-    options:
-      - Only core tools (~15)
-      - Core + explicitly enabled features
-      - All of them — auto-detection is generous, defaulting to current behavior
-      - None — features must be explicitly configured
-    correct: 2
+    choices:
+      A: Only core tools (~15)
+      B: Core + explicitly enabled features
+      C: All of them — auto-detection is generous, defaulting to current behavior
+      D: None — features must be explicitly configured
+    correct: C
     explanation: No features config + generous auto-detection = all tools loaded, matching pre-4.0 behavior for backward compat.
   - id: Q-501-RC-003
     question: 'You call paradigm_search with response_format: ''concise''. What fields are returned?'
-    options:
-      - Full results with descriptions, paths, and fuzzy matches
-      - Only { symbol, type } per result — descriptions and secondary data stripped
-      - Only symbol names as a flat array
-      - Compressed binary format
-    correct: 1
+    choices:
+      A: Full results with descriptions, paths, and fuzzy matches
+      B: Only { symbol, type } per result — descriptions and secondary data stripped
+      C: Only symbol names as a flat array
+      D: Compressed binary format
+    correct: B
     explanation: Concise mode strips results to { symbol, type } per entry and removes fuzzyMatched, fuzzyNote, suggestions, workspace data.
   - id: Q-501-RC-004
     question: An agent needs the graph generation tool but it's in the advanced tier. What does it do?
-    options:
-      - Request an admin to enable it in config.yaml
-      - 'Call paradigm_tool_activate with feature: ''graph'''
-      - Modify the agent's permissions to include graph tools
-      - Restart the session with --enable-graph flag
-    correct: 1
+    choices:
+      A: Request an admin to enable it in config.yaml
+      B: 'Call paradigm_tool_activate with feature: ''graph'''
+      C: Modify the agent's permissions to include graph tools
+      D: Restart the session with --enable-graph flag
+    correct: B
     explanation: paradigm_tool_activate enables advanced-tier modules for the current session. The tools become available immediately.
   - id: Q-501-RC-005
     question: What's the relationship between paradigm review Stage 1 and paradigm_pm_postflight?
-    options:
-      - They are completely independent with different checks
-      - paradigm review calls paradigm_pm_postflight internally
-      - They share the same compliance logic extracted into compliance-checker.ts
-      - paradigm_pm_postflight is deprecated in favor of paradigm review
-    correct: 2
+    choices:
+      A: They are completely independent with different checks
+      B: paradigm review calls paradigm_pm_postflight internally
+      C: They share the same compliance logic extracted into compliance-checker.ts
+      D: paradigm_pm_postflight is deprecated in favor of paradigm review
+    correct: C
     explanation: Both use compliance-checker.ts for shared compliance logic — purpose coverage, portal gates, aspect anchors, and broken refs.

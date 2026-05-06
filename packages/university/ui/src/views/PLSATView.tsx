@@ -65,13 +65,22 @@ export function PLSATView() {
   const [nameInput, setNameInput] = useState(studentName);
 
   useEffect(() => {
-    fetch('/api/plsat/3.0')
-      .then((r) => r.json())
-      .then((data) => {
-        setExam(data);
+    async function loadExam() {
+      try {
+        const versionsRes = await fetch('/api/plsat');
+        const versionsData = await versionsRes.json();
+        const best = versionsData.versions?.[0]?.version;
+        if (!best) return;
+        const examRes = await fetch(`/api/plsat/${best}`);
+        if (!examRes.ok) return;
+        setExam(await examRes.json());
+      } catch {
+        // !exam guard below handles the empty state
+      } finally {
         setIsLoading(false);
-      })
-      .catch(() => setIsLoading(false));
+      }
+    }
+    loadExam();
   }, []);
 
   const calculateResults = useCallback(() => {

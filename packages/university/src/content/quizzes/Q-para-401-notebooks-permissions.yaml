@@ -3,7 +3,7 @@ title: 'PARA 401: Orchestration — Agent Notebooks & Permission Scoping'
 description: 'Quiz for lesson: Agent Notebooks & Permission Scoping'
 author: paradigm
 created: '2026-04-22'
-updated: '2026-04-22'
+updated: '2026-05-06'
 tags:
   - course
   - para-401
@@ -16,46 +16,46 @@ source: courses/para-401.json
 questions:
   - id: Q-401-NP-001
     question: Where are global notebook entries stored for the architect agent?
-    options:
-      - ~/.paradigm/notebooks/architect/
-      - .paradigm/notebooks/architect/
-      - ~/.paradigm/agents/architect/notebooks/
-      - .paradigm/agents/architect.notebooks
-    correct: 0
+    choices:
+      A: ~/.paradigm/notebooks/architect/
+      B: .paradigm/notebooks/architect/
+      C: ~/.paradigm/agents/architect/notebooks/
+      D: .paradigm/agents/architect.notebooks
+    correct: A
     explanation: Global notebook entries are stored at ~/.paradigm/notebooks/{agent-id}/ and travel across projects.
   - id: Q-401-NP-002
     question: 'An agent has permissions.paths.deny: [".paradigm/agents/*"]. What happens if it tries to write to .paradigm/agents/builder.agent?'
-    options:
-      - The write succeeds if there's also a write pattern matching it
-      - The write is flagged as denied — deny patterns always override allow patterns
-      - The write succeeds but triggers an advisory
-      - The agent profile is deleted
-    correct: 1
+    choices:
+      A: The write succeeds if there's also a write pattern matching it
+      B: The write is flagged as denied — deny patterns always override allow patterns
+      C: The write succeeds but triggers an advisory
+      D: The agent profile is deleted
+    correct: B
     explanation: Deny patterns always override allow patterns. checkPathPermission() checks deny first.
   - id: Q-401-NP-003
     question: You want to extract a reusable pattern from lore entry L-2026-03-10-001 into the architect's notebook. Which MCP tool?
-    options:
-      - paradigm_notebook_add with loreEntryId parameter
-      - paradigm_lore_promote with agentId parameter
-      - paradigm_notebook_promote with agentId + loreEntryId
-      - 'paradigm_agent_notebook with action: ''promote'''
-    correct: 2
+    choices:
+      A: paradigm_notebook_add with loreEntryId parameter
+      B: paradigm_lore_promote with agentId parameter
+      C: paradigm_notebook_promote with agentId + loreEntryId
+      D: 'paradigm_agent_notebook with action: ''promote'''
+    correct: C
     explanation: paradigm_notebook_promote takes agentId + loreEntryId and creates a distilled notebook entry with provenance link.
   - id: Q-401-NP-004
     question: 'An architect agent has 3 notebook entries matching #auth-middleware. How does orchestration use them?'
-    options:
-      - They replace the agent's expertise section in the prompt
-      - buildProfileEnrichment() appends a 'Relevant Notebook Entries' section with context + snippet
-      - They are sent as separate tool calls before the main prompt
-      - They override the agent's personality settings
-    correct: 1
+    choices:
+      A: They replace the agent's expertise section in the prompt
+      B: buildProfileEnrichment() appends a 'Relevant Notebook Entries' section with context + snippet
+      C: They are sent as separate tool calls before the main prompt
+      D: They override the agent's personality settings
+    correct: B
     explanation: buildProfileEnrichment() appends notebook entries (up to 5) with context + truncated snippet to the orchestration prompt.
   - id: Q-401-NP-005
     question: A .agent file's integrityHash doesn't match the computed hash. What does this indicate?
-    options:
-      - The file was created before v4.0 and needs migration
-      - The file was modified without going through saveAgentProfile() — possible tampering
-      - The agent's expertise has been updated since the hash was computed
-      - The hash algorithm has changed between versions
-    correct: 1
-    explanation: verifyIntegrity() returns false when the stored hash doesn't match. The hash covers id+role+permissions, so changes to those fields without saveAgentProfile() indicate tampering.
+    choices:
+      A: The file was created before v4.0 and needs migration
+      B: The file was modified without going through saveAgentProfile() — possible tampering
+      C: The agent's expertise has been updated since the hash was computed
+      D: The hash algorithm has changed between versions
+    correct: B
+    explanation: "verifyIntegrity() returns false when the stored hash doesn't match. The hash covers id+role+permissions, so changes to those fields without saveAgentProfile() indicate tampering."

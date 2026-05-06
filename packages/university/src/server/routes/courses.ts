@@ -163,6 +163,8 @@ function readLessonsForCourse(contentDir: string, courseId: string, pathYaml: Pa
       id: lessonId,
       title: fm.title || lessonId,
       content: parsed.body,
+      keyConcepts: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
+      quiz: [],
     };
 
     // Attach quiz if present
