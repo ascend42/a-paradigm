@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-05-07T20:09:50.669Z'
+generated: '2026-05-07T20:33:20.053Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -6077,11 +6077,29 @@ by_symbol:
       agent: []
   '#enforcement':
     symbol: '#enforcement'
-    total_changes: 12
-    last_modified: '2026-05-07T20:09:47Z'
+    total_changes: 13
+    last_modified: '2026-05-07T20:33:15Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_244
+        id: h0357
+        ts: '2026-05-07T20:33:15Z'
+        type: implement
+        symbols:
+          - '#docs'
+          - '#enforcement'
+        author:
+          type: human
+          id: ascend
+        commit: df21f3d74b9254d0f3928c5f7f007e2829649d6b
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - docs/commands/doctor.md
+          - plugins/paradigm/README.md
+        description: 'docs(#docs): sweep remaining init→shift stragglers + compliance loop qualifier'
       - *ref_65
       - *ref_66
       - &ref_243
@@ -6141,19 +6159,6 @@ by_symbol:
           - packages/paradigm/src/core/enforcement/loader.ts
           - packages/paradigm/src/core/enforcement/writer.ts
         description: 'fix(#enforcement): default to minimal enforcement for new projects'
-      - id: h0263
-        ts: '2026-03-26T00:27:23Z'
-        type: implement
-        symbols:
-          - '#enforcement'
-        author:
-          type: human
-          id: ascend
-        commit: 8d7e77ba3f3a65cc0477f72ed266c223a35fb87b
-        intent: feature
-        files:
-          - .paradigm/config.yaml
-        description: 'chore(#enforcement): adopt enforcement config for a-paradigm — orchestration-required: block'
     contributors:
       human:
         - ascend
@@ -17619,11 +17624,12 @@ by_symbol:
       agent: []
   '#docs':
     symbol: '#docs'
-    total_changes: 2
-    last_modified: '2026-05-07T20:09:47Z'
+    total_changes: 3
+    last_modified: '2026-05-07T20:33:15Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_244
       - *ref_65
       - *ref_66
     contributors:

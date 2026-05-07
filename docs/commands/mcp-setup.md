@@ -41,7 +41,7 @@ Generates MCP configuration files for AI clients (Cursor, Claude Desktop, Contin
 ## When to Run It
 
 ### ✅ Run once per:
-- **New project** - After `paradigm init`
+- **New project** - After `paradigm shift`
 - **New machine** - Fresh dev environment setup
 - **AI client install** - Just installed Cursor/Claude/etc.
 
@@ -166,7 +166,7 @@ Then try asking your AI:
 **Standard setup workflow:**
 ```bash
 # 1. Initialize project
-paradigm init --quick
+paradigm shift --quick
 
 # 2. Generate AI context
 paradigm beacon
@@ -185,7 +185,7 @@ paradigm mcp setup --client all
 
 ### Fresh Project Setup
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm sync --all
 paradigm mcp setup --client all
 # Restart IDEs
@@ -288,7 +288,7 @@ paradigm mcp list
 **Example 1: First-time setup**
 ```bash
 # New machine, fresh project
-paradigm init --quick
+paradigm shift --quick
 paradigm mcp setup --client all
 # Restart all IDEs
 
@@ -309,7 +309,7 @@ paradigm mcp setup --client cursor
 ```bash
 #!/bin/bash
 # setup-paradigm.sh
-paradigm init --quick
+paradigm shift --quick
 paradigm sync --all
 paradigm mcp setup --client all
 paradigm beacon && paradigm constellation
