@@ -283,7 +283,7 @@ Cursor's stop hook outputs a `followup_message` that auto-retries compliance up 
 
 ### The agent team
 
-Paradigm ships with a core team of 8 specialist agents you can orchestrate through a single command (`paradigm team orchestrate "..."`): **architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid)**. Project detection ("SaaS" vs "game" vs "generic") determines which additional ecosystem agents get rostered on first shift.
+Paradigm ships with a core team of 8 specialist agents you can orchestrate through a single command (`paradigm team orchestrate "..."`): **architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid)**. Additional specialists — **Loid** (intelligence officer / learning), **Atlas** (cartographer / architecture mapping), **Rune** (compliance / enforcement state machine) — roster based on project type and stack detection. Project detection ("SaaS" vs "game" vs "generic") determines which additional ecosystem agents get rostered on first shift.
 
 ---
 

@@ -83,7 +83,7 @@ All tools are available immediately — no configuration needed:
 
 After installing the plugin:
 
-1. **New project**: Run `/paradigm:shift` for full setup (or `/paradigm:init` for a minimal init only)
+1. **New project**: Run `/paradigm:shift` for full setup
 2. **Existing project**: If already using Paradigm, see [Migrating from Per-Project Setup](#migrating-from-per-project-setup)
 
 ## How Enforcement Works

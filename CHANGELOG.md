@@ -5,6 +5,25 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.3] — 2026-05-07
+
+Agent roster corrections and docs accuracy pass — Loid, Atlas, Rune now appear on all relevant surfaces.
+
+### Changed
+
+- **`README.md`** — "The agent team" paragraph: added Loid, Atlas, Rune as named additional specialists; they were absent from the only agent-roster sentence users see before clicking into the agents guide
+- **`docs/guides/agents.md`** — "six core + three specialty" framing replaced with non-numbered section headers; Rune (compliance, promotion state machine) added to core table; Atlas (cartographer, `arch.yaml`) added to specialty table; roster shift comment updated
+- **`plugins/paradigm/README.md`** — Getting Started step 1: removed `/paradigm:init` as an equal-weight alternative to `/paradigm:shift` — init is available in the skills table for reference but should not be presented as the recommended first-run path
+- **`docs/guides/university.md`** — §9.2: "v6.3 (~Q3 2026) will review" updated to reflect that v6.3 shipped May 2026 and the first review has been triggered
+- **`docs/guides/mcp-setup.md`** — "Last Updated" date corrected from 2026-04-07 to 2026-05-07
+
+### Versions
+
+- `@a-company/paradigm`: 6.3.2 → **6.3.3**
+- Plugin `plugin.json`: 6.3.2 → **6.3.3**
+
+---
+
 ## [6.3.2] — 2026-05-07
 
 Docs polish pass for public launch — migration guide extended through v6.3, enforcement default explained, agent roster corrected.

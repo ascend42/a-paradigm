@@ -291,7 +291,7 @@ metrics:
 
 ### 9.2 The v6.3 sunset contract
 
-v6.3 (~Q3 2026) will review cross-adopter University metrics to decide whether the per-project University primitive earned its keep. The contract: the project-pack primitive is a **candidate for consolidation** if **all four** of these hold at the review:
+v6.3 shipped May 2026 and triggered the first cross-adopter University metrics review to decide whether the per-project University primitive earned its keep. The contract: the project-pack primitive is a **candidate for consolidation** if **all four** of these hold at the review:
 
 1. **median project-pack entries < 3** (notes + policies + paths)
 2. **median `last_modified_days_ago` > 45**

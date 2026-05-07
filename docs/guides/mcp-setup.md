@@ -552,4 +552,4 @@ paradigm mcp setup --client cursor --force
 
 ---
 
-*Last Updated: 2026-04-07*
+*Last Updated: 2026-05-07*

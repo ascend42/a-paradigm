@@ -24,9 +24,9 @@ Profiles live in two places:
 
 ## 2. The core team
 
-`paradigm shift` rosters six core agents on first run, plus three specialty roles that activate on need. All are tier-1 / tier-2 / tier-3 — the tier maps to a default model (opus / sonnet / haiku) but can be overridden in `.paradigm/config.yaml`'s `model-resolution` block.
+`paradigm shift` rosters a core team of agents on first run, plus specialty roles that activate based on project type or manual addition. All are tier-1 / tier-2 / tier-3 — the tier maps to a default model (opus / sonnet / haiku) but can be overridden in `.paradigm/config.yaml`'s `model-resolution` block.
 
-### The six core agents
+### Core agents
 
 | Agent | Tier | Role |
 |-------|------|------|
@@ -36,14 +36,16 @@ Profiles live in two places:
 | **security** | tier-1 | Audits for auth, secrets, injection, ownership checks. Reads `portal.yaml`. |
 | **tester** | tier-3 | Writes and runs tests. Methodical, conservative. |
 | **documentor** | tier-3 | Final orchestration stage. Updates `.purpose` files, `portal.yaml`, lore. Never touches source code. |
+| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance_promote` to advance each concern. Rostered on by `paradigm shift`. |
 
-### The three specialty agents
+### Specialty agents
 
 | Agent | Tier | Role |
 |-------|------|------|
 | **ftux (Nora)** | tier-1 | First-time user experience simulator. Reads only user-facing surfaces (README, --help, error strings) — never source. Produces friction reports at `.paradigm/ftux/reports/YYYY-MM-DD.md`. Runs after builder when the task touches a user-visible surface, before documentor. |
 | **captain (Cid)** | tier-1 | Navigation + coverage captain. Briefs the team on what to read before a task; debriefs at the end on what was missed. |
 | **intelligence officer (Loid)** | tier-1 | Learning officer. Synthesizes patterns from postflight verdicts into agent journals → notebooks → wisdom. |
+| **Atlas** (cartographer) | tier-2 | Generates and maintains `arch.yaml` — a structured architectural map committed alongside `.purpose` files. Uses `paradigm_arch_status` and `paradigm_arch_diagram`. |
 
 The full list of role tiers (architect, ftux, security, advocate, product, operations, sales, legal, ethicist, futurist all tier-1; many more tier-2 / tier-3) is at `packages/paradigm-mcp/src/tools/orchestration.ts:181`.
 
@@ -228,7 +230,7 @@ Two related tools used during orchestration:
 ### First time on a project
 
 ```bash
-paradigm shift                       # rosters six core agents + ftux + cid
+paradigm shift                       # rosters core agents (incl. Rune) + ftux + cid
 paradigm agent roster                # confirm active list
 paradigm agent sync architect        # seed expertise from existing lore
 paradigm agent sync builder
