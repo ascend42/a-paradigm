@@ -37,7 +37,7 @@ cd /path/to/your/project
 # 2. Initialize Paradigm (non-interactive, uses auto-detected defaults)
 paradigm shift --quick
 
-# 3. Generate IDE instruction files
+# 3. Generate IDE instruction files (already done by `paradigm shift` without --quick; safe to re-run)
 paradigm sync --all
 
 # 4. Configure MCP for your AI client
@@ -50,7 +50,19 @@ paradigm constellation && paradigm beacon
 paradigm doctor
 ```
 
-> **`--quick` vs interactive:** `paradigm shift --quick` skips slow operations (scan). Run `paradigm shift` without `--quick` for the full setup pass.
+> **`--quick` vs interactive:** `paradigm shift --quick` skips slow operations (scan). Run `paradigm shift` without `--quick` for the full setup pass — it also runs `sync --all` automatically.
+
+### About enforcement
+
+After `paradigm shift`, Paradigm's enforcement default is **`none`** — all compliance checks are off. This is intentional: you get a clean, unobstructed workspace to start.
+
+When you're ready for compliance checks to kick in, add Rune to your roster:
+
+```bash
+paradigm agent add rune
+```
+
+Rune enables compliance gradually through his promotion state machine (`candidate` → `active` → `enforcing` → `blocking`), so checks turn on as they're validated — not all at once. Run `paradigm doctor` at any time to see current enforcement posture.
 
 ### Option 2: Install from Source
 

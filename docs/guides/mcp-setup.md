@@ -173,7 +173,7 @@ Restart Claude Code after installing. All 50+ Paradigm MCP tools will be availab
 | **MCP tools** | All 50+, globally for every project | Per-project config in `~/.claude/claude.json` |
 | **Enforcement hooks** | Stop, PreToolUse, PostToolUse | Must run `paradigm hooks install --claude-code` separately |
 | **Skills** | `/paradigm:init`, `/paradigm:shift`, `/paradigm:scan`, etc. | Not included |
-| **Agents** | architect, builder, reviewer, tester, security | Not included |
+| **Agents** | architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid) | Not included |
 | **Updates** | Update plugin once | Re-run setup per project |
 
 Most teams use the plugin globally and `paradigm shift` for per-project context files (`.paradigm/`, `portal.yaml`, etc.).

@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.2] — 2026-05-07
+
+Docs polish pass for public launch — migration guide extended through v6.3, enforcement default explained, agent roster corrected.
+
+### Changed
+
+- **`docs/guides/v6-migration.md`** — renamed to "v6 Migration Guide"; TL;DR flags the enforcement default change; new §11 covers v6.1–v6.3 behavioral changes (enforcement default `minimal` → `none`, Rune promotion state machine, Atlas + `arch.yaml`, soft-block + `paradigm override`); audience track map updated with v6.x-upgrader paths
+- **`docs/guides/quick-start.md`** — `paradigm sync --all` step annotated as already done by `paradigm shift` (without `--quick`); new "About enforcement" section explains the `none` default and Rune onboarding
+- **`docs/guides/symphony-quickstart.md`** — version floor corrected from v3.35.0+ to v6.0.0+; "Coming Soon" nevr.land relay header updated to "Roadmap"
+- **`docs/guides/mcp-setup.md`** — plugin agents table updated: added documentor, ftux (Nora), captain (Cid) to the previously incomplete 5-agent list
+
+### Versions
+
+- `@a-company/paradigm`: 6.3.1 → **6.3.2**
+- Plugin `plugin.json`: 6.3.1 → **6.3.2**
+
+---
+
 ## [6.3.1] — 2026-05-06
 
 University bug fix release — crash on course load, PLSAT inaccessible, five broken quiz files.

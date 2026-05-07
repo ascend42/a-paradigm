@@ -1,8 +1,8 @@
-# v6.0 Migration Guide
+# v6 Migration Guide
 
-> Upgrading from v5.x → v6.0 (and v6.0.x). What broke, what to do, and how the migration shims keep you safe if you skip a release.
+> Upgrading from v5.x → v6.0, and post-v6.0 behavioral changes through v6.3. What broke, what to do, and how the migration shims keep you safe if you skip a release.
 
-## TL;DR — the six breaking changes
+## TL;DR — the six v6.0 breaking changes
 
 1. **`LoreType.decision` removed.** `paradigm_lore_record({type:'decision'})` and `paradigm_assessment_record({type:'decision'})` now return a structured rejection envelope. CLI side throws the same migration message at the storage layer.
 2. **`loadPortalConfigLegacy` deleted.** The one-minor back-compat shim from v5.37.12 is gone. Use `loadPortalConfig` and switch on the `status` discriminator (`'missing' | 'unparseable' | 'ok'`).
@@ -10,6 +10,8 @@
 4. **`paradigm_university_search` result `id` format changed** to `<pack-id>:<entry-id>`. Strip the prefix for display if needed.
 5. **Decision-store consolidation.** `paradigm migrate decisions` consolidates `wisdom/decisions/*.yaml` and `lore.type='decision'` into the canonical `.paradigm/decisions/TD-*.yaml` store.
 6. **Wisdom `type='decision'` soft-deprecated.** Still writes to disk in v6.0 with a deprecation warning; hard-error in a future minor.
+
+> **Already on v6.0?** §11 covers the v6.1–v6.3 behavioral changes — including the enforcement default flip in v6.3.0 that may have silently turned off compliance checks on your project.
 
 Read on for the per-change details, migration shims, and an upgrade checklist.
 
@@ -326,14 +328,75 @@ Then audit your own code:
 
 ---
 
+---
+
+## 11. v6.1–v6.3 behavioral changes (post-v6.0)
+
+These are **not semver breaking changes** but alter default behavior. Upgrade from any earlier v6.x and these may surprise you.
+
+### v6.3.0 — Enforcement default: `minimal` → `none`
+
+The largest silent behavioral change in v6.x. Prior to v6.3.0, `paradigm shift` seeded new projects with `enforcement.default: minimal`, keeping 13 compliance checks on. **v6.3.0 flips the default to `none` — all compliance checks are off until an agent enables them.**
+
+**Who's affected:** Any project where `paradigm doctor` or the stop hook stopped blocking after upgrading to v6.3.0. The checks are still available; they're just not armed by default.
+
+**Check your posture:**
+
+```bash
+grep -A 5 enforcement .paradigm/config.yaml
+```
+
+**To restore v6.2.x behavior explicitly:**
+
+```yaml
+# .paradigm/config.yaml
+enforcement:
+  default: minimal
+```
+
+Or add Rune to your roster — he'll re-enable the checks he owns and graduate them through his promotion state machine (see below).
+
+### v6.3.0 — Rune's promotion state machine
+
+Rune (compliance archetype) gained a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Rather than turning all compliance checks on at once, he graduates each one over time as project signals validate them.
+
+New MCP tool: **`paradigm_compliance_promote`** — advances a compliance concern's promotion state. This is Rune's tool; call it after verifying a concern is ready to enforce.
+
+Add Rune to your roster:
+
+```bash
+paradigm shift   # detects your stack, adds Rune and other applicable archetypes
+```
+
+### v6.2.0 — Atlas agent + `arch.yaml`
+
+Atlas (cartographer archetype) joined the roster. He generates and maintains **`arch.yaml`** — a structured architectural map committed alongside `.purpose` files. New MCP tools: `paradigm_arch_status`, `paradigm_arch_diagram`.
+
+`arch.yaml` is a new artifact type. Commit it. No breaking change — purely additive.
+
+### v6.1.0 — Soft-block primitive + `paradigm override`
+
+Agents can now plant soft-blocks in `.paradigm/remediations/` via `paradigm_propose_block`. The stop hook reads these and refuses-with-override when `severity: guard`.
+
+New CLI: **`paradigm override <id>`** — interactive escape hatch that clears a specific remediation. One-shot scripted form: `PARADIGM_OVERRIDE=<id> <cmd>`.
+
+Override events land in `.paradigm/events/overrides.jsonl` for Loid's calibration pass.
+
+**Upgrade note:** If you add Rune to an existing project after v6.1 and he blocks immediately on first run, he's surfacing concerns that were silently ignored before. Use `paradigm override` to acknowledge them or fix the underlying issues.
+
+---
+
 ## Audience track map
 
 - **5.x → 6.0 in one project:** §9, then §1–§6 as you hit each
+- **6.0–6.2 → 6.3 (enforcement default changed):** §11.a — check your posture, decide minimal vs. none
 - **Library author depending on `loadPortalConfigLegacy`:** §2
 - **Library author depending on `lore.type='decision'`:** §1, §5
 - **Pack author / University consumer:** §3, §4, §8
 - **Skip-upgrader (pinned older minor):** §7
+- **Adding Rune to an existing project:** §11.b — promotion state machine
+- **Using soft-blocks / `paradigm override`:** §11.d
 
 ---
 
-*Source of truth: [CHANGELOG.md](../../CHANGELOG.md) §6.0.0 + §6.0.1; v6.0 D3 lock at `docs/private/plans/v6.0-decisions-locked.md`; v5.37.12 fail-closed contract at `packages/paradigm-mcp/src/utils/yaml-validator.ts` + `packages/paradigm-mcp/src/utils/portal-writer.ts`; v5.38.0 envelope at `packages/paradigm-mcp/src/utils/write-and-confirm.ts`.*
+*Source of truth: [CHANGELOG.md](../../CHANGELOG.md) §6.0.0–§6.3.0; v6.0 D3 lock at `docs/private/plans/v6.0-decisions-locked.md`; v5.37.12 fail-closed contract at `packages/paradigm-mcp/src/utils/yaml-validator.ts` + `packages/paradigm-mcp/src/utils/portal-writer.ts`; v5.38.0 envelope at `packages/paradigm-mcp/src/utils/write-and-confirm.ts`.*

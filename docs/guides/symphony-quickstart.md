@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Paradigm CLI v3.35.0+ installed (`npm i -g @a-company/paradigm`)
+- Paradigm CLI v6.0.0+ installed (`npm i -g @a-company/paradigm`)
 - Two or more Claude Code terminals open
 
 ## Step 1: Link Sessions
@@ -208,15 +208,15 @@ paradigm symphony join --remote localhost:3939
 
 > **Note:** SSH tunnels require both users to have SSH access to the same server. The tunnel is encrypted but the Symphony relay itself uses plain `ws://` — the SSH layer provides the security.
 
-#### Coming Soon: nevr.land Relay
+#### Roadmap: nevr.land Relay
 
-A managed relay at `relay.nevr.land` is planned so you can connect with just:
+A hosted relay at `relay.nevr.land` is on the roadmap. Once live, connecting will be as simple as:
 
 ```sh
 paradigm symphony join --relay nevr.land
 ```
 
-Both users connect outbound (no port config), relay bridges them, auth via nevr.land accounts. Until then, use one of the options above.
+Both users connect outbound (no port forwarding), relay bridges them, auth via nevr.land accounts. Until then, use one of the options above.
 
 ### Managing Peers
 
