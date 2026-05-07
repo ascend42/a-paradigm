@@ -24,7 +24,7 @@ Validates your Paradigm installation, checks for missing files, verifies configu
 - ○ Missing - File not found
 
 **Suggests fixes:**
-- `paradigm init --force` - Regenerate structure
+- `paradigm shift --force` - Regenerate structure
 - `paradigm index` - Update scan index
 - `paradigm sync` - Regenerate IDE files
 - `paradigm migrate` - Update to latest version
@@ -32,7 +32,7 @@ Validates your Paradigm installation, checks for missing files, verifies configu
 ## Why You Need It
 
 **Verify setup:**
-- After `paradigm init` - Confirm everything created
+- After `paradigm shift` - Confirm everything created
 - After updates - Ensure compatibility
 - Before onboarding - Validate team setup
 
@@ -49,7 +49,7 @@ Validates your Paradigm installation, checks for missing files, verifies configu
 ## When to Run It
 
 ### ✅ Run after:
-- **`paradigm init`** - Verify setup succeeded
+- **`paradigm shift`** - Verify setup succeeded
 - **`paradigm upgrade`** - Confirm upgrade worked
 - **Problems** - First troubleshooting step
 - **Team onboarding** - Validate new setup
@@ -149,7 +149,7 @@ Run the suggested commands to fix issues.
 ✓ .purpose                     Present
   or
 ⚠ .purpose                     Root .purpose not found
-    └─ Fix: paradigm init
+    └─ Fix: paradigm shift
 ```
 
 ## Exit Codes
@@ -322,7 +322,7 @@ paradigm doctor
 
 ### "No .paradigm/ directory found"
 ```bash
-paradigm init
+paradigm shift
 ```
 
 ### "Invalid YAML in config.yaml"
@@ -331,7 +331,7 @@ paradigm init
 cat .paradigm/config.yaml | yaml-lint
 
 # Or regenerate
-paradigm init --force
+paradigm shift --force
 ```
 
 ### "Scan index stale"

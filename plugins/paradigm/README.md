@@ -95,7 +95,7 @@ CLAUDE.md is **advisory** — agents can and do ignore it. Paradigm's hooks are
 
 1. **PostToolUse** tracks every source file modification after an edit
 2. **Stop** validates compliance at session end
-3. If violations are found, the session is blocked with a list of what needs fixing
+3. If violations are found and enforcement is active, the session is blocked with a list of what needs fixing (with the default `none` preset, Stop runs advisory-only until you add Rune or change the preset)
 4. The agent fixes violations and completes the session
 
 ### Task-Size Tiers
