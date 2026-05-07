@@ -1,5 +1,7 @@
 # Sentinel Upgrade Guide — Per-Project Instructions
 
+> **Internal runbook.** This guide covers connecting specific projects to the Sentinel observability server. It is not a general user guide — new users should start with the [Quick Start Guide](./quick-start.md).
+
 How to connect each project to the Sentinel observability server using the new logger transport layer (TS) or tracing Layer (Rust).
 
 **Prerequisites:** Sentinel server running at `http://localhost:3838` (or your configured URL).

@@ -27,7 +27,7 @@ Validates your Paradigm installation, checks for missing files, verifies configu
 - `paradigm init --force` - Regenerate structure
 - `paradigm index` - Update scan index
 - `paradigm sync` - Regenerate IDE files
-- `paradigm upgrade --all` - Update to latest version
+- `paradigm migrate` - Update to latest version
 
 ## Why You Need It
 
@@ -121,7 +121,7 @@ Run the suggested commands to fix issues.
 ✓ .paradigm/specs/probe.md     Present
   or
 ○ .paradigm/specs/scan.md       Spec file not found
-    └─ Fix: paradigm upgrade --all
+    └─ Fix: paradigm migrate
 ```
 
 ### Scan Index
@@ -164,11 +164,11 @@ Run the suggested commands to fix issues.
 **Standard verification:**
 ```bash
 # After setup
-paradigm init --quick
+paradigm shift --quick
 paradigm doctor  # Verify
 
 # After updates
-paradigm upgrade --all
+paradigm migrate
 paradigm doctor  # Confirm
 ```
 
@@ -189,7 +189,7 @@ paradigm doctor
 
 ### After Initial Setup
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm doctor
 # Expect: All checks pass
 ```
@@ -202,7 +202,7 @@ paradigm doctor
 # Apply fixes
 paradigm index
 paradigm sync
-paradigm upgrade --all
+paradigm migrate
 
 # Verify
 paradigm doctor
@@ -245,7 +245,7 @@ paradigm constellation
 **Watch out for:**
 - Legacy `.paradigm` file (not directory) - needs migration
 - Stale scan index - regenerate with `paradigm index`
-- Missing specs after upgrade - run `paradigm upgrade --all`
+- Missing specs after upgrade - run `paradigm migrate`
 - IDE files for wrong IDE - run `paradigm sync [ide]`
 
 ## Issue Categories
@@ -281,7 +281,7 @@ Action: Run suggested command.
 
 **Example 1: Fresh setup verification**
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm doctor
 
 # Expected: All checks pass
@@ -313,7 +313,7 @@ paradigm doctor
 paradigm doctor
 # Output: ⚠ Legacy .paradigm file found
 
-paradigm upgrade --all
+paradigm migrate
 paradigm doctor
 # Output: ✓ All checks pass
 ```
@@ -348,12 +348,12 @@ paradigm sync cursor
 
 ### "Spec files missing"
 ```bash
-paradigm upgrade --all
+paradigm migrate
 ```
 
 ### "Legacy .paradigm file"
 ```bash
-paradigm upgrade --all
+paradigm migrate
 ```
 
 ## What Doctor Doesn't Check

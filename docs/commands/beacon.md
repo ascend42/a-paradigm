@@ -171,7 +171,7 @@ paradigm beacon --refresh && paradigm constellation
 
 ### Initial Setup
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm beacon
 paradigm constellation
 # Now AI agents can orient quickly
@@ -301,7 +301,7 @@ Useful for tooling and integrations.
 
 **Example 1: New project**
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm beacon
 cat .paradigm/beacon.md  # Review orientation
 ```

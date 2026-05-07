@@ -1,5 +1,7 @@
 # paradigm init
 
+> **Tip:** For new project setup, prefer [`paradigm shift`](./shift.md) — it runs `init` plus scans, hook installation, and CLAUDE.md generation in one command. Use `paradigm init` directly when you want the initialization step only.
+
 Initialize Paradigm in your project with all necessary configuration files and IDE integrations.
 
 ## Overview
@@ -36,7 +38,7 @@ Sets up the `.paradigm/` directory structure, creates initial context files (`.p
 
 ### ⚠️ Don't run multiple times:
 - Use `paradigm sync` to regenerate IDE files
-- Use `paradigm upgrade` to update Paradigm files to latest version
+- Use `paradigm migrate` to update Paradigm files to the latest version
 
 ## Usage
 
@@ -156,7 +158,7 @@ paradigm sync --all
 - MCP configs (`.cursor/mcp.json`, `.claude/settings.json`) go in `.gitignore`
 
 **Watch out for:**
-- Don't run `init` multiple times - use `sync` or `upgrade` instead
+- Don't run `init` multiple times - use `sync` or `paradigm migrate` instead
 - If `.paradigm/` already exists, use `--force` or `--migrate`
 - IDE detection might fail - specify with `--ide` if needed
 - `portal.yaml` is optional - only create if you need authorization gates
@@ -230,13 +232,13 @@ git add .paradigm/ .cursor/ .github/ CLAUDE.md .windsurfrules
 ## Troubleshooting
 
 **Problem: "⚠ .paradigm/ already exists"**
-- Solution: Use `--force` to overwrite, or `paradigm upgrade` to update
+- Solution: Use `--force` to overwrite, or `paradigm migrate` to update
 
 **Problem: "Could not auto-detect IDE"**
 - Solution: Specify with `--ide cursor` (or copilot/windsurf/claude)
 
 **Problem: "Legacy .paradigm file found"**
-- Solution: Run `paradigm upgrade --all` to migrate to directory structure
+- Solution: Run `paradigm migrate --all` to migrate to directory structure
 
 **Problem: IDE files not updating**
 - Solution: Use `paradigm sync` not `init` for regeneration
@@ -244,7 +246,7 @@ git add .paradigm/ .cursor/ .github/ CLAUDE.md .windsurfrules
 ## See Also
 
 - [`paradigm sync`](./sync.md) - Regenerate IDE files after config changes
-- [`paradigm upgrade`](./upgrade.md) - Update Paradigm to latest version
+- [`paradigm migrate`](./upgrade.md) - Update Paradigm to latest version
 - [`paradigm doctor`](./doctor.md) - Verify setup health
 - [`paradigm beacon`](./beacon.md) - Generate AI orientation file
 - [Quick Start Guide](../guides/quick-start.md) - Complete setup walkthrough

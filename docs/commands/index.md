@@ -130,7 +130,7 @@ paradigm constellation
 ### Initial Setup
 ```bash
 # After project init
-paradigm init --quick
+paradigm shift --quick
 paradigm index  # Generate initial scan index
 ```
 
@@ -263,7 +263,7 @@ Once index is generated:
 
 **Example 1: New project setup**
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm index
 # Index ready for visual discovery
 ```

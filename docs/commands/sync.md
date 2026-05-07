@@ -106,7 +106,7 @@ paradigm sync
 paradigm sync --all --force
 
 # Update everything
-paradigm upgrade --all
+paradigm migrate
 paradigm sync --all
 paradigm beacon && paradigm constellation
 ```
@@ -263,7 +263,7 @@ paradigm doctor
 ## Troubleshooting
 
 **Problem: "No .paradigm/ directory found"**
-- Solution: Run `paradigm init` first
+- Solution: Run `paradigm shift` first
 
 **Problem: "IDE instructions not updating"**
 - Solution: Use `--force` flag, then restart IDE

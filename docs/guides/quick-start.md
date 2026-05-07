@@ -206,8 +206,8 @@ After setup, you can:
 
 1. **Add features** - Create `.purpose` files in your directories
 2. **Define gates** - Create `portal.yaml` for authorization
-3. **Use the logger** - Follow patterns in `.paradigm/specs/logger.md`
-4. **Get AI help** - Use prompts in `.paradigm/prompts/`
+3. **Use the logger** - After setup, `.paradigm/specs/logger.md` in your project has logging conventions for your stack
+4. **Get AI help** - After setup, `.paradigm/prompts/` contains reusable task templates for common AI workflows
 
 ---
 

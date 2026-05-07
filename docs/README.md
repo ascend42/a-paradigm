@@ -37,7 +37,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 
 **For new users:**
 1. Start with [Quick Start Guide](./guides/quick-start.md)
-2. Run the setup, then read [`paradigm init`](./commands/init.md)
+2. Run `paradigm shift` to set up your project, then explore the command docs below
 3. Understand [`paradigm sync`](./commands/sync.md) for keeping IDE files fresh
 4. Learn [`paradigm beacon`](./commands/beacon.md) and [`paradigm constellation`](./commands/constellation.md) for AI context
 
@@ -55,7 +55,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 
 | Command | Use Case | Frequency |
 |---------|----------|-----------|
-| `paradigm init` | Initialize new project | Once per project |
+| `paradigm shift` | Initialize and configure new project | Once per project |
 | `paradigm sync` | Update IDE files | After config changes |
 | `paradigm beacon` | Generate AI orientation | Weekly or after features |
 | `paradigm constellation` | Build symbol graph | With beacon |
@@ -68,7 +68,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 
 ### New Project Setup
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm sync --all
 paradigm mcp setup --client all
 paradigm beacon && paradigm constellation

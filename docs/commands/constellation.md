@@ -184,7 +184,7 @@ paradigm ripple #checkout  # Uses constellation data
 
 ### Initial Setup
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm constellation
 paradigm beacon
 # Complete AI context ready
@@ -297,7 +297,7 @@ The `stats` object provides symbol counts:
 
 **Example 1: Initial generation**
 ```bash
-paradigm init --quick
+paradigm shift --quick
 paradigm constellation
 ls -lh .paradigm/constellation.json  # Check size
 ```
