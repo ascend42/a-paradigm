@@ -1,0 +1,58 @@
+id: L-2026-05-06-ascend-182418-001
+type: agent-session
+timestamp: '2026-05-06T18:24:18.752Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.3.1 — University bug fix pass (crash on load, PLSAT dead, 5 broken quizzes)
+summary: Full university triage before video launch week. Team audit (architect + Nora + Scholar + reviewer) surfaced 10 bugs across the UI, server, and content files. CourseView crashed on every lesson load due to unguarded .keyConcepts/.quiz access; PLSAT was completely inaccessible due to a hardcoded /api/plsat/3.0 fetch against a broken v3 YAML; five quiz files had either YAML parse errors (unquoted colon-space in scalars) or wrong schema (options/integer instead of choices/letter). All 10 fixed, verified, rebuilt, and published as v6.3.1.
+symbols_touched:
+  - '#university'
+  - '#course-view'
+  - '#plsat'
+  - '#quiz-content'
+files_modified:
+  - packages/university/ui/src/views/CourseView.tsx
+  - packages/university/ui/src/views/PLSATView.tsx
+  - packages/university/src/server/routes/courses.ts
+  - packages/university/src/content/quizzes/Q-plsat-v3.yaml
+  - packages/university/src/content/quizzes/Q-para-701-arch-mcp-tools.yaml
+  - packages/university/src/content/quizzes/Q-para-701-arch-yaml-format.yaml
+  - packages/university/src/content/quizzes/Q-para-401-notebooks-permissions.yaml
+  - packages/university/src/content/quizzes/Q-para-501-review-compliance.yaml
+decisions:
+  - id: university-null-guard
+    decision: Guard both keyConcepts and quiz with optional chaining in CourseView; normalize server to always return [] for both fields
+    rationale: Type says required arrays but server omits them when absent — dual fix prevents future drift
+  - id: plsat-dynamic-version
+    decision: Fetch /api/plsat to get available versions rather than hardcoding 3.0
+    rationale: Hardcoded version breaks silently when that version has a parse error; dynamic fetch auto-recovers
+errors_encountered:
+  - description: CourseView.tsx:114 crash — activeLesson.keyConcepts undefined on any lesson without quiz data
+    resolution: 'Optional chaining: keyConcepts?.length ?? 0'
+  - description: PLSATView hardcoded /api/plsat/3.0 — v3 YAML broken, server 500, silent dead-end UI
+    resolution: Dynamic version fetch via /api/plsat, load highest available
+  - description: Q-plsat-v3.yaml two YAML parse errors — unquoted colon-space in choice C and variant scenario
+    resolution: Single-quoted choice C; double-quoted scenario field
+  - description: Q-para-701-arch-mcp-tools.yaml three YAML parse errors across explanation/question/choice fields
+    resolution: Double-quoted all three affected strings
+  - description: Q-para-401 and Q-para-501 wrong schema — options/integer instead of choices/letter
+    resolution: Full rewrite of both quiz files to correct schema
+verification:
+  status: pass
+  details:
+    yaml_parse: all 5 files OK
+    ui_build: pass
+    paradigm_build: pass
+tags:
+  - bug-fix
+  - university
+  - plsat
+  - yaml
+  - v6.3.1
+confidence: 0.97
+git_context:
+  ref: 8f3fac44ff8b0401937c56dc916bc13fc57877b9
+  branch: main
+  dirty: true
