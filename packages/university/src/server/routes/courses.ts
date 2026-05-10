@@ -135,6 +135,39 @@ function listLearningPaths(contentDir: string): PathYaml[] {
   return out;
 }
 
+/**
+ * Collect all content directories to scan: the bundled first-party dir plus
+ * any project pack directories found under projectDir/.paradigm/university/.
+ * Each directory that contains a paths/ subdirectory is included.
+ */
+function collectContentDirs(contentDir: string, projectDir?: string): string[] {
+  const dirs: string[] = [contentDir];
+  if (!projectDir) return dirs;
+
+  const universityRoot = path.join(projectDir, '.paradigm', 'university');
+  if (!fs.existsSync(universityRoot)) return dirs;
+
+  // Root project pack
+  if (fs.existsSync(path.join(universityRoot, 'paths'))) {
+    dirs.push(universityRoot);
+  }
+
+  // Discipline sub-packs (subdirectories with their own paths/)
+  try {
+    for (const entry of fs.readdirSync(universityRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const subDir = path.join(universityRoot, entry.name);
+      if (fs.existsSync(path.join(subDir, 'paths'))) {
+        dirs.push(subDir);
+      }
+    }
+  } catch {
+    // ignore unreadable subdirs
+  }
+
+  return dirs;
+}
+
 function readLessonsForCourse(contentDir: string, courseId: string, pathYaml: PathYaml): ClientLesson[] {
   const notesDir = path.join(contentDir, 'notes');
   const quizzesDir = path.join(contentDir, 'quizzes');
@@ -204,25 +237,31 @@ function loadCourse(contentDir: string, courseId: string): ClientCourse | null {
 // Router
 // ────────────────────────────────────────────────────────────────
 
-export function createCoursesRouter(contentDir: string): Router {
+export function createCoursesRouter(contentDir: string, projectDir?: string): Router {
   const router = Router();
+  const allContentDirs = collectContentDirs(contentDir, projectDir);
 
-  // GET /api/courses - List all courses (without full lesson content)
+  // GET /api/courses - List all courses across all packs
   router.get('/', (_req: Request, res: Response) => {
-    const paths = listLearningPaths(contentDir);
-    const courses: ClientCourseSummary[] = paths
-      .filter(p => p.id.startsWith('LP-para-'))
-      .map(p => {
-        const courseId = p.id.slice(3);  // strip "LP-"
-        const lessons = readLessonsForCourse(contentDir, courseId, p);
-        return {
+    const seen = new Set<string>();
+    const courses: ClientCourseSummary[] = [];
+
+    for (const dir of allContentDirs) {
+      const paths = listLearningPaths(dir);
+      for (const p of paths) {
+        const courseId = p.id.startsWith('LP-') ? p.id.slice(3) : p.id;
+        if (seen.has(courseId)) continue; // first-party wins on id collision
+        seen.add(courseId);
+        const lessons = readLessonsForCourse(dir, courseId, p);
+        courses.push({
           id: courseId,
           title: p.title,
           description: p.description || '',
           lessonCount: lessons.length,
           lessons: lessons.map(l => ({ id: l.id, title: l.title })),
-        };
-      });
+        });
+      }
+    }
 
     courses.sort((a, b) => a.id.localeCompare(b.id));
     return res.json({ courses });
@@ -230,24 +269,22 @@ export function createCoursesRouter(contentDir: string): Router {
 
   // GET /api/courses/:id - Get full course with lesson content and quizzes
   router.get('/:id', (req: Request, res: Response) => {
-    const course = loadCourse(contentDir, req.params.id);
-    if (!course) {
-      return res.status(404).json({ error: `Course '${req.params.id}' not found` });
+    for (const dir of allContentDirs) {
+      const course = loadCourse(dir, req.params.id);
+      if (course) return res.json(course);
     }
-    return res.json(course);
+    return res.status(404).json({ error: `Course '${req.params.id}' not found` });
   });
 
   // GET /api/courses/:id/lessons/:lessonId - Get a single lesson
   router.get('/:id/lessons/:lessonId', (req: Request, res: Response) => {
-    const course = loadCourse(contentDir, req.params.id);
-    if (!course) {
-      return res.status(404).json({ error: `Course '${req.params.id}' not found` });
+    for (const dir of allContentDirs) {
+      const course = loadCourse(dir, req.params.id);
+      if (!course) continue;
+      const lesson = course.lessons.find(l => l.id === req.params.lessonId);
+      if (lesson) return res.json(lesson);
     }
-    const lesson = course.lessons.find(l => l.id === req.params.lessonId);
-    if (!lesson) {
-      return res.status(404).json({ error: `Lesson '${req.params.lessonId}' not found` });
-    }
-    return res.json(lesson);
+    return res.status(404).json({ error: `Lesson '${req.params.lessonId}' not found` });
   });
 
   return router;

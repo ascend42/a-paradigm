@@ -5,6 +5,33 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.4] — 2026-05-10
+
+Fix: `paradigm university serve` now shows project packs — dealoracle, agency-intelligence, and any other `.paradigm/university/` pack created by an agent team.
+
+### Fixed
+
+- **Project packs invisible in the UI** — `universityCommand` never passed `projectDir` to `startServer`, so the server had no idea where the user's project was. Even if it had, `createCoursesRouter` had a hardcoded `.filter(p => p.id.startsWith('LP-para-'))` that silently dropped every non-Paradigm course. Three files changed:
+  - `packages/paradigm/src/commands/university.ts` — pass `projectDir: process.cwd()` to `startServer`
+  - `packages/university/src/server/index.ts` — forward `projectDir` to `createCoursesRouter`
+  - `packages/university/src/server/routes/courses.ts` — add `collectContentDirs()` helper that discovers `.paradigm/university/` and its discipline sub-packs; update router to scan all content dirs and drop the `LP-para-` prefix filter
+
+### How it works now
+
+`paradigm university serve` run from `~/projects/dealoracle/` will serve:
+1. First-party Paradigm courses (bundled in the CLI)
+2. All courses in `~/projects/dealoracle/.paradigm/university/` (root pack + discipline sub-packs)
+
+First-party wins on course id collision. Project packs appear alongside Paradigm courses on the home page.
+
+### Versions
+
+- `@a-company/paradigm`: 6.3.3 → **6.3.4**
+- `@a-company/university`: 6.0.4 → **6.0.5**
+- Plugin `plugin.json`: 6.3.3 → **6.3.4**
+
+---
+
 ## [6.3.3] — 2026-05-07
 
 Agent roster corrections and docs accuracy pass — Loid, Atlas, Rune now appear on all relevant surfaces.

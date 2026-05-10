@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-05-07T20:33:20.053Z'
+generated: '2026-05-07T20:34:01.933Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -17624,11 +17624,26 @@ by_symbol:
       agent: []
   '#docs':
     symbol: '#docs'
-    total_changes: 3
-    last_modified: '2026-05-07T20:33:15Z'
+    total_changes: 4
+    last_modified: '2026-05-07T20:34:00Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0358
+        ts: '2026-05-07T20:34:00Z'
+        type: implement
+        symbols:
+          - '#docs'
+        author:
+          type: human
+          id: ascend
+        commit: 53f86888e8fc259d45520a113221efbf45e4e982
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - docs/commands/mcp-setup.md
+        description: 'docs(#docs): fix missed init→shift in docs/commands/mcp-setup.md'
       - *ref_244
       - *ref_65
       - *ref_66

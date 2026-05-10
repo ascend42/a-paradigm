@@ -35,6 +35,7 @@ export async function universityCommand(_path: string | undefined, options: Univ
       open: shouldOpen,
       contentDir,
       uiDistPath,
+      projectDir: process.cwd(),
     });
 
     console.log(chalk.green(`\nParadigm University is running at http://localhost:${port}`));

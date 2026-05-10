@@ -110,7 +110,7 @@ export function createApp(options?: { contentDir?: string; uiDistPath?: string; 
   const { contentDir, uiDistPath } = resolveAssetPaths(options);
 
   // API routes
-  app.use('/api/courses', createCoursesRouter(contentDir));
+  app.use('/api/courses', createCoursesRouter(contentDir, options?.projectDir));
   app.use('/api/plsat', createPlsatRouter(contentDir, options?.projectDir));
 
   // Reference cards
