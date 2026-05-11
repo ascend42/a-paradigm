@@ -121,3 +121,23 @@ export interface ReferenceSection {
 export interface ReferenceData {
   sections: ReferenceSection[];
 }
+
+/** Branding config returned by /api/pack-config */
+export interface PackConfigBranding {
+  name: string;
+  tagline: string;
+  logo: string | null;
+  institution: string | null;
+  favicon: string | null;
+  tabs: Array<'campus' | 'courses' | 'plsat' | 'library' | 'certificates'>;
+  startCourse: string | null;
+}
+
+/** Response shape for /api/pack-config */
+export interface PackConfigResponse {
+  mode: 'paradigm' | 'project';
+  branding: PackConfigBranding;
+  theme: Record<string, string> | null;
+  version: string;
+  hasProjectLibrary: boolean;
+}

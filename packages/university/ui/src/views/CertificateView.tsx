@@ -1,9 +1,16 @@
 import { usePLSATStore } from '../store/plsatStore';
-import { Seal } from '../components/Seal';
+import { BrandLogo } from '../components/BrandLogo';
+import { usePackConfigStore } from '../store/packConfigStore';
 import { Link } from 'react-router-dom';
 
 export function CertificateView() {
   const { certificates } = usePLSATStore();
+  const config = usePackConfigStore((s) => s.config);
+
+  const name = config?.branding.name ?? 'Paradigm University';
+  const tagline = config?.branding.tagline ?? 'Lux in Codice';
+  const isParadigm = !config || config.mode === 'paradigm';
+  const certTitle = isParadigm ? `Universitas Paradigmatica — ${tagline}` : tagline;
 
   const passedCerts = certificates.filter((c) => c.passed);
   const latestPassed = passedCerts.length > 0
@@ -14,9 +21,9 @@ export function CertificateView() {
     return (
       <div className="certificate-container">
         <div className="empty-state">
-          <Seal size={80} />
+          <BrandLogo size={80} />
           <h3 className="mt-lg">No Certificates Yet</h3>
-          <p>Pass the PLSAT examination to earn your Paradigm certification.</p>
+          <p>Pass the PLSAT examination to earn your certification.</p>
           <Link to="/plsat" className="btn btn-primary mt-lg">
             Take the PLSAT
           </Link>
@@ -52,10 +59,10 @@ export function CertificateView() {
       </div>
 
       <div className="certificate">
-        <Seal size={100} className="cert-seal" />
+        <BrandLogo size={100} className="cert-seal" />
 
-        <h1>Paradigm University</h1>
-        <p className="cert-title">Universitas Paradigmatica — Lux in Codice</p>
+        <h1>{name}</h1>
+        <p className="cert-title">{certTitle}</p>
 
         <div className="gold-divider" />
 
@@ -95,7 +102,6 @@ export function CertificateView() {
         </dl>
       </div>
 
-      {/* All certificates list */}
       {certificates.length > 1 && (
         <div className="no-print mt-xl">
           <h3 className="mb-md">All Attempts</h3>

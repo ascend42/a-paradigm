@@ -24,8 +24,7 @@ export function CoursesView() {
           const pct = getCoursePercentage(course.id, course.lessonCount);
           return (
             <Link to={`/course/${course.id}`} className="course-card" key={course.id}>
-              <span className="course-number">{course.id.replace('para-', 'PARA ')}</span>
-              <h3>{course.title.replace(/^PARA \d+: /, '')}</h3>
+              <h3>{course.title}</h3>
               <p className="course-description">{course.description}</p>
               <div className="course-meta">
                 <span>{course.lessonCount} lessons</span>

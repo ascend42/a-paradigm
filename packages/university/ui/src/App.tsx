@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
 import { HomeView } from './views/HomeView';
@@ -7,10 +8,26 @@ import { QuizView } from './views/QuizView';
 import { PLSATView } from './views/PLSATView';
 import { ReferenceView } from './views/ReferenceView';
 import { CertificateView } from './views/CertificateView';
+import { usePackConfigStore } from './store/packConfigStore';
 
 declare const __PARADIGM_VERSION__: string;
 
 function App() {
+  const { loadPackConfig, config } = usePackConfigStore();
+
+  useEffect(() => {
+    loadPackConfig();
+  }, [loadPackConfig]);
+
+  useEffect(() => {
+    if (!config) return;
+    document.title = config.branding.name;
+    if (config.branding.favicon) {
+      const link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+      if (link) link.href = config.branding.favicon;
+    }
+  }, [config]);
+
   return (
     <div className="app">
       <Header version={__PARADIGM_VERSION__} />

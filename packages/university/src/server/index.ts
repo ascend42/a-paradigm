@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
+import * as yaml from 'js-yaml';
 
 import { createCoursesRouter } from './routes/courses.js';
 import { createPlsatRouter } from './routes/plsat.js';
@@ -91,6 +92,38 @@ function resolveAssetPaths(options?: { contentDir?: string; uiDistPath?: string 
   };
 }
 
+// ── Pack-config types (server-local; shape mirrors PackConfigResponse in UI) ──
+
+interface PackConfigBranding {
+  name: string;
+  tagline: string;
+  logo: string | null;
+  institution: string | null;
+  favicon: string | null;
+  tabs: Array<'campus' | 'courses' | 'plsat' | 'library' | 'certificates'>;
+  startCourse: string | null;
+}
+
+interface PackConfig {
+  mode: 'paradigm' | 'project';
+  branding: PackConfigBranding;
+  theme: Record<string, string> | null;
+  version: string;
+  hasProjectLibrary: boolean;
+}
+
+const PARADIGM_FALLBACK_VERSION = '6.4.0';
+
+const BRANDING_DEFAULTS: PackConfigBranding = {
+  name: 'Paradigm University',
+  tagline: 'Lux in Codice',
+  logo: null,
+  institution: null,
+  favicon: null,
+  tabs: ['campus', 'courses', 'plsat', 'library', 'certificates'],
+  startCourse: null,
+};
+
 /**
  * Create the Express application with all routes configured
  */
@@ -109,19 +142,106 @@ export function createApp(options?: { contentDir?: string; uiDistPath?: string; 
 
   const { contentDir, uiDistPath } = resolveAssetPaths(options);
 
-  // API routes
-  app.use('/api/courses', createCoursesRouter(contentDir, options?.projectDir));
+  // ── Detect project mode ───────────────────────────────────────────
+  let mode: 'paradigm' | 'project' = 'paradigm';
+  let packConfig: PackConfig;
+
+  if (options?.projectDir) {
+    const packYamlPath = path.join(options.projectDir, '.paradigm', 'university', 'pack.yaml');
+    if (fs.existsSync(packYamlPath)) {
+      mode = 'project';
+    }
+  }
+
+  if (mode === 'project' && options?.projectDir) {
+    // Load pack manifest
+    const packYamlPath = path.join(options.projectDir, '.paradigm', 'university', 'pack.yaml');
+    let packManifest: Record<string, unknown> = {};
+    try {
+      const raw = fs.readFileSync(packYamlPath, 'utf-8');
+      packManifest = (yaml.load(raw) as Record<string, unknown>) ?? {};
+    } catch {
+      log.component('university-server').warn('Could not parse pack.yaml — using defaults', { path: packYamlPath });
+    }
+
+    const packBranding = (packManifest.branding ?? {}) as Partial<PackConfigBranding>;
+    const packTheme = (packManifest.theme ?? null) as Record<string, string> | null;
+    const packVersion = typeof packManifest.version === 'string' ? packManifest.version : PARADIGM_FALLBACK_VERSION;
+
+    // Check for project-local reference library
+    const projectRefPath = path.join(options.projectDir, '.paradigm', 'university', 'reference.json');
+    const hasProjectLibrary = fs.existsSync(projectRefPath);
+
+    // Capture whether pack explicitly set tabs before merging
+    const explicitTabs = packBranding.tabs;
+
+    const mergedBranding: PackConfigBranding = {
+      ...BRANDING_DEFAULTS,
+      ...packBranding,
+    };
+
+    // In project mode with no explicit tabs: default to minimal set,
+    // adding 'library' only if a reference.json is present.
+    if (!explicitTabs) {
+      const defaultTabs: Array<'campus' | 'courses' | 'plsat' | 'library' | 'certificates'> = ['campus', 'courses', 'certificates'];
+      if (hasProjectLibrary) {
+        defaultTabs.splice(2, 0, 'library'); // insert before 'certificates'
+      }
+      mergedBranding.tabs = defaultTabs;
+    }
+
+    packConfig = {
+      mode: 'project',
+      branding: mergedBranding,
+      theme: packTheme,
+      version: packVersion,
+      hasProjectLibrary,
+    };
+
+    log.component('university-server').info('Project mode active', { pack: String(packManifest.id ?? 'unknown') });
+  } else {
+    // Paradigm mode — standard branding and full tab set
+    packConfig = {
+      mode: 'paradigm',
+      branding: { ...BRANDING_DEFAULTS },
+      theme: null,
+      version: PARADIGM_FALLBACK_VERSION,
+      hasProjectLibrary: false,
+    };
+  }
+
+  // ── API routes ────────────────────────────────────────────────────
+
+  // Pack config
+  app.get('/api/pack-config', (_req: Request, res: Response) => {
+    res.json(packConfig);
+  });
+
+  app.use('/api/courses', createCoursesRouter(contentDir, options?.projectDir, mode));
   app.use('/api/plsat', createPlsatRouter(contentDir, options?.projectDir));
 
   // Reference cards
   app.get('/api/reference', (_req: Request, res: Response) => {
+    if (mode === 'project' && options?.projectDir) {
+      const projectRefPath = path.join(options.projectDir, '.paradigm', 'university', 'reference.json');
+      if (fs.existsSync(projectRefPath)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(projectRefPath, 'utf-8'));
+          return res.json(data);
+        } catch {
+          return res.status(500).json({ error: 'Failed to parse project reference.json' });
+        }
+      }
+      return res.status(404).json({ error: 'No reference library configured for this project.' });
+    }
+
+    // Paradigm mode — serve bundled reference.json
     const refPath = path.join(contentDir, 'reference.json');
     if (fs.existsSync(refPath)) {
       const data = JSON.parse(fs.readFileSync(refPath, 'utf-8'));
-      res.json(data);
-    } else {
-      res.status(404).json({ error: 'Reference data not found' });
+      return res.json(data);
     }
+    return res.status(404).json({ error: 'Reference data not found' });
   });
 
   // Health check

@@ -136,12 +136,17 @@ function listLearningPaths(contentDir: string): PathYaml[] {
 }
 
 /**
- * Collect all content directories to scan: the bundled first-party dir plus
- * any project pack directories found under projectDir/.paradigm/university/.
- * Each directory that contains a paths/ subdirectory is included.
+ * Collect all content directories to scan.
+ *
+ * In 'paradigm' mode (or when mode is absent): include the bundled
+ * first-party contentDir first, then any project pack directories found
+ * under projectDir/.paradigm/university/.
+ *
+ * In 'project' mode: skip contentDir entirely — return ONLY project pack
+ * directories so that no first-party Paradigm courses appear.
  */
-function collectContentDirs(contentDir: string, projectDir?: string): string[] {
-  const dirs: string[] = [contentDir];
+function collectContentDirs(contentDir: string, projectDir?: string, mode?: 'paradigm' | 'project'): string[] {
+  const dirs: string[] = mode === 'project' ? [] : [contentDir];
   if (!projectDir) return dirs;
 
   const universityRoot = path.join(projectDir, '.paradigm', 'university');
@@ -237,9 +242,9 @@ function loadCourse(contentDir: string, courseId: string): ClientCourse | null {
 // Router
 // ────────────────────────────────────────────────────────────────
 
-export function createCoursesRouter(contentDir: string, projectDir?: string): Router {
+export function createCoursesRouter(contentDir: string, projectDir?: string, mode?: 'paradigm' | 'project'): Router {
   const router = Router();
-  const allContentDirs = collectContentDirs(contentDir, projectDir);
+  const allContentDirs = collectContentDirs(contentDir, projectDir, mode);
 
   // GET /api/courses - List all courses across all packs
   router.get('/', (_req: Request, res: Response) => {

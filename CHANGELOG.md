@@ -5,6 +5,36 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] — 2026-05-10
+
+University white-label support — any project with `.paradigm/university/pack.yaml` now gets its own branded experience: custom name, tagline, logo, favicon, tab set, and library. First-party Paradigm content is hidden in project mode.
+
+### Added
+
+- **`/api/pack-config` endpoint** — new server route returning `{ mode, branding, theme, version, hasProjectLibrary }`. The UI fetches this on mount to configure itself. No more hardcoded "Paradigm University" strings baked into the bundle.
+- **`packConfigStore` (UI)** — Zustand store that loads `/api/pack-config` once on mount and provides `config` to all components. Falls back to Paradigm defaults on fetch error.
+- **`BrandLogo` component (UI)** — renders a custom `<img>` when `branding.logo` is set, falls back to the Paradigm `<Seal>` SVG otherwise. Used in Header, HomeView hero, and CertificateView.
+- **`UniversityBranding.tabs` + `startCourse` fields** (`packages/paradigm-mcp/src/types/university.ts`) — pack authors can now specify which tabs appear and which course the "Start Learning" button links to.
+
+### Changed
+
+- **`packages/university/src/server/index.ts`** — mode detection at startup (`paradigm` vs `project`); loads `pack.yaml`; merges branding with defaults; builds `packConfig` with `hasProjectLibrary` flag; serves `/api/pack-config`; project-mode `/api/reference` returns the project's `reference.json` or a clean 404 with `{ error: 'No reference library configured for this project.' }`
+- **`packages/university/src/server/routes/courses.ts`** — `collectContentDirs()` skips the first-party `contentDir` entirely in project mode so Paradigm courses never appear in a white-labeled instance
+- **`Header.tsx`** — branding name/tagline from store; tabs rendered from `config.branding.tabs` array (dynamic, not hardcoded); version badge reads from pack config
+- **`HomeView.tsx`** — hero uses `BrandLogo`; name/tagline/motto from store; Paradigm-only description hidden in project mode; course cards no longer mangle IDs with `para-` string surgery; Quick Links section respects active tab set; "Start Learning" link uses `branding.startCourse` if set
+- **`CoursesView.tsx`** — removed `para-` ID formatting; shows full `course.title` as-is
+- **`CertificateView.tsx`** — heading and sub-title from pack config branding; `BrandLogo` replaces hardcoded `Seal`
+- **`ReferenceView.tsx`** — detects non-OK HTTP response; surfaces the API's error message in the empty state (project mode without a reference.json shows "No reference library configured for this project." instead of a generic error)
+
+### Versions
+
+- `@a-company/paradigm`: 6.3.4 → **6.4.0**
+- `@a-company/paradigm-mcp`: 6.3.0 → **6.3.1**
+- `@a-company/university`: 6.0.5 → **6.1.0**
+- Plugin `plugin.json`: 6.3.4 → **6.4.0**
+
+---
+
 ## [6.3.4] — 2026-05-10
 
 Fix: `paradigm university serve` now shows project packs — dealoracle, agency-intelligence, and any other `.paradigm/university/` pack created by an agent team.

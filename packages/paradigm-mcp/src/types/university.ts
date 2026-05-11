@@ -268,6 +268,8 @@ export interface UniversityBranding {
   logo?: string;
   institution?: string;
   favicon?: string;
+  tabs?: Array<'campus' | 'courses' | 'plsat' | 'library' | 'certificates'>;
+  startCourse?: string; // e.g. "para-101" or "crystal-ai-deep-dive"
 }
 
 export interface UniversityTheme {

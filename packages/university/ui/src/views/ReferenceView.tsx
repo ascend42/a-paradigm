@@ -4,15 +4,25 @@ import type { ReferenceData } from '../types';
 export function ReferenceView() {
   const [data, setData] = useState<ReferenceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/reference')
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({})) as Record<string, unknown>;
+          setErrorMsg(typeof body.error === 'string' ? body.error : 'Could not load reference data.');
+          setIsLoading(false);
+          return;
+        }
+        const d: ReferenceData = await r.json();
         setData(d);
         setIsLoading(false);
       })
-      .catch(() => setIsLoading(false));
+      .catch(() => {
+        setErrorMsg('Could not load reference data.');
+        setIsLoading(false);
+      });
   }, []);
 
   if (isLoading) {
@@ -23,7 +33,7 @@ export function ReferenceView() {
     return (
       <div className="empty-state">
         <h3>Reference library unavailable</h3>
-        <p>Could not load reference data.</p>
+        <p>{errorMsg ?? 'Could not load reference data.'}</p>
       </div>
     );
   }
