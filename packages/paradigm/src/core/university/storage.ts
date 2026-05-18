@@ -280,6 +280,7 @@ export function searchContent(rootDir: string, filter: UniversityFilter): Univer
   if (filter.tag) results = results.filter(e => e.tags.some(t => t.startsWith(filter.tag!)));
   if (filter.difficulty) results = results.filter(e => e.difficulty === filter.difficulty);
   if (filter.symbol) results = results.filter(e => e.symbols.includes(filter.symbol!));
+  if (filter.section) results = results.filter(e => e.section === filter.section);
   if (filter.query) {
     const q = filter.query.toLowerCase();
     results = results.filter(e => e.title.toLowerCase().includes(q) || e.id.toLowerCase().includes(q));

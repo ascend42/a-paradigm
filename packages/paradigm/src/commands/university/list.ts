@@ -10,6 +10,7 @@ import type { Difficulty } from '../../core/university/types.js';
 import {
   discoverPacksForCli,
   resolvePackContext,
+  readPackSections,
   hasSelector,
   type SelectorOptions,
 } from './selectors.js';
@@ -21,6 +22,8 @@ interface ListOptions extends SelectorOptions {
   symbol?: string;
   limit?: string;
   json?: boolean;
+  // v6.5: filter entries to a single section id
+  section?: string;
 }
 
 export async function universityListCommand(options: ListOptions): Promise<void> {
@@ -51,7 +54,15 @@ export async function universityListCommand(options: ListOptions): Promise<void>
       const disciplines = p.disciplines && p.disciplines.length > 0
         ? chalk.gray(` [${p.disciplines.join(', ')}]`)
         : '';
-      console.log(`  ${chalk.white(p.id.padEnd(28))} ${tk}  ${p.entryCount} entries${disciplines}`);
+      // v6.5: surface user-declared section count. Suppressed when 0 — packs
+      // that lean on the loader's implicit-default `main` section read as
+      // "no sections declared" here, which is the truthful answer for authors
+      // deciding whether to add a `sections:` block.
+      const declaredSections = readPackSections(p.packRoot);
+      const sectionsAnnot = declaredSections.length > 0
+        ? chalk.gray(`  (${declaredSections.length} section${declaredSections.length === 1 ? '' : 's'})`)
+        : '';
+      console.log(`  ${chalk.white(p.id.padEnd(28))} ${tk}  ${p.entryCount} entries${sectionsAnnot}${disciplines}`);
       if (p.name && p.name !== p.id) {
         console.log(chalk.gray(`    ${p.name}`));
       }
@@ -80,6 +91,7 @@ export async function universityListCommand(options: ListOptions): Promise<void>
     tag: options.tag,
     difficulty: options.difficulty as Difficulty | undefined,
     symbol: options.symbol,
+    section: options.section,
     limit: options.limit ? parseInt(options.limit, 10) : 20,
   });
 

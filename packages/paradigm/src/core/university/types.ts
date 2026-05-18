@@ -18,6 +18,9 @@ export interface UniversityFrontmatter {
   difficulty: Difficulty;
   estimatedMinutes?: number;
   prerequisites: string[];
+  // v6.5 sections
+  section?: string;
+  order?: number;
 }
 
 export interface UniversityNote {
@@ -46,6 +49,9 @@ export interface UniversityQuiz {
   estimatedMinutes?: number;
   passThreshold: number;
   questions: QuizQuestion[];
+  // v6.5 sections (top-level; distinct from QuizQuestion.section PLSAT slot)
+  section?: string;
+  order?: number;
 }
 
 export interface LearningPathStep {
@@ -65,6 +71,9 @@ export interface LearningPath {
   tags: string[];
   ordered: boolean;
   steps: LearningPathStep[];
+  // v6.5 sections
+  section?: string;
+  order?: number;
 }
 
 export interface Diploma {
@@ -91,6 +100,9 @@ export interface UniversityIndexEntry {
   symbols: string[];
   difficulty?: Difficulty;
   file: string;
+  // v6.5 sections
+  section?: string;
+  order?: number;
 }
 
 export interface UniversityIndex {
@@ -107,5 +119,7 @@ export interface UniversityFilter {
   difficulty?: Difficulty;
   symbol?: string;
   query?: string;
+  /** v6.5: filter entries to a single section id. */
+  section?: string;
   limit?: number;
 }

@@ -23,6 +23,25 @@ export interface SelectorOptions {
   discipline?: string;
 }
 
+/**
+ * v6.5: Read the user-declared sections array from a pack's manifest. Returns
+ * an empty array when the manifest is missing/unparseable or when no sections
+ * are declared. Consumers distinguish between "no sections declared" (length 0)
+ * and the loader's synthesized implicit-default `main` section (which lives in
+ * paradigm-mcp, not here).
+ */
+export function readPackSections(packRoot: string): Array<{ id: string; name?: string }> {
+  const manifest = safeLoadManifest(packRoot);
+  if (!manifest || !Array.isArray(manifest.sections)) return [];
+  const out: Array<{ id: string; name?: string }> = [];
+  for (const s of manifest.sections) {
+    if (s && typeof s.id === 'string' && s.id.length > 0) {
+      out.push({ id: s.id, name: typeof s.name === 'string' ? s.name : undefined });
+    }
+  }
+  return out;
+}
+
 export interface ResolvedPackContext {
   /** Pack id resolved from the manifest (or derived from dir name when
    *  no manifest is present — v5 implicit-pack path). */
@@ -43,6 +62,10 @@ interface MinimalManifest {
   name?: string;
   tenant_kind?: 'first-party' | 'project' | 'external';
   disciplines?: string[];
+  /** v6.5: declared sections. Each entry shape is unvalidated here; consumers
+   *  treat the array length as the user-declared count and inspect ids if
+   *  needed (add.ts unknown-id validation). Empty/missing → 0 declared. */
+  sections?: Array<{ id?: string; name?: string }>;
 }
 
 function safeLoadManifest(packRoot: string): MinimalManifest | null {

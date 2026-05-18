@@ -2017,6 +2017,7 @@ universityCmd
   .option('--pack <id>', 'v6.0: target a specific content pack by id')
   .option('--project', 'v6.0: target the local project pack')
   .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
+  .option('--section <id>', 'v6.5: filter entries to a single section id')
   .option('-l, --limit <number>', 'Number of entries', '20')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -2036,6 +2037,8 @@ universityCmd
   .option('--pack <id>', 'v6.0: target a specific content pack by id')
   .option('--project', 'v6.0: target the local project pack (default)')
   .option('--discipline <name>', 'v6.0: scope to a discipline sub-pack')
+  .option('--section <id>', 'v6.5: assign the entry to a section id declared in pack.yaml')
+  .option('--order <n>', 'v6.5: integer order within the section (lower first)')
   .action(async (type, options) => {
     const { universityAddCommand } = await import('./commands/university/add.js');
     await universityAddCommand(type, options);

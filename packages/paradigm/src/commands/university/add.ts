@@ -6,7 +6,7 @@
 import chalk from 'chalk';
 import { saveNote, saveQuiz, rebuildUniversityIndex } from '../../core/university/index.js';
 import type { UniversityFrontmatter, UniversityQuiz, Difficulty } from '../../core/university/types.js';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { resolvePackContext, readPackSections, type SelectorOptions } from './selectors.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
 
@@ -26,6 +26,9 @@ interface AddOptions extends SelectorOptions {
   symbols?: string;
   difficulty?: string;
   minutes?: string;
+  // v6.5 sections
+  section?: string;
+  order?: string;
 }
 
 export async function universityAddCommand(type: string, options: AddOptions): Promise<void> {
@@ -39,6 +42,31 @@ export async function universityAddCommand(type: string, options: AddOptions): P
 
   if (!options.title) {
     console.error(chalk.red('\n  Error: --title is required\n'));
+    process.exit(1);
+  }
+
+  // v6.5: validate --section against pack's declared sections. The check only
+  // fires when the pack has user-authored sections — packs that rely on the
+  // loader's implicit-default `main` section accept any section ref (the
+  // dangling-ref warning surfaces later in `paradigm university validate`).
+  if (options.section) {
+    const declared = readPackSections(ctx.subPackRoot ?? ctx.packRoot);
+    if (declared.length > 0) {
+      const known = new Set(declared.map(s => s.id));
+      if (!known.has(options.section)) {
+        const available = declared.map(s => s.id).join(', ');
+        const packId = ctx.subPackId ?? ctx.packId;
+        console.error(
+          chalk.red(`\n  Error: section "${options.section}" not declared in pack "${packId}". Available: ${available}\n`),
+        );
+        process.exit(1);
+      }
+    }
+  }
+
+  const orderNum = options.order !== undefined ? parseInt(options.order, 10) : undefined;
+  if (options.order !== undefined && (orderNum === undefined || Number.isNaN(orderNum))) {
+    console.error(chalk.red(`\n  Error: --order must be an integer (got "${options.order}")\n`));
     process.exit(1);
   }
 
@@ -62,6 +90,8 @@ export async function universityAddCommand(type: string, options: AddOptions): P
       difficulty: (options.difficulty as Difficulty) || 'beginner',
       passThreshold: 0.7,
       questions: [],
+      ...(options.section ? { section: options.section } : {}),
+      ...(orderNum !== undefined ? { order: orderNum } : {}),
     };
     saveQuiz(rootDir, quiz);
     rebuildUniversityIndex(rootDir);
@@ -85,6 +115,8 @@ export async function universityAddCommand(type: string, options: AddOptions): P
     difficulty: (options.difficulty as Difficulty) || 'beginner',
     estimatedMinutes: options.minutes ? parseInt(options.minutes, 10) : undefined,
     prerequisites: [],
+    ...(options.section ? { section: options.section } : {}),
+    ...(orderNum !== undefined ? { order: orderNum } : {}),
   };
 
   saveNote(rootDir, frontmatter, options.body || '');
