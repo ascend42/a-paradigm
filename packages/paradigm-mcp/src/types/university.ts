@@ -38,6 +38,42 @@ export interface PackCompliance {
   revoke_on_policy_change?: boolean;
 }
 
+// ── Pack Sections (v6.5) ─────────────────────────────────
+
+/**
+ * Visual presentation style for a section. The loader and validator are
+ * style-agnostic; only the UI dispatches on this enum.
+ *
+ *   - `track`          — ordered curriculum (e.g. PARA 001 → 701)
+ *   - `index`          — alphabetical / lookup grid
+ *   - `chronological`  — newest-first reverse-time list
+ *   - `featured`       — small, hand-picked tile view
+ */
+export type SectionStyle = 'track' | 'index' | 'chronological' | 'featured';
+
+/**
+ * A logical grouping inside a content pack. Sections are additive over the
+ * v6.0 manifest — packs without `sections:` synthesize a single implicit
+ * `main` section flagged `default: true` to preserve v6.0-6.4 behavior.
+ *
+ * Constraints enforced by the Zod schema in pack-loader:
+ *   - `id`           : matches /^[a-z0-9][a-z0-9-]{0,63}$/ (kebab-case)
+ *   - `name`         : ≤ 120 chars
+ *   - `description`  : ≤ 1000 chars, PLAIN TEXT (no markdown rendering)
+ *   - `order`        : integer in [0, 9999]
+ *   - At most 64 sections per pack
+ *   - Exactly one section per pack may set `default: true` (single-section
+ *     packs with `default: false` get auto-promoted)
+ */
+export interface Section {
+  id: string;
+  name: string;
+  order: number;
+  style: SectionStyle;
+  description?: string;
+  default?: boolean;
+}
+
 /**
  * Shape of `pack.yaml` at a content-pack root. Version 1 at v6.0.
  * See docs/private/plans/v6.0-university-builder-spec.md §1.2.
@@ -70,6 +106,11 @@ export interface PackManifest {
 
   // Dependencies
   dependencies?: PackDependency[];
+
+  // v6.5: optional pack sections (groupings for entries). When omitted or
+  // an empty array, the loader synthesizes a single implicit `main` section
+  // flagged `default: true`. See Section docstring for constraints.
+  sections?: Section[];
 }
 
 /**
@@ -104,6 +145,13 @@ export interface UniversityFrontmatter {
   source?: string;          // provenance hint, e.g. 'courses/para-001.json' for imported
   pack_id?: string;         // injected by loader; not authored
   discipline?: string;      // for discipline sub-pack entries
+
+  // v6.5 section additions (optional, additive). `section` is the id of a
+  // Section declared on the pack manifest; `order` is the per-section sort
+  // key (lower first). When `section` is absent, the entry falls through to
+  // the pack's default section (the loader synthesizes one if needed).
+  section?: string;
+  order?: number;
 }
 
 export interface UniversityNote {
@@ -149,6 +197,13 @@ export interface UniversityQuiz {
   pack_id?: string;
   discipline?: string;
 
+  // v6.5 section additions — see notes on UniversityFrontmatter. Note: this
+  // is the TOP-LEVEL section grouping the quiz into a pack section. It is
+  // intentionally different from `QuizQuestion.section` (PLSAT slot id like
+  // 'para-101') — different schema levels; collision accepted by design.
+  section?: string;
+  order?: number;
+
   // v6.0 PLSAT additions (all optional)
   timeLimit?: number;        // seconds
   totalSlots?: number;
@@ -178,6 +233,10 @@ export interface LearningPath {
   ordered: boolean;
   steps: LearningPathStep[];
   category?: string;
+
+  // v6.5 section additions — see notes on UniversityFrontmatter.
+  section?: string;
+  order?: number;
 }
 
 // ── Diploma ──────────────────────────────────────────────
@@ -236,6 +295,12 @@ export interface UniversityIndexEntry {
   difficulty?: Difficulty;
   file: string;             // Relative path from university dir
   category?: string;
+
+  // v6.5 section additions — propagated from frontmatter/quiz/path at
+  // rebuildUniversityIndex time so downstream consumers (list grouping,
+  // section filters, UI sidebar) don't need to re-parse content files.
+  section?: string;
+  order?: number;
 }
 
 export interface UniversityIndex {
@@ -257,6 +322,8 @@ export interface UniversityFilter {
   query?: string;           // Free-text search in title/description
   category?: string;
   track?: 'core' | 'extracurricular';
+  /** v6.5: filter to entries whose `section` equals this id. */
+  section?: string;
   limit?: number;
 }
 

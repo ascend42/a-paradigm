@@ -14,6 +14,9 @@ export type {
   PackCompliance,
   PackManifest,
   PackLocation,
+  // v6.5 sections
+  Section,
+  SectionStyle,
 } from './university.js';
 
 /** Filename of the pack manifest at a pack root. */
