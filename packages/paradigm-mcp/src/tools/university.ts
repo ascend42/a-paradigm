@@ -202,6 +202,10 @@ export function getUniversityToolsList() {
             type: 'string',
             description: 'v6.0: filter by discipline sub-pack name',
           },
+          section: {
+            type: 'string',
+            description: 'v6.5: filter by section id (within the active pack)',
+          },
           limit: {
             type: 'number',
             description: 'Maximum results (default: 20)',
@@ -434,17 +438,27 @@ export async function handleUniversityTool(
       : packs;
 
     const result = {
-      packs: filtered.map(p => ({
-        id: p.manifest.id,
-        name: p.manifest.name,
-        version: p.manifest.version,
-        tenant_kind: p.manifest.tenant_kind,
-        ...(p.manifest.disciplines && p.manifest.disciplines.length > 0
-          ? { discipline: p.manifest.disciplines[0] }
-          : {}),
-        entry_count: countPackEntries(p.rootDir),
-        path: p.rootDir,
-      })),
+      packs: filtered.map(p => {
+        // v6.5: surface the pack's sections (always non-empty post-synthesis
+        // — pack-loader synthesizes a default `main` section when omitted).
+        // Sort by (order, id) ascending so UI consumers get a deterministic
+        // order without re-sorting.
+        const sections = (p.manifest.sections ?? []).slice().sort((a, b) =>
+          (a.order - b.order) || a.id.localeCompare(b.id),
+        );
+        return {
+          id: p.manifest.id,
+          name: p.manifest.name,
+          version: p.manifest.version,
+          tenant_kind: p.manifest.tenant_kind,
+          ...(p.manifest.disciplines && p.manifest.disciplines.length > 0
+            ? { discipline: p.manifest.disciplines[0] }
+            : {}),
+          entry_count: countPackEntries(p.rootDir),
+          sections,
+          path: p.rootDir,
+        };
+      }),
     };
 
     const text = JSON.stringify(result, null, 2);
@@ -455,7 +469,13 @@ export async function handleUniversityTool(
   // ── Search ─────────────────────────────────────────────
   if (name === 'paradigm_university_search') {
     const requestedPack = args.pack as string | undefined;
-    const { packId } = resolveActivePack(ctx.rootDir, requestedPack);
+    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
+
+    // v6.5: resolve the active pack's default-section id for synthesis on
+    // results where `section` is absent in the entry frontmatter.
+    const activeManifest = loadOrFabricatePackManifest(packRoot);
+    const defaultSectionId =
+      activeManifest?.sections?.find(s => s.default === true)?.id ?? 'main';
 
     const results = searchContent(ctx.rootDir, {
       type: args.type as string | undefined,
@@ -465,10 +485,14 @@ export async function handleUniversityTool(
       query: args.query as string | undefined,
       category: args.category as string | undefined,
       track: args.track as 'core' | 'extracurricular' | undefined,
+      section: args.section as string | undefined,
       limit: args.limit as number | undefined,
     });
 
     // v6.0 spec §4.1: result ids are <pack-id>:<entry-id>.
+    // v6.5: result items include `section` (always present, synthesized to
+    // the active pack's default when not authored) and `order` (only when
+    // set on the entry).
     const text = JSON.stringify({
       count: results.length,
       pack: packId,
@@ -479,6 +503,8 @@ export async function handleUniversityTool(
         difficulty: r.difficulty,
         tags: r.tags,
         symbols: r.symbols,
+        section: r.section ?? defaultSectionId,
+        ...(typeof r.order === 'number' ? { order: r.order } : {}),
       })),
     }, null, 2);
 

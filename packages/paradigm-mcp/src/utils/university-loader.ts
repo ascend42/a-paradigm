@@ -46,7 +46,7 @@ import type {
   PackLocation,
 } from '../types/university.js';
 import { PACK_MANIFEST_FILENAME } from '../types/pack.js';
-import { loadPackManifest, PackLoadError, discoverPacks } from './pack-loader.js';
+import { loadPackManifest, PackLoadError, discoverPacks, normalizeSections } from './pack-loader.js';
 import { log } from './mcp-logger.js';
 
 const UNIVERSITY_DIR = '.paradigm/university';
@@ -104,7 +104,10 @@ export function loadOrFabricatePackManifest(packRoot: string): PackManifest | nu
       });
     }
   }
-  // Fabricate an implicit manifest for pre-v6.0 layouts.
+  // Fabricate an implicit manifest for pre-v6.0 layouts. v6.5: synthesize the
+  // implicit default section via normalizeSections(undefined) so the
+  // fabricated manifest and a real loaded manifest agree on the default-
+  // section shape — UI/MCP consumers can rely on `sections` being populated.
   const packId = path.basename(packRoot) || 'project';
   return {
     id: packId,
@@ -114,6 +117,7 @@ export function loadOrFabricatePackManifest(packRoot: string): PackManifest | nu
     tenant_kind: 'project',
     description: 'Implicit project pack (pack.yaml not present — v5 layout)',
     origin_hint: 'authored',
+    sections: normalizeSections(undefined),
   };
 }
 
@@ -710,6 +714,12 @@ export function validateUniversityContent(
     }
   }
 
+  // v6.5: section integrity checks (dangling-section-ref + empty-section).
+  // Resolves the project-pack manifest (fabricated when pack.yaml absent) so
+  // synthesized default section is honored on legacy layouts — keeps
+  // back-compat packs from emitting noise.
+  validateSectionIntegrity(rootDir, index, issues);
+
   // Validate diplomas
   const diplomas = loadDiplomas(rootDir);
   for (const diploma of diplomas) {
@@ -812,6 +822,75 @@ function validatePathContent(
         check: 'broken-path-step',
         message: `Learning path step references "${step.content}" which doesn't exist`,
         fix: `Create content with id "${step.content}" or remove this step`,
+      });
+    }
+  }
+}
+
+/**
+ * v6.5: validate section refs against the project pack manifest.
+ *
+ *   - `dangling-section-ref` (warning): entry has `section:` set to an id
+ *     that does not exist in the pack's `sections:` block.
+ *   - `empty-section` (warning): a declared section has zero matching
+ *     entries. Matching = entries explicitly tagged with the section id,
+ *     OR (for the default section) entries without `section:` set — so
+ *     legacy packs that haven't migrated frontmatter don't emit noise on
+ *     the synthesized `main` default.
+ *
+ * No-op when the pack manifest cannot be resolved (defensive — diagnostic
+ * checks must never block the main validation pipeline).
+ */
+function validateSectionIntegrity(
+  rootDir: string,
+  index: UniversityIndex,
+  issues: UniversityValidationIssue[],
+): void {
+  const packRoot = path.join(rootDir, UNIVERSITY_DIR);
+  const manifest = loadOrFabricatePackManifest(packRoot);
+  if (!manifest || !manifest.sections || manifest.sections.length === 0) {
+    return;
+  }
+
+  const knownSectionIds = new Set(manifest.sections.map(s => s.id));
+  const defaultSection = manifest.sections.find(s => s.default === true);
+
+  // dangling-section-ref pass
+  for (const entry of index.entries) {
+    if (entry.section && !knownSectionIds.has(entry.section)) {
+      issues.push({
+        contentId: entry.id,
+        severity: 'warning',
+        check: 'dangling-section-ref',
+        message: `Entry references section "${entry.section}" which is not declared in pack.yaml`,
+        fix: `Add a section with id "${entry.section}" to pack.yaml, or remove the section field`,
+      });
+    }
+  }
+
+  // empty-section pass — count entries per section. Untagged entries count
+  // toward the default section so legacy packs (no per-entry section field
+  // yet) don't trigger a false-positive on the synthesized default.
+  const sectionCounts = new Map<string, number>();
+  for (const s of manifest.sections) {
+    sectionCounts.set(s.id, 0);
+  }
+  for (const entry of index.entries) {
+    if (entry.section && knownSectionIds.has(entry.section)) {
+      sectionCounts.set(entry.section, (sectionCounts.get(entry.section) || 0) + 1);
+    } else if (!entry.section && defaultSection) {
+      sectionCounts.set(defaultSection.id, (sectionCounts.get(defaultSection.id) || 0) + 1);
+    }
+  }
+
+  for (const s of manifest.sections) {
+    if ((sectionCounts.get(s.id) || 0) === 0) {
+      issues.push({
+        contentId: s.id,
+        severity: 'warning',
+        check: 'empty-section',
+        message: `Section "${s.id}" has zero entries`,
+        fix: `Add at least one entry with section: "${s.id}", or remove the section from pack.yaml`,
       });
     }
   }
