@@ -7,7 +7,13 @@
 import chalk from 'chalk';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { resolvePackContext, readPackSections, type SelectorOptions } from './selectors.js';
+import { out } from '../../utils/cli-output.js';
+
+// v6.5: Module-local guard so the implicit-default advisory fires at most once
+// per process, regardless of how many serve calls or pack-context resolutions
+// happen. Re-imports get a fresh module → fresh guard, which is fine.
+let implicitDefaultAdvisoryEmitted = false;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +30,20 @@ export async function universityServeCommand(_path: string | undefined, options:
   const rootDir = process.cwd();
   const hasSelector = Boolean(options.pack || options.project || options.discipline);
   const ctx = hasSelector ? resolvePackContext(rootDir, options) : null;
+
+  // v6.5: If the resolved pack has no user-authored sections, the paradigm-mcp
+  // loader synthesizes a default `main` section. Surface this once per process
+  // so authors know custom sections are available. We only probe when a pack
+  // context is resolved — bare `paradigm university serve` (bundled first-party
+  // content) skips the advisory.
+  if (ctx && !implicitDefaultAdvisoryEmitted) {
+    const probeRoot = ctx.subPackRoot ?? ctx.packRoot;
+    const declared = readPackSections(probeRoot);
+    if (declared.length === 0) {
+      out('Using implicit default section. v6.5 supports custom sections — see docs.');
+      implicitDefaultAdvisoryEmitted = true;
+    }
+  }
 
   console.log(chalk.cyan('\nOpening the campus gates...\n'));
 

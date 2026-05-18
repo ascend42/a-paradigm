@@ -99,6 +99,9 @@ export async function universityInitCommand(options: InitOptions): Promise<void>
     dim(`  parent pack:  ${parentPackId}`);
     dim(`  discipline:   ${disciplineName}`);
     out('');
+    // v6.5 FTUX: surface sections to authors during init.
+    out('Tip: declare sections: in pack.yaml to group entries (see university.md §4.5).');
+    out('');
     return;
   }
 
@@ -138,5 +141,8 @@ export async function universityInitCommand(options: InitOptions): Promise<void>
   dim(`  tenant_kind: project`);
   out('');
   dim('  next: paradigm university add note --title "Your first note"');
+  out('');
+  // v6.5 FTUX: surface sections to authors during init.
+  out('Tip: declare sections: in pack.yaml to group entries (see university.md §4.5).');
   out('');
 }
