@@ -440,3 +440,43 @@ describe('pack-loader — resolveEntryAddress', () => {
     expect(r).toEqual({ packId: 'acme-project', entryId: 'N-only-in-acme' });
   });
 });
+
+describe('pack-loader — v6.5 section synthesis (PARA 001-701 back-compat)', () => {
+  let tmpDir: string | undefined;
+  afterEach(() => {
+    if (tmpDir && fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+    tmpDir = undefined;
+  });
+
+  it('synthesizes the default section for a first-party-shaped pack with no sections: declared', () => {
+    // Atelier migration target: a real first-party-shaped pack (PARA 001-701
+    // lineage) authored before v6.5 has no `sections:` block. After v6.5 it
+    // should load with a synthesized single-section `main` default — every
+    // existing entry continues to resolve to a known section without manifest
+    // edits.
+    tmpDir = mktemp();
+    writeJson(path.join(tmpDir, 'package.json'), { name: 'host', version: '0.0.0' });
+    writePackYaml(
+      path.join(tmpDir, 'node_modules', '@a-company', 'university'),
+      [
+        'id: paradigm',
+        'name: Paradigm University',
+        'version: 6.5.0',
+        'schema_version: "1"',
+        'tenant_kind: first-party',
+        'description: First-party pack — pre-sections.',
+      ].join('\n'),
+    );
+
+    const packs = discoverPacks(tmpDir);
+    const fp = packs.find(p => p.source === 'first-party');
+    expect(fp).toBeDefined();
+    expect(fp!.manifest.sections).toBeDefined();
+    expect(fp!.manifest.sections!).toHaveLength(1);
+    expect(fp!.manifest.sections![0].id).toBe('main');
+    expect(fp!.manifest.sections![0].default).toBe(true);
+    expect(fp!.manifest.sections![0].style).toBe('track');
+  });
+});
