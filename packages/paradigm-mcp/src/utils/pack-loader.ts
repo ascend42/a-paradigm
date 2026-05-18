@@ -20,7 +20,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { z } from 'zod';
 import {
   PACK_MANIFEST_FILENAME,
   PACKAGE_JSON_POINTER_FIELD,
@@ -28,6 +27,11 @@ import {
 import type { PackLocation, PackManifest, Section, SectionStyle } from '../types/pack.js';
 import { safeLoad } from './yaml-validator.js';
 import { log } from './mcp-logger.js';
+import {
+  SectionsArraySchema,
+  SECTION_STYLES as SECTION_STYLE_VALUES,
+  MAX_SECTIONS_PER_PACK,
+} from './pack-schema.js';
 
 const FIRST_PARTY_PACKAGE_NAME = '@a-company/university';
 const LOCAL_UNIVERSITY_DIR = '.paradigm/university';
@@ -68,53 +72,12 @@ const REQUIRED_MANIFEST_FIELDS: ReadonlyArray<keyof PackManifest> = [
 const VALID_TENANT_KINDS: ReadonlySet<string> = new Set(['first-party', 'project', 'external']);
 
 // ─────────────────────────────────────────────────────────────
-// v6.5: Section schema + synthesis (Aegis-reviewed)
+// v6.5: Section synthesis (schema lives in pack-schema.ts)
 // ─────────────────────────────────────────────────────────────
 
-/** Identifier discipline for section ids — kebab-case, ≤ 64 chars. */
-const SECTION_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-
-/** Hard cap on sections per pack (defence-in-depth against runaway manifests). */
-const MAX_SECTIONS_PER_PACK = 64;
-
-/** Allowed section styles — mirrors the SectionStyle type union. */
-const SECTION_STYLE_VALUES = ['track', 'index', 'chronological', 'featured'] as const;
-
-/**
- * Zod schema for a single Section. Surfaces classifier-only errors via the
- * `manifest-invalid` PackLoadError class — never echoes manifest body strings
- * into the public error surface.
- */
-const SectionSchema = z.object({
-  id: z
-    .string()
-    .regex(SECTION_ID_PATTERN, 'section.id must be kebab-case, ≤64 chars'),
-  name: z
-    .string()
-    .min(1, 'section.name must be non-empty')
-    .max(120, 'section.name must be ≤120 chars'),
-  order: z
-    .number()
-    .int('section.order must be an integer')
-    .min(0, 'section.order must be ≥0')
-    .max(9999, 'section.order must be ≤9999'),
-  style: z.enum(SECTION_STYLE_VALUES, {
-    errorMap: () => ({ message: `section.style must be one of ${SECTION_STYLE_VALUES.join('|')}` }),
-  }),
-  description: z
-    .string()
-    .max(1000, 'section.description must be ≤1000 chars')
-    .optional(),
-  // Strict boolean — Zod's default z.boolean() rejects non-boolean inputs
-  // including string "true"/"false" and 0/1, which is the contract Aegis
-  // asked for.
-  default: z.boolean({ invalid_type_error: 'section.default must be a boolean' }).optional(),
-}).strict();
-
-/** Zod array schema with the 64-section cap. */
-const SectionsArraySchema = z
-  .array(SectionSchema)
-  .max(MAX_SECTIONS_PER_PACK, `sections must contain ≤${MAX_SECTIONS_PER_PACK} entries`);
+// Reference MAX_SECTIONS_PER_PACK so the const remains traceable from this
+// module (load-time importers that grep for the cap can find it here).
+void MAX_SECTIONS_PER_PACK;
 
 /** The implicit-default section synthesized for packs without `sections:`. */
 const IMPLICIT_DEFAULT_SECTION: Section = {
