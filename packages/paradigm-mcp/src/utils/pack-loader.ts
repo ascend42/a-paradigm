@@ -20,11 +20,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { z } from 'zod';
 import {
   PACK_MANIFEST_FILENAME,
   PACKAGE_JSON_POINTER_FIELD,
 } from '../types/pack.js';
-import type { PackLocation, PackManifest } from '../types/pack.js';
+import type { PackLocation, PackManifest, Section, SectionStyle } from '../types/pack.js';
 import { safeLoad } from './yaml-validator.js';
 import { log } from './mcp-logger.js';
 
@@ -65,6 +66,129 @@ const REQUIRED_MANIFEST_FIELDS: ReadonlyArray<keyof PackManifest> = [
 ] as const;
 
 const VALID_TENANT_KINDS: ReadonlySet<string> = new Set(['first-party', 'project', 'external']);
+
+// ─────────────────────────────────────────────────────────────
+// v6.5: Section schema + synthesis (Aegis-reviewed)
+// ─────────────────────────────────────────────────────────────
+
+/** Identifier discipline for section ids — kebab-case, ≤ 64 chars. */
+const SECTION_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** Hard cap on sections per pack (defence-in-depth against runaway manifests). */
+const MAX_SECTIONS_PER_PACK = 64;
+
+/** Allowed section styles — mirrors the SectionStyle type union. */
+const SECTION_STYLE_VALUES = ['track', 'index', 'chronological', 'featured'] as const;
+
+/**
+ * Zod schema for a single Section. Surfaces classifier-only errors via the
+ * `manifest-invalid` PackLoadError class — never echoes manifest body strings
+ * into the public error surface.
+ */
+const SectionSchema = z.object({
+  id: z
+    .string()
+    .regex(SECTION_ID_PATTERN, 'section.id must be kebab-case, ≤64 chars'),
+  name: z
+    .string()
+    .min(1, 'section.name must be non-empty')
+    .max(120, 'section.name must be ≤120 chars'),
+  order: z
+    .number()
+    .int('section.order must be an integer')
+    .min(0, 'section.order must be ≥0')
+    .max(9999, 'section.order must be ≤9999'),
+  style: z.enum(SECTION_STYLE_VALUES, {
+    errorMap: () => ({ message: `section.style must be one of ${SECTION_STYLE_VALUES.join('|')}` }),
+  }),
+  description: z
+    .string()
+    .max(1000, 'section.description must be ≤1000 chars')
+    .optional(),
+  // Strict boolean — Zod's default z.boolean() rejects non-boolean inputs
+  // including string "true"/"false" and 0/1, which is the contract Aegis
+  // asked for.
+  default: z.boolean({ invalid_type_error: 'section.default must be a boolean' }).optional(),
+}).strict();
+
+/** Zod array schema with the 64-section cap. */
+const SectionsArraySchema = z
+  .array(SectionSchema)
+  .max(MAX_SECTIONS_PER_PACK, `sections must contain ≤${MAX_SECTIONS_PER_PACK} entries`);
+
+/** The implicit-default section synthesized for packs without `sections:`. */
+const IMPLICIT_DEFAULT_SECTION: Section = {
+  id: 'main',
+  name: 'Curriculum',
+  order: 1,
+  style: 'track',
+  default: true,
+};
+
+/**
+ * Validate + normalize a manifest's `sections:` block. Returns a fresh array
+ * (never mutates the input). Synthesizes the implicit default section when
+ * `sections` is missing or empty. Auto-promotes the sole section to default
+ * for single-section packs that omit `default: true`.
+ *
+ * Throws PackLoadError('manifest-invalid', ...) — classifier-only messages,
+ * never the manifest body — when the schema rejects.
+ */
+export function normalizeSections(rawSections: unknown): Section[] {
+  // Missing or empty → synthesize implicit default. Per spec: empty array is
+  // treated the same as missing field.
+  if (rawSections === undefined || rawSections === null) {
+    return [{ ...IMPLICIT_DEFAULT_SECTION }];
+  }
+  if (Array.isArray(rawSections) && rawSections.length === 0) {
+    return [{ ...IMPLICIT_DEFAULT_SECTION }];
+  }
+
+  const parsed = SectionsArraySchema.safeParse(rawSections);
+  if (!parsed.success) {
+    // Classifier message; first issue path + code. Do NOT include issue
+    // `received` values (those may echo manifest content).
+    const first = parsed.error.issues[0];
+    const detail = first
+      ? `${first.path.join('.') || 'sections'}: ${first.message}`
+      : 'sections failed schema validation';
+    throw new PackLoadError('manifest-invalid', detail);
+  }
+
+  const sections = parsed.data.map((s) => ({ ...s })) as Section[];
+
+  // Duplicate id check
+  const seen = new Set<string>();
+  for (const s of sections) {
+    if (seen.has(s.id)) {
+      throw new PackLoadError('manifest-invalid', `duplicate section id "${s.id}"`);
+    }
+    seen.add(s.id);
+  }
+
+  // Single-section packs with no default get auto-promoted (never fail a
+  // one-section pack on the "exactly one default" rule).
+  if (sections.length === 1 && !sections[0].default) {
+    sections[0] = { ...sections[0], default: true };
+  }
+
+  // "Exactly one default" check — applies for multi-section packs.
+  const defaults = sections.filter((s) => s.default === true);
+  if (defaults.length > 1) {
+    throw new PackLoadError(
+      'manifest-invalid',
+      `at most one section may set default: true (found ${defaults.length})`,
+    );
+  }
+
+  // Stable sort by order, then id (deterministic when orders tie).
+  sections.sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
+
+  return sections;
+}
+
+/** Re-export the style enum values so other modules don't re-declare them. */
+export const SECTION_STYLES: ReadonlyArray<SectionStyle> = SECTION_STYLE_VALUES;
 
 /**
  * Read and validate a `pack.yaml` from a directory. Throws `PackLoadError`
@@ -107,6 +231,12 @@ export function loadPackManifest(dir: string): PackManifest {
           'tenant_kind must be one of first-party|project|external',
         );
       }
+
+      // v6.5: normalize sections (synthesize default when absent/empty, run
+      // Zod schema, enforce single-default invariant). normalizeSections
+      // throws PackLoadError('manifest-invalid', ...) with classifier-only
+      // detail strings — never the manifest body.
+      manifest.sections = normalizeSections((manifest as { sections?: unknown }).sections);
 
       return manifest;
     }

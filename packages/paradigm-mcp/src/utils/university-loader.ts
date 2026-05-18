@@ -471,6 +471,13 @@ export function searchContent(rootDir: string, filter: UniversityFilter): Univer
   if (filter.category) {
     results = results.filter(e => e.category === filter.category);
   }
+  if (filter.section) {
+    // v6.5: section filter. Matches entries whose `section` matches exactly.
+    // Entries without a `section` are excluded unless the filter targets the
+    // synthesized default — but that's a UI/CLI concern (callers can pass
+    // the default id explicitly).
+    results = results.filter(e => e.section === filter.section);
+  }
   if (filter.track) {
     const config = loadUniversityConfig(rootDir);
     const categoryTrackMap = new Map<string, string>();
@@ -521,6 +528,10 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             difficulty: (fm.difficulty as Difficulty) || 'beginner',
             file: `${CONTENT_DIR}/${subdir}/${file}`,
             ...(fm.category ? { category: fm.category as string } : {}),
+            // v6.5: propagate section + order so list/search/UI consumers
+            // don't need to re-parse the markdown frontmatter.
+            ...(typeof fm.section === 'string' && fm.section ? { section: fm.section } : {}),
+            ...(typeof fm.order === 'number' && Number.isFinite(fm.order) ? { order: fm.order } : {}),
           });
         } catch {
           // Skip malformed
@@ -553,6 +564,10 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             difficulty: quiz.difficulty || 'beginner',
             file: `${CONTENT_DIR}/${QUIZZES_DIR}/${file}`,
             ...(quiz.category ? { category: quiz.category } : {}),
+            // v6.5: top-level `section` field (distinct from per-question
+            // QuizQuestion.section PLSAT slot id — different schema levels).
+            ...(typeof quiz.section === 'string' && quiz.section ? { section: quiz.section } : {}),
+            ...(typeof quiz.order === 'number' && Number.isFinite(quiz.order) ? { order: quiz.order } : {}),
           });
         } catch {
           // Skip malformed
@@ -584,6 +599,9 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             symbols: [],
             file: `${CONTENT_DIR}/${PATHS_DIR}/${file}`,
             ...(lp.category ? { category: lp.category } : {}),
+            // v6.5: section + order propagation.
+            ...(typeof lp.section === 'string' && lp.section ? { section: lp.section } : {}),
+            ...(typeof lp.order === 'number' && Number.isFinite(lp.order) ? { order: lp.order } : {}),
           });
         } catch {
           // Skip malformed
@@ -930,6 +948,10 @@ function normalizeFrontmatter(fm: UniversityFrontmatter): UniversityFrontmatter 
     ...(fm.source ? { source: fm.source } : {}),
     ...(fm.pack_id ? { pack_id: fm.pack_id } : {}),
     ...(fm.discipline ? { discipline: fm.discipline } : {}),
+    // v6.5 section additions — round-trip through load/save without
+    // mutation. Validation of refs lives in the validator command.
+    ...(fm.section ? { section: fm.section } : {}),
+    ...(typeof fm.order === 'number' ? { order: fm.order } : {}),
   };
 }
 
