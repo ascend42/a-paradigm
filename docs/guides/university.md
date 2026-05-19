@@ -109,6 +109,93 @@ The `--discipline` flag scopes the command to the sub-pack. `list`, `show`, `qui
 
 The root `.paradigm/university/pack.yaml` can declare `branding:` and `theme:`. Sub-packs inherit unless they set their own. Keeps the UI coherent across disciplines without duplicating config.
 
+### 4.5 Sections
+
+#### What sections are
+
+A **section** is a named grouping of entries inside a pack — rendered as a tab in the University UI and as a filter on the CLI and MCP search surfaces. Sections let a single pack carry multiple presentations of content side by side: a course track for structured learning, an index of field notes, a chronological changelog, a featured shelf for landing-page highlights. Sections landed in v6.5; everything below is additive — packs authored before v6.5 continue to render pixel-identical without any manifest changes.
+
+#### Declaring sections in `pack.yaml`
+
+```yaml
+id: acme-onboarding
+version: "1.0.0"
+sections:
+  - id: courses
+    name: Courses
+    order: 0
+    style: track
+    default: true
+    description: Structured learning paths.
+  - id: field-notes
+    name: Field Notes
+    order: 1
+    style: index
+    description: Nice-to-knows and electives.
+```
+
+Required per-section fields: `id` (kebab-case), `name`, `order` (integer), `style`. Optional: `description`, `default: true` (exactly one section may carry it).
+
+#### The four `style` values
+
+| Style | Renders as | Use for |
+|-------|------------|---------|
+| `track` | Ordered paths with progress rings (the v6.4 CoursesView) | Courses, certifications, onboarding tracks |
+| `index` | Sortable entry list (alphabetical or `order:`-keyed) | Field notes, references, electives |
+| `chronological` | Newest-first by `created:` | Changelogs, release notes, blog-style |
+| `featured` | Editor-curated highlights | Landing page, "start here" shelf |
+
+At v6.5 the UI ships a `track`-native renderer; `index`, `chronological`, and `featured` fall back to the track renderer with a one-line dev-console warning. The dedicated renderers land as content demand grows — the manifest schema is locked so future renderers swap in without authoring churn.
+
+#### Opting entries into a section
+
+Every note, policy, quiz, and path can carry `section:` and `order:` in its frontmatter:
+
+```yaml
+---
+id: N-deployment-runbook
+title: "Deployment runbook"
+type: note
+section: field-notes
+order: 10
+---
+```
+
+Entries without an explicit `section:` land in the section flagged `default: true` (or the first section if none is). For learning paths in particular, the path's own `section:` declares where the path appears; the entries it references can live in any section.
+
+#### Implicit-default back-compat
+
+A pack that omits `sections:` entirely behaves exactly like v6.4: the loader synthesizes an implicit `main` section, the SectionNav collapses, and the UI renders the same single-track view it always did. There is no migration step for existing packs — declaring `sections:` is opt-in for packs that want the tab strip.
+
+#### Worked example: Paradigm's first-party layout
+
+The first-party Paradigm pack declares two sections — Courses (track, default) and Field Notes (index). PARA 001 through 701 live in Courses; nuanced explainers like "Authoring your own University pack" live in Field Notes. The same content_types power both — only the presentation differs.
+
+#### Disambiguation: `section` is overloaded
+
+Two different surfaces use the word `section`, in two different scopes:
+
+| Field | Scope | Meaning |
+|-------|-------|---------|
+| `pack.yaml -> sections[].id` | Pack | The named tab a group of entries renders under |
+| `Q-*.yaml -> questions[].section` | Question | The exam section a PLSAT-style question contributes to (§5.2) |
+
+They share a name because both are organizational groupings, but their scopes never overlap — pack-level sections are about presentation, question-level sections are about exam structure. We considered renaming one and decided the conceptual overlap was clear enough in context that a rename would create more confusion than it resolves. If you find yourself debugging a validator error about "sections," check which one the error refers to.
+
+#### CLI integration
+
+```bash
+paradigm university add note --title "Deploy guide" --section field-notes --order 10
+paradigm university list --section field-notes
+paradigm university validate
+```
+
+`add` accepts `--section <id>` and `--order <n>` flags. `list` accepts `--section <id>` as a filter. `validate` (v6.5+) checks: duplicate section ids, more than one default, entries referencing a section that doesn't exist, invalid `style` values, sections with no entries (warning, not error).
+
+#### MCP integration
+
+`paradigm_university_search` accepts an optional `section: <id>` filter. `paradigm_university_pack_list` returns each pack's declared `sections[]` so agents can route queries appropriately. Cross-pack references continue to use `<pack-id>:<entry-id>` — sections are not part of the address space.
+
 ---
 
 ## 5. The content types
@@ -126,6 +213,8 @@ PLSAT-style scenarios — a shared preamble (`scenario:`) with multiple question
 ### 5.3 Learning paths
 
 YAML files at `.paradigm/university/content/paths/LP-<slug>.yaml`. A path is an ordered (or unordered) list of steps, each referencing another entry id (a note, policy, or quiz). Steps can be marked `required: true` and quiz steps can require a passing grade (`passRequired: true`).
+
+Paths are the canonical ordering for `track`-style sections (§4.5) — a track-section's progress ring counts steps in the path, not entries in the section.
 
 ### 5.4 Diplomas (completion records)
 
@@ -206,7 +295,7 @@ tenant_kind: external      # or: first-party | project
 description: "Security onboarding for Acme engineers."
 ```
 
-Required fields: `id`, `name`, `version`, `schema_version`, `tenant_kind`. Optional fields (branding, theme, content_types, disciplines, compliance, dependencies) are documented in `packages/paradigm-mcp/src/types/pack.ts`.
+Required fields: `id`, `name`, `version`, `schema_version`, `tenant_kind`. Optional fields (branding, theme, content_types, disciplines, sections, compliance, dependencies) are documented in `packages/paradigm-mcp/src/types/pack.ts`. See §4.5 for the `sections` field reference.
 
 Use kebab-case for `id`. First-party packs use short names (`paradigm`). Third-party packs should use reverse-DNS or a scoped form (`@acme/security-onboarding`) so ids don't collide across the ecosystem. This is a convention, not a hard check.
 
@@ -348,6 +437,7 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 - **Project owner adding compliance:** §1, §2.2, §3.3–3.4, §5.1–5.2, §6 (primary), §8
 - **First-party pack author:** §1, §2.1, §5, §6, §7 (primary), §8
 - **Discipline sub-pack creator:** §1, §2.2, §3.3, §4 (primary), §5, §7.1
+- **Section-aware pack author (v6.5+):** §1, §2.2, §4.5 (primary), §5.3, §7.1, §8
 
 ---
 
