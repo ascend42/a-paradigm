@@ -7,3 +7,8 @@ sections:
     style: track
     default: true
     description: Structured Paradigm learning paths
+  - id: field-notes
+    name: Field Notes
+    order: 1
+    style: index
+    description: Nice-to-knows about Paradigm's nuanced features
