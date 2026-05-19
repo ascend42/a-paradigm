@@ -16,6 +16,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
+import { resolveSections, assignSectionId, type Section } from '../sections.js';
+
 // ────────────────────────────────────────────────────────────────
 // Types (client-facing; unchanged from v5)
 // ────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ interface ClientCourseSummary {
   description: string;
   lessonCount: number;
   lessons: Array<{ id: string; title: string }>;
+  section: string;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -60,6 +63,8 @@ interface PathYaml {
   title: string;
   description?: string;
   steps?: Array<{ content: string; required?: boolean; passRequired?: boolean }>;
+  /** v6.5: section assignment at the learning-path layer. */
+  section?: string;
 }
 
 interface NoteFrontmatter {
@@ -246,6 +251,11 @@ export function createCoursesRouter(contentDir: string, projectDir?: string, mod
   const router = Router();
   const allContentDirs = collectContentDirs(contentDir, projectDir, mode);
 
+  // v6.5: load sections once per server instance (single-tenant). Used by
+  // the listing handler to apply the section-assignment rule when a
+  // course's LP-*.yaml omits `section:`.
+  const sections: Section[] = resolveSections(mode ?? 'paradigm', contentDir, projectDir);
+
   // GET /api/courses - List all courses across all packs
   router.get('/', (_req: Request, res: Response) => {
     const seen = new Set<string>();
@@ -264,6 +274,7 @@ export function createCoursesRouter(contentDir: string, projectDir?: string, mod
           description: p.description || '',
           lessonCount: lessons.length,
           lessons: lessons.map(l => ({ id: l.id, title: l.title })),
+          section: assignSectionId(p.section, sections),
         });
       }
     }
