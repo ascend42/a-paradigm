@@ -1,6 +1,8 @@
 version: 2.0.0
 name: university
-description: Interactive academia-themed learning platform for the Paradigm framework — courses, quizzes, the PLSAT certification exam, and a reference library.
+description: |
+  Interactive academia-themed learning platform for the Paradigm framework — courses, quizzes, the PLSAT certification exam, and a reference library.
+  v6.5: packs can declare a `sections:` block grouping entries into named tabs (styles: track | index | chronological | featured). First-party pack ships two sections (Courses, Field Notes). Single-section packs render identically to v6.4 via implicit-default back-compat.
 
 components:
   university-server:
@@ -112,6 +114,18 @@ components:
     description: Navigation bar with university seal, course/PLSAT/reference links, and version badge
     type: view
     file: ui/src/components/Header.tsx
+
+  section-nav:
+    description: v6.5 tab strip rendering the active pack's declared sections; collapsed when only one section is present (back-compat with v6.4)
+    type: view
+    file: ui/src/components/SectionNav.tsx
+    tags: [university, sections, v6.5]
+
+  section-view:
+    description: v6.5 style dispatcher routing track | index | chronological | featured to a renderer; only track renders natively at v6.5, others fall back to track with a warning
+    type: view
+    file: ui/src/views/SectionView.tsx
+    tags: [university, sections, v6.5]
 
   academia-theme:
     description: CSS theme with Crimson Pro serif fonts, parchment colors, burgundy/gold accents

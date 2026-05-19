@@ -4,6 +4,9 @@ description: >
   CLI command group for per-project university management.
   Subcommands: serve, list, add, show, quiz, status, validate, init (v6.0),
   migrate-plsat (v6.0, hidden).
+  v6.5: add/list honor --section flag; init prints a sections tip; serve emits a one-shot
+  FTUX advisory when running a pack without sections; validate runs section integrity checks
+  (duplicate id, two defaults, unknown ref, invalid style, dangling section warning).
 
 components:
   UniversityCommands:
@@ -11,9 +14,17 @@ components:
     type: command-group
     tags: [university, cli]
   UniversityInit:
-    description: Scaffold project-pack or discipline sub-pack pack.yaml
+    description: Scaffold project-pack or discipline sub-pack pack.yaml. v6.5 emits a sections tip after scaffold.
     type: command
     tags: [university, cli, pack, v6]
+  UniversityValidate:
+    description: >
+      Pack integrity validator — broken path steps, bad quiz answer keys,
+      missing titles. v6.5: adds section integrity checks (duplicate id,
+      multiple defaults, unknown section ref on entry, invalid style,
+      dangling section warning, non-kebab section id).
+    type: command
+    tags: [university, cli, validation, v6.5]
   UniversityMigratePlsat:
     description: >
       One-shot PLSAT JSON → v6 content-pack migration (hidden).
