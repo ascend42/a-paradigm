@@ -21,6 +21,7 @@ const DEFAULT_CONFIG: PackConfigResponse = {
   theme: null,
   version: '6.4.0',
   hasProjectLibrary: false,
+  sections: [],
 };
 
 export const usePackConfigStore = create<PackConfigState>((set) => ({

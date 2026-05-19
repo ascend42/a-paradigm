@@ -50,3 +50,16 @@ export const useCoursesStore = create<CoursesState>((set, get) => ({
     }
   },
 }));
+
+/**
+ * Filter courses by section id (v6.5 University Sections).
+ *
+ * Pure helper — pair with `useCoursesStore((s) => s.courses)` in components:
+ *
+ *   const courses = useCoursesStore((s) => s.courses);
+ *   const sectionCourses = coursesBySection(courses, 'main');
+ */
+export const coursesBySection = (
+  courses: CourseSummary[],
+  sectionId: string,
+): CourseSummary[] => courses.filter((c) => c.section === sectionId);

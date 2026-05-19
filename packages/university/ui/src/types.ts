@@ -23,6 +23,7 @@ export interface CourseSummary {
   description: string;
   lessonCount: number;
   lessons: { id: string; title: string }[];
+  section: string;
 }
 
 /** Full course with lesson content */
@@ -133,6 +134,19 @@ export interface PackConfigBranding {
   startCourse: string | null;
 }
 
+/** v6.5 University Section style */
+export type SectionStyle = 'track' | 'index' | 'chronological' | 'featured';
+
+/** v6.5 University Section (groups courses within a pack) */
+export interface Section {
+  id: string;
+  name: string;
+  order: number;
+  style: SectionStyle;
+  description?: string;
+  default?: boolean;
+}
+
 /** Response shape for /api/pack-config */
 export interface PackConfigResponse {
   mode: 'paradigm' | 'project';
@@ -140,4 +154,5 @@ export interface PackConfigResponse {
   theme: Record<string, string> | null;
   version: string;
   hasProjectLibrary: boolean;
+  sections: Section[];
 }
