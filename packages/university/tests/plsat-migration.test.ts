@@ -508,7 +508,10 @@ describe('plsat-migration — server route response shape smoke', () => {
     const body = responseBody as { courses: Array<{ id: string; title: string; lessons: unknown[] }> };
     expect(body).toBeDefined();
     expect(Array.isArray(body.courses)).toBe(true);
-    expect(body.courses.length).toBe(8);
+    // v6.5: 9 learning paths after first-party pack added LP-para-451.yaml.
+    // Hard-coded count — if a course is added/removed later, update this test
+    // explicitly (don't soften to >=; first-party pack is a stable surface).
+    expect(body.courses.length).toBe(9);
     for (const c of body.courses) {
       expect(c.id).toMatch(/^para-\d{3}$/);
       expect(typeof c.title).toBe('string');
