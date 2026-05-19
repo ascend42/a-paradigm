@@ -415,6 +415,61 @@ pre code {
   margin: 0 auto;
 }
 
+/* Section nav (v6.5 University Sections) */
+.section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--parchment-dark);
+}
+
+.section-nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-light);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  transition: all 0.2s;
+  max-width: 280px;
+}
+
+.section-nav-tab:hover {
+  background: var(--burgundy-bg);
+  color: var(--burgundy);
+}
+
+.section-nav-tab.active {
+  background: var(--burgundy);
+  color: var(--cream);
+}
+
+.section-nav-name {
+  font-weight: 600;
+}
+
+.section-nav-description {
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-width: 100%;
+}
+
 /* Course catalog */
 .course-catalog {
   display: flex;
