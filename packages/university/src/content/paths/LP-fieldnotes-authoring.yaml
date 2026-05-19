@@ -1,0 +1,16 @@
+id: LP-fieldnotes-authoring
+title: "Authoring your own University pack"
+description: A single-entry Field Notes path covering how to scaffold, structure, and ship a project pack for your codebase.
+author: paradigm
+created: '2026-05-18'
+updated: '2026-05-18'
+section: field-notes
+tags:
+  - university
+  - authoring
+  - electives
+ordered: false
+category: paradigm-core
+steps:
+  - content: N-fieldnotes-pack-authoring
+    required: true
