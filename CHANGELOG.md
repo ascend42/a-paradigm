@@ -5,6 +5,42 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0] — 2026-05-18
+
+University Sections — packs can group entries into named tracks, indexes, chronological streams, or featured shelves. The first-party Paradigm pack now ships a Core / Courses track plus a Field Notes index for nuanced explainers. Existing packs render unchanged via implicit-default back-compat.
+
+### Added
+
+- **`sections: Section[]`** field on `pack.yaml` (Zod-validated `Section = { id, name, order, style, description?, default? }`). The `style` enum is `track | index | chronological | featured`.
+- **Optional `section?` and `order?`** frontmatter on note, quiz, policy, and path entries. Entries without `section:` land in the section marked `default: true`.
+- **First-party pack manifest** declares two sections — Courses (track, default) + Field Notes (index). First Field Notes entry: `N-fieldnotes-pack-authoring.md` teaching project-pack authoring end-to-end.
+- **`LP-fieldnotes-authoring.yaml`** — one-step learning path scaffolding the Field Notes section (Field Notes is index-style; a one-step path is acceptable until more entries land).
+- **`docs/guides/university.md` §4.5** — new "Sections" section covering the four styles, the implicit-default back-compat rule, the `section` field disambiguation (pack-level vs question-level), and a worked example matching the first-party layout.
+- **CLI flags**: `paradigm university add --section <id> --order <n>` for scoping new entries; `paradigm university list --section <id>` filter; sections-count annotation on pack rows.
+- **FTUX advisories**: `paradigm university init` prints a one-line sections tip; `paradigm university serve` emits a one-shot advisory when running a pack without sections so authors know the primitive exists.
+- **Section integrity checks** in `paradigm university validate`: duplicate id, two defaults, unknown section ref on entry, invalid style value, dangling section warning.
+- **MCP**: `paradigm_university_search` accepts `section: <id>` filter; `paradigm_university_pack_list` returns `sections[]` per pack so agents can route queries appropriately.
+- **UI**: `SectionNav` tab strip (collapsed for single-section packs to preserve v6.4 visuals) + `SectionView` style dispatcher. Track-only renderer at v6.5 — `index`, `chronological`, `featured` fall back to track with a dev-console warning until content demand justifies dedicated renderers.
+
+### Changed
+
+- **`packages/university/src/content/pack.yaml`** — declares two sections (Courses, Field Notes). Two sections triggers `SectionView` rendering end-to-end.
+- **`/api/pack-config` payload** — includes `sections` so the UI can render the tab strip without a second round trip.
+- **`/api/courses` summary items** — include `section` so the courses route can be filtered client-side.
+
+### Migration
+
+Packs authored without `sections:` continue to work unchanged. The server synthesizes an implicit default `main` section and the UI collapses SectionNav for single-section packs — pixel-identical to v6.4 for those packs. Declaring `sections:` is opt-in for packs that want the tab strip.
+
+### Versions
+
+- `@a-company/paradigm`: 6.4.0 → **6.5.0**
+- `@a-company/paradigm-mcp`: 6.3.1 → **6.5.0**
+- `@a-company/university`: 6.1.0 → **6.5.0**
+- Plugin `plugin.json`: 6.4.0 → **6.5.0**
+
+---
+
 ## [6.4.0] — 2026-05-10
 
 University white-label support — any project with `.paradigm/university/pack.yaml` now gets its own branded experience: custom name, tagline, logo, favicon, tab set, and library. First-party Paradigm content is hidden in project mode.

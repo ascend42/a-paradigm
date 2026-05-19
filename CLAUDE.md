@@ -208,7 +208,7 @@ Detailed guidance is available via MCP resources — load only what you need:
 | Flow-first development | `paradigm://guidance/flows` |
 | Multi-agent orchestration | `paradigm://guidance/orchestration` |
 | Workspaces (multi-project) | `paradigm://guidance/workspaces` |
-| University (multi-tenant content packs) | `paradigm://guidance/university` |
+| University (multi-tenant content packs + sections) | `paradigm://guidance/university` |
 | Confidence calibration | `paradigm://guidance/calibration` |
 | Session checkpoints | `paradigm://guidance/checkpoints` |
 | Navigation & task recipes | `paradigm://guidance/navigation` |

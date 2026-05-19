@@ -1,6 +1,6 @@
 {
   "name": "@a-company/university",
-  "version": "6.1.0",
+  "version": "6.5.0",
   "description": "Interactive learning platform for the Paradigm framework — courses, quizzes, and the PLSAT certification exam",
   "type": "module",
   "main": "./dist/index.js",
