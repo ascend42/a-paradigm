@@ -1,0 +1,9 @@
+id: paradigm-university
+version: 6.5.0
+sections:
+  - id: courses
+    name: Courses
+    order: 0
+    style: track
+    default: true
+    description: Structured Paradigm learning paths
