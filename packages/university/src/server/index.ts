@@ -11,6 +11,11 @@ import * as yaml from 'js-yaml';
 
 import { createCoursesRouter } from './routes/courses.js';
 import { createPlsatRouter } from './routes/plsat.js';
+import {
+  normalizeSections,
+  loadSectionsFromYamlFile,
+  type Section,
+} from './sections.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,6 +115,7 @@ interface PackConfig {
   theme: Record<string, string> | null;
   version: string;
   hasProjectLibrary: boolean;
+  sections: Section[];
 }
 
 const PARADIGM_FALLBACK_VERSION = '6.4.0';
@@ -190,23 +196,35 @@ export function createApp(options?: { contentDir?: string; uiDistPath?: string; 
       mergedBranding.tabs = defaultTabs;
     }
 
+    // ── Sections (v6.5): read from pack.yaml or fall back to implicit default
+    const sections = normalizeSections(packManifest.sections);
+
     packConfig = {
       mode: 'project',
       branding: mergedBranding,
       theme: packTheme,
       version: packVersion,
       hasProjectLibrary,
+      sections,
     };
 
-    log.component('university-server').info('Project mode active', { pack: String(packManifest.id ?? 'unknown') });
+    log.component('university-server').info('Project mode active', {
+      pack: String(packManifest.id ?? 'unknown'),
+      sections: sections.length,
+    });
   } else {
-    // Paradigm mode — standard branding and full tab set
+    // Paradigm mode — standard branding and full tab set.
+    // Sections come from the bundled first-party pack.yaml if present;
+    // otherwise the implicit default ([{ id: 'main', ... }]) is used.
+    const sections = loadSectionsFromYamlFile(path.join(contentDir, 'pack.yaml'));
+
     packConfig = {
       mode: 'paradigm',
       branding: { ...BRANDING_DEFAULTS },
       theme: null,
       version: PARADIGM_FALLBACK_VERSION,
       hasProjectLibrary: false,
+      sections,
     };
   }
 
