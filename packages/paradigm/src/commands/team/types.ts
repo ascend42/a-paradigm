@@ -88,7 +88,9 @@ export interface PartnerRef {
 
 export interface AgentDefinition {
   name: string;
-  role: string;       // Multi-line description of agent's role
+  role: string;       // One-line summary of agent's role (fallback persona)
+  /** Rich multi-paragraph persona from the .agent profile — preferred over `role` for prompt assembly */
+  description?: string;
   focus: AgentFocus;
   triggers: AgentTrigger[];
   handoff_to: string[];  // Agents this one can hand off to

@@ -38,7 +38,7 @@ components:
     type: service
     path: agent-matcher.ts
   agent-prompts:
-    description: Generate agent-specific prompts with role context and handoff data. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review protocol (spec compliance then code quality) with minimum 3 categorized findings.
+    description: Generate agent-specific prompts with role context and handoff data. Persona precedence is hardcoded ROLE_PROMPTS constant (wins for the core 5 + pm) → rich agent.description from the .agent profile (drives the ~62 other archetypes) → one-line agent.role → generic builder. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review protocol (spec compliance then code quality) with minimum 3 categorized findings.
     type: utility
     path: agent-prompts.ts
   model-discovery:

@@ -63,6 +63,8 @@ interface AgentManifest {
 interface AgentDefinition {
   name: string;
   role: string;
+  /** Rich multi-paragraph persona from the .agent profile — preferred over `role` for prompt assembly */
+  description?: string;
   focus: {
     reads: string[];
     writes: string[];
@@ -1023,7 +1025,7 @@ async function handleOrchestrateInline(
 
   // Execute mode: return full prompts for each stage
   // Load .agent profiles with full ambient context for enrichment (non-fatal)
-  let agentProfiles: Map<string, { enrichment: string; nickname?: string }> = new Map();
+  let agentProfiles: Map<string, { enrichment: string; nickname?: string; description?: string }> = new Map();
   try {
     const { loadAgentProfile, buildProfileEnrichment } = await import('../utils/agent-loader.js');
     const { loadDecisions } = await import('../utils/decision-loader.js');
@@ -1123,12 +1125,13 @@ async function handleOrchestrateInline(
               }
               enrichment += '\n' + constraints.join('\n');
             }
-            if (enrichment.trim()) {
-              agentProfiles.set(agentStep.name, {
-                enrichment,
-                nickname: profile.nickname,
-              });
-            }
+            // Carry the rich persona description even when enrichment is empty —
+            // it drives the role prompt for non-core archetypes (see buildAgentPromptInternal).
+            agentProfiles.set(agentStep.name, {
+              enrichment: enrichment.trim() ? enrichment : '',
+              nickname: profile.nickname,
+              description: profile.description,
+            });
           }
         }
       }
@@ -1164,9 +1167,11 @@ async function handleOrchestrateInline(
 
     for (const agentStep of stage.agents) {
       const manifestAgent = manifest.agents[agentStep.name];
+      const profileData = agentProfiles.get(agentStep.name);
       const agentDef: AgentDefinition = {
         name: manifestAgent?.name || agentStep.name,
         role: manifestAgent?.role || ROLE_PROMPTS[agentStep.name] || `${agentStep.name} agent`,
+        description: profileData?.description,
         focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
         defaultModel: resolveModelForAgent(agentStep.name, ctx.rootDir, manifestAgent),
         triggers: manifestAgent?.triggers,
@@ -1175,7 +1180,6 @@ async function handleOrchestrateInline(
         protocol: manifestAgent?.protocol,
       };
 
-      const profileData = agentProfiles.get(agentStep.name);
       const promptResult = buildAgentPromptInternal({
         agent: agentDef,
         task: agentStep.task,
@@ -1651,6 +1655,8 @@ async function handleAgentPrompt(
     const profile = loadAgentProfile(ctx.rootDir, agentName);
     if (profile) {
       nickname = profile.nickname;
+      // The rich persona drives the role prompt for non-core archetypes (see buildAgentPromptInternal)
+      agentDef.description = profile.description;
 
       // Load ambient context
       const recentDecisions = loadDecisions(ctx.rootDir, { status: 'active', limit: 5 })
@@ -2157,8 +2163,12 @@ function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResul
     parts.push('');
   }
 
-  // Role prompt
-  const rolePrompt = ROLE_PROMPTS[agent.name] || agent.role || ROLE_PROMPTS.builder;
+  // Role prompt. Precedence:
+  // 1. Battle-tested hardcoded constant (ROLE_PROMPTS[name]) — wins for the core 5 + pm
+  // 2. Rich multi-paragraph persona from the .agent profile (agent.description) — drives the ~62 others
+  // 3. One-line role summary from agents.yaml (agent.role) — fallback
+  // 4. Generic builder prompt — last resort
+  const rolePrompt = ROLE_PROMPTS[agent.name] || agent.description || agent.role || ROLE_PROMPTS.builder;
   parts.push(rolePrompt);
   parts.push('');
   parts.push('---');

@@ -402,8 +402,12 @@ export function buildAgentPrompt(options: AgentPromptOptions): AgentPrompt {
 
   const parts: string[] = [];
 
-  // Role-specific prompt (use custom role from agents.yaml if available, else default)
-  const rolePrompt = agent.role || ROLE_PROMPTS[agent.name] || ROLE_PROMPTS.builder;
+  // Role-specific prompt. Precedence:
+  // 1. Battle-tested hardcoded constant (ROLE_PROMPTS[name]) — wins for the core 5 + pm
+  // 2. Rich multi-paragraph persona from the .agent profile (agent.description) — drives the ~62 others
+  // 3. One-line role summary from agents.yaml (agent.role) — fallback
+  // 4. Generic builder prompt — last resort
+  const rolePrompt = ROLE_PROMPTS[agent.name] || agent.description || agent.role || ROLE_PROMPTS.builder;
   parts.push(rolePrompt);
   parts.push('');
 
