@@ -36,6 +36,10 @@ components:
     description: "v6.0.3 marketplace SKU primitives — typed-only contracts, no live consumer. Exports PartnerBundle (groups partnered agents into single SKU), ReciprocalInstallMeta (typed install-prompt metadata), PartnerCoverage (registry-index indicator). Forward-compat for nevr.land MVP."
     type: module
     tags: [feature, agent-partners, marketplace-primitive, contracts-only]
+  SyncGlobalCommand:
+    description: "CLI: paradigm agent sync-global — copies the ~67 bundled canonical .agent profiles from <packageRoot>/templates/agents/ into ~/.paradigm/agents/. Default skip-if-exists preserves user customizations; --force overwrites; --dry-run previews. Fixes the frozen-roster problem so npm update + sync-global gets the full team."
+    type: command
+    tags: [feature, agent-identity, cli, university-cli]
 
 signals:
   agent-created:

@@ -2548,6 +2548,16 @@ agentCmd
     await agentSyncCommand(id, options);
   });
 
+agentCmd
+  .command('sync-global')
+  .description('Materialize the bundled canonical agent set into ~/.paradigm/agents/')
+  .option('-f, --force', 'Overwrite existing global agents with the bundled version')
+  .option('-n, --dry-run', 'Show what would be added/skipped/overwritten without writing')
+  .action(async (options) => {
+    const { agentSyncGlobalCommand } = await import('./commands/agent/sync-global.js');
+    await agentSyncGlobalCommand(options);
+  });
+
 const rosterCmd = agentCmd
   .command('roster')
   .description('Manage per-project agent roster (.paradigm/roster.yaml)');
