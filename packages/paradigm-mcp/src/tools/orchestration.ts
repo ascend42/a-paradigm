@@ -194,6 +194,11 @@ const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
   ethicist: 'tier-1',
   futurist: 'tier-1',
   cartographer: 'tier-1',
+  cid: 'tier-1',
+  'agent-evaluator': 'tier-1',
+  'data-model': 'tier-1',
+  domain: 'tier-1',
+  regulatory: 'tier-1',
   // Tier 2 — Specialists (sonnet)
   compliance: 'tier-2',
   reviewer: 'tier-2',
@@ -220,6 +225,8 @@ const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
   a11y: 'tier-2',
   seo: 'tier-2',
   swift: 'tier-2',
+  forms: 'tier-2',
+  geo: 'tier-2',
   // Tier 3 — Implementers (haiku)
   builder: 'tier-3',
   tester: 'tier-3',
@@ -243,6 +250,8 @@ const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
   reverser: 'tier-3',
   audio: 'tier-3',
   finance: 'tier-3',
+  offline: 'tier-3',
+  'report-gen': 'tier-3',
 };
 
 const DEFAULT_TIER_MODELS: Record<string, string> = {
