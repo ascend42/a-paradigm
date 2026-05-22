@@ -29,6 +29,8 @@ The full agent roster now ships with the package. All 67 canonical archetypes ar
 
 Existing users: run `paradigm agent sync-global` after updating to pull in any agents you're missing. Your customized profiles are preserved (skip-if-exists); use `--force` only if you want to reset to the bundled versions.
 
+**Behavior change:** custom `role:` overrides in `agents.yaml` for the 5 hardcoded archetypes (architect, builder, reviewer, security, tester) no longer take precedence over the bundled prompts — the battle-tested constants now win for those 5. If you relied on overriding a core agent's persona, move the override into that agent's `description:` field in its `.agent` profile instead. All other archetypes are unaffected and now render from their `.agent` description.
+
 ### Versions
 
 - `@a-company/paradigm`: 6.5.0 → **6.6.0**
