@@ -5,6 +5,39 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0] — 2026-05-22
+
+The full agent roster now ships with the package. All 67 canonical archetypes are bundled, every one has a behavior-shaping persona, and a new `paradigm agent sync-global` command materializes them into your global dir — fixing the long-standing "frozen roster" problem where a global update could never expand the agents available to you.
+
+### Added
+
+- **Bundled agent roster** — all 67 canonical archetypes ship as `.agent` profiles in the package (`packages/paradigm/templates/agents/`, distributed via the `files` field, no build step). Previously there was no shipped set; agents only existed ad-hoc in users' home dirs.
+- **`paradigm agent sync-global`** — materializes the bundled agents into `~/.paradigm/agents/`. Default **skip-if-exists** (never destroys customizations); `--force` overwrites; `--dry-run` previews. This is how an update now actually delivers new agents to you.
+- **8 new/promoted archetypes** — `agent-evaluator` (Crucible, generalized from a project-specific evaluator), `data-model` (Lattice), `domain` (Lexicon), `regulatory` (Codex), `geo` (Carto), `offline` (Tide), `forms` (Quill), `report-gen` (Press) — all brought from thin stubs to full canonical personas.
+
+### Changed
+
+- **Prompt assembler uses rich personas** (`agent-prompts.ts`) — resolution is now `ROLE_PROMPTS[name] → agent.description → agent.role → builder`. The 5 battle-tested hardcoded prompts (architect, builder, reviewer, security, tester) still win; the other ~62 agents now render with their rich multi-paragraph `description` instead of a thin one-line role or a generic builder fallback. Most agents behaved like "builder" before this fix.
+- **`AGENT_TIERS` + `DEFAULT_MODELS` cover all 67** (`orchestration.ts`) — explicit tier assignments for every archetype plus a deterministic `tier-2`/`sonnet` fallback so unmapped agents resolve predictably instead of undefined.
+- **Nickname collision resolved** — `mobile` (was "Swift") renamed to "Dash"; `swift` keeps "Swift". All 67 bundled agents now have unique nicknames.
+
+### Fixed
+
+- **Frozen-roster problem** — a global `npm update` never touched `~/.paradigm/agents/`, so users were stuck at whatever count they first onboarded (e.g. 26) regardless of framework growth. Bundling + `sync-global` closes this: `npm update` then `paradigm agent sync-global` gets you the full team.
+
+### Migration
+
+Existing users: run `paradigm agent sync-global` after updating to pull in any agents you're missing. Your customized profiles are preserved (skip-if-exists); use `--force` only if you want to reset to the bundled versions.
+
+### Versions
+
+- `@a-company/paradigm`: 6.5.0 → **6.6.0**
+- `@a-company/paradigm-mcp`: 6.5.0 → **6.6.0**
+- `@a-company/university`: 6.5.0 (unchanged — no university changes)
+- Plugin `plugin.json`: 6.5.0 → **6.6.0**
+
+---
+
 ## [6.5.0] — 2026-05-18
 
 University Sections — packs can group entries into named tracks, indexes, chronological streams, or featured shelves. The first-party Paradigm pack now ships a Core / Courses track plus a Field Notes index for nuanced explainers. Existing packs render unchanged via implicit-default back-compat.
