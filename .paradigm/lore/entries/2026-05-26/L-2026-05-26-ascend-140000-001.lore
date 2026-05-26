@@ -1,0 +1,59 @@
+id: L-2026-05-26-ascend-140000-001
+type: refinement
+timestamp: '2026-05-26T14:00:00.000Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-7
+title: v6.6.1 follow-up — Arky, Topo, Atlas collision resolved + roster advertised in README
+summary: |-
+  Three small but real cleanups on top of v6.6.0. Architect got a proper nickname (Arky — previously the placeholder string "architect"). Cartographer was added to the bundle as Topo, fixing the 68th-archetype gap (it was tier-1 in AGENT_TIERS but had no .agent file). The long-standing Atlas-name collision was resolved in cartographer's favor of giving up the name — Atlas now belongs solely to devops; cartographer is Topo. The 68-agent roster is now advertised in the top-level README, grouped by model tier with the sync-global CTA.
+symbols_touched:
+  - '#agents'
+  - '#agent-identity'
+  - '#orchestration'
+  - '#docs'
+learnings:
+  - Naming collisions can persist invisibly across surfaces — orchestration.ts referred to cartographer as ATLAS while devops.agent owned the Atlas nickname in the bundle. Same name, different definitions, no compile-time check caught it. Worth a follow-up audit pass (nickname uniqueness validator at load time) to make collisions hard errors.
+  - Authoring a new bundled agent inline (without spawning Loid) was tractable here because the orchestration ATLAS_PROMPT already specified the cartographer's role and behaviors — the .agent file just needed to mirror that as a rich description. Loid-pass would still be the right move for a from-scratch persona.
+  - The README is high-leverage real estate for showcasing what ships. Going from "core 8 + 3 specialists" prose to a 68-agent tier-grouped roster materially changes how new users perceive the framework's depth, with near-zero maintenance cost.
+verification:
+  status: pass
+  details:
+    build: pass (paradigm-mcp + paradigm clean)
+    bundled-count: 68 (.agent files in templates/agents/)
+    sync-global: 'pass (added 68 on fresh home)'
+    cli-version: 6.6.0 linked (pre-bump verification)
+tags:
+  - v6.6.1
+  - agents
+  - naming
+  - readme
+  - polish
+body: |-
+  ## Why
+  Two loose ends from the v6.6.0 release that the user wanted closed before next publish:
+  1. `architect.agent` had `nickname: architect` as a placeholder — every other tier-1 agent had a real handle, so the architect rendered as an oddball in the roster.
+  2. `cartographer` was referenced in `AGENT_TIERS` as tier-1 and had a full prompt in orchestration.ts (line 744), but **no bundled .agent file** — so it never appeared in `paradigm agent list`, never synced, and was effectively a phantom 68th archetype. Worse: orchestration.ts opened its prompt with "You are ATLAS, the CARTOGRAPHER agent" — but Atlas was already taken by devops.agent in the bundled set (a real nickname collision).
+
+  Plus a marketing/discoverability piece: the new 68-agent roster wasn't visible in the README, which still described "a core team of 8 + 3 specialists" — significantly understating what ships.
+
+  ## What changed
+  - `packages/paradigm/templates/agents/architect.agent`: nickname `architect` → `Arky`.
+  - `packages/paradigm/src/commands/shift.ts` CORE_AGENT_META: fallback nickname `Apex` → `Arky` (kept consistent with the .agent so resolution lands on the same name either way).
+  - `packages/paradigm/templates/agents/cartographer.agent` (NEW): full canonical persona — id cartographer, nickname Topo, tier-1, role "Architecture cartographer", rich multi-paragraph description mirroring the orchestration.ts cartographer prompt (arch.yaml maintainer, drift reporter, Mermaid renderer, advisory-only).
+  - `packages/paradigm-mcp/src/tools/orchestration.ts`: cartographer prompt opens "You are TOPO" (was "You are ATLAS"). devops.agent keeps Atlas — the framework now has a single owner for that name.
+  - `README.md`: previous "core team of 8 + 3 specialists" paragraph replaced with a full tier-grouped 68-agent roster (Tier 1 / 2 / 3 with nickname (role) interpunct lists) plus the `paradigm agent sync-global` CTA.
+
+  ## Decision the user made
+  Atlas conflict: presented three options (restore Atlas to cartographer + rename devops; keep Atlas on devops + rename cartographer; both rename to fresh names). User picked the middle option — devops keeps Atlas (it was the bundled owner), cartographer becomes Topo. Cleanest user-facing change because devops.agent's identity was already shipped to users at v6.6.0; renaming devops post-publish would have churned more.
+
+  ## Bumps
+  - `@a-company/paradigm`: 6.6.0 → 6.6.1
+  - `@a-company/paradigm-mcp`: 6.6.0 → 6.6.1 (orchestration.ts changed — MCP tool file)
+  - Plugin `plugin.json`: 6.6.0 → 6.6.1
+  - `@a-company/university`: unchanged at 6.5.0 (no university changes)
+linked_commits:
+  - a18ef100
+  - 1dd4f9fa
+confidence: 0.92

@@ -5,6 +5,29 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.1] — 2026-05-26
+
+Follow-up polish on the v6.6.0 agent roster. Closes two naming loose ends (architect had no real nickname; cartographer was tier-1-known but unbundled and shared "Atlas" with devops) and advertises the now-68-agent roster in the README so its scope is visible from the front door.
+
+### Added
+
+- **`cartographer.agent` (Topo)** — bundled tier-1 architecture-cartographer profile. Maintains `.paradigm/arch.yaml`, computes drift between declared architecture and live symbols, renders Mermaid diagrams, advisory-only. Previously referenced in `AGENT_TIERS` and orchestration prompts but had no `.agent` file in the bundle — so it never appeared in `paradigm agent list` and never synced.
+- **README agent roster** — replaces the prior "core team of 8 + 3 specialists" paragraph with the full 68-agent roster grouped by model tier, plus the `paradigm agent sync-global` CTA.
+
+### Changed
+
+- **architect nickname: `architect` → Arky** — every other tier-1 agent had a real handle; architect's placeholder nickname is fixed in both `architect.agent` and `CORE_AGENT_META` (fallback path, previously "Apex").
+- **cartographer prompt identity: ATLAS → TOPO** in `orchestration.ts`. Devops keeps "Atlas" (it owned the name in the bundled v6.6.0 set); cartographer is now Topo, resolving the long-standing collision.
+
+### Versions
+
+- `@a-company/paradigm`: 6.6.0 → **6.6.1**
+- `@a-company/paradigm-mcp`: 6.6.0 → **6.6.1** (orchestration.ts cartographer prompt updated)
+- `@a-company/university`: 6.5.0 (unchanged — no university changes)
+- Plugin `plugin.json`: 6.6.0 → **6.6.1**
+
+---
+
 ## [6.6.0] — 2026-05-22
 
 The full agent roster now ships with the package. All 67 canonical archetypes are bundled, every one has a behavior-shaping persona, and a new `paradigm agent sync-global` command materializes them into your global dir — fixing the long-standing "frozen roster" problem where a global update could never expand the agents available to you.
