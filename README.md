@@ -283,11 +283,11 @@ Cursor's stop hook outputs a `followup_message` that auto-retries compliance up 
 
 ### The agent team
 
-Paradigm ships with **67 specialist agents** as bundled `.agent` profiles, each with a rich persona, attention triggers (symbols/paths/concepts), and a model-tier assignment so high-stakes work routes to opus and implementation routes to haiku. Orchestrate any subset via `paradigm orchestrate "..."`; `paradigm shift` auto-rosters a sensible default for your stack and benches the rest.
+Paradigm ships with **68 specialist agents** as bundled `.agent` profiles, each with a rich persona, attention triggers (symbols/paths/concepts), and a model-tier assignment so high-stakes work routes to opus and implementation routes to haiku. Orchestrate any subset via `paradigm orchestrate "..."`; `paradigm shift` auto-rosters a sensible default for your stack and benches the rest.
 
 After updating, run `paradigm agent sync-global` to materialize them into `~/.paradigm/agents/` (skip-if-exists by default; never overwrites customizations — pass `--force` to reset).
 
-**Tier 1 — strategy & high-stakes (16, opus-class):** `architect` · **Aegis** (security) · **Cid** (captain/navigator) · **Nora** (FTUX) · **Scholar** (research) · **Jinx** (devil's advocate) · **Compass** (ethics) · **Clause** (legal) · **Crucible** (agent eval) · **Codex** (regulatory) · **Horizon** (futurist) · **Leila** (operations) · **Lattice** (data modeling) · **Lexicon** (domain-driven design) · **North** (product) · **Mozi** (sales).
+**Tier 1 — strategy & high-stakes (17, opus-class):** **Arky** (architect) · **Aegis** (security) · **Topo** (cartographer / architecture mapping) · **Cid** (captain/navigator) · **Nora** (FTUX) · **Scholar** (research) · **Jinx** (devil's advocate) · **Compass** (ethics) · **Clause** (legal) · **Crucible** (agent eval) · **Codex** (regulatory) · **Horizon** (futurist) · **Leila** (operations) · **Lattice** (data modeling) · **Lexicon** (domain-driven design) · **North** (product) · **Mozi** (sales).
 
 **Tier 2 — specialists & review (27):** **Mika** (design) · **Judge** (reviewer) · **Shield** (QA) · **Helix** (DX) · **Aria** (a11y) · **Oracle** (AI/ML) · **Sage** (analyst) · **Rune** (compliance) · **Lens** (content intel) · **Wren** (copywriter) · **Prism** (creative) · **Trace** (debugger) · **Ghost** (E2E) · **Sheila** (educator) · **Quill** (forms) · **Carto** (geospatial) · **Bridge** (mediator) · **Obi** (mentor) · **Ink** (narrator) · **Bolt** (performance) · **Yuki** (PM) · **Stage** (presenter) · **Scout** (research) · **Beacon** (SEO) · **Swift** (Swift language) · **Sensei** (trainer) · **Gather** (community).
 

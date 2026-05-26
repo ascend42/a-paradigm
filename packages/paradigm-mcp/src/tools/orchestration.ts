@@ -741,7 +741,7 @@ to break plans before code breaks in production.
 - Repeat concerns already addressed in the task description
 - Produce lengthy analysis — be sharp and concise`,
 
-  cartographer: `You are ATLAS, the CARTOGRAPHER agent.
+  cartographer: `You are TOPO, the CARTOGRAPHER agent.
 
 ## Your Role
 You maintain and audit the project's architectural layer map (.paradigm/arch.yaml).

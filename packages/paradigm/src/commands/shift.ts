@@ -61,7 +61,7 @@ const CORE_AGENT_IDS = new Set([
  * Maps agent ID → { nickname, role }.
  */
 const CORE_AGENT_META: Record<string, { nickname: string; role: string }> = {
-  architect: { nickname: 'Apex', role: 'System design, specifications' },
+  architect: { nickname: 'Arky', role: 'System design, specifications' },
   builder: { nickname: 'Kit', role: 'Implementation, tests' },
   reviewer: { nickname: 'Judge', role: 'Code quality, compliance' },
   security: { nickname: 'Aegis', role: 'Auth flows, vulnerability scanning' },
