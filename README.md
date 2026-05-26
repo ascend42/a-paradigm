@@ -283,7 +283,17 @@ Cursor's stop hook outputs a `followup_message` that auto-retries compliance up 
 
 ### The agent team
 
-Paradigm ships with a core team of 8 specialist agents you can orchestrate through a single command (`paradigm team orchestrate "..."`): **architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid)**. Additional specialists — **Loid** (intelligence officer / learning), **Atlas** (cartographer / architecture mapping), **Rune** (compliance / enforcement state machine) — roster based on project type and stack detection. Project detection ("SaaS" vs "game" vs "generic") determines which additional ecosystem agents get rostered on first shift.
+Paradigm ships with **67 specialist agents** as bundled `.agent` profiles, each with a rich persona, attention triggers (symbols/paths/concepts), and a model-tier assignment so high-stakes work routes to opus and implementation routes to haiku. Orchestrate any subset via `paradigm orchestrate "..."`; `paradigm shift` auto-rosters a sensible default for your stack and benches the rest.
+
+After updating, run `paradigm agent sync-global` to materialize them into `~/.paradigm/agents/` (skip-if-exists by default; never overwrites customizations — pass `--force` to reset).
+
+**Tier 1 — strategy & high-stakes (16, opus-class):** `architect` · **Aegis** (security) · **Cid** (captain/navigator) · **Nora** (FTUX) · **Scholar** (research) · **Jinx** (devil's advocate) · **Compass** (ethics) · **Clause** (legal) · **Crucible** (agent eval) · **Codex** (regulatory) · **Horizon** (futurist) · **Leila** (operations) · **Lattice** (data modeling) · **Lexicon** (domain-driven design) · **North** (product) · **Mozi** (sales).
+
+**Tier 2 — specialists & review (27):** **Mika** (design) · **Judge** (reviewer) · **Shield** (QA) · **Helix** (DX) · **Aria** (a11y) · **Oracle** (AI/ML) · **Sage** (analyst) · **Rune** (compliance) · **Lens** (content intel) · **Wren** (copywriter) · **Prism** (creative) · **Trace** (debugger) · **Ghost** (E2E) · **Sheila** (educator) · **Quill** (forms) · **Carto** (geospatial) · **Bridge** (mediator) · **Obi** (mentor) · **Ink** (narrator) · **Bolt** (performance) · **Yuki** (PM) · **Stage** (presenter) · **Scout** (research) · **Beacon** (SEO) · **Swift** (Swift language) · **Sensei** (trainer) · **Gather** (community).
+
+**Tier 3 — implementation & ops (24, haiku-class):** **Kit** (builder) · **Probe** (tester) · **Scribe** (documentor) · **Loid** (forge / agent intelligence) · **Ship** (release) · **Atlas** (devops) · **Vault** (DBA) · **Pipeline** (data eng) · **Neon** (3D) · **Echo** (audio) · **Index** (archivist) · **Ledger** (finance) · **Pixel** (gamedev) · **Babel** (i18n) · **Conduit** (integrator) · **Dash** (mobile) · **Wire** (network) · **Tide** (offline-first) · **Press** (report gen) · **Cipher** (reverse engineer) · **Sunday** (secretary) · **Flux** (streaming) · **Root** (sysadmin) · **Rosetta** (translator).
+
+See any agent's full definition with `paradigm agent show <id>` or read its profile at `~/.paradigm/agents/<id>.agent`.
 
 ---
 
