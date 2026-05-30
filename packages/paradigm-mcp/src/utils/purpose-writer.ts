@@ -190,12 +190,23 @@ export function normalizeFlowsToRecord(
 ): Record<string, FlowDefinition> {
   if (!flows) return {};
 
-  // Already record format
-  if (!Array.isArray(flows)) return flows;
+  // Already record format — clone and strip any stray "undefined" key so a
+  // poisoned input (from an earlier write of an unnamed array entry) does not
+  // propagate into the YAML.
+  if (!Array.isArray(flows)) {
+    const cleaned: Record<string, FlowDefinition> = {};
+    for (const [key, value] of Object.entries(flows)) {
+      if (!key || key === 'undefined') continue;
+      cleaned[key] = value;
+    }
+    return cleaned;
+  }
 
-  // Convert array → record
+  // Convert array → record. Skip entries without a usable key so an unnamed
+  // entry's undefined name does not coerce to the literal "undefined" key.
   const record: Record<string, FlowDefinition> = {};
   for (const flow of flows) {
+    if (!flow || !flow.name) continue;
     record[flow.name] = {
       description: flow.description,
       steps: flow.steps,

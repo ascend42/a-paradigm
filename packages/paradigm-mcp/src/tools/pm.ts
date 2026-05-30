@@ -27,6 +27,7 @@ import { getSessionTracker } from '../utils/session-tracker.js';
 import { execSync } from 'child_process';
 import { narrateAllGaps, type CheckResult as GapCheckResult } from '../utils/gap-narrator.js';
 import { extractDeclaredGateNames } from '../utils/compliance-checker.js';
+import { resolveAnchorPath } from '../utils/anchor-path.js';
 
 // ============================================================================
 // Constants
@@ -456,11 +457,19 @@ function runPostflightCheck(
               suggestion: `Add anchors to ${aspect.symbol} in .purpose file. Run paradigm_aspect_check for details.`,
             });
           } else {
+            // Resolve anchors via the SHARED helper (utils/anchor-path.ts) so
+            // pm_postflight matches paradigm_aspect_check's resolution semantics
+            // (absolute → project-root → purpose-dir bases). The owning
+            // .purpose file's directory is the purpose-dir base, derived the
+            // same way aspect_check does (tags.ts).
+            const purposeFilePath = aspect.filePath
+              ? (path.isAbsolute(aspect.filePath) ? aspect.filePath : path.resolve(ctx.rootDir, aspect.filePath))
+              : ctx.rootDir;
+            const purposeDir = aspect.filePath ? path.dirname(purposeFilePath) : ctx.rootDir;
+
             for (const anchor of anchors) {
-              const filePath = path.isAbsolute(anchor.path)
-                ? anchor.path
-                : path.join(ctx.rootDir, anchor.path);
-              if (!fs.existsSync(filePath)) {
+              const resolution = resolveAnchorPath(anchor.path, purposeDir, ctx.rootDir);
+              if (!resolution.exists) {
                 violations.push({
                   type: 'stale-aspect',
                   severity: 'warning',

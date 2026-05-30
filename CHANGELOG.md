@@ -5,6 +5,25 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.2] — 2026-05-29
+
+Three framework-bug fixes surfaced from a field report in a downstream project (`dealoracle`). All three were confirmed against framework code with writer/reader evidence before fixing, reviewed (261/261 tests pass, no blocking findings), and are MCP-tool behavior changes.
+
+### Fixed
+
+- **`paradigm_pm_postflight` no longer false-flags every aspect anchor as a missing file** (was: high-impact). The stale-aspect check reimplemented anchor path resolution inline (`path.join(ctx.rootDir, anchor.path)`), which ignored purpose-dir-relative and `../`-relative anchors — so it reported anchors that `paradigm_aspect_check` resolves as `exists: true` as "points to missing file." It now uses the shared `resolveAnchorPath()` helper, the same resolver `aspect_check` uses, deriving `purposeDir` identically. This makes `aspect-anchors` enforcement safe to set to `block`. (`tools/pm.ts`)
+- **`paradigm_flow_check` now sees flows defined in `.purpose` files** (was: silent blind spot). `flow_check` read only `.paradigm/flows.yaml`, while `purpose_add_flow` writes flows into `.purpose` files that `reindex` indexes into `flow-index.json`. Flows created via `purpose_add_flow` appeared in `search`/`reindex`/`flows_affected` but returned "Flow not found" from `flow_check`. It now merges both sources (flows.yaml wins on id collision) so `.purpose`-defined flows validate. (`tools/flows.ts`)
+- **`paradigm_purpose_add_flow` no longer writes a junk `undefined: {}` key** into the `flows:` block (was: cosmetic / parse noise). `normalizeFlowsToRecord` keyed array-form flow entries by `flow.name`; a nameless entry coerced to the literal string key `"undefined"`. Both the array and record-passthrough branches now guard against missing/`"undefined"` keys. (`utils/purpose-writer.ts`)
+
+### Versions
+
+- `@a-company/paradigm`: 6.6.1 → **6.6.2**
+- `@a-company/paradigm-mcp`: 6.6.1 → **6.6.2** (`pm_postflight`, `flow_check`, `purpose_add_flow` behavior changed)
+- `@a-company/university`: 6.5.0 (unchanged)
+- Plugin `plugin.json`: 6.6.1 → **6.6.2**
+
+---
+
 ## [6.6.1] — 2026-05-26
 
 Follow-up polish on the v6.6.0 agent roster. Closes two naming loose ends (architect had no real nickname; cartographer was tier-1-known but unbundled and shared "Atlas" with devops) and advertises the now-68-agent roster in the README so its scope is visible from the front door.

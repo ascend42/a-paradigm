@@ -187,7 +187,41 @@ flows:
         }
       }
 
-      if (!flowsConfig || !flowsConfig.flows || Object.keys(flowsConfig.flows).length === 0) {
+      // Merge flows from BOTH sources: .paradigm/flows.yaml AND the
+      // flow-index.json built from .purpose-defined flows (via
+      // paradigm_purpose_add_flow + reindex). Without this, flows authored in
+      // .purpose files are invisible to flow_check — including the common case
+      // where flows.yaml does not exist at all.
+      const mergedFlows: Record<string, FlowDefinitionSimple> = {
+        ...(flowsConfig?.flows ?? {}),
+      };
+
+      const flowIndex = await loadFlowIndex(ctx.rootDir);
+      if (flowIndex?.flows) {
+        for (const [id, tf] of Object.entries(flowIndex.flows)) {
+          // flows.yaml entries take precedence over index entries.
+          if (mergedFlows[id]) continue;
+          // flow-index FlowStep has no `type` field — classify by symbol prefix
+          // (^→gate, !→signal, else action) so the shared validation loop can
+          // run unchanged. parseSymbolSimple excludes @, so @-actions stay
+          // 'action' here, which is fine: only gate-vs-portal is load-bearing.
+          mergedFlows[id] = {
+            description: tf.description,
+            trigger: tf.trigger,
+            steps: (tf.steps || []).map((s) => ({
+              type: s.symbol?.startsWith('^')
+                ? 'gate'
+                : s.symbol?.startsWith('!')
+                  ? 'signal'
+                  : 'action',
+              symbol: s.symbol ?? '',
+              description: s.action,
+            })),
+          };
+        }
+      }
+
+      if (Object.keys(mergedFlows).length === 0) {
         const text = JSON.stringify({
           error: 'No flows found',
           suggestion: 'Create .paradigm/flows.yaml with flow definitions',
@@ -236,15 +270,15 @@ flows:
       // Validate flows
       const results: FlowValidationResult[] = [];
       const flowsToValidate = flowId
-        ? [[flowId, flowsConfig.flows[flowId]]]
-        : Object.entries(flowsConfig.flows);
+        ? [[flowId, mergedFlows[flowId]]]
+        : Object.entries(mergedFlows);
 
       for (const [id, flow] of flowsToValidate as Array<[string, FlowDefinitionSimple]>) {
         if (!flow) {
           if (flowId) {
             const text = JSON.stringify({
               error: `Flow not found: ${flowId}`,
-              availableFlows: Object.keys(flowsConfig.flows),
+              availableFlows: Object.keys(mergedFlows),
             }, null, 2);
             return { handled: true, text };
           }
