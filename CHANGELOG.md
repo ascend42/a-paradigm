@@ -15,6 +15,10 @@ Three framework-bug fixes surfaced from a field report in a downstream project (
 - **`paradigm_flow_check` now sees flows defined in `.purpose` files** (was: silent blind spot). `flow_check` read only `.paradigm/flows.yaml`, while `purpose_add_flow` writes flows into `.purpose` files that `reindex` indexes into `flow-index.json`. Flows created via `purpose_add_flow` appeared in `search`/`reindex`/`flows_affected` but returned "Flow not found" from `flow_check`. It now merges both sources (flows.yaml wins on id collision) so `.purpose`-defined flows validate. (`tools/flows.ts`)
 - **`paradigm_purpose_add_flow` no longer writes a junk `undefined: {}` key** into the `flows:` block (was: cosmetic / parse noise). `normalizeFlowsToRecord` keyed array-form flow entries by `flow.name`; a nameless entry coerced to the literal string key `"undefined"`. Both the array and record-passthrough branches now guard against missing/`"undefined"` keys. (`utils/purpose-writer.ts`)
 
+### Tests
+
+- Added regression coverage for the `flow_check` two-source merge (`tests/flow-check-merge.test.ts`) and the `normalizeFlowsToRecord` undefined-key guards (`tests/purpose-writer-flows.test.ts`) — 12 new tests, suite now at 273.
+
 ### Versions
 
 - `@a-company/paradigm`: 6.6.1 → **6.6.2**
