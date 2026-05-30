@@ -1,0 +1,60 @@
+id: L-2026-05-30-ascend-022221-001
+type: agent-session
+timestamp: '2026-05-30T02:22:21.616Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Fixed 3 framework validator bugs from dealoracle field report (v6.6.2)
+summary: Three Paradigm MCP validator bugs reported from the dealoracle project were each confirmed against framework code with writer/reader file:line evidence, fixed, reviewed (261/261 tests pass), and released as v6.6.2. Two were "validators disagree with each other" bugs rooted in duplicated/diverged path logic; the third was a junk-key bug in flow normalization.
+symbols_touched:
+  - '#paradigm-mcp'
+  - '#pm-postflight'
+  - '#flow-check'
+  - '#purpose-add-flow'
+  - '#aspect-check'
+files_modified:
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/flows.ts
+  - packages/paradigm-mcp/src/utils/purpose-writer.ts
+  - CHANGELOG.md
+  - packages/paradigm-mcp/package.json
+  - packages/paradigm/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+decisions:
+  - id: d-flow-merge-precedence
+    decision: flow_check merges flows.yaml + flow-index.json with flows.yaml winning on id collision
+    rationale: Preserves existing explicit flows.yaml validation behavior while extending coverage to .purpose-defined flows; least-surprising precedence.
+  - id: d-version-6.6.2
+    decision: Bump paradigm + paradigm-mcp + plugin to 6.6.2 (patch)
+    rationale: Bugfix-only release with MCP tool behavior changes (pm_postflight, flow_check, purpose_add_flow); paradigm-mcp bumps because tool behavior changed.
+learnings:
+  - 'When two Paradigm validators disagree about the same artifact, suspect duplicated resolution logic — the canonical fix is to route both through the same shared helper (here: resolveAnchorPath) rather than patch each call site.'
+  - pm_postflight had reimplemented aspect-anchor path resolution inline instead of using the shared resolver aspect_check uses — a latent divergence that made aspect-anchors unsafe to set to block repo-wide.
+  - flow_check read only flows.yaml while purpose_add_flow/reindex use .purpose-derived flow-index.json — two unsynced flow registries; fix merges both with flows.yaml winning on id collision.
+  - The real failure case for the flow_check bug is when flows.yaml is absent entirely, so the merge must happen before the empty-check early-return, not just inside the inner lookup branch (caught by reviewer).
+verification:
+  status: pass
+  details:
+    tests: 261/261 pass
+    build: pass
+    link: pass (CLI reports 6.6.2)
+    review: approved, no blocking findings
+tags:
+  - framework-bug
+  - validators
+  - mcp-tools
+  - release
+  - field-report
+linked_tasks:
+  - '1'
+  - '2'
+  - '3'
+  - '4'
+linked_commits:
+  - 94b2c715
+confidence: 0.9
+git_context:
+  ref: 94b2c715ff3b7fe70337fb32e86f7268fcc1e43e
+  branch: main
+  dirty: true

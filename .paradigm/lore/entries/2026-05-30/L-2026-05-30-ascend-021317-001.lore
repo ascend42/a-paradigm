@@ -1,0 +1,33 @@
+id: L-2026-05-30-ascend-021317-001
+type: agent-session
+timestamp: '2026-05-30T02:13:17.047Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Fixed 3 confirmed Paradigm framework bugs reported from dealoracle (PARADIGM_BUG'
+summary: 'Fixed 3 confirmed Paradigm framework bugs reported from dealoracle (PARADIGM_BUGS.md). BUG 2 (high): pm_postflight false-flagged every aspect anchor as missing — now uses shared resolveAnchorPath() matching aspect_check. BUG 1 (medium): flow_check was blind to .purpose-defined flows — now merges flows.yaml + flow-index.json. BUG 3 (low): purpose_add_flow wrote a junk ''undefined'' key — normalizeFlowsToRecord now guards missing flow.name. Reviewer approved (261/261 tests pass, no blocking). Built + linked; bumped paradigm + paradigm-mcp + plugin to 6.6.2 with CHANGELOG entry.'
+symbols_touched: []
+files_modified:
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/tools/flows.ts
+  - packages/paradigm-mcp/src/utils/purpose-writer.ts
+  - CHANGELOG.md
+  - packages/paradigm-mcp/package.json
+  - packages/paradigm/package.json
+  - plugins/paradigm/.claude-plugin/plugin.json
+tags:
+  - arc:cid-debrief
+  - orch:orch-mprn5oa3-27lj
+meta:
+  orchestrationId: orch-mprn5oa3-27lj
+  coverageScore:
+    before: 0.8
+    after: 1
+  coverageAdded:
+    - plugins/paradigm/.claude-plugin
+  notes: Surgical bugfixes to existing MCP tool handlers — no new symbols, routes, or components. All three confirmed with writer/reader file:line evidence before fixing per the framework-bug protocol.
+git_context:
+  ref: af0169a5cc2bb533b4af6aa67970bf49bb5d9bf6
+  branch: main
+  dirty: true
