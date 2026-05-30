@@ -13,7 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   searchSymbols,
-  getSymbolsByType,
+  checkAspectAnchors,
 } from '@a-company/premise-core';
 import type { ParsedGateConfig } from '@a-company/portal-core';
 
@@ -210,42 +210,17 @@ export function checkSpecCompliance(
     }
   }
 
-  // 4. Aspect anchors
-  const aspects = getSymbolsByType(ctx.index, 'aspect');
-  for (const aspect of aspects) {
-    const appliesTo = aspect.appliesTo || [];
-    if (appliesTo.length === 0) continue;
-
-    for (const pattern of appliesTo) {
-      for (const symbol of symbolsTouched) {
-        const matches = matchPattern(pattern, symbol);
-        if (matches) {
-          const anchors = aspect.anchors || [];
-          if (anchors.length === 0) {
-            findings.push({
-              type: 'improvement',
-              category: 'aspect-anchors',
-              message: `Aspect "${aspect.symbol}" applies to "${symbol}" but has no code anchors`,
-              suggestion: `Add anchors to ${aspect.symbol} in .purpose file.`,
-            });
-          } else {
-            for (const anchor of anchors) {
-              const filePath = path.isAbsolute(anchor.path)
-                ? anchor.path
-                : path.join(ctx.rootDir, anchor.path);
-              if (!fs.existsSync(filePath)) {
-                findings.push({
-                  type: 'improvement',
-                  category: 'aspect-anchors',
-                  message: `Aspect "${aspect.symbol}" anchor "${anchor.raw}" points to missing file`,
-                  suggestion: `Update anchors for ${aspect.symbol} in .purpose file.`,
-                });
-              }
-            }
-          }
-        }
-      }
-    }
+  // 4. Aspect anchors — delegated to the shared checkAspectAnchors helper
+  // (premise-core) for correct path resolution and per-aspect dedup.
+  for (const issue of checkAspectAnchors(ctx.index, symbolsTouched, ctx.rootDir)) {
+    findings.push({
+      type: 'improvement',
+      category: 'aspect-anchors',
+      message: issue.kind === 'no-anchors'
+        ? `Aspect "${issue.aspectSymbol}" has no code anchors`
+        : `Aspect "${issue.aspectSymbol}" anchor "${issue.anchorRaw}" points to missing file`,
+      suggestion: `Update anchors for ${issue.aspectSymbol} in .purpose file.`,
+    });
   }
 
   // 5. Broken parent references
@@ -348,16 +323,4 @@ export function checkCodeQuality(
   }
 
   return findings;
-}
-
-// ────────────────────────────────────────────────────────
-// Helpers
-// ────────────────────────────────────────────────────────
-
-function matchPattern(pattern: string, value: string): boolean {
-  if (!pattern.includes('*')) return pattern === value;
-  const regex = new RegExp(
-    '^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$'
-  );
-  return regex.test(value);
 }

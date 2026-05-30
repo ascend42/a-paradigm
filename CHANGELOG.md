@@ -5,6 +5,33 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.3] — 2026-05-29
+
+Follow-up to v6.6.2's aspect-anchor fix, prompted by a second field report (`not-chat`). Fixes a duplication bug in `pm_postflight`, and — more importantly — discovers and fixes the **same false positive still live in `paradigm review`**: the aspect-anchor existence check was triplicated across three code paths, and v6.6.2 had only fixed one. All three now share a single helper.
+
+### Fixed
+
+- **`paradigm_pm_postflight` no longer emits duplicate stale-aspect warnings.** The anchor-existence check was nested inside `for (applies-to pattern) → for (touched symbol)`, so an aspect matching multiple touched symbols had each missing anchor reported once *per matching symbol* — N copies of the same warning. Findings are now deduped per `(aspect, anchor)`.
+- **`paradigm review` (CLI) no longer reports false-positive aspect drift.** This surface still carried the pre-v6.6.2 bug — it resolved anchors with `path.join(cwd, anchor.path)` + `existsSync`, missing purpose-dir-relative and `../`-relative anchors and flagging valid anchors as "points to missing file." It now uses the correct shared resolver. (`commands/review/index.ts`)
+
+### Changed
+
+- **Consolidated the triplicated aspect-anchor check into one shared helper.** Extracted `checkAspectAnchors()` into `@a-company/premise-core` (the only package all three callers can import) — encapsulating applies-to matching, per-aspect dedup, purpose-dir anchor resolution via `resolveAnchorPath`, and emitting a neutral result each caller maps to its own output shape. `pm_postflight`, `paradigm review`, and the (dormant) `compliance-checker` now delegate to it, so this logic can't fork and drift again. `resolveAnchorPath` moved to premise-core with a back-compat re-export shim left in `paradigm-mcp/src/utils/anchor-path.ts`. premise-core gained test infra (vitest); its source is bundled into the published packages, so no separate publish.
+
+### Tests
+
+- `premise-core/src/aspect-anchors.test.ts` (6) — the consolidated helper: purpose-dir + `../`-relative resolution (no false positive), per-aspect and multi-aspect dedup, no-anchors. Plus `paradigm-mcp/tests/postflight-aspect-dedup.test.ts` (3) as the integration guard. Suites: premise-core 16, paradigm-mcp 276.
+
+### Versions
+
+- `@a-company/paradigm`: 6.6.2 → **6.6.3**
+- `@a-company/paradigm-mcp`: 6.6.2 → **6.6.3** (`pm_postflight` dedup; bundles the relocated premise-core helper)
+- `@a-company/premise-core`: 3.6.0 (source changed — `checkAspectAnchors` + `anchor-path` moved here — but bundled into consumers, not published separately)
+- `@a-company/university`: 6.5.0 (unchanged)
+- Plugin `plugin.json`: 6.6.2 → **6.6.3**
+
+---
+
 ## [6.6.2] — 2026-05-29
 
 Three framework-bug fixes surfaced from a field report in a downstream project (`dealoracle`). All three were confirmed against framework code with writer/reader evidence before fixing, reviewed (261/261 tests pass, no blocking findings), and are MCP-tool behavior changes.

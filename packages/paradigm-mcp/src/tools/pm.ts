@@ -13,6 +13,7 @@ import {
   getReferencesTo,
   getAllSymbols,
   getSymbolsByType,
+  checkAspectAnchors,
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
@@ -27,7 +28,6 @@ import { getSessionTracker } from '../utils/session-tracker.js';
 import { execSync } from 'child_process';
 import { narrateAllGaps, type CheckResult as GapCheckResult } from '../utils/gap-narrator.js';
 import { extractDeclaredGateNames } from '../utils/compliance-checker.js';
-import { resolveAnchorPath } from '../utils/anchor-path.js';
 
 // ============================================================================
 // Constants
@@ -335,7 +335,7 @@ interface PostflightViolation {
   suggestion: string;
 }
 
-function runPostflightCheck(
+export function runPostflightCheck(
   filesModified: string[],
   symbolsTouched: string[],
   ctx: ProjectContext
@@ -428,60 +428,30 @@ function runPostflightCheck(
 
   // 4. Aspect coverage check
   // For every aspect in the index, check if touched symbols should be in applies-to
-  // and if anchor files still exist
+  // and if anchor files still exist.
+  //
+  // The anchor-existence half is delegated to the shared checkAspectAnchors
+  // helper (premise-core) so pm_postflight, the compliance checker, and the CLI
+  // review pipeline share ONE implementation — with correct path resolution
+  // (absolute → project-root → purpose-dir) and per-aspect dedup baked in.
+  for (const issue of checkAspectAnchors(ctx.index, symbolsTouched, ctx.rootDir)) {
+    violations.push({
+      type: 'stale-aspect',
+      severity: 'warning',
+      message: issue.kind === 'no-anchors'
+        ? `Aspect "${issue.aspectSymbol}" has no code anchors`
+        : `Aspect "${issue.aspectSymbol}" anchor "${issue.anchorRaw}" points to missing file`,
+      suggestion: issue.kind === 'no-anchors'
+        ? `Add anchors to ${issue.aspectSymbol} in .purpose file. Run paradigm_aspect_check for details.`
+        : `Update anchors for ${issue.aspectSymbol} in .purpose file.`,
+    });
+  }
+
+  // The applies-to coverage half stays here (pm_postflight-only; NOT shared).
   const aspects = getSymbolsByType(ctx.index, 'aspect');
   for (const aspect of aspects) {
     const appliesTo = aspect.appliesTo || [];
     if (appliesTo.length === 0) continue;
-
-    // Check if any touched symbol matches an applies-to pattern
-    for (const pattern of appliesTo) {
-      const isGlob = pattern.includes('*');
-      for (const symbol of symbolsTouched) {
-        let matches = false;
-        if (isGlob) {
-          const regex = new RegExp('^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
-          matches = regex.test(symbol);
-        } else {
-          matches = symbol === pattern;
-        }
-
-        if (matches) {
-          // Symbol matches an aspect's applies-to — check the aspect's anchors are valid
-          const anchors = aspect.anchors || [];
-          if (anchors.length === 0) {
-            violations.push({
-              type: 'stale-aspect',
-              severity: 'warning',
-              message: `Aspect "${aspect.symbol}" applies to "${symbol}" but has no code anchors`,
-              suggestion: `Add anchors to ${aspect.symbol} in .purpose file. Run paradigm_aspect_check for details.`,
-            });
-          } else {
-            // Resolve anchors via the SHARED helper (utils/anchor-path.ts) so
-            // pm_postflight matches paradigm_aspect_check's resolution semantics
-            // (absolute → project-root → purpose-dir bases). The owning
-            // .purpose file's directory is the purpose-dir base, derived the
-            // same way aspect_check does (tags.ts).
-            const purposeFilePath = aspect.filePath
-              ? (path.isAbsolute(aspect.filePath) ? aspect.filePath : path.resolve(ctx.rootDir, aspect.filePath))
-              : ctx.rootDir;
-            const purposeDir = aspect.filePath ? path.dirname(purposeFilePath) : ctx.rootDir;
-
-            for (const anchor of anchors) {
-              const resolution = resolveAnchorPath(anchor.path, purposeDir, ctx.rootDir);
-              if (!resolution.exists) {
-                violations.push({
-                  type: 'stale-aspect',
-                  severity: 'warning',
-                  message: `Aspect "${aspect.symbol}" anchor "${anchor.raw}" points to missing file`,
-                  suggestion: `Update anchors for ${aspect.symbol} in .purpose file.`,
-                });
-              }
-            }
-          }
-        }
-      }
-    }
 
     // Check if touched symbols should be in applies-to but aren't
     for (const symbol of symbolsTouched) {

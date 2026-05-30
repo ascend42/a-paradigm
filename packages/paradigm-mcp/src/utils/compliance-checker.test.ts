@@ -6,22 +6,22 @@ import * as os from 'os';
 // Mock @a-company/premise-core before importing the module under test
 vi.mock('@a-company/premise-core', () => ({
   searchSymbols: vi.fn(),
-  getSymbolsByType: vi.fn(),
+  checkAspectAnchors: vi.fn(),
 }));
 
 import { checkSpecCompliance, checkCodeQuality, type ComplianceContext } from './compliance-checker.js';
-import { searchSymbols, getSymbolsByType } from '@a-company/premise-core';
+import { searchSymbols, checkAspectAnchors } from '@a-company/premise-core';
 
 const mockSearchSymbols = vi.mocked(searchSymbols);
-const mockGetSymbolsByType = vi.mocked(getSymbolsByType);
+const mockCheckAspectAnchors = vi.mocked(checkAspectAnchors);
 
 let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-check-'));
   vi.clearAllMocks();
-  // Default: getSymbolsByType returns empty (no aspects)
-  mockGetSymbolsByType.mockReturnValue([]);
+  // Default: checkAspectAnchors returns empty (no aspect-anchor issues)
+  mockCheckAspectAnchors.mockReturnValue([]);
 });
 
 afterEach(() => {

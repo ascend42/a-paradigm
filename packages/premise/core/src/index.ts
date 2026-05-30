@@ -72,3 +72,18 @@ export {
   getAllComponentTypes,
   getChildComponents,
 } from './symbol-index.js';
+
+// Anchor path resolution
+export {
+  resolveAnchorPath,
+  detectAnchorBaseMismatch,
+} from './anchor-path.js';
+export type {
+  AnchorBase,
+  ResolveAnchorPathResult,
+  AnchorBaseMismatch,
+} from './anchor-path.js';
+
+// Aspect-anchor existence check
+export { checkAspectAnchors } from './aspect-anchors.js';
+export type { AspectAnchorIssue } from './aspect-anchors.js';
