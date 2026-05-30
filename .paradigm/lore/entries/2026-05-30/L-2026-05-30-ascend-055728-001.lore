@@ -1,0 +1,66 @@
+id: L-2026-05-30-ascend-055728-001
+type: agent-session
+timestamp: '2026-05-30T05:57:28.593Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Consolidated triplicated aspect-anchor check into premise-core (v6.6.3)
+summary: A second field report (not-chat) on pm_postflight aspect-drift false positives revealed the v6.6.2 fix had only patched one of three copies of the aspect-anchor existence check — paradigm review (CLI) and compliance-checker still had the bug. Consolidated all three onto a single checkAspectAnchors() helper in premise-core (the only package all callers can import), fixing the live CLI false positive and adding per-(aspect,anchor) dedup. Architect-designed, builder-implemented, reviewer-approved.
+symbols_touched:
+  - '#paradigm-mcp'
+  - '#pm-postflight'
+  - '#review-command'
+  - '#premise-core'
+  - '#compliance-checker'
+symbols_created:
+  - '#aspect-anchors-helper'
+files_created:
+  - packages/premise/core/src/anchor-path.ts
+  - packages/premise/core/src/aspect-anchors.ts
+  - packages/premise/core/src/aspect-anchors.test.ts
+  - packages/premise/core/vitest.config.ts
+  - packages/paradigm-mcp/tests/postflight-aspect-dedup.test.ts
+files_modified:
+  - packages/paradigm-mcp/src/tools/pm.ts
+  - packages/paradigm-mcp/src/utils/anchor-path.ts
+  - packages/paradigm-mcp/src/utils/compliance-checker.ts
+  - packages/paradigm/src/commands/review/index.ts
+  - packages/premise/core/src/index.ts
+  - CHANGELOG.md
+decisions:
+  - id: d-helper-location-premise-core
+    decision: checkAspectAnchors + resolveAnchorPath live in premise-core, with a back-compat shim left in paradigm-mcp/src/utils/anchor-path.ts
+    rationale: premise-core is the only package all 3 callers can import; the CLI cannot import paradigm-mcp. Injecting the resolver instead would recreate the divergence at the CLI site.
+  - id: d-neutral-result-type
+    decision: Helper returns neutral AspectAnchorIssue[] ({aspectSymbol, anchorRaw, kind}); each caller maps to its own output
+    rationale: pm_postflight emits PostflightViolation, review emits Finding — keeping the helper output-agnostic prevents coupling and lets all 3 share one implementation.
+learnings:
+  - A bug fix that lands on only one of N duplicated copies is a latent re-report. When fixing a validator bug, grep for sibling re-implementations of the same logic BEFORE declaring done — here the same aspect-anchor check existed in 3 places (pm_postflight, paradigm review CLI, compliance-checker) and v6.6.2 fixed only one, so the false positive resurfaced from a different surface.
+  - Cross-package shared helpers must live in the lowest common package both/all callers can import. The CLI (paradigm) cannot import paradigm-mcp, so injecting a resolver from paradigm-mcp would force the CLI to reimplement the buggy resolver — the consolidation had to move resolveAnchorPath + the helper down into premise-core.
+  - A shared helper that feeds differently-shaped outputs (PostflightViolation vs Finding) should return a NEUTRAL result type each caller maps to its own shape — keeps formatting out of the helper and avoids coupling.
+  - premise-core had no test infrastructure before this; lower-level core packages can silently lack vitest, so 'run the tests' there is a no-op until you add the config.
+verification:
+  status: pass
+  details:
+    premise-core-tests: 16/16
+    paradigm-mcp-tests: 266/266
+    review: approved, no blocking
+    build: all 3 packages green
+    link: CLI 6.6.3
+tags:
+  - framework-bug
+  - refactor
+  - cross-package
+  - dedup
+  - field-report
+  - release
+linked_lore:
+  - L-2026-05-30-ascend-022221-001
+linked_commits:
+  - '59322105'
+confidence: 0.9
+git_context:
+  ref: 5932210506694d90a6cef0b175ca6257f37cce1c
+  branch: main
+  dirty: true
