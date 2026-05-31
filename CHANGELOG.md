@@ -5,6 +5,33 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.4] — 2026-05-31
+
+Fixes the University `pack` selector being silently ignored by the read tools — discovered while authoring a multi-section discipline pack. The v6.0 `pack` argument is documented to "target a specific content pack," but `search`, `onboard`, and `validate` resolved the right pack root and then discarded it.
+
+### Fixed
+
+- **`paradigm_university_search` / `_onboard` / `_validate` now honor the `pack` selector.** All three resolved the correct `packRoot` via `resolveActivePack` and then called a loader hardcoded to `<rootDir>/.paradigm/university/index.yaml` — so selecting any non-default pack returned the project pack's content (or nothing). `search pack=<discipline>` and `search pack=paradigm` (first-party) both returned `0`. There were two root causes: the index path was hardcoded to the project pack, **and** the content base was hardcoded to `content/` while the first-party pack ships under `src/content/`. (`utils/university-loader.ts`, `tools/university.ts`)
+
+### Changed
+
+- **Pack entry loading is now pack-root-aware with a scan fallback.** New `resolveContentBase()` probes `content/` then `src/content/` (matching `countPackEntries`), `loadPackIndex()` reads a pack's `index.yaml` when present and otherwise builds entries in-memory by scanning the pack's content dirs (non-project packs ship no `index.yaml`), and `scanPackEntries()` is now the single source the on-disk index rebuild also uses. The default (no `pack` argument) path is byte-identical to before — it still reads the project `index.yaml` and keeps the rebuild-on-missing fallback. The CLI's separate University storage is unaffected.
+
+### Tests
+
+- `paradigm-mcp/tests/university-pack-selector.test.ts` (8) — `content/` and `src/content/` layouts both resolve; section filter works; `pack_list` count equals unfiltered search count; onboard/validate over a selected pack load bodies correctly; project-pack path unchanged; scan output equals the index-rebuild output. Suite: 274 passing.
+
+### Versions
+
+- `@a-company/paradigm`: 6.6.3 → **6.6.4**
+- `@a-company/paradigm-mcp`: 6.6.3 → **6.6.4** (`university_search`/`_onboard`/`_validate` now honor `pack`)
+- `@a-company/university`: 6.5.0 (unchanged)
+- Plugin `plugin.json`: 6.6.3 → **6.6.4**
+
+> Note: a follow-up (`T-2026-05-31-001`) tracks unifying `countPackEntries` onto `resolveContentBase` so the two content-base probes can't drift — latent, no shipped pack triggers it.
+
+---
+
 ## [6.6.3] — 2026-05-29
 
 Follow-up to v6.6.2's aspect-anchor fix, prompted by a second field report (`not-chat`). Fixes a duplication bug in `pm_postflight`, and — more importantly — discovers and fixes the **same false positive still live in `paradigm review`**: the aspect-anchor existence check was triplicated across three code paths, and v6.6.2 had only fixed one. All three now share a single helper.

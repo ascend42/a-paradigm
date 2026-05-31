@@ -477,6 +477,9 @@ export async function handleUniversityTool(
     const defaultSectionId =
       activeManifest?.sections?.find(s => s.default === true)?.id ?? 'main';
 
+    // Only scope to packRoot when a pack was explicitly requested. Without a
+    // `pack` arg, pass undefined so the default routes through the unchanged
+    // project-index path (loadUniversityIndex) — byte-identical to v6.x.
     const results = searchContent(ctx.rootDir, {
       type: args.type as string | undefined,
       tag: args.tag as string | undefined,
@@ -487,7 +490,7 @@ export async function handleUniversityTool(
       track: args.track as 'core' | 'extracurricular' | undefined,
       section: args.section as string | undefined,
       limit: args.limit as number | undefined,
-    });
+    }, requestedPack ? packRoot : undefined);
 
     // v6.0 spec §4.1: result ids are <pack-id>:<entry-id>.
     // v6.5: result items include `section` (always present, synthesized to
@@ -743,10 +746,10 @@ export async function handleUniversityTool(
   if (name === 'paradigm_university_onboard') {
     const student = (args.student as string) || resolveAuthor();
     const requestedPack = args.pack as string | undefined;
-    const { packId } = resolveActivePack(ctx.rootDir, requestedPack);
+    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
 
     const config = loadUniversityConfig(ctx.rootDir);
-    const sequence = getOnboardingSequence(ctx.rootDir, student);
+    const sequence = getOnboardingSequence(ctx.rootDir, student, requestedPack ? packRoot : undefined);
 
     const text = JSON.stringify({
       university: config.branding.name,
@@ -762,7 +765,7 @@ export async function handleUniversityTool(
   // ── Validate ───────────────────────────────────────────
   if (name === 'paradigm_university_validate') {
     const requestedPack = args.pack as string | undefined;
-    const { packId } = resolveActivePack(ctx.rootDir, requestedPack);
+    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
 
     const rawId = args.id as string | undefined;
     let entryId: string | undefined = rawId;
@@ -778,7 +781,7 @@ export async function handleUniversityTool(
     const result = validateUniversityContent(ctx.rootDir, {
       id: entryId,
       deep: args.deep as boolean | undefined,
-    });
+    }, requestedPack ? packRoot : undefined);
 
     const text = JSON.stringify({ pack: packId, ...result }, null, 2);
     trackToolCall(text.length, name);

@@ -11,7 +11,7 @@ components:
       - feature
       - symphony
   university-loader:
-    description: 'Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes.'
+    description: 'Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes. Pack-selector fix: resolveContentBase probes content/ + src/content/ (shared with countPackEntries); scanPackEntries is the single frontmatter→entry mapper used by both rebuildUniversityIndex (project, writes index) and loadPackIndex (selected pack, in-memory scan, no write); searchContent/getOnboardingSequence/validateUniversityContent take optional trailing packRoot — when present they read the selected pack, when omitted they keep the byte-identical project path. Deep-validate symbol/staleness/coverage checks stay rootDir-relative (project owns symbol authority).'
     type: loader
     tags:
       - feature
