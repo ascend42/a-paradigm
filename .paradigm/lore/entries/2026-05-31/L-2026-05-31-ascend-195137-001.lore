@@ -1,0 +1,49 @@
+id: L-2026-05-31-ascend-195137-001
+type: agent-session
+timestamp: '2026-05-31T19:51:37.549Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Fixed University pack-selector ignored by read tools (v6.6.4)
+summary: While authoring a private multi-section University pack (ai-literacy), discovered that paradigm_university_search/onboard/validate accept a `pack` selector but ignore it — they resolve the correct packRoot then call a loader hardcoded to the project index.yaml, so non-default packs return 0. Two hardcodes (project-index path + content/-only base; first-party ships src/content/). Fixed with a pack-root-aware loader + scan fallback. Architect-designed, builder-implemented, reviewer-approved, 274 tests pass.
+symbols_touched:
+  - '#university-loader'
+  - '#paradigm-mcp'
+  - '#university-search'
+  - '#university-onboard'
+  - '#university-validate'
+files_created:
+  - packages/paradigm-mcp/tests/university-pack-selector.test.ts
+  - .paradigm/specs/fix-university-pack-selector.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/university-loader.ts
+  - packages/paradigm-mcp/src/tools/university.ts
+  - CHANGELOG.md
+learnings:
+  - 'A ''param accepted but ignored by the reader'' bug recurs in this codebase: the writer computes the right value (resolveActivePack → packRoot) and the reader silently uses a different default (ctx.rootDir → project index). Same shape as the v6.6.2 pm_postflight and v6.6.3 flow_check bugs. When a selector/param exists, grep that the READER actually consumes it.'
+  - 'University packs ship content under TWO layouts: project/discipline packs use content/, the first-party pack uses src/content/. Any pack-content code must probe both — and the probe logic is itself duplicated (countPackEntries vs the new resolveContentBase), a latent drift filed as T-2026-05-31-001.'
+  - Non-project University packs have no index.yaml, so pack-aware reads must scan content in-memory, not assume a prebuilt index.
+  - Authoring a real artifact (the ai-literacy pack) surfaced a framework bug that internal testing missed — dog-fooding the multi-tenant pack feature is what exposed the selector gap.
+verification:
+  status: pass
+  details:
+    tests: 274/274 (8 new)
+    build: green
+    review: approved, no blocking
+    link: CLI 6.6.4
+tags:
+  - framework-bug
+  - university
+  - multi-tenant
+  - pack-selector
+  - release
+linked_tasks:
+  - T-2026-05-31-001
+linked_commits:
+  - 4549b539
+confidence: 0.88
+git_context:
+  ref: 4549b539689aba74cb09b531fcd83d36a409f56d
+  branch: main
+  dirty: true
