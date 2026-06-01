@@ -1,0 +1,74 @@
+id: L-2026-06-01-ascend-040751-001
+type: milestone
+timestamp: '2026-06-01T04:07:51.845Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Extracted @a-company/university-core — killed the 3-way pack-loader duplication (v6.6.6)
+summary: Extracted the triplicated pack/content-loading logic into one lean shared package, @a-company/university-core (js-yaml + zod, zero @a-company deps). The MCP loader, CLI storage, and serve server now import it; their old copies are re-export shims. Behavior-neutral read path (proven by-construction); the only user delta is CLI search now matching tags. Architect-designed (Option C→A extraction), 3 phased builders + integrated review, end-to-end built-CLI serve smoke verified. This is the long-term cure for the bug class we fixed the same way 3x across v6.6.2–6.6.5.
+symbols_touched:
+  - '#university-core'
+  - '#university-loader'
+  - '#university-server'
+  - '#paradigm-mcp'
+  - '#university-cli'
+symbols_created:
+  - '#university-core'
+files_created:
+  - packages/university-core/src/loader.ts
+  - packages/university-core/src/pack-discovery.ts
+  - packages/university-core/src/pack-schema.ts
+  - packages/university-core/src/logger.ts
+  - packages/university-core/src/index.ts
+  - .paradigm/specs/extract-university-core.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/university-loader.ts
+  - packages/paradigm/src/core/university/storage.ts
+  - packages/university/src/server/index.ts
+  - package.json
+  - CHANGELOG.md
+decisions:
+  - id: d-extract-university-core
+    decision: Extract @a-company/university-core as a lean package (js-yaml+zod, zero @a-company deps); all 3 consumers import it via shims
+    rationale: Fixed the same pack-loader bug 3x across 4 releases; the multi-tenant feature is evolving fast so duplication compounds. Lean (slim reimplemented discovery, not pack-loader) keeps the dep-light university package from gaining an internal-coupling chain.
+  - id: d-safeloadpackid-home
+    decision: safeLoadPackId lives in university-core, not CLI
+    rationale: Spec §3's claim that loadOrFabricatePackManifest subsumes it was false (it fabricates pack_id from dir basename for partial manifests); core is its single canonical home per §5.5, avoiding re-introducing a deleted copy.
+  - id: d-bundle-not-publish-only
+    decision: university-core is published (private:false, in dependencies '*') AND bundled into consumers
+    rationale: Matches the established premise-core pattern; consumers list it as a dep so npm install resolves it, even though tsup noExternal inlines the code. Must be published FIRST.
+learnings:
+  - 'The durable cure for ''same bug fixed N times'' is extraction into a shared package the consumers can all import — but package boundaries dictate WHERE it lives: the CLI can''t import paradigm-mcp, so the shared code had to become a new lean leaf package (zero @a-company deps) that everyone depends on, mirroring the premise-core/anchor-path precedent.'
+  - 'A bundled-but-published package is the project''s pattern: *-core packages are private:false and listed in consumer dependencies with ''*'' (so npm install resolves them) AND bundled via tsup noExternal (so they work at runtime). A NEW such package must be published BEFORE its consumers or their install breaks.'
+  - The highest-risk failure mode for bundled dynamic-import code (serve loads @a-company/university/server via import()) is the bundler leaving a workspace dep EXTERNAL — unit tests pass, runtime breaks. Gate it with a built-ARTIFACT smoke (launch serve from the linked CLI + curl /api/pack-config), not just unit green, plus a dist grep proving no bare specifier survives.
+  - '''Behavior-neutral'' refactors still need a precise guarantee: split into read-path byte-identical (proven by moving code verbatim + diffing) vs enumerated intentional convergence deltas (the divergences the consolidation CLOSES). Burying a delta (e.g. CLI search now matches tags) violates the neutrality claim — enumerate every one.'
+verification:
+  status: pass
+  details:
+    core-tests: '28'
+    mcp-tests: '286'
+    cli-tests: '360'
+    university-tests: 46 (+1 pre-existing)
+    live-serve-smoke: built CLI serve --pack ai-literacy → mode:project, 5 sections
+    review: approved, no blocking
+    bundle: core inlined in both server + CLI dist (verified)
+tags:
+  - refactor
+  - consolidation
+  - university
+  - scalability
+  - release
+  - milestone
+linked_lore:
+  - L-2026-06-01-ascend-001947-001
+linked_tasks:
+  - T-2026-06-01-003
+  - T-2026-06-01-004
+linked_commits:
+  - c6fabeb7
+confidence: 0.85
+git_context:
+  ref: c6fabeb728eea211c359834fa684964f841911c7
+  branch: main
+  dirty: true
