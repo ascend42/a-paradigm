@@ -25,6 +25,15 @@ program
   .version(VERSION)
   .addHelpText('before', banner);
 
+// v6.6.5 (A2): when a `--port` (or any option) is declared on BOTH a parent
+// command and its subcommand, Commander otherwise resolves the parent's
+// default ahead of the subcommand's parsed value (e.g. `university serve
+// --port 4000` → '3839'). enablePositionalOptions() makes the subcommand's
+// own option win. Applied program-globally so every parent+sub `--port`
+// pairing (university serve, portal watch, lore serve, docs serve, symphony
+// serve, unified serve) parses its own value. See spec §A2.
+program.enablePositionalOptions();
+
 // v6.0.4 — one-time migration notice for cohort C (projects with ~aspects
 // but no compliance archetype on the roster). preAction fires before any
 // subcommand action; commander short-circuits before this for --version /
@@ -1992,6 +2001,11 @@ program
 const universityCmd = program
   .command('university')
   .description('Per-project university - knowledge base, quizzes, learning paths & PLSAT certification');
+
+// v6.6.5 (A2): the parent `university` command also declares `--port` (for the
+// bare-command backward-compat path below). enablePositionalOptions() here lets
+// the `serve` subcommand's own `--port` take precedence over the parent default.
+universityCmd.enablePositionalOptions();
 
 universityCmd
   .command('serve')

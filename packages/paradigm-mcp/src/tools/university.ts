@@ -17,7 +17,7 @@
 
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
-  searchContent,
+  searchContentWithMeta,
   loadNote,
   loadQuiz,
   loadPath,
@@ -125,6 +125,21 @@ function resolveActivePack(
   return { packId, packRoot, packs };
 }
 
+const PROJECT_UNIVERSITY_SUBDIR = path.join('.paradigm', 'university');
+
+/**
+ * C3a: is the write-target pack root the PROJECT university dir
+ * (`<rootDir>/.paradigm/university`)? Only that pack owns a persisted
+ * `index.yaml`; non-project packs (subdir packs like ai-literacy, first-party,
+ * npm) scan-on-read and ship no index. Guarding the project-index rebuild on
+ * this path equality (NOT on `tenant_kind`, since a subdir pack can also be
+ * `tenant_kind: project`) prevents a misleading project-index churn when a
+ * pack-scoped write lands elsewhere.
+ */
+export function isProjectUniversityRoot(rootDir: string, packRoot: string): boolean {
+  return path.resolve(packRoot) === path.resolve(rootDir, PROJECT_UNIVERSITY_SUBDIR);
+}
+
 /**
  * Count entries across the content subdirectories of a pack root. Used by
  * paradigm_university_pack_list for per-pack entry totals without loading
@@ -197,10 +212,6 @@ export function getUniversityToolsList() {
           pack: {
             type: 'string',
             description: 'v6.0: target a specific content pack by id (default: project pack if present, else first-party)',
-          },
-          discipline: {
-            type: 'string',
-            description: 'v6.0: filter by discipline sub-pack name',
           },
           section: {
             type: 'string',
@@ -480,7 +491,9 @@ export async function handleUniversityTool(
     // Only scope to packRoot when a pack was explicitly requested. Without a
     // `pack` arg, pass undefined so the default routes through the unchanged
     // project-index path (loadUniversityIndex) — byte-identical to v6.x.
-    const results = searchContent(ctx.rootDir, {
+    // C2: searchContentWithMeta also surfaces `total` (pre-slice) so callers
+    // can tell whether the default limit silently truncated results.
+    const { entries: results, total, returned } = searchContentWithMeta(ctx.rootDir, {
       type: args.type as string | undefined,
       tag: args.tag as string | undefined,
       difficulty: args.difficulty as Difficulty | undefined,
@@ -496,8 +509,13 @@ export async function handleUniversityTool(
     // v6.5: result items include `section` (always present, synthesized to
     // the active pack's default when not authored) and `order` (only when
     // set on the entry).
+    // C2: `total` (post-filter, pre-slice) + `returned` (post-slice) expose
+    // truncation. `count` is kept as an alias of `returned` for back-compat.
     const text = JSON.stringify({
       count: results.length,
+      total,
+      returned,
+      truncated: total > returned,
       pack: packId,
       results: results.map(r => ({
         id: `${packId}:${r.id}`,
@@ -607,7 +625,9 @@ export async function handleUniversityTool(
       };
 
       saveQuiz(ctx.rootDir, quiz, packRoot);
-      rebuildUniversityIndex(ctx.rootDir);
+      // C3a: only rebuild the project index when the write target IS the
+      // project university dir. Non-project packs scan-on-read (no index.yaml).
+      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
       const text = JSON.stringify({ created: id, type: 'quiz', file: `content/quizzes/${id}.yaml` }, null, 2);
       trackToolCall(text.length, name);
@@ -630,7 +650,9 @@ export async function handleUniversityTool(
       };
 
       savePath(ctx.rootDir, lp, packRoot);
-      rebuildUniversityIndex(ctx.rootDir);
+      // C3a: only rebuild the project index when the write target IS the
+      // project university dir. Non-project packs scan-on-read (no index.yaml).
+      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
       const text = JSON.stringify({ created: id, type: 'path', file: `content/paths/${id}.yaml` }, null, 2);
       trackToolCall(text.length, name);
@@ -656,7 +678,9 @@ export async function handleUniversityTool(
     };
 
     saveNote(ctx.rootDir, frontmatter, (args.body as string) || '', packRoot);
-    rebuildUniversityIndex(ctx.rootDir);
+    // C3a: only rebuild the project index when the write target IS the
+    // project university dir. Non-project packs scan-on-read (no index.yaml).
+    if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
     const subdir = contentType === 'policy' ? 'policies' : 'notes';
     const text = JSON.stringify({ created: id, type: contentType, file: `content/${subdir}/${id}.md` }, null, 2);
@@ -696,7 +720,9 @@ export async function handleUniversityTool(
 
       const body = (args.body as string) ?? note.body;
       saveNote(ctx.rootDir, fm, body, packRoot);
-      rebuildUniversityIndex(ctx.rootDir);
+      // C3a: only rebuild the project index when the write target IS the
+      // project university dir. Non-project packs scan-on-read (no index.yaml).
+      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
       const text = JSON.stringify({ updated: entryId, type: fm.type }, null, 2);
       trackToolCall(text.length, name);
@@ -714,7 +740,9 @@ export async function handleUniversityTool(
       quiz.updated = today;
 
       saveQuiz(ctx.rootDir, quiz, packRoot);
-      rebuildUniversityIndex(ctx.rootDir);
+      // C3a: only rebuild the project index when the write target IS the
+      // project university dir. Non-project packs scan-on-read (no index.yaml).
+      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
       const text = JSON.stringify({ updated: entryId, type: 'quiz' }, null, 2);
       trackToolCall(text.length, name);
@@ -730,7 +758,9 @@ export async function handleUniversityTool(
       lp.updated = today;
 
       savePath(ctx.rootDir, lp, packRoot);
-      rebuildUniversityIndex(ctx.rootDir);
+      // C3a: only rebuild the project index when the write target IS the
+      // project university dir. Non-project packs scan-on-read (no index.yaml).
+      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
 
       const text = JSON.stringify({ updated: entryId, type: 'path' }, null, 2);
       trackToolCall(text.length, name);
@@ -748,11 +778,20 @@ export async function handleUniversityTool(
     const requestedPack = args.pack as string | undefined;
     const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
 
-    const config = loadUniversityConfig(ctx.rootDir);
+    // C1.4: when a pack is explicitly requested, surface the PACK's display
+    // name (from its manifest) rather than the project config's branding, so a
+    // sections-only / first-party pack keeps its own identity. No-pack path →
+    // project branding, unchanged.
+    let universityName = loadUniversityConfig(ctx.rootDir).branding.name;
+    if (requestedPack) {
+      const manifest = loadOrFabricatePackManifest(packRoot);
+      if (manifest?.name) universityName = manifest.name;
+    }
+
     const sequence = getOnboardingSequence(ctx.rootDir, student, requestedPack ? packRoot : undefined);
 
     const text = JSON.stringify({
-      university: config.branding.name,
+      university: universityName,
       pack: packId,
       student,
       ...sequence,

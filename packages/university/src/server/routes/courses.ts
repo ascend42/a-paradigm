@@ -147,11 +147,15 @@ function listLearningPaths(contentDir: string): PathYaml[] {
  * first-party contentDir first, then any project pack directories found
  * under projectDir/.paradigm/university/.
  *
- * In 'project' mode: skip contentDir entirely — return ONLY project pack
- * directories so that no first-party Paradigm courses appear.
+ * In 'project' mode: skip contentDir entirely WHEN a projectDir is given,
+ * returning ONLY project pack directories so that no first-party Paradigm
+ * courses appear. But in 'project' mode WITHOUT a projectDir — i.e. a single
+ * pack mounted by `serve --pack` where contentDir is already the resolved
+ * pack content base — read that base directly (A1b).
  */
 function collectContentDirs(contentDir: string, projectDir?: string, mode?: 'paradigm' | 'project'): string[] {
-  const dirs: string[] = mode === 'project' ? [] : [contentDir];
+  // project mode + no projectDir → contentDir IS the selected pack's base.
+  const dirs: string[] = (mode === 'project' && projectDir) ? [] : [contentDir];
   if (!projectDir) return dirs;
 
   const universityRoot = path.join(projectDir, '.paradigm', 'university');
@@ -247,14 +251,28 @@ function loadCourse(contentDir: string, courseId: string): ClientCourse | null {
 // Router
 // ────────────────────────────────────────────────────────────────
 
-export function createCoursesRouter(contentDir: string, projectDir?: string, mode?: 'paradigm' | 'project'): Router {
+export function createCoursesRouter(
+  contentDir: string,
+  projectDir?: string,
+  mode?: 'paradigm' | 'project',
+  sectionsOverride?: Section[],
+): Router {
   const router = Router();
   const allContentDirs = collectContentDirs(contentDir, projectDir, mode);
 
   // v6.5: load sections once per server instance (single-tenant). Used by
   // the listing handler to apply the section-assignment rule when a
   // course's LP-*.yaml omits `section:`.
-  const sections: Section[] = resolveSections(mode ?? 'paradigm', contentDir, projectDir);
+  //
+  // A1b: when serving a pack via `--pack` the manifest lives at
+  // <packRoot>/pack.yaml — one level above the resolved content base — so
+  // resolveSections(contentDir) cannot find it. The server passes the
+  // already-resolved pack sections (from buildPackConfig) as an override so
+  // the section-assignment fallback uses the pack's real sections, not the
+  // implicit default. No override → today's resolveSections path unchanged.
+  const sections: Section[] = (sectionsOverride && sectionsOverride.length > 0)
+    ? sectionsOverride
+    : resolveSections(mode ?? 'paradigm', contentDir, projectDir);
 
   // GET /api/courses - List all courses across all packs
   router.get('/', (_req: Request, res: Response) => {

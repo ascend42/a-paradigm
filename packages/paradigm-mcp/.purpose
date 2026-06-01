@@ -308,20 +308,20 @@ description: |
     - "#IndexLoader"
 
 #UniversityTools:
-  description: MCP tool handlers for university content — search, create, update, quiz, submit, onboard, validate, diplomas. Supports category/track filtering and extracurricular content tracks.
+  description: MCP tool handlers for university content — search, create, update, quiz, submit, onboard, validate, diplomas. Supports category/track filtering, extracurricular content tracks, and the v6.0 pack selector. Search surfaces truncation meta (total/returned); create/update only rebuild the project index when the write target is the project pack; onboard sources the display name from the selected pack's manifest.
   type: service
   tags: [feature, university, mcp]
   anchors:
-    - src/tools/university.ts:1-730
+    - src/tools/university.ts:1-831
   components:
     - "#UniversityLoader"
 
 #UniversityLoader:
-  description: Reads/writes per-project university content (notes, policies, quizzes, paths, diplomas). Supports category-based content organization, extracurricular track filtering, and onboarding sequence generation with core/extracurricular separation.
+  description: Reads/writes per-project and pack-scoped university content (notes, policies, quizzes, paths, diplomas). Supports category-based organization, extracurricular track filtering, and onboarding sequence generation. Onboarding is section-aware for packs that DECLARE sections in pack.yaml (packDeclaresSections + loadPackConfig pack-scope the config); otherwise it keeps the category-based core/extracurricular partition byte-identical. Content-base probing (resolveContentBase) prefers the base that contains content. searchContentWithMeta exposes pre-slice totals for truncation reporting.
   type: loader
   tags: [feature, university]
   anchors:
-    - src/utils/university-loader.ts:1-850
+    - src/utils/university-loader.ts:1-1442
     - src/types/university.ts:1-210
 
 # ============================================

@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as readline from 'readline';
 import { loadQuiz, saveDiploma } from '../../core/university/index.js';
 import type { Diploma } from '../../core/university/types.js';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { resolvePackContext, hasSelector, type SelectorOptions } from './selectors.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
 
@@ -41,9 +41,11 @@ export async function universityQuizCommand(id: string, options: QuizOptions = {
 
   const selectorOpts: SelectorOptions = { ...options };
   if (addressPackId) selectorOpts.pack = addressPackId;
-  resolvePackContext(rootDir, selectorOpts);
+  const ctx = resolvePackContext(rootDir, selectorOpts);
+  // B-fix: selector from flag OR address pack-id → read the SELECTED pack.
+  const packRoot = hasSelector(selectorOpts) ? (ctx.subPackRoot ?? ctx.packRoot) : undefined;
 
-  const quiz = loadQuiz(rootDir, entryId);
+  const quiz = loadQuiz(rootDir, entryId, packRoot);
 
   if (!quiz) {
     console.error(chalk.red(`\n  Quiz "${id}" not found\n`));

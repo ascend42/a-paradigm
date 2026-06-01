@@ -20,6 +20,7 @@ export type {
 
 export {
   loadUniversityIndex,
+  loadPackIndex,
   loadNote,
   loadQuiz,
   loadPath,
@@ -28,5 +29,7 @@ export {
   saveQuiz,
   saveDiploma,
   searchContent,
+  searchContentWithMeta,
   rebuildUniversityIndex,
+  resolveContentBase,
 } from './storage.js';

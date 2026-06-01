@@ -3,9 +3,17 @@ purpose: CLI-side university core - types and storage
 description: >
   Core types and storage operations for per-project university content.
   Mirrors MCP-side university-loader.ts for CLI command usage.
+  v6.6.5: ported the v6.6.4 pack-selector loader contract — storage CRUD/search
+  accept an optional packRoot. resolveContentBase/loadPackIndex use the
+  contains-content dual-base probe (content/ → src/content/). The no-packRoot
+  path stays byte-identical (project pack, no pack_id stamping).
 
 components:
   UniversityStorage:
-    description: CRUD operations for notes, quizzes, paths, diplomas
+    description: >
+      CRUD operations for notes, quizzes, paths, diplomas. v6.6.5 adds optional
+      packRoot threading (loadPackIndex, searchContent, loadNote/Quiz/Path,
+      saveNote/Quiz) + searchContentWithMeta total counts. Write-path stamps
+      pack_id (raw-YAML manifest id) ONLY when packRoot is explicitly passed.
     type: storage
-    tags: [university, storage]
+    tags: [university, storage, pack, v6.6.5]

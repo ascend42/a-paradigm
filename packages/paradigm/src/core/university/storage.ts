@@ -25,11 +25,88 @@ import type {
   UniversityIndex,
   UniversityIndexEntry,
   UniversityFilter,
-  Difficulty,
 } from './types.js';
 
 const UNIVERSITY_DIR = '.paradigm/university';
 const CONTENT_DIR = 'content';
+const NOTES_DIR = 'notes';
+const POLICIES_DIR = 'policies';
+const QUIZZES_DIR = 'quizzes';
+const PATHS_DIR = 'paths';
+const INDEX_FILE = 'index.yaml';
+const PACK_MANIFEST_FILENAME = 'pack.yaml';
+
+// ═══════════════════════════════════════════════════════════════════
+// CONTENT-BASE RESOLUTION (port of university-loader.ts, v6.6.4 contract)
+//
+// These are additive, optional-`packRoot` ports of the MCP loader so the
+// CLI honors the pack selector. The no-`packRoot` paths below stay byte-
+// identical to today. See spec §SURFACE 2.
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Count content files under a content base — the "contains-content" probe
+ * helper. Mirrors selectors.ts `countPackEntries`'s per-base counting so the
+ * dual-base resolution agrees across CLI surfaces (spec §SURFACE 2.1 / C4).
+ */
+function countContentFiles(contentBase: string): number {
+  let total = 0;
+  for (const sub of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {
+    const dir = path.join(contentBase, sub);
+    if (!fs.existsSync(dir)) continue;
+    try {
+      total += fs.readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.yaml')).length;
+    } catch {
+      // skip
+    }
+  }
+  return total;
+}
+
+/**
+ * Resolve the absolute content dir for a pack, probing both layouts:
+ *   - `content/`     — local project packs + authored discipline packs
+ *   - `src/content/` — first-party @a-company/university
+ *
+ * Spec §SURFACE 2.1 / C4: return the FIRST base that actually CONTAINS
+ * content (not merely the first that exists), aligning with selectors.ts
+ * `countPackEntries`. Returns null when neither base has content.
+ */
+export function resolveContentBase(packRoot: string): string | null {
+  const label = resolveContentBaseLabel(packRoot);
+  return label ? path.join(packRoot, label) : null;
+}
+
+/**
+ * Same contains-content probe as {@link resolveContentBase} but returns the
+ * relative sub-label (`'content'` | `'src/content'`) so entry `file` fields
+ * are prefixed with the layout that actually exists on disk.
+ */
+function resolveContentBaseLabel(packRoot: string): string | null {
+  for (const sub of [CONTENT_DIR, 'src/content']) {
+    const dir = path.join(packRoot, sub);
+    if (fs.existsSync(dir) && countContentFiles(dir) > 0) return sub;
+  }
+  return null;
+}
+
+/**
+ * Derive a pack id from `<packRoot>/pack.yaml` via a raw-YAML read — used for
+ * write-time `pack_id` stamping when a `packRoot` is explicitly provided.
+ * Kept self-contained (no import of commands/selectors.ts) to avoid a
+ * core→commands layering inversion. Returns null when the manifest is
+ * missing/unparseable or carries no `id`.
+ */
+function safeLoadPackId(packRoot: string): string | null {
+  const manifestPath = path.join(packRoot, PACK_MANIFEST_FILENAME);
+  if (!fs.existsSync(manifestPath)) return null;
+  try {
+    const data = yaml.load(fs.readFileSync(manifestPath, 'utf8')) as { id?: unknown } | null;
+    return data && typeof data.id === 'string' && data.id.length > 0 ? data.id : null;
+  } catch {
+    return null;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // MARKDOWN PARSING
@@ -56,7 +133,7 @@ function serializeFrontmatter(frontmatter: Record<string, unknown>, body: string
 // ═══════════════════════════════════════════════════════════════════
 
 export function loadUniversityIndex(rootDir: string): UniversityIndex | null {
-  const indexPath = path.join(rootDir, UNIVERSITY_DIR, 'index.yaml');
+  const indexPath = path.join(rootDir, UNIVERSITY_DIR, INDEX_FILE);
   if (!fs.existsSync(indexPath)) return null;
   try {
     return yaml.load(fs.readFileSync(indexPath, 'utf8')) as UniversityIndex;
@@ -65,21 +142,66 @@ export function loadUniversityIndex(rootDir: string): UniversityIndex | null {
   }
 }
 
+/**
+ * Load a pack's index for the READ commands (list / search / status /
+ * validate). Port of university-loader.ts `loadPackIndex`:
+ *   - If `<packRoot>/index.yaml` exists → read it.
+ *   - Else → build entries in-memory by scanning the pack's content dirs via
+ *     {@link scanPackEntries} (probed base). Non-project packs ship no
+ *     index.yaml and may live under node_modules, so we NEVER write one here.
+ *
+ * Always returns a non-null index (empty when no content base resolves).
+ */
+export function loadPackIndex(packRoot: string): UniversityIndex {
+  const indexPath = path.join(packRoot, INDEX_FILE);
+  if (fs.existsSync(indexPath)) {
+    try {
+      const parsed = yaml.load(fs.readFileSync(indexPath, 'utf8')) as UniversityIndex | null;
+      if (parsed) return parsed;
+    } catch {
+      // fall through to scan
+    }
+  }
+
+  const contentSubLabel = resolveContentBaseLabel(packRoot);
+  if (!contentSubLabel) {
+    return { version: '1.0', generatedAt: new Date().toISOString(), totalContent: 0, entries: [], diplomaCount: 0 };
+  }
+  const contentBase = path.join(packRoot, contentSubLabel);
+  const entries = scanPackEntries(contentBase, contentSubLabel);
+
+  return {
+    version: '1.0',
+    generatedAt: new Date().toISOString(),
+    totalContent: entries.length,
+    entries,
+    diplomaCount: 0,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CONTENT LOADING
 // ═══════════════════════════════════════════════════════════════════
 
-function resolveFile(rootDir: string, id: string, ext: string): string | null {
-  const base = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR);
-  for (const subdir of ['notes', 'policies', 'quizzes', 'paths']) {
+/**
+ * Resolve a content file path. Port of university-loader.ts `resolveContentFile`:
+ * when `packRoot` is given, probe its dual content base (`content/` →
+ * `src/content/`); when omitted, fall back to the legacy project `content/` dir
+ * (byte-identical to today).
+ */
+function resolveFile(rootDir: string, id: string, ext: string, packRoot?: string): string | null {
+  const base = packRoot
+    ? (resolveContentBase(packRoot) ?? path.join(packRoot, CONTENT_DIR))
+    : path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR);
+  for (const subdir of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {
     const fp = path.join(base, subdir, `${id}${ext}`);
     if (fs.existsSync(fp)) return fp;
   }
   return null;
 }
 
-export function loadNote(rootDir: string, id: string): UniversityNote | null {
-  const fp = resolveFile(rootDir, id, '.md');
+export function loadNote(rootDir: string, id: string, packRoot?: string): UniversityNote | null {
+  const fp = resolveFile(rootDir, id, '.md', packRoot);
   if (!fp) return null;
   try {
     const parsed = parseFrontmatter(fs.readFileSync(fp, 'utf8'));
@@ -99,8 +221,8 @@ export function loadNote(rootDir: string, id: string): UniversityNote | null {
   }
 }
 
-export function loadQuiz(rootDir: string, id: string): UniversityQuiz | null {
-  const fp = resolveFile(rootDir, id, '.yaml');
+export function loadQuiz(rootDir: string, id: string, packRoot?: string): UniversityQuiz | null {
+  const fp = resolveFile(rootDir, id, '.yaml', packRoot);
   if (!fp) return null;
   try {
     const data = yaml.load(fs.readFileSync(fp, 'utf8')) as UniversityQuiz;
@@ -111,8 +233,8 @@ export function loadQuiz(rootDir: string, id: string): UniversityQuiz | null {
   }
 }
 
-export function loadPath(rootDir: string, id: string): LearningPath | null {
-  const fp = resolveFile(rootDir, id, '.yaml');
+export function loadPath(rootDir: string, id: string, packRoot?: string): LearningPath | null {
+  const fp = resolveFile(rootDir, id, '.yaml', packRoot);
   if (!fp) return null;
   try {
     const data = yaml.load(fs.readFileSync(fp, 'utf8')) as LearningPath;
@@ -147,20 +269,47 @@ export function loadDiplomas(rootDir: string, filter?: { student?: string; type?
 // CONTENT WRITING
 // ═══════════════════════════════════════════════════════════════════
 
-export function saveNote(rootDir: string, frontmatter: UniversityFrontmatter, body: string): string {
-  const subdir = frontmatter.type === 'policy' ? 'policies' : 'notes';
-  const dir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR, subdir);
+export function saveNote(
+  rootDir: string,
+  frontmatter: UniversityFrontmatter,
+  body: string,
+  packRoot?: string,
+): string {
+  const subdir = frontmatter.type === 'policy' ? POLICIES_DIR : NOTES_DIR;
+  // Default to the project pack when packRoot omitted → byte-identical write
+  // path. Spec §SURFACE 2 note: thread packRoot ONLY for directory targeting;
+  // stamp pack_id (raw-YAML manifest id) ONLY when packRoot was explicitly
+  // passed — the no-packRoot path writes exactly as today (no stamping).
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, subdir);
   fs.mkdirSync(dir, { recursive: true });
+
+  let record = frontmatter as unknown as Record<string, unknown>;
+  if (packRoot) {
+    const packId = safeLoadPackId(packRoot);
+    if (packId && !record.pack_id) record = { ...record, pack_id: packId };
+  }
+
   const fp = path.join(dir, `${frontmatter.id}.md`);
-  fs.writeFileSync(fp, serializeFrontmatter(frontmatter as unknown as Record<string, unknown>, body), 'utf8');
+  fs.writeFileSync(fp, serializeFrontmatter(record, body), 'utf8');
   return fp;
 }
 
-export function saveQuiz(rootDir: string, quiz: UniversityQuiz): string {
-  const dir = path.join(rootDir, UNIVERSITY_DIR, CONTENT_DIR, 'quizzes');
+export function saveQuiz(rootDir: string, quiz: UniversityQuiz, packRoot?: string): string {
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, QUIZZES_DIR);
   fs.mkdirSync(dir, { recursive: true });
+
+  let toWrite: Record<string, unknown> = quiz as unknown as Record<string, unknown>;
+  if (packRoot) {
+    const packId = safeLoadPackId(packRoot);
+    if (packId && !(toWrite as { pack_id?: unknown }).pack_id) {
+      toWrite = { ...toWrite, pack_id: packId };
+    }
+  }
+
   const fp = path.join(dir, `${quiz.id}.yaml`);
-  fs.writeFileSync(fp, yaml.dump(quiz, { lineWidth: -1, noRefs: true }), 'utf8');
+  fs.writeFileSync(fp, yaml.dump(toWrite, { lineWidth: -1, noRefs: true }), 'utf8');
   return fp;
 }
 
@@ -176,13 +325,27 @@ export function saveDiploma(rootDir: string, diploma: Diploma): string {
 // INDEX REBUILD
 // ═══════════════════════════════════════════════════════════════════
 
-export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
-  const uniDir = path.join(rootDir, UNIVERSITY_DIR);
-  const contentBase = path.join(uniDir, CONTENT_DIR);
+/**
+ * Scan a pack's content directory into `UniversityIndexEntry[]`. Single source
+ * of truth for frontmatter→entry mapping, including v6.5 `section`/`order`
+ * propagation. Both `rebuildUniversityIndex` (forced `content/` label) and
+ * `loadPackIndex` (probed base) call it so the two paths never diverge.
+ *
+ * Port of university-loader.ts `scanPackEntries`. NOTE: the CLI
+ * `UniversityIndexEntry` type has no `category` field, so (unlike the MCP
+ * loader) category is not surfaced here — keeps the CLI rebuild within its own
+ * type shape. `section`/`order` ARE propagated (additive; the CLI type
+ * supports them).
+ *
+ * @param contentBase absolute path to the resolved content dir
+ * @param contentSubLabel relative sub-label (`content` / `src/content`) used to
+ *   build each entry's `file` path so it round-trips for later body loads.
+ */
+function scanPackEntries(contentBase: string, contentSubLabel: string): UniversityIndexEntry[] {
   const entries: UniversityIndexEntry[] = [];
 
   // Scan notes and policies
-  for (const subdir of ['notes', 'policies']) {
+  for (const subdir of [NOTES_DIR, POLICIES_DIR]) {
     const dir = path.join(contentBase, subdir);
     if (!fs.existsSync(dir)) continue;
     try {
@@ -195,14 +358,16 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
           entries.push({
             id: fm.id || file.replace('.md', ''),
             title: (fm.title as string) || file,
-            type: (fm.type as string) || (subdir === 'policies' ? 'policy' : 'note'),
+            type: (fm.type as string) || (subdir === POLICIES_DIR ? 'policy' : 'note'),
             author: (fm.author as string) || 'unknown',
             created: (fm.created as string) || '',
             updated: (fm.updated as string) || '',
             tags: Array.isArray(fm.tags) ? fm.tags : [],
             symbols: Array.isArray(fm.symbols) ? fm.symbols : [],
             difficulty: fm.difficulty || 'beginner',
-            file: `${CONTENT_DIR}/${subdir}/${file}`,
+            file: `${contentSubLabel}/${subdir}/${file}`,
+            ...(typeof fm.section === 'string' && fm.section ? { section: fm.section } : {}),
+            ...(typeof fm.order === 'number' && Number.isFinite(fm.order) ? { order: fm.order } : {}),
           });
         } catch { /* skip */ }
       }
@@ -210,7 +375,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
   }
 
   // Scan quizzes
-  const quizDir = path.join(contentBase, 'quizzes');
+  const quizDir = path.join(contentBase, QUIZZES_DIR);
   if (fs.existsSync(quizDir)) {
     try {
       for (const file of fs.readdirSync(quizDir).filter(f => f.endsWith('.yaml'))) {
@@ -221,7 +386,9 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
             id: data.id, title: data.title || file, type: 'quiz', author: data.author || 'unknown',
             created: data.created || '', updated: data.updated || '', tags: data.tags || [],
             symbols: data.symbols || [], difficulty: data.difficulty || 'beginner',
-            file: `${CONTENT_DIR}/quizzes/${file}`,
+            file: `${contentSubLabel}/${QUIZZES_DIR}/${file}`,
+            ...(typeof data.section === 'string' && data.section ? { section: data.section } : {}),
+            ...(typeof data.order === 'number' && Number.isFinite(data.order) ? { order: data.order } : {}),
           });
         } catch { /* skip */ }
       }
@@ -229,7 +396,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
   }
 
   // Scan learning paths
-  const pathDir = path.join(contentBase, 'paths');
+  const pathDir = path.join(contentBase, PATHS_DIR);
   if (fs.existsSync(pathDir)) {
     try {
       for (const file of fs.readdirSync(pathDir).filter(f => f.endsWith('.yaml'))) {
@@ -239,12 +406,25 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
           entries.push({
             id: data.id, title: data.title || file, type: 'path', author: data.author || 'unknown',
             created: data.created || '', updated: data.updated || '', tags: data.tags || [],
-            symbols: [], file: `${CONTENT_DIR}/paths/${file}`,
+            symbols: [], file: `${contentSubLabel}/${PATHS_DIR}/${file}`,
+            ...(typeof data.section === 'string' && data.section ? { section: data.section } : {}),
+            ...(typeof data.order === 'number' && Number.isFinite(data.order) ? { order: data.order } : {}),
           });
         } catch { /* skip */ }
       }
     } catch { /* skip */ }
   }
+
+  return entries;
+}
+
+export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
+  const uniDir = path.join(rootDir, UNIVERSITY_DIR);
+  const contentBase = path.join(uniDir, CONTENT_DIR);
+
+  // Project index is always built from the `content/` layout (forced label so
+  // entry `file` paths stay project-relative).
+  const entries = scanPackEntries(contentBase, CONTENT_DIR);
 
   // Count diplomas
   let diplomaCount = 0;
@@ -262,7 +442,7 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
   };
 
   fs.mkdirSync(uniDir, { recursive: true });
-  fs.writeFileSync(path.join(uniDir, 'index.yaml'), yaml.dump(index, { lineWidth: -1, noRefs: true }), 'utf8');
+  fs.writeFileSync(path.join(uniDir, INDEX_FILE), yaml.dump(index, { lineWidth: -1, noRefs: true }), 'utf8');
   return index;
 }
 
@@ -270,11 +450,9 @@ export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
 // SEARCH & FILTER
 // ═══════════════════════════════════════════════════════════════════
 
-export function searchContent(rootDir: string, filter: UniversityFilter): UniversityIndexEntry[] {
-  const index = loadUniversityIndex(rootDir);
-  if (!index) return [];
-
-  let results = [...index.entries];
+/** Apply filters to a set of entries. Shared by searchContent + meta variant. */
+function applyFilters(entries: UniversityIndexEntry[], filter: UniversityFilter): UniversityIndexEntry[] {
+  let results = [...entries];
 
   if (filter.type) results = results.filter(e => e.type === filter.type);
   if (filter.tag) results = results.filter(e => e.tags.some(t => t.startsWith(filter.tag!)));
@@ -286,5 +464,35 @@ export function searchContent(rootDir: string, filter: UniversityFilter): Univer
     results = results.filter(e => e.title.toLowerCase().includes(q) || e.id.toLowerCase().includes(q));
   }
 
-  return results.slice(0, filter.limit || 20);
+  return results;
+}
+
+export function searchContent(
+  rootDir: string,
+  filter: UniversityFilter,
+  packRoot?: string,
+): UniversityIndexEntry[] {
+  // packRoot present → load the selected pack (its index.yaml or an in-memory
+  // scan). Omitted → unchanged project-pack path (byte-identical).
+  const index = packRoot ? loadPackIndex(packRoot) : loadUniversityIndex(rootDir);
+  if (!index) return [];
+
+  return applyFilters(index.entries, filter).slice(0, filter.limit || 20);
+}
+
+/**
+ * Like {@link searchContent} but also returns the pre-slice count, so callers
+ * can surface "showing N of TOTAL" without re-counting (spec §C2 CLI parity).
+ * `searchContent`'s signature stays untouched for back-compat.
+ */
+export function searchContentWithMeta(
+  rootDir: string,
+  filter: UniversityFilter,
+  packRoot?: string,
+): { entries: UniversityIndexEntry[]; total: number } {
+  const index = packRoot ? loadPackIndex(packRoot) : loadUniversityIndex(rootDir);
+  if (!index) return { entries: [], total: 0 };
+
+  const filtered = applyFilters(index.entries, filter);
+  return { entries: filtered.slice(0, filter.limit || 20), total: filtered.length };
 }

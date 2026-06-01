@@ -5,6 +5,39 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.5] — 2026-05-31
+
+A thorough sweep of the University `pack` selector across **all three surfaces** — the v6.6.4 fix only covered the MCP read tools, but the CLI commands and the `serve` server had the same bug class (the logic was duplicated and only one copy was fixed). Triaged into ~14 findings across three packages; fixed, reviewed, and live-verified (`serve --pack ai-literacy` now mounts the pack's 5 sections; `serve --port` is honored).
+
+### Fixed
+
+- **`paradigm university serve --pack <id>` now mounts the selected pack.** The CLI resolved the pack context but never forwarded it to the HTTP server, which hardcoded first-party detection — so `/api/pack-config` always returned "Paradigm University" regardless of `--pack`. The server's `ServerOptions` now carries `packRoot`/`packId`, and a new exported `buildPackConfig()` resolves the selected pack's manifest (mode, branding, version, sections) with a dual-base content probe. (`packages/university`, `commands/university/serve.ts`)
+- **`paradigm university serve --port <n>` is now honored.** `--port` was declared on both the parent `university` command and the `serve` subcommand, so commander applied the parent default (3839). Fixed with `enablePositionalOptions()` so the subcommand wins. (`packages/paradigm/src/index.ts`)
+- **All CLI university subcommands now honor `--pack`/`--discipline`.** `list`, `search`, `status`, `validate`, `show`, `quiz`, and `add` resolved the pack but passed the project root to a separate `core/university/storage.ts` that had no `packRoot` awareness (hardcoded `.paradigm/university/` + `content/`-only). Ported the v6.6.4 loader contract into `storage.ts` (pack-root threading, `content/`↔`src/content/` dual-base probe, scan-fallback `loadPackIndex`), so discipline and first-party packs are now visible/editable from the CLI.
+- **`paradigm_university_onboard` now works for sections-only packs.** Onboarding loaded categories from the *project* config and partitioned by category; a pack that uses **sections** (no categories), like a fresh discipline pack, produced an empty/wrong sequence. It now loads pack-scoped config and, when the pack declares `sections:`, partitions and orders by section. Diplomas are also pack-scoped. (`packages/paradigm-mcp`)
+
+### Changed
+
+- **`paradigm_university_search` now reports truncation.** Results include `total`/`returned` so callers know when the default page (20) cut the list. The dead `discipline` filter (declared but never applied) was removed from the search schema. Index rebuilds are now guarded to the project pack only. (`packages/paradigm-mcp`)
+
+### Tests
+
+- +12 MCP (286 total), +10 university pack-config (headline: `buildPackConfig({packRoot})` → the pack's sections without launching a server), +21 CLI storage/wiring (355 total). Every no-selector path is asserted byte-identical across all three surfaces.
+
+### Known follow-ups
+
+- `T-2026-06-01-001` — extract a shared `@a-company/university-core` so the pack-loading logic (now ported into MCP loader, CLI storage, and serve server) stops being duplicated; folds in the latent dual-base predicate divergence and the `reference.json` packRoot inconsistency.
+- `T-2026-05-31-001` — re-scoped onto the same extraction (probe rule now aligned on "first base that contains content").
+
+### Versions
+
+- `@a-company/paradigm`: 6.6.4 → **6.6.5**
+- `@a-company/paradigm-mcp`: 6.6.4 → **6.6.5** (onboard section-aware; search truncation meta)
+- `@a-company/university`: 6.5.0 → **6.5.1** (serve server pack resolution — bundled into the CLI, so it ships with the `@a-company/paradigm` publish)
+- Plugin `plugin.json`: 6.6.4 → **6.6.5**
+
+---
+
 ## [6.6.4] — 2026-05-31
 
 Fixes the University `pack` selector being silently ignored by the read tools — discovered while authoring a multi-section discipline pack. The v6.0 `pack` argument is documented to "target a specific content pack," but `search`, `onboard`, and `validate` resolved the right pack root and then discarded it.

@@ -5,7 +5,7 @@
 
 import chalk from 'chalk';
 import { loadNote, loadQuiz, loadPath } from '../../core/university/index.js';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { resolvePackContext, hasSelector, type SelectorOptions } from './selectors.js';
 
 interface ShowOptions extends SelectorOptions {
   json?: boolean;
@@ -31,15 +31,14 @@ export async function universityShowCommand(id: string, options: ShowOptions): P
   const selectorOpts: SelectorOptions = { ...options };
   if (addressPackId) selectorOpts.pack = addressPackId;
 
-  // Resolving the context is advisory — the paradigm CLI's core loader
-  // still reads from .paradigm/university/. v5.39.0 doesn't split the
-  // storage layer along pack boundaries (that's v6.0 core work). This
-  // call ensures we surface the selector in messages and validate the
-  // pack exists.
-  resolvePackContext(rootDir, selectorOpts);
+  // B-fix: a selector can come from a flag OR the <pack-id>:<entry-id>
+  // address. When either is present, read from the SELECTED pack; bare
+  // `show N-foo` (no flag, no address pack-id) stays byte-identical.
+  const ctx = resolvePackContext(rootDir, selectorOpts);
+  const packRoot = hasSelector(selectorOpts) ? (ctx.subPackRoot ?? ctx.packRoot) : undefined;
 
   // Try note/policy
-  const note = loadNote(rootDir, entryId);
+  const note = loadNote(rootDir, entryId, packRoot);
   if (note) {
     if (options.json) {
       console.log(JSON.stringify({ ...note.frontmatter, body: note.body }, null, 2));
@@ -60,7 +59,7 @@ export async function universityShowCommand(id: string, options: ShowOptions): P
   }
 
   // Try quiz
-  const quiz = loadQuiz(rootDir, entryId);
+  const quiz = loadQuiz(rootDir, entryId, packRoot);
   if (quiz) {
     if (options.json) {
       console.log(JSON.stringify(quiz, null, 2));
@@ -83,7 +82,7 @@ export async function universityShowCommand(id: string, options: ShowOptions): P
   }
 
   // Try path
-  const lp = loadPath(rootDir, entryId);
+  const lp = loadPath(rootDir, entryId, packRoot);
   if (lp) {
     if (options.json) {
       console.log(JSON.stringify(lp, null, 2));

@@ -6,7 +6,9 @@ description: |
 
 components:
   university-server:
-    description: Express server serving static UI and content API endpoints
+    description: |
+      Express server serving static UI and content API endpoints.
+      v6.6.x pack selector: ServerOptions accepts optional packRoot (absolute path to the selected pack root) and packId (display/logging). When packRoot is set, the server mounts THAT pack's manifest (mode/branding/version/sections) and resolves its content base under both content/ and src/content/ (dual-base probe, A1b). The no-packRoot path is byte-identical to prior behavior (project-dir manifest probe, else paradigm defaults). buildPackConfig(options) is the exported pure function backing /api/pack-config (no-server test seam).
     type: service
     file: src/server/index.ts
     tags: [feature]

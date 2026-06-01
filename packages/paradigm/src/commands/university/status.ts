@@ -4,8 +4,8 @@
  */
 
 import chalk from 'chalk';
-import { loadUniversityIndex, loadDiplomas } from '../../core/university/index.js';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { loadUniversityIndex, loadPackIndex, loadDiplomas } from '../../core/university/index.js';
+import { resolvePackContext, hasSelector, type SelectorOptions } from './selectors.js';
 
 interface StatusOptions extends SelectorOptions {
   json?: boolean;
@@ -14,7 +14,10 @@ interface StatusOptions extends SelectorOptions {
 export async function universityStatusCommand(options: StatusOptions): Promise<void> {
   const rootDir = process.cwd();
   const ctx = resolvePackContext(rootDir, options);
-  const index = loadUniversityIndex(rootDir);
+  // B-fix: when a selector is present, read the SELECTED pack's index; with no
+  // selector the project index path is byte-identical to today.
+  const packRoot = hasSelector(options) ? (ctx.subPackRoot ?? ctx.packRoot) : undefined;
+  const index = packRoot ? loadPackIndex(packRoot) : loadUniversityIndex(rootDir);
 
   if (!index || index.totalContent === 0) {
     console.log(chalk.yellow('\n  No university content found.'));

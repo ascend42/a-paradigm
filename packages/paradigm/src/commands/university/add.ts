@@ -4,11 +4,14 @@
  */
 
 import chalk from 'chalk';
+import * as path from 'path';
 import { saveNote, saveQuiz, rebuildUniversityIndex } from '../../core/university/index.js';
 import type { UniversityFrontmatter, UniversityQuiz, Difficulty } from '../../core/university/types.js';
 import { resolvePackContext, readPackSections, type SelectorOptions } from './selectors.js';
 import { execSync } from 'child_process';
 import * as os from 'os';
+
+const UNIVERSITY_DIR = '.paradigm/university';
 
 function resolveAuthor(): string {
   try {
@@ -33,12 +36,24 @@ interface AddOptions extends SelectorOptions {
 
 export async function universityAddCommand(type: string, options: AddOptions): Promise<void> {
   const rootDir = process.cwd();
+  // Did the USER supply a real selector? (vs. the synthesized project default
+  // below.) This gates the write packRoot so the no-selector path stays
+  // byte-identical — no pack_id stamping, no behavior change. See spec
+  // §SURFACE 2 "CRITICAL back-compat".
+  const userSelector = Boolean(options.pack || options.project || options.discipline);
   // Default to project pack when no selector set, matching spec §3.2.
-  const effectiveOptions: SelectorOptions = options.pack || options.project || options.discipline
-    ? options
-    : { ...options, project: true };
+  const effectiveOptions: SelectorOptions = userSelector ? options : { ...options, project: true };
   const ctx = resolvePackContext(rootDir, effectiveOptions);
-  void ctx;  // v5.39.0: resolution surfaces in display/error paths, storage still project-scoped
+  const resolvedPackRoot = ctx.subPackRoot ?? ctx.packRoot;
+  // B-fix: write under the SELECTED pack's content dir ONLY when the user asked
+  // for a specific pack. On the bare `add` path, pass undefined so saveNote/
+  // saveQuiz take their byte-identical project-pack branch (no stamping).
+  const writePackRoot = userSelector ? resolvedPackRoot : undefined;
+  // Only rebuild the project `index.yaml` when the write target IS the project
+  // pack — non-project packs (first-party, discipline, external) scan-on-read,
+  // so rebuilding the project index on those writes would churn the wrong file.
+  const projectRoot = path.join(rootDir, UNIVERSITY_DIR);
+  const isProjectTarget = path.resolve(resolvedPackRoot) === path.resolve(projectRoot);
 
   if (!options.title) {
     console.error(chalk.red('\n  Error: --title is required\n'));
@@ -93,8 +108,8 @@ export async function universityAddCommand(type: string, options: AddOptions): P
       ...(options.section ? { section: options.section } : {}),
       ...(orderNum !== undefined ? { order: orderNum } : {}),
     };
-    saveQuiz(rootDir, quiz);
-    rebuildUniversityIndex(rootDir);
+    saveQuiz(rootDir, quiz, writePackRoot);
+    if (isProjectTarget) rebuildUniversityIndex(rootDir);
     console.log(chalk.green(`\n  Created quiz: ${id}`));
     console.log(chalk.gray('  Add questions by editing the YAML file\n'));
     return;
@@ -119,8 +134,8 @@ export async function universityAddCommand(type: string, options: AddOptions): P
     ...(orderNum !== undefined ? { order: orderNum } : {}),
   };
 
-  saveNote(rootDir, frontmatter, options.body || '');
-  rebuildUniversityIndex(rootDir);
+  saveNote(rootDir, frontmatter, options.body || '', writePackRoot);
+  if (isProjectTarget) rebuildUniversityIndex(rootDir);
   console.log(chalk.green(`\n  Created ${type}: ${id}`));
   console.log(chalk.gray(`  Edit at .paradigm/university/content/${type === 'policy' ? 'policies' : 'notes'}/${id}.md\n`));
 }

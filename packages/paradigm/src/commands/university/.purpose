@@ -7,12 +7,28 @@ description: >
   v6.5: add/list honor --section flag; init prints a sections tip; serve emits a one-shot
   FTUX advisory when running a pack without sections; validate runs section integrity checks
   (duplicate id, two defaults, unknown ref, invalid style, dangling section warning).
+  v6.6.5: subcommands now honor the pack selector end-to-end. list/status/validate read the
+  SELECTED pack's index (loadPackIndex) when a selector is present; show/quiz resolve packRoot
+  from a flag OR the <pack-id>:<entry-id> address; add writes under the selected pack and only
+  rebuilds the project index when the target is the project pack; serve forwards packRoot/packId
+  to the server and uses the dual-base probe for contentDir. No-selector paths are byte-identical.
 
 components:
   UniversityCommands:
-    description: CLI interface for university content management
+    description: >
+      CLI interface for university content management. v6.6.5: pack-selector
+      honored across list/add/show/quiz/status/validate/serve (gated on
+      hasSelector → byte-identical default path).
     type: command-group
-    tags: [university, cli]
+    tags: [university, cli, pack, v6.6.5]
+  UniversityServe:
+    description: >
+      Launch the learning platform. v6.6.5 (A1/A1b/A2): forwards the resolved
+      packRoot/packId to startServer so the server detects the SELECTED pack's
+      mode/branding/sections; resolves contentDir via the contains-content
+      dual-base probe; the subcommand --port wins via enablePositionalOptions().
+    type: command
+    tags: [university, cli, serve, pack, v6.6.5]
   UniversityInit:
     description: Scaffold project-pack or discipline sub-pack pack.yaml. v6.5 emits a sections tip after scaffold.
     type: command

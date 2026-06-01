@@ -9,8 +9,8 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { loadUniversityIndex, loadQuiz, loadPath } from '../../core/university/index.js';
-import { resolvePackContext, type SelectorOptions } from './selectors.js';
+import { loadUniversityIndex, loadPackIndex, loadQuiz, loadPath } from '../../core/university/index.js';
+import { resolvePackContext, hasSelector, type SelectorOptions } from './selectors.js';
 
 interface ValidateOptions extends SelectorOptions {
   deep?: boolean;
@@ -162,7 +162,10 @@ function validateSectionBlock(
 export async function universityValidateCommand(options: ValidateOptions): Promise<void> {
   const rootDir = process.cwd();
   const ctx = resolvePackContext(rootDir, options);
-  const index = loadUniversityIndex(rootDir);
+  // B-fix: validate the SELECTED pack's index when a selector is present;
+  // no-selector path stays byte-identical (project index).
+  const packRoot = hasSelector(options) ? (ctx.subPackRoot ?? ctx.packRoot) : undefined;
+  const index = packRoot ? loadPackIndex(packRoot) : loadUniversityIndex(rootDir);
 
   if (!index || index.totalContent === 0) {
     console.log(chalk.yellow('\n  No university content to validate.\n'));
@@ -220,7 +223,7 @@ export async function universityValidateCommand(options: ValidateOptions): Promi
 
     // Quiz validation
     if (entry.type === 'quiz') {
-      const quiz = loadQuiz(rootDir, entry.id);
+      const quiz = loadQuiz(rootDir, entry.id, packRoot);
       if (!quiz) {
         issues.push({ contentId: entry.id, severity: 'error', check: 'unreadable-quiz', message: 'Quiz file could not be parsed' });
       } else {
@@ -240,7 +243,7 @@ export async function universityValidateCommand(options: ValidateOptions): Promi
 
     // Path validation
     if (entry.type === 'path') {
-      const lp = loadPath(rootDir, entry.id);
+      const lp = loadPath(rootDir, entry.id, packRoot);
       if (!lp) {
         issues.push({ contentId: entry.id, severity: 'error', check: 'unreadable-path', message: 'Learning path file could not be parsed' });
       } else {

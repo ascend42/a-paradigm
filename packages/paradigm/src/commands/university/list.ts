@@ -5,7 +5,7 @@
  */
 
 import chalk from 'chalk';
-import { searchContent, loadUniversityIndex } from '../../core/university/index.js';
+import { searchContent, loadPackIndex } from '../../core/university/index.js';
 import type { Difficulty } from '../../core/university/types.js';
 import {
   discoverPacksForCli,
@@ -78,7 +78,10 @@ export async function universityListCommand(options: ListOptions): Promise<void>
   // When a discipline sub-pack is resolved, scope the display to it.
   const displayPackId = ctx.subPackId ?? ctx.packId;
 
-  const index = loadUniversityIndex(rootDir);
+  // B-fix: read the SELECTED pack's index (not always the project index).
+  // hasSelector is true here (guarded above), so packRoot is always defined.
+  const packRoot = ctx.subPackRoot ?? ctx.packRoot;
+  const index = loadPackIndex(packRoot);
 
   if (!index || index.totalContent === 0) {
     console.log(chalk.yellow(`\n  No content found in pack "${displayPackId}".`));
@@ -93,7 +96,7 @@ export async function universityListCommand(options: ListOptions): Promise<void>
     symbol: options.symbol,
     section: options.section,
     limit: options.limit ? parseInt(options.limit, 10) : 20,
-  });
+  }, packRoot);
 
   if (options.json) {
     console.log(JSON.stringify({ pack: displayPackId, results }, null, 2));

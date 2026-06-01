@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { resolvePackContext, readPackSections, type SelectorOptions } from './selectors.js';
+import { resolveContentBase } from '../../core/university/index.js';
 import { out } from '../../utils/cli-output.js';
 
 // v6.5: Module-local guard so the implicit-default advisory fires at most once
@@ -56,11 +57,12 @@ export async function universityServeCommand(_path: string | undefined, options:
     const defaultContentDir = path.resolve(__dirname, 'university-content');
     let contentDir = defaultContentDir;
     if (ctx) {
-      const packContentDir = path.join(ctx.subPackRoot ?? ctx.packRoot, 'content');
-      // Prefer pack content dir only when it actually exists.
-      // Otherwise fall back to bundled content rather than serving an empty dir.
-      // (fs.existsSync check lives in the server, but we do a quick probe here.)
-      contentDir = packContentDir;
+      // A1b: dual-base probe (content/ → src/content/, contains-content rule)
+      // so a first-party / src/content-layout pack doesn't mount an empty dir.
+      // Fall back to bundled content when the pack has no resolvable content.
+      const packRoot = ctx.subPackRoot ?? ctx.packRoot;
+      const resolvedBase = resolveContentBase(packRoot);
+      contentDir = resolvedBase ?? path.join(packRoot, 'content');
     }
     const uiDistPath = path.resolve(__dirname, 'university-ui');
 
@@ -76,6 +78,10 @@ export async function universityServeCommand(_path: string | undefined, options:
       contentDir,
       uiDistPath,
       projectDir: process.cwd(),
+      // A1: forward the resolved pack so the server detects mode/branding/
+      // sections from the SELECTED pack, not the project default.
+      packRoot: ctx ? (ctx.subPackRoot ?? ctx.packRoot) : undefined,
+      packId: ctx ? (ctx.subPackId ?? ctx.packId) : undefined,
     });
 
     console.log(chalk.green(`\nParadigm University is running at http://localhost:${port}`));

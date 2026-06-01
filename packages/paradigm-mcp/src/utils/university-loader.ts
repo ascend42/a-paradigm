@@ -249,6 +249,74 @@ export function loadUniversityConfig(rootDir: string): UniversityConfig {
   }
 }
 
+/**
+ * Load a PACK's own `config.yaml` (`<packRoot>/config.yaml`), returning null
+ * when absent. Distinct from {@link loadUniversityConfig}, which always reads
+ * the PROJECT config at `<rootDir>/.paradigm/university/config.yaml`.
+ *
+ * C1: onboarding partitions by category rules; those rules must come from the
+ * SELECTED pack's config, not the project's. A sections-only pack ships no
+ * `config.yaml`, so this returns null and callers fall back to the project
+ * config — but the section-aware branch (see {@link getOnboardingSequence})
+ * means that fallback no longer breaks onboarding for such packs.
+ */
+export function loadPackConfig(packRoot: string): UniversityConfig | null {
+  const configPath = path.join(packRoot, CONFIG_FILE);
+  if (!fs.existsSync(configPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const data = yaml.load(raw) as Partial<UniversityConfig> | null;
+    if (!data) return null;
+
+    return {
+      branding: { ...DEFAULT_BRANDING, ...(data.branding || {}) },
+      theme: { ...DEFAULT_THEME, ...(data.theme || {}) },
+      content: {
+        categories: data.content?.categories || [],
+        defaultDifficulty: data.content?.defaultDifficulty || 'beginner',
+        requireApproval: data.content?.requireApproval ?? false,
+        defaultCategory: data.content?.defaultCategory,
+      },
+      diplomas: {
+        includeGlobalPLSAT: data.diplomas?.includeGlobalPLSAT ?? true,
+        customCertStyle: data.diplomas?.customCertStyle ?? null,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Does a pack DECLARE sections in its raw `pack.yaml`? C1: this is the gate for
+ * section-aware onboarding.
+ *
+ * CRITICAL — do NOT use `loadOrFabricatePackManifest(...).sections.length`:
+ * `normalizeSections` ALWAYS populates `manifest.sections` (a no-`pack.yaml`
+ * legacy project fabricates a single default section), so that signal is always
+ * truthy and would flip legacy/project packs off the byte-identical category
+ * path. Instead we read the RAW `pack.yaml` (mirroring the CLI `readPackSections`
+ * rule in selectors.ts) and treat the pack as section-structured ONLY when the
+ * file exists AND carries a non-empty `sections:` array. A fabricated/synthesized
+ * default (no `pack.yaml`, or `pack.yaml` without a `sections:` key) counts as
+ * "no declared sections."
+ */
+export function packDeclaresSections(packRoot: string): boolean {
+  const manifestPath = path.join(packRoot, PACK_MANIFEST_FILENAME);
+  if (!fs.existsSync(manifestPath)) return false;
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf8');
+    const data = yaml.load(raw) as { sections?: unknown } | null;
+    if (!data || !Array.isArray(data.sections)) return false;
+    return data.sections.some(
+      s => s && typeof (s as { id?: unknown }).id === 'string' && (s as { id: string }).id.length > 0,
+    );
+  } catch {
+    return false;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // INDEX
 // ═══════════════════════════════════════════════════════════════════
@@ -392,8 +460,16 @@ export function savePath(rootDir: string, lp: LearningPath, packRoot?: string): 
 // DIPLOMAS
 // ═══════════════════════════════════════════════════════════════════
 
-export function loadDiplomas(rootDir: string, filter?: { student?: string; type?: string }): Diploma[] {
-  const dir = path.join(rootDir, UNIVERSITY_DIR, DIPLOMAS_DIR);
+export function loadDiplomas(
+  rootDir: string,
+  filter?: { student?: string; type?: string },
+  packRoot?: string,
+): Diploma[] {
+  // C1.3: pack-scope diplomas when a packRoot is given, mirroring saveDiploma's
+  // effectivePackRoot. No-packRoot path resolves to <rootDir>/.paradigm/
+  // university/diplomas — byte-identical to the pre-v6.0 read location.
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, DIPLOMAS_DIR);
   if (!fs.existsSync(dir)) return [];
 
   const results: Diploma[] = [];
@@ -448,10 +524,27 @@ export function searchContent(
   filter: UniversityFilter,
   packRoot?: string,
 ): UniversityIndexEntry[] {
+  // Back-compat signature: returns only the sliced entries. Delegates to the
+  // metadata variant so the filter/slice logic has a single source of truth;
+  // the returned array is byte-identical to the pre-C2 implementation.
+  return searchContentWithMeta(rootDir, filter, packRoot).entries;
+}
+
+/**
+ * C2: search with truncation metadata. Returns the same sliced `entries` as
+ * {@link searchContent} PLUS `total` (post-filter, pre-slice count) and
+ * `returned` (post-slice count) so callers can tell whether results were
+ * silently truncated by `limit`. The default `limit=20` is unchanged.
+ */
+export function searchContentWithMeta(
+  rootDir: string,
+  filter: UniversityFilter,
+  packRoot?: string,
+): { entries: UniversityIndexEntry[]; total: number; returned: number } {
   // packRoot present → load the selected pack (project index.yaml or in-memory
   // scan for non-project packs). Omitted → unchanged project-pack path.
   const index = packRoot ? loadPackIndex(packRoot, rootDir) : loadUniversityIndex(rootDir);
-  if (!index) return [];
+  if (!index) return { entries: [], total: 0, returned: 0 };
 
   let results = [...index.entries];
 
@@ -500,8 +593,10 @@ export function searchContent(
     });
   }
 
+  const total = results.length;
   const limit = filter.limit || 20;
-  return results.slice(0, limit);
+  const sliced = results.slice(0, limit);
+  return { entries: sliced, total, returned: sliced.length };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -509,32 +604,72 @@ export function searchContent(
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Resolve the absolute content dir for a pack, probing both layouts in the
- * SAME order `countPackEntries` (tools/university.ts) uses:
+ * Probe order shared by every content-base resolver (C4 alignment). Both
+ * layouts are tried in this order:
  *   - `content/`     — local project packs + authored discipline packs
  *   - `src/content/` — first-party @a-company/university
- * Returns null when neither exists. The probed sub-label (`content` vs
- * `src/content`) is recoverable via {@link resolveContentBaseLabel}; callers
- * that build relative `file` paths need the label so the path stays valid.
+ */
+const CONTENT_BASE_SUBS = [CONTENT_DIR, 'src/content'] as const;
+
+/**
+ * Does a content base actually contain at least one content file? Mirrors the
+ * `countPackEntries` (tools/university.ts) rule so the loader and pack_list
+ * agree on which base "wins" (C4 / T-2026-05-31-001). A base that exists but
+ * is empty (no notes/policies/quizzes/paths files) does NOT count.
+ */
+function contentBaseHasContent(contentDir: string): boolean {
+  if (!fs.existsSync(contentDir)) return false;
+  for (const sub of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {
+    const dir = path.join(contentDir, sub);
+    if (!fs.existsSync(dir)) continue;
+    try {
+      if (fs.readdirSync(dir).some(f => f.endsWith('.md') || f.endsWith('.yaml'))) {
+        return true;
+      }
+    } catch {
+      // skip unreadable
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the absolute content dir for a pack, probing both layouts in the
+ * SAME order `countPackEntries` (tools/university.ts) uses.
+ *
+ * C4 (T-2026-05-31-001): returns the first base that actually CONTAINS content,
+ * not merely the first that exists — so a pack with an empty `content/` beside a
+ * populated `src/content/` resolves to the populated base. Falls back to the
+ * first base that merely exists when neither has content (preserves directory
+ * targeting for empty packs). Returns null when neither layout exists.
+ *
+ * The probed sub-label (`content` vs `src/content`) is recoverable via
+ * {@link resolveContentBaseLabel}; callers that build relative `file` paths need
+ * the label so the path stays valid.
  */
 export function resolveContentBase(packRoot: string): string | null {
-  for (const sub of [CONTENT_DIR, 'src/content']) {
-    const dir = path.join(packRoot, sub);
-    if (fs.existsSync(dir)) return dir;
-  }
-  return null;
+  const label = resolveContentBaseLabel(packRoot);
+  return label ? path.join(packRoot, label) : null;
 }
 
 /**
  * Same probe as {@link resolveContentBase} but returns the relative sub-label
  * (`'content'` | `'src/content'`) instead of the absolute dir, so entry `file`
  * fields are prefixed with the layout that actually exists on disk.
+ *
+ * C4: prefers the first base that CONTAINS content; falls back to the first base
+ * that merely exists. Kept in lockstep with {@link resolveContentBase} so the
+ * index scan (label-based) and body loads (base-based) never disagree.
  */
 function resolveContentBaseLabel(packRoot: string): string | null {
-  for (const sub of [CONTENT_DIR, 'src/content']) {
-    if (fs.existsSync(path.join(packRoot, sub))) return sub;
+  let firstExisting: string | null = null;
+  for (const sub of CONTENT_BASE_SUBS) {
+    const dir = path.join(packRoot, sub);
+    if (!fs.existsSync(dir)) continue;
+    if (firstExisting === null) firstExisting = sub;
+    if (contentBaseHasContent(dir)) return sub;
   }
-  return null;
+  return firstExisting;
 }
 
 /**
@@ -1055,6 +1190,16 @@ export interface OnboardingSequence {
   extracurricular: UniversityIndexEntry[];
   diplomaCount: number;
   totalContent: number;
+  /**
+   * C1 (additive): section-grouped onboarding for packs that DECLARE sections
+   * in `pack.yaml`. Ordered by section `order` then entry `order`. Present only
+   * when the selected pack declares sections; OMITTED otherwise (no-selector /
+   * legacy / category-only packs) so the response stays byte-identical to the
+   * pre-C1 shape. The flat `paths`/`suggestedContent`/`extracurricular`/
+   * `diplomaCount`/`totalContent` fields remain populated regardless, for
+   * back-compat consumers.
+   */
+  sections?: Array<{ id: string; name: string; entries: UniversityIndexEntry[] }>;
 }
 
 export function getOnboardingSequence(
@@ -1067,8 +1212,10 @@ export function getOnboardingSequence(
     return { paths: [], suggestedContent: [], extracurricular: [], diplomaCount: 0, totalContent: 0 };
   }
 
-  // Load config to determine which categories exclude from onboarding
-  const config = loadUniversityConfig(rootDir);
+  // C1.1: pack-scope the config source. When a pack is selected and ships its
+  // own `config.yaml`, its category rules govern onboarding; otherwise fall
+  // back to the project config. No-packRoot path → project config, unchanged.
+  const config = (packRoot && loadPackConfig(packRoot)) || loadUniversityConfig(rootDir);
   const excludedCategories = new Set<string>();
   for (const cat of config.content.categories) {
     if (cat.excludeFromOnboarding) {
@@ -1082,7 +1229,11 @@ export function getOnboardingSequence(
 
   // Find learning paths (core only)
   const pathEntries = coreEntries.filter(e => e.type === 'path');
-  const diplomas = student ? loadDiplomas(rootDir, { student }) : [];
+  // C1.3: pack-scope diplomas when a packRoot is given (mirrors saveDiploma's
+  // effectivePackRoot). loadDiplomas owns the diplomas/ path join, so we pass
+  // packRoot straight through — no-pack path reads the project diplomas dir,
+  // byte-identical to today.
+  const diplomas = student ? loadDiplomas(rootDir, { student }, packRoot) : [];
   const diplomaSourceIds = new Set(diplomas.map(d => d.source));
 
   const paths = pathEntries.map(pe => {
@@ -1100,13 +1251,55 @@ export function getOnboardingSequence(
     .filter(e => e.type !== 'path' && (e.difficulty === 'beginner' || e.tags.includes('onboarding')))
     .slice(0, 10);
 
-  return {
+  const sequence: OnboardingSequence = {
     paths,
     suggestedContent,
     extracurricular: extracurricularEntries,
     diplomaCount: diplomas.length,
     totalContent: index.totalContent,
   };
+
+  // C1.2: section-aware grouping — ADDITIVE on top of the flat fields above.
+  // Gated on the RAW pack.yaml declaring a non-empty `sections:` array (not
+  // the always-populated normalized manifest), so legacy/category-only packs
+  // and the no-selector path keep the pre-C1 response shape byte-identical
+  // (`sections` omitted). When declared, group ALL entries by `entry.section`
+  // (untagged → the manifest's default section), ordered by section `order`
+  // then entry `order`.
+  if (packRoot && packDeclaresSections(packRoot)) {
+    const manifest = loadOrFabricatePackManifest(packRoot);
+    const declared = (manifest?.sections ?? []).slice().sort(
+      (a, b) => (a.order - b.order) || a.id.localeCompare(b.id),
+    );
+    if (declared.length > 0) {
+      const defaultSection = declared.find(s => s.default === true) ?? declared[0];
+      const buckets = new Map<string, UniversityIndexEntry[]>();
+      for (const s of declared) buckets.set(s.id, []);
+
+      for (const entry of index.entries) {
+        const target =
+          entry.section && buckets.has(entry.section) ? entry.section : defaultSection.id;
+        const bucket = buckets.get(target);
+        if (bucket) bucket.push(entry);
+      }
+
+      // Order entries within each section by `order` (lower first; unset → end),
+      // stable on ties by id.
+      const byEntryOrder = (a: UniversityIndexEntry, b: UniversityIndexEntry): number => {
+        const ao = typeof a.order === 'number' ? a.order : Number.POSITIVE_INFINITY;
+        const bo = typeof b.order === 'number' ? b.order : Number.POSITIVE_INFINITY;
+        return (ao - bo) || a.id.localeCompare(b.id);
+      };
+
+      sequence.sections = declared.map(s => ({
+        id: s.id,
+        name: s.name,
+        entries: (buckets.get(s.id) ?? []).sort(byEntryOrder),
+      }));
+    }
+  }
+
+  return sequence;
 }
 
 // ═══════════════════════════════════════════════════════════════════
