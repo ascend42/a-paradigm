@@ -13,6 +13,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+// Unified pack-entry probe (spec §4.4 / T-2026-05-31-001). Replaces the CLI's
+// formerly-local `countPackEntries` so the MCP + CLI probes can never re-drift.
+import { countPackEntries } from '@a-company/university-core';
 
 const UNIVERSITY_DIR = '.paradigm/university';
 const PACK_MANIFEST_FILENAME = 'pack.yaml';
@@ -155,27 +158,11 @@ export function discoverPacksForCli(rootDir: string): Array<{
   return results;
 }
 
-export function countPackEntries(packRoot: string): number {
-  // Packs may place content directly under `content/` (local project pack,
-  // spec §1.2) or under `src/content/` (first-party @a-company/university).
-  // Probe both layouts.
-  for (const contentSub of ['content', 'src/content']) {
-    const contentDir = path.join(packRoot, contentSub);
-    if (!fs.existsSync(contentDir)) continue;
-    let total = 0;
-    for (const sub of ['notes', 'policies', 'quizzes', 'paths']) {
-      const dir = path.join(contentDir, sub);
-      if (!fs.existsSync(dir)) continue;
-      try {
-        total += fs.readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.yaml')).length;
-      } catch {
-        // skip
-      }
-    }
-    if (total > 0) return total;
-  }
-  return 0;
-}
+// `countPackEntries` is now imported from @a-company/university-core (above) —
+// the formerly-local definition was deleted in the extract-university-core
+// refactor (spec §4.4). Re-export it so any consumer of this module's public
+// surface keeps resolving the symbol.
+export { countPackEntries };
 
 /**
  * Resolve selectors to a concrete pack context. Precedence:

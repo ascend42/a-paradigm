@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm-mcp",
-  "version": "6.6.5",
+  "version": "6.6.6",
   "private": true,
   "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
   "type": "module",
@@ -29,6 +29,7 @@
     "@a-company/probe-core": "*",
     "@a-company/purpose-core": "*",
     "@a-company/sentinel": "*",
+    "@a-company/university-core": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "js-yaml": "^4.1.0",
     "sql.js": "^1.10.3",

@@ -28,6 +28,15 @@ import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
 import { autoRegisterWithConductor } from './utils/conductor-loader.js';
 import { log } from './utils/mcp-logger.js';
+import { setUniversityCoreLogger } from '@a-company/university-core';
+
+// Wire the university-core logger seam (extract-university-core spec §2) so the
+// extracted loader routes its advisory warnings through the MCP logger. Done at
+// module load (before main()) — the no-op default means a missed wire is silent,
+// but wiring here covers every request-driven university tool call.
+setUniversityCoreLogger({
+  warn: (message, data) => log.component('#university-loader').warn(message, data),
+});
 
 // Get project directory from args or use cwd
 const projectDir = process.argv[2] || process.cwd();

@@ -1,0 +1,1561 @@
+/**
+ * University Loader - Reads/writes per-project university content
+ *
+ * MOVED to @a-company/university-core (extract-university-core spec §1.3).
+ * The canonical implementation lives here; paradigm-mcp's
+ * src/utils/university-loader.ts is now a re-export shim.
+ *
+ * Storage layout:
+ *   .paradigm/university/
+ *     config.yaml               # Branding & theme
+ *     index.yaml                # Auto-generated catalog
+ *     content/
+ *       notes/    N-*.md        # Notes & policies (markdown + YAML frontmatter)
+ *       policies/ P-*.md
+ *       quizzes/  Q-*.yaml      # Quizzes (YAML)
+ *       paths/    LP-*.yaml     # Learning paths (YAML)
+ *     diplomas/   D-*.yaml      # Auto-generated diplomas
+ *
+ * v6.0 (sub-phase 1) additions:
+ *   - All CRUD fns accept an optional `packRoot` parameter (absolute path to
+ *     a pack root directory containing `pack.yaml`). When omitted, the
+ *     loader defaults to the project pack at `<rootDir>/.paradigm/university/`
+ *     and preserves v5 behavior when `pack.yaml` is absent (treated as an
+ *     implicit default project pack).
+ *   - Discipline sub-pack discovery: `discoverDisciplineSubPacks()` walks a
+ *     pack root for child dirs containing their own `pack.yaml`.
+ *   - Write operations stamp `pack_id` on frontmatter/entries derived from
+ *     the resolving pack manifest so entries round-trip their source pack.
+ *
+ * v0.1.0 (university-core extraction) write-path reconciliation (spec §3):
+ *   - `saveNote` / `saveQuiz` accept a 4th argument that is EITHER the legacy
+ *     positional `packRoot?: string` OR a `SaveOptions` object
+ *     ({ packRoot, stampPackId, resolveDefaultPack }). The union form keeps the
+ *     re-export shim pure (no signature adaptation needed) so every existing
+ *     positional-string caller stays byte-identical, while the options form lets
+ *     the (future) CLI reproduce its "stamp only when packRoot explicit; never
+ *     resolve to first-party" behavior via flags. `safeLoadPackId` is gone —
+ *     the `stampPackId` flag subsumes it.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+import type {
+  UniversityConfig,
+  UniversityBranding,
+  UniversityTheme,
+  UniversityFrontmatter,
+  UniversityNote,
+  UniversityQuiz,
+  LearningPath,
+  Diploma,
+  UniversityIndex,
+  UniversityIndexEntry,
+  UniversityFilter,
+  UniversityValidationIssue,
+  UniversityValidationResult,
+  Difficulty,
+  PackManifest,
+  PackLocation,
+} from './types/university.js';
+import { PACK_MANIFEST_FILENAME } from './types/pack.js';
+import { loadPackManifest, PackLoadError, discoverPacks, normalizeSections } from './pack-discovery.js';
+import { getUniversityCoreLogger } from './logger.js';
+
+const UNIVERSITY_DIR = '.paradigm/university';
+const CONTENT_DIR = 'content';
+const NOTES_DIR = 'notes';
+const POLICIES_DIR = 'policies';
+const QUIZZES_DIR = 'quizzes';
+const PATHS_DIR = 'paths';
+const DIPLOMAS_DIR = 'diplomas';
+const INDEX_FILE = 'index.yaml';
+const CONFIG_FILE = 'config.yaml';
+
+/**
+ * Write-path options for `saveNote` / `saveQuiz` (spec §3). The 4th arg may be
+ * passed as a bare `packRoot` string (legacy positional form) or as this object.
+ */
+export interface SaveOptions {
+  packRoot?: string;
+  /** Stamp `pack_id` from the resolving manifest. Default TRUE (MCP behavior). */
+  stampPackId?: boolean;
+  /**
+   * When no `packRoot` is given, resolve a default via `resolveDefaultPackRoot`
+   * (which may pick a discovered first-party pack). Default TRUE (MCP behavior).
+   * Pass FALSE to pin writes to `<rootDir>/.paradigm/university` (CLI behavior).
+   */
+  resolveDefaultPack?: boolean;
+}
+
+/** Normalize the union 4th arg into a concrete options object. */
+function normalizeSaveOptions(opts?: string | SaveOptions): Required<Omit<SaveOptions, 'packRoot'>> & { packRoot?: string } {
+  if (typeof opts === 'string') {
+    return { packRoot: opts, stampPackId: true, resolveDefaultPack: true };
+  }
+  return {
+    packRoot: opts?.packRoot,
+    stampPackId: opts?.stampPackId ?? true,
+    resolveDefaultPack: opts?.resolveDefaultPack ?? true,
+  };
+}
+
+/**
+ * Compute the effective pack root for a write, honoring the resolveDefaultPack
+ * flag. When a packRoot is explicit it always wins. Otherwise: resolveDefault
+ * → `resolveDefaultPackRoot` (may pick a first-party pack); else the local
+ * project dir.
+ */
+function effectiveWritePackRoot(
+  rootDir: string,
+  packRoot: string | undefined,
+  resolveDefaultPack: boolean,
+): string {
+  if (packRoot) return packRoot;
+  return resolveDefaultPack
+    ? resolveDefaultPackRoot(rootDir)
+    : path.join(rootDir, UNIVERSITY_DIR);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// v6.0 PACK RESOLUTION
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve the default pack root for a project. Preference order:
+ *   1. `<rootDir>/.paradigm/university/` if it exists (implicit project pack,
+ *      regardless of whether `pack.yaml` is present — preserves v5 layouts).
+ *   2. First-party pack from `discoverPacks(rootDir)` if available.
+ *   3. `<rootDir>/.paradigm/university/` (created lazily on write).
+ */
+export function resolveDefaultPackRoot(rootDir: string): string {
+  const localRoot = path.join(rootDir, UNIVERSITY_DIR);
+  if (fs.existsSync(localRoot)) return localRoot;
+
+  try {
+    const packs = discoverPacks(rootDir);
+    const firstParty = packs.find(p => p.manifest.tenant_kind === 'first-party');
+    if (firstParty) return firstParty.rootDir;
+  } catch {
+    // fall through
+  }
+  return localRoot;
+}
+
+/**
+ * Load a pack's manifest, returning a fabricated implicit manifest when
+ * `pack.yaml` is absent. This preserves v5 project-pack behavior — any
+ * existing `.paradigm/university/` layout continues to work unchanged.
+ *
+ * Returns null only if the pack root does not exist.
+ */
+export function loadOrFabricatePackManifest(packRoot: string): PackManifest | null {
+  if (!fs.existsSync(packRoot)) return null;
+
+  const manifestPath = path.join(packRoot, PACK_MANIFEST_FILENAME);
+  if (fs.existsSync(manifestPath)) {
+    try {
+      return loadPackManifest(packRoot);
+    } catch (err) {
+      getUniversityCoreLogger().warn('pack manifest invalid, using implicit manifest', {
+        errorClass: err instanceof PackLoadError ? err.errorClass : 'other',
+      });
+    }
+  }
+  // Fabricate an implicit manifest for pre-v6.0 layouts. v6.5: synthesize the
+  // implicit default section via normalizeSections(undefined) so the
+  // fabricated manifest and a real loaded manifest agree on the default-
+  // section shape — UI/MCP consumers can rely on `sections` being populated.
+  const packId = path.basename(packRoot) || 'project';
+  return {
+    id: packId,
+    name: packId,
+    version: '0.0.0',
+    schema_version: '1',
+    tenant_kind: 'project',
+    description: 'Implicit project pack (pack.yaml not present — v5 layout)',
+    origin_hint: 'authored',
+    sections: normalizeSections(undefined),
+  };
+}
+
+/**
+ * Walk a pack root for discipline sub-packs (immediate children containing
+ * their own `pack.yaml`). Returns a list of `PackLocation`s with
+ * `parentPackId` set from the parent manifest's id.
+ */
+export function discoverDisciplineSubPacks(packRoot: string): PackLocation[] {
+  if (!fs.existsSync(packRoot) || !fs.statSync(packRoot).isDirectory()) {
+    return [];
+  }
+
+  const parent = loadOrFabricatePackManifest(packRoot);
+  const parentPackId = parent?.id ?? path.basename(packRoot);
+
+  const results: PackLocation[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(packRoot, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    if (ent.name.startsWith('.')) continue;
+    const sub = path.join(packRoot, ent.name);
+    if (!fs.existsSync(path.join(sub, PACK_MANIFEST_FILENAME))) continue;
+
+    try {
+      const manifest = loadPackManifest(sub);
+      results.push({ manifest, rootDir: sub, source: 'local', parentPackId });
+    } catch (err) {
+      getUniversityCoreLogger().warn('discipline sub-pack manifest invalid', {
+        errorClass: err instanceof PackLoadError ? err.errorClass : 'other',
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Stamp pack context onto a frontmatter record at write time. Optional —
+ * callers pass a resolved manifest and the stamper fills `pack_id` +
+ * `discipline` when missing. Non-destructive when already present.
+ */
+function stampFrontmatterPackContext(
+  fm: UniversityFrontmatter,
+  manifest?: PackManifest | null,
+  discipline?: string,
+): UniversityFrontmatter {
+  if (!manifest) return fm;
+  return {
+    ...fm,
+    ...(fm.pack_id ? {} : { pack_id: manifest.id }),
+    ...(fm.discipline || !discipline ? {} : { discipline }),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEFAULTS
+// ═══════════════════════════════════════════════════════════════════
+
+const DEFAULT_BRANDING: UniversityBranding = {
+  name: 'Project University',
+  tagline: 'Learn the codebase',
+  institution: 'Paradigm',
+};
+
+const DEFAULT_THEME: UniversityTheme = {
+  primary: '#6366f1',
+  secondary: '#8b5cf6',
+  accent: '#f59e0b',
+  background: '#0f172a',
+  surface: '#1e293b',
+  text: '#f8fafc',
+  textMuted: '#94a3b8',
+  success: '#22c55e',
+  error: '#ef4444',
+  font: 'Inter, system-ui, sans-serif',
+};
+
+const DEFAULT_CONFIG: UniversityConfig = {
+  branding: DEFAULT_BRANDING,
+  theme: DEFAULT_THEME,
+  content: {
+    categories: [],
+    defaultDifficulty: 'beginner',
+    requireApproval: false,
+  },
+  diplomas: {
+    includeGlobalPLSAT: true,
+    customCertStyle: null,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadUniversityConfig(rootDir: string): UniversityConfig {
+  const configPath = path.join(rootDir, UNIVERSITY_DIR, CONFIG_FILE);
+  if (!fs.existsSync(configPath)) {
+    return { ...DEFAULT_CONFIG };
+  }
+
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const data = yaml.load(raw) as Partial<UniversityConfig> | null;
+    if (!data) return { ...DEFAULT_CONFIG };
+
+    return {
+      branding: { ...DEFAULT_BRANDING, ...(data.branding || {}) },
+      theme: { ...DEFAULT_THEME, ...(data.theme || {}) },
+      content: {
+        categories: data.content?.categories || [],
+        defaultDifficulty: data.content?.defaultDifficulty || 'beginner',
+        requireApproval: data.content?.requireApproval ?? false,
+        defaultCategory: data.content?.defaultCategory,
+      },
+      diplomas: {
+        includeGlobalPLSAT: data.diplomas?.includeGlobalPLSAT ?? true,
+        customCertStyle: data.diplomas?.customCertStyle ?? null,
+      },
+    };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+/**
+ * Load a PACK's own `config.yaml` (`<packRoot>/config.yaml`), returning null
+ * when absent. Distinct from {@link loadUniversityConfig}, which always reads
+ * the PROJECT config at `<rootDir>/.paradigm/university/config.yaml`.
+ *
+ * C1: onboarding partitions by category rules; those rules must come from the
+ * SELECTED pack's config, not the project's. A sections-only pack ships no
+ * `config.yaml`, so this returns null and callers fall back to the project
+ * config — but the section-aware branch (see {@link getOnboardingSequence})
+ * means that fallback no longer breaks onboarding for such packs.
+ */
+export function loadPackConfig(packRoot: string): UniversityConfig | null {
+  const configPath = path.join(packRoot, CONFIG_FILE);
+  if (!fs.existsSync(configPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const data = yaml.load(raw) as Partial<UniversityConfig> | null;
+    if (!data) return null;
+
+    return {
+      branding: { ...DEFAULT_BRANDING, ...(data.branding || {}) },
+      theme: { ...DEFAULT_THEME, ...(data.theme || {}) },
+      content: {
+        categories: data.content?.categories || [],
+        defaultDifficulty: data.content?.defaultDifficulty || 'beginner',
+        requireApproval: data.content?.requireApproval ?? false,
+        defaultCategory: data.content?.defaultCategory,
+      },
+      diplomas: {
+        includeGlobalPLSAT: data.diplomas?.includeGlobalPLSAT ?? true,
+        customCertStyle: data.diplomas?.customCertStyle ?? null,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Does a pack DECLARE sections in its raw `pack.yaml`? C1: this is the gate for
+ * section-aware onboarding.
+ *
+ * CRITICAL — do NOT use `loadOrFabricatePackManifest(...).sections.length`:
+ * `normalizeSections` ALWAYS populates `manifest.sections` (a no-`pack.yaml`
+ * legacy project fabricates a single default section), so that signal is always
+ * truthy and would flip legacy/project packs off the byte-identical category
+ * path. Instead we read the RAW `pack.yaml` (mirroring the CLI `readPackSections`
+ * rule in selectors.ts) and treat the pack as section-structured ONLY when the
+ * file exists AND carries a non-empty `sections:` array. A fabricated/synthesized
+ * default (no `pack.yaml`, or `pack.yaml` without a `sections:` key) counts as
+ * "no declared sections."
+ */
+export function packDeclaresSections(packRoot: string): boolean {
+  const manifestPath = path.join(packRoot, PACK_MANIFEST_FILENAME);
+  if (!fs.existsSync(manifestPath)) return false;
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf8');
+    const data = yaml.load(raw) as { sections?: unknown } | null;
+    if (!data || !Array.isArray(data.sections)) return false;
+    return data.sections.some(
+      s => s && typeof (s as { id?: unknown }).id === 'string' && (s as { id: string }).id.length > 0,
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INDEX
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadUniversityIndex(rootDir: string): UniversityIndex | null {
+  const indexPath = path.join(rootDir, UNIVERSITY_DIR, INDEX_FILE);
+  if (!fs.existsSync(indexPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(indexPath, 'utf8');
+    return yaml.load(raw) as UniversityIndex;
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MARKDOWN PARSING (frontmatter + body)
+// ═══════════════════════════════════════════════════════════════════
+
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } | null {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return null;
+
+  try {
+    const frontmatter = yaml.load(match[1]) as Record<string, unknown>;
+    return { frontmatter, body: match[2].trim() };
+  } catch {
+    return null;
+  }
+}
+
+function serializeFrontmatter(frontmatter: Record<string, unknown>, body: string): string {
+  const fm = yaml.dump(frontmatter, { lineWidth: -1, noRefs: true, sortKeys: false });
+  return `---\n${fm}---\n\n${body}\n`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NOTES / POLICIES
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadNote(rootDir: string, id: string, packRoot?: string): UniversityNote | null {
+  const filePath = resolveContentFile(rootDir, id, '.md', packRoot);
+  if (!filePath) return null;
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = parseFrontmatter(raw);
+    if (!parsed) return null;
+
+    const fm = parsed.frontmatter as unknown as UniversityFrontmatter;
+    return { frontmatter: normalizeFrontmatter(fm), body: parsed.body };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save a note/policy. The 4th arg is EITHER a legacy positional `packRoot`
+ * string OR a {@link SaveOptions} object (spec §3). Defaults reproduce the
+ * MCP behavior (always stamp pack_id, resolveDefault on). CLI reproduces its
+ * behavior by passing `{ stampPackId: !!packRoot, resolveDefaultPack: false }`.
+ */
+export function saveNote(
+  rootDir: string,
+  frontmatter: UniversityFrontmatter,
+  body: string,
+  opts?: string | SaveOptions,
+): string {
+  const { packRoot, stampPackId, resolveDefaultPack } = normalizeSaveOptions(opts);
+  const subdir = frontmatter.type === 'policy' ? POLICIES_DIR : NOTES_DIR;
+  const effectivePackRoot = effectiveWritePackRoot(rootDir, packRoot, resolveDefaultPack);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, subdir);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const manifest = stampPackId ? loadOrFabricatePackManifest(effectivePackRoot) : null;
+  const stamped = stampFrontmatterPackContext(frontmatter, manifest);
+
+  const filePath = path.join(dir, `${stamped.id}.md`);
+  const content = serializeFrontmatter(stamped as unknown as Record<string, unknown>, body);
+  fs.writeFileSync(filePath, content, 'utf8');
+  return filePath;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// QUIZZES
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadQuiz(rootDir: string, id: string, packRoot?: string): UniversityQuiz | null {
+  const filePath = resolveContentFile(rootDir, id, '.yaml', packRoot);
+  if (!filePath) return null;
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const data = yaml.load(raw) as UniversityQuiz;
+    if (!data || !data.id) return null;
+    return normalizeQuiz(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save a quiz. Same union 4th-arg contract as {@link saveNote} (spec §3).
+ */
+export function saveQuiz(rootDir: string, quiz: UniversityQuiz, opts?: string | SaveOptions): string {
+  const { packRoot, stampPackId, resolveDefaultPack } = normalizeSaveOptions(opts);
+  const effectivePackRoot = effectiveWritePackRoot(rootDir, packRoot, resolveDefaultPack);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, QUIZZES_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const manifest = stampPackId ? loadOrFabricatePackManifest(effectivePackRoot) : null;
+  const stamped: UniversityQuiz = {
+    ...quiz,
+    ...(quiz.pack_id || !manifest ? {} : { pack_id: manifest.id }),
+  };
+
+  const filePath = path.join(dir, `${stamped.id}.yaml`);
+  fs.writeFileSync(filePath, yaml.dump(stamped, { lineWidth: -1, noRefs: true }), 'utf8');
+  return filePath;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEARNING PATHS
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadPath(rootDir: string, id: string, packRoot?: string): LearningPath | null {
+  const filePath = resolveContentFile(rootDir, id, '.yaml', packRoot);
+  if (!filePath) return null;
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const data = yaml.load(raw) as LearningPath;
+    if (!data || !data.id) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save a learning path. NOT part of the §3 write-path reconciliation (no
+ * pack_id stamping was ever performed for paths) — kept on the legacy
+ * positional `packRoot` signature to minimize blast radius.
+ */
+export function savePath(rootDir: string, lp: LearningPath, packRoot?: string): string {
+  const effectivePackRoot = packRoot ?? resolveDefaultPackRoot(rootDir);
+  const dir = path.join(effectivePackRoot, CONTENT_DIR, PATHS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const filePath = path.join(dir, `${lp.id}.yaml`);
+  fs.writeFileSync(filePath, yaml.dump(lp, { lineWidth: -1, noRefs: true }), 'utf8');
+  return filePath;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DIPLOMAS
+// ═══════════════════════════════════════════════════════════════════
+
+export function loadDiplomas(
+  rootDir: string,
+  filter?: { student?: string; type?: string },
+  packRoot?: string,
+): Diploma[] {
+  // C1.3: pack-scope diplomas when a packRoot is given, mirroring saveDiploma's
+  // effectivePackRoot. No-packRoot path resolves to <rootDir>/.paradigm/
+  // university/diplomas — byte-identical to the pre-v6.0 read location.
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, DIPLOMAS_DIR);
+  if (!fs.existsSync(dir)) return [];
+
+  const results: Diploma[] = [];
+  try {
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.yaml'));
+    for (const file of files) {
+      try {
+        const raw = fs.readFileSync(path.join(dir, file), 'utf8');
+        const diploma = yaml.load(raw) as Diploma;
+        if (!diploma || !diploma.id) continue;
+
+        if (filter?.student && diploma.student !== filter.student) continue;
+        if (filter?.type && diploma.type !== filter.type) continue;
+
+        results.push(diploma);
+      } catch {
+        // Skip malformed
+      }
+    }
+  } catch {
+    // Directory read failed
+  }
+
+  return results.sort((a, b) => b.earnedAt.localeCompare(a.earnedAt));
+}
+
+/**
+ * Save a diploma. Diplomas are project-level by default; NOT part of the §3
+ * write reconciliation (CLI variant lacks pack-scoping — deferred per §6.6).
+ * Kept on the legacy positional `packRoot` signature.
+ */
+export function saveDiploma(rootDir: string, diploma: Diploma, packRoot?: string): string {
+  // Diplomas remain at the project-pack `diplomas/` dir by default (they're
+  // a project-level artifact), but v6.0 allows pack-scoped diplomas when a
+  // packRoot is explicitly provided.
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const dir = path.join(effectivePackRoot, DIPLOMAS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const manifest = loadOrFabricatePackManifest(effectivePackRoot);
+  const stamped: Diploma = {
+    ...diploma,
+    ...(diploma.pack_id || !manifest ? {} : { pack_id: manifest.id }),
+  };
+
+  const filePath = path.join(dir, `${stamped.id}.yaml`);
+  fs.writeFileSync(filePath, yaml.dump(stamped, { lineWidth: -1, noRefs: true }), 'utf8');
+  return filePath;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SEARCH & FILTER
+// ═══════════════════════════════════════════════════════════════════
+
+export function searchContent(
+  rootDir: string,
+  filter: UniversityFilter,
+  packRoot?: string,
+): UniversityIndexEntry[] {
+  // Back-compat signature: returns only the sliced entries. Delegates to the
+  // metadata variant so the filter/slice logic has a single source of truth;
+  // the returned array is byte-identical to the pre-C2 implementation.
+  return searchContentWithMeta(rootDir, filter, packRoot).entries;
+}
+
+/**
+ * C2: search with truncation metadata. Returns the same sliced `entries` as
+ * {@link searchContent} PLUS `total` (post-filter, pre-slice count) and
+ * `returned` (post-slice count) so callers can tell whether results were
+ * silently truncated by `limit`. The default `limit=20` is unchanged.
+ */
+export function searchContentWithMeta(
+  rootDir: string,
+  filter: UniversityFilter,
+  packRoot?: string,
+): { entries: UniversityIndexEntry[]; total: number; returned: number } {
+  // packRoot present → load the selected pack (project index.yaml or in-memory
+  // scan for non-project packs). Omitted → unchanged project-pack path.
+  const index = packRoot ? loadPackIndex(packRoot, rootDir) : loadUniversityIndex(rootDir);
+  if (!index) return { entries: [], total: 0, returned: 0 };
+
+  let results = [...index.entries];
+
+  if (filter.type) {
+    results = results.filter(e => e.type === filter.type);
+  }
+  if (filter.tag) {
+    results = results.filter(e => e.tags.some(t => t.startsWith(filter.tag!)));
+  }
+  if (filter.difficulty) {
+    results = results.filter(e => e.difficulty === filter.difficulty);
+  }
+  if (filter.symbol) {
+    results = results.filter(e => e.symbols.some(s => s === filter.symbol));
+  }
+  if (filter.author) {
+    results = results.filter(e => e.author === filter.author);
+  }
+  if (filter.query) {
+    const q = filter.query.toLowerCase();
+    results = results.filter(e =>
+      e.title.toLowerCase().includes(q) ||
+      e.id.toLowerCase().includes(q) ||
+      e.tags.some(t => t.toLowerCase().includes(q)),
+    );
+  }
+  if (filter.category) {
+    results = results.filter(e => e.category === filter.category);
+  }
+  if (filter.section) {
+    // v6.5: section filter. Matches entries whose `section` matches exactly.
+    // Entries without a `section` are excluded unless the filter targets the
+    // synthesized default — but that's a UI/CLI concern (callers can pass
+    // the default id explicitly).
+    results = results.filter(e => e.section === filter.section);
+  }
+  if (filter.track) {
+    const config = loadUniversityConfig(rootDir);
+    const categoryTrackMap = new Map<string, string>();
+    for (const cat of config.content.categories) {
+      categoryTrackMap.set(cat.id, cat.track || 'core');
+    }
+    results = results.filter(e => {
+      const entryTrack = e.category ? (categoryTrackMap.get(e.category) || 'core') : 'core';
+      return entryTrack === filter.track;
+    });
+  }
+
+  const total = results.length;
+  const limit = filter.limit || 20;
+  const sliced = results.slice(0, limit);
+  return { entries: sliced, total, returned: sliced.length };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONTENT-BASE RESOLUTION (shared by rebuild + pack-scoped reads)
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Probe order shared by every content-base resolver (C4 alignment). Both
+ * layouts are tried in this order:
+ *   - `content/`     — local project packs + authored discipline packs
+ *   - `src/content/` — first-party @a-company/university
+ */
+const CONTENT_BASE_SUBS = [CONTENT_DIR, 'src/content'] as const;
+
+/** The content subdirs probed for "has content" + countPackEntries (C4). */
+const CONTENT_SUBDIRS = [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR] as const;
+
+/**
+ * Does a content base actually contain at least one content file? Mirrors the
+ * `countPackEntries` rule so the loader and pack_list agree on which base
+ * "wins" (C4 / T-2026-05-31-001). A base that exists but is empty (no
+ * notes/policies/quizzes/paths files) does NOT count.
+ */
+function contentBaseHasContent(contentDir: string): boolean {
+  if (!fs.existsSync(contentDir)) return false;
+  for (const sub of CONTENT_SUBDIRS) {
+    const dir = path.join(contentDir, sub);
+    if (!fs.existsSync(dir)) continue;
+    try {
+      if (fs.readdirSync(dir).some(f => f.endsWith('.md') || f.endsWith('.yaml'))) {
+        return true;
+      }
+    } catch {
+      // skip unreadable
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the absolute content dir for a pack, probing both layouts in the
+ * SAME order `countPackEntries` uses.
+ *
+ * C4 (T-2026-05-31-001): returns the first base that actually CONTAINS content,
+ * not merely the first that exists — so a pack with an empty `content/` beside a
+ * populated `src/content/` resolves to the populated base. Falls back to the
+ * first base that merely exists when neither has content (preserves directory
+ * targeting for empty packs). Returns null when neither layout exists.
+ *
+ * The probed sub-label (`content` vs `src/content`) is recoverable via
+ * {@link resolveContentBaseLabel}; callers that build relative `file` paths need
+ * the label so the path stays valid.
+ */
+export function resolveContentBase(packRoot: string): string | null {
+  const label = resolveContentBaseLabel(packRoot);
+  return label ? path.join(packRoot, label) : null;
+}
+
+/**
+ * Same probe as {@link resolveContentBase} but returns the relative sub-label
+ * (`'content'` | `'src/content'`) instead of the absolute dir, so entry `file`
+ * fields are prefixed with the layout that actually exists on disk.
+ *
+ * C4: prefers the first base that CONTAINS content; falls back to the first base
+ * that merely exists. Kept in lockstep with {@link resolveContentBase} so the
+ * index scan (label-based) and body loads (base-based) never disagree.
+ */
+function resolveContentBaseLabel(packRoot: string): string | null {
+  let firstExisting: string | null = null;
+  for (const sub of CONTENT_BASE_SUBS) {
+    const dir = path.join(packRoot, sub);
+    if (!fs.existsSync(dir)) continue;
+    if (firstExisting === null) firstExisting = sub;
+    if (contentBaseHasContent(dir)) return sub;
+  }
+  return firstExisting;
+}
+
+/**
+ * Count entries across the content subdirectories of a pack root (spec §4.4).
+ * Unifies the two formerly-duplicated `countPackEntries` probes (MCP
+ * tools/university.ts + CLI selectors.ts) onto a single core implementation so
+ * they can never re-drift. Uses the loader's content-subdir set
+ * (`notes/policies/quizzes/paths`) and returns the count from the FIRST base
+ * that contains content (the C4 rule) — closing T-2026-05-31-001.
+ */
+export function countPackEntries(packRoot: string): number {
+  for (const contentSub of CONTENT_BASE_SUBS) {
+    const contentDir = path.join(packRoot, contentSub);
+    if (!fs.existsSync(contentDir)) continue;
+    let total = 0;
+    for (const sub of CONTENT_SUBDIRS) {
+      const dir = path.join(contentDir, sub);
+      if (!fs.existsSync(dir)) continue;
+      try {
+        total += fs.readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.yaml')).length;
+      } catch {
+        // skip
+      }
+    }
+    if (total > 0) return total;
+  }
+  return 0;
+}
+
+/**
+ * Scan a pack's content directory into `UniversityIndexEntry[]`. This is the
+ * SINGLE source of truth for frontmatter→entry mapping (incl. v6.5 section +
+ * order propagation). Both `rebuildUniversityIndex` (forced `content/`, then
+ * writes the project index) and `loadPackIndex` (probed base, no write) call
+ * it, so the two paths can never diverge.
+ *
+ * @param contentBase absolute path to the resolved content dir
+ * @param contentSubLabel relative sub-label (`content` / `src/content`) used to
+ *   build each entry's `file` path so it round-trips for later body loads.
+ */
+function scanPackEntries(contentBase: string, contentSubLabel: string): UniversityIndexEntry[] {
+  const entries: UniversityIndexEntry[] = [];
+
+  // Scan notes and policies (markdown with frontmatter)
+  for (const subdir of [NOTES_DIR, POLICIES_DIR]) {
+    const dir = path.join(contentBase, subdir);
+    if (!fs.existsSync(dir)) continue;
+
+    try {
+      for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+        try {
+          const raw = fs.readFileSync(path.join(dir, file), 'utf8');
+          const parsed = parseFrontmatter(raw);
+          if (!parsed) continue;
+
+          const fm = parsed.frontmatter as unknown as UniversityFrontmatter;
+          entries.push({
+            id: fm.id || file.replace('.md', ''),
+            title: (fm.title as string) || file,
+            type: (fm.type as string) || (subdir === POLICIES_DIR ? 'policy' : 'note'),
+            author: (fm.author as string) || 'unknown',
+            created: (fm.created as string) || '',
+            updated: (fm.updated as string) || '',
+            tags: Array.isArray(fm.tags) ? fm.tags : [],
+            symbols: Array.isArray(fm.symbols) ? fm.symbols : [],
+            difficulty: (fm.difficulty as Difficulty) || 'beginner',
+            file: `${contentSubLabel}/${subdir}/${file}`,
+            ...(fm.category ? { category: fm.category as string } : {}),
+            // v6.5: propagate section + order so list/search/UI consumers
+            // don't need to re-parse the markdown frontmatter.
+            ...(typeof fm.section === 'string' && fm.section ? { section: fm.section } : {}),
+            ...(typeof fm.order === 'number' && Number.isFinite(fm.order) ? { order: fm.order } : {}),
+          });
+        } catch {
+          // Skip malformed
+        }
+      }
+    } catch {
+      // Directory read failed
+    }
+  }
+
+  // Scan quizzes (YAML)
+  const quizDir = path.join(contentBase, QUIZZES_DIR);
+  if (fs.existsSync(quizDir)) {
+    try {
+      for (const file of fs.readdirSync(quizDir).filter(f => f.endsWith('.yaml'))) {
+        try {
+          const raw = fs.readFileSync(path.join(quizDir, file), 'utf8');
+          const quiz = yaml.load(raw) as UniversityQuiz;
+          if (!quiz || !quiz.id) continue;
+
+          entries.push({
+            id: quiz.id,
+            title: quiz.title || file,
+            type: 'quiz',
+            author: quiz.author || 'unknown',
+            created: quiz.created || '',
+            updated: quiz.updated || '',
+            tags: quiz.tags || [],
+            symbols: quiz.symbols || [],
+            difficulty: quiz.difficulty || 'beginner',
+            file: `${contentSubLabel}/${QUIZZES_DIR}/${file}`,
+            ...(quiz.category ? { category: quiz.category } : {}),
+            // v6.5: top-level `section` field (distinct from per-question
+            // QuizQuestion.section PLSAT slot id — different schema levels).
+            ...(typeof quiz.section === 'string' && quiz.section ? { section: quiz.section } : {}),
+            ...(typeof quiz.order === 'number' && Number.isFinite(quiz.order) ? { order: quiz.order } : {}),
+          });
+        } catch {
+          // Skip malformed
+        }
+      }
+    } catch {
+      // Directory read failed
+    }
+  }
+
+  // Scan learning paths (YAML)
+  const pathDir = path.join(contentBase, PATHS_DIR);
+  if (fs.existsSync(pathDir)) {
+    try {
+      for (const file of fs.readdirSync(pathDir).filter(f => f.endsWith('.yaml'))) {
+        try {
+          const raw = fs.readFileSync(path.join(pathDir, file), 'utf8');
+          const lp = yaml.load(raw) as LearningPath;
+          if (!lp || !lp.id) continue;
+
+          entries.push({
+            id: lp.id,
+            title: lp.title || file,
+            type: 'path',
+            author: lp.author || 'unknown',
+            created: lp.created || '',
+            updated: lp.updated || '',
+            tags: lp.tags || [],
+            symbols: [],
+            file: `${contentSubLabel}/${PATHS_DIR}/${file}`,
+            ...(lp.category ? { category: lp.category } : {}),
+            // v6.5: section + order propagation.
+            ...(typeof lp.section === 'string' && lp.section ? { section: lp.section } : {}),
+            ...(typeof lp.order === 'number' && Number.isFinite(lp.order) ? { order: lp.order } : {}),
+          });
+        } catch {
+          // Skip malformed
+        }
+      }
+    } catch {
+      // Directory read failed
+    }
+  }
+
+  return entries;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INDEX REBUILD
+// ═══════════════════════════════════════════════════════════════════
+
+export function rebuildUniversityIndex(rootDir: string): UniversityIndex {
+  const uniDir = path.join(rootDir, UNIVERSITY_DIR);
+  const contentDir = path.join(uniDir, CONTENT_DIR);
+
+  // Project index is always built from the `content/` layout (forced label so
+  // the on-disk index is byte-identical to pre-refactor output).
+  const entries = scanPackEntries(contentDir, CONTENT_DIR);
+
+  // Count diplomas
+  let diplomaCount = 0;
+  const diplomaDir = path.join(uniDir, DIPLOMAS_DIR);
+  if (fs.existsSync(diplomaDir)) {
+    try {
+      diplomaCount = fs.readdirSync(diplomaDir).filter(f => f.endsWith('.yaml')).length;
+    } catch {
+      // Skip
+    }
+  }
+
+  const index: UniversityIndex = {
+    version: '1.0',
+    generatedAt: new Date().toISOString(),
+    totalContent: entries.length,
+    entries,
+    diplomaCount,
+  };
+
+  // Write index
+  fs.mkdirSync(uniDir, { recursive: true });
+  const indexPath = path.join(uniDir, INDEX_FILE);
+  fs.writeFileSync(indexPath, yaml.dump(index, { lineWidth: -1, noRefs: true }), 'utf8');
+
+  return index;
+}
+
+/**
+ * Load a pack's index for the READ tools (search / onboard / validate).
+ *
+ *   - If `<packRoot>/index.yaml` exists → read it (project pack: byte-identical
+ *     to `loadUniversityIndex`'s contract).
+ *   - Else → build entries in-memory by scanning the pack's content dirs via
+ *     the shared {@link scanPackEntries}. Non-project packs (first-party, npm,
+ *     discipline) ship no index.yaml and may live under `node_modules/`, so we
+ *     NEVER write an index for them.
+ *
+ * Always returns a non-null index (empty when no content base resolves), so
+ * callers' `if (!index)` guards only fire on the project (`loadUniversityIndex`)
+ * branch — preserving today's behavior for the default pack.
+ */
+export function loadPackIndex(packRoot: string, _rootDir: string): UniversityIndex {
+  const indexPath = path.join(packRoot, INDEX_FILE);
+  if (fs.existsSync(indexPath)) {
+    try {
+      const raw = fs.readFileSync(indexPath, 'utf8');
+      const parsed = yaml.load(raw) as UniversityIndex | null;
+      if (parsed) return parsed;
+    } catch {
+      // fall through to scan
+    }
+  }
+
+  const contentSubLabel = resolveContentBaseLabel(packRoot);
+  if (!contentSubLabel) {
+    return { version: '1.0', generatedAt: new Date().toISOString(), totalContent: 0, entries: [], diplomaCount: 0 };
+  }
+  const contentBase = path.join(packRoot, contentSubLabel);
+  const entries = scanPackEntries(contentBase, contentSubLabel);
+
+  return {
+    version: '1.0',
+    generatedAt: new Date().toISOString(),
+    totalContent: entries.length,
+    entries,
+    diplomaCount: 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════════════════════════
+
+export function validateUniversityContent(
+  rootDir: string,
+  options?: { id?: string; deep?: boolean },
+  packRoot?: string,
+): UniversityValidationResult {
+  // packRoot present → validate the selected pack's content bodies + manifest.
+  // The host-project symbol checks below (loadKnownSymbols / staleness /
+  // computeSymbolCoverage) intentionally stay rootDir-relative: a pack's
+  // content references PROJECT symbols, and the project owns symbol authority.
+  const index = packRoot
+    ? loadPackIndex(packRoot, rootDir)
+    : (loadUniversityIndex(rootDir) || rebuildUniversityIndex(rootDir));
+  const issues: UniversityValidationIssue[] = [];
+  let entriesToCheck = index.entries;
+
+  if (options?.id) {
+    entriesToCheck = entriesToCheck.filter(e => e.id === options.id);
+  }
+
+  // Load scan index for deep checks
+  let knownSymbols: Set<string> | null = null;
+  if (options?.deep) {
+    knownSymbols = loadKnownSymbols(rootDir);
+  }
+
+  // All content IDs for prerequisite/path checks
+  const allContentIds = new Set(index.entries.map(e => e.id));
+
+  for (const entry of entriesToCheck) {
+    // Schema checks
+    if (!entry.title) {
+      issues.push({
+        contentId: entry.id,
+        severity: 'error',
+        check: 'missing-title',
+        message: 'Content is missing a title',
+        fix: 'Add a title field to the content frontmatter',
+      });
+    }
+
+    if (entry.type === 'quiz') {
+      validateQuizContent(rootDir, entry.id, issues, packRoot);
+    }
+
+    if (entry.type === 'path') {
+      validatePathContent(rootDir, entry.id, allContentIds, issues, packRoot);
+    }
+
+    // Deep checks: symbol references
+    if (knownSymbols && entry.symbols.length > 0) {
+      // Look up category validation strictness
+      const config = loadUniversityConfig(rootDir);
+      const entryCat = config.content.categories.find(c => c.id === entry.category);
+      const isRelaxed = entryCat?.validationStrictness === 'relaxed';
+
+      for (const sym of entry.symbols) {
+        if (!knownSymbols.has(sym)) {
+          issues.push({
+            contentId: entry.id,
+            severity: isRelaxed ? 'warning' : 'warning',
+            check: 'broken-symbol-ref',
+            message: `Symbol "${sym}" not found in scan-index`,
+            fix: `Remove or update the symbol reference in ${entry.id}`,
+          });
+        }
+      }
+    }
+
+    // Deep checks: content freshness vs symbol .purpose mtime
+    if (options?.deep && entry.symbols.length > 0 && entry.updated) {
+      checkContentStaleness(rootDir, entry, issues);
+    }
+  }
+
+  // v6.5: section integrity checks (dangling-section-ref + empty-section).
+  // Resolves the project-pack manifest (fabricated when pack.yaml absent) so
+  // synthesized default section is honored on legacy layouts — keeps
+  // back-compat packs from emitting noise.
+  validateSectionIntegrity(rootDir, index, issues, packRoot);
+
+  // Validate diplomas
+  const diplomas = loadDiplomas(rootDir);
+  for (const diploma of diplomas) {
+    if (diploma.total > 0 && diploma.percentage !== Math.round((diploma.score / diploma.total) * 10000) / 100) {
+      // Allow small floating point differences
+      const expected = Math.round((diploma.score / diploma.total) * 10000) / 100;
+      if (Math.abs(diploma.percentage - expected) > 0.1) {
+        issues.push({
+          contentId: diploma.id,
+          severity: 'warning',
+          check: 'diploma-score-mismatch',
+          message: `Diploma percentage ${diploma.percentage} doesn't match score ${diploma.score}/${diploma.total} (expected ${expected})`,
+        });
+      }
+    }
+  }
+
+  // Symbol coverage stats
+  const symbolCoverage = computeSymbolCoverage(rootDir, index);
+
+  return {
+    status: issues.some(i => i.severity === 'error') ? 'errors' : issues.length > 0 ? 'warnings' : 'healthy',
+    totalContent: index.totalContent,
+    checked: entriesToCheck.length,
+    issues,
+    symbolCoverage,
+  };
+}
+
+function validateQuizContent(
+  rootDir: string,
+  id: string,
+  issues: UniversityValidationIssue[],
+  packRoot?: string,
+): void {
+  const quiz = loadQuiz(rootDir, id, packRoot);
+  if (!quiz) {
+    issues.push({
+      contentId: id,
+      severity: 'error',
+      check: 'unreadable-quiz',
+      message: 'Quiz file could not be parsed',
+    });
+    return;
+  }
+
+  if (!quiz.passThreshold || quiz.passThreshold < 0 || quiz.passThreshold > 1) {
+    issues.push({
+      contentId: id,
+      severity: 'warning',
+      check: 'invalid-pass-threshold',
+      message: `passThreshold should be between 0 and 1, got ${quiz.passThreshold}`,
+      fix: 'Set passThreshold to a value between 0.0 and 1.0',
+    });
+  }
+
+  for (const q of quiz.questions) {
+    if (!q.choices || typeof q.choices !== 'object') {
+      issues.push({
+        contentId: id,
+        severity: 'error',
+        check: 'invalid-quiz-choices',
+        message: `Question ${q.id} has no choices defined`,
+      });
+      continue;
+    }
+
+    if (!q.correct || !(q.correct in q.choices)) {
+      issues.push({
+        contentId: id,
+        severity: 'error',
+        check: 'invalid-quiz-answer',
+        message: `Question ${q.id}: correct answer "${q.correct}" not found in choices [${Object.keys(q.choices).join(', ')}]`,
+        fix: `Set correct to one of: ${Object.keys(q.choices).join(', ')}`,
+      });
+    }
+  }
+}
+
+function validatePathContent(
+  rootDir: string,
+  id: string,
+  allContentIds: Set<string>,
+  issues: UniversityValidationIssue[],
+  packRoot?: string,
+): void {
+  const lp = loadPath(rootDir, id, packRoot);
+  if (!lp) {
+    issues.push({
+      contentId: id,
+      severity: 'error',
+      check: 'unreadable-path',
+      message: 'Learning path file could not be parsed',
+    });
+    return;
+  }
+
+  for (const step of lp.steps) {
+    // Allow plsat: references
+    if (step.content.startsWith('plsat:')) continue;
+
+    if (!allContentIds.has(step.content)) {
+      issues.push({
+        contentId: id,
+        severity: 'error',
+        check: 'broken-path-step',
+        message: `Learning path step references "${step.content}" which doesn't exist`,
+        fix: `Create content with id "${step.content}" or remove this step`,
+      });
+    }
+  }
+}
+
+/**
+ * v6.5: validate section refs against the project pack manifest.
+ *
+ *   - `dangling-section-ref` (warning): entry has `section:` set to an id
+ *     that does not exist in the pack's `sections:` block.
+ *   - `empty-section` (warning): a declared section has zero matching
+ *     entries. Matching = entries explicitly tagged with the section id,
+ *     OR (for the default section) entries without `section:` set — so
+ *     legacy packs that haven't migrated frontmatter don't emit noise on
+ *     the synthesized `main` default.
+ *
+ * No-op when the pack manifest cannot be resolved (defensive — diagnostic
+ * checks must never block the main validation pipeline).
+ */
+function validateSectionIntegrity(
+  rootDir: string,
+  index: UniversityIndex,
+  issues: UniversityValidationIssue[],
+  packRoot?: string,
+): void {
+  // Section integrity checks the SELECTED pack's manifest when packRoot is
+  // given; otherwise the project pack at `<rootDir>/.paradigm/university/`.
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  const manifest = loadOrFabricatePackManifest(effectivePackRoot);
+  if (!manifest || !manifest.sections || manifest.sections.length === 0) {
+    return;
+  }
+
+  const knownSectionIds = new Set(manifest.sections.map(s => s.id));
+  const defaultSection = manifest.sections.find(s => s.default === true);
+
+  // dangling-section-ref pass
+  for (const entry of index.entries) {
+    if (entry.section && !knownSectionIds.has(entry.section)) {
+      issues.push({
+        contentId: entry.id,
+        severity: 'warning',
+        check: 'dangling-section-ref',
+        message: `Entry references section "${entry.section}" which is not declared in pack.yaml`,
+        fix: `Add a section with id "${entry.section}" to pack.yaml, or remove the section field`,
+      });
+    }
+  }
+
+  // empty-section pass — count entries per section. Untagged entries count
+  // toward the default section so legacy packs (no per-entry section field
+  // yet) don't trigger a false-positive on the synthesized default.
+  const sectionCounts = new Map<string, number>();
+  for (const s of manifest.sections) {
+    sectionCounts.set(s.id, 0);
+  }
+  for (const entry of index.entries) {
+    if (entry.section && knownSectionIds.has(entry.section)) {
+      sectionCounts.set(entry.section, (sectionCounts.get(entry.section) || 0) + 1);
+    } else if (!entry.section && defaultSection) {
+      sectionCounts.set(defaultSection.id, (sectionCounts.get(defaultSection.id) || 0) + 1);
+    }
+  }
+
+  for (const s of manifest.sections) {
+    if ((sectionCounts.get(s.id) || 0) === 0) {
+      issues.push({
+        contentId: s.id,
+        severity: 'warning',
+        check: 'empty-section',
+        message: `Section "${s.id}" has zero entries`,
+        fix: `Add at least one entry with section: "${s.id}", or remove the section from pack.yaml`,
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SYMBOL LINKING (for ripple integration)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface AffectedUniversityContent {
+  id: string;
+  title: string;
+  type: string;
+  stale: boolean;
+}
+
+export function getAffectedUniversityContent(rootDir: string, symbol: string): AffectedUniversityContent[] {
+  const index = loadUniversityIndex(rootDir);
+  if (!index) return [];
+
+  const affected: AffectedUniversityContent[] = [];
+
+  for (const entry of index.entries) {
+    if (entry.symbols.includes(symbol)) {
+      const stale = isContentStale(rootDir, entry, symbol);
+      affected.push({
+        id: entry.id,
+        title: entry.title,
+        type: entry.type,
+        stale,
+      });
+    }
+  }
+
+  return affected;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ONBOARDING
+// ═══════════════════════════════════════════════════════════════════
+
+export interface OnboardingSequence {
+  paths: Array<{ id: string; title: string; steps: number; completed: boolean }>;
+  suggestedContent: UniversityIndexEntry[];
+  extracurricular: UniversityIndexEntry[];
+  diplomaCount: number;
+  totalContent: number;
+  /**
+   * C1 (additive): section-grouped onboarding for packs that DECLARE sections
+   * in `pack.yaml`. Ordered by section `order` then entry `order`. Present only
+   * when the selected pack declares sections; OMITTED otherwise (no-selector /
+   * legacy / category-only packs) so the response stays byte-identical to the
+   * pre-C1 shape. The flat `paths`/`suggestedContent`/`extracurricular`/
+   * `diplomaCount`/`totalContent` fields remain populated regardless, for
+   * back-compat consumers.
+   */
+  sections?: Array<{ id: string; name: string; entries: UniversityIndexEntry[] }>;
+}
+
+export function getOnboardingSequence(
+  rootDir: string,
+  student?: string,
+  packRoot?: string,
+): OnboardingSequence {
+  const index = packRoot ? loadPackIndex(packRoot, rootDir) : loadUniversityIndex(rootDir);
+  if (!index) {
+    return { paths: [], suggestedContent: [], extracurricular: [], diplomaCount: 0, totalContent: 0 };
+  }
+
+  // C1.1: pack-scope the config source. When a pack is selected and ships its
+  // own `config.yaml`, its category rules govern onboarding; otherwise fall
+  // back to the project config. No-packRoot path → project config, unchanged.
+  const config = (packRoot && loadPackConfig(packRoot)) || loadUniversityConfig(rootDir);
+  const excludedCategories = new Set<string>();
+  for (const cat of config.content.categories) {
+    if (cat.excludeFromOnboarding) {
+      excludedCategories.add(cat.id);
+    }
+  }
+
+  // Partition entries into core and extracurricular
+  const coreEntries = index.entries.filter(e => !e.category || !excludedCategories.has(e.category));
+  const extracurricularEntries = index.entries.filter(e => e.category && excludedCategories.has(e.category));
+
+  // Find learning paths (core only)
+  const pathEntries = coreEntries.filter(e => e.type === 'path');
+  // C1.3: pack-scope diplomas when a packRoot is given (mirrors saveDiploma's
+  // effectivePackRoot). loadDiplomas owns the diplomas/ path join, so we pass
+  // packRoot straight through — no-pack path reads the project diplomas dir,
+  // byte-identical to today.
+  const diplomas = student ? loadDiplomas(rootDir, { student }, packRoot) : [];
+  const diplomaSourceIds = new Set(diplomas.map(d => d.source));
+
+  const paths = pathEntries.map(pe => {
+    const lp = loadPath(rootDir, pe.id, packRoot);
+    return {
+      id: pe.id,
+      title: pe.title,
+      steps: lp?.steps.length || 0,
+      completed: diplomaSourceIds.has(pe.id),
+    };
+  });
+
+  // Suggest beginner content for onboarding (core only)
+  const suggestedContent = coreEntries
+    .filter(e => e.type !== 'path' && (e.difficulty === 'beginner' || e.tags.includes('onboarding')))
+    .slice(0, 10);
+
+  const sequence: OnboardingSequence = {
+    paths,
+    suggestedContent,
+    extracurricular: extracurricularEntries,
+    diplomaCount: diplomas.length,
+    totalContent: index.totalContent,
+  };
+
+  // C1.2: section-aware grouping — ADDITIVE on top of the flat fields above.
+  // Gated on the RAW pack.yaml declaring a non-empty `sections:` array (not
+  // the always-populated normalized manifest), so legacy/category-only packs
+  // and the no-selector path keep the pre-C1 response shape byte-identical
+  // (`sections` omitted). When declared, group ALL entries by `entry.section`
+  // (untagged → the manifest's default section), ordered by section `order`
+  // then entry `order`.
+  if (packRoot && packDeclaresSections(packRoot)) {
+    const manifest = loadOrFabricatePackManifest(packRoot);
+    const declared = (manifest?.sections ?? []).slice().sort(
+      (a, b) => (a.order - b.order) || a.id.localeCompare(b.id),
+    );
+    if (declared.length > 0) {
+      const defaultSection = declared.find(s => s.default === true) ?? declared[0];
+      const buckets = new Map<string, UniversityIndexEntry[]>();
+      for (const s of declared) buckets.set(s.id, []);
+
+      for (const entry of index.entries) {
+        const target =
+          entry.section && buckets.has(entry.section) ? entry.section : defaultSection.id;
+        const bucket = buckets.get(target);
+        if (bucket) bucket.push(entry);
+      }
+
+      // Order entries within each section by `order` (lower first; unset → end),
+      // stable on ties by id.
+      const byEntryOrder = (a: UniversityIndexEntry, b: UniversityIndexEntry): number => {
+        const ao = typeof a.order === 'number' ? a.order : Number.POSITIVE_INFINITY;
+        const bo = typeof b.order === 'number' ? b.order : Number.POSITIVE_INFINITY;
+        return (ao - bo) || a.id.localeCompare(b.id);
+      };
+
+      sequence.sections = declared.map(s => ({
+        id: s.id,
+        name: s.name,
+        entries: (buckets.get(s.id) ?? []).sort(byEntryOrder),
+      }));
+    }
+  }
+
+  return sequence;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+function resolveContentFile(rootDir: string, id: string, ext: string, packRoot?: string): string | null {
+  const effectivePackRoot = packRoot ?? path.join(rootDir, UNIVERSITY_DIR);
+  // Probe both layouts (`content/` + `src/content/`) so body loads work for
+  // first-party / non-project packs; fall back to the legacy `content/` dir.
+  const contentDir = resolveContentBase(effectivePackRoot) ?? path.join(effectivePackRoot, CONTENT_DIR);
+
+  // Try each subdirectory
+  for (const subdir of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {
+    const filePath = path.join(contentDir, subdir, `${id}${ext}`);
+    if (fs.existsSync(filePath)) return filePath;
+  }
+
+  return null;
+}
+
+function normalizeFrontmatter(fm: UniversityFrontmatter): UniversityFrontmatter {
+  return {
+    id: fm.id || '',
+    title: fm.title || '',
+    type: fm.type || 'note',
+    author: fm.author || 'unknown',
+    created: fm.created || '',
+    updated: fm.updated || '',
+    tags: Array.isArray(fm.tags) ? fm.tags : [],
+    symbols: Array.isArray(fm.symbols) ? fm.symbols : [],
+    difficulty: fm.difficulty || 'beginner',
+    estimatedMinutes: fm.estimatedMinutes,
+    prerequisites: Array.isArray(fm.prerequisites) ? fm.prerequisites : [],
+    ...(fm.category ? { category: fm.category as string } : {}),
+    // v6.0 additive pack-manifest fields — pass through untouched so stamps
+    // authored at saveNote() survive a load/normalize round-trip. No
+    // validation at this layer; consumers (pack loader, multi-tenant
+    // resolver) own that.
+    ...(fm.origin ? { origin: fm.origin } : {}),
+    ...(fm.source ? { source: fm.source } : {}),
+    ...(fm.pack_id ? { pack_id: fm.pack_id } : {}),
+    ...(fm.discipline ? { discipline: fm.discipline } : {}),
+    // v6.5 section additions — round-trip through load/save without
+    // mutation. Validation of refs lives in the validator command.
+    ...(fm.section ? { section: fm.section } : {}),
+    ...(typeof fm.order === 'number' ? { order: fm.order } : {}),
+  };
+}
+
+function normalizeQuiz(quiz: UniversityQuiz): UniversityQuiz {
+  return {
+    ...quiz,
+    tags: quiz.tags || [],
+    symbols: quiz.symbols || [],
+    difficulty: quiz.difficulty || 'beginner',
+    passThreshold: quiz.passThreshold ?? 0.7,
+    questions: quiz.questions || [],
+  };
+}
+
+function loadKnownSymbols(rootDir: string): Set<string> {
+  const symbols = new Set<string>();
+  const scanIndexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
+  if (!fs.existsSync(scanIndexPath)) return symbols;
+
+  try {
+    const raw = fs.readFileSync(scanIndexPath, 'utf8');
+    const index = JSON.parse(raw);
+    if (index.symbols && Array.isArray(index.symbols)) {
+      for (const sym of index.symbols) {
+        if (sym.symbol) symbols.add(sym.symbol);
+      }
+    }
+  } catch {
+    // Skip
+  }
+
+  return symbols;
+}
+
+function computeSymbolCoverage(rootDir: string, index: UniversityIndex): UniversityValidationResult['symbolCoverage'] {
+  const knownSymbols = loadKnownSymbols(rootDir);
+  const coveredSymbols = new Set<string>();
+
+  for (const entry of index.entries) {
+    for (const sym of entry.symbols) {
+      if (knownSymbols.has(sym)) {
+        coveredSymbols.add(sym);
+      }
+    }
+  }
+
+  const total = knownSymbols.size;
+  return {
+    totalSymbols: total,
+    coveredByContent: coveredSymbols.size,
+    percentage: total > 0 ? Math.round((coveredSymbols.size / total) * 100) : 0,
+  };
+}
+
+function isContentStale(rootDir: string, entry: UniversityIndexEntry, _symbol: string): boolean {
+  if (!entry.updated) return false;
+
+  // Check if any .purpose file in the project was modified after this content
+  const contentUpdated = new Date(entry.updated).getTime();
+  if (isNaN(contentUpdated)) return false;
+
+  // Find .purpose files that might define the symbol
+  const scanIndexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
+  if (!fs.existsSync(scanIndexPath)) return false;
+
+  try {
+    const raw = fs.readFileSync(scanIndexPath, 'utf8');
+    const index = JSON.parse(raw);
+    if (index.symbols && Array.isArray(index.symbols)) {
+      for (const sym of index.symbols) {
+        if (sym.symbol === _symbol && sym.filePath) {
+          const purposePath = path.join(rootDir, sym.filePath);
+          if (fs.existsSync(purposePath)) {
+            const stat = fs.statSync(purposePath);
+            if (stat.mtime.getTime() > contentUpdated) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Skip
+  }
+
+  return false;
+}
+
+function checkContentStaleness(rootDir: string, entry: UniversityIndexEntry, issues: UniversityValidationIssue[]): void {
+  for (const sym of entry.symbols) {
+    if (isContentStale(rootDir, entry, sym)) {
+      issues.push({
+        contentId: entry.id,
+        severity: 'warning',
+        check: 'stale-content',
+        message: `Content may be stale: symbol "${sym}" was updated after content was last modified`,
+        fix: `Review and update ${entry.id} to reflect changes to ${sym}`,
+      });
+      break; // One staleness warning per content item is enough
+    }
+  }
+}

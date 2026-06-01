@@ -14,7 +14,7 @@
   "scripts": {
     "setup": "npm install && npm run build",
     "build": "npm run build:core && npm run build:packages && npm run build:cli",
-    "build:core": "npm run build --workspace=@a-company/purpose-core && npm run build --workspace=@a-company/portal-core && npm run build --workspace=@a-company/probe-core",
+    "build:core": "npm run build --workspace=@a-company/university-core && npm run build --workspace=@a-company/purpose-core && npm run build --workspace=@a-company/portal-core && npm run build --workspace=@a-company/probe-core",
     "build:packages": "npm run build --workspace=@a-company/portal-sdk && npm run build --workspace=@a-company/portal-manager && npm run build --workspace=@a-company/portal-viewer && npm run build --workspace=@a-company/premise-core && npm run build --workspace=@a-company/sentinel && npm run build --workspace=@a-company/paradigm-runtime && npm run build --workspace=@a-company/paradigm-mcp",
     "build:cli": "npm run build --workspace=@a-company/paradigm",
     "build:vscode": "npm run build --workspace=@a-company/paradigm-vscode",

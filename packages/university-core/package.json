@@ -1,0 +1,59 @@
+{
+  "name": "@a-company/university-core",
+  "version": "0.1.0",
+  "description": "Lean, dependency-light shared core for Paradigm University content + pack loading. Zero @a-company dependencies.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/university-core"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "university",
+    "content",
+    "packs"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

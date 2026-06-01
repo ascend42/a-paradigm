@@ -1,10 +1,12 @@
 /**
- * Pack manifest constants and convenience re-exports (v6.0).
+ * Pack manifest constants and convenience re-exports — back-compat shim.
  *
- * The canonical type definitions live in `./university.ts` alongside the
- * rest of the University domain types. This module provides a small
- * shim for consumers that only care about pack-manifest shape + the
- * well-known filesystem constants.
+ * The canonical definitions moved to `@a-company/university-core`
+ * (src/types/pack.ts + src/types/university.ts) during the content-loading
+ * extraction (extract-university-core spec §4.1). This shim is retained so
+ * existing importers (`pack-loader.ts`, `university-metrics.ts`) stay
+ * untouched. Prefer importing from `@a-company/university-core` directly in
+ * new code.
  */
 
 export type {
@@ -17,25 +19,11 @@ export type {
   // v6.5 sections
   Section,
   SectionStyle,
-} from './university.js';
+} from '@a-company/university-core';
 
-/** Filename of the pack manifest at a pack root. */
-export const PACK_MANIFEST_FILENAME = 'pack.yaml' as const;
-
-/** Current pack-manifest schema version. Bump when `pack.yaml` shape changes. */
-export const PACK_SCHEMA_VERSION = '1' as const;
-
-/**
- * The package.json field consulted during npm-pack discovery. Value is a
- * relative path from the package root to a directory containing a
- * `pack.yaml` manifest.
- */
-export const PACKAGE_JSON_POINTER_FIELD = 'paradigm.universityPack' as const;
-
-/**
- * Well-known first-party pack ids. These short names are reserved; third
- * parties must use reverse-DNS or npm-scope form.
- */
-export const FIRST_PARTY_PACK_IDS = {
-  paradigm: 'paradigm',
-} as const;
+export {
+  PACK_MANIFEST_FILENAME,
+  PACK_SCHEMA_VERSION,
+  PACKAGE_JSON_POINTER_FIELD,
+  FIRST_PARTY_PACK_IDS,
+} from '@a-company/university-core';

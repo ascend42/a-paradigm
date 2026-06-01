@@ -261,6 +261,20 @@ describe('back-compat — no-packRoot path is byte-identical', () => {
     expect(fp).toBe(path.join(packRoot, 'content', 'notes', 'N-x.md'));
     expect(fs.readFileSync(fp, 'utf8')).toContain('pack_id: ai-literacy');
   });
+
+  it('saveNote WITH a packRoot but NO pack.yaml stamps NOTHING (never the dir basename)', () => {
+    // D2 case (b): explicit packRoot pointing at a manifestless dir. The CLI's
+    // lenient stamp must yield no pack_id — NOT the directory basename, which
+    // loadOrFabricatePackManifest would have produced. Guards the spec-§3 defect.
+    const packRoot = makePack('content'); // no withPackYaml → no manifest
+    const fm: UniversityFrontmatter = {
+      id: 'N-x', title: 'X', type: 'note', author: 't', created: '2026-05-31', updated: '2026-05-31',
+      tags: [], symbols: [], difficulty: 'beginner', prerequisites: [],
+    };
+    const fp = saveNote(mkTmp(), fm, 'body', packRoot);
+    expect(fp).toBe(path.join(packRoot, 'content', 'notes', 'N-x.md'));
+    expect(fs.readFileSync(fp, 'utf8')).not.toContain('pack_id');
+  });
 });
 
 describe('loadNote / loadQuiz honor packRoot dual-base', () => {

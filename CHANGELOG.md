@@ -5,6 +5,33 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.6] — 2026-06-01
+
+A structural refactor, not a behavior change: the pack/content-loading logic that we fixed *the same way three times* across v6.6.2–6.6.5 (because it was copy-pasted into the MCP tools, the CLI, and the serve server) is now extracted into **one shared package**, `@a-company/university-core`. Future pack-loading fixes land once, for all three surfaces. Read-path behavior is byte-identical; the only user-visible delta is a tiny search improvement (D5 below).
+
+### Added
+
+- **`@a-company/university-core`** — a lean, dependency-light package (only `js-yaml` + `zod`, **zero `@a-company` deps**) that now owns the content loader, pack discovery, content-base resolution, the university types, a unified write path, and a logger seam. The MCP loader, CLI storage, and serve server all import it; their old copies are thin re-export shims (the `anchor-path.ts` precedent). The probe behind `T-2026-05-31-001` and the duplication behind `T-2026-06-01-001` are unified away.
+
+### Changed
+
+- **Pack-loading is now single-source.** `packages/paradigm-mcp/.../university-loader.ts`, `packages/paradigm/.../core/university/storage.ts`, and the serve server's `resolveContentBase` are now shims/imports over `university-core`. The serve server's previously-divergent content-base probe (it omitted `policies/` and had no fallback) is replaced by the canonical one. The lean core is **bundled** into both the server and CLI outputs (verified inlined — no external resolution at runtime).
+- **`paradigm university` search now matches tags** in addition to title and id (D5). Previously the CLI search matched only title+id; it now also matches tags, bringing it in line with the MCP search (which already did). Strictly more results — additive.
+
+### Tests
+
+- `university-core`: 28 new (golden read-path over `content/` + `src/content/` fixtures, `normalizeSections` golden matrix, drift-guards incl. probe parity). Suites hold: paradigm-mcp 286, CLI 360, university 46 (+1 pre-existing, unrelated). End-to-end **built-CLI serve smoke** verified: `serve --pack ai-literacy` → `mode:project`, 5 sections.
+
+### Versions
+
+- `@a-company/university-core`: **0.1.0** (NEW — must be published *first*; the others depend on it)
+- `@a-company/paradigm`: 6.6.5 → **6.6.6**
+- `@a-company/paradigm-mcp`: 6.6.5 → **6.6.6**
+- `@a-company/university`: 6.5.1 → **6.5.2**
+- Plugin `plugin.json`: 6.6.5 → **6.6.6**
+
+---
+
 ## [6.6.5] — 2026-05-31
 
 A thorough sweep of the University `pack` selector across **all three surfaces** — the v6.6.4 fix only covered the MCP read tools, but the CLI commands and the `serve` server had the same bug class (the logic was duplicated and only one copy was fixed). Triaged into ~14 findings across three packages; fixed, reviewed, and live-verified (`serve --pack ai-literacy` now mounts the pack's 5 sections; `serve --port` is honored).

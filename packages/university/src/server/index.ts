@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import * as yaml from 'js-yaml';
 
+import { resolveContentBase } from '@a-company/university-core';
+
 import { createCoursesRouter } from './routes/courses.js';
 import { createPlsatRouter } from './routes/plsat.js';
 import {
@@ -101,35 +103,14 @@ function resolveAssetPaths(options?: { contentDir?: string; uiDistPath?: string 
   };
 }
 
-/**
- * Resolve a pack's content base, probing the two supported layouts.
- *
- * v6.0 packs (incl. ai-literacy) use `content/`; first-party / source
- * packs use `src/content/`. Mirrors the loader's dual-base probe
- * (university-loader.ts) and the "first base that CONTAINS content"
- * rule (spec §C4) — a base is only chosen if at least one of its known
- * content subdirs (notes/quizzes/paths) exists and is non-empty.
- *
- * Returns the resolved content base, or `null` if neither layout under
- * `packRoot` actually contains content.
- */
-function resolveContentBase(packRoot: string): string | null {
-  const CONTENT_SUBDIRS = ['notes', 'quizzes', 'paths'];
-  for (const sub of ['content', 'src/content']) {
-    const base = path.join(packRoot, sub);
-    if (!fs.existsSync(base)) continue;
-    const hasContent = CONTENT_SUBDIRS.some((d) => {
-      const dir = path.join(base, d);
-      try {
-        return fs.existsSync(dir) && fs.readdirSync(dir).length > 0;
-      } catch {
-        return false;
-      }
-    });
-    if (hasContent) return base;
-  }
-  return null;
-}
+// `resolveContentBase` now comes from @a-company/university-core (imported
+// above). The server previously kept its OWN divergent copy that probed only
+// `['notes','quizzes','paths']` with a bare `readdirSync().length>0` check and
+// had no "first base that exists" fallback. Core's canonical version adds
+// `policies/`, uses an extension filter (.md/.yaml), and falls back to the
+// first base that merely exists when neither contains content — closing the
+// reviewer-flagged divergence (extract-university-core spec §4.3 / delta D3).
+// Signature is identical: `(packRoot: string) => string | null`.
 
 // ── Pack-config types (server-local; shape mirrors PackConfigResponse in UI) ──
 

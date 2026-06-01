@@ -1,0 +1,60 @@
+version: 2.0.0
+description: |
+  @a-company/university-core - Lean, dependency-light shared core owning the
+  Paradigm University content-loading contract. ZERO @a-company dependencies
+  (js-yaml + zod leaf deps only). Extracted to de-duplicate the loader / pack
+  discovery / content-base probe that had drifted across paradigm-mcp, the CLI,
+  and the serve server (extract-university-core spec). paradigm-mcp consumes it
+  via a re-export shim.
+features:
+  content-loading:
+    description: '@content-loading: Read/write per-project + pack-scoped university content'
+    aspects:
+      - ~zod-validated-sections
+      - ~content-base-dual-layout
+    components:
+      - '#university-loader'
+      - '#content-base-resolver'
+  pack-discovery:
+    description: '@pack-discovery: SLIM reimplemented pack manifest discovery (no portal-core drag)'
+    aspects:
+      - ~classifier-only-errors
+    components:
+      - '#pack-discovery'
+      - '#pack-schema'
+  logger-seam:
+    description: '@logger-seam: Injected no-op-default logger so core never imports a concrete logger'
+    components:
+      - '#university-core-logger'
+components:
+  university-loader:
+    description: '#university-loader: Canonical content read/write + index/search/onboard/validate'
+  content-base-resolver:
+    description: '#content-base-resolver: Dual-layout (content/ + src/content/) base probe, C4-aligned with countPackEntries'
+  pack-discovery:
+    description: '#pack-discovery: Slim loadPackManifest/discoverPacks/normalizeSections/resolveEntryAddress using raw js-yaml'
+  pack-schema:
+    description: '#pack-schema: Copied zod Section schema (Option B) for byte-identical section synthesis'
+  university-core-logger:
+    description: '#university-core-logger: UniversityCoreLogger interface + setUniversityCoreLogger + NOOP default'
+aspects:
+  ~zod-validated-sections:
+    description: Section blocks validated/synthesized via the copied zod pack-schema; byte-identical to pack-loader output
+    tags:
+      - validation
+      - sections
+    applies-to:
+      - '#pack-discovery'
+  ~content-base-dual-layout:
+    description: Content base probes content/ then src/content/, preferring the first base that contains content (C4 / T-2026-05-31-001)
+    tags:
+      - content-base
+    applies-to:
+      - '#content-base-resolver'
+  ~classifier-only-errors:
+    description: PackLoadError messages are classifier-only (derived from js-yaml error name) — never echo manifest body
+    tags:
+      - security
+      - error-handling
+    applies-to:
+      - '#pack-discovery'

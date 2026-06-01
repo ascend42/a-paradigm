@@ -30,6 +30,7 @@ import {
   loadUniversityConfig,
   resolveDefaultPackRoot,
   loadOrFabricatePackManifest,
+  countPackEntries,
 } from '../utils/university-loader.js';
 import {
   discoverPacks,
@@ -44,7 +45,6 @@ import type {
 } from '../types/university.js';
 import { trackToolCall } from './context.js';
 import { execSync } from 'child_process';
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -140,32 +140,10 @@ export function isProjectUniversityRoot(rootDir: string, packRoot: string): bool
   return path.resolve(packRoot) === path.resolve(rootDir, PROJECT_UNIVERSITY_SUBDIR);
 }
 
-/**
- * Count entries across the content subdirectories of a pack root. Used by
- * paradigm_university_pack_list for per-pack entry totals without loading
- * content bodies (privacy + budget). Probes both layouts:
- *   - `content/` (local project packs per spec §1.2)
- *   - `src/content/` (first-party @a-company/university)
- */
-function countPackEntries(packRoot: string): number {
-  const subdirs = ['notes', 'policies', 'quizzes', 'paths'];
-  for (const contentSub of ['content', 'src/content']) {
-    const contentDir = path.join(packRoot, contentSub);
-    if (!fs.existsSync(contentDir)) continue;
-    let total = 0;
-    for (const sub of subdirs) {
-      const dir = path.join(contentDir, sub);
-      if (!fs.existsSync(dir)) continue;
-      try {
-        total += fs.readdirSync(dir).filter(f => f.endsWith('.md') || f.endsWith('.yaml')).length;
-      } catch {
-        // skip
-      }
-    }
-    if (total > 0) return total;
-  }
-  return 0;
-}
+// countPackEntries unified onto @a-company/university-core (spec §4.4) — the MCP
+// + CLI probes were two copies of the same logic; core now owns the single
+// canonical definition (imported above via the university-loader shim), closing
+// T-2026-05-31-001 and preventing re-drift (§5.5 guard).
 
 /**
  * Get list of university tools with safety annotations
