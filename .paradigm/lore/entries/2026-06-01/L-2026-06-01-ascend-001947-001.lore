@@ -1,0 +1,65 @@
+id: L-2026-06-01-ascend-001947-001
+type: agent-session
+timestamp: '2026-06-01T00:19:47.046Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'University pack-selector: full 3-surface fix (v6.6.5)'
+summary: 'Thorough triage + fix of the University pack-selector bug across all three surfaces. v6.6.4 fixed only the MCP read tools; the CLI commands and the serve HTTP server had the same bug class because pack-loading logic is duplicated in three copies. Triaged ~14 findings (2 serve, 10 CLI, plus MCP onboard/search gaps), fixed via parallel per-package builders (architect→3 builders→integrated review), and live-verified: serve --pack ai-literacy mounts the pack''s 5 sections, serve --port honored.'
+symbols_touched:
+  - '#university'
+  - '#university-loader'
+  - '#university-server'
+  - '#paradigm-mcp'
+  - '#university-cli'
+files_created:
+  - packages/paradigm-mcp/tests/university-phase0-onboard-search.test.ts
+  - packages/paradigm/src/core/university/storage.test.ts
+  - packages/university/tests/pack-config.test.ts
+  - .paradigm/specs/fix-university-pack-selector-full.md
+files_modified:
+  - packages/paradigm-mcp/src/utils/university-loader.ts
+  - packages/paradigm-mcp/src/tools/university.ts
+  - packages/paradigm/src/core/university/storage.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/commands/university/serve.ts
+  - packages/university/src/server/index.ts
+  - packages/university/src/server/routes/courses.ts
+  - CHANGELOG.md
+learnings:
+  - A 'param accepted but ignored' bug that's fixed in one copy almost always lives in the OTHER copies of duplicated logic. The University pack-loader exists in THREE places (MCP university-loader.ts, CLI core/university/storage.ts, serve server) — v6.6.4 fixed one, so the same bug resurfaced in the CLI and serve. ALWAYS grep for sibling implementations and fix/triage them together.
+  - 'Package boundaries forced a port-not-extract decision: the CLI (packages/paradigm) can''t import the MCP loader (packages/paradigm-mcp), so the v6.6.4 contract was ported into storage.ts as additive packRoot params. The real consolidation (extract @a-company/university-core all three import) is filed as T-2026-06-01-001 — port-now-extract-later.'
+  - 'The serve HTTP server was a DIFFERENT bug from the loader dup: it resolved the pack context in the CLI but never FORWARDED packRoot/packId to startServer, and the server hardcoded first-party detection. Test seam: extract buildPackConfig(options) as a pure exported function so ''serve --pack X mounts X'' is testable WITHOUT launching a server.'
+  - serve --port was ignored due to commander declaring --port on BOTH the parent `university` command and the `serve` subcommand; fix is enablePositionalOptions() (program-global — verify sibling serve/watch commands still parse).
+  - Onboarding partitioned by CATEGORY; sections-only packs (the v6.5 model) need section-aware partitioning gated on the RAW pack.yaml declaring sections (never manifest.sections.length, which is always populated post-normalize).
+  - The university server is BUNDLED into the CLI dist by esbuild (dynamic import of @a-company/university/server, not externalized), so the serve fix ships with the @a-company/paradigm publish — no separate university publish strictly required.
+verification:
+  status: pass
+  details:
+    mcp-tests: '286'
+    university-tests: 46 (1 pre-existing fail tracked T-2026-06-01-002)
+    cli-tests: '355'
+    live-serve: serve --pack ai-literacy → mode:project, 5 sections; --port 3855 honored
+    review: approved, no blocking
+    link: CLI 6.6.5
+tags:
+  - framework-bug
+  - university
+  - multi-tenant
+  - pack-selector
+  - consolidation
+  - release
+linked_lore:
+  - L-2026-05-31-ascend-195137-001
+linked_tasks:
+  - T-2026-06-01-001
+  - T-2026-05-31-001
+  - T-2026-06-01-002
+linked_commits:
+  - e85cd141
+confidence: 0.85
+git_context:
+  ref: e85cd141b5b131b20de65e964d3e1e1a8c503843
+  branch: main
+  dirty: true
