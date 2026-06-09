@@ -31,6 +31,13 @@ import {
   type PostflightResult,
 } from './pm-compliance.js';
 import { buildSymbolIndex } from '@a-company/premise-core';
+import {
+  IterationDelta,
+  IterationOptions,
+  IterationLoopResult,
+  IterationRoundResult,
+} from './iteration-types.js';
+import { appendIterationRevision, generateRevisionId } from './iteration-revision-log.js';
 
 // ============================================================================
 // Types
@@ -1253,6 +1260,239 @@ export class Orchestrator {
     }
 
     return { success, results, totalTokens, totalCost };
+  }
+
+  // ==========================================================================
+  // Public: Stateless Iteration Loop (TD-2026-06-09-522)
+  // ==========================================================================
+
+  /**
+   * Run the SAME specialist across multiple rounds (re-review / iterate-with-
+   * same-role) WITHOUT warm/persistent subagents. Each round is a fresh spawn;
+   * continuity is carried by a typed `IterationDelta` threaded into the task.
+   *
+   * Three guardrails:
+   *  1. Convergence is read from the agent's TYPED `iteration-verdict` block —
+   *     never inferred from free-text prose.
+   *  2. `maxRounds` is required; exhausting it yields a structured `unresolved`
+   *     result. The last attempt is NEVER returned as a pass.
+   *  3. Belief revisions are promoted to the learning loop at each round
+   *     boundary, gated on `corrections` (actual belief change), not progress.
+   *
+   * @param promoteRevision Test seam. Defaults to the durable iteration-revision
+   *   writer (mandatory by default — guardrail #3). Injectable for unit tests.
+   */
+  async runIterationLoop(
+    task: string,
+    opts: IterationOptions,
+    promoteRevision?: (record: { agent: string; corrections: string[]; symbols: string[]; round: number }) => void,
+  ): Promise<IterationLoopResult> {
+    // Fail fast — no silent infinite loop, no silently-missing review agent.
+    if (!Number.isInteger(opts.maxRounds) || opts.maxRounds < 1) {
+      throw new Error(`runIterationLoop: maxRounds must be an integer >= 1 (got ${opts.maxRounds})`);
+    }
+    if (opts.mode === 'ping-pong' && !opts.reviewAgent) {
+      throw new Error('runIterationLoop: ping-pong mode requires reviewAgent');
+    }
+
+    const promote = promoteRevision ?? ((record: { agent: string; corrections: string[]; symbols: string[]; round: number }) =>
+      appendIterationRevision(this.rootDir, {
+        id: generateRevisionId(record.agent, record.round),
+        agent: record.agent,
+        corrections: record.corrections,
+        symbols: record.symbols,
+        round: record.round,
+      }));
+
+    const rounds: IterationRoundResult[] = [];
+    const totalTokens: TokenUsage = { input: 0, output: 0, total: 0 };
+    let prevDelta: IterationDelta | null = null;
+    let finalDelta: IterationDelta | null = null;
+
+    for (let round = 1; round <= opts.maxRounds; round++) {
+      const agent = this.iterationAgentForRound(opts, round);
+      const roundTask = this.buildIterationTask(task, prevDelta, round);
+
+      const spawnerOptions: SpawnerOptions = {
+        workingDirectory: opts.workingDirectory || this.rootDir,
+        mcpServerPath: opts.mcpServerPath,
+      };
+
+      const spawnResult = await this.spawner.spawn(agent, roundTask, spawnerOptions);
+
+      if (spawnResult.relay) {
+        totalTokens.input += spawnResult.relay.metrics.tokens_used.input;
+        totalTokens.output += spawnResult.relay.metrics.tokens_used.output;
+        totalTokens.total += spawnResult.relay.metrics.tokens_used.total;
+      }
+
+      const delta = this.parseIterationVerdict(spawnResult);
+      if (delta) finalDelta = delta;
+
+      // Belief-revision promotion (guardrail #3) — fires BEFORE the stop check
+      // so a converging round still externalizes what it learned.
+      let promoted = false;
+      if (this.beliefRevised(delta, prevDelta)) {
+        const corrections = delta!.corrections.length > 0
+          ? delta!.corrections
+          : this.reopenedClaims(delta!, prevDelta);
+        promote({
+          agent,
+          corrections,
+          symbols: spawnResult.relay?.outputs.symbols ?? [],
+          round,
+        });
+        promoted = true;
+      }
+
+      const roundResult: IterationRoundResult = { round, agent, spawnResult, delta, promoted };
+      rounds.push(roundResult);
+      opts.onRound?.(roundResult);
+
+      // Stop conditions — every non-converged exit is structured `unresolved`.
+      if (!spawnResult.success) {
+        return this.unresolvedResult(rounds, finalDelta, totalTokens, 'spawn-failed', round);
+      }
+      if (delta === null) {
+        return this.unresolvedResult(rounds, finalDelta, totalTokens, 'unparseable-verdict', round);
+      }
+      if (this.isConverged(delta, opts, agent)) {
+        return { converged: true, rounds, finalDelta: delta, totalTokens };
+      }
+
+      prevDelta = delta;
+    }
+
+    // Cap reached without convergence.
+    return this.unresolvedResult(rounds, finalDelta, totalTokens, 'max-rounds', opts.maxRounds);
+  }
+
+  private unresolvedResult(
+    rounds: IterationRoundResult[],
+    finalDelta: IterationDelta | null,
+    totalTokens: TokenUsage,
+    reason: 'max-rounds' | 'unparseable-verdict' | 'spawn-failed',
+    roundsRun: number,
+  ): IterationLoopResult {
+    return {
+      converged: false,
+      rounds,
+      finalDelta,
+      totalTokens,
+      unresolved: { reason, roundsRun, openThreads: finalDelta?.openThreads ?? [] },
+    };
+  }
+
+  /** single-role → always iterateAgent; ping-pong → odd=fix, even=re-review. */
+  private iterationAgentForRound(opts: IterationOptions, round: number): string {
+    if (opts.mode === 'single-role') return opts.iterateAgent;
+    return round % 2 === 1 ? opts.iterateAgent : (opts.reviewAgent as string);
+  }
+
+  /**
+   * Converged iff the agent approved. In single-role mode self-approval is weak
+   * signal, so additionally require no open threads remain. In ping-pong, only
+   * the REVIEW agent's approval is authoritative — a fixer self-approving (e.g.
+   * on an odd final round) must NOT end the loop without reviewer sign-off.
+   */
+  private isConverged(delta: IterationDelta, opts: IterationOptions, agent: string): boolean {
+    if (delta.verdict !== 'approved') return false;
+    if (opts.mode === 'single-role') return delta.openThreads.length === 0;
+    return agent === opts.reviewAgent;
+  }
+
+  /** Settled (`alreadyVerified`) claims from `prev` that re-appear in this round's `whatChanged`. */
+  private reopenedClaims(delta: IterationDelta, prev: IterationDelta | null): string[] {
+    if (!prev) return [];
+    return delta.whatChanged.filter(c => prev.alreadyVerified.includes(c));
+  }
+
+  /**
+   * Belief changed iff the round reported explicit corrections, OR a previously
+   * settled claim was re-opened. Progress alone (`whatChanged` non-empty) is
+   * deliberately NOT the gate.
+   */
+  private beliefRevised(delta: IterationDelta | null, prev: IterationDelta | null): boolean {
+    if (!delta) return false;
+    if (delta.corrections.length > 0) return true;
+    return this.reopenedClaims(delta, prev).length > 0;
+  }
+
+  /** Build the round task: original task + serialized prior delta + verdict-block instruction. */
+  private buildIterationTask(task: string, prevDelta: IterationDelta | null, round: number): string {
+    const parts: string[] = [task];
+
+    if (prevDelta) {
+      parts.push('', `## Iteration delta (entering round ${round})`);
+      parts.push(`- Verdict so far: ${prevDelta.verdict}`);
+      if (prevDelta.whatChanged.length) {
+        parts.push('- Changed last round:', ...prevDelta.whatChanged.map(s => `  - ${s}`));
+      }
+      if (prevDelta.alreadyVerified.length) {
+        parts.push('- Already verified (do NOT re-litigate):', ...prevDelta.alreadyVerified.map(s => `  - ${s}`));
+      }
+      if (prevDelta.openThreads.length) {
+        parts.push('- Open threads to resolve:', ...prevDelta.openThreads.map(s => `  - ${s}`));
+      }
+    }
+
+    parts.push('', '## Required: end with an iteration-verdict block');
+    parts.push('After your work, append a fenced block tagged `iteration-verdict` with JSON:');
+    parts.push('```iteration-verdict');
+    parts.push('{');
+    parts.push('  "verdict": "approved" | "changes-requested",');
+    parts.push('  "whatChanged": ["progress made this round"],');
+    parts.push('  "alreadyVerified": ["settled claims; do not revisit"],');
+    parts.push('  "openThreads": ["unresolved items for the next round"],');
+    parts.push('  "corrections": ["only genuine belief revisions: was X, now Y"]');
+    parts.push('}');
+    parts.push('```');
+    parts.push('Use "approved" only when no open threads remain. Leave "corrections" empty if nothing you previously believed changed.');
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Extract the typed iteration verdict from a spawn result. Deterministic parse
+   * of a tagged fenced block — NOT prose scraping. Returns null when no valid
+   * block is present (caller treats null as a non-converged failure).
+   *
+   * NOTE: reads the relay surfaces available today (handoff context, decisions).
+   * Surfacing the agent's full final text into the relay for real providers is a
+   * documented follow-up (see CHANGELOG); unit tests inject these surfaces.
+   */
+  private parseIterationVerdict(result: SpawnResult): IterationDelta | null {
+    if (!result.relay) return null;
+    const haystacks: string[] = [];
+    if (result.relay.handoff?.context) haystacks.push(result.relay.handoff.context);
+    if (result.relay.outputs?.decisions?.length) haystacks.push(result.relay.outputs.decisions.join('\n'));
+    for (const text of haystacks) {
+      const parsed = extractIterationVerdictBlock(text);
+      if (parsed) return parsed;
+    }
+    return null;
+  }
+}
+
+/**
+ * Parse a fenced ```iteration-verdict JSON block into an IterationDelta.
+ * Returns null on a missing block, malformed JSON, or an invalid verdict value.
+ */
+function extractIterationVerdictBlock(text: string): IterationDelta | null {
+  const fence = text.match(/```iteration-verdict\s*\n([\s\S]*?)```/);
+  if (!fence) return null;
+  try {
+    const raw = JSON.parse(fence[1].trim()) as Partial<IterationDelta>;
+    if (raw.verdict !== 'approved' && raw.verdict !== 'changes-requested') return null;
+    return {
+      verdict: raw.verdict,
+      whatChanged: Array.isArray(raw.whatChanged) ? raw.whatChanged : [],
+      alreadyVerified: Array.isArray(raw.alreadyVerified) ? raw.alreadyVerified : [],
+      openThreads: Array.isArray(raw.openThreads) ? raw.openThreads : [],
+      corrections: Array.isArray(raw.corrections) ? raw.corrections : [],
+    };
+  } catch {
+    return null;
   }
 }
 

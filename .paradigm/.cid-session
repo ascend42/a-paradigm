@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-05-06T00:44:04.198Z",
-  "taskDescription": "Full product audit of Paradigm before video launch this week. Top-to-bottom review covering: copy quality and clarity (README, CLI help text, error messages, docs), onboarding/FTUX friction (first-tim",
+  "timestamp": "2026-05-30T00:57:31.178Z",
+  "taskDescription": "Fix 3 confirmed Paradigm framework bugs. BUG 2 (high): packages/paradigm-mcp/src/tools/pm.ts:460-462 reimplements aspect-anchor path resolution inline as path.join(ctx.rootDir, anchor.path) — replace ",
   "depth": "standard",
   "coverageScore": 0.5
 }

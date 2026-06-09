@@ -1,28 +1,26 @@
 id: P-add-upgrade-guide
-name: "Add an upgrade guide"
-description: "Write a version migration guide with breaking changes, before/after examples, and migration steps"
-
+name: Add an upgrade guide
+description: Write a version migration guide with breaking changes, before/after examples, and migration steps
 trigger:
-  - "upgrade guide"
-  - "migration guide"
-  - "breaking changes doc"
-tags: [docs, guide, migration, upgrade]
-
+  - upgrade guide
+  - migration guide
+  - breaking changes doc
+tags:
+  - docs
+  - guide
+  - migration
+  - upgrade
 symbols: []
-
-exemplar: "docs/guides/sentinel-upgrade.md"
-
+exemplar: docs/guides/sentinel-upgrade.md
 steps:
   - action: create
-    target: "docs/guides/{feature}-upgrade.md"
-    template_from: "docs/guides/sentinel-upgrade.md"
-    notes: "Include: version range (from → to), breaking changes list, step-by-step migration, before/after code examples, verification steps"
-
+    target: docs/guides/{feature}-upgrade.md
+    template_from: docs/guides/sentinel-upgrade.md
+    notes: 'Include: version range (from → to), breaking changes list, step-by-step migration, before/after code examples, verification steps'
   - action: verify
-    notes: "Ensure all breaking changes are documented with concrete migration paths"
-
-recorded_from: "L-2026-03-01-protocols-audit"
-recorded_at: "2026-03-01T12:00:00Z"
-last_verified: "2026-03-01T12:00:00Z"
-verified_by: "claude-opus-4-6"
-status: current
+    notes: Ensure all breaking changes are documented with concrete migration paths
+recorded_from: L-2026-03-01-protocols-audit
+recorded_at: '2026-03-01T12:00:00Z'
+last_verified: '2026-03-01T12:00:00Z'
+verified_by: claude-opus-4-6
+status: stale

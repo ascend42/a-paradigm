@@ -5,7 +5,9 @@ active:
   - builder
   - cartographer
   - cid
+  - cinematographer
   - compliance
+  - composer
   - debugger
   - designer
   - documentor
@@ -21,5 +23,6 @@ active:
   - reviewer
   - scholar
   - security
+  - showrunner
   - swift
   - tester

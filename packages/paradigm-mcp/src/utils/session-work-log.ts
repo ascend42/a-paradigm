@@ -16,6 +16,7 @@ import * as path from 'path';
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
 const VERDICTS_LOG_FILE = '.paradigm/events/verdicts.jsonl';
+const ITERATION_REVISIONS_FILE = '.paradigm/events/iteration-revisions.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -39,6 +40,27 @@ export interface SessionWorkEntry {
   // Decisions
   decisionTitle?: string;
   decisionRationale?: string;
+}
+
+/**
+ * Iteration-revision record — an agent belief-revision emitted during an
+ * iteration loop (TD-2026-06-09-522). SEPARATE from user verdicts: this is
+ * AGENT self-revision provenance, fed to the `self_reflection` journal trigger,
+ * and must never touch the human-verdict channel or expertise scoring.
+ *
+ * Written by the orchestrator (packages/paradigm `iteration-revision-log.ts`);
+ * the JSONL shape there is the source of truth — keep this in sync.
+ * Storage: .paradigm/events/iteration-revisions.jsonl (durable, consumed by postflight).
+ */
+export interface IterationRevisionEntry {
+  id: string;
+  timestamp: string;
+  type: 'iteration-revision';
+  agent: string;
+  corrections: string[];
+  symbols: string[];
+  round: number;
+  consumed?: boolean;
 }
 
 /**
@@ -238,6 +260,57 @@ export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): 
       try {
         const entry = JSON.parse(line) as Record<string, unknown>;
         if (entry.nominationId && consumed.has(entry.nominationId as string)) {
+          return JSON.stringify({ ...entry, consumed: true });
+        }
+        return line;
+      } catch { return line; }
+    });
+    fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ── Durable Iteration Revisions ───────────────────────────────────────
+// Agent belief-revisions from iteration loops. Separate durable channel from
+// verdicts.jsonl (human provenance). Written by the orchestrator, consumed by
+// the postflight learning pass into `self_reflection` journal entries.
+
+/**
+ * Read all unconsumed iteration-revision records.
+ */
+export function readPendingIterationRevisions(rootDir: string): IterationRevisionEntry[] {
+  try {
+    const filePath = path.join(rootDir, ITERATION_REVISIONS_FILE);
+    if (!fs.existsSync(filePath)) return [];
+    return fs.readFileSync(filePath, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try { return JSON.parse(line) as IterationRevisionEntry; }
+        catch { return null; }
+      })
+      .filter((e): e is IterationRevisionEntry =>
+        e !== null && e.type === 'iteration-revision' && !e.consumed);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Mark iteration-revision records consumed after postflight processes them.
+ */
+export function markIterationRevisionsConsumed(rootDir: string, ids: string[]): void {
+  try {
+    const filePath = path.join(rootDir, ITERATION_REVISIONS_FILE);
+    if (!fs.existsSync(filePath)) return;
+    const consumed = new Set(ids);
+    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
+    const updated = lines.map(line => {
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        if (entry.id && consumed.has(entry.id as string)) {
           return JSON.stringify({ ...entry, consumed: true });
         }
         return line;

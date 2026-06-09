@@ -194,7 +194,7 @@ components:
       - decisions
       - mcp
   AmbientTools:
-    description: 8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_health (validation metrics), paradigm_context_compose, plus surfacing config
+    description: 8 MCP tools for ambient coordination — paradigm_ambient_nominations, paradigm_ambient_events, paradigm_ambient_engage (with reason storage), paradigm_ambient_learn, paradigm_ambient_promote, paradigm_ambient_health (validation metrics), paradigm_context_compose, plus surfacing config. The postflight learning pass (runPostflightLearning) also consumes durable iteration-revisions (agent belief-revisions from iteration loops) into self_reflection journal entries, separate from the human-verdict path.
     type: tool-group
     tags:
       - feature

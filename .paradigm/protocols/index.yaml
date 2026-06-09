@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-05-02T18:21:36.990Z'
+generated: '2026-06-09T16:30:31.375Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -389,7 +389,7 @@ protocols:
       - assessment
   - id: P-add-upgrade-guide
     name: Add an upgrade guide
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - upgrade guide
@@ -504,6 +504,6 @@ protocols:
       - content
 health:
   total: 38
-  current: 22
-  stale: 12
+  current: 21
+  stale: 13
   broken: 4

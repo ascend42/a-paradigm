@@ -1,11 +1,10 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-05-02T19:32:59.837Z'
-  sessionId: orch-mooqoc3g-awov
-  summary: '[Kit (builder)]: builder: Implement: Create .paradigm/arch.yaml — the first ...'
-  symbolsTouched:
-    - '#67'
+  date: '2026-05-30T00:57:31.181Z'
+  sessionId: orch-mprn5oa3-27lj
+  summary: '[Kit (builder)]: builder: Implement: Fix 3 confirmed Paradigm framework bugs...'
+  symbolsTouched: []
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 8
+sessionsOnProject: 10

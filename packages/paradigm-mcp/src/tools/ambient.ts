@@ -17,7 +17,13 @@ import { queryEvents } from '../utils/event-stream.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
 import { loadJournalEntries, recordJournalEntry } from '../utils/journal-loader.js';
-import { readSessionWorkLog, readPendingVerdicts, markVerdictsConsumed } from '../utils/session-work-log.js';
+import {
+  readSessionWorkLog,
+  readPendingVerdicts,
+  markVerdictsConsumed,
+  readPendingIterationRevisions,
+  markIterationRevisionsConsumed,
+} from '../utils/session-work-log.js';
 import type { NominationUrgencyLevel } from '../types/ambient.js';
 import type { JournalTrigger } from '../types/knowledge-streams.js';
 
@@ -552,10 +558,15 @@ export async function runPostflightLearning(
   const verdictEntries = readPendingVerdicts(rootDir).filter(
     e => e.verdict && e.agent
   );
+  // Agent belief-revisions from iteration loops — a SEPARATE durable channel
+  // (self_reflection provenance, never the human-verdict path).
+  const revisionEntries = readPendingIterationRevisions(rootDir).filter(
+    e => e.agent && e.corrections.length > 0
+  );
   // Also read session log for contribution context (ephemeral, enrichment only)
   const allEntries = readSessionWorkLog(rootDir);
 
-  if (verdictEntries.length === 0) {
+  if (verdictEntries.length === 0 && revisionEntries.length === 0) {
     return {
       sessionEntries: allEntries.length,
       agentsProcessed: [],
@@ -659,12 +670,61 @@ export async function runPostflightLearning(
     }
   }
 
-  // 4. Auto-promote high-confidence entries to notebooks
+  // 3b. Generate self_reflection journal entries for agent belief-revisions.
+  //     Agent-provenance — NOT routed through buildVerdictInsight (which assumes
+  //     a human verdict). Belief revisions are transferable lessons.
+  const revisionAgents = new Set<string>();
+  for (const rev of revisionEntries) {
+    const agentId = rev.agent;
+    revisionAgents.add(agentId);
+    if (journalsByAgent[agentId] === undefined) journalsByAgent[agentId] = 0;
+
+    const insight = `Self-revision during iteration round ${rev.round}: ${rev.corrections.join('; ')}`;
+
+    details.push({
+      agent: agentId,
+      verdict: 'iteration-revision',
+      trigger: 'self_reflection',
+      insight,
+      symbols: rev.symbols,
+    });
+
+    if (!dryRun) {
+      try {
+        recordJournalEntry(agentId, {
+          trigger: 'self_reflection',
+          insight,
+          confidence_before: 0.6,
+          confidence_after: 0.75,
+          project: projectName,
+          // Default project-scoped: a self-revision is often a local fact ("this
+          // repo's auth uses X"). Don't blanket-leak into cross-project notebooks.
+          transferable: false,
+          tags: [
+            'postflight',
+            'iteration-revision',
+            `round:${rev.round}`,
+            ...(rev.symbols || []).map(s => `symbol:${s}`),
+          ],
+        });
+        journalsByAgent[agentId]++;
+        totalJournals++;
+      } catch {
+        // Non-fatal — continue with other entries
+      }
+    } else {
+      journalsByAgent[agentId]++;
+      totalJournals++;
+    }
+  }
+
+  // 4. Auto-promote high-confidence entries to notebooks (verdict + revision agents)
   const promotedByAgent: Record<string, number> = {};
   let totalPromoted = 0;
+  const promoteAgents = new Set<string>([...agentVerdicts.keys(), ...revisionAgents]);
 
   if (!dryRun) {
-    for (const agentId of agentVerdicts.keys()) {
+    for (const agentId of promoteAgents) {
       try {
         const result = autoPromoteJournalEntries(rootDir, agentId);
         if (result.promoted > 0) {
@@ -677,17 +737,20 @@ export async function runPostflightLearning(
     }
   }
 
-  // Mark processed verdicts as consumed so they don't re-run on next postflight
+  // Mark processed verdicts + revisions as consumed so they don't re-run.
   if (!dryRun && verdictEntries.length > 0) {
     markVerdictsConsumed(
       rootDir,
       verdictEntries.map(v => v.nominationId).filter(Boolean) as string[]
     );
   }
+  if (!dryRun && revisionEntries.length > 0) {
+    markIterationRevisionsConsumed(rootDir, revisionEntries.map(r => r.id));
+  }
 
   return {
     sessionEntries: allEntries.length,
-    agentsProcessed: Array.from(agentVerdicts.keys()),
+    agentsProcessed: Array.from(promoteAgents),
     journalsWritten: totalJournals,
     journalsByAgent,
     promoted: totalPromoted,

@@ -1,0 +1,60 @@
+id: L-2026-05-22-ascend-200450-001
+type: milestone
+timestamp: '2026-05-22T20:04:50.465Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v6.6.0 — bundled agent roster + sync-global
+summary: Shipped all 67 canonical agent archetypes as bundled .agent profiles, made the prompt assembler use each agent's rich description (not generic builder fallback), and added `paradigm agent sync-global` to materialize them into the global dir. Fixes the frozen-roster problem where a global npm update never expanded a user's available agents.
+symbols_touched:
+  - '#agents'
+  - '#agent-identity'
+  - '#orchestration'
+  - '#university-cli'
+learnings:
+  - paradigm agent list counts .agent files on disk; npm update never seeds them — distribution requires bundling + an explicit sync command
+  - Three disagreeing agent-count sources of truth (CORE_AGENT_IDS=8, ROLE_PROMPTS=5, AGENT_TIERS=51) — consolidation is real debt, deferred
+  - 'Assembler fix could have been a silent no-op: agents.yaml has role not description; verify the field is plumbed end-to-end (loadAgentProfile → agentDef.description) before trusting a precedence change'
+verification:
+  status: pass
+  details:
+    build: pass
+    tests: pass (261 paradigm-mcp)
+    sync-global: 'pass (lifecycle: add/skip/force/dry-run)'
+    assembler-e2e: pass (designer→description, architect→constant)
+tags:
+  - v6.6.0
+  - agents
+  - release
+  - frozen-roster
+  - sync-global
+body: |-
+  ## Why
+  Field report: Kevin (deal-oracle) updated paradigm globally but his Claude still showed only 26 agents. Root-cause investigation found: `paradigm agent list` counts .agent FILES in ~/.paradigm/agents/, npm update never touches that dir (no postinstall, only `agent create --global` writes one at a time), and there was NO bundled canonical set — agents existed ad-hoc in home dirs only. So a global update could never change a user's agent count by design. Separately, the framework had three disagreeing sources of truth (CORE_AGENT_IDS=8, ROLE_PROMPTS=5 real, AGENT_TIERS=51) and the prompt assembler only injected the one-line `role`, so ~62 archetypes rendered as generic builder.
+
+  ## What shipped
+  - Bundled all 67 archetypes at packages/paradigm/templates/agents/ (ships via package `files` field, no build step).
+  - `paradigm agent sync-global`: copies bundle → ~/.paradigm/agents/, skip-if-exists default (never destroys customizations), --force, --dry-run.
+  - Assembler precedence fixed: ROLE_PROMPTS[name] (core 5 battle-tested constants win) → agent.description (rich persona for the other 62) → agent.role → builder. Verified end-to-end: designer→425-char description, architect→hardcoded constant.
+  - AGENT_TIERS + DEFAULT_MODELS cover all 67 + deterministic tier-2/sonnet fallback at all read sites.
+  - 8 thin stubs authored to canonical bar by Loid (forge): agent-evaluator/Crucible, data-model/Lattice, domain/Lexicon, regulatory/Codex, geo/Carto, offline/Tide, forms/Quill, report-gen/Press — generalized from project-specific stubs.
+  - Nickname collision resolved: mobile renamed Swift→Dash; swift keeps Swift. All 67 nicknames unique.
+
+  ## Process notes
+  - Curation gate (advisor): did NOT bundle all 67 verbatim without user sign-off; presented A/B/C buckets; user chose "fix all 67 and ship."
+  - The assembler change was nearly a silent no-op — agents.yaml carries `role` not `description`; verified the orchestration execute path loads .agent profiles via loadAgentProfile and plumbs description through before declaring done.
+  - Behavior change flagged in CHANGELOG: custom role: overrides for the core 5 no longer win over hardcoded prompts.
+linked_commits:
+  - 5ab56996
+  - d0b5c0d2
+  - d70fa437
+  - 9c9fc82e
+  - a00b7dc1
+  - 87485d60
+  - 826541f1
+confidence: 0.9
+git_context:
+  ref: 826541f1d79bfb4b7e386b4d9618425058c0431c
+  branch: main
+  dirty: true

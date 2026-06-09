@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-05-30T02:13:17.150Z",
+  "sessionId": "orch-mprn5oa3-27lj",
+  "touchedFiles": [
+    "packages/paradigm-mcp/src/tools/pm.ts",
+    "packages/paradigm-mcp/src/tools/flows.ts",
+    "packages/paradigm-mcp/src/utils/purpose-writer.ts",
+    "CHANGELOG.md",
+    "packages/paradigm-mcp/package.json",
+    "packages/paradigm/package.json",
+    "plugins/paradigm/.claude-plugin/plugin.json"
+  ],
+  "coverageScore": 1
+}

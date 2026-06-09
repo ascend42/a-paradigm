@@ -80,3 +80,4 @@ packages/paradigm-mcp/src/tools/tags.ts
 {"path":".paradigm","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mooqoc3g-awov. Files: .paradigm/arch.yaml","timestamp":"2026-05-02T19:38:33.718Z"}
 {"path":".paradigm/research","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-moosjz01-2akf. Files: .paradigm/research/new-user-capability-gap-2026-05-02.md","timestamp":"2026-05-02T20:38:05.684Z"}
 {"path":".paradigm/specs","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-moosjz01-2akf. Files: .paradigm/specs/capability-discovery-spec.md","timestamp":"2026-05-02T20:38:05.685Z"}
+{"path":"plugins/paradigm/.claude-plugin","reason":"captain-debrief","priority":"high","context":"Touched during orchestration orch-mprn5oa3-27lj. Files: plugins/paradigm/.claude-plugin/plugin.json","timestamp":"2026-05-30T02:13:17.042Z"}

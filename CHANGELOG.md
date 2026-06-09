@@ -5,6 +5,23 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.7.0] — 2026-06-09
+
+A new orchestration primitive, born from a team debate about persistent subagents. The not-chat project asked whether Paradigm should adopt Claude Code's experimental warm/`SendMessage` subagents so multi-round work with the same specialist resumes a warm instance instead of re-contexting each round. The team (Architect, Builder, Loid) reframed it: the re-context tax only bites in *intra-specialist iteration loops*, and we don't even have an iteration-loop primitive — so build that first, statelessly, with no dependency on the experimental flag (decision **TD-2026-06-09-522**).
+
+### Added
+
+- **Stateless iteration-loop primitive** (`Orchestrator.runIterationLoop`) — runs the SAME specialist across multiple rounds (re-review / iterate-with-same-role) without warm/persistent subagents. Each round is a fresh spawn; continuity is carried by a typed `IterationDelta` threaded into the next round's task. Three guardrails are baked in:
+  - **Typed convergence** — the verdict is read from a typed `` ```iteration-verdict `` block the agent emits (`approved` / `changes-requested`), never inferred from free-text. In ping-pong mode only the **reviewer's** approval is authoritative (a fixer can't self-approve the loop closed).
+  - **Required `maxRounds`** — no implicit infinite path. Exhausting the cap without convergence returns a structured `unresolved` result (`max-rounds` / `unparseable-verdict` / `spawn-failed`); the last attempt is never returned as a pass.
+  - **Belief-revision promotion** — at each round boundary, genuine belief revisions (not mere progress) are externalized to the learning loop, so insight isn't trapped in a discarded round.
+- **Agent self-revision learning channel** — `.paradigm/events/iteration-revisions.jsonl`, written by the orchestrator and consumed by the postflight learning pass into `self_reflection` journal entries. Kept strictly separate from the human-verdict channel (`verdicts.jsonl`) so agent self-revisions never pollute human-feedback provenance or nudge expertise scores. Defaults to project-scoped (`transferable: false`).
+- **`orchestration.iteration` config** in `agents.yaml` (`enabled`, `defaultMaxRounds`, `defaultMode`) — convenience defaults for callers; `runIterationLoop` still requires `maxRounds` explicitly.
+
+### Notes
+
+- **Scope:** this ships the primitive + 12 unit tests. Wiring `runIterationLoop` into the faceted pipeline / CLI callers, surfacing the agent's full final text into the relay so `parseIterationVerdict` reaches it on real providers, and exposing an interactive MCP→Task iteration protocol are tracked follow-ups. Warm/`SendMessage` resume remains a documented future accelerator only — addable to this seam later, behind our own config, never the experimental flag.
+
 ## [6.6.6] — 2026-06-01
 
 A structural refactor, not a behavior change: the pack/content-loading logic that we fixed *the same way three times* across v6.6.2–6.6.5 (because it was copy-pasted into the MCP tools, the CLI, and the serve server) is now extracted into **one shared package**, `@a-company/university-core`. Future pack-loading fixes land once, for all three surfaces. Read-path behavior is byte-identical; the only user-visible delta is a tiny search improvement (D5 below).

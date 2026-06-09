@@ -1,0 +1,59 @@
+id: TD-2026-06-09-522
+timestamp: '2026-06-09T15:40:58.829Z'
+title: Stateless iteration-loop primitive instead of warm/persistent subagents
+decision: >-
+  Paradigm will NOT adopt Claude Code's experimental warm/resumable subagents (SendMessage, gated behind
+  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) into its orchestration pipeline. Stateless one-shot Task contexts remain the
+  contract; no dependency on the experimental flag. Instead, build the actually-missing primitive: a STATELESS iteration
+  loop (re-review / iterate-with-same-role) in orchestrator.ts, with (a) a typed iteration-handoff/delta contract
+  carrying what-changed, already-verified, and open-threads; (b) a required max-round cap that terminates into a
+  structured 'unresolved-after-N-rounds' handoff rather than silently passing; (c) mandatory journal-promotion at each
+  round boundary, gated on belief-revision (promote corrections, not activity restatements). Warm-resume via SendMessage
+  is recorded as a DOCUMENTED FUTURE accelerator only — behind Paradigm's own config (default off), addable to the loop
+  seam after the stateless loop ships, same-model/same-specialist loops only, with a session-boundary liveness guard +
+  fresh-spawn fallback.
+rationale: >-
+  The reported 're-context tax' is real but narrow: it bites only in intra-specialist iteration loops (esp. re-review),
+  NOT cross-stage handoffs where fresh+curated is a feature and per-role model switching (architect=opus, builder=haiku)
+  makes warm-resume architecturally inapplicable anyway. The real gap is that the orchestrator has no iteration-loop
+  primitive at all — so the prerequisite is a stateless loop, not persistent subagents. SendMessage is a config-gated
+  experimental harness feature (a config, not a bug); coupling the default pipeline to it is unnecessary since the flag
+  is off-by-default and the stateless path must be maintained regardless. Builder's decisive risk: held agent IDs are
+  process-scoped and go stale on session boundary/compaction, so warm-resume can silently drop into a dead/wrong context
+  (silent + severe failure) vs. a clean re-spawn. Loid's decisive risk: warm in-memory rounds bypass the
+  journal→notebook promotion pipeline, a learning regression — so mandatory belief-revision-gated promotion is baked
+  into the stateless loop from day one, enforced before warm-resume could ever exist.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: builder
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Adopt warm/SendMessage subagents into the default pipeline now
+    rejected_because: >-
+      Couples orchestration to an off-by-default experimental flag; session-boundary/compaction silently invalidates
+      held agent IDs (silent severe failure); bypasses the auditable notebook learning layer
+  - option: Prototype warm-resume behind a flag immediately (Architect's initial lean)
+    rejected_because: >-
+      Premature — the orchestrator lacks an iteration-loop seam to attach it to; the stateless loop must exist first,
+      and once it does the tax may already be acceptably paid down
+  - option: Document-and-wait, change nothing (Loid's initial lean)
+    rejected_because: >-
+      Leaves the genuine narrow gap (no iteration/re-review primitive) unaddressed; the stateless loop is worth building
+      on its own merits independent of warm-resume
+status: active
+tags:
+  - orchestration
+  - subagents
+  - sendmessage
+  - iteration-loop
+  - learning-loop
+  - experimental-flag

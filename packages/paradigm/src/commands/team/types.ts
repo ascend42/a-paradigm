@@ -137,10 +137,28 @@ export interface TeamConfig {
   require_handoff: boolean;
 }
 
+/**
+ * Orchestration-level config (agents.yaml `orchestration:` block).
+ * Optional — absence means defaults apply.
+ */
+export interface OrchestrationConfig {
+  /** Stateless iteration-loop primitive (TD-2026-06-09-522). */
+  iteration?: {
+    /** Whether callers may use the iteration loop. */
+    enabled: boolean;
+    /** Convenience default for callers (CLI/background). `runIterationLoop`
+     *  still requires `maxRounds` explicitly — there is no implicit infinite path. */
+    defaultMaxRounds: number;
+    /** Default loop shape: one specialist iterates, or fix↔re-review ping-pong. */
+    defaultMode: 'single-role' | 'ping-pong';
+  };
+}
+
 export interface AgentsManifest {
   version: string;
   team: TeamConfig;
   agents: Record<string, AgentDefinition>;
+  orchestration?: OrchestrationConfig;
 }
 
 export interface TeamActivity {

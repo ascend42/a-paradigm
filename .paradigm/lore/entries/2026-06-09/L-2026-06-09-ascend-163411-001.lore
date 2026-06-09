@@ -1,0 +1,37 @@
+id: L-2026-06-09-ascend-163411-001
+type: milestone
+timestamp: '2026-06-09T16:34:11.277Z'
+author: ascend
+title: Stateless iteration-loop primitive shipped (v6.7.0)
+summary: 'Implemented Orchestrator.runIterationLoop — the stateless re-review/iterate-with-same-role primitive from decision TD-2026-06-09-522. Born from the not-chat SendMessage/persistent-subagent debate: the team (Arky/Builder/Loid) reframed it — the re-context tax only bites in intra-specialist loops and we lacked an iteration primitive, so build that statelessly with no experimental-flag dependency. Three guardrails in code: typed iteration-verdict block for convergence (ping-pong honors only the reviewer''s approval), required maxRounds with structured unresolved exits (never a silent pass), and belief-revision-gated promotion to a NEW durable self-revision channel (iteration-revisions.jsonl → self_reflection journal) kept separate from human-verdict provenance. Arky''s spec corrected the original advisor contract in 4 places (provenance pollution chief among them). Loid+Reviewer pass caught two real bugs pre-commit: ping-pong fixer-self-approval and unconditional transferable:true. 12 unit tests; 210 core + 286 mcp tests green. Per user feedback, design consultation routed through Arky (our Architect) instead of the generic advisor tool so learnings compound.'
+symbols_touched:
+  - '#orchestrator'
+  - '#iteration-loop-types'
+  - '#iteration-revision-log'
+  - '#session-work-log'
+  - '-orchestration-flow'
+files_modified:
+  - packages/paradigm/src/core/orchestrator.ts
+  - packages/paradigm/src/commands/team/types.ts
+  - packages/paradigm-mcp/src/utils/session-work-log.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+  - CHANGELOG.md
+files_created:
+  - packages/paradigm/src/core/iteration-types.ts
+  - packages/paradigm/src/core/iteration-revision-log.ts
+  - packages/paradigm/src/core/iteration-loop.test.ts
+learnings:
+  - Use Arky not the generic advisor for design
+  - File-as-contract beats cross-package code import for the learning channel
+  - Agent self-revision must not reuse the human-verdict provenance channel
+  - Ping-pong convergence must gate on reviewer role not any approval
+tags:
+  - orchestration
+  - iteration-loop
+  - learning-loop
+  - v6.7.0
+  - TD-2026-06-09-522
+git_context:
+  ref: 366006f27151c25296c1ffa0c62f8e4e5916bc9c
+  branch: main
+  dirty: true

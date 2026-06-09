@@ -19,13 +19,28 @@ components:
       - utilities
     path: pipeline-utils.ts
   orchestrator:
-    description: Multi-agent task conductor supporting solo and faceted modes
+    description: Multi-agent task conductor supporting solo and faceted modes, plus the stateless iteration-loop primitive (re-review / iterate-with-same-role)
     type: engine
     aspects:
       - ~budget-enforced
     flows:
       - $agent-orchestration-flow
     path: orchestrator.ts
+  iteration-loop-types:
+    description: Types for the stateless iteration-loop primitive — delta/verdict contract, options (required maxRounds), round + loop results
+    type: model
+    tags:
+      - orchestration
+      - iteration
+    path: iteration-types.ts
+  iteration-revision-log:
+    description: Durable agent belief-revision channel written at iteration round boundaries; consumed by postflight learning as self_reflection (kept separate from human-verdict provenance)
+    type: utility
+    tags:
+      - orchestration
+      - iteration
+      - learning-loop
+    path: iteration-revision-log.ts
   agent-spawner:
     description: Spawn individual agents with task, context, and budget constraints. Includes completion confirmation — validates relay output before accepting success status.
     type: service
