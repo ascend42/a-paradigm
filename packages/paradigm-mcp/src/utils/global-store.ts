@@ -248,8 +248,16 @@ export function recordGlobalAntipattern(antipattern: Omit<WisdomAntipattern, 'ad
   if (fs.existsSync(filePath)) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
-      data = yaml.load(content) as WisdomAntipatterns;
-      if (!data.antipatterns) data.antipatterns = [];
+      const loaded = yaml.load(content) as Partial<WisdomAntipatterns> | null | undefined;
+      // Empty file → null/undefined; hand-edited file may drop the `antipatterns`
+      // key. Normalize (the old `if (!data.antipatterns)` still threw when the
+      // whole object was undefined, before the push outside this try).
+      if (loaded && typeof loaded === 'object') {
+        data = {
+          version: loaded.version || '1.0',
+          antipatterns: Array.isArray(loaded.antipatterns) ? loaded.antipatterns : [],
+        };
+      }
     } catch {
       // Start fresh on parse error
     }

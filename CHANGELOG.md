@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.7.1] — 2026-06-09
+
+### Fixed
+
+- **`paradigm_wisdom_record` (antipattern) crash** — recording an antipattern threw `Cannot read properties of undefined (reading 'push')` when an existing `antipatterns.yaml` parsed to an object without an `antipatterns` array (an empty file, or one hand-edited down to just `version:`). `recordAntipattern` overwrote its safe default with `yaml.load(...)` and never re-normalized before `.push`. Now both the project writer (`recordAntipattern`) and the global writer (`recordGlobalAntipattern`) normalize the loaded data — coercing a missing/`null` `antipatterns` to `[]` and falling back to a fresh store on malformed YAML — so the write never crashes. (Field-reported by the dealoracle agent team; the root cause was the defensive-load gap, **not** an unregistered symbol as first suspected.) Regression-tested for the empty-file, no-key, fresh, and append cases.
+
 ## [6.7.0] — 2026-06-09
 
 A new orchestration primitive, born from a team debate about persistent subagents. The not-chat project asked whether Paradigm should adopt Claude Code's experimental warm/`SendMessage` subagents so multi-round work with the same specialist resumes a warm instance instead of re-contexting each round. The team (Architect, Builder, Loid) reframed it: the re-context tax only bites in *intra-specialist iteration loops*, and we don't even have an iteration-loop primitive — so build that first, statelessly, with no dependency on the experimental flag (decision **TD-2026-06-09-522**).

@@ -404,8 +404,20 @@ export async function recordAntipattern(
   let data: WisdomAntipatterns = { version: '1.0', antipatterns: [] };
 
   if (fs.existsSync(filePath)) {
-    const content = fs.readFileSync(filePath, 'utf8');
-    data = yaml.load(content) as WisdomAntipatterns;
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const loaded = yaml.load(content) as Partial<WisdomAntipatterns> | null | undefined;
+      // An empty file parses to null/undefined; a hand-edited file may lack the
+      // `antipatterns` key entirely. Normalize so the push below can't crash.
+      if (loaded && typeof loaded === 'object') {
+        data = {
+          version: loaded.version || '1.0',
+          antipatterns: Array.isArray(loaded.antipatterns) ? loaded.antipatterns : [],
+        };
+      }
+    } catch {
+      // Malformed YAML — start fresh rather than throw.
+    }
   }
 
   data.antipatterns.push({
