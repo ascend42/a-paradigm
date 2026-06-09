@@ -200,12 +200,23 @@ export class AgentSpawner {
       },
     };
 
+    // Rolling tail of the agent's final assistant text. Bounded — trailing
+    // structured blocks (e.g. the iteration-verdict block) live at the END, so
+    // we only need the tail, never the full transcript.
+    const MAX_RAW_RESPONSE = 32 * 1024;
+    let rawTail = '';
+
     // Spawn agent
     try {
       for await (const message of provider.spawn(agent, spawnOptions)) {
         // Update metrics
         if (message.usage) {
           relay.metrics.tokens_used = message.usage;
+        }
+
+        // Accumulate assistant text (tail-bounded)
+        if (message.type === 'text' && message.content) {
+          rawTail = (rawTail + message.content).slice(-MAX_RAW_RESPONSE);
         }
 
         // Track file operations
@@ -266,6 +277,7 @@ export class AgentSpawner {
 
       // Calculate duration
       relay.metrics.duration_ms = Date.now() - startTime;
+      relay.rawResponse = rawTail;
 
       // Record budget usage
       if (this.budgetTracker) {
@@ -340,6 +352,7 @@ export class AgentSpawner {
         relay: {
           ...relay,
           status: 'failed',
+          rawResponse: rawTail,
           metrics: {
             ...relay.metrics,
             duration_ms: Date.now() - startTime,

@@ -50,6 +50,10 @@ export interface AgentRelay {
     files_read: number;
     files_written: number;
   };
+  /** Rolling tail (~last 32KB) of the agent's final assistant text. Used to
+   *  recover trailing structured blocks (e.g. the iteration-verdict block) that
+   *  the structured relay fields don't capture. */
+  rawResponse?: string;
 }
 
 export interface SpawnOptions {

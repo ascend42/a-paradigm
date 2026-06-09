@@ -17,10 +17,12 @@ A new orchestration primitive, born from a team debate about persistent subagent
   - **Belief-revision promotion** — at each round boundary, genuine belief revisions (not mere progress) are externalized to the learning loop, so insight isn't trapped in a discarded round.
 - **Agent self-revision learning channel** — `.paradigm/events/iteration-revisions.jsonl`, written by the orchestrator and consumed by the postflight learning pass into `self_reflection` journal entries. Kept strictly separate from the human-verdict channel (`verdicts.jsonl`) so agent self-revisions never pollute human-feedback provenance or nudge expertise scores. Defaults to project-scoped (`transferable: false`).
 - **`orchestration.iteration` config** in `agents.yaml` (`enabled`, `defaultMaxRounds`, `defaultMode`) — convenience defaults for callers; `runIterationLoop` still requires `maxRounds` explicitly.
+- **Live wiring into the faceted pipeline** — when `orchestration.iteration.enabled` and the plan has both builder + reviewer, the reviewer is asked for a typed verdict; a `changes-requested` verdict escalates into a bounded builder↔reviewer re-review loop (`maxRounds` forced even so it ends on a reviewer round). The loop's rounds fold into the orchestration result (per-round cost + tokens, honoring `agentBudgets`); an unconverged loop is surfaced as `iterationOutcome` and is **non-blocking** (the reviewer stage is itself non-required). The tester re-runs once against the converged code. Off by default — no behavior change unless a project opts in.
+- **Relay text surfacing** — the spawner now keeps a bounded (32KB) rolling tail of the agent's final text on `AgentRelay.rawResponse`, so `parseIterationVerdict` reaches the trailing `iteration-verdict` block on real providers. The parser matches the **last** block (an agent often echoes the instruction's placeholder template first).
 
 ### Notes
 
-- **Scope:** this ships the primitive + 12 unit tests. Wiring `runIterationLoop` into the faceted pipeline / CLI callers, surfacing the agent's full final text into the relay so `parseIterationVerdict` reaches it on real providers, and exposing an interactive MCP→Task iteration protocol are tracked follow-ups. Warm/`SendMessage` resume remains a documented future accelerator only — addable to this seam later, behind our own config, never the experimental flag.
+- **Scope:** ships the primitive + faceted-pipeline escalation + 14 unit tests. Still tracked as follow-ups: an interactive MCP→Task iteration protocol, and single-role auto-use. Warm/`SendMessage` resume remains a documented future accelerator only — addable to this seam later, behind our own config, never the experimental flag.
 
 ## [6.6.6] — 2026-06-01
 

@@ -18,7 +18,7 @@
  */
 
 import type { SpawnResult } from './agent-spawner.js';
-import type { TokenUsage } from './agent-provider.js';
+import type { TokenUsage, AgentModel, BudgetConfig } from './agent-provider.js';
 
 /** Convergence signal emitted by the iterating agent. */
 export type IterationVerdict = 'approved' | 'changes-requested';
@@ -57,6 +57,12 @@ export interface IterationOptions {
   reviewAgent?: string;
   workingDirectory?: string;
   mcpServerPath?: string;
+  /** Per-round model resolver (e.g. budget-aware downgrade). When omitted the
+   *  spawner resolves the model itself. Keeps the loop honoring the same
+   *  model/budget policy as the surrounding pipeline. */
+  resolveModel?: (agent: string) => AgentModel | undefined;
+  /** Per-round budget resolver. */
+  resolveBudget?: (agent: string) => BudgetConfig | undefined;
   /** Observability hook fired after each round completes. */
   onRound?: (round: IterationRoundResult) => void;
 }

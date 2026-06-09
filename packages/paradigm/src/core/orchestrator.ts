@@ -110,6 +110,14 @@ export interface OrchestrationResult {
     preflight: PreflightResult;
     postflight?: PostflightResult;
   };
+  /** Re-review iteration outcome (when the faceted pipeline escalated builder↔reviewer
+   *  into an iteration loop). Surfaced, not blocking — an unconverged loop does not
+   *  flip `success`, since the reviewer stage is itself non-required. */
+  iterationOutcome?: {
+    converged: boolean;
+    roundsRun: number;
+    openThreads: string[];
+  };
 }
 
 // Types for parallel builder execution
@@ -312,6 +320,7 @@ export class Orchestrator {
         result.totalCost = facetedResult.totalCost;
         result.success = facetedResult.success;
         result.parallelBuilderStats = facetedResult.parallelBuilderStats;
+        result.iterationOutcome = facetedResult.iterationOutcome;
       }
 
       // PM Governance: Post-flight
@@ -490,6 +499,11 @@ export class Orchestrator {
       totalParallelBuilders: number;
       filesCreated: number;
     };
+    iterationOutcome?: {
+      converged: boolean;
+      roundsRun: number;
+      openThreads: string[];
+    };
   }> {
     const manifest = loadAgentsManifest(this.rootDir);
     if (!manifest) {
@@ -528,6 +542,16 @@ export class Orchestrator {
     let totalCost = 0;
     let handoffContexts: Map<string, string> = new Map();
     let success = true;
+
+    // Re-review iteration: when enabled and the plan has both builder + reviewer,
+    // the reviewer is asked for a typed verdict; a `changes-requested` verdict
+    // escalates into a builder↔reviewer iteration loop after the stage pass.
+    const iterationCfg = manifest.orchestration?.iteration;
+    const iterationEnabled = iterationCfg?.enabled === true;
+    const builderSubtask = agentPlan.find(p => p.agent === 'builder')?.subtask;
+    const hasReviewer = agentPlan.some(p => p.agent === 'reviewer');
+    const hasTester = agentPlan.some(p => p.agent === 'tester');
+    const reviewIterationActive = iterationEnabled && !!builderSubtask && hasReviewer;
     let parallelBuilderStats: {
       usedFilePlan: boolean;
       totalSubPhases: number;
@@ -582,9 +606,15 @@ export class Orchestrator {
           additionalContext = rippleContext + (handoffContext ? '\n\n---\n\n' + handoffContext : '');
         }
 
-        const taskWithContext = additionalContext
+        let taskWithContext = additionalContext
           ? `${step.subtask}\n\n## Context from previous agents:\n${additionalContext}`
           : step.subtask;
+
+        // When re-review iteration is active, the reviewer must emit a typed
+        // verdict block so the post-stage escalation gate can read it.
+        if (reviewIterationActive && step.agent === 'reviewer') {
+          taskWithContext = `${taskWithContext}\n\n${ITERATION_VERDICT_INSTRUCTION}`;
+        }
 
         const spawnerOptions: SpawnerOptions = {
           model,
@@ -698,7 +728,129 @@ export class Orchestrator {
       }
     }
 
-    return { success, results, totalTokens, totalCost, parallelBuilderStats };
+    // Re-review escalation: if the reviewer returned a `changes-requested`
+    // verdict, run a bounded builder↔reviewer iteration loop to converge.
+    let iterationOutcome: OrchestrationResult['iterationOutcome'];
+    if (reviewIterationActive && success) {
+      const reviewerResult = [...results].reverse().find(r => r.relay?.agent === 'reviewer');
+      const reviewVerdict = reviewerResult ? this.parseIterationVerdict(reviewerResult) : null;
+      if (reviewVerdict?.verdict === 'changes-requested') {
+        const escalation = await this.runReviewIteration({
+          builderSubtask: builderSubtask!,
+          firstReview: reviewVerdict,
+          hasTester,
+          maxRoundsConfig: iterationCfg?.defaultMaxRounds ?? 3,
+          options,
+        });
+        results.push(...escalation.extraResults);
+        totalTokens.input += escalation.extraTokens.input;
+        totalTokens.output += escalation.extraTokens.output;
+        totalTokens.total += escalation.extraTokens.total;
+        totalCost += escalation.extraCost;
+        iterationOutcome = escalation.iterationOutcome;
+      } else if (reviewerResult && !reviewVerdict && options.onMessage) {
+        // Reviewer ran but emitted no parseable verdict — the loop can't fire.
+        // Surface it so a missing/garbled verdict block is diagnosable.
+        options.onMessage('orchestrator', {
+          type: 'text',
+          content: '[iteration] reviewer produced no parseable iteration-verdict — re-review loop not triggered.',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    return { success, results, totalTokens, totalCost, parallelBuilderStats, iterationOutcome };
+  }
+
+  /**
+   * Run the builder↔reviewer re-review loop after a `changes-requested` verdict,
+   * folding rounds (and a single post-convergence tester re-run) into extras.
+   */
+  private async runReviewIteration(params: {
+    builderSubtask: string;
+    firstReview: IterationDelta;
+    hasTester: boolean;
+    maxRoundsConfig: number;
+    options: OrchestrationOptions;
+  }): Promise<{
+    extraResults: SpawnResult[];
+    extraTokens: TokenUsage;
+    extraCost: number;
+    iterationOutcome: { converged: boolean; roundsRun: number; openThreads: string[] };
+  }> {
+    const { builderSubtask, firstReview, hasTester, maxRoundsConfig, options } = params;
+
+    // Ping-pong converges only on an even (reviewer) round — force even.
+    const maxRounds = maxRoundsConfig % 2 === 0 ? maxRoundsConfig : maxRoundsConfig + 1;
+
+    // Seed round 1 (builder) with the original work + the first review's asks.
+    const seedParts = [builderSubtask];
+    if (firstReview.openThreads.length) {
+      seedParts.push('', '## Reviewer asked you to resolve:', ...firstReview.openThreads.map(s => `- ${s}`));
+    }
+    if (firstReview.whatChanged.length) {
+      seedParts.push('', '## Reviewer notes:', ...firstReview.whatChanged.map(s => `- ${s}`));
+    }
+
+    // Mirror the main pass's model/budget policy so iteration honors the same
+    // budget downgrade and cost is attributed to the model actually used.
+    const resolveModel = (agent: string): AgentModel =>
+      options.agentBudgets?.[agent]?.maxTokens ? 'haiku' : (DEFAULT_AGENT_MODELS[agent] || 'sonnet');
+    const resolveBudget = (agent: string) => options.agentBudgets?.[agent] || options.budget;
+
+    const loop = await this.runIterationLoop(seedParts.join('\n'), {
+      maxRounds,
+      mode: 'ping-pong',
+      iterateAgent: 'builder',
+      reviewAgent: 'reviewer',
+      workingDirectory: options.workingDirectory || this.rootDir,
+      mcpServerPath: options.mcpServerPath,
+      resolveModel,
+      resolveBudget,
+      onRound: options.onAgentComplete
+        ? (r) => options.onAgentComplete!(r.agent, r.spawnResult, resolveModel(r.agent))
+        : undefined,
+    });
+
+    const extraResults: SpawnResult[] = loop.rounds.map(r => r.spawnResult);
+    let extraCost = 0;
+    for (const r of loop.rounds) {
+      if (r.spawnResult.relay) {
+        extraCost += calculateCost(r.spawnResult.relay.metrics.tokens_used, resolveModel(r.agent));
+      }
+    }
+
+    // Re-run the tester once against the converged code (the parallel tester in
+    // the main pass saw the pre-fix code).
+    if (hasTester && loop.converged) {
+      const testerResult = await this.spawner.spawn(
+        'tester',
+        `Re-test after re-review convergence:\n${builderSubtask}`,
+        {
+          model: 'haiku',
+          workingDirectory: options.workingDirectory || this.rootDir,
+          mcpServerPath: options.mcpServerPath,
+        },
+      );
+      extraResults.push(testerResult);
+      if (testerResult.relay) {
+        extraCost += calculateCost(testerResult.relay.metrics.tokens_used, 'haiku');
+        loop.totalTokens.input += testerResult.relay.metrics.tokens_used.input;
+        loop.totalTokens.output += testerResult.relay.metrics.tokens_used.output;
+        loop.totalTokens.total += testerResult.relay.metrics.tokens_used.total;
+      }
+    }
+
+    return {
+      extraResults,
+      extraTokens: loop.totalTokens,
+      extraCost,
+      iterationOutcome: {
+        converged: loop.converged,
+        roundsRun: loop.rounds.length,
+        openThreads: loop.unresolved?.openThreads ?? [],
+      },
+    };
   }
 
   /**
@@ -1316,6 +1468,8 @@ export class Orchestrator {
       const spawnerOptions: SpawnerOptions = {
         workingDirectory: opts.workingDirectory || this.rootDir,
         mcpServerPath: opts.mcpServerPath,
+        model: opts.resolveModel?.(agent),
+        budget: opts.resolveBudget?.(agent),
       };
 
       const spawnResult = await this.spawner.spawn(agent, roundTask, spawnerOptions);
@@ -1436,18 +1590,7 @@ export class Orchestrator {
       }
     }
 
-    parts.push('', '## Required: end with an iteration-verdict block');
-    parts.push('After your work, append a fenced block tagged `iteration-verdict` with JSON:');
-    parts.push('```iteration-verdict');
-    parts.push('{');
-    parts.push('  "verdict": "approved" | "changes-requested",');
-    parts.push('  "whatChanged": ["progress made this round"],');
-    parts.push('  "alreadyVerified": ["settled claims; do not revisit"],');
-    parts.push('  "openThreads": ["unresolved items for the next round"],');
-    parts.push('  "corrections": ["only genuine belief revisions: was X, now Y"]');
-    parts.push('}');
-    parts.push('```');
-    parts.push('Use "approved" only when no open threads remain. Leave "corrections" empty if nothing you previously believed changed.');
+    parts.push('', ITERATION_VERDICT_INSTRUCTION);
 
     return parts.join('\n');
   }
@@ -1457,15 +1600,15 @@ export class Orchestrator {
    * of a tagged fenced block — NOT prose scraping. Returns null when no valid
    * block is present (caller treats null as a non-converged failure).
    *
-   * NOTE: reads the relay surfaces available today (handoff context, decisions).
-   * Surfacing the agent's full final text into the relay for real providers is a
-   * documented follow-up (see CHANGELOG); unit tests inject these surfaces.
+   * Scans `rawResponse` (the agent's final text, surfaced by the spawner) LAST,
+   * after the structured handoff/decisions surfaces.
    */
   private parseIterationVerdict(result: SpawnResult): IterationDelta | null {
     if (!result.relay) return null;
     const haystacks: string[] = [];
     if (result.relay.handoff?.context) haystacks.push(result.relay.handoff.context);
     if (result.relay.outputs?.decisions?.length) haystacks.push(result.relay.outputs.decisions.join('\n'));
+    if (result.relay.rawResponse) haystacks.push(result.relay.rawResponse);
     for (const text of haystacks) {
       const parsed = extractIterationVerdictBlock(text);
       if (parsed) return parsed;
@@ -1475,25 +1618,55 @@ export class Orchestrator {
 }
 
 /**
+ * Shared instruction telling an agent to emit the typed verdict block. Used by
+ * `buildIterationTask` (loop rounds) AND the round-0 reviewer task in faceted
+ * mode (so the escalation gate can read the reviewer's verdict). One source so
+ * the contract can't drift between the two call sites.
+ */
+export const ITERATION_VERDICT_INSTRUCTION = [
+  '## Required: end with an iteration-verdict block',
+  'After your work, append a fenced block tagged `iteration-verdict` with JSON:',
+  '```iteration-verdict',
+  '{',
+  '  "verdict": "approved" | "changes-requested",',
+  '  "whatChanged": ["progress made this round"],',
+  '  "alreadyVerified": ["settled claims; do not revisit"],',
+  '  "openThreads": ["unresolved items for the next round"],',
+  '  "corrections": ["only genuine belief revisions: was X, now Y"]',
+  '}',
+  '```',
+  'Use "approved" only when no open threads remain. Leave "corrections" empty if nothing you previously believed changed.',
+].join('\n');
+
+/**
  * Parse a fenced ```iteration-verdict JSON block into an IterationDelta.
  * Returns null on a missing block, malformed JSON, or an invalid verdict value.
+ *
+ * Matches the LAST such block in the text: an agent typically echoes the
+ * instruction's placeholder template (invalid JSON) before emitting its real
+ * trailing block, so first-match would hit the echoed template and mask the
+ * genuine verdict.
  */
 function extractIterationVerdictBlock(text: string): IterationDelta | null {
-  const fence = text.match(/```iteration-verdict\s*\n([\s\S]*?)```/);
-  if (!fence) return null;
-  try {
-    const raw = JSON.parse(fence[1].trim()) as Partial<IterationDelta>;
-    if (raw.verdict !== 'approved' && raw.verdict !== 'changes-requested') return null;
-    return {
-      verdict: raw.verdict,
-      whatChanged: Array.isArray(raw.whatChanged) ? raw.whatChanged : [],
-      alreadyVerified: Array.isArray(raw.alreadyVerified) ? raw.alreadyVerified : [],
-      openThreads: Array.isArray(raw.openThreads) ? raw.openThreads : [],
-      corrections: Array.isArray(raw.corrections) ? raw.corrections : [],
-    };
-  } catch {
-    return null;
+  const matches = [...text.matchAll(/```iteration-verdict\s*\n([\s\S]*?)```/g)];
+  if (matches.length === 0) return null;
+  // Walk from the last block backward — return the last one that parses cleanly.
+  for (let i = matches.length - 1; i >= 0; i--) {
+    try {
+      const raw = JSON.parse(matches[i][1].trim()) as Partial<IterationDelta>;
+      if (raw.verdict !== 'approved' && raw.verdict !== 'changes-requested') continue;
+      return {
+        verdict: raw.verdict,
+        whatChanged: Array.isArray(raw.whatChanged) ? raw.whatChanged : [],
+        alreadyVerified: Array.isArray(raw.alreadyVerified) ? raw.alreadyVerified : [],
+        openThreads: Array.isArray(raw.openThreads) ? raw.openThreads : [],
+        corrections: Array.isArray(raw.corrections) ? raw.corrections : [],
+      };
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 // ============================================================================

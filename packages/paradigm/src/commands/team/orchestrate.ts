@@ -295,6 +295,21 @@ function displayResult(result: OrchestrationResult): void {
   console.log(chalk.gray(`    Duration: ${(result.duration_ms / 1000).toFixed(1)}s`));
   console.log();
 
+  // Re-review iteration outcome (only present when the loop was triggered)
+  if (result.iterationOutcome) {
+    const it = result.iterationOutcome;
+    console.log(chalk.cyan('  Re-review loop:'));
+    if (it.converged) {
+      console.log(chalk.green(`    ✓ Converged after ${it.roundsRun} round${it.roundsRun === 1 ? '' : 's'}`));
+    } else {
+      console.log(chalk.yellow(`    ⚠ Unresolved after ${it.roundsRun} round${it.roundsRun === 1 ? '' : 's'} (non-blocking)`));
+      for (const t of it.openThreads.slice(0, 5)) {
+        console.log(chalk.gray(`      - ${t}`));
+      }
+    }
+    console.log();
+  }
+
   // Agent results
   if (result.agentResults.length > 0) {
     console.log(chalk.cyan('  Agents:'));

@@ -23,14 +23,21 @@ function verdictBlock(delta: Partial<IterationDelta>): string {
   }) + '\n```';
 }
 
+// An echoed instruction template: the placeholder block agents tend to repeat
+// back. Its `"approved" | "changes-requested"` value is invalid JSON.
+const ECHOED_TEMPLATE = '```iteration-verdict\n{\n  "verdict": "approved" | "changes-requested"\n}\n```';
+
 function makeResult(opts: {
   success?: boolean;
   delta?: Partial<IterationDelta>;
   rawContext?: string;
   symbols?: string[];
+  channel?: 'handoff' | 'rawResponse';
+  echoTemplate?: boolean;
 }): SpawnResult {
-  const { success = true, delta, rawContext, symbols = [] } = opts;
-  const context = rawContext !== undefined ? rawContext : (delta ? verdictBlock(delta) : '');
+  const { success = true, delta, rawContext, symbols = [], channel = 'handoff', echoTemplate = false } = opts;
+  let content = rawContext !== undefined ? rawContext : (delta ? verdictBlock(delta) : '');
+  if (echoTemplate && content) content = `${ECHOED_TEMPLATE}\n\n${content}`;
   return {
     success,
     sessionId: 'test',
@@ -39,7 +46,8 @@ function makeResult(opts: {
       task: 't',
       status: success ? 'success' : 'failed',
       outputs: { artifacts: [], symbols, decisions: [] },
-      handoff: context ? { to: '', reason: '', context } : undefined,
+      handoff: content && channel === 'handoff' ? { to: '', reason: '', context: content } : undefined,
+      rawResponse: content && channel === 'rawResponse' ? content : undefined,
       metrics: { tokens_used: { input: 10, output: 5, total: 15 }, duration_ms: 1, files_read: 0, files_written: 0 },
     },
   };
@@ -163,6 +171,27 @@ describe('runIterationLoop convergence', () => {
     expect(res.converged).toBe(false);
     expect(res.unresolved?.reason).toBe('spawn-failed');
     expect(spawn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Verdict extraction surfaces (rawResponse + echoed-template trap) ─────────
+
+describe('runIterationLoop verdict extraction', () => {
+  it('reads the verdict from relay.rawResponse (real-provider surface)', async () => {
+    const { orch } = makeOrchestrator([
+      makeResult({ delta: { verdict: 'approved', openThreads: [] }, channel: 'rawResponse' }),
+    ]);
+    const res = await orch.runIterationLoop('t', singleRole({ maxRounds: 1 }));
+    expect(res.converged).toBe(true);
+  });
+
+  it('ignores an echoed instruction template and reads the real trailing verdict', async () => {
+    const { orch } = makeOrchestrator([
+      // Agent echoes the invalid placeholder template, THEN emits its real block.
+      makeResult({ delta: { verdict: 'approved', openThreads: [] }, channel: 'rawResponse', echoTemplate: true }),
+    ]);
+    const res = await orch.runIterationLoop('t', singleRole({ maxRounds: 1 }));
+    expect(res.converged).toBe(true); // last-match parse, not the echoed template
   });
 });
 
