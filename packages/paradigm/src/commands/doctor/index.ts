@@ -765,6 +765,29 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         });
       }
     }
+
+    // Team-invocation funnel (Pillar 0 telemetry: eligible → orchestrated/solo/bypass)
+    try {
+      const { summarizeTeamFunnel } = await import('../../core/team-funnel.js');
+      const funnel = summarizeTeamFunnel(cwd, 30);
+      const resolved = funnel.orchestrated + funnel.soloDeclared + funnel.bypasses;
+      if (resolved > 0 || funnel.eligible > 0) {
+        const rate = funnel.invocationRate !== null ? `${Math.round(funnel.invocationRate * 100)}%` : 'n/a';
+        const legible = funnel.legibleRate !== null ? `${Math.round(funnel.legibleRate * 100)}%` : 'n/a';
+        const soloBits = Object.entries(funnel.soloByReason).map(([r, n]) => `${r}:${n}`).join(' ');
+        results.push({
+          name: 'Team funnel (30d)',
+          // Bypasses outnumbering team runs = the gate is leaking; surface as warn
+          status: funnel.bypasses > funnel.orchestrated ? 'warn' : 'info',
+          message: `eligible ${funnel.eligible} · orchestrated ${funnel.orchestrated} · solo ${funnel.soloDeclared}${soloBits ? ` (${soloBits})` : ''} · bypass ${funnel.bypasses} · invocation ${rate} · legible ${legible}`,
+          ...(funnel.bypasses > funnel.orchestrated
+            ? { fix: 'Orchestrate eligible tasks (paradigm_orchestrate_inline) or declare `paradigm solo <reason>`' }
+            : {}),
+        });
+      }
+    } catch {
+      // Telemetry is advisory — never fail doctor on it.
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────

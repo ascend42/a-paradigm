@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-09T23:04:25.623Z'
+generated: '2026-06-09T23:24:50.662Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1896,11 +1896,37 @@ by_symbol:
       agent: []
   '#global-store':
     symbol: '#global-store'
-    total_changes: 1
-    last_modified: '2026-02-18T17:29:36Z'
+    total_changes: 2
+    last_modified: '2026-06-09T23:24:45Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_269
+        id: h0406
+        ts: '2026-06-09T23:24:45Z'
+        type: implement
+        symbols:
+          - '#global-store'
+          - '#wisdom-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 95ee35bf5e843034e5809b0d9e91b26747bb7881
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/utils/global-store.ts
+          - packages/paradigm-mcp/src/utils/wisdom-loader.test.ts
+          - packages/paradigm-mcp/src/utils/wisdom-loader.ts
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'fix(#wisdom-loader): harden antipattern writers against missing/empty store (v6.7.1)'
       - *ref_12
     contributors:
       human:
@@ -18866,6 +18892,18 @@ by_symbol:
     fragility: low
     recent:
       - *ref_140
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#wisdom-loader':
+    symbol: '#wisdom-loader'
+    total_changes: 1
+    last_modified: '2026-06-09T23:24:45Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_269
     contributors:
       human:
         - ascend

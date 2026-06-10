@@ -2746,6 +2746,15 @@ enforcementCmd
     await enforcementStatusCommand(options);
   });
 
+// paradigm solo — declare a deliberate no-team session (satisfies orchestration gates, recorded to telemetry)
+program
+  .command('solo <reason> [note...]')
+  .description('Declare a deliberate solo (no-team) session: trivial | hotfix | user-directed | exploratory')
+  .action(async (reason, noteParts) => {
+    const { soloDeclare } = await import('./commands/solo.js');
+    soloDeclare(reason, noteParts || []);
+  });
+
 // paradigm compliance-check — unified compliance checker for stop hooks
 program
   .command('compliance-check')

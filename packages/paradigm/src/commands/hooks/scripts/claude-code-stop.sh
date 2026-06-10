@@ -108,6 +108,10 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f ".paradigm/.orchestrated"
+# NOTE: .solo-declared / .team-prompted / .team-reminded / .team-bypass-recorded
+# are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
+# would erase solo declarations mid-session and re-nag every turn. They expire
+# by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 # Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
 if command -v paradigm >/dev/null 2>&1 && [ -f ".paradigm/events/verdicts.jsonl" ]; then

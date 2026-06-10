@@ -130,5 +130,8 @@ rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f ".paradigm/.orchestrated"
+# NOTE: .solo-declared / .team-prompted / .team-reminded / .team-bypass-recorded
+# are deliberately NOT cleared here — stop fires per turn; they expire by age
+# instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 exit 0

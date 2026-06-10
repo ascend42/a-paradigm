@@ -890,16 +890,39 @@ if [ "$_SEV" != "off" ]; then
 
   # Compare magnitude against threshold (default 3)
   if [ "$MAGNITUDE" -ge "$ORCH_THRESHOLD" ]; then
-    if [ ! -f ".paradigm/.orchestrated" ]; then
+    # Gate markers expire by age (Stop fires per assistant turn, so clearing
+    # them here would erase declarations mid-session). TTL default 4h.
+    _GATE_TTL_MIN=$(( ${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
+    _marker_fresh() {
+      [ -f "$1" ] || return 1
+      [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
+    }
+    # A structured solo declaration (paradigm solo <reason>) satisfies the gate —
+    # bypass becomes a legible recorded choice instead of silent drift.
+    if [ ! -f ".paradigm/.orchestrated" ] && ! _marker_fresh ".paradigm/.solo-declared"; then
+      # Record the bypass to the team-funnel telemetry regardless of severity —
+      # the invocation-rate metric needs the event even when only warning.
+      # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
+      # would structurally deflate the invocation rate Loid calibrates from.
+      if ! _marker_fresh ".paradigm/.team-bypass-recorded"; then
+        mkdir -p ".paradigm/events" 2>/dev/null
+        _BYPASS_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        _BYPASS_REASONS=$(printf '%s' "$MAGNITUDE_REASONS" | tr -cd 'a-zA-Z0-9,. ' | head -c 120)
+        echo "{\"timestamp\":\"$_BYPASS_TS\",\"type\":\"bypass\",\"source\":\"stop-hook\",\"magnitude\":$MAGNITUDE,\"reasons\":\"$_BYPASS_REASONS\",\"severity\":\"$_SEV\"}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+        touch ".paradigm/.team-bypass-recorded" 2>/dev/null
+      fi
+
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
     Run paradigm_orchestrate_inline mode=\"quick\" for fast pre-check.
+    Or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
-  - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration."
+  - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
+    Bypass recorded to team-funnel telemetry. Next time: orchestrate, or declare \`paradigm solo <reason>\`."
       fi
     fi
   fi

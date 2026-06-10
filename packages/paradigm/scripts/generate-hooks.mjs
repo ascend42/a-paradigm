@@ -31,6 +31,8 @@ const HOOKS = [
   { file: 'claude-code-postwrite.sh',         exportName: 'CLAUDE_CODE_POSTWRITE_HOOK' },
   { file: 'claude-code-precommit.sh',         exportName: 'CLAUDE_CODE_PRECOMMIT_HOOK' },
   { file: 'claude-code-navigate-remind.sh',   exportName: 'CLAUDE_CODE_NAVIGATE_REMIND_HOOK' },
+  { file: 'claude-code-prompt-gate.sh',       exportName: 'CLAUDE_CODE_PROMPT_GATE_HOOK' },
+  { file: 'claude-code-team-gate.sh',         exportName: 'CLAUDE_CODE_TEAM_GATE_HOOK' },
   { file: 'cursor-session-start.sh',          exportName: 'CURSOR_SESSION_START_HOOK' },
   { file: 'cursor-stop.sh',                   exportName: 'CURSOR_STOP_HOOK' },
   { file: 'cursor-postwrite.sh',              exportName: 'CURSOR_POSTWRITE_HOOK' },
@@ -46,6 +48,8 @@ const PLUGIN_COPIES = [
   { src: 'claude-code-postwrite.sh',        dest: 'paradigm-postwrite.sh' },
   { src: 'claude-code-precommit.sh',        dest: 'paradigm-precommit.sh' },
   { src: 'claude-code-navigate-remind.sh',  dest: 'paradigm-navigate-remind.sh' },
+  { src: 'claude-code-prompt-gate.sh',      dest: 'paradigm-prompt-gate.sh' },
+  { src: 'claude-code-team-gate.sh',        dest: 'paradigm-team-gate.sh' },
 ];
 
 // Map: cursor script → Cursor plugin destination filename

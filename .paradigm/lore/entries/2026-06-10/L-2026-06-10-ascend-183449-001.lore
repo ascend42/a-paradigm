@@ -1,0 +1,41 @@
+id: L-2026-06-10-ascend-183449-001
+type: milestone
+timestamp: '2026-06-10T18:34:49.091Z'
+author: ascend
+title: Pillar 0 advisory tier shipped (v6.8.0) — team-invocation graduates to the hook tier
+summary: 'Implemented the invocation-reliability ladder from strategy TD-2026-06-10-101: prompt-gate (UserPromptSubmit, decision-time directive injected into model context once per TTL window, telemetry every match), team edit-gate (PreToolUse Write|Edit one-time advisory), paradigm solo CLI with enumerated reasons, deduped bypass events in stop-hook Check 13, #team-funnel core module computing invocation + legible rates surfaced in doctor. Reviewer pass caught the decisive bug pre-ship: the Stop hook fires per assistant TURN not per session, so stop-clearing markers would have erased solo declarations mid-session, re-nagged every turn, and double-counted bypasses — fix is TTL-based marker expiry (PARADIGM_GATE_TTL_HOURS, default 4h), verified by aging markers in smoke tests. Loid pre-ratified the telemetry design and the anti-distortion rule (advisory-first 4 weeks; hollow invocations must be quarantined from expertise before any blocking tier). Also discovered: the v6.0 deprecation error recommends ''paradigm decision record'' which was never built as a CLI command (MCP-only) — same bug class as dealoracle''s report; decision TD-2026-06-10-101 was hand-written to the store as the workaround. 386+290 tests green.'
+symbols_touched:
+  - '#team-funnel'
+  - '#paradigm-hooks'
+  - '#paradigm-solo-cli'
+  - '#orchestrator'
+files_modified:
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+  - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+  - packages/paradigm/src/commands/hooks/index.ts
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - plugins/paradigm/hooks/hooks.json
+  - CHANGELOG.md
+files_created:
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-prompt-gate.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-team-gate.sh
+  - packages/paradigm/src/core/team-funnel.ts
+  - packages/paradigm/src/core/team-funnel.test.ts
+  - packages/paradigm/src/commands/solo.ts
+  - .paradigm/decisions/TD-2026-06-10-101.yaml
+learnings:
+  - Stop hook fires per turn not per session — never use it to clear session-scoped state; TTL-expire markers instead
+  - Deprecation messages must point at commands that exist
+  - Telemetry must fire even when the advisory is capped or overridden
+tags:
+  - pillar-0
+  - team-funnel
+  - hooks
+  - v6.8.0
+  - arc:strategy-2026
+git_context:
+  ref: 95ee35bf5e843034e5809b0d9e91b26747bb7881
+  branch: main
+  dirty: true

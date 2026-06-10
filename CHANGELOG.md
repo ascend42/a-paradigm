@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.8.0] — 2026-06-10
+
+**Pillar 0: invocation reliability.** The most common field failure isn't that the agent team works badly — it's that the main agent never invokes it. CLAUDE.md mandates and memory notes are instructions, and instructions leak; hooks are deterministic. This release graduates team-invocation from the instruction tier to the hook tier, advisory-first: measure the funnel before gating it (team-ratified: Arky's mechanism ladder, Loid's telemetry + anti-distortion amendments).
+
+### Added
+
+- **Prompt gate** (`UserPromptSubmit` hook) — classifies each incoming prompt; orchestration-eligible tasks get a decision-time directive injected into model context ("standing opt-in exists — orchestrate or declare solo"), at most once per TTL window. Telemetry fires on **every** match so the classifier's false-positive rate is measurable from day one.
+- **Team edit-gate** (`PreToolUse` Write|Edit hook) — one-time advisory before source edits in sessions that have neither orchestrated nor declared solo. Never blocks at this tier.
+- **`paradigm solo <reason> [note]`** — declare a deliberate no-team session with an *enumerated* reason (`trivial` | `hotfix` | `user-directed` | `exploratory`). Satisfies all orchestration gates for the work window and records a structured `solo-declared` event — bypass becomes a legible choice instead of silent drift ("enums give distributions, strings give vibes" — Loid).
+- **Team-funnel telemetry** (`.paradigm/events/team-funnel.jsonl`) — `eligible` / `edit-advisory` / `orchestrated` / `solo-declared` / `bypass` events; the stop hook's orchestration check (Check 13) now records **deduped** bypass events even at warn severity, and `paradigm_orchestrate_inline` records `orchestrated`. New `#team-funnel` core module computes the **team-invocation rate** and **legible-resolution rate**, surfaced in `paradigm doctor` (warns when bypasses outnumber team runs).
+- **TTL-based gate markers** — `.solo-declared` / `.team-prompted` / `.team-reminded` expire by age (`PARADIGM_GATE_TTL_HOURS`, default 4h) instead of being stop-cleared. Review-caught: the Stop hook fires per assistant *turn*, so clearing there would erase solo declarations mid-session, re-nag every turn, and double-count bypasses — corrupting the very telemetry the gates are calibrated from. Kill switch: `PARADIGM_TEAM_GATE=off`.
+
+### Notes
+
+- **Advisory-everywhere first, ~4 weeks** (Loid): no gate graduates to blocking until baseline data exists — graduation criteria live in the funnel metrics, not vibes. Planned follow-ups: hollow-invocation detector (quarantine compliance-theater sessions from expertise updates), Cursor-side gate parity, `team-funnel.jsonl` rotation, and the TEP compiler (strategy decision recorded in lore).
+
 ## [6.7.1] — 2026-06-09
 
 ### Fixed

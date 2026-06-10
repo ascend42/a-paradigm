@@ -896,16 +896,39 @@ if [ "$_SEV" != "off" ]; then
 
   # Compare magnitude against threshold (default 3)
   if [ "$MAGNITUDE" -ge "$ORCH_THRESHOLD" ]; then
-    if [ ! -f ".paradigm/.orchestrated" ]; then
+    # Gate markers expire by age (Stop fires per assistant turn, so clearing
+    # them here would erase declarations mid-session). TTL default 4h.
+    _GATE_TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
+    _marker_fresh() {
+      [ -f "$1" ] || return 1
+      [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
+    }
+    # A structured solo declaration (paradigm solo <reason>) satisfies the gate —
+    # bypass becomes a legible recorded choice instead of silent drift.
+    if [ ! -f ".paradigm/.orchestrated" ] && ! _marker_fresh ".paradigm/.solo-declared"; then
+      # Record the bypass to the team-funnel telemetry regardless of severity —
+      # the invocation-rate metric needs the event even when only warning.
+      # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
+      # would structurally deflate the invocation rate Loid calibrates from.
+      if ! _marker_fresh ".paradigm/.team-bypass-recorded"; then
+        mkdir -p ".paradigm/events" 2>/dev/null
+        _BYPASS_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        _BYPASS_REASONS=$(printf '%s' "$MAGNITUDE_REASONS" | tr -cd 'a-zA-Z0-9,. ' | head -c 120)
+        echo "{\\"timestamp\\":\\"$_BYPASS_TS\\",\\"type\\":\\"bypass\\",\\"source\\":\\"stop-hook\\",\\"magnitude\\":$MAGNITUDE,\\"reasons\\":\\"$_BYPASS_REASONS\\",\\"severity\\":\\"$_SEV\\"}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+        touch ".paradigm/.team-bypass-recorded" 2>/dev/null
+      fi
+
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
     Run paradigm_orchestrate_inline mode=\\"quick\\" for fast pre-check.
+    Or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
-  - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration."
+  - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
+    Bypass recorded to team-funnel telemetry. Next time: orchestrate, or declare \\\`paradigm solo <reason>\\\`."
       fi
     fi
   fi
@@ -1089,6 +1112,10 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f ".paradigm/.orchestrated"
+# NOTE: .solo-declared / .team-prompted / .team-reminded / .team-bypass-recorded
+# are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
+# would erase solo declarations mid-session and re-nag every turn. They expire
+# by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 # Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
 if command -v paradigm >/dev/null 2>&1 && [ -f ".paradigm/events/verdicts.jsonl" ]; then
@@ -1227,6 +1254,205 @@ echo "  paradigm_navigate({ intent: \\"context\\", task: \\"<your task>\\" })" >
 echo "  Returns relevant .purpose files, symbols, and file paths — skips blind Glob/Grep." >&2
 echo "  Scan index: $SCAN_INDEX" >&2
 echo "  Navigator:  $CWD/.paradigm/navigator.yaml" >&2
+
+exit 0
+`;
+
+export const CLAUDE_CODE_PROMPT_GATE_HOOK = `#!/bin/sh
+# Paradigm Claude Code UserPromptSubmit — Team Invocation Gate (advisory tier)
+# Fires on every user prompt. If the task looks orchestration-eligible and the
+# session has neither orchestrated nor declared solo, injects a decision-time
+# directive into the model's context (UserPromptSubmit stdout = context).
+#
+# Why decision-time: CLAUDE.md "always use the team" instructions sit far back
+# in context and lose to the model's action bias. A directive injected at the
+# moment of decision is deterministic — it fires 100% of the time.
+#
+# Hook type: UserPromptSubmit
+# Exit 0 = always (advisory only — never blocks)
+#
+# Telemetry: every eligible prompt appends an \`eligible\` event to
+# .paradigm/events/team-funnel.jsonl (even when the directive is capped),
+# so the classifier's false-positive rate and the team-invocation rate are
+# measurable from day one. Loid calibrates the gate from this data.
+#
+# Escape hatches: PARADIGM_TEAM_GATE=off env var; \`paradigm solo <reason>\`
+# declares a legible solo session; orchestrating clears the gate naturally.
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Kill switch
+if [ "$PARADIGM_TEAM_GATE" = "off" ]; then
+  exit 0
+fi
+
+# Extract cwd from input
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+if [ -z "$CWD" ]; then
+  CWD="$(pwd)"
+fi
+
+# Not a paradigm project — pass
+if [ ! -d "$CWD/.paradigm" ]; then
+  exit 0
+fi
+
+# Markers expire by age, NOT by Stop-hook clearing — the Stop hook fires per
+# assistant turn, so clearing there would erase solo declarations mid-session
+# and turn the once-per-session cap into once-per-turn nagging. TTL default 4h.
+TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
+marker_fresh() {
+  [ -f "$1" ] || return 1
+  [ -n "$(find "$1" -mmin "-$TTL_MIN" 2>/dev/null)" ]
+}
+
+# Session already resolved the gate (team ran, or solo was declared) — pass
+if [ -f "$CWD/.paradigm/.orchestrated" ] || marker_fresh "$CWD/.paradigm/.solo-declared"; then
+  exit 0
+fi
+
+# Extract the prompt text
+if command -v jq >/dev/null 2>&1; then
+  PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
+else
+  PROMPT=$(printf '%s' "$INPUT" | grep -o '"prompt"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"prompt"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+# Too short to be a task (confirmations, "yes", "continue") — pass
+if [ "\${#PROMPT}" -lt 24 ]; then
+  exit 0
+fi
+
+# Eligibility: implementation-shaped verbs. Deliberately simple — the funnel
+# telemetry measures this classifier's false-positive rate; tune from data.
+# printf (not echo): a prompt starting with -n/-e must not be mangled.
+MATCHED=$(printf '%s\\n' "$PROMPT" | grep -ioE 'implement|build |fix |refactor|migrate|rewrite|integrate|add (a |an |the )?(feature|support|endpoint|command|tool|component)|create (a |an |the )?(feature|component|module|service)' | head -1)
+
+if [ -z "$MATCHED" ]; then
+  exit 0
+fi
+
+# Record the eligible event (telemetry fires every time, even when the
+# directive itself is capped)
+EVENTS_DIR="$CWD/.paradigm/events"
+mkdir -p "$EVENTS_DIR" 2>/dev/null
+MATCHED_CLEAN=$(printf '%s' "$MATCHED" | tr -cd 'a-zA-Z ' | head -c 40)
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"eligible\\",\\"source\\":\\"prompt-gate\\",\\"matched\\":\\"$MATCHED_CLEAN\\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+
+# Inject the directive at most once per TTL window (age-based, see above)
+MARKER="$CWD/.paradigm/.team-prompted"
+if marker_fresh "$MARKER"; then
+  exit 0
+fi
+touch "$MARKER" 2>/dev/null
+
+# stdout on UserPromptSubmit = injected into the model's context
+echo "[paradigm] This task looks orchestration-eligible (matched: \\"$MATCHED_CLEAN\\")."
+echo "Standing opt-in for team orchestration exists in this project. Before editing source:"
+echo "  - Run paradigm_orchestrate_inline (mode=\\"plan\\") to engage the agent team, OR"
+echo "  - Declare solo explicitly: \\\`paradigm solo <trivial|hotfix|user-directed|exploratory> [note]\\\`"
+echo "Solo work on eligible tasks without a declaration is recorded as a bypass at session end."
+
+exit 0
+`;
+
+export const CLAUDE_CODE_TEAM_GATE_HOOK = `#!/bin/sh
+# Paradigm Claude Code PreToolUse — Team Edit Gate (advisory tier)
+# Fires before Write/Edit tool calls. If source code is about to be edited in a
+# session that has neither orchestrated nor declared solo, emits a one-time
+# advisory. Second line of defense after the prompt-gate (UserPromptSubmit) —
+# catches sessions where the task only became implementation-shaped mid-way.
+#
+# Hook type: PreToolUse (matcher: Write|Edit)
+# Exit 0 = always allows (advisory only — never blocks at this tier).
+# Graduation to a blocking guard happens only after baseline telemetry
+# justifies it (Loid: "advisory-everywhere first, four weeks minimum").
+#
+# Uses a session marker (.paradigm/.team-reminded) to fire at most once.
+# Escape hatch: PARADIGM_TEAM_GATE=off
+
+# Read JSON from stdin (hook input)
+INPUT=$(cat)
+
+# Kill switch
+if [ "$PARADIGM_TEAM_GATE" = "off" ]; then
+  exit 0
+fi
+
+# Extract cwd from input
+if command -v jq >/dev/null 2>&1; then
+  CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+if [ -z "$CWD" ]; then
+  CWD="$(pwd)"
+fi
+
+# Not a paradigm project — pass
+if [ ! -d "$CWD/.paradigm" ]; then
+  exit 0
+fi
+
+# Markers expire by age, NOT by Stop-hook clearing (Stop fires per turn).
+TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
+marker_fresh() {
+  [ -f "$1" ] || return 1
+  [ -n "$(find "$1" -mmin "-$TTL_MIN" 2>/dev/null)" ]
+}
+
+# Session already resolved the gate — pass
+if [ -f "$CWD/.paradigm/.orchestrated" ] || marker_fresh "$CWD/.paradigm/.solo-declared"; then
+  exit 0
+fi
+
+# Only remind once per TTL window
+MARKER="$CWD/.paradigm/.team-reminded"
+if marker_fresh "$MARKER"; then
+  exit 0
+fi
+
+# Extract the target file path
+if command -v jq >/dev/null 2>&1; then
+  FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+else
+  FILE_PATH=$(printf '%s' "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+
+if [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+# Only fire for source files — docs/config/purpose edits are not team-eligible
+case "$FILE_PATH" in
+  *.md|*.markdown|*.yaml|*.yml|*.json|*.txt|*.purpose) exit 0 ;;
+  */docs/*|*/.paradigm/*) exit 0 ;;
+esac
+
+# Mark as reminded so this only fires once per session
+touch "$MARKER" 2>/dev/null
+
+# Record the edit-advisory event (telemetry)
+EVENTS_DIR="$CWD/.paradigm/events"
+mkdir -p "$EVENTS_DIR" 2>/dev/null
+FILE_BASE=$(basename -- "$FILE_PATH" | tr -cd 'a-zA-Z0-9._-' | head -c 60)
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"edit-advisory\\",\\"source\\":\\"team-gate\\",\\"file\\":\\"$FILE_BASE\\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+
+# Emit advisory (non-blocking)
+echo "" >&2
+echo "[paradigm] Source edit without team orchestration this session." >&2
+echo "  Standing opt-in exists: run paradigm_orchestrate_inline (mode=\\"plan\\") to engage the team," >&2
+echo "  or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory> [note]" >&2
+echo "  Undeclared solo work on eligible tasks is recorded as a bypass at session end." >&2
 
 exit 0
 `;
@@ -1465,6 +1691,9 @@ rm -f ".paradigm/.stop-hook-active"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f ".paradigm/.orchestrated"
+# NOTE: .solo-declared / .team-prompted / .team-reminded / .team-bypass-recorded
+# are deliberately NOT cleared here — stop fires per turn; they expire by age
+# instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 exit 0
 `;

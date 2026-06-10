@@ -904,6 +904,18 @@ async function handleOrchestrateInline(
     fs.writeFileSync(markerPath, new Date().toISOString(), 'utf8');
   } catch { /* best-effort */ }
 
+  // Team-funnel telemetry: record that orchestration actually ran (Pillar 0 —
+  // the invocation-rate metric counts these against bypasses/solo declarations)
+  try {
+    const eventsDir = path.join(ctx.rootDir, '.paradigm', 'events');
+    if (!fs.existsSync(eventsDir)) fs.mkdirSync(eventsDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(eventsDir, 'team-funnel.jsonl'),
+      JSON.stringify({ timestamp: new Date().toISOString(), type: 'orchestrated', source: 'orchestrate_inline', mode }) + '\n',
+      'utf8',
+    );
+  } catch { /* best-effort */ }
+
   // Load agents manifest
   const manifest = loadAgentsManifest(ctx.rootDir);
   if (!manifest) {

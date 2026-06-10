@@ -41,6 +41,15 @@ components:
       - iteration
       - learning-loop
     path: iteration-revision-log.ts
+  team-funnel:
+    description: Team-invocation funnel telemetry (Pillar 0) — typed reader/summarizer + writer for .paradigm/events/team-funnel.jsonl (eligible / edit-advisory / orchestrated / solo-declared / bypass events). Computes the invocation rate and legible-resolution rate Loid calibrates the gates from; surfaced in paradigm doctor. Shell hooks append the JSONL directly; this module is the typed contract.
+    type: utility
+    tags:
+      - orchestration
+      - team-funnel
+      - telemetry
+      - pillar-0
+    path: team-funnel.ts
   agent-spawner:
     description: Spawn individual agents with task, context, and budget constraints. Includes completion confirmation — validates relay output before accepting success status.
     type: service

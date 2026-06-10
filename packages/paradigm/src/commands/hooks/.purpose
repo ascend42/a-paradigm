@@ -20,6 +20,29 @@ components:
       - hooks
       - roster
       - v6.0.4
+  team-invocation-gates:
+    description: |
+      Pillar 0 (invocation reliability) advisory tier — two new Claude Code
+      hooks: prompt-gate (UserPromptSubmit; classifies the incoming prompt and
+      injects a decision-time orchestration directive into model context, once
+      per TTL window, telemetry on every match) and team-gate (PreToolUse
+      Write|Edit; one-time stderr advisory before source edits in unresolved
+      sessions). Both honor .orchestrated / fresh .solo-declared markers and
+      the PARADIGM_TEAM_GATE=off kill switch. Markers expire by AGE
+      (PARADIGM_GATE_TTL_HOURS, default 4h) — never stop-cleared, because Stop
+      fires per assistant turn. Check 13 in paradigm-common.sh records deduped
+      bypass events to team-funnel telemetry at both warn and block severity.
+    type: utility
+    components:
+      - '#team-funnel'
+    signals:
+      - '!team-funnel'
+    tags:
+      - hooks
+      - orchestration
+      - team-funnel
+      - pillar-0
+    file: scripts/claude-code-prompt-gate.sh
   check-14-remediation-gate:
     description: |
       v6.1 Sprint 1 Wave 2 — Stop hook Check 14. Iterates the cached

@@ -1,0 +1,71 @@
+id: TD-2026-06-10-101
+timestamp: '2026-06-10T18:40:00.000Z'
+title: 'Strategy: Paradigm is the brain and the ledger; the harness is the muscle'
+decision: >-
+  Paradigm stops competing with the harness on orchestration PLUMBING and doubles down on the POLICY layer it alone
+  owns. Three-phase path, team-ratified (Arky, Loid, Builder — all agree-with-amendments). PILLAR 0 (invocation
+  reliability, SHIPPED v6.8.0 advisory tier): graduate team-invocation from instructions to deterministic hooks —
+  UserPromptSubmit prompt-gate (decision-time directive), PreToolUse team edit-gate, structured `paradigm solo
+  <trivial|hotfix|user-directed|exploratory>` declaration, deduped bypass telemetry, team-invocation + legible-rate
+  metrics in doctor. Advisory-everywhere ~4 weeks to establish baseline; graduation to blocking only where
+  advisory-ignored-then-patched clusters appear. Hollow-invocation detector (quarantine 100%-approve/zero-mutation
+  sessions from expertise updates) required before any blocking tier. PHASE 1 (TEP compiler, ~4-6 wks): extract a
+  serializable Team Execution Plan IR (roster binding, stages w/ notebook injection + schemas + gates, attribution
+  contract, budget envelope, postflight) from the core Orchestrator; rewrite paradigm_orchestrate_inline on the SAME
+  builder (dual-engine debt dies BEFORE any Claude Code work — refuse the inverse ordering); then add a
+  Workflow-script emitter with harness-version detection; cascade selects backend per surface (Workflow in CC, core
+  engine headless, sequential roleplay in Cursor). PHASE 2 (finish the moat): verdict-capture rate instrumented with
+  target >60%; claim-level calibration (typed root-cause/severity claims scored against ground truth); knowledge
+  stores consolidated 8→3; portable signed career format — the nevr.land artifact. SACRED SEAMS every backend must
+  honor: attribution envelopes, verdict hook, agent-identity continuity, gate evaluation before protected stages,
+  ledger writes. FREEZE-DON'T-DELETE: core Orchestrator, sequential-roleplay, claude-cli/cursor-cli/manual providers,
+  budget-tracker. DEPRECATE-WITH-TIMELINE: parallel-builder file-plan YAML parsing in CC, claude-code-teams provider.
+  Delete nothing until a release cycle of telemetry shows zero use.
+rationale: >-
+  Claude Code keeps absorbing Paradigm's orchestration mechanics (native Workflow tool with schema-validated agent
+  outputs, tasks, cron routines, memory, experimental agent teams) — competing there is a treadmill, and the
+  commoditization is CC-specific (Cursor/headless still need our engine, which the provider cascade already serves).
+  What the harness has NOT absorbed: roster/personas, notebook knowledge injection, expertise + calibration with
+  provenance discipline, governance (gates/budgets/postflight), and the audit ledger (lore/decisions/history). Loid's
+  ledger audit tempers the moat claim honestly: the learning loop is architecturally sound but operationally immature
+  — most sessions end without human verdicts (expertise accrues from participation, not validation) and the
+  nomination tail is ceremony-not-signal. So the pivot is to FINISH the moat, not polish it. The user's #1 field
+  failure — the active agent never invokes the team — gates everything downstream (funnel: INVOKE → EXECUTE → CAPTURE
+  → LEARN), and the proven internal pattern is that hooks hold while instructions leak (.purpose enforcement vs four
+  ignored always-use-team memory notes); hence Pillar 0 ships first. Loid's anti-distortion amendment is structural:
+  coerced compliance is acceptable for the INVOKE funnel but must never contaminate LEARN — hollow invocations get
+  quarantined from attribution. STANDING WATCH (Loid's flip condition): if harness-native memory ships
+  verdict-attributed per-agent scoring, differentiation collapses to UX — review quarterly.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+  - id: builder
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Keep competing on orchestration mechanics (maintain two diverging engines)
+    rejected_because: >-
+      Each CC release absorbs another mechanic; dual-engine maintenance already costs more per year than the 4-6 week
+      compiler move (Builder's sizing); the YAML-parsing and provider-drift fixes are recurring, not one-time
+  - option: Kill Paradigm orchestration entirely and ride harness primitives everywhere
+    rejected_because: >-
+      Commoditization is Claude-Code-specific — Cursor, headless CI, and API surfaces still require our engine; and
+      the learning loop dies without the capture seams our orchestration carries (attribution, verdicts, identity)
+  - option: Enforce team-invocation with hard blocks immediately
+    rejected_because: >-
+      Zero baseline exists on invocation rate — guarding before measuring makes it impossible to separate 'gate works'
+      from 'gate annoys' (Loid); and coerced orchestration risks polluting attribution with compliance theater
+tags:
+  - strategy
+  - pillar-0
+  - tep-compiler
+  - learning-moat
+  - team-funnel
+  - harness-adoption

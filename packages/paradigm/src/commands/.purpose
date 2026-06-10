@@ -84,3 +84,13 @@ components:
     components:
       - '#arch-tools'
     type: command
+  paradigm-solo-cli:
+    description: paradigm solo <reason> [note] — declare a deliberate no-team session (Pillar 0 invocation funnel). Enumerated reasons (trivial|hotfix|user-directed|exploratory) + optional note; writes the .paradigm/.solo-declared marker (TTL-expired, ~4h via PARADIGM_GATE_TTL_HOURS — NOT stop-cleared, Stop fires per turn) and appends a solo-declared event to team-funnel telemetry. Satisfies the prompt-gate, edit-gate, and stop-hook orchestration-required check.
+    type: command
+    components:
+      - '#team-funnel'
+    tags:
+      - feature
+      - orchestration
+      - team-funnel
+    file: packages/paradigm/src/commands/solo.ts
