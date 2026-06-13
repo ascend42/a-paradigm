@@ -36,6 +36,12 @@ export interface SessionWorkEntry {
   verdict?: 'accepted' | 'dismissed' | 'revised' | 'deferred';
   reason?: string;
   revisionDelta?: string;
+  /**
+   * v7 §2.0: REAL post-task confidence (0–1) emitted by the agent/reviewer.
+   * When present, `runPostflightLearning` prefers this over the branch-literal
+   * fallback. `confidence_before` stays fabricated (not gated on — see v7.x).
+   */
+  confidence?: number;
 
   // Decisions
   decisionTitle?: string;
@@ -61,6 +67,8 @@ export interface IterationRevisionEntry {
   symbols: string[];
   round: number;
   consumed?: boolean;
+  /** v7 §2.0: REAL post-revision confidence (0–1); preferred over the 0.75 literal. */
+  confidence?: number;
 }
 
 /**

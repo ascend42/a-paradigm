@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-13T19:21:17.224Z'
+generated: '2026-06-13T19:29:32.235Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1155,11 +1155,36 @@ by_symbol:
       agent: []
   '#orchestrator':
     symbol: '#orchestrator'
-    total_changes: 5
-    last_modified: '2026-06-13T19:21:16Z'
+    total_changes: 6
+    last_modified: '2026-06-13T19:29:31Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_270
+        id: h0410
+        ts: '2026-06-13T19:29:31Z'
+        type: implement
+        symbols:
+          - '#agent-relay'
+          - '#orchestrator'
+          - '#task-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 1f21b837a5bc0add2f2f16850778d14d0c9b0792
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-192921-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/orchestration-dag-emission.test.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+        description: 'feat(#orchestrator): v7 sub-phase 2 — orchestration emits the persisted task DAG'
       - &ref_127
         id: h0409
         ts: '2026-06-13T19:21:16Z'
@@ -1189,7 +1214,7 @@ by_symbol:
           - packages/paradigm/src/core/agent-matcher.test.ts
           - packages/paradigm/src/core/orchestrator.ts
         description: 'feat(#orchestrator): v7 Front Door — honest classifier, full-roster routability, notebook-key fix'
-      - &ref_270
+      - &ref_271
         id: h0408
         ts: '2026-06-13T19:05:47Z'
         type: implement
@@ -1340,7 +1365,6 @@ by_symbol:
           - packages/paradigm/src/core/orchestrator.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestrator): stateless iteration-loop primitive (v6.7.0)'
-      - *ref_9
     contributors:
       human:
         - ascend
@@ -1866,7 +1890,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_272
+      - &ref_273
         id: h0407
         ts: '2026-06-10T18:35:38Z'
         type: implement
@@ -2023,7 +2047,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_271
+      - &ref_272
         id: h0406
         ts: '2026-06-09T23:24:45Z'
         type: implement
@@ -18997,12 +19021,13 @@ by_symbol:
       agent: []
   '#agent-relay':
     symbol: '#agent-relay'
-    total_changes: 2
-    last_modified: '2026-06-13T19:05:47Z'
+    total_changes: 3
+    last_modified: '2026-06-13T19:29:31Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_270
+      - *ref_271
       - *ref_141
     contributors:
       human:
@@ -19027,7 +19052,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_271
+      - *ref_272
     contributors:
       human:
         - ascend
@@ -19039,7 +19064,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_273
     contributors:
       human:
         - ascend
@@ -19051,7 +19076,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_273
     contributors:
       human:
         - ascend
@@ -19063,7 +19088,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_273
     contributors:
       human:
         - ascend
@@ -19075,19 +19100,20 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_273
     contributors:
       human:
         - ascend
       agent: []
   '#task-loader':
     symbol: '#task-loader'
-    total_changes: 1
-    last_modified: '2026-06-13T19:05:47Z'
+    total_changes: 2
+    last_modified: '2026-06-13T19:29:31Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_270
+      - *ref_271
     contributors:
       human:
         - ascend

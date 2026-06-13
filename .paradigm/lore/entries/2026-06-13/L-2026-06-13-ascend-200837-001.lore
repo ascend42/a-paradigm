@@ -1,0 +1,39 @@
+id: L-2026-06-13-ascend-200837-001
+type: milestone
+timestamp: '2026-06-13T20:08:37.794Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7 build round 4a: the learning loop closes (settlement + falsifiable liveness)'
+summary: '§2-rev2 shipped: the orchestration learning loop is now actually closed. New #task-settlement module settles a parent when all siblings reach terminal (triggered inside updateTask), runs recordWorkLog→runPostflightLearning→autoPromoteJournalEntries, with idempotency, an orphan self-settle, and a reaper that crashes abandoned in-progress tasks. confidence_after is now a real agent value (literal fallback; belief-delta deferred to v7.x). A chainLive liveness probe + paradigm doctor check make ''self-improving'' falsifiable. Build clean; mcp 347→360, cli 387.'
+symbols_touched:
+  - '#task-settlement'
+  - '#task-loader'
+  - '#nomination-engine'
+  - '#orchestrator'
+symbols_created:
+  - '#task-settlement'
+learnings:
+  - 'The loop closure converged on the loader, not the orchestrator: hooking settlement inside updateTask means completeTask/shelveTask/direct-set all trigger it with zero drift — the single-chokepoint insight from Loid''s rev.2.'
+  - 'Falsifiability achieved by instrumenting the PIPE not the OUTPUT: chainLive (every non-skipped stage ok, written in finally) distinguishes a clean silence-is-signal run (chainLive:true, 0 journals) from a severed chain (chainLive:false) — the circular JPS metric could not. A reviewer can sever postflight and watch paradigm doctor flip red.'
+  - 'Belief-delta promotion was correctly NOT shipped: confidence_before is a fabricated branch literal, so a real prior needs unbuilt elicitation + corpus migration. v7.0 ships honest absolute-confidence with a real confidence_after; belief-delta is v7.x. Shipping the delta on synthetic numbers would have been the exact ''asserted not true'' failure v7 exists to kill.'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 360 pass
+    paradigm-cli: 387 pass
+    build: pass
+tags:
+  - v7
+  - build
+  - learning-loop
+  - settlement
+  - milestone
+linked_tasks:
+  - T-2026-06-13-006
+confidence: 0.85
+git_context:
+  ref: 1f21b837a5bc0add2f2f16850778d14d0c9b0792
+  branch: v7-close-the-loop
+  dirty: true

@@ -788,6 +788,67 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     } catch {
       // Telemetry is advisory — never fail doctor on it.
     }
+
+    // Learning-loop liveness (v7 §2.3): the falsifiable pipeline-liveness probe.
+    // Each task-DAG settlement appends one record to settlement-liveness.jsonl with
+    // per-stage ok|threw|skipped + chainLive. A severed chain (e.g. postflight
+    // commented out) flips chainLive:false and this check screams — that's the
+    // whole point: "self-improving" is now falsifiable, not asserted.
+    try {
+      const livenessPath = path.join(cwd, '.paradigm', 'events', 'settlement-liveness.jsonl');
+      if (fs.existsSync(livenessPath)) {
+        const lines = fs.readFileSync(livenessPath, 'utf8')
+          .trim().split('\n').filter(l => l.trim());
+        const records = lines
+          .map(l => { try { return JSON.parse(l); } catch { return null; } })
+          .filter((r): r is { chainLive?: boolean; settledAs?: string; stages?: Record<string, string> } => r !== null);
+
+        if (records.length === 0) {
+          results.push({
+            name: 'Learning-loop liveness',
+            status: 'info',
+            message: 'No settlements recorded yet (probe writes on each task-DAG settlement)',
+          });
+        } else {
+          const window = records.slice(-20);
+          const last5 = records.slice(-5);
+          const dead = window.filter(r => r.chainLive === false);
+          const dead5 = last5.filter(r => r.chainLive === false);
+
+          // Name the failing stage(s) from the most recent dead record.
+          const lastDead = dead.length > 0 ? dead[dead.length - 1] : undefined;
+          const failingStages = lastDead?.stages
+            ? Object.entries(lastDead.stages).filter(([, v]) => v === 'threw').map(([k]) => k)
+            : [];
+          const stageNote = failingStages.length > 0 ? ` (stage: ${failingStages.join(', ')})` : '';
+
+          if (dead5.length >= 3) {
+            // Loud dead-chain alarm: ≥3 of last 5 severed.
+            results.push({
+              name: 'Learning-loop liveness',
+              status: 'error',
+              message: `DEAD CHAIN: ${dead5.length}/5 recent settlements severed${stageNote} — the learning loop is not closing`,
+              fix: 'A settlement-chain stage is throwing. Inspect .paradigm/events/settlement-liveness.jsonl and the named stage.',
+            });
+          } else if (dead.length > 0) {
+            results.push({
+              name: 'Learning-loop liveness',
+              status: 'warn',
+              message: `${dead.length}/${window.length} recent settlements had a severed chain${stageNote}`,
+              fix: 'Inspect the named stage in .paradigm/events/settlement-liveness.jsonl.',
+            });
+          } else {
+            results.push({
+              name: 'Learning-loop liveness',
+              status: 'ok',
+              message: `${window.length} recent settlements, chain live`,
+            });
+          }
+        }
+      }
+    } catch {
+      // Probe read is advisory — never fail doctor on it.
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────

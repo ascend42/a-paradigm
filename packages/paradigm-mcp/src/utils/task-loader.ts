@@ -66,8 +66,19 @@ export interface Task {
   started_at?: string; // stamped on entering 'in-progress'
   completed?: string;
   shelved?: string;
-  /** Loid's idempotency stamp (learning settled). Field only — write-logic is §2. */
+  /** Loid's idempotency stamp (learning settled). Written by §2 settlement. */
   settledAt?: string;
+  /**
+   * §2 reaper crash markers. `crashed` is an internal settle-state, NOT a
+   * TaskStatus value (v7.0 statuses stay `open|in-progress|done|shelved`). The
+   * reaper stamps these alongside a real terminal `status:'shelved'` so the node
+   * is terminal-in-index AND identifiable as a crash. `isTerminal`/`settledAs`
+   * read `crashed_at` to distinguish a reaped crash from a deliberate shelve.
+   */
+  crashed_at?: string;
+  crash_reason?: string;
+  /** §2 orphan marker: parentTaskId set but parent failed to load; child self-settled. */
+  orphaned?: boolean;
 
   // ── References ──
   external_ref?: ExternalRef; // renamed from orphan session_link
@@ -342,7 +353,39 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
 
   fs.writeFileSync(taskPath, yaml.dump(pruneUndefined(updated), { lineWidth: -1, noRefs: true }));
   await rebuildTaskIndex(rootDir);
+
+  // §2: settlement trigger. When a task reaches terminal AND has a parent, check
+  // whether the parent's whole sibling-set is now terminal and, if so, fire the
+  // learning chain (recordWorkLog → runPostflightLearning → autoPromoteJournalEntries).
+  // Gated INSIDE updateTask (the real chokepoint) so completeTask, shelveTask, and
+  // direct status sets all trigger without drifting. Best-effort: a settlement
+  // failure must NEVER break this write — log and continue.
+  //
+  // Lazy/dynamic import breaks the task-settlement ⇄ task-loader cycle at
+  // module-eval time (mirrors the autoPromoteJournalEntries pattern).
+  if (isTerminalStatus(updated.status) && updated.parentTaskId) {
+    try {
+      const { settleParentIfComplete } = await import('./task-settlement.js');
+      await settleParentIfComplete(rootDir, updated.parentTaskId, updated.id);
+    } catch (err) {
+      log.component('#task-loader').warn('Settlement after updateTask failed (non-fatal)', {
+        taskId, parentTaskId: updated.parentTaskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return true;
+}
+
+/**
+ * §2 terminal predicate for the loader hook gate. v7.0 terminal statuses are
+ * `done`/`shelved` (a reaper crash is recorded as `shelved` + `crashed_at`).
+ * Kept here as a local mirror so the loader does not statically import
+ * task-settlement (which would re-introduce the import cycle).
+ */
+function isTerminalStatus(status: TaskStatus): boolean {
+  return status === 'done' || status === 'shelved';
 }
 
 export async function completeTask(rootDir: string, taskId: string): Promise<boolean> {

@@ -629,8 +629,12 @@ export async function runPostflightLearning(
         revised,
       });
 
-      // Compute confidence_after based on verdict
-      const confidenceAfter = verdict.verdict === 'accepted' ? 0.85
+      // v7 §2.0: prefer the agent's REAL post-task confidence; fall back to the
+      // branch literal only when no measured value is present. This is the input
+      // to the (still-absolute ≥0.8) promotion gate — see nomination-engine:944.
+      const confidenceAfter = typeof verdict.confidence === 'number'
+        ? verdict.confidence
+        : verdict.verdict === 'accepted' ? 0.85
         : verdict.verdict === 'revised' ? 0.6
         : 0.4; // dismissed
 
@@ -648,6 +652,7 @@ export async function runPostflightLearning(
           recordJournalEntry(agentId, {
             trigger,
             insight,
+            // fabricated; not gated on — see v7.x
             confidence_before: verdict.verdict === 'accepted' ? 0.7 : 0.8,
             confidence_after: confidenceAfter,
             project: projectName,
@@ -694,8 +699,10 @@ export async function runPostflightLearning(
         recordJournalEntry(agentId, {
           trigger: 'self_reflection',
           insight,
+          // fabricated; not gated on — see v7.x
           confidence_before: 0.6,
-          confidence_after: 0.75,
+          // v7 §2.0: prefer the agent's REAL post-revision confidence.
+          confidence_after: typeof rev.confidence === 'number' ? rev.confidence : 0.75,
           project: projectName,
           // Default project-scoped: a self-revision is often a local fact ("this
           // repo's auth uses X"). Don't blanket-leak into cross-project notebooks.
