@@ -955,3 +955,4 @@
 {"id":"ev-1781387901409-0590","timestamp":"2026-06-13T21:58:21.409Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1781387991328-6339","timestamp":"2026-06-13T21:59:51.328Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1781388151180-5806","timestamp":"2026-06-13T22:02:31.180Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1781389888982-8805","timestamp":"2026-06-13T22:31:28.982Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#nomination-engine","#notebook-loader"],"context":"Lore recorded: v7.1 round 4: closed the notebook loop + promotion instrument (belief-delta gate deferred)"}

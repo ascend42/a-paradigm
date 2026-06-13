@@ -113,6 +113,51 @@ function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>): v
 }
 
 /**
+ * Default prior confidence when no matching notebook entry exists for a concept set.
+ * Used by {@link notebookPrior} as the "uninformed" baseline.
+ */
+export const DEFAULT_PRIOR = 0.5;
+
+/**
+ * Derive the prior confidence the notebook already holds for a set of concepts.
+ *
+ * This is the read side of the promotion belief loop: before promoting a journal
+ * entry, we want to know what the notebook currently believes about the same
+ * concepts. Concepts are normalized the same way promotion derives them, so a
+ * structured tag (`symbol:payment-form`) and a bare slug (`payment-form`) match.
+ *
+ * Returns the MAX confidence across matching entries (the strongest existing
+ * belief), or {@link DEFAULT_PRIOR} when no entry matches. The `found` flag
+ * distinguishes "no prior on record" from a real entry that happens to sit at
+ * the default value — useful for the promotion-decision instrument.
+ *
+ * NOTE: This is an INSTRUMENT, not a gate. It only measures; it does not decide
+ * which entries promote.
+ */
+export function notebookPrior(
+  agentId: string,
+  concepts: string[],
+  rootDir: string
+): { value: number; found: boolean } {
+  const normalized = Array.from(
+    new Set((concepts || []).map(normalizeConcept).filter(Boolean))
+  );
+  if (normalized.length === 0) {
+    return { value: DEFAULT_PRIOR, found: false };
+  }
+
+  const matches = loadNotebookEntries(agentId, rootDir, { concepts: normalized });
+  if (matches.length === 0) {
+    return { value: DEFAULT_PRIOR, found: false };
+  }
+
+  const value = Math.max(
+    ...matches.map(m => (typeof m.confidence === 'number' ? m.confidence : DEFAULT_PRIOR))
+  );
+  return { value, found: true };
+}
+
+/**
  * Search notebook entries by query string across context, snippet, and concepts.
  */
 export function searchNotebooks(
@@ -218,6 +263,12 @@ export function addNotebookEntry(
     id,
     scope: resolvedScope,
     publishable: entry.publishable ?? true,
+    // Persist confidence explicitly. The NotebookEntry type requires a number,
+    // but callers (e.g. autoPromoteJournalEntries before the open-loop fix) could
+    // omit it, leaving the stored entry's confidence silently absent → any future
+    // prior read would be garbage. Default to 0.5 (DEFAULT_PRIOR) when a caller
+    // gives us nothing to anchor on. No ratchet: latest measurement wins.
+    confidence: entry.confidence ?? 0.5,
     appliedCount: 0,
     created: now,
     updated: now,

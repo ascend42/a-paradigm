@@ -1,0 +1,35 @@
+id: L-2026-06-13-ascend-223128-001
+type: milestone
+timestamp: '2026-06-13T22:31:28.799Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.1 round 4: closed the notebook loop + promotion instrument (belief-delta gate deferred)'
+summary: 'Fourth v7.x fast-follow, reshaped by adversarial review. The belief-delta promotion gate was DESIGNED (Loid) then ADVERSARIALLY REVIEWED (Jinx) — and deferred: Jinx proved it unfalsifiable (nothing measures promotion correctness, so the bands can''t be calibrated) and that the max() ratchet structurally prevents downward belief revision. Instead v7.1 shipped the sound prerequisites: (1) fixed a real open-loop bug — addNotebookEntry never persisted confidence; promotion now writes confidence_after (no ratchet); (2) a promotion-decisions.jsonl instrument logging {before(real notebook prior), after, delta, promoted, priorFound} per decision, while the proven absolute≥0.8 gate runs UNCHANGED (regression-locked by test). Caught + fixed a variable-shadow bug in the builder''s instrument code (a local `promoted` boolean shadowed the accumulator array → threw). Build clean; mcp 385→397.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#notebook-loader'
+learnings:
+  - 'The adversarial review paid off AGAIN — and the meta-lesson is the v7 thesis itself: the belief-delta gate would have shipped an UNFALSIFIABLE check (the exact thing v7 exists to kill). Jinx caught that the floor (after>=0.7) swallowed the delta math on the majority no-prior path (reducing to a 0.8→0.7 nerf), the four bands had no calibration signal, and the max() ratchet made beliefs un-revisable downward. Right move: ship the measurement first, build the gate from data later.'
+  - Loid's own §5 self-critique was strong but did NOT substitute for an independent adversary — Jinx found the ratchet-breaks-downward-revision KILL that Loid had rationalized as a feature (can't lower a curated belief). Don't let one agent's self-review close the loop; that's 'consensus recorded as rigor'.
+  - Builder cut off mid-debug with 5 failing tests; root cause was a one-line variable shadow (instrument's `const promoted` boolean shadowed the `promoted` accumulator array → promoted.push threw). Verifying state directly (run the failing test, read the diff) found it in minutes — don't trust a truncated builder report.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 397 pass
+    build: pass
+tags:
+  - v7.1
+  - fast-follow
+  - build
+  - learning-loop
+  - adversarial-review
+  - milestone
+linked_tasks:
+  - T-2026-06-13-012
+confidence: 0.85
+git_context:
+  ref: 884ff9cd4b0eb150f8ae9fba2f0241e01a0becd5
+  branch: v7.1-fast-follows
+  dirty: true
