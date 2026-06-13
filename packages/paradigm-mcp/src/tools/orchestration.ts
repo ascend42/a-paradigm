@@ -49,7 +49,7 @@ type CostPreview = {
 // Types
 // ============================================================================
 
-interface AgentManifest {
+export interface AgentManifest {
   version: string;
   team: {
     name: string;
@@ -2712,7 +2712,7 @@ function generateCostPreviewLocal(
 // Agent Suggestion
 // ============================================================================
 
-interface AgentSuggestion {
+export interface AgentSuggestion {
   name: string;
   reason: string;
   confidence: 'high' | 'medium' | 'low';
@@ -2720,9 +2720,13 @@ interface AgentSuggestion {
 }
 
 /**
- * Suggest agents for a task based on triggers in agents.yaml
+ * Suggest agents for a task based on triggers in agents.yaml.
+ *
+ * Exported so Cid's captain board (`paradigm_captain_board`, session-open) can
+ * reuse the same archetype-matcher when proposing claimants for unclaimed tasks —
+ * one matcher, both the orchestrator's plan and Cid's claimant proposals.
  */
-function suggestAgentsForTask(
+export function suggestAgentsForTask(
   task: string,
   agents: Record<string, AgentDefinition>
 ): AgentSuggestion[] {
@@ -2836,7 +2840,7 @@ function suggestAgentsForTask(
   return suggestions.sort((a, b) => scoreMap[b.confidence] - scoreMap[a.confidence]);
 }
 
-function loadAgentsManifest(rootDir: string): AgentManifest | null {
+export function loadAgentsManifest(rootDir: string): AgentManifest | null {
   const manifestPath = path.join(rootDir, '.paradigm', 'agents.yaml');
 
   if (!fs.existsSync(manifestPath)) {

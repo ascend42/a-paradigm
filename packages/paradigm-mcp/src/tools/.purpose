@@ -206,7 +206,7 @@ components:
       - neverland
       - mcp
   CaptainTools:
-    description: '2 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt) and paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid for the learning pass). Core-tier always loaded. Cid closes navigation; Loid closes learning.'
+    description: '3 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt), paradigm_captain_debrief (post-task coverage audit: .purpose stub creation, pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid; v7 §3 adds a postflight-liveness check that self-heals — runs runPostflightLearning itself when the settlement-liveness probe shows no postflight ran, and on self-heal failure proposes an ADVISE block, never guard), and paradigm_captain_board (#captain-board — Cid''s owned run-DAG read+write artifact: read assembles the live orchestration DAG from non-terminal epic tasks + their stage-children ordered by stage/dependsOn, plus ripple-ranked unclaimed open tasks and a summary; claim writes a task claimant keeping status open with a human/peer-over-archetype override guard; advance records a Cid-owned blocked_on reason without changing status — v7.0 has no blocked status). Core-tier always loaded. Cid closes navigation; Loid closes learning. Ownership boundary: Cid writes claimant/blocked_on (present tense); Loid writes settledAt (past tense) — they never co-write a field.'
     type: tool-group
     tags:
       - core
@@ -215,12 +215,15 @@ components:
       - orchestration
       - coverage
       - session-learning
+      - captain-board
       - mcp
     signals:
       - '!cid-brief-produced'
       - '!cid-debrief-complete'
       - '!coverage-stub-created'
       - '!session-insights-ready'
+      - '!cid-claim-written'
+      - '!cid-postflight-self-healed'
   OrchestrationTools:
     description: 2 MCP tools for Maestro team orchestration — paradigm_orchestrate_inline (plan/execute with ambient-enriched agent profiles, attributed responses, Symphony thread recording, documentor as final stage, Cid captain brief injected into every agent) and paradigm_agent_prompt (single agent with full context injection). Role-prompt precedence in buildAgentPromptInternal is hardcoded ROLE_PROMPTS constant → rich .agent profile description → one-line role → generic builder, so all 67 bundled archetypes render their full persona. AGENT_TIERS + DEFAULT_TIER_MODELS cover all 67 archetypes with a deterministic tier-2/sonnet fallback for any unmapped agent. Nora (ftux) is a core tier-1 agent in the roster — runs after Builder on user-visible surfaces, before Documentor. v6.0.3+ adds Scholar (tier-1 core, paired with Sheila/educator via partners primitive — research/curation specialist) and Swift (tier-2 ecosystem, auto-rosters on *.swift detection — Swift/SwiftUI/Apple-platform expertise with global cross-project notebook compounding).
     type: tool-group

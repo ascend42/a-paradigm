@@ -1,0 +1,40 @@
+id: L-2026-06-13-ascend-202022-001
+type: milestone
+timestamp: '2026-06-13T20:20:22.435Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7 build round 4b: Cid becomes a real Captain (captain_board)'
+summary: '§3 shipped — the Captain is no longer inert. New paradigm_captain_board tool is Cid''s owned artifact (live run-DAG of epic+stage tasks + ripple-ranked unclaimed). Session-open: Cid runs the reaper, reads the board, and proposes claimants by writing them back (real per-session mutation, replacing the anonymous task dump). Session-close: debrief reads the liveness probe and self-heals (runs postflight itself) rather than blocking — advise, never guard. Holds the Cid↔Loid boundary. Build clean; mcp 360→373, cli 387. This completes the v7.0 keystone (Spine + emission + settlement + captain).'
+symbols_touched:
+  - '#captain-board'
+  - '#captain'
+  - '#cid'
+  - '#context'
+  - '#task-settlement'
+symbols_created:
+  - '#captain-board'
+learnings:
+  - 'Cid''s inertness had one root cause (no owned artifact) and one fix: give him the live task-DAG board + a real per-session write (claimant proposals at session-open). The ''make him own something durable and mutate it on a real trigger'' principle from his own self-audit, now built.'
+  - 'Session-close self-heal over hard-block was the right call (adversarial review #5): a learning-loop gap triggers Cid running postflight himself, advise-severity only — never deadlocks the human. Hard refuse stays reserved for correctness gates.'
+  - 'The epic-task-as-run-record model (emission) made §3 clean: the board just reads epic tasks (external_ref kind orchestration) + children; settlement already advances them, so Cid reads live state without a separate run-record store.'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 373 pass
+    paradigm-cli: 387 pass
+    build: pass
+tags:
+  - v7
+  - build
+  - captain
+  - cid
+  - milestone
+linked_tasks:
+  - T-2026-06-13-006
+confidence: 0.85
+git_context:
+  ref: 3649936c016b79d42c21a98cc5d3bfa811382ba0
+  branch: v7-close-the-loop
+  dirty: true

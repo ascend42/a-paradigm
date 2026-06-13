@@ -102,6 +102,17 @@ export interface DebriefReport {
     delta: number;
   };
   stopHookCleared: boolean;
+  /**
+   * v7 §3 postflight liveness check + self-heal outcome. `ranThisSession` reads
+   * the settlement-liveness probe; if false, Cid self-heals (runs postflight)
+   * and on failure proposes an ADVISE block (never guard).
+   */
+  postflight?: {
+    ranThisSession: boolean;
+    selfHealed: boolean;
+    selfHealError?: string;
+    blockProposed: boolean;
+  };
   sessionInsights: SessionInsights;
 }
 
@@ -121,4 +132,61 @@ export interface CidBriefedMarker {
   sessionId: string;
   touchedFiles: string[];
   coverageScore: number;
+}
+
+// ────────────────────────────────────────────────────────
+// Captain Board (#captain-board — v7 §3, Cid's owned artifact)
+// ────────────────────────────────────────────────────────
+
+import type { Claimant, TaskStatus } from '../utils/task-loader.js';
+
+/** Derived live-status of an orchestration run (epic + its children). */
+export type RunStatus = 'pending' | 'in-progress' | 'settled' | 'crashed';
+
+/** A single node (stage-task) in a run's live DAG. */
+export interface BoardNode {
+  taskId: string;
+  blurb: string;
+  stage?: number;
+  status: TaskStatus;
+  claimant?: Claimant;
+  dependsOn: string[];
+  /**
+   * Fragile / high-ripple symbols touched by this node, merged INLINE (adversarial
+   * cut: not a separate block). Empty when no ripple risk detected.
+   */
+  fragileSymbols: string[];
+}
+
+/** One orchestration run: its epic + ordered stage-children. */
+export interface BoardRun {
+  epicTaskId: string;
+  blurb: string;
+  runStatus: RunStatus;
+  settledAt?: string;
+  nodes: BoardNode[];
+}
+
+/** An unclaimed open task, ripple-ranked, with a proposed claimant. */
+export interface BoardUnclaimed {
+  taskId: string;
+  blurb: string;
+  priority: 'high' | 'medium' | 'low';
+  tags: string[];
+  /** Higher = more downstream blast-radius (ranked descending). */
+  rippleScore: number;
+  fragileSymbols: string[];
+  /** Cid's proposed archetype owner (session-open writes this back as claimant). */
+  proposedClaimant?: Claimant;
+}
+
+export interface CaptainBoard {
+  runs: BoardRun[];
+  unclaimed: BoardUnclaimed[];
+  summary: {
+    runs: number;
+    open: number;
+    inFlight: number;
+    unclaimed: number;
+  };
 }

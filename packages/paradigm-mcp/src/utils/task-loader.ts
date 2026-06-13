@@ -80,6 +80,14 @@ export interface Task {
   /** §2 orphan marker: parentTaskId set but parent failed to load; child self-settled. */
   orphaned?: boolean;
 
+  /**
+   * Cid-owned blocking reason (v7 §3 captain board `advance`). v7.0 has no
+   * `blocked` status, so a blocked node is recorded as `blocked_on` (the reason)
+   * with its live `status` left untouched. Written ONLY by Cid; cleared when the
+   * block resolves. Not a status — purely a present-tense annotation Cid owns.
+   */
+  blocked_on?: string;
+
   // ── References ──
   external_ref?: ExternalRef; // renamed from orphan session_link
   related_lore?: string[];
