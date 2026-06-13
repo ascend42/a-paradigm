@@ -1,0 +1,43 @@
+id: LP-para-801
+title: 'PARA 801: Closing the Loop (v7)'
+description: "Learn how Paradigm v7 makes the framework's own checks TRUE instead of asserted — by closing the orchestration and learning loop around one keystone: a persisted, claimant-owned task DAG that orchestration emits, settlement feeds back as learning, and Cid the Captain manages."
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+  - close-the-loop
+ordered: true
+category: paradigm-core
+steps:
+  - content: N-para-801-the-task-dag
+    required: true
+  - content: Q-para-801-the-task-dag
+    required: true
+    passRequired: true
+  - content: N-para-801-orchestration-emits-dag
+    required: true
+  - content: Q-para-801-orchestration-emits-dag
+    required: true
+    passRequired: true
+  - content: N-para-801-settlement-closes-the-loop
+    required: true
+  - content: Q-para-801-settlement-closes-the-loop
+    required: true
+    passRequired: true
+  - content: N-para-801-falsifiable-self-improvement
+    required: true
+  - content: Q-para-801-falsifiable-self-improvement
+    required: true
+    passRequired: true
+  - content: N-para-801-cid-becomes-real
+    required: true
+  - content: Q-para-801-cid-becomes-real
+    required: true
+    passRequired: true
+  - content: N-para-801-honest-routing-and-the-method
+    required: true
+  - content: Q-para-801-honest-routing-and-the-method
+    required: true
+    passRequired: true

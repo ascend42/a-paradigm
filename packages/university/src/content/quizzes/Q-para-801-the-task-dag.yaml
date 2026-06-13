@@ -1,0 +1,54 @@
+id: Q-para-801-the-task-dag
+title: 'PARA 801: Closing the Loop — Lesson 1: The Spine'
+description: 'Quiz for lesson: The Spine — A Claimant-Owned Task DAG'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: 'In v7, a task''s owner is recorded as `claimant: { kind, ref }` rather than a flat `assignee: "builder"` string. Why is the typed claim the right design?'
+    choices:
+      A: It is shorter to serialize in YAML
+      B: A flat name throws away whether the owner is a role, a specific human, or a remote peer — the very distinction the learning loop needs (archetype-fit signal, churn-vs-handoff)
+      C: Tagged unions are required by the YAML loader
+      D: It lets two owners write the same field safely
+      E: It encrypts the owner's identity
+    correct: B
+    explanation: 'The claimant is a tagged union (`kind: archetype | human | peer`). That `kind` is load-bearing: archetype-fit analytics compare the predicted role-owner against the closing owner, and reassignment-churn detection must distinguish a healthy peer handoff (`kind: peer`) from under-specified-blurb churn. A flat name string cannot answer "is this a role, a human, or a peer?" — so it discards exactly the signal the loop is built to learn from.'
+  - id: q2
+    question: How are the DAG edges (parentTaskId / dependsOn / stage) stored in v7?
+    choices:
+      A: In a new SQLite database alongside the task store
+      B: In a separate central edges.yaml file that must be kept in sync
+      C: Edge-list-in-node — each task's own YAML carries its edges; the graph is reconstructed by loading the node set, with no separate edges file and no SQLite
+      D: Only in memory during an orchestration run
+      E: As Git commit metadata
+    correct: C
+    explanation: 'The DAG uses edge-list-in-node: every task''s YAML carries its own parentTaskId/dependsOn/stage, and the graph is rebuilt simply by loading the nodes. This needs no separate edges file and no SQLite, survives the existing date-partitioned loader with zero loader changes, and supports cross-date edges because each task id embeds its date.'
+  - id: q3
+    question: Which statement about v7.0's task status set and state machine is correct?
+    choices:
+      A: v7.0 ships all six states (open, claimed, in-progress, blocked, done, shelved) at launch
+      B: v7.0 ships four states (open, in-progress, done, shelved); claimed and blocked are deferred to a fast-follow because they are justified only by Symphony peer-claims
+      C: Any status can transition to any other status freely
+      D: '`done` can transition back to `in-progress`'
+      E: '`started_at` is stamped when the task is first created'
+    correct: B
+    explanation: 'v7.0 ships four states. `claimed` and `blocked` are deferred because they are only justified by Symphony peer-claims, which are themselves fast-follow. Transitions are enforced by a single `assertTransition` guard inside `updateTask` (done is terminal), and `started_at` is stamped on *entering* `in-progress`, not at creation.'
+  - id: q4
+    question: How does the v7 schema migration treat existing pre-v7 task YAML?
+    choices:
+      A: A mandatory bulk migration script must rewrite every file before v7 can load
+      B: Old files are rejected until manually upgraded
+      C: Every new field is optional, so old YAML loads unchanged; the orphan `session_link` is healed into `external_ref` by a read-side `normalizeTask` shim, and files migrate on their next write
+      D: Old tasks are silently deleted
+      E: Migration requires a database export and re-import
+    correct: C
+    explanation: 'The migration is additive and lazy-healing: every v7 field is optional so old YAML loads as-is, MCP enums widen non-breakingly, and the orphaned `session_link` is normalized into the typed `external_ref` by a read-side shim at the load chokepoint — files heal on their next write with no bulk step.'

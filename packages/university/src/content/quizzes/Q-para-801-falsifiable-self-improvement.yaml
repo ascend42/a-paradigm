@@ -1,0 +1,54 @@
+id: Q-para-801-falsifiable-self-improvement
+title: 'PARA 801: Closing the Loop — Lesson 4: Falsifiable Self-Improvement'
+description: 'Quiz for lesson: Falsifiable Self-Improvement'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: Why was the JPS (journals-per-settlement) metric rejected as a measure of whether the learning loop is alive?
+    choices:
+      A: It was too expensive to compute over a trailing window
+      B: It was circular — a clean run that legitimately produced no insight ("silence is signal") and a severed chain both yield JPS = 0, so it could not distinguish healthy quiet from a dead pipe
+      C: It double-counted journal entries
+      D: It required SQLite
+      E: It only worked in the CLI world
+    correct: B
+    explanation: 'JPS measures the *volume of output*, which cannot tell you whether the *pipe* is alive. A clean settlement that had nothing new to promote and a settlement whose chain was severed both produce JPS = 0. The metric could not separate healthy silence from a corpse, so v7 replaced it with the chainLive probe that instruments the pipe instead of the output.'
+  - id: q2
+    question: How does the chainLive liveness probe make "self-improving" falsifiable?
+    choices:
+      A: It counts how many notebooks exist
+      B: Each settlement appends a settlement-liveness.jsonl record with per-stage ok|threw|skipped (written in a finally so a mid-chain throw still records which stage died) and chainLive=true only if every non-skipped stage ran; a doctor check alarms on chainLive=false, which a reviewer can trigger by commenting out a stage
+      C: It asks the user to self-report whether they felt the framework improved
+      D: It measures token spend per session
+      E: It is not falsifiable; it just logs activity
+    correct: B
+    explanation: 'Each settlement writes a record to .paradigm/events/settlement-liveness.jsonl with each stage marked ok|threw|skipped, written in a finally block so a mid-chain throw still records *which* stage died. chainLive is true only if every non-skipped stage returned ok. A paradigm doctor / paradigm:health check alarms on chainLive=false — and a reviewer can comment out runPostflightLearning, settle once, and watch the check flip red naming the dead stage. That deliberate-break-turns-red property is what makes the claim falsifiable.'
+  - id: q3
+    question: 'A settlement records `chainLive: true, journalsWritten: 0`. What does this mean?'
+    choices:
+      A: The chain is broken — zero journals means a dead pipe
+      B: The pipe ran end-to-end successfully and simply had nothing new to promote — a healthy clean subtree ("silence is signal"); this is distinguishable from chainLive=false, which is the broken case
+      C: The settlement never ran
+      D: The agent crashed mid-task
+      E: Postflight was skipped intentionally by the user
+    correct: B
+    explanation: 'chainLive=true means every non-skipped stage ran without throwing — the pipe is alive. journalsWritten=0 is diagnostic only: it means there was nothing new worth promoting this time (silence is signal). This is precisely the case JPS could not distinguish from a dead chain; the chainLive probe separates healthy quiet (chainLive=true, journals=0) from a severed chain (chainLive=false).'
+  - id: q4
+    question: 'The chainLive design generalizes into a pattern for honest self-checks. Which principle best captures it?'
+    choices:
+      A: Measure the volume of results; more output means a healthier system
+      B: Instrument the pipe (liveness of the mechanism, falsifiable) not the output (volume, not falsifiable); record per-stage in a finally; and make the red state reachable by a deliberate act
+      C: Trust the agent's self-assessment of its own improvement
+      D: Only check the loop on a fixed schedule, never per settlement
+      E: Replace all checks with a single boolean the user sets manually
+    correct: B
+    explanation: 'The generalizable pattern: (1) instrument the pipe, not the output — liveness of the mechanism is falsifiable, volume of results is not; (2) record per-stage in a finally so a mid-pipe failure still tells you where it died; (3) make the red state reachable by a deliberate act — if you cannot describe the exact change that turns the check red, the check is not really checking anything. A self-improving claim is only earned if you can prove it ISN''T improving when it breaks.'

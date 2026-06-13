@@ -1,0 +1,54 @@
+id: Q-para-801-settlement-closes-the-loop
+title: 'PARA 801: Closing the Loop — Lesson 3: Settlement Closes the Loop'
+description: 'Quiz for lesson: Settlement Closes the Loop'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: What is the settlement trigger in v7 — when does a parent task settle and run the learning chain?
+    choices:
+      A: As soon as the first child reaches `done`
+      B: When every sibling sharing the parentTaskId reaches a terminal state (all-siblings-terminal) — exactly once, idempotent via settledAt
+      C: On a fixed 30-minute timer regardless of child status
+      D: Only when the human manually calls settle
+      E: When the parent task itself is marked done by hand
+    correct: B
+    explanation: 'Settlement fires on all-siblings-terminal: when every task sharing a parentTaskId reaches a terminal state ({done, shelved, crashed} in v7.0), the parent settles exactly once, made idempotent by stamping settledAt. The original design fired only on `done`, which the adversarial review caught as re-creating the open-loop bug — one shelved or crashed sibling would leave the parent unsettled forever.'
+  - id: q2
+    question: Where is the settlement hook placed, and why there?
+    choices:
+      A: Only inside completeTask, so done is the only path that settles
+      B: Inside updateTask (the real chokepoint), gated on isTerminal(status) && parentTaskId — so completeTask, shelveTask, and any direct status set all fire it and none can drift
+      C: In a Git post-commit hook
+      D: In the orchestrator's plan mode
+      E: In the Stop hook only
+    correct: B
+    explanation: 'The hook lives inside updateTask — the real chokepoint — gated on isTerminal(status) && parentTaskId. Putting it at the chokepoint (rather than in completeTask alone) means completeTask, shelveTask, and direct status sets all settle, with no path able to drift. A reaper also crashes abandoned in-progress tasks stale past a window, and orphans (missing parent) self-settle with a warn.'
+  - id: q3
+    question: 'The v7 thesis is "Cid writes the present tense; Loid writes the past tense; they never co-write a field." Which field does settlement write, holding that boundary?'
+    choices:
+      A: Settlement writes `status` live-transitions
+      B: Settlement writes `claimant`
+      C: Settlement only ever writes settledAt (and crash markers) — never live status; Cid owns live status/claimant/edges, Loid owns settledAt and the learning stores
+      D: Settlement writes the DAG edges
+      E: Settlement co-writes status and settledAt together
+    correct: C
+    explanation: 'Settlement writes only settledAt and crash markers, never live status. This holds the load-bearing Cid↔Loid boundary: Cid (present tense) writes status live-transitions, claimant, and the DAG edges at emission; Loid (past tense) writes settledAt and the learning stores. The dependency points one way — status → settlement → learning — and settlement never calls back to change status.'
+  - id: q4
+    question: 'Why did v7.0 drop the original belief-delta promotion gate (confidence_after − confidence_before ≥ 0.15) in favor of keeping the absolute ≥ 0.8 gate with a *real* confidence_after?'
+    choices:
+      A: The delta gate was too slow to compute
+      B: Both confidence numbers were hardcoded branch literals, so a delta gate promotes on the difference of two constants (numerology); v7.0 keeps the absolute gate but makes confidence_after a real agent output, deferring the belief-delta honestly to v7.x
+      C: The team preferred round numbers
+      D: Belief-deltas are mathematically impossible
+      E: The absolute gate was removed entirely and replaced by manual approval
+    correct: B
+    explanation: 'The adversarial review proved both confidence_before and confidence_after were branch literals, so promoting on their difference is numerology. v7.0''s honest fix: keep the existing absolute ≥0.8 gate but make confidence_after real (agents emit an optional `confidence` that runPostflightLearning prefers, falling back to the literal only when absent). confidence_before stays, explicitly marked not-gated-on; the belief-delta gate is deferred to v7.x because a real pre-task prior needs unbuilt elicitation infrastructure.'

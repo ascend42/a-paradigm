@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-13T20:20:35.808Z'
+generated: '2026-06-13T20:49:26.934Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -19181,11 +19181,40 @@ by_symbol:
       agent: []
   '#task-settlement':
     symbol: '#task-settlement'
-    total_changes: 1
-    last_modified: '2026-06-13T20:08:51Z'
+    total_changes: 2
+    last_modified: '2026-06-13T20:25:13Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_275
+        id: h0413
+        ts: '2026-06-13T20:25:13Z'
+        type: implement
+        symbols:
+          - '#captain-board'
+          - '#task-settlement'
+        author:
+          type: human
+          id: ascend
+        commit: a2ec893830e3fd391066e69ad8d3f171c76966af
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/.purpose
+          - packages/paradigm/src/platform-server/routes/.purpose
+        description: 'docs(#task-settlement): v7 self-documentation — register new symbols + fix broken .purpose'
       - *ref_150
     contributors:
       human:
@@ -19205,11 +19234,12 @@ by_symbol:
       agent: []
   '#captain-board':
     symbol: '#captain-board'
-    total_changes: 1
-    last_modified: '2026-06-13T20:20:34Z'
+    total_changes: 2
+    last_modified: '2026-06-13T20:25:13Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_275
       - *ref_274
     contributors:
       human:
